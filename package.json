@@ -1,0 +1,17 @@
+{
+  "name": "pss-next",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "dev": "tsx examples/basic.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx src/runtime/agent-loop.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "tsx": "latest",
+    "typescript": "latest"
+  }
+}
