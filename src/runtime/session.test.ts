@@ -142,6 +142,10 @@ await persistedSession.submit({ type: "user-text", text: "persist this" });
 
 const persistedSnapshot = await historyStore.load("persisted");
 assert.deepEqual(
+  persistedSnapshot?.events.map((record) => record.event.type),
+  ["user-text", "turn-start", "step-start", "assistant-text", "step-end", "turn-end"],
+);
+assert.deepEqual(
   persistedSnapshot?.modelHistory.map((record) => record.item),
   [
     { type: "user-text", text: "persist this" },

@@ -109,12 +109,11 @@ export class AgentSession {
             signal: this.#activeAbort.signal,
           });
 
-          await this.save();
-
           this.#emit({
             type: result === "aborted" ? "turn-abort" : "turn-end",
           });
           turnClosed = true;
+          await this.save();
           item.resolve();
         } catch (error) {
           if (!turnClosed) {
