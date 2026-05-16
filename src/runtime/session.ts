@@ -47,6 +47,7 @@ export class AgentSession {
     }
 
     this.#running = true;
+    this.#emit({ type: "agent-start" });
 
     try {
       while (this.#inputQueue.length > 0) {
@@ -72,6 +73,7 @@ export class AgentSession {
         }
       }
     } finally {
+      this.#emit({ type: "agent-end" });
       this.#running = false;
     }
   }

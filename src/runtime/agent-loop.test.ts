@@ -21,7 +21,6 @@ assert.equal(await runAgentLoop({ emit: (event) => events.push(event), llm }), u
 assert.deepEqual(
   events.map((event) => event.type),
   [
-    "agent-start",
     "turn-start",
     "text",
     "tool-call",
@@ -29,6 +28,5 @@ assert.deepEqual(
     "turn-start",
     "text",
     "turn-end",
-    "agent-end",
   ]
 );

@@ -45,8 +45,6 @@ assert.deepEqual(
     "turn-start",
     "user-message",
     "turn-abort",
-    "agent-end",
-    "agent-start",
     "turn-start",
     "text",
     "turn-end",
