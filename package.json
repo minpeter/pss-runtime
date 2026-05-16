@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "tsx examples/basic.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx src/runtime/agent-loop.test.ts"
+    "test": "tsx src/runtime/agent-loop.test.ts && tsx src/runtime/session.test.ts"
   },
   "devDependencies": {
     "@types/node": "latest",

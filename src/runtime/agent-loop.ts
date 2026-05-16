@@ -4,20 +4,34 @@ import { mockLlm, type Llm } from "./mock-llm";
 type RunAgentLoopOptions = {
   emit: AgentEventListener;
   llm?: Llm;
+  signal?: AbortSignal;
 };
+
+export type AgentLoopResult = "completed" | "aborted";
 
 export async function runAgentLoop({
   emit,
   llm = mockLlm,
-}: RunAgentLoopOptions): Promise<void> {
-  emit({ type: "agent-start" });
-
+  signal = new AbortController().signal,
+}: RunAgentLoopOptions): Promise<AgentLoopResult> {
   while (true) {
-    emit({ type: "turn-start" });
-    const output = await llm();
+    if (signal.aborted) {
+      return "aborted";
+    }
+
+    emit({ type: "step-start" });
+    const output = await llm({ signal });
     let shouldContinue = false;
 
+    if (signal.aborted) {
+      return "aborted";
+    }
+
     for (const part of output) {
+      if (signal.aborted) {
+        return "aborted";
+      }
+
       if (part.type === "text") {
         emit({ type: "text", text: part.text });
         continue;
@@ -27,11 +41,10 @@ export async function runAgentLoop({
       shouldContinue = true;
     }
 
-    emit({ type: "turn-end" });
+    emit({ type: "step-end" });
 
     if (!shouldContinue) {
-      emit({ type: "agent-end" });
-      return;
+      return "completed";
     }
   }
 }

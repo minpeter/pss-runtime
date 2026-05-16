@@ -17,18 +17,16 @@ const llm = createScriptedLlm([
   [{ type: "text", text: "DONE" }],
 ]);
 
-assert.equal(await runAgentLoop({ emit: (event) => events.push(event), llm }), undefined);
+assert.equal(await runAgentLoop({ emit: (event) => events.push(event), llm }), "completed");
 assert.deepEqual(
   events.map((event) => event.type),
   [
-    "agent-start",
-    "turn-start",
+    "step-start",
     "text",
     "tool-call",
-    "turn-end",
-    "turn-start",
+    "step-end",
+    "step-start",
     "text",
-    "turn-end",
-    "agent-end",
+    "step-end",
   ]
 );
