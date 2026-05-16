@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { runAgentLoop } from "./agent-loop";
-import type { AgentEvent } from "./session";
+import type { AgentEvent } from "./session/events";
 import type { Llm, LlmOutput } from "./mock-llm";
 
 const createScriptedLlm = (outputs: LlmOutput[]): Llm => {

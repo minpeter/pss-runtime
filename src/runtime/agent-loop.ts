@@ -1,4 +1,4 @@
-import type { AgentEventListener } from "./session";
+import type { AgentEventListener } from "./session/events";
 import { mockLlm, type Llm } from "./mock-llm";
 
 type RunAgentLoopOptions = {
