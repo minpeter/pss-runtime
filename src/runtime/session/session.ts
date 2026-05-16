@@ -3,7 +3,8 @@ import type { Llm } from "../mock-llm";
 import type { AgentEvent, AgentEventListener } from "./events";
 import {
   SessionHistory,
-  toModelHistoryItem,
+  type PendingUserInput,
+  type SessionHistoryView,
   type SessionSnapshot,
 } from "./history";
 import type { SessionHistoryStore } from "./store";
@@ -27,9 +28,10 @@ export class AgentSession {
   readonly #listeners = new Set<AgentEventListener>();
   readonly #llm: Llm;
   readonly #historyStore?: SessionHistoryStore;
+  readonly #history: SessionHistory;
   readonly id: string;
-  readonly history: SessionHistory;
   readonly #inputQueue: QueuedInput[] = [];
+  #saveQueue: Promise<void> = Promise.resolve();
   #running = false;
   #activeAbort?: AbortController;
 
@@ -37,7 +39,8 @@ export class AgentSession {
     this.id = id;
     this.#llm = llm;
     this.#historyStore = historyStore;
-    this.history = new SessionHistory(id, snapshot);
+    this.#history = new SessionHistory(id, snapshot);
+    this.#restorePendingInputs();
   }
 
   subscribe(listener: AgentEventListener): () => void {
@@ -46,14 +49,16 @@ export class AgentSession {
   }
 
   submit(input: SessionInput): Promise<void> {
-    this.#emit(input);
+    const acceptedInput = clone(input);
+    const queuedInput = clone(acceptedInput);
+    this.#emit(acceptedInput);
 
     if (this.#historyStore) {
       void this.save().catch(() => {});
     }
 
     const queued = new Promise<void>((resolve, reject) => {
-      this.#inputQueue.push({ input, resolve, reject });
+      this.#inputQueue.push({ input: queuedInput, resolve, reject });
     });
 
     void this.#drainInputQueue();
@@ -65,7 +70,11 @@ export class AgentSession {
   }
 
   snapshot(): SessionSnapshot {
-    return this.history.snapshot();
+    return this.#history.snapshot();
+  }
+
+  viewAt(sequence: number): SessionHistoryView {
+    return this.#history.viewAt(sequence);
   }
 
   restore(snapshot: SessionSnapshot): void {
@@ -73,11 +82,19 @@ export class AgentSession {
       throw new Error("Cannot restore history while the session is running");
     }
 
-    this.history.restore(snapshot);
+    this.#history.restore(snapshot);
+    this.#restorePendingInputs();
   }
 
   async save(): Promise<void> {
-    await this.#historyStore?.save(this.snapshot());
+    if (!this.#historyStore) {
+      return;
+    }
+
+    const snapshot = this.snapshot();
+    const save = this.#saveQueue.then(() => this.#historyStore?.save(snapshot));
+    this.#saveQueue = save.catch(() => {});
+    await save;
   }
 
   async #drainInputQueue(): Promise<void> {
@@ -99,13 +116,12 @@ export class AgentSession {
         let turnClosed = false;
 
         try {
-          const turnStart = this.#emit({ type: "turn-start" });
-          this.history.appendModelItem(turnStart.sequence, item.input);
+          this.#emit({ type: "turn-start" });
 
           const result = await runAgentLoop({
-            emit: (event) => this.#emitLoopEvent(event),
+            emit: (event) => this.#emit(event),
             llm: this.#llm,
-            modelHistory: () => this.history.modelHistory(),
+            modelHistory: () => this.#history.modelHistory(),
             signal: this.#activeAbort.signal,
           });
 
@@ -130,15 +146,6 @@ export class AgentSession {
     }
   }
 
-  #emitLoopEvent(event: AgentEvent): void {
-    const record = this.#emit(event);
-    const modelHistoryItem = toModelHistoryItem(event);
-
-    if (modelHistoryItem) {
-      this.history.appendModelItem(record.sequence, modelHistoryItem);
-    }
-  }
-
   async #trySave(): Promise<void> {
     try {
       await this.save();
@@ -147,15 +154,35 @@ export class AgentSession {
     }
   }
 
+  #restorePendingInputs(): void {
+    this.#inputQueue.length = 0;
+
+    for (const input of this.#history.pendingInputs()) {
+      this.#inputQueue.push(createRestoredInput(input));
+    }
+  }
+
   #emit(event: AgentEvent): { sequence: number } {
-    const record = this.history.appendEvent(event);
+    const record = this.#history.appendEvent(event);
 
     for (const listener of this.#listeners) {
-      listener(event);
+      listener(clone(event));
     }
 
     return record;
   }
+}
+
+function createRestoredInput(input: PendingUserInput): QueuedInput {
+  return {
+    input: clone(input),
+    reject: () => {},
+    resolve: () => {},
+  };
+}
+
+function clone<T>(value: T): T {
+  return structuredClone(value);
 }
 
 function errorMessage(error: unknown): string {
