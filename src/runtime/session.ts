@@ -70,6 +70,7 @@ export class AgentSession {
           });
           item.resolve();
         } catch (error) {
+          this.#emit({ type: "turn-error", message: errorMessage(error) });
           item.reject(error);
         } finally {
           this.#activeAbort = undefined;
@@ -85,4 +86,12 @@ export class AgentSession {
       listener(event);
     }
   }
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
 }

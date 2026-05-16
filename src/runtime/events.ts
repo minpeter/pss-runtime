@@ -2,6 +2,7 @@ export type AgentEvent =
   | { type: "user-message"; text: string }
   | { type: "turn-start" }
   | { type: "turn-abort" }
+  | { type: "turn-error"; message: string }
   | { type: "turn-end" }
   | { type: "step-start" }
   | { type: "text"; text: string }

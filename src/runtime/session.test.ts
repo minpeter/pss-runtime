@@ -52,3 +52,25 @@ assert.deepEqual(
     "turn-end",
   ]
 );
+
+const failingSession = new Agent({
+  llm: async () => {
+    throw new Error("model unavailable");
+  },
+}).createSession();
+const failingEvents: AgentEvent[] = [];
+failingSession.subscribe((event) => failingEvents.push(event));
+
+await assert.rejects(
+  failingSession.submit({ type: "user-message", text: "fail" }),
+  /model unavailable/
+);
+
+assert.deepEqual(
+  failingEvents.map((event) => event.type),
+  ["user-message", "turn-start", "step-start", "turn-error"]
+);
+assert.deepEqual(failingEvents.at(-1), {
+  type: "turn-error",
+  message: "model unavailable",
+});
