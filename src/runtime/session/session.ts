@@ -1,6 +1,6 @@
-import { runAgentLoop } from "./agent-loop";
+import { runAgentLoop } from "../agent-loop";
 import type { AgentEvent, AgentEventListener } from "./events";
-import type { Llm } from "./mock-llm";
+import type { Llm } from "../mock-llm";
 
 export type SessionInput = { type: "user-message"; text: string };
 
