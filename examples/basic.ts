@@ -1,9 +1,10 @@
 import { Agent } from "../src";
 
 const agent = new Agent();
+const session = agent.createSession();
 
-agent.subscribe((event) => {
+session.subscribe((event) => {
   console.log(event);
 });
 
-await agent.run();
+await session.submit({ type: "user-message", text: "do something" });
