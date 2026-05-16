@@ -28,7 +28,7 @@ export class Agent {
 
   createSession(options: CreateSessionOptions = {}): AgentSession {
     return new AgentSession({
-      id: options.id ?? crypto.randomUUID(),
+      id: options.id ?? options.snapshot?.sessionId ?? crypto.randomUUID(),
       llm: this.#llm,
       snapshot: options.snapshot,
       historyStore: options.historyStore ?? this.#historyStore,

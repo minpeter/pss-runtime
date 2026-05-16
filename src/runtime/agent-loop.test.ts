@@ -22,11 +22,11 @@ assert.deepEqual(
   events.map((event) => event.type),
   [
     "step-start",
-    "text",
+    "assistant-text",
     "tool-call",
     "step-end",
     "step-start",
-    "text",
+    "assistant-text",
     "step-end",
   ]
 );

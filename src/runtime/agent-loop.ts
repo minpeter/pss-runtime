@@ -36,7 +36,7 @@ export async function runAgentLoop({
       }
 
       if (part.type === "text") {
-        emit({ type: "text", text: part.text });
+        emit({ type: "assistant-text", text: part.text });
         continue;
       }
 

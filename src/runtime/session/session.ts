@@ -1,10 +1,14 @@
 import { runAgentLoop } from "../agent-loop";
 import type { Llm } from "../mock-llm";
 import type { AgentEvent, AgentEventListener } from "./events";
-import { SessionHistory, type SessionSnapshot } from "./history";
+import {
+  SessionHistory,
+  toModelHistoryItem,
+  type SessionSnapshot,
+} from "./history";
 import type { SessionHistoryStore } from "./store";
 
-export type SessionInput = { type: "user-message"; text: string };
+export type SessionInput = { type: "user-text"; text: string };
 
 export type AgentSessionOptions = {
   id: string;
@@ -43,6 +47,10 @@ export class AgentSession {
 
   submit(input: SessionInput): Promise<void> {
     this.#emit(input);
+
+    if (this.#historyStore) {
+      void this.save().catch(() => {});
+    }
 
     const queued = new Promise<void>((resolve, reject) => {
       this.#inputQueue.push({ input, resolve, reject });
@@ -92,10 +100,7 @@ export class AgentSession {
 
         try {
           const turnStart = this.#emit({ type: "turn-start" });
-          this.history.appendModelItem(turnStart.sequence, {
-            type: "user-message",
-            text: item.input.text,
-          });
+          this.history.appendModelItem(turnStart.sequence, item.input);
 
           const result = await runAgentLoop({
             emit: (event) => this.#emitLoopEvent(event),
@@ -103,11 +108,13 @@ export class AgentSession {
             modelHistory: () => this.history.modelHistory(),
             signal: this.#activeAbort.signal,
           });
+
+          await this.save();
+
           this.#emit({
             type: result === "aborted" ? "turn-abort" : "turn-end",
           });
           turnClosed = true;
-          await this.save();
           item.resolve();
         } catch (error) {
           if (!turnClosed) {
@@ -126,20 +133,10 @@ export class AgentSession {
 
   #emitLoopEvent(event: AgentEvent): void {
     const record = this.#emit(event);
+    const modelHistoryItem = toModelHistoryItem(event);
 
-    if (event.type === "text") {
-      this.history.appendModelItem(record.sequence, {
-        type: "assistant-text",
-        text: event.text,
-      });
-      return;
-    }
-
-    if (event.type === "tool-call") {
-      this.history.appendModelItem(record.sequence, {
-        type: "tool-call",
-        toolName: event.toolName,
-      });
+    if (modelHistoryItem) {
+      this.history.appendModelItem(record.sequence, modelHistoryItem);
     }
   }
 

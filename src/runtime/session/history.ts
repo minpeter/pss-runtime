@@ -5,12 +5,10 @@ export type SessionEventRecord = {
   event: AgentEvent;
 };
 
-export type ModelHistoryItem =
-  | { type: "user-message"; text: string }
-  | { type: "assistant-text"; text: string }
-  | { type: "tool-call"; toolName: string }
-  | { type: "tool-result"; toolName: string; output: unknown }
-  | { type: "reasoning"; text: string };
+export type ModelHistoryItem = Extract<
+  AgentEvent,
+  { type: "user-text" | "assistant-text" | "tool-call" }
+>;
 
 export type ModelHistoryRecord = {
   sequence: number;
@@ -26,6 +24,18 @@ export type SessionSnapshot = {
 };
 
 export type SessionHistoryView = SessionSnapshot;
+
+export function toModelHistoryItem(
+  event: AgentEvent,
+): ModelHistoryItem | undefined {
+  if (
+    event.type === "user-text" ||
+    event.type === "assistant-text" ||
+    event.type === "tool-call"
+  ) {
+    return event;
+  }
+}
 
 export class SessionHistory {
   readonly #sessionId: string;
@@ -52,7 +62,10 @@ export class SessionHistory {
     return clone(record);
   }
 
-  appendModelItem(sequence: number, item: ModelHistoryItem): ModelHistoryRecord {
+  appendModelItem(
+    sequence: number,
+    item: ModelHistoryItem,
+  ): ModelHistoryRecord {
     const record = { sequence, item: clone(item) };
     this.#modelHistory.push(record);
     return clone(record);
@@ -71,20 +84,34 @@ export class SessionHistory {
   }
 
   viewAt(sequence: number): SessionHistoryView {
+    const maxSequence = this.#nextSequence - 1;
+
+    if (sequence > maxSequence) {
+      throw new Error(
+        `Cannot view future sequence ${sequence} (current max is ${maxSequence})`,
+      );
+    }
+
     return this.#snapshotFrom({
       events: this.#events.filter((record) => record.sequence <= sequence),
-      modelHistory: this.#modelHistory.filter((record) => record.sequence <= sequence),
+      modelHistory: this.#modelHistory.filter(
+        (record) => record.sequence <= sequence,
+      ),
       nextSequence: sequence + 1,
     });
   }
 
   restore(snapshot: SessionSnapshot): void {
     if (snapshot.version !== "pss-session-v1") {
-      throw new Error(`Unsupported session snapshot version: ${snapshot.version}`);
+      throw new Error(
+        `Unsupported session snapshot version: ${snapshot.version}`,
+      );
     }
 
     if (snapshot.sessionId !== this.#sessionId) {
-      throw new Error(`Cannot restore snapshot for session ${snapshot.sessionId} into ${this.#sessionId}`);
+      throw new Error(
+        `Cannot restore snapshot for session ${snapshot.sessionId} into ${this.#sessionId}`,
+      );
     }
 
     this.#nextSequence = snapshot.nextSequence;

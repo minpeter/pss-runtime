@@ -28,8 +28,8 @@ const session = new Agent({ llm }).createSession();
 const events: AgentEvent[] = [];
 session.subscribe((event) => events.push(event));
 
-const firstSubmit = session.submit({ type: "user-message", text: "first" });
-const secondSubmit = session.submit({ type: "user-message", text: "second" });
+const firstSubmit = session.submit({ type: "user-text", text: "first" });
+const secondSubmit = session.submit({ type: "user-text", text: "second" });
 
 session.interrupt();
 firstLlmCall.resolve();
@@ -40,14 +40,14 @@ assert.equal(calls, 2);
 assert.deepEqual(
   events.map((event) => event.type),
   [
-    "user-message",
+    "user-text",
     "turn-start",
     "step-start",
-    "user-message",
+    "user-text",
     "turn-abort",
     "turn-start",
     "step-start",
-    "text",
+    "assistant-text",
     "step-end",
     "turn-end",
   ]
@@ -62,13 +62,13 @@ const failingEvents: AgentEvent[] = [];
 failingSession.subscribe((event) => failingEvents.push(event));
 
 await assert.rejects(
-  failingSession.submit({ type: "user-message", text: "fail" }),
+  failingSession.submit({ type: "user-text", text: "fail" }),
   /model unavailable/
 );
 
 assert.deepEqual(
   failingEvents.map((event) => event.type),
-  ["user-message", "turn-start", "step-start", "turn-error"]
+  ["user-text", "turn-start", "step-start", "turn-error"]
 );
 assert.deepEqual(failingEvents.at(-1), {
   type: "turn-error",
@@ -78,8 +78,8 @@ assert.deepEqual(failingEvents.at(-1), {
 assert.deepEqual(
   session.snapshot().modelHistory.map((record) => record.item),
   [
-    { type: "user-message", text: "first" },
-    { type: "user-message", text: "second" },
+    { type: "user-text", text: "first" },
+    { type: "user-text", text: "second" },
     { type: "assistant-text", text: "DONE" },
   ]
 );
@@ -101,12 +101,12 @@ const historyLlm: Llm = async ({ history }) => {
 };
 
 const historySession = new Agent({ llm: historyLlm }).createSession({ id: "history-test" });
-await historySession.submit({ type: "user-message", text: "remember me" });
+await historySession.submit({ type: "user-text", text: "remember me" });
 
 assert.deepEqual(seenHistory, [
-  [{ type: "user-message", text: "remember me" }],
+  [{ type: "user-text", text: "remember me" }],
   [
-    { type: "user-message", text: "remember me" },
+    { type: "user-text", text: "remember me" },
     { type: "assistant-text", text: "Looking it up." },
     { type: "tool-call", toolName: "continue" },
   ],
@@ -119,7 +119,7 @@ assert.ok(toolCallSequence);
 const toolCallView = historySession.history.viewAt(toolCallSequence);
 assert.deepEqual(
   toolCallView.events.map((record) => record.event.type),
-  ["user-message", "turn-start", "step-start", "text", "tool-call"]
+  ["user-text", "turn-start", "step-start", "assistant-text", "tool-call"]
 );
 assert.deepEqual(toolCallView.modelHistory.at(-1)?.item, {
   type: "tool-call",
@@ -138,13 +138,13 @@ const persistedSession = new Agent({
   llm: async () => [{ type: "text", text: "stored" }],
 }).createSession({ id: "persisted" });
 
-await persistedSession.submit({ type: "user-message", text: "persist this" });
+await persistedSession.submit({ type: "user-text", text: "persist this" });
 
 const persistedSnapshot = await historyStore.load("persisted");
 assert.deepEqual(
   persistedSnapshot?.modelHistory.map((record) => record.item),
   [
-    { type: "user-message", text: "persist this" },
+    { type: "user-text", text: "persist this" },
     { type: "assistant-text", text: "stored" },
   ]
 );

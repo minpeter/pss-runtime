@@ -7,9 +7,9 @@ session.subscribe((event) => {
   console.log(event);
 });
 
-const first = session.submit({ type: "user-message", text: "first input" });
+const first = session.submit({ type: "user-text", text: "first input" });
 const second = session.submit({
-  type: "user-message",
+  type: "user-text",
   text: "queued input",
 });
 
