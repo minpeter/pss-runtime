@@ -1,40 +1,34 @@
 import assert from "node:assert/strict";
 import { runAgentLoop } from "./agent-loop";
 import type { AgentEvent } from "./events";
-import { createMockLlm } from "./mock-llm";
+import type { Llm, LlmOutput } from "./mock-llm";
 
-assert.deepEqual(await createMockLlm(() => 0.29)(), {
-  type: "text",
-  text: "DONE",
-});
-assert.deepEqual(await createMockLlm(() => 0.3)(), {
-  type: "tool-call",
-  toolName: "continue",
-});
+const createScriptedLlm = (outputs: LlmOutput[]): Llm => {
+  let index = 0;
+  return async () => outputs[index++] ?? [];
+};
 
 const events: AgentEvent[] = [];
-const originalRandom = Math.random;
-let calls = 0;
-Math.random = () => {
-  calls += 1;
-  return calls === 1 ? 0.7 : 0.2;
-};
-try {
-  assert.equal(await runAgentLoop((event) => events.push(event)), "DONE");
-} finally {
-  Math.random = originalRandom;
-}
-assert.equal(calls, 2);
+const llm = createScriptedLlm([
+  [
+    { type: "text", text: "I should keep going." },
+    { type: "tool-call", toolName: "continue" },
+  ],
+  [{ type: "text", text: "DONE" }],
+]);
+
+assert.equal(await runAgentLoop({ emit: (event) => events.push(event), llm }), undefined);
 assert.deepEqual(
   events.map((event) => event.type),
   [
-    "agent_start",
-    "turn_start",
-    "tool_call",
-    "turn_end",
-    "turn_start",
-    "message",
-    "turn_end",
-    "agent_end",
+    "agent-start",
+    "turn-start",
+    "text",
+    "tool-call",
+    "turn-end",
+    "turn-start",
+    "text",
+    "turn-end",
+    "agent-end",
   ]
 );

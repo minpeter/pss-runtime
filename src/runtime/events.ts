@@ -1,9 +1,9 @@
 export type AgentEvent =
-  | { type: "agent_start" }
-  | { type: "turn_start" }
-  | { type: "message"; text: string }
-  | { type: "tool_call"; toolName: string }
-  | { type: "turn_end" }
-  | { type: "agent_end" };
+  | { type: "agent-start" }
+  | { type: "turn-start" }
+  | { type: "text"; text: string }
+  | { type: "tool-call"; toolName: string }
+  | { type: "turn-end" }
+  | { type: "agent-end" };
 
 export type AgentEventListener = (event: AgentEvent) => void;
