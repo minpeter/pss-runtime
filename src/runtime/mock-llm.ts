@@ -1,9 +1,11 @@
+import type { ModelHistoryItem } from "./session";
+
 export type LlmOutputPart =
   | { type: "text"; text: string }
   | { type: "tool-call"; toolName: string };
 
 export type LlmOutput = LlmOutputPart[];
-export type LlmContext = { signal: AbortSignal };
+export type LlmContext = { history: ModelHistoryItem[]; signal: AbortSignal };
 export type Llm = (context: LlmContext) => Promise<LlmOutput>;
 
 const mockLlmDelayMs = 300;

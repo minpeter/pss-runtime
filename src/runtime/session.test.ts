@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { Agent } from "./agent";
-import type { AgentEvent } from "./session";
+import { InMemorySessionHistoryStore, type AgentEvent, type ModelHistoryItem } from "./session";
 import type { Llm } from "./mock-llm";
 
 const createDeferred = () => {
@@ -74,3 +74,77 @@ assert.deepEqual(failingEvents.at(-1), {
   type: "turn-error",
   message: "model unavailable",
 });
+
+assert.deepEqual(
+  session.snapshot().modelHistory.map((record) => record.item),
+  [
+    { type: "user-message", text: "first" },
+    { type: "user-message", text: "second" },
+    { type: "assistant-text", text: "DONE" },
+  ]
+);
+
+const seenHistory: ModelHistoryItem[][] = [];
+let historyCalls = 0;
+const historyLlm: Llm = async ({ history }) => {
+  historyCalls += 1;
+  seenHistory.push(history);
+
+  if (historyCalls === 1) {
+    return [
+      { type: "text", text: "Looking it up." },
+      { type: "tool-call", toolName: "continue" },
+    ];
+  }
+
+  return [{ type: "text", text: "DONE" }];
+};
+
+const historySession = new Agent({ llm: historyLlm }).createSession({ id: "history-test" });
+await historySession.submit({ type: "user-message", text: "remember me" });
+
+assert.deepEqual(seenHistory, [
+  [{ type: "user-message", text: "remember me" }],
+  [
+    { type: "user-message", text: "remember me" },
+    { type: "assistant-text", text: "Looking it up." },
+    { type: "tool-call", toolName: "continue" },
+  ],
+]);
+
+const fullSnapshot = historySession.snapshot();
+const toolCallSequence = fullSnapshot.events.find((record) => record.event.type === "tool-call")?.sequence;
+assert.ok(toolCallSequence);
+
+const toolCallView = historySession.history.viewAt(toolCallSequence);
+assert.deepEqual(
+  toolCallView.events.map((record) => record.event.type),
+  ["user-message", "turn-start", "step-start", "text", "tool-call"]
+);
+assert.deepEqual(toolCallView.modelHistory.at(-1)?.item, {
+  type: "tool-call",
+  toolName: "continue",
+});
+
+const restoredSession = new Agent({ llm: historyLlm }).createSession({
+  id: "history-test",
+  snapshot: toolCallView,
+});
+assert.deepEqual(restoredSession.snapshot(), toolCallView);
+
+const historyStore = new InMemorySessionHistoryStore();
+const persistedSession = new Agent({
+  historyStore,
+  llm: async () => [{ type: "text", text: "stored" }],
+}).createSession({ id: "persisted" });
+
+await persistedSession.submit({ type: "user-message", text: "persist this" });
+
+const persistedSnapshot = await historyStore.load("persisted");
+assert.deepEqual(
+  persistedSnapshot?.modelHistory.map((record) => record.item),
+  [
+    { type: "user-message", text: "persist this" },
+    { type: "assistant-text", text: "stored" },
+  ]
+);

@@ -1,9 +1,11 @@
 import type { AgentEventListener } from "./session/events";
+import type { ModelHistoryItem } from "./session/history";
 import { mockLlm, type Llm } from "./mock-llm";
 
 type RunAgentLoopOptions = {
   emit: AgentEventListener;
   llm?: Llm;
+  modelHistory?: () => ModelHistoryItem[];
   signal?: AbortSignal;
 };
 
@@ -12,6 +14,7 @@ export type AgentLoopResult = "completed" | "aborted";
 export async function runAgentLoop({
   emit,
   llm = mockLlm,
+  modelHistory = () => [],
   signal = new AbortController().signal,
 }: RunAgentLoopOptions): Promise<AgentLoopResult> {
   while (true) {
@@ -20,7 +23,7 @@ export async function runAgentLoop({
     }
 
     emit({ type: "step-start" });
-    const output = await llm({ signal });
+    const output = await llm({ history: modelHistory(), signal });
     let shouldContinue = false;
 
     if (signal.aborted) {
