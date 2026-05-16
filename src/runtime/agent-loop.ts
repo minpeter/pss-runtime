@@ -7,29 +7,29 @@ type RunAgentLoopOptions = {
   signal?: AbortSignal;
 };
 
+export type AgentLoopResult = "completed" | "aborted";
+
 export async function runAgentLoop({
   emit,
   llm = mockLlm,
   signal = new AbortController().signal,
-}: RunAgentLoopOptions): Promise<void> {
+}: RunAgentLoopOptions): Promise<AgentLoopResult> {
   while (true) {
     if (signal.aborted) {
-      return;
+      return "aborted";
     }
 
-    emit({ type: "turn-start" });
+    emit({ type: "step-start" });
     const output = await llm({ signal });
     let shouldContinue = false;
 
     if (signal.aborted) {
-      emit({ type: "turn-abort" });
-      return;
+      return "aborted";
     }
 
     for (const part of output) {
       if (signal.aborted) {
-        emit({ type: "turn-abort" });
-        return;
+        return "aborted";
       }
 
       if (part.type === "text") {
@@ -41,10 +41,10 @@ export async function runAgentLoop({
       shouldContinue = true;
     }
 
-    emit({ type: "turn-end" });
+    emit({ type: "step-end" });
 
     if (!shouldContinue) {
-      return;
+      return "completed";
     }
   }
 }

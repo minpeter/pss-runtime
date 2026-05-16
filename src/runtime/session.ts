@@ -47,7 +47,6 @@ export class AgentSession {
     }
 
     this.#running = true;
-    this.#emit({ type: "agent-start" });
 
     try {
       while (this.#inputQueue.length > 0) {
@@ -60,10 +59,14 @@ export class AgentSession {
         this.#activeAbort = new AbortController();
 
         try {
-          await runAgentLoop({
+          this.#emit({ type: "turn-start" });
+          const result = await runAgentLoop({
             emit: (event) => this.#emit(event),
             llm: this.#llm,
             signal: this.#activeAbort.signal,
+          });
+          this.#emit({
+            type: result === "aborted" ? "turn-abort" : "turn-end",
           });
           item.resolve();
         } catch (error) {
@@ -73,7 +76,6 @@ export class AgentSession {
         }
       }
     } finally {
-      this.#emit({ type: "agent-end" });
       this.#running = false;
     }
   }

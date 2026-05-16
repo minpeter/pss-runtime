@@ -41,13 +41,14 @@ assert.deepEqual(
   events.map((event) => event.type),
   [
     "user-message",
-    "agent-start",
     "turn-start",
+    "step-start",
     "user-message",
     "turn-abort",
     "turn-start",
+    "step-start",
     "text",
+    "step-end",
     "turn-end",
-    "agent-end",
   ]
 );
