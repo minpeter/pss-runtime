@@ -2,14 +2,21 @@ import assert from "node:assert/strict";
 import { runAgentLoop } from "./agent-loop";
 import type { Llm, LlmOutput } from "./llm";
 import type { AgentEvent } from "./session/events";
-import type { AssistantMessage, ModelHistoryItem, ToolCall, ToolMessage } from "./session";
+import type {
+  AssistantContentPart,
+  AssistantMessage,
+  ModelHistoryItem,
+  ToolMessage,
+} from "./session";
 
 const createScriptedLlm = (outputs: LlmOutput[]): Llm => {
   let index = 0;
   return async () => outputs[index++] ?? [];
 };
 
-const continueToolCall = (toolCallId: string): ToolCall => ({
+type ToolCallPart = Extract<AssistantContentPart, { type: "tool-call" }>;
+
+const continueToolCall = (toolCallId: string): ToolCallPart => ({
   type: "tool-call",
   toolCallId,
   toolName: "continue",
@@ -21,7 +28,7 @@ const assistantMessage = (content: AssistantMessage["content"]): AssistantMessag
   content,
 });
 
-const continueToolResult = (toolCall: ToolCall): ToolMessage => ({
+const continueToolResult = (toolCall: ToolCallPart): ToolMessage => ({
   role: "tool",
   content: [
     {

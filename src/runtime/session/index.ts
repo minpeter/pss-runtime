@@ -6,7 +6,6 @@ export type {
   AssistantMessage,
   ModelHistoryItem,
   ToolContentPart,
-  ToolCall,
   ToolMessage,
   UserContentPart,
   UserMessage,

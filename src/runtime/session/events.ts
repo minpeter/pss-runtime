@@ -14,7 +14,6 @@ export type ToolContentPart = ToolContent[number];
 export type UserMessage = UserModelMessage;
 export type AssistantMessage = AssistantModelMessage;
 export type ToolMessage = ToolModelMessage;
-export type ToolCall = Extract<AssistantContentPart, { type: "tool-call" }>;
 
 export type ModelHistoryItem = UserMessage | AssistantMessage | ToolMessage;
 

@@ -3,9 +3,9 @@ import { Agent } from "../agent";
 import type { Llm } from "../llm";
 import type {
   AgentEvent,
+  AssistantContentPart,
   AssistantMessage,
   ModelHistoryItem,
-  ToolCall,
   ToolMessage,
   UserMessage,
 } from "./index";
@@ -18,7 +18,9 @@ const createDeferred = () => {
   return { promise, resolve };
 };
 
-const continueToolCall = (toolCallId: string): ToolCall => ({
+type ToolCallPart = Extract<AssistantContentPart, { type: "tool-call" }>;
+
+const continueToolCall = (toolCallId: string): ToolCallPart => ({
   type: "tool-call",
   toolCallId,
   toolName: "continue",
@@ -34,7 +36,7 @@ const assistantMessage = (
   content,
 });
 
-const continueToolResult = (toolCall: ToolCall): ToolMessage => ({
+const continueToolResult = (toolCall: ToolCallPart): ToolMessage => ({
   role: "tool",
   content: [
     {

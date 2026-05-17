@@ -18,7 +18,6 @@ export type {
   ModelHistoryItem,
   SessionInput,
   ToolContentPart,
-  ToolCall,
   ToolMessage,
   UserContentPart,
   UserMessage,
