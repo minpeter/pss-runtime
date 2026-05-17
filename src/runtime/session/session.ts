@@ -1,8 +1,13 @@
 import { runAgentLoop } from "../agent-loop";
-import type { AgentEvent, AgentEventListener, ModelHistoryItem } from "./events";
+import type {
+  AgentEvent,
+  AgentEventListener,
+  ModelHistoryItem,
+  UserMessage,
+} from "./events";
 import type { Llm } from "../llm";
 
-export type SessionInput = { type: "user-text"; text: string };
+export type SessionInput = UserMessage;
 
 type QueuedInput = {
   input: SessionInput;

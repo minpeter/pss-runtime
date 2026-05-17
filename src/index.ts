@@ -9,12 +9,17 @@ export type {
   LlmOutputPart,
 } from "./runtime/llm";
 export type {
+  AgentLifecycleEvent,
   AgentEvent,
   AgentEventListener,
   AgentSession,
-  AssistantText,
+  AssistantContentPart,
+  AssistantMessage,
   ModelHistoryItem,
   SessionInput,
+  ToolContentPart,
   ToolCall,
-  UserText,
+  ToolMessage,
+  UserContentPart,
+  UserMessage,
 } from "./runtime/session";

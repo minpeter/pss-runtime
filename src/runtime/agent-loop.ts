@@ -1,6 +1,6 @@
 import type { AgentEventListener } from "./session/events";
 import type { ModelHistoryItem } from "./session";
-import type { Llm } from "./llm";
+import { hasToolCall, type Llm } from "./llm";
 
 type RunAgentLoopOptions = {
   emit: AgentEventListener;
@@ -41,20 +41,17 @@ export async function runAgentLoop({
       return "aborted";
     }
 
-    for (const part of output) {
+    for (const message of output) {
       if (signal.aborted) {
         return "aborted";
       }
 
-      history.push(structuredClone(part));
+      history.push(structuredClone(message));
+      emit(message);
 
-      if (part.type === "assistant-text") {
-        emit(part);
-        continue;
+      if (message.role === "assistant" && hasToolCall(message)) {
+        shouldContinue = true;
       }
-
-      emit(part);
-      shouldContinue = true;
     }
 
     emit({ type: "step-end" });

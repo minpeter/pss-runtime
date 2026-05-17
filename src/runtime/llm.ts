@@ -3,26 +3,19 @@ import {
   generateText,
   jsonSchema,
   tool,
-  type AssistantContent,
-  type ContentPart,
+  type AssistantModelMessage,
   type LanguageModel,
   type ModelMessage,
-  type ToolContent,
 } from "ai";
 import { env } from "./env";
 import type {
-  AssistantText,
+  AssistantContentPart,
+  AssistantMessage,
   ModelHistoryItem,
-  ToolCall,
-  UserText,
+  ToolMessage,
 } from "./session/events";
 
-type ArrayItem<T> = T extends Array<infer Item> ? Item : never;
-type AssistantPromptPart = ArrayItem<Exclude<AssistantContent, string>>;
-type AssistantTextPart = Extract<AssistantPromptPart, { type: "text" }>;
-type ToolContentPart = ToolContent[number];
-
-export type LlmOutputPart = AssistantText | ToolCall;
+export type LlmOutputPart = AssistantMessage | ToolMessage;
 export type LlmOutput = LlmOutputPart[];
 export type LlmContext = {
   history: readonly ModelHistoryItem[];
@@ -59,7 +52,6 @@ const continueTool = tool({
 });
 
 const continueTools = { continue: continueTool };
-type ContinueContentPart = ContentPart<typeof continueTools>;
 
 export function createLlm({
   model = defaultModel,
@@ -74,94 +66,22 @@ export function createLlm({
       tools: continueTools,
     });
 
-    return toLlmOutput(result.content);
+    return result.responseMessages;
   };
 }
 
 function toModelMessages(history: readonly ModelHistoryItem[]): ModelMessage[] {
-  const messages: ModelMessage[] = [];
-  let assistantParts: AssistantPromptPart[] = [];
-
-  const flushAssistant = () => {
-    if (assistantParts.length === 0) {
-      return;
-    }
-
-    messages.push({
-      role: "assistant",
-      content:
-        assistantParts.length === 1 &&
-        assistantParts[0]?.type === "text" &&
-        assistantParts[0].providerOptions == null
-          ? assistantParts[0].text
-          : assistantParts,
-    });
-    assistantParts = [];
-  };
-
-  history.forEach((item, index) => {
-    if (item.type === "user-text") {
-      flushAssistant();
-      const content = textPartFromRuntime(item);
-      messages.push({
-        role: "user",
-        content: content.providerOptions == null ? content.text : [content],
-      });
-      return;
-    }
-
-    if (item.type === "assistant-text") {
-      assistantParts.push(textPartFromRuntime(item));
-      return;
-    }
-
-    assistantParts.push(item);
-    flushAssistant();
-    const toolResultPart = {
-      type: "tool-result",
-      toolCallId: item.toolCallId,
-      toolName: item.toolName,
-      output: { type: "json", value: {} },
-    } satisfies ToolContentPart;
-
-    messages.push({
-      role: "tool",
-      content: [toolResultPart],
-    });
-  });
-
-  flushAssistant();
-  return messages;
+  return [...history];
 }
 
-function textPartFromRuntime(item: UserText | AssistantText): AssistantTextPart {
-  return {
-    type: "text",
-    text: item.text,
-    ...(item.providerOptions == null
-      ? {}
-      : { providerOptions: item.providerOptions }),
-  } satisfies AssistantTextPart;
+export function hasToolCall(message: AssistantModelMessage): boolean {
+  return assistantContentParts(message).some((part) => part.type === "tool-call");
 }
 
-function toLlmOutput(content: ContinueContentPart[]): LlmOutput {
-  return content.flatMap((part): LlmOutput => {
-    if (part.type === "text") {
-      return part.text ? [{ type: "assistant-text", text: part.text }] : [];
-    }
-
-    if (part.type === "tool-call") {
-      return [
-        {
-          type: "tool-call",
-          toolCallId: part.toolCallId,
-          toolName: part.toolName,
-          input: part.input,
-          providerExecuted: part.providerExecuted,
-        },
-      ];
-    }
-
-    return [];
-  });
+export function assistantContentParts(
+  message: AssistantModelMessage
+): AssistantContentPart[] {
+  return typeof message.content === "string"
+    ? [{ type: "text", text: message.content }]
+    : message.content;
 }
