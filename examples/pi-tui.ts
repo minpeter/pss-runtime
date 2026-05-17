@@ -6,8 +6,7 @@ import {
   Text,
   TUI,
 } from "@earendil-works/pi-tui";
-import { Agent } from "../src/runtime/agent";
-import type { AgentEvent } from "../src/runtime/session/events";
+import { Agent, type AgentEvent } from "../src";
 
 const agent = new Agent();
 const session = agent.createSession();

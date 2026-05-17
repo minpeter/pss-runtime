@@ -3,6 +3,18 @@
   "root": true,
   "extends": ["ultracite/biome/core"],
   "files": {
-    "includes": ["!!**/.omx"]
-  }
+    "includes": ["**/*", "!!**/.omx"]
+  },
+  "overrides": [
+    {
+      "includes": ["src/index.ts", "src/runtime/session/index.ts"],
+      "linter": {
+        "rules": {
+          "performance": {
+            "noBarrelFile": "off"
+          }
+        }
+      }
+    }
+  ]
 }

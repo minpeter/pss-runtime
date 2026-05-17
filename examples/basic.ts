@@ -1,4 +1,4 @@
-import { Agent } from "../src/runtime/agent";
+import { Agent } from "../src";
 
 const agent = new Agent();
 const session = agent.createSession();

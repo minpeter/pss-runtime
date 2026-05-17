@@ -55,7 +55,9 @@ export class AgentSession {
       });
     });
 
-    this.#drainInputQueue();
+    this.#drainInputQueue().catch((error: unknown) => {
+      this.#emit({ type: "turn-error", message: errorMessage(error) });
+    });
     return queued;
   }
 
