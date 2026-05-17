@@ -20,9 +20,11 @@ export type LlmContext = {
 export type Llm = (context: LlmContext) => Promise<LlmOutput>;
 
 export type CreateLlmOptions = {
-  model: LanguageModel;
+  model?: LanguageModel;
   instructions?: string;
 };
+
+export const defaultModel = "openai/gpt-5.5" satisfies LanguageModel;
 
 const continueTool = tool({
   description: "Request one more agent loop step before producing a final answer.",
@@ -38,7 +40,10 @@ const continueTool = tool({
   }),
 });
 
-export function createLlm({ model, instructions }: CreateLlmOptions): Llm {
+export function createLlm({
+  model = defaultModel,
+  instructions,
+}: CreateLlmOptions = {}): Llm {
   return async ({ history, signal }) => {
     const result = await generateText({
       abortSignal: signal,
