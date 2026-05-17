@@ -38,20 +38,23 @@ const addLine = (text: string): void => {
   tui.requestRender();
 };
 
+const safeText = (text: string): string =>
+  text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g, "");
+
 const formatEvent = (event: AgentEvent): string | undefined => {
   switch (event.type) {
     case "user-text":
-      return `\x1b[36myou\x1b[0m: ${event.text}`;
+      return `\x1b[36myou\x1b[0m: ${safeText(event.text)}`;
     case "assistant-text":
-      return `\x1b[32massistant\x1b[0m: ${event.text}`;
+      return `\x1b[32massistant\x1b[0m: ${safeText(event.text)}`;
     case "tool-call":
-      return `\x1b[33mtool\x1b[0m: ${event.toolName}`;
+      return `\x1b[33mtool\x1b[0m: ${safeText(event.toolName)}`;
     case "turn-start":
       return "\x1b[2mrunning...\x1b[0m";
     case "turn-abort":
       return "\x1b[2minterrupted\x1b[0m";
     case "turn-error":
-      return `\x1b[31merror\x1b[0m: ${event.message}`;
+      return `\x1b[31merror\x1b[0m: ${safeText(event.message)}`;
     case "turn-end":
       return "\x1b[2mdone\x1b[0m";
     case "step-start":
@@ -79,8 +82,9 @@ input.onSubmit = (text) => {
   void session
     .submit({ type: "user-text", text: trimmed })
     .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
       addLine(
-        `\x1b[31merror\x1b[0m: ${error instanceof Error ? error.message : String(error)}`
+        `\x1b[31merror\x1b[0m: ${safeText(message)}`
       );
     });
 };
@@ -97,6 +101,7 @@ const removeInputListener = tui.addInputListener((data) => {
   }
 
   removeInputListener();
+  session.interrupt();
   tui.stop();
   finish();
   return { consume: true };
