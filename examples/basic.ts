@@ -7,14 +7,7 @@ session.subscribe((event) => {
   console.log(event);
 });
 
-const first = session.submit({ type: "user-text", text: "first input" });
-const second = session.submit({
+await session.submit({
   type: "user-text",
-  text: "queued input",
+  text: "Say hello in one short sentence.",
 });
-
-setTimeout(() => {
-  session.interrupt();
-}, 100);
-
-await Promise.all([first, second]);
