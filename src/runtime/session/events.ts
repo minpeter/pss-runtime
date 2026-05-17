@@ -1,6 +1,8 @@
+import type { ToolCallPart } from "ai";
+
 export type UserText = { type: "user-text"; text: string };
 export type AssistantText = { type: "assistant-text"; text: string };
-export type ToolCall = { type: "tool-call"; toolName: string };
+export type ToolCall = ToolCallPart;
 
 export type ModelHistoryItem = UserText | AssistantText | ToolCall;
 

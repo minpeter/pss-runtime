@@ -102,19 +102,11 @@ function toModelMessages(history: readonly ModelHistoryItem[]): ModelMessage[] {
       return;
     }
 
-    // Replay-only id: the public ToolCall event intentionally stores only the
-    // logical tool name while the AI SDK prompt requires paired call/result ids.
-    const toolCallId = `tool-call-${index}`;
-    assistantParts.push({
-      type: "tool-call",
-      toolCallId,
-      toolName: item.toolName,
-      input: {},
-    } satisfies ToolCallPart);
+    assistantParts.push(item);
     flushAssistant();
     const toolResultPart = {
       type: "tool-result",
-      toolCallId,
+      toolCallId: item.toolCallId,
       toolName: item.toolName,
       output: { type: "json", value: {} },
     } satisfies ToolResultPart;
@@ -136,7 +128,15 @@ function toLlmOutput(content: ContinueContentPart[]): LlmOutput {
     }
 
     if (part.type === "tool-call") {
-      return [{ type: "tool-call", toolName: part.toolName }];
+      return [
+        {
+          type: "tool-call",
+          toolCallId: part.toolCallId,
+          toolName: part.toolName,
+          input: part.input,
+          providerExecuted: part.providerExecuted,
+        },
+      ];
     }
 
     return [];

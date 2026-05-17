@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { Agent } from "../agent";
 import type { Llm } from "../llm";
-import type { AgentEvent, ModelHistoryItem } from "./index";
+import type { AgentEvent, ModelHistoryItem, ToolCall } from "./index";
 
 const createDeferred = () => {
   let resolve!: () => void;
@@ -10,6 +10,13 @@ const createDeferred = () => {
   });
   return { promise, resolve };
 };
+
+const continueToolCall = (toolCallId: string): ToolCall => ({
+  type: "tool-call",
+  toolCallId,
+  toolName: "continue",
+  input: {},
+});
 
 const firstLlmCall = createDeferred();
 const seenHistory: ModelHistoryItem[][] = [];
@@ -20,7 +27,7 @@ const llm: Llm = async ({ history }) => {
 
   if (calls === 1) {
     await firstLlmCall.promise;
-    return [{ type: "tool-call", toolName: "continue" }];
+    return [continueToolCall("call-interrupted-continue")];
   }
 
   return [{ type: "assistant-text", text: "DONE" }];
@@ -75,7 +82,7 @@ const toolLoopSession = new Agent({
     toolLoopHistories.push([...history]);
 
     if (toolLoopCalls === 1) {
-      return [{ type: "tool-call", toolName: "continue" }];
+      return [continueToolCall("call-tool-loop-continue")];
     }
 
     return [{ type: "assistant-text", text: "DONE" }];
@@ -88,12 +95,12 @@ assert.deepEqual(toolLoopHistories, [
   [{ type: "user-text", text: "remember me" }],
   [
     { type: "user-text", text: "remember me" },
-    { type: "tool-call", toolName: "continue" },
+    continueToolCall("call-tool-loop-continue"),
   ],
 ]);
 assert.deepEqual(toolLoopSession.history(), [
   { type: "user-text", text: "remember me" },
-  { type: "tool-call", toolName: "continue" },
+  continueToolCall("call-tool-loop-continue"),
   { type: "assistant-text", text: "DONE" },
 ]);
 
