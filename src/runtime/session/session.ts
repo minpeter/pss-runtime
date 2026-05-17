@@ -1,13 +1,15 @@
 import { runAgentLoop } from "../agent-loop";
-import type {
-  AgentEvent,
-  AgentEventListener,
-  ModelHistoryItem,
-  UserMessage,
-} from "./events";
 import type { Llm } from "../llm";
+import {
+  toUserModelMessage,
+  type AgentEvent,
+  type AgentEventListener,
+  type ModelHistoryItem,
+  type UserText,
+} from "./events";
+import type { ModelMessage } from "ai";
 
-export type SessionInput = UserMessage;
+export type SessionInput = UserText;
 
 type QueuedInput = {
   input: SessionInput;
@@ -19,6 +21,7 @@ export class AgentSession {
   readonly #listeners = new Set<AgentEventListener>();
   readonly #llm: Llm;
   readonly #history: ModelHistoryItem[] = [];
+  readonly #modelHistory: ModelMessage[] = [];
   readonly #inputQueue: QueuedInput[] = [];
   #running = false;
   #activeAbort?: AbortController;
@@ -98,9 +101,17 @@ export class AgentSession {
         try {
           this.#emit({ type: "turn-start" });
           this.#history.push(structuredClone(item.input));
+          this.#modelHistory.push(toUserModelMessage(item.input));
+
           const result = await runAgentLoop({
-            emit: (event) => this.#emit(event),
-            history: this.#history,
+            emit: (event) => {
+              if (isModelHistoryItem(event)) {
+                this.#history.push(structuredClone(event));
+              }
+
+              this.#emit(event);
+            },
+            history: this.#modelHistory,
             llm: this.#llm,
             signal: this.#activeAbort.signal,
           });
@@ -125,6 +136,14 @@ export class AgentSession {
       listener(event);
     }
   }
+}
+
+function isModelHistoryItem(event: AgentEvent): event is ModelHistoryItem {
+  return (
+    event.type === "user-text" ||
+    event.type === "assistant-text" ||
+    event.type === "tool-call"
+  );
 }
 
 function errorMessage(error: unknown): string {

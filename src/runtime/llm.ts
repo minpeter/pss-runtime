@@ -3,15 +3,17 @@ import {
   generateText,
   jsonSchema,
   tool,
+  type AssistantModelMessage,
   type LanguageModel,
+  type ModelMessage,
+  type ToolModelMessage,
 } from "ai";
 import { env } from "./env";
-import type { AssistantMessage, ModelHistoryItem, ToolMessage } from "./session/events";
 
-export type LlmOutputPart = AssistantMessage | ToolMessage;
+export type LlmOutputPart = AssistantModelMessage | ToolModelMessage;
 export type LlmOutput = LlmOutputPart[];
 export type LlmContext = {
-  history: readonly ModelHistoryItem[];
+  history: readonly ModelMessage[];
   signal: AbortSignal;
 };
 export type Llm = (context: LlmContext) => Promise<LlmOutput>;

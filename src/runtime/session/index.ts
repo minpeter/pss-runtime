@@ -1,14 +1,10 @@
 export type {
-  AgentLifecycleEvent,
   AgentEvent,
   AgentEventListener,
-  AssistantContentPart,
-  AssistantMessage,
+  AgentLifecycleEvent,
+  AssistantText,
   ModelHistoryItem,
-  ToolContentPart,
-  ToolMessage,
-  UserContentPart,
-  UserMessage,
+  ToolCall,
+  UserText,
 } from "./events";
-export { assistantContentParts, hasAssistantToolCall } from "./events";
 export { AgentSession, type SessionInput } from "./session";

@@ -8,6 +8,6 @@ session.subscribe((event) => {
 });
 
 await session.submit({
-  role: "user",
-  content: "Say hello in one short sentence.",
+  type: "user-text",
+  text: "Say hello in one short sentence.",
 });

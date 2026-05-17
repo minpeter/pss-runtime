@@ -41,52 +41,14 @@ const addLine = (text: string): void => {
 const safeText = (text: string): string =>
   text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, "");
 
-const textContent = (content: unknown): string => {
-  if (typeof content === "string") {
-    return content;
-  }
-
-  if (!Array.isArray(content)) {
-    return "";
-  }
-
-  return content
-    .filter((part): part is { type: "text"; text: string } => part.type === "text")
-    .map((part) => part.text)
-    .join("");
-};
-
-const toolNames = (content: unknown): string => {
-  if (!Array.isArray(content)) {
-    return "";
-  }
-
-  return content
-    .filter((part): part is { type: "tool-call"; toolName: string } => part.type === "tool-call")
-    .map((part) => part.toolName)
-    .join(", ");
-};
-
 const formatEvent = (event: AgentEvent): string | undefined => {
-  if ("role" in event) {
-    if (event.role === "user") {
-      return `\x1b[36myou\x1b[0m: ${safeText(textContent(event.content))}`;
-    }
-
-    if (event.role === "assistant") {
-      const text = textContent(event.content);
-      const tools = toolNames(event.content);
-      return text
-        ? `\x1b[32massistant\x1b[0m: ${safeText(text)}`
-        : tools
-          ? `\x1b[33mtool\x1b[0m: ${safeText(tools)}`
-          : undefined;
-    }
-
-    return undefined;
-  }
-
   switch (event.type) {
+    case "user-text":
+      return `\x1b[36myou\x1b[0m: ${safeText(event.text)}`;
+    case "assistant-text":
+      return `\x1b[32massistant\x1b[0m: ${safeText(event.text)}`;
+    case "tool-call":
+      return `\x1b[33mtool\x1b[0m: ${safeText(event.toolName)}`;
     case "turn-start":
       return "\x1b[2mrunning...\x1b[0m";
     case "turn-abort":
@@ -100,7 +62,6 @@ const formatEvent = (event: AgentEvent): string | undefined => {
       return undefined;
   }
 };
-
 session.subscribe((event) => {
   const line = formatEvent(event);
   if (line) {
@@ -118,7 +79,7 @@ input.onSubmit = (text) => {
   }
 
   void session
-    .submit({ role: "user", content: trimmed })
+    .submit({ type: "user-text", text: trimmed })
     .catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
       addLine(

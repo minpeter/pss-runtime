@@ -1,10 +1,14 @@
-import { hasAssistantToolCall, type AgentEventListener } from "./session/events";
-import type { ModelHistoryItem } from "./session";
+import {
+  agentEventsFromResponseMessage,
+  hasAssistantToolCall,
+  type AgentEventListener,
+} from "./session/events";
 import type { Llm } from "./llm";
+import type { ModelMessage } from "ai";
 
 type RunAgentLoopOptions = {
   emit: AgentEventListener;
-  history: ModelHistoryItem[];
+  history: ModelMessage[];
   llm: Llm;
   signal?: AbortSignal;
 };
@@ -47,7 +51,9 @@ export async function runAgentLoop({
       }
 
       history.push(structuredClone(message));
-      emit(message);
+      for (const event of agentEventsFromResponseMessage(message)) {
+        emit(event);
+      }
 
       if (message.role === "assistant" && hasAssistantToolCall(message)) {
         shouldContinue = true;
