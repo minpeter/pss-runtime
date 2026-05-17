@@ -5,7 +5,7 @@ import type {
   ToolModelMessage,
   UserModelMessage,
 } from "ai";
-import type { ModelHistoryItem } from "./agent-events";
+import type { ModelHistoryItem } from "./events";
 
 type AssistantContentPart = Exclude<AssistantContent, string>[number];
 type ResponseMessage = AssistantModelMessage | ToolModelMessage;

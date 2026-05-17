@@ -1,12 +1,12 @@
 import { runAgentLoop } from "../agent-loop";
 import type { Llm } from "../llm";
-import { AgentModelHistory } from "./model-history";
+import { AgentModelHistory } from "./history";
 import type {
   AgentEvent,
   AgentEventListener,
   ModelHistoryItem,
   UserText,
-} from "./agent-events";
+} from "./events";
 
 export type SessionInput = UserText;
 

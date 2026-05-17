@@ -1,6 +1,6 @@
 import type { ModelMessage, UserModelMessage } from "ai";
-import { modelHistoryItemsFromModelMessage } from "./model-message-events";
-import type { ModelHistoryItem, UserText } from "./agent-events";
+import { modelHistoryItemsFromModelMessage } from "./mapping";
+import type { ModelHistoryItem, UserText } from "./events";
 
 export class AgentModelHistory {
   readonly #modelHistory: ModelMessage[] = [];
