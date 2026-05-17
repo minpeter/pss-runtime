@@ -2,15 +2,13 @@ import type {
   AssistantContent,
   AssistantModelMessage,
   ModelMessage,
-  ToolModelMessage,
   UserModelMessage,
 } from "ai";
 import type { ModelHistoryItem } from "./events";
 
 type AssistantContentPart = Exclude<AssistantContent, string>[number];
-type ResponseMessage = AssistantModelMessage | ToolModelMessage;
 
-export function modelHistoryItemsFromModelMessage(
+export function agentEventsFromModelMessage(
   message: ModelMessage
 ): ModelHistoryItem[] {
   if (message.role === "user") {
@@ -18,17 +16,7 @@ export function modelHistoryItemsFromModelMessage(
     return text ? [{ type: "user-text", text }] : [];
   }
 
-  if (message.role === "assistant" || message.role === "tool") {
-    return agentEventsFromResponseMessage(message);
-  }
-
-  return [];
-}
-
-export function agentEventsFromResponseMessage(
-  message: ResponseMessage
-): ModelHistoryItem[] {
-  if (message.role === "tool") {
+  if (message.role !== "assistant") {
     return [];
   }
 

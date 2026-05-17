@@ -1,5 +1,5 @@
 import type { ModelMessage, UserModelMessage } from "ai";
-import { modelHistoryItemsFromModelMessage } from "./mapping";
+import { agentEventsFromModelMessage } from "./mapping";
 import type { ModelHistoryItem, UserText } from "./events";
 
 export class AgentModelHistory {
@@ -14,7 +14,7 @@ export class AgentModelHistory {
   }
 
   publicSnapshot(): ModelHistoryItem[] {
-    return this.#modelHistory.flatMap(modelHistoryItemsFromModelMessage);
+    return this.#modelHistory.flatMap(agentEventsFromModelMessage);
   }
 }
 

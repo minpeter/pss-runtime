@@ -3,15 +3,13 @@ import {
   generateText,
   jsonSchema,
   tool,
-  type AssistantModelMessage,
   type LanguageModel,
   type ModelMessage,
-  type ToolModelMessage,
 } from "ai";
 import { env } from "./env";
 
-export type LlmOutputPart = AssistantModelMessage | ToolModelMessage;
-export type LlmOutput = LlmOutputPart[];
+export type LlmOutput = Awaited<ReturnType<typeof generateText>>["responseMessages"];
+export type LlmOutputPart = LlmOutput[number];
 export type LlmContext = {
   history: readonly ModelMessage[];
   signal: AbortSignal;
@@ -53,7 +51,7 @@ export function createLlm({
   instructions,
 }: CreateLlmOptions = {}): Llm {
   return async ({ history, signal }) => {
-    const result = await generateText({
+    const { responseMessages } = await generateText({
       abortSignal: signal,
       instructions,
       messages: [...history],
@@ -61,6 +59,6 @@ export function createLlm({
       tools: continueTools,
     });
 
-    return result.responseMessages;
+    return responseMessages;
   };
 }

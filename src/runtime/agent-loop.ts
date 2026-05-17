@@ -1,5 +1,5 @@
 import {
-  agentEventsFromResponseMessage,
+  agentEventsFromModelMessage,
   hasAssistantToolCall,
 } from "./session/mapping";
 import type { AgentEventListener } from "./session/events";
@@ -51,7 +51,7 @@ export async function runAgentLoop({
       }
 
       history.push(structuredClone(message));
-      for (const event of agentEventsFromResponseMessage(message)) {
+      for (const event of agentEventsFromModelMessage(message)) {
         emit(event);
       }
 
