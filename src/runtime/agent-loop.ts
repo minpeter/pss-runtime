@@ -23,7 +23,18 @@ export async function runAgentLoop({
     }
 
     emit({ type: "step-start" });
-    const output = await llm({ history: structuredClone(history), signal });
+    let output;
+
+    try {
+      output = await llm({ history: structuredClone(history), signal });
+    } catch (error) {
+      if (signal.aborted) {
+        return "aborted";
+      }
+
+      throw error;
+    }
+
     let shouldContinue = false;
 
     if (signal.aborted) {
