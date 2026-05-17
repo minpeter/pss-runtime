@@ -1,0 +1,8 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
+  "root": true,
+  "extends": ["ultracite/biome/core"],
+  "files": {
+    "includes": ["!!**/.omx"]
+  }
+}

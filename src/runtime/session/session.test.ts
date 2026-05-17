@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { Agent } from "../agent";
 import type { Llm } from "../llm";
-import type { AgentEvent, ModelHistoryItem } from "./index";
+import type { AgentEvent, ModelHistoryItem } from "./events";
 
 const createDeferred = () => {
   let resolve!: () => void;
@@ -70,15 +70,15 @@ assert.deepEqual(
 const toolLoopHistories: ModelHistoryItem[][] = [];
 let toolLoopCalls = 0;
 const toolLoopSession = new Agent({
-  llm: async ({ history }) => {
+  llm: ({ history }) => {
     toolLoopCalls += 1;
     toolLoopHistories.push([...history]);
 
     if (toolLoopCalls === 1) {
-      return [{ type: "tool-call", toolName: "continue" }];
+      return Promise.resolve([{ type: "tool-call", toolName: "continue" }]);
     }
 
-    return [{ type: "assistant-text", text: "DONE" }];
+    return Promise.resolve([{ type: "assistant-text", text: "DONE" }]);
   },
 }).createSession();
 
@@ -98,9 +98,7 @@ assert.deepEqual(toolLoopSession.history(), [
 ]);
 
 const failingSession = new Agent({
-  llm: async () => {
-    throw new Error("model unavailable");
-  },
+  llm: () => Promise.reject(new Error("model unavailable")),
 }).createSession();
 const failingEvents: AgentEvent[] = [];
 failingSession.subscribe((event) => failingEvents.push(event));
@@ -131,8 +129,14 @@ const killedSession = new Agent({
 const killedEvents: AgentEvent[] = [];
 killedSession.subscribe((event) => killedEvents.push(event));
 
-const activeSubmit = killedSession.submit({ type: "user-text", text: "active" });
-const queuedSubmit = killedSession.submit({ type: "user-text", text: "queued" });
+const activeSubmit = killedSession.submit({
+  type: "user-text",
+  text: "active",
+});
+const queuedSubmit = killedSession.submit({
+  type: "user-text",
+  text: "queued",
+});
 const queuedResult = queuedSubmit.then(
   () => "resolved",
   (error: unknown) => error
@@ -164,9 +168,11 @@ assert.deepEqual(
 
 let listenerKilledCalls = 0;
 const listenerKilledSession = new Agent({
-  llm: async () => {
+  llm: () => {
     listenerKilledCalls += 1;
-    return [{ type: "assistant-text", text: "should not run" }];
+    return Promise.resolve([
+      { type: "assistant-text", text: "should not run" },
+    ]);
   },
 }).createSession();
 const listenerKilledEvents: AgentEvent[] = [];

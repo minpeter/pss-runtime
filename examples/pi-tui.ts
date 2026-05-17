@@ -1,12 +1,13 @@
 import {
   Container,
   Input,
+  matchesKey,
   ProcessTerminal,
   Text,
   TUI,
-  matchesKey,
 } from "@earendil-works/pi-tui";
-import { Agent, type AgentEvent } from "../src";
+import { Agent } from "../src/runtime/agent";
+import type { AgentEvent } from "../src/runtime/session/events";
 
 const agent = new Agent();
 const session = agent.createSession();
@@ -38,8 +39,21 @@ const addLine = (text: string): void => {
   tui.requestRender();
 };
 
+const isTerminalControlCharacter = (value: string): boolean => {
+  const code = value.codePointAt(0);
+
+  return (
+    code !== undefined &&
+    (code <= 0x08 ||
+      (code >= 0x0b && code <= 0x1f) ||
+      (code >= 0x7f && code <= 0x9f))
+  );
+};
+
 const safeText = (text: string): string =>
-  text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, "");
+  Array.from(text)
+    .filter((value) => !isTerminalControlCharacter(value))
+    .join("");
 
 const formatEvent = (event: AgentEvent): string | undefined => {
   switch (event.type) {
@@ -59,7 +73,9 @@ const formatEvent = (event: AgentEvent): string | undefined => {
       return "\x1b[2mdone\x1b[0m";
     case "step-start":
     case "step-end":
-      return undefined;
+      return;
+    default:
+      return;
   }
 };
 
@@ -79,13 +95,11 @@ input.onSubmit = (text) => {
     return;
   }
 
-  void session
+  session
     .submit({ type: "user-text", text: trimmed })
     .catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
-      addLine(
-        `\x1b[31merror\x1b[0m: ${safeText(message)}`
-      );
+      addLine(`\x1b[31merror\x1b[0m: ${safeText(message)}`);
     });
 };
 
@@ -97,7 +111,7 @@ const removeInputListener = tui.addInputListener((data) => {
   }
 
   if (!matchesKey(data, "ctrl+c")) {
-    return undefined;
+    return;
   }
 
   removeInputListener();

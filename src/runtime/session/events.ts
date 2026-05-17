@@ -1,6 +1,15 @@
-export type UserText = { type: "user-text"; text: string };
-export type AssistantText = { type: "assistant-text"; text: string };
-export type ToolCall = { type: "tool-call"; toolName: string };
+export interface UserText {
+  text: string;
+  type: "user-text";
+}
+export interface AssistantText {
+  text: string;
+  type: "assistant-text";
+}
+export interface ToolCall {
+  toolName: string;
+  type: "tool-call";
+}
 
 export type ModelHistoryItem = UserText | AssistantText | ToolCall;
 

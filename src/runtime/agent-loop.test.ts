@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { runAgentLoop } from "./agent-loop";
 import type { Llm, LlmOutput } from "./llm";
-import type { AgentEvent } from "./session/events";
-import type { ModelHistoryItem } from "./session";
+import type { AgentEvent, ModelHistoryItem } from "./session/events";
 
 const createScriptedLlm = (outputs: LlmOutput[]): Llm => {
   let index = 0;
@@ -21,7 +20,7 @@ const llm = createScriptedLlm([
 
 assert.equal(
   await runAgentLoop({ emit: (event) => events.push(event), history, llm }),
-  "completed",
+  "completed"
 );
 assert.deepEqual(
   events.map((event) => event.type),
@@ -44,9 +43,9 @@ assert.deepEqual(history, [
 const abortEvents: AgentEvent[] = [];
 const abortHistory: ModelHistoryItem[] = [];
 const abortController = new AbortController();
-const abortingLlm: Llm = async () => {
+const abortingLlm: Llm = () => {
   abortController.abort();
-  throw new Error("model request aborted");
+  return Promise.reject(new Error("model request aborted"));
 };
 
 assert.equal(
@@ -56,10 +55,10 @@ assert.equal(
     llm: abortingLlm,
     signal: abortController.signal,
   }),
-  "aborted",
+  "aborted"
 );
 assert.deepEqual(
   abortEvents.map((event) => event.type),
-  ["step-start"],
+  ["step-start"]
 );
 assert.deepEqual(abortHistory, []);

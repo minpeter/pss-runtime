@@ -2,12 +2,16 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import {
   generateText,
   jsonSchema,
-  tool,
   type LanguageModel,
   type ModelMessage,
+  tool,
 } from "ai";
 import { env } from "./env";
-import type { AssistantText, ModelHistoryItem, ToolCall } from "./session/events";
+import type {
+  AssistantText,
+  ModelHistoryItem,
+  ToolCall,
+} from "./session/events";
 
 type AssistantPromptPart =
   | { type: "text"; text: string }
@@ -15,16 +19,16 @@ type AssistantPromptPart =
 
 export type LlmOutputPart = AssistantText | ToolCall;
 export type LlmOutput = LlmOutputPart[];
-export type LlmContext = {
+export interface LlmContext {
   history: readonly ModelHistoryItem[];
   signal: AbortSignal;
-};
+}
 export type Llm = (context: LlmContext) => Promise<LlmOutput>;
 
-export type CreateLlmOptions = {
-  model?: LanguageModel;
+export interface CreateLlmOptions {
   instructions?: string;
-};
+  model?: LanguageModel;
+}
 
 const defaultProvider = createOpenAICompatible({
   name: "custom",
@@ -35,7 +39,8 @@ const defaultProvider = createOpenAICompatible({
 export const defaultModel = defaultProvider(env.AI_MODEL);
 
 const continueTool = tool({
-  description: "Request one more agent loop step before producing a final answer.",
+  description:
+    "Request one more agent loop step before producing a final answer.",
   execute: () => ({}),
   inputSchema: jsonSchema({
     type: "object",
@@ -122,7 +127,9 @@ function toModelMessages(history: readonly ModelHistoryItem[]): ModelMessage[] {
   return messages;
 }
 
-function toLlmOutput(content: Awaited<ReturnType<typeof generateText>>["content"]): LlmOutput {
+function toLlmOutput(
+  content: Awaited<ReturnType<typeof generateText>>["content"]
+): LlmOutput {
   return content.flatMap((part): LlmOutput => {
     if (part.type === "text") {
       return part.text ? [{ type: "assistant-text", text: part.text }] : [];
