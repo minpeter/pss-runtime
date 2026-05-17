@@ -1,13 +1,12 @@
-import type { AgentEventListener } from "./session/events";
-import type { ModelHistoryItem } from "./session";
-import type { Llm } from "./llm";
+import type { Llm, LlmOutput } from "./llm";
+import type { AgentEventListener, ModelHistoryItem } from "./session/events";
 
-type RunAgentLoopOptions = {
+interface RunAgentLoopOptions {
   emit: AgentEventListener;
   history: ModelHistoryItem[];
   llm: Llm;
   signal?: AbortSignal;
-};
+}
 
 export type AgentLoopResult = "completed" | "aborted";
 
@@ -23,7 +22,7 @@ export async function runAgentLoop({
     }
 
     emit({ type: "step-start" });
-    let output;
+    let output: LlmOutput;
 
     try {
       output = await llm({ history: structuredClone(history), signal });

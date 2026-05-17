@@ -8,13 +8,17 @@
     "dev": "tsx examples/basic.ts",
     "dev:tui": "tsx examples/pi-tui.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx src/runtime/agent-loop.test.ts && tsx src/runtime/session/session.test.ts"
+    "test": "tsx src/runtime/agent-loop.test.ts && tsx src/runtime/session/session.test.ts",
+    "lint": "ultracite check .",
+    "format": "ultracite fix ."
   },
   "devDependencies": {
+    "@biomejs/biome": "2.4.15",
     "@earendil-works/pi-tui": "^0.74.1",
     "@types/node": "latest",
     "tsx": "latest",
-    "typescript": "latest"
+    "typescript": "latest",
+    "ultracite": "7.7.0"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "3.0.0-canary.48",

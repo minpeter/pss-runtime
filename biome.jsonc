@@ -1,0 +1,20 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
+  "root": true,
+  "extends": ["ultracite/biome/core"],
+  "files": {
+    "includes": ["**/*", "!!**/.omx"]
+  },
+  "overrides": [
+    {
+      "includes": ["src/index.ts", "src/runtime/session/index.ts"],
+      "linter": {
+        "rules": {
+          "performance": {
+            "noBarrelFile": "off"
+          }
+        }
+      }
+    }
+  ]
+}

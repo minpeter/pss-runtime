@@ -1,14 +1,21 @@
 import { runAgentLoop } from "../agent-loop";
-import type { AgentEvent, AgentEventListener, ModelHistoryItem } from "./events";
 import type { Llm } from "../llm";
+import type {
+  AgentEvent,
+  AgentEventListener,
+  ModelHistoryItem,
+} from "./events";
 
-export type SessionInput = { type: "user-text"; text: string };
+export interface SessionInput {
+  text: string;
+  type: "user-text";
+}
 
-type QueuedInput = {
+interface QueuedInput {
   input: SessionInput;
-  resolve: () => void;
   reject: (error: unknown) => void;
-};
+  resolve: () => void;
+}
 
 export class AgentSession {
   readonly #listeners = new Set<AgentEventListener>();
@@ -48,7 +55,9 @@ export class AgentSession {
       });
     });
 
-    void this.#drainInputQueue();
+    this.#drainInputQueue().catch((error: unknown) => {
+      this.#emit({ type: "turn-error", message: errorMessage(error) });
+    });
     return queued;
   }
 

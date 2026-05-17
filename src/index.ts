@@ -1,6 +1,5 @@
 export { Agent } from "./runtime/agent";
 export { runAgentLoop } from "./runtime/agent-loop";
-export { createLlm, defaultModel } from "./runtime/llm";
 export type {
   CreateLlmOptions,
   Llm,
@@ -8,6 +7,7 @@ export type {
   LlmOutput,
   LlmOutputPart,
 } from "./runtime/llm";
+export { createLlm, defaultModel } from "./runtime/llm";
 export type {
   AgentEvent,
   AgentEventListener,
