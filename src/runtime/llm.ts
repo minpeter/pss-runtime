@@ -11,7 +11,12 @@ import {
   type ToolResultPart,
 } from "ai";
 import { env } from "./env";
-import type { AssistantText, ModelHistoryItem, ToolCall } from "./session/events";
+import type {
+  AssistantText,
+  ModelHistoryItem,
+  ToolCall,
+  UserText,
+} from "./session/events";
 
 type AssistantPromptPart = TextPart | ToolCallPart;
 
@@ -83,7 +88,9 @@ function toModelMessages(history: readonly ModelHistoryItem[]): ModelMessage[] {
     messages.push({
       role: "assistant",
       content:
-        assistantParts.length === 1 && assistantParts[0]?.type === "text"
+        assistantParts.length === 1 &&
+        assistantParts[0]?.type === "text" &&
+        assistantParts[0].providerOptions == null
           ? assistantParts[0].text
           : assistantParts,
     });
@@ -93,12 +100,16 @@ function toModelMessages(history: readonly ModelHistoryItem[]): ModelMessage[] {
   history.forEach((item, index) => {
     if (item.type === "user-text") {
       flushAssistant();
-      messages.push({ role: "user", content: item.text });
+      const content = textPartFromRuntime(item);
+      messages.push({
+        role: "user",
+        content: content.providerOptions == null ? content.text : [content],
+      });
       return;
     }
 
     if (item.type === "assistant-text") {
-      assistantParts.push({ type: "text", text: item.text } satisfies TextPart);
+      assistantParts.push(textPartFromRuntime(item));
       return;
     }
 
@@ -119,6 +130,16 @@ function toModelMessages(history: readonly ModelHistoryItem[]): ModelMessage[] {
 
   flushAssistant();
   return messages;
+}
+
+function textPartFromRuntime(item: UserText | AssistantText): TextPart {
+  return {
+    type: "text",
+    text: item.text,
+    ...(item.providerOptions == null
+      ? {}
+      : { providerOptions: item.providerOptions }),
+  } satisfies TextPart;
 }
 
 function toLlmOutput(content: ContinueContentPart[]): LlmOutput {

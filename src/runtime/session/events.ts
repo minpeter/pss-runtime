@@ -1,7 +1,11 @@
-import type { ToolCallPart } from "ai";
+import type { TextPart, ToolCallPart } from "ai";
 
-export type UserText = { type: "user-text"; text: string };
-export type AssistantText = { type: "assistant-text"; text: string };
+type RuntimeTextPart<TType extends string> = Omit<TextPart, "type"> & {
+  type: TType;
+};
+
+export type UserText = RuntimeTextPart<"user-text">;
+export type AssistantText = RuntimeTextPart<"assistant-text">;
 export type ToolCall = ToolCallPart;
 
 export type ModelHistoryItem = UserText | AssistantText | ToolCall;
