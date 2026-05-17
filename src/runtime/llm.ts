@@ -3,15 +3,17 @@ import {
   generateText,
   jsonSchema,
   tool,
+  type ContentPart,
   type LanguageModel,
   type ModelMessage,
+  type TextPart,
+  type ToolCallPart,
+  type ToolResultPart,
 } from "ai";
 import { env } from "./env";
 import type { AssistantText, ModelHistoryItem, ToolCall } from "./session/events";
 
-type AssistantPromptPart =
-  | { type: "text"; text: string }
-  | { type: "tool-call"; toolCallId: string; toolName: string; input: object };
+type AssistantPromptPart = TextPart | ToolCallPart;
 
 export type LlmOutputPart = AssistantText | ToolCall;
 export type LlmOutput = LlmOutputPart[];
@@ -49,6 +51,9 @@ const continueTool = tool({
   }),
 });
 
+const continueTools = { continue: continueTool };
+type ContinueContentPart = ContentPart<typeof continueTools>;
+
 export function createLlm({
   model = defaultModel,
   instructions,
@@ -59,7 +64,7 @@ export function createLlm({
       instructions,
       messages: toModelMessages(history),
       model,
-      tools: { continue: continueTool },
+      tools: continueTools,
     });
 
     return toLlmOutput(result.content);
@@ -93,28 +98,30 @@ function toModelMessages(history: readonly ModelHistoryItem[]): ModelMessage[] {
     }
 
     if (item.type === "assistant-text") {
-      assistantParts.push({ type: "text", text: item.text });
+      assistantParts.push({ type: "text", text: item.text } satisfies TextPart);
       return;
     }
 
+    // Replay-only id: the public ToolCall event intentionally stores only the
+    // logical tool name while the AI SDK prompt requires paired call/result ids.
     const toolCallId = `tool-call-${index}`;
     assistantParts.push({
       type: "tool-call",
       toolCallId,
       toolName: item.toolName,
       input: {},
-    });
+    } satisfies ToolCallPart);
     flushAssistant();
+    const toolResultPart = {
+      type: "tool-result",
+      toolCallId,
+      toolName: item.toolName,
+      output: { type: "json", value: {} },
+    } satisfies ToolResultPart;
+
     messages.push({
       role: "tool",
-      content: [
-        {
-          type: "tool-result",
-          toolCallId,
-          toolName: item.toolName,
-          output: { type: "json", value: {} },
-        },
-      ],
+      content: [toolResultPart],
     });
   });
 
@@ -122,7 +129,7 @@ function toModelMessages(history: readonly ModelHistoryItem[]): ModelMessage[] {
   return messages;
 }
 
-function toLlmOutput(content: Awaited<ReturnType<typeof generateText>>["content"]): LlmOutput {
+function toLlmOutput(content: ContinueContentPart[]): LlmOutput {
   return content.flatMap((part): LlmOutput => {
     if (part.type === "text") {
       return part.text ? [{ type: "assistant-text", text: part.text }] : [];
