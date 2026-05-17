@@ -1,11 +1,6 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import {
-  generateText,
-  jsonSchema,
-  type LanguageModel,
-  type ModelMessage,
-  tool,
-} from "ai";
+import { generateText, type LanguageModel, type ModelMessage } from "ai";
+import type { AgentTools } from "../tools";
 import { env } from "./env";
 
 export type LlmOutput = Awaited<
@@ -23,6 +18,7 @@ export type Llm = (context: LlmContext) => Promise<LlmOutput>;
 export interface CreateLlmOptions {
   instructions?: string;
   model?: LanguageModel;
+  tools?: AgentTools;
 }
 
 const defaultProvider = createOpenAICompatible({
@@ -33,27 +29,10 @@ const defaultProvider = createOpenAICompatible({
 
 export const defaultModel = defaultProvider(env.AI_MODEL);
 
-const continueTool = tool({
-  description:
-    "Request one more agent loop step before producing a final answer.",
-  execute: () => ({}),
-  inputSchema: jsonSchema({
-    type: "object",
-    properties: {},
-    additionalProperties: false,
-  }),
-  outputSchema: jsonSchema({
-    type: "object",
-    properties: {},
-    additionalProperties: false,
-  }),
-});
-
-const continueTools = { continue: continueTool };
-
 export function createLlm({
   model = defaultModel,
   instructions,
+  tools,
 }: CreateLlmOptions = {}): Llm {
   return async ({ history, signal }) => {
     const { responseMessages } = await generateText({
@@ -61,7 +40,7 @@ export function createLlm({
       instructions,
       messages: [...history],
       model,
-      tools: continueTools,
+      tools,
     });
 
     return responseMessages;
