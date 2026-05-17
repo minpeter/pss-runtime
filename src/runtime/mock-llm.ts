@@ -1,9 +1,12 @@
-export type LlmOutputPart =
-  | { type: "text"; text: string }
-  | { type: "tool-call"; toolName: string };
+import type { AssistantText, ModelHistoryItem, ToolCall } from "./session";
+
+export type LlmOutputPart = AssistantText | ToolCall;
 
 export type LlmOutput = LlmOutputPart[];
-export type LlmContext = { signal: AbortSignal };
+export type LlmContext = {
+  history: readonly ModelHistoryItem[];
+  signal: AbortSignal;
+};
 export type Llm = (context: LlmContext) => Promise<LlmOutput>;
 
 const mockLlmDelayMs = 300;
@@ -31,7 +34,7 @@ export function createMockLlm(): Llm {
     const roll = Math.random();
 
     if (roll < 0.3) {
-      return [{ type: "text", text: "DONE" }];
+      return [{ type: "assistant-text", text: "DONE" }];
     }
 
     if (roll < 0.65) {
@@ -39,7 +42,7 @@ export function createMockLlm(): Llm {
     }
 
     return [
-      { type: "text", text: "I should keep going." },
+      { type: "assistant-text", text: "I should keep going." },
       { type: "tool-call", toolName: "continue" },
     ];
   };

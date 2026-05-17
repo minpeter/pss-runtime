@@ -1,6 +1,12 @@
+export type UserText = { type: "user-text"; text: string };
+export type AssistantText = { type: "assistant-text"; text: string };
+export type ToolCall = { type: "tool-call"; toolName: string };
+
+export type ModelHistoryItem = UserText | AssistantText | ToolCall;
+
 export type AgentEvent =
   /** User input was accepted into the session queue. */
-  | { type: "user-message"; text: string }
+  | UserText
   /** A queued user input started running as a turn. */
   | { type: "turn-start" }
   /** The active turn was interrupted before normal completion. */
@@ -12,9 +18,9 @@ export type AgentEvent =
   /** One model/tool-loop iteration started within the active turn. */
   | { type: "step-start" }
   /** The model produced visible assistant text. */
-  | { type: "text"; text: string }
+  | AssistantText
   /** The model requested a tool call. */
-  | { type: "tool-call"; toolName: string }
+  | ToolCall
   /** One model/tool-loop iteration finished within the active turn. */
   | { type: "step-end" };
 

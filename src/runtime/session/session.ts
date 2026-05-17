@@ -1,8 +1,8 @@
 import { runAgentLoop } from "../agent-loop";
-import type { AgentEvent, AgentEventListener } from "./events";
+import type { AgentEvent, AgentEventListener, ModelHistoryItem } from "./events";
 import type { Llm } from "../mock-llm";
 
-export type SessionInput = { type: "user-message"; text: string };
+export type SessionInput = { type: "user-text"; text: string };
 
 type QueuedInput = {
   input: SessionInput;
@@ -13,6 +13,7 @@ type QueuedInput = {
 export class AgentSession {
   readonly #listeners = new Set<AgentEventListener>();
   readonly #llm: Llm;
+  readonly #history: ModelHistoryItem[] = [];
   readonly #inputQueue: QueuedInput[] = [];
   #running = false;
   #activeAbort?: AbortController;
@@ -27,10 +28,15 @@ export class AgentSession {
   }
 
   submit(input: SessionInput): Promise<void> {
-    this.#emit(input);
+    const acceptedInput = structuredClone(input);
+    this.#emit(acceptedInput);
 
     const queued = new Promise<void>((resolve, reject) => {
-      this.#inputQueue.push({ input, resolve, reject });
+      this.#inputQueue.push({
+        input: structuredClone(acceptedInput),
+        resolve,
+        reject,
+      });
     });
 
     void this.#drainInputQueue();
@@ -39,6 +45,10 @@ export class AgentSession {
 
   interrupt(): void {
     this.#activeAbort?.abort();
+  }
+
+  history(): ModelHistoryItem[] {
+    return structuredClone(this.#history);
   }
 
   async #drainInputQueue(): Promise<void> {
@@ -60,8 +70,10 @@ export class AgentSession {
 
         try {
           this.#emit({ type: "turn-start" });
+          this.#history.push(structuredClone(item.input));
           const result = await runAgentLoop({
             emit: (event) => this.#emit(event),
+            history: this.#history,
             llm: this.#llm,
             signal: this.#activeAbort.signal,
           });
