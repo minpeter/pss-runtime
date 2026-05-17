@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { Agent } from "./agent";
-import type { AgentEvent } from "./session";
-import type { Llm } from "./mock-llm";
+import { Agent } from "../agent";
+import type { AgentEvent } from "./index";
+import type { Llm } from "../mock-llm";
 
 const createDeferred = () => {
   let resolve!: () => void;
