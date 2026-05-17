@@ -1,21 +1,53 @@
 import assert from "node:assert/strict";
+import type { AssistantModelMessage, ToolCallPart, ToolModelMessage } from "ai";
 import { runAgentLoop } from "./agent-loop";
 import type { Llm, LlmOutput } from "./llm";
-import type { AgentEvent, ModelHistoryItem } from "./session/events";
+import type { AgentEvent } from "./session/events";
+import { AgentModelHistory } from "./session/history";
 
 const createScriptedLlm = (outputs: LlmOutput[]): Llm => {
   let index = 0;
-  return async () => outputs[index++] ?? [];
+  return () => Promise.resolve(outputs[index++] ?? []);
 };
 
+const continueToolCall = (toolCallId: string): ToolCallPart => ({
+  type: "tool-call",
+  toolCallId,
+  toolName: "continue",
+  input: {},
+});
+
+const assistantMessage = (
+  content: AssistantModelMessage["content"]
+): AssistantModelMessage => ({
+  role: "assistant",
+  content,
+});
+
+const continueToolResult = (toolCall: ToolCallPart): ToolModelMessage => ({
+  role: "tool",
+  content: [
+    {
+      type: "tool-result",
+      toolCallId: toolCall.toolCallId,
+      toolName: toolCall.toolName,
+      output: { type: "json", value: {} },
+    },
+  ],
+});
+
 const events: AgentEvent[] = [];
-const history: ModelHistoryItem[] = [];
+const history = new AgentModelHistory();
+const callContinue1 = continueToolCall("call-continue-1");
 const llm = createScriptedLlm([
   [
-    { type: "assistant-text", text: "I should keep going." },
-    { type: "tool-call", toolName: "continue" },
+    assistantMessage([
+      { type: "text", text: "I should keep going." },
+      callContinue1,
+    ]),
+    continueToolResult(callContinue1),
   ],
-  [{ type: "assistant-text", text: "DONE" }],
+  [assistantMessage("DONE")],
 ]);
 
 assert.equal(
@@ -34,14 +66,26 @@ assert.deepEqual(
     "step-end",
   ]
 );
-assert.deepEqual(history, [
+assert.deepEqual(events, [
+  { type: "step-start" },
   { type: "assistant-text", text: "I should keep going." },
   { type: "tool-call", toolName: "continue" },
+  { type: "step-end" },
+  { type: "step-start" },
   { type: "assistant-text", text: "DONE" },
+  { type: "step-end" },
+]);
+assert.deepEqual(history.modelSnapshot(), [
+  assistantMessage([
+    { type: "text", text: "I should keep going." },
+    callContinue1,
+  ]),
+  continueToolResult(callContinue1),
+  assistantMessage("DONE"),
 ]);
 
 const abortEvents: AgentEvent[] = [];
-const abortHistory: ModelHistoryItem[] = [];
+const abortHistory = new AgentModelHistory();
 const abortController = new AbortController();
 const abortingLlm: Llm = () => {
   abortController.abort();
@@ -61,4 +105,27 @@ assert.deepEqual(
   abortEvents.map((event) => event.type),
   ["step-start"]
 );
-assert.deepEqual(abortHistory, []);
+assert.deepEqual(abortHistory.modelSnapshot(), []);
+
+const emptyAbortEvents: AgentEvent[] = [];
+const emptyAbortHistory = new AgentModelHistory();
+const emptyAbortController = new AbortController();
+const emptyAbortingLlm: Llm = () => {
+  emptyAbortController.abort();
+  return Promise.resolve([]);
+};
+
+assert.equal(
+  await runAgentLoop({
+    emit: (event) => emptyAbortEvents.push(event),
+    history: emptyAbortHistory,
+    llm: emptyAbortingLlm,
+    signal: emptyAbortController.signal,
+  }),
+  "aborted"
+);
+assert.deepEqual(
+  emptyAbortEvents.map((event) => event.type),
+  ["step-start"]
+);
+assert.deepEqual(emptyAbortHistory.modelSnapshot(), []);

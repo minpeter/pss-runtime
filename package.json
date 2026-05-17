@@ -8,7 +8,7 @@
     "dev": "tsx examples/basic.ts",
     "dev:tui": "tsx examples/pi-tui.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx src/runtime/agent-loop.test.ts && tsx src/runtime/session/session.test.ts",
+    "test": "tsx src/runtime/agent-loop.test.ts && tsx src/runtime/session/mapping.test.ts && tsx src/runtime/session/session.test.ts",
     "lint": "ultracite check .",
     "format": "ultracite fix ."
   },

@@ -1,14 +1,22 @@
+import type { ModelMessage } from "ai";
 import type { Llm, LlmOutput } from "./llm";
-import type { AgentEventListener, ModelHistoryItem } from "./session/events";
+import type { AgentEventListener } from "./session/events";
+import { modelMessageToAgentEvents } from "./session/mapping";
+
+interface ModelHistory {
+  appendModelMessage(message: ModelMessage): void;
+  modelSnapshot(): ModelMessage[];
+}
 
 interface RunAgentLoopOptions {
   emit: AgentEventListener;
-  history: ModelHistoryItem[];
+  history: ModelHistory;
   llm: Llm;
   signal?: AbortSignal;
 }
 
 export type AgentLoopResult = "completed" | "aborted";
+type StepOutputResult = "continue" | "completed" | "aborted";
 
 export async function runAgentLoop({
   emit,
@@ -22,44 +30,75 @@ export async function runAgentLoop({
     }
 
     emit({ type: "step-start" });
-    let output: LlmOutput;
+    const output = await readLlmOutput({ history, llm, signal });
 
-    try {
-      output = await llm({ history: structuredClone(history), signal });
-    } catch (error) {
-      if (signal.aborted) {
-        return "aborted";
-      }
-
-      throw error;
-    }
-
-    let shouldContinue = false;
-
-    if (signal.aborted) {
+    if (output === "aborted") {
       return "aborted";
     }
 
-    for (const part of output) {
-      if (signal.aborted) {
-        return "aborted";
-      }
+    const result = appendStepOutput({ emit, history, output, signal });
 
-      history.push(structuredClone(part));
-
-      if (part.type === "assistant-text") {
-        emit(part);
-        continue;
-      }
-
-      emit(part);
-      shouldContinue = true;
+    if (result === "aborted") {
+      return "aborted";
     }
 
     emit({ type: "step-end" });
 
-    if (!shouldContinue) {
+    if (result === "completed") {
       return "completed";
     }
   }
+}
+
+async function readLlmOutput({
+  history,
+  llm,
+  signal,
+}: Pick<RunAgentLoopOptions, "history" | "llm"> & {
+  signal: AbortSignal;
+}): Promise<LlmOutput | "aborted"> {
+  try {
+    return await llm({ history: history.modelSnapshot(), signal });
+  } catch (error) {
+    if (signal.aborted) {
+      return "aborted";
+    }
+
+    throw error;
+  }
+}
+
+function appendStepOutput({
+  emit,
+  history,
+  output,
+  signal,
+}: Pick<RunAgentLoopOptions, "emit" | "history"> & {
+  output: LlmOutput;
+  signal: AbortSignal;
+}): StepOutputResult {
+  if (signal.aborted) {
+    return "aborted";
+  }
+
+  let shouldContinue = false;
+
+  for (const message of output) {
+    if (signal.aborted) {
+      return "aborted";
+    }
+
+    history.appendModelMessage(message);
+    const events = modelMessageToAgentEvents(message);
+
+    for (const event of events) {
+      emit(event);
+    }
+
+    if (events.some((event) => event.type === "tool-call")) {
+      shouldContinue = true;
+    }
+  }
+
+  return shouldContinue ? "continue" : "completed";
 }

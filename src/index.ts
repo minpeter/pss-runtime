@@ -13,7 +13,6 @@ export type {
   AgentEventListener,
   AgentSession,
   AssistantText,
-  ModelHistoryItem,
   SessionInput,
   ToolCall,
   UserText,

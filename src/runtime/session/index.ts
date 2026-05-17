@@ -2,7 +2,6 @@ export type {
   AgentEvent,
   AgentEventListener,
   AssistantText,
-  ModelHistoryItem,
   ToolCall,
   UserText,
 } from "./events";

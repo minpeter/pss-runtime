@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
+import type {
+  AssistantModelMessage,
+  ModelMessage,
+  ToolCallPart,
+  ToolModelMessage,
+} from "ai";
 import { Agent } from "../agent";
 import type { Llm } from "../llm";
-import type { AgentEvent, ModelHistoryItem } from "./events";
+import type { AgentEvent, UserText } from "./index";
+import { userTextToModelMessage } from "./mapping";
 
 const createDeferred = () => {
   let resolve!: () => void;
@@ -11,8 +18,35 @@ const createDeferred = () => {
   return { promise, resolve };
 };
 
+const continueToolCall = (toolCallId: string): ToolCallPart => ({
+  type: "tool-call",
+  toolCallId,
+  toolName: "continue",
+  input: {},
+});
+
+const userText = (text: string): UserText => ({ type: "user-text", text });
+const assistantMessage = (
+  content: AssistantModelMessage["content"]
+): AssistantModelMessage => ({
+  role: "assistant",
+  content,
+});
+
+const continueToolResult = (toolCall: ToolCallPart): ToolModelMessage => ({
+  role: "tool",
+  content: [
+    {
+      type: "tool-result",
+      toolCallId: toolCall.toolCallId,
+      toolName: toolCall.toolName,
+      output: { type: "json", value: {} },
+    },
+  ],
+});
+
 const firstLlmCall = createDeferred();
-const seenHistory: ModelHistoryItem[][] = [];
+const seenHistory: ModelMessage[][] = [];
 let calls = 0;
 const llm: Llm = async ({ history }) => {
   calls += 1;
@@ -20,18 +54,19 @@ const llm: Llm = async ({ history }) => {
 
   if (calls === 1) {
     await firstLlmCall.promise;
-    return [{ type: "tool-call", toolName: "continue" }];
+    const toolCall = continueToolCall("call-interrupted-continue");
+    return [assistantMessage([toolCall]), continueToolResult(toolCall)];
   }
 
-  return [{ type: "assistant-text", text: "DONE" }];
+  return [assistantMessage("DONE")];
 };
 
 const session = new Agent({ llm }).createSession();
 const events: AgentEvent[] = [];
 session.subscribe((event) => events.push(event));
 
-const firstSubmit = session.submit({ type: "user-text", text: "first" });
-const secondSubmit = session.submit({ type: "user-text", text: "second" });
+const firstSubmit = session.submit(userText("first"));
+const secondSubmit = session.submit(userText("second"));
 
 session.interrupt();
 firstLlmCall.resolve();
@@ -40,16 +75,11 @@ await Promise.all([firstSubmit, secondSubmit]);
 
 assert.equal(calls, 2);
 assert.deepEqual(seenHistory, [
-  [{ type: "user-text", text: "first" }],
+  [userTextToModelMessage(userText("first"))],
   [
-    { type: "user-text", text: "first" },
-    { type: "user-text", text: "second" },
+    userTextToModelMessage(userText("first")),
+    userTextToModelMessage(userText("second")),
   ],
-]);
-assert.deepEqual(session.history(), [
-  { type: "user-text", text: "first" },
-  { type: "user-text", text: "second" },
-  { type: "assistant-text", text: "DONE" },
 ]);
 assert.deepEqual(
   events.map((event) => event.type),
@@ -67,7 +97,7 @@ assert.deepEqual(
   ]
 );
 
-const toolLoopHistories: ModelHistoryItem[][] = [];
+const toolLoopHistories: ModelMessage[][] = [];
 let toolLoopCalls = 0;
 const toolLoopSession = new Agent({
   llm: ({ history }) => {
@@ -75,26 +105,28 @@ const toolLoopSession = new Agent({
     toolLoopHistories.push([...history]);
 
     if (toolLoopCalls === 1) {
-      return Promise.resolve([{ type: "tool-call", toolName: "continue" }]);
+      const toolCall = continueToolCall("call-tool-loop-continue");
+      return Promise.resolve([
+        assistantMessage([toolCall]),
+        continueToolResult(toolCall),
+      ]);
     }
 
-    return Promise.resolve([{ type: "assistant-text", text: "DONE" }]);
+    return Promise.resolve([assistantMessage("DONE")]);
   },
 }).createSession();
 
-await toolLoopSession.submit({ type: "user-text", text: "remember me" });
+await toolLoopSession.submit(userText("remember me"));
+
+const toolLoopCall = continueToolCall("call-tool-loop-continue");
 
 assert.deepEqual(toolLoopHistories, [
-  [{ type: "user-text", text: "remember me" }],
+  [userTextToModelMessage(userText("remember me"))],
   [
-    { type: "user-text", text: "remember me" },
-    { type: "tool-call", toolName: "continue" },
+    userTextToModelMessage(userText("remember me")),
+    assistantMessage([toolLoopCall]),
+    continueToolResult(toolLoopCall),
   ],
-]);
-assert.deepEqual(toolLoopSession.history(), [
-  { type: "user-text", text: "remember me" },
-  { type: "tool-call", toolName: "continue" },
-  { type: "assistant-text", text: "DONE" },
 ]);
 
 const failingSession = new Agent({
@@ -104,7 +136,7 @@ const failingEvents: AgentEvent[] = [];
 failingSession.subscribe((event) => failingEvents.push(event));
 
 await assert.rejects(
-  failingSession.submit({ type: "user-text", text: "fail" }),
+  failingSession.submit(userText("fail")),
   /model unavailable/
 );
 
@@ -123,20 +155,14 @@ const killedSession = new Agent({
   llm: async () => {
     killCalls += 1;
     await killLlmCall.promise;
-    return [{ type: "assistant-text", text: "should not render" }];
+    return [assistantMessage("should not render")];
   },
 }).createSession();
 const killedEvents: AgentEvent[] = [];
 killedSession.subscribe((event) => killedEvents.push(event));
 
-const activeSubmit = killedSession.submit({
-  type: "user-text",
-  text: "active",
-});
-const queuedSubmit = killedSession.submit({
-  type: "user-text",
-  text: "queued",
-});
+const activeSubmit = killedSession.submit(userText("active"));
+const queuedSubmit = killedSession.submit(userText("queued"));
 const queuedResult = queuedSubmit.then(
   () => "resolved",
   (error: unknown) => error
@@ -151,16 +177,10 @@ const queuedError = await queuedResult;
 assert.equal(killCalls, 1);
 assert.ok(queuedError instanceof Error);
 assert.equal(queuedError.message, "Session killed");
-assert.deepEqual(killedSession.history(), [
-  { type: "user-text", text: "active" },
-]);
 await assert.rejects(
-  killedSession.submit({ type: "user-text", text: "after kill" }),
+  killedSession.submit(userText("after kill")),
   /Session killed/
 );
-assert.deepEqual(killedSession.history(), [
-  { type: "user-text", text: "active" },
-]);
 assert.deepEqual(
   killedEvents.map((event) => event.type),
   ["user-text", "turn-start", "step-start", "user-text", "turn-abort"]
@@ -170,9 +190,7 @@ let listenerKilledCalls = 0;
 const listenerKilledSession = new Agent({
   llm: () => {
     listenerKilledCalls += 1;
-    return Promise.resolve([
-      { type: "assistant-text", text: "should not run" },
-    ]);
+    return Promise.resolve([assistantMessage("should not run")]);
   },
 }).createSession();
 const listenerKilledEvents: AgentEvent[] = [];
@@ -185,12 +203,11 @@ listenerKilledSession.subscribe((event) => {
 });
 
 await assert.rejects(
-  listenerKilledSession.submit({ type: "user-text", text: "kill now" }),
+  listenerKilledSession.submit(userText("kill now")),
   /Session killed/
 );
 
 assert.equal(listenerKilledCalls, 0);
-assert.deepEqual(listenerKilledSession.history(), []);
 assert.deepEqual(
   listenerKilledEvents.map((event) => event.type),
   ["user-text"]
