@@ -3,12 +3,11 @@ import {
   generateText,
   jsonSchema,
   tool,
+  type AssistantContent,
   type ContentPart,
   type LanguageModel,
   type ModelMessage,
-  type TextPart,
-  type ToolCallPart,
-  type ToolResultPart,
+  type ToolContent,
 } from "ai";
 import { env } from "./env";
 import type {
@@ -18,7 +17,10 @@ import type {
   UserText,
 } from "./session/events";
 
-type AssistantPromptPart = TextPart | ToolCallPart;
+type ArrayItem<T> = T extends Array<infer Item> ? Item : never;
+type AssistantPromptPart = ArrayItem<Exclude<AssistantContent, string>>;
+type AssistantTextPart = Extract<AssistantPromptPart, { type: "text" }>;
+type ToolContentPart = ToolContent[number];
 
 export type LlmOutputPart = AssistantText | ToolCall;
 export type LlmOutput = LlmOutputPart[];
@@ -120,7 +122,7 @@ function toModelMessages(history: readonly ModelHistoryItem[]): ModelMessage[] {
       toolCallId: item.toolCallId,
       toolName: item.toolName,
       output: { type: "json", value: {} },
-    } satisfies ToolResultPart;
+    } satisfies ToolContentPart;
 
     messages.push({
       role: "tool",
@@ -132,14 +134,14 @@ function toModelMessages(history: readonly ModelHistoryItem[]): ModelMessage[] {
   return messages;
 }
 
-function textPartFromRuntime(item: UserText | AssistantText): TextPart {
+function textPartFromRuntime(item: UserText | AssistantText): AssistantTextPart {
   return {
     type: "text",
     text: item.text,
     ...(item.providerOptions == null
       ? {}
       : { providerOptions: item.providerOptions }),
-  } satisfies TextPart;
+  } satisfies AssistantTextPart;
 }
 
 function toLlmOutput(content: ContinueContentPart[]): LlmOutput {

@@ -1,12 +1,18 @@
-import type { TextPart, ToolCallPart } from "ai";
+import type { AssistantContent, UserContent } from "ai";
 
-type RuntimeTextPart<TType extends string> = Omit<TextPart, "type"> & {
+type ArrayItem<T> = T extends Array<infer Item> ? Item : never;
+type AssistantContentPart = ArrayItem<Exclude<AssistantContent, string>>;
+type UserContentPart = ArrayItem<Exclude<UserContent, string>>;
+type RuntimeTextPart<TType extends string> = Omit<
+  Extract<AssistantContentPart | UserContentPart, { type: "text" }>,
+  "type"
+> & {
   type: TType;
 };
 
 export type UserText = RuntimeTextPart<"user-text">;
 export type AssistantText = RuntimeTextPart<"assistant-text">;
-export type ToolCall = ToolCallPart;
+export type ToolCall = Extract<AssistantContentPart, { type: "tool-call" }>;
 
 export type ModelHistoryItem = UserText | AssistantText | ToolCall;
 
