@@ -1,6 +1,7 @@
 import type { AgentEventListener } from "./session/events";
 import type { ModelHistoryItem } from "./session";
-import { mockLlm, type Llm } from "./mock-llm";
+import type { Llm } from "./llm";
+import { mockLlm } from "./mock-llm";
 
 type RunAgentLoopOptions = {
   emit: AgentEventListener;

@@ -1,6 +1,6 @@
 import { runAgentLoop } from "../agent-loop";
 import type { AgentEvent, AgentEventListener, ModelHistoryItem } from "./events";
-import type { Llm } from "../mock-llm";
+import type { Llm } from "../llm";
 
 export type SessionInput = { type: "user-text"; text: string };
 

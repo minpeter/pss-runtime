@@ -1,13 +1,4 @@
-import type { AssistantText, ModelHistoryItem, ToolCall } from "./session";
-
-export type LlmOutputPart = AssistantText | ToolCall;
-
-export type LlmOutput = LlmOutputPart[];
-export type LlmContext = {
-  history: readonly ModelHistoryItem[];
-  signal: AbortSignal;
-};
-export type Llm = (context: LlmContext) => Promise<LlmOutput>;
+import type { Llm } from "./llm";
 
 const mockLlmDelayMs = 300;
 

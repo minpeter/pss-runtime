@@ -1,6 +1,6 @@
 # pss-next
 
-Small prototype for a minimal agent runtime: a mock LLM emits text, a tool call, or text followed by a tool call; sessions accept user messages through a queue and consumers observe progress through agent events.
+Small prototype for a minimal agent runtime: an LLM emits text, a tool call, or text followed by a tool call; sessions accept user messages through a queue and consumers observe progress through agent events.
 
 ```bash
 pnpm install
