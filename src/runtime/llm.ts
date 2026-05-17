@@ -29,6 +29,7 @@ export const defaultModel = env.AI_MODEL as LanguageModel;
 
 const continueTool = tool({
   description: "Request one more agent loop step before producing a final answer.",
+  execute: () => ({}),
   inputSchema: jsonSchema({
     type: "object",
     properties: {},
