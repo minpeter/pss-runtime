@@ -1,131 +1,96 @@
-import assert from "node:assert/strict";
-import type { AssistantModelMessage, ToolCallPart, ToolModelMessage } from "ai";
+import { describe, expect, it } from "vitest";
 import { runAgentLoop } from "./agent-loop";
-import type { Llm, LlmOutput } from "./llm";
+import type { Llm } from "./llm";
 import type { AgentEvent } from "./session/events";
 import { AgentModelHistory } from "./session/history";
+import {
+  assistantMessage,
+  continueToolCall,
+  continueToolResult,
+  createScriptedLlm,
+  eventTypes,
+} from "./test-fixtures";
 
-const createScriptedLlm = (outputs: LlmOutput[]): Llm => {
-  let index = 0;
-  return () => Promise.resolve(outputs[index++] ?? []);
-};
+describe("runAgentLoop", () => {
+  it("continues while assistant messages request the continue tool", async () => {
+    const events: AgentEvent[] = [];
+    const history = new AgentModelHistory();
+    const toolCall = continueToolCall("call-continue-1");
+    const llm = createScriptedLlm([
+      [
+        assistantMessage([
+          { type: "text", text: "I should keep going." },
+          toolCall,
+        ]),
+        continueToolResult(toolCall),
+      ],
+      [assistantMessage("DONE")],
+    ]);
 
-const continueToolCall = (toolCallId: string): ToolCallPart => ({
-  type: "tool-call",
-  toolCallId,
-  toolName: "continue",
-  input: {},
+    await expect(
+      runAgentLoop({ emit: (event) => events.push(event), history, llm })
+    ).resolves.toBe("completed");
+
+    expect(events).toEqual([
+      { type: "step-start" },
+      { type: "assistant-text", text: "I should keep going." },
+      { type: "tool-call", toolName: "continue" },
+      { type: "step-end" },
+      { type: "step-start" },
+      { type: "assistant-text", text: "DONE" },
+      { type: "step-end" },
+    ]);
+    expect(history.modelSnapshot()).toEqual([
+      assistantMessage([
+        { type: "text", text: "I should keep going." },
+        toolCall,
+      ]),
+      continueToolResult(toolCall),
+      assistantMessage("DONE"),
+    ]);
+  });
+
+  it("returns aborted when the LLM rejects after the signal is aborted", async () => {
+    const events: AgentEvent[] = [];
+    const history = new AgentModelHistory();
+    const controller = new AbortController();
+    const abortingLlm: Llm = () => {
+      controller.abort();
+      return Promise.reject(new Error("model request aborted"));
+    };
+
+    await expect(
+      runAgentLoop({
+        emit: (event) => events.push(event),
+        history,
+        llm: abortingLlm,
+        signal: controller.signal,
+      })
+    ).resolves.toBe("aborted");
+
+    expect(eventTypes(events)).toEqual(["step-start"]);
+    expect(history.modelSnapshot()).toEqual([]);
+  });
+
+  it("returns aborted when the LLM resolves empty output after the signal is aborted", async () => {
+    const events: AgentEvent[] = [];
+    const history = new AgentModelHistory();
+    const controller = new AbortController();
+    const emptyAbortingLlm: Llm = () => {
+      controller.abort();
+      return Promise.resolve([]);
+    };
+
+    await expect(
+      runAgentLoop({
+        emit: (event) => events.push(event),
+        history,
+        llm: emptyAbortingLlm,
+        signal: controller.signal,
+      })
+    ).resolves.toBe("aborted");
+
+    expect(eventTypes(events)).toEqual(["step-start"]);
+    expect(history.modelSnapshot()).toEqual([]);
+  });
 });
-
-const assistantMessage = (
-  content: AssistantModelMessage["content"]
-): AssistantModelMessage => ({
-  role: "assistant",
-  content,
-});
-
-const continueToolResult = (toolCall: ToolCallPart): ToolModelMessage => ({
-  role: "tool",
-  content: [
-    {
-      type: "tool-result",
-      toolCallId: toolCall.toolCallId,
-      toolName: toolCall.toolName,
-      output: { type: "json", value: {} },
-    },
-  ],
-});
-
-const events: AgentEvent[] = [];
-const history = new AgentModelHistory();
-const callContinue1 = continueToolCall("call-continue-1");
-const llm = createScriptedLlm([
-  [
-    assistantMessage([
-      { type: "text", text: "I should keep going." },
-      callContinue1,
-    ]),
-    continueToolResult(callContinue1),
-  ],
-  [assistantMessage("DONE")],
-]);
-
-assert.equal(
-  await runAgentLoop({ emit: (event) => events.push(event), history, llm }),
-  "completed"
-);
-assert.deepEqual(
-  events.map((event) => event.type),
-  [
-    "step-start",
-    "assistant-text",
-    "tool-call",
-    "step-end",
-    "step-start",
-    "assistant-text",
-    "step-end",
-  ]
-);
-assert.deepEqual(events, [
-  { type: "step-start" },
-  { type: "assistant-text", text: "I should keep going." },
-  { type: "tool-call", toolName: "continue" },
-  { type: "step-end" },
-  { type: "step-start" },
-  { type: "assistant-text", text: "DONE" },
-  { type: "step-end" },
-]);
-assert.deepEqual(history.modelSnapshot(), [
-  assistantMessage([
-    { type: "text", text: "I should keep going." },
-    callContinue1,
-  ]),
-  continueToolResult(callContinue1),
-  assistantMessage("DONE"),
-]);
-
-const abortEvents: AgentEvent[] = [];
-const abortHistory = new AgentModelHistory();
-const abortController = new AbortController();
-const abortingLlm: Llm = () => {
-  abortController.abort();
-  return Promise.reject(new Error("model request aborted"));
-};
-
-assert.equal(
-  await runAgentLoop({
-    emit: (event) => abortEvents.push(event),
-    history: abortHistory,
-    llm: abortingLlm,
-    signal: abortController.signal,
-  }),
-  "aborted"
-);
-assert.deepEqual(
-  abortEvents.map((event) => event.type),
-  ["step-start"]
-);
-assert.deepEqual(abortHistory.modelSnapshot(), []);
-
-const emptyAbortEvents: AgentEvent[] = [];
-const emptyAbortHistory = new AgentModelHistory();
-const emptyAbortController = new AbortController();
-const emptyAbortingLlm: Llm = () => {
-  emptyAbortController.abort();
-  return Promise.resolve([]);
-};
-
-assert.equal(
-  await runAgentLoop({
-    emit: (event) => emptyAbortEvents.push(event),
-    history: emptyAbortHistory,
-    llm: emptyAbortingLlm,
-    signal: emptyAbortController.signal,
-  }),
-  "aborted"
-);
-assert.deepEqual(
-  emptyAbortEvents.map((event) => event.type),
-  ["step-start"]
-);
-assert.deepEqual(emptyAbortHistory.modelSnapshot(), []);

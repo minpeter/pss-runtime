@@ -1,0 +1,55 @@
+import type { AssistantModelMessage, ToolCallPart, ToolModelMessage } from "ai";
+import type { Llm, LlmOutput } from "./llm";
+import type { AgentEvent, UserText } from "./session";
+
+export const assistantMessage = (
+  content: AssistantModelMessage["content"]
+): AssistantModelMessage => ({
+  role: "assistant",
+  content,
+});
+
+export const continueToolCall = (toolCallId: string): ToolCallPart => ({
+  type: "tool-call",
+  toolCallId,
+  toolName: "continue",
+  input: {},
+});
+
+export const continueToolResult = (
+  toolCall: ToolCallPart
+): ToolModelMessage => ({
+  role: "tool",
+  content: [
+    {
+      type: "tool-result",
+      toolCallId: toolCall.toolCallId,
+      toolName: toolCall.toolName,
+      output: { type: "json", value: {} },
+    },
+  ],
+});
+
+export const createDeferred = (): {
+  promise: Promise<void>;
+  resolve: () => void;
+} => {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+};
+
+export const createScriptedLlm = (outputs: LlmOutput[]): Llm => {
+  let index = 0;
+  return () => Promise.resolve(outputs[index++] ?? []);
+};
+
+export const eventTypes = (events: AgentEvent[]) =>
+  events.map((event) => event.type);
+
+export const userText = (text: string): UserText => ({
+  type: "user-text",
+  text,
+});

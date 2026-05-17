@@ -1,62 +1,46 @@
-import assert from "node:assert/strict";
-import type { AssistantModelMessage, ToolCallPart, ToolModelMessage } from "ai";
-import type { UserText } from "./events";
+import { describe, expect, it } from "vitest";
+import {
+  assistantMessage,
+  continueToolCall,
+  continueToolResult,
+  userText,
+} from "../test-fixtures";
 import { modelMessageToAgentEvents, userTextToModelMessage } from "./mapping";
 
-const userText = (text: string): UserText => ({ type: "user-text", text });
+describe("session mapping", () => {
+  it("maps user text to an AI SDK user model message", () => {
+    expect(userTextToModelMessage(userText("hello"))).toEqual({
+      role: "user",
+      content: "hello",
+    });
+  });
 
-const assistantMessage = (
-  content: AssistantModelMessage["content"]
-): AssistantModelMessage => ({
-  role: "assistant",
-  content,
+  it("projects assistant text and tool calls to public agent events", () => {
+    const toolCall = continueToolCall("call-continue");
+
+    expect(modelMessageToAgentEvents(assistantMessage("DONE"))).toEqual([
+      { type: "assistant-text", text: "DONE" },
+    ]);
+    expect(
+      modelMessageToAgentEvents(
+        assistantMessage([
+          { type: "text", text: "thinking aloud" },
+          { type: "text", text: "" },
+          toolCall,
+        ])
+      )
+    ).toEqual([
+      { type: "assistant-text", text: "thinking aloud" },
+      { type: "tool-call", toolName: "continue" },
+    ]);
+  });
+
+  it("does not project non-assistant messages to public agent events", () => {
+    const toolCall = continueToolCall("call-continue");
+
+    expect(
+      modelMessageToAgentEvents(userTextToModelMessage(userText("hi")))
+    ).toEqual([]);
+    expect(modelMessageToAgentEvents(continueToolResult(toolCall))).toEqual([]);
+  });
 });
-
-const continueToolCall = (toolCallId: string): ToolCallPart => ({
-  type: "tool-call",
-  toolCallId,
-  toolName: "continue",
-  input: {},
-});
-
-const continueToolResult = (toolCall: ToolCallPart): ToolModelMessage => ({
-  role: "tool",
-  content: [
-    {
-      type: "tool-result",
-      toolCallId: toolCall.toolCallId,
-      toolName: toolCall.toolName,
-      output: { type: "json", value: {} },
-    },
-  ],
-});
-
-assert.deepEqual(userTextToModelMessage(userText("hello")), {
-  role: "user",
-  content: "hello",
-});
-
-assert.deepEqual(modelMessageToAgentEvents(assistantMessage("DONE")), [
-  { type: "assistant-text", text: "DONE" },
-]);
-
-const toolCall = continueToolCall("call-continue");
-assert.deepEqual(
-  modelMessageToAgentEvents(
-    assistantMessage([
-      { type: "text", text: "thinking aloud" },
-      { type: "text", text: "" },
-      toolCall,
-    ])
-  ),
-  [
-    { type: "assistant-text", text: "thinking aloud" },
-    { type: "tool-call", toolName: "continue" },
-  ]
-);
-
-assert.deepEqual(
-  modelMessageToAgentEvents(userTextToModelMessage(userText("hi"))),
-  []
-);
-assert.deepEqual(modelMessageToAgentEvents(continueToolResult(toolCall)), []);
