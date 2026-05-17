@@ -36,6 +36,10 @@ export class AgentSession {
     const acceptedInput = structuredClone(input);
     this.#emit(acceptedInput);
 
+    if (this.#killed) {
+      return Promise.reject(sessionKilledError());
+    }
+
     const queued = new Promise<void>((resolve, reject) => {
       this.#inputQueue.push({
         input: structuredClone(acceptedInput),

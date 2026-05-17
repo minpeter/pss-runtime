@@ -161,3 +161,31 @@ assert.deepEqual(
   killedEvents.map((event) => event.type),
   ["user-text", "turn-start", "step-start", "user-text", "turn-abort"]
 );
+
+let listenerKilledCalls = 0;
+const listenerKilledSession = new Agent({
+  llm: async () => {
+    listenerKilledCalls += 1;
+    return [{ type: "assistant-text", text: "should not run" }];
+  },
+}).createSession();
+const listenerKilledEvents: AgentEvent[] = [];
+listenerKilledSession.subscribe((event) => {
+  listenerKilledEvents.push(event);
+
+  if (event.type === "user-text") {
+    listenerKilledSession.kill();
+  }
+});
+
+await assert.rejects(
+  listenerKilledSession.submit({ type: "user-text", text: "kill now" }),
+  /Session killed/
+);
+
+assert.equal(listenerKilledCalls, 0);
+assert.deepEqual(listenerKilledSession.history(), []);
+assert.deepEqual(
+  listenerKilledEvents.map((event) => event.type),
+  ["user-text"]
+);
