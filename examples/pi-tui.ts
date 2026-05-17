@@ -77,7 +77,6 @@ const formatEvent = (event: AgentEvent): string | undefined => {
       return;
   }
 };
-
 session.subscribe((event) => {
   const line = formatEvent(event);
   if (line) {

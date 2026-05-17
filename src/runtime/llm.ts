@@ -7,22 +7,17 @@ import {
   tool,
 } from "ai";
 import { env } from "./env";
-import type {
-  AssistantText,
-  ModelHistoryItem,
-  ToolCall,
-} from "./session/events";
 
-type AssistantPromptPart =
-  | { type: "text"; text: string }
-  | { type: "tool-call"; toolCallId: string; toolName: string; input: object };
+export type LlmOutput = Awaited<
+  ReturnType<typeof generateText>
+>["responseMessages"];
+export type LlmOutputPart = LlmOutput[number];
 
-export type LlmOutputPart = AssistantText | ToolCall;
-export type LlmOutput = LlmOutputPart[];
 export interface LlmContext {
-  history: readonly ModelHistoryItem[];
+  history: readonly ModelMessage[];
   signal: AbortSignal;
 }
+
 export type Llm = (context: LlmContext) => Promise<LlmOutput>;
 
 export interface CreateLlmOptions {
@@ -54,91 +49,21 @@ const continueTool = tool({
   }),
 });
 
+const continueTools = { continue: continueTool };
+
 export function createLlm({
   model = defaultModel,
   instructions,
 }: CreateLlmOptions = {}): Llm {
   return async ({ history, signal }) => {
-    const result = await generateText({
+    const { responseMessages } = await generateText({
       abortSignal: signal,
       instructions,
-      messages: toModelMessages(history),
+      messages: [...history],
       model,
-      tools: { continue: continueTool },
+      tools: continueTools,
     });
 
-    return toLlmOutput(result.content);
+    return responseMessages;
   };
-}
-
-function toModelMessages(history: readonly ModelHistoryItem[]): ModelMessage[] {
-  const messages: ModelMessage[] = [];
-  let assistantParts: AssistantPromptPart[] = [];
-
-  const flushAssistant = () => {
-    if (assistantParts.length === 0) {
-      return;
-    }
-
-    messages.push({
-      role: "assistant",
-      content:
-        assistantParts.length === 1 && assistantParts[0]?.type === "text"
-          ? assistantParts[0].text
-          : assistantParts,
-    });
-    assistantParts = [];
-  };
-
-  history.forEach((item, index) => {
-    if (item.type === "user-text") {
-      flushAssistant();
-      messages.push({ role: "user", content: item.text });
-      return;
-    }
-
-    if (item.type === "assistant-text") {
-      assistantParts.push({ type: "text", text: item.text });
-      return;
-    }
-
-    const toolCallId = `tool-call-${index}`;
-    assistantParts.push({
-      type: "tool-call",
-      toolCallId,
-      toolName: item.toolName,
-      input: {},
-    });
-    flushAssistant();
-    messages.push({
-      role: "tool",
-      content: [
-        {
-          type: "tool-result",
-          toolCallId,
-          toolName: item.toolName,
-          output: { type: "json", value: {} },
-        },
-      ],
-    });
-  });
-
-  flushAssistant();
-  return messages;
-}
-
-function toLlmOutput(
-  content: Awaited<ReturnType<typeof generateText>>["content"]
-): LlmOutput {
-  return content.flatMap((part): LlmOutput => {
-    if (part.type === "text") {
-      return part.text ? [{ type: "assistant-text", text: part.text }] : [];
-    }
-
-    if (part.type === "tool-call") {
-      return [{ type: "tool-call", toolName: part.toolName }];
-    }
-
-    return [];
-  });
 }

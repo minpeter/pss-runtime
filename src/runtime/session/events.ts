@@ -11,8 +11,6 @@ export interface ToolCall {
   type: "tool-call";
 }
 
-export type ModelHistoryItem = UserText | AssistantText | ToolCall;
-
 export type AgentEvent =
   /** User input was accepted into the session queue. */
   | UserText
