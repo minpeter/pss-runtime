@@ -6,5 +6,5 @@ export type {
   ModelHistoryItem,
   ToolCall,
   UserText,
-} from "./events";
+} from "./agent-events";
 export { AgentSession, type SessionInput } from "./session";

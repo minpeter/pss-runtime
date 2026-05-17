@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { runAgentLoop } from "./agent-loop";
 import type { Llm, LlmOutput } from "./llm";
-import type { AgentEvent } from "./session/events";
+import type { AgentEvent } from "./session/agent-events";
 import type {
   AssistantModelMessage,
   ModelMessage,

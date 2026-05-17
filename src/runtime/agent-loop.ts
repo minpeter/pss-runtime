@@ -1,8 +1,8 @@
 import {
   agentEventsFromResponseMessage,
   hasAssistantToolCall,
-} from "./session/converters";
-import type { AgentEventListener } from "./session/events";
+} from "./session/model-message-events";
+import type { AgentEventListener } from "./session/agent-events";
 import type { Llm } from "./llm";
 import type { ModelMessage } from "ai";
 

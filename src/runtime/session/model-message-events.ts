@@ -5,14 +5,10 @@ import type {
   ToolModelMessage,
   UserModelMessage,
 } from "ai";
-import type { ModelHistoryItem, UserText } from "./events";
+import type { ModelHistoryItem } from "./agent-events";
 
 type AssistantContentPart = Exclude<AssistantContent, string>[number];
 type ResponseMessage = AssistantModelMessage | ToolModelMessage;
-
-export function toUserModelMessage(input: UserText): UserModelMessage {
-  return { role: "user", content: input.text };
-}
 
 export function modelHistoryItemsFromModelMessage(
   message: ModelMessage

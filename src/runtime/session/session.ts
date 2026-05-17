@@ -1,12 +1,12 @@
 import { runAgentLoop } from "../agent-loop";
 import type { Llm } from "../llm";
-import { AgentConversationHistory } from "./history";
+import { AgentModelHistory } from "./model-history";
 import type {
   AgentEvent,
   AgentEventListener,
   ModelHistoryItem,
   UserText,
-} from "./events";
+} from "./agent-events";
 
 export type SessionInput = UserText;
 
@@ -19,7 +19,7 @@ type QueuedInput = {
 export class AgentSession {
   readonly #listeners = new Set<AgentEventListener>();
   readonly #llm: Llm;
-  readonly #history = new AgentConversationHistory();
+  readonly #history = new AgentModelHistory();
   readonly #inputQueue: QueuedInput[] = [];
   #running = false;
   #activeAbort?: AbortController;
@@ -76,7 +76,7 @@ export class AgentSession {
   }
 
   history(): ModelHistoryItem[] {
-    return this.#history.snapshot();
+    return this.#history.publicSnapshot();
   }
 
   async #drainInputQueue(): Promise<void> {
