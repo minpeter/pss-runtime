@@ -1,17 +1,13 @@
 import assert from "node:assert/strict";
-import { Agent } from "../agent";
-import type { Llm } from "../llm";
-import type {
-  AgentEvent,
-  ModelHistoryItem,
-  UserText,
-} from "./index";
 import type {
   AssistantModelMessage,
   ToolCallPart,
   ToolModelMessage,
   UserModelMessage,
 } from "ai";
+import { Agent } from "../agent";
+import type { Llm } from "../llm";
+import type { AgentEvent, ModelHistoryItem, UserText } from "./events";
 
 const createDeferred = () => {
   let resolve!: () => void;
@@ -110,16 +106,19 @@ assert.deepEqual(
 const toolLoopHistories: unknown[][] = [];
 let toolLoopCalls = 0;
 const toolLoopSession = new Agent({
-  llm: async ({ history }) => {
+  llm: ({ history }) => {
     toolLoopCalls += 1;
     toolLoopHistories.push([...history]);
 
     if (toolLoopCalls === 1) {
       const toolCall = continueToolCall("call-tool-loop-continue");
-      return [assistantMessage([toolCall]), continueToolResult(toolCall)];
+      return Promise.resolve([
+        assistantMessage([toolCall]),
+        continueToolResult(toolCall),
+      ]);
     }
 
-    return [assistantMessage("DONE")];
+    return Promise.resolve([assistantMessage("DONE")]);
   },
 }).createSession();
 
@@ -142,9 +141,7 @@ assert.deepEqual(toolLoopSession.history(), [
 ]);
 
 const failingSession = new Agent({
-  llm: async () => {
-    throw new Error("model unavailable");
-  },
+  llm: () => Promise.reject(new Error("model unavailable")),
 }).createSession();
 const failingEvents: AgentEvent[] = [];
 failingSession.subscribe((event) => failingEvents.push(event));
@@ -204,9 +201,9 @@ assert.deepEqual(
 
 let listenerKilledCalls = 0;
 const listenerKilledSession = new Agent({
-  llm: async () => {
+  llm: () => {
     listenerKilledCalls += 1;
-    return [assistantMessage("should not run")];
+    return Promise.resolve([assistantMessage("should not run")]);
   },
 }).createSession();
 const listenerKilledEvents: AgentEvent[] = [];

@@ -34,7 +34,9 @@ export function agentEventsFromModelMessage(
 }
 
 export function hasAssistantToolCall(message: AssistantModelMessage): boolean {
-  return assistantContentParts(message).some((part) => part.type === "tool-call");
+  return assistantContentParts(message).some(
+    (part) => part.type === "tool-call"
+  );
 }
 
 function userTextContent(message: UserModelMessage): string {
@@ -43,12 +45,16 @@ function userTextContent(message: UserModelMessage): string {
   }
 
   return message.content
-    .filter((part): part is { type: "text"; text: string } => part.type === "text")
+    .filter(
+      (part): part is { type: "text"; text: string } => part.type === "text"
+    )
     .map((part) => part.text)
     .join("");
 }
 
-function assistantContentParts(message: AssistantModelMessage): AssistantContentPart[] {
+function assistantContentParts(
+  message: AssistantModelMessage
+): AssistantContentPart[] {
   return typeof message.content === "string"
     ? [{ type: "text", text: message.content }]
     : message.content;

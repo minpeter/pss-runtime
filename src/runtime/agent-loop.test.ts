@@ -1,17 +1,17 @@
 import assert from "node:assert/strict";
-import { runAgentLoop } from "./agent-loop";
-import type { Llm, LlmOutput } from "./llm";
-import type { AgentEvent } from "./session/events";
 import type {
   AssistantModelMessage,
   ModelMessage,
   ToolCallPart,
   ToolModelMessage,
 } from "ai";
+import { runAgentLoop } from "./agent-loop";
+import type { Llm, LlmOutput } from "./llm";
+import type { AgentEvent } from "./session/events";
 
 const createScriptedLlm = (outputs: LlmOutput[]): Llm => {
   let index = 0;
-  return async () => outputs[index++] ?? [];
+  return () => Promise.resolve(outputs[index++] ?? []);
 };
 
 const continueToolCall = (toolCallId: string): ToolCallPart => ({
@@ -80,7 +80,10 @@ assert.deepEqual(events, [
   { type: "step-end" },
 ]);
 assert.deepEqual(history, [
-  assistantMessage([{ type: "text", text: "I should keep going." }, callContinue1]),
+  assistantMessage([
+    { type: "text", text: "I should keep going." },
+    callContinue1,
+  ]),
   continueToolResult(callContinue1),
   assistantMessage("DONE"),
 ]);
@@ -88,9 +91,9 @@ assert.deepEqual(history, [
 const abortEvents: AgentEvent[] = [];
 const abortHistory: ModelMessage[] = [];
 const abortController = new AbortController();
-const abortingLlm: Llm = async () => {
+const abortingLlm: Llm = () => {
   abortController.abort();
-  throw new Error("model request aborted");
+  return Promise.reject(new Error("model request aborted"));
 };
 
 assert.equal(

@@ -1,12 +1,12 @@
 import type { LanguageModel } from "ai";
 import { createLlm, type Llm } from "./llm";
-import { AgentSession } from "./session";
+import { AgentSession } from "./session/session";
 
-type AgentOptions = {
+interface AgentOptions {
+  instructions?: string;
   llm?: Llm;
   model?: LanguageModel;
-  instructions?: string;
-};
+}
 
 export class Agent {
   readonly #llm: Llm;

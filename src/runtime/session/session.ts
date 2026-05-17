@@ -1,20 +1,20 @@
 import { runAgentLoop } from "../agent-loop";
 import type { Llm } from "../llm";
-import { AgentModelHistory } from "./history";
 import type {
   AgentEvent,
   AgentEventListener,
   ModelHistoryItem,
   UserText,
 } from "./events";
+import { AgentModelHistory } from "./history";
 
 export type SessionInput = UserText;
 
-type QueuedInput = {
+interface QueuedInput {
   input: SessionInput;
-  resolve: () => void;
   reject: (error: unknown) => void;
-};
+  resolve: () => void;
+}
 
 export class AgentSession {
   readonly #listeners = new Set<AgentEventListener>();
@@ -49,12 +49,12 @@ export class AgentSession {
     const queued = new Promise<void>((resolve, reject) => {
       this.#inputQueue.push({
         input: structuredClone(acceptedInput),
-        resolve,
         reject,
+        resolve,
       });
     });
 
-    void this.#drainInputQueue();
+    this.#drainInputQueue();
     return queued;
   }
 

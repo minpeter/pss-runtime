@@ -2,24 +2,26 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import {
   generateText,
   jsonSchema,
-  tool,
   type LanguageModel,
   type ModelMessage,
+  tool,
 } from "ai";
 import { env } from "./env";
 
-export type LlmOutput = Awaited<ReturnType<typeof generateText>>["responseMessages"];
+export type LlmOutput = Awaited<
+  ReturnType<typeof generateText>
+>["responseMessages"];
 export type LlmOutputPart = LlmOutput[number];
-export type LlmContext = {
+export interface LlmContext {
   history: readonly ModelMessage[];
   signal: AbortSignal;
-};
+}
 export type Llm = (context: LlmContext) => Promise<LlmOutput>;
 
-export type CreateLlmOptions = {
-  model?: LanguageModel;
+export interface CreateLlmOptions {
   instructions?: string;
-};
+  model?: LanguageModel;
+}
 
 const defaultProvider = createOpenAICompatible({
   name: "custom",
@@ -30,7 +32,8 @@ const defaultProvider = createOpenAICompatible({
 export const defaultModel = defaultProvider(env.AI_MODEL);
 
 const continueTool = tool({
-  description: "Request one more agent loop step before producing a final answer.",
+  description:
+    "Request one more agent loop step before producing a final answer.",
   execute: () => ({}),
   inputSchema: jsonSchema({
     type: "object",
