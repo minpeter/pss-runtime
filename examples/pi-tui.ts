@@ -101,7 +101,7 @@ const removeInputListener = tui.addInputListener((data) => {
   }
 
   removeInputListener();
-  session.interrupt();
+  session.kill();
   tui.stop();
   finish();
   return { consume: true };
