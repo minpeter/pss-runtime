@@ -5,6 +5,7 @@ import {
   type LanguageModel,
   type ModelMessage,
 } from "ai";
+import { env } from "./env";
 import type { AssistantText, ModelHistoryItem, ToolCall } from "./session/events";
 
 type AssistantPromptPart =
@@ -24,7 +25,7 @@ export type CreateLlmOptions = {
   instructions?: string;
 };
 
-export const defaultModel = "openai/gpt-5.5" satisfies LanguageModel;
+export const defaultModel = env.AI_MODEL as LanguageModel;
 
 const continueTool = tool({
   description: "Request one more agent loop step before producing a final answer.",

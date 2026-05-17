@@ -8,3 +8,5 @@ pnpm run dev
 pnpm run test
 pnpm run typecheck
 ```
+
+Set `AI_MODEL` in `.env` to change the default model.
