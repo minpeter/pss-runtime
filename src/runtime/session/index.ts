@@ -10,4 +10,5 @@ export type {
   UserContentPart,
   UserMessage,
 } from "./events";
+export { assistantContentParts, hasAssistantToolCall } from "./events";
 export { AgentSession, type SessionInput } from "./session";

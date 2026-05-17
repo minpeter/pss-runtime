@@ -22,3 +22,4 @@ export type {
   UserContentPart,
   UserMessage,
 } from "./runtime/session";
+export { assistantContentParts, hasAssistantToolCall } from "./runtime/session";

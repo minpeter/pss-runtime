@@ -3,17 +3,10 @@ import {
   generateText,
   jsonSchema,
   tool,
-  type AssistantModelMessage,
   type LanguageModel,
-  type ModelMessage,
 } from "ai";
 import { env } from "./env";
-import type {
-  AssistantContentPart,
-  AssistantMessage,
-  ModelHistoryItem,
-  ToolMessage,
-} from "./session/events";
+import type { AssistantMessage, ModelHistoryItem, ToolMessage } from "./session/events";
 
 export type LlmOutputPart = AssistantMessage | ToolMessage;
 export type LlmOutput = LlmOutputPart[];
@@ -61,27 +54,11 @@ export function createLlm({
     const result = await generateText({
       abortSignal: signal,
       instructions,
-      messages: toModelMessages(history),
+      messages: [...history],
       model,
       tools: continueTools,
     });
 
     return result.responseMessages;
   };
-}
-
-function toModelMessages(history: readonly ModelHistoryItem[]): ModelMessage[] {
-  return [...history];
-}
-
-export function hasToolCall(message: AssistantModelMessage): boolean {
-  return assistantContentParts(message).some((part) => part.type === "tool-call");
-}
-
-export function assistantContentParts(
-  message: AssistantModelMessage
-): AssistantContentPart[] {
-  return typeof message.content === "string"
-    ? [{ type: "text", text: message.content }]
-    : message.content;
 }

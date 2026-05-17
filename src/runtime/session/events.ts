@@ -34,3 +34,15 @@ export type AgentLifecycleEvent =
 export type AgentEvent = ModelHistoryItem | AgentLifecycleEvent;
 
 export type AgentEventListener = (event: AgentEvent) => void;
+
+export function assistantContentParts(
+  message: AssistantMessage
+): AssistantContentPart[] {
+  return typeof message.content === "string"
+    ? [{ type: "text", text: message.content }]
+    : message.content;
+}
+
+export function hasAssistantToolCall(message: AssistantMessage): boolean {
+  return assistantContentParts(message).some((part) => part.type === "tool-call");
+}

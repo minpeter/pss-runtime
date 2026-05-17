@@ -1,6 +1,6 @@
-import type { AgentEventListener } from "./session/events";
+import { hasAssistantToolCall, type AgentEventListener } from "./session/events";
 import type { ModelHistoryItem } from "./session";
-import { hasToolCall, type Llm } from "./llm";
+import type { Llm } from "./llm";
 
 type RunAgentLoopOptions = {
   emit: AgentEventListener;
@@ -49,7 +49,7 @@ export async function runAgentLoop({
       history.push(structuredClone(message));
       emit(message);
 
-      if (message.role === "assistant" && hasToolCall(message)) {
+      if (message.role === "assistant" && hasAssistantToolCall(message)) {
         shouldContinue = true;
       }
     }
