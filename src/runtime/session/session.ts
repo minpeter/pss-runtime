@@ -101,10 +101,7 @@ export class AgentSession {
           this.#history.appendUserInput(item.input);
 
           const result = await runAgentLoop({
-            emit: (event) => {
-              this.#history.appendPublicEvent(event);
-              this.#emit(event);
-            },
+            emit: (event) => this.#emit(event),
             history: this.#history.modelMessages,
             llm: this.#llm,
             signal: this.#activeAbort.signal,

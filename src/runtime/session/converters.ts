@@ -1,16 +1,32 @@
 import type {
   AssistantContent,
   AssistantModelMessage,
+  ModelMessage,
   ToolModelMessage,
   UserModelMessage,
 } from "ai";
-import type { AgentEvent, ModelHistoryItem, UserText } from "./events";
+import type { ModelHistoryItem, UserText } from "./events";
 
 type AssistantContentPart = Exclude<AssistantContent, string>[number];
 type ResponseMessage = AssistantModelMessage | ToolModelMessage;
 
 export function toUserModelMessage(input: UserText): UserModelMessage {
   return { role: "user", content: input.text };
+}
+
+export function modelHistoryItemsFromModelMessage(
+  message: ModelMessage
+): ModelHistoryItem[] {
+  if (message.role === "user") {
+    const text = userTextContent(message);
+    return text ? [{ type: "user-text", text }] : [];
+  }
+
+  if (message.role === "assistant" || message.role === "tool") {
+    return agentEventsFromResponseMessage(message);
+  }
+
+  return [];
 }
 
 export function agentEventsFromResponseMessage(
@@ -37,12 +53,15 @@ export function hasAssistantToolCall(message: AssistantModelMessage): boolean {
   return assistantContentParts(message).some((part) => part.type === "tool-call");
 }
 
-export function isModelHistoryItem(event: AgentEvent): event is ModelHistoryItem {
-  return (
-    event.type === "user-text" ||
-    event.type === "assistant-text" ||
-    event.type === "tool-call"
-  );
+function userTextContent(message: UserModelMessage): string {
+  if (typeof message.content === "string") {
+    return message.content;
+  }
+
+  return message.content
+    .filter((part): part is { type: "text"; text: string } => part.type === "text")
+    .map((part) => part.text)
+    .join("");
 }
 
 function assistantContentParts(message: AssistantModelMessage): AssistantContentPart[] {
