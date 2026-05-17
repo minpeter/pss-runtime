@@ -1,4 +1,6 @@
-import "dotenv/config";
+import { config } from "dotenv";
+
+config({ override: true, quiet: true });
 
 export const env = {
   AI_API_KEY: process.env.AI_API_KEY?.trim() || undefined,
