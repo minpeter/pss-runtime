@@ -1,3 +1,4 @@
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import {
   generateText,
   jsonSchema,
@@ -25,7 +26,13 @@ export type CreateLlmOptions = {
   instructions?: string;
 };
 
-export const defaultModel = env.AI_MODEL as LanguageModel;
+const defaultProvider = createOpenAICompatible({
+  name: "custom",
+  apiKey: env.AI_API_KEY,
+  baseURL: env.AI_BASE_URL,
+});
+
+export const defaultModel = defaultProvider(env.AI_MODEL);
 
 const continueTool = tool({
   description: "Request one more agent loop step before producing a final answer.",

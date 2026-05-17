@@ -9,4 +9,5 @@ pnpm run test
 pnpm run typecheck
 ```
 
-Set `AI_MODEL` in `.env` to change the default model.
+Copy `.env.example` to `.env` and set `AI_API_KEY`, `AI_BASE_URL`, and
+`AI_MODEL` to configure the default OpenAI-compatible provider.

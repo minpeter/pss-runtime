@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@ai-sdk/openai-compatible':
+        specifier: 3.0.0-canary.48
+        version: 3.0.0-canary.48(zod@4.4.3)
       ai:
         specifier: 7.0.0-canary.142
         version: 7.0.0-canary.142(zod@4.4.3)
@@ -35,6 +38,12 @@ packages:
 
   '@ai-sdk/gateway@4.0.0-canary.83':
     resolution: {integrity: sha512-/vLA9WoE3VGtGdnjWU5roVyibrDgRkpyoCxde7tfndNVN3mLq+UjQWyK6t5GnrwAPpKqv4JIDyu6tkN54jtcNw==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/openai-compatible@3.0.0-canary.48':
+    resolution: {integrity: sha512-eQ33kifFlMmVz5eep2dqQlCrNAFhQE7Jgq0ZG75Ti7aKGmQ2SWD+smnZ+pbIMGZvFxGhyeGXUYPYYWMXOBSnVA==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -284,6 +293,12 @@ snapshots:
       '@ai-sdk/provider': 4.0.0-canary.16
       '@ai-sdk/provider-utils': 5.0.0-canary.41(zod@4.4.3)
       '@vercel/oidc': 3.2.0
+      zod: 4.4.3
+
+  '@ai-sdk/openai-compatible@3.0.0-canary.48(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.0-canary.16
+      '@ai-sdk/provider-utils': 5.0.0-canary.41(zod@4.4.3)
       zod: 4.4.3
 
   '@ai-sdk/provider-utils@5.0.0-canary.41(zod@4.4.3)':
