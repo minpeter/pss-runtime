@@ -17,8 +17,8 @@
     "typescript": "latest"
   },
   "dependencies": {
-    "@t3-oss/env-core": "^0.13.11",
     "ai": "7.0.0-canary.142",
+    "dotenv": "^17.4.2",
     "zod": "^4.4.3"
   }
 }

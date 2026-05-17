@@ -1,13 +1,5 @@
-import { createEnv } from "@t3-oss/env-core";
-import { z } from "zod";
-import { loadEnvFile } from "./env-file";
+import "dotenv/config";
 
-loadEnvFile();
-
-export const env = createEnv({
-  server: {
-    AI_MODEL: z.string().min(1).default("openai/gpt-5.5"),
-  },
-  runtimeEnv: process.env,
-  emptyStringAsUndefined: true,
-});
+export const env = {
+  AI_MODEL: process.env.AI_MODEL?.trim() || "openai/gpt-5.5",
+} as const;
