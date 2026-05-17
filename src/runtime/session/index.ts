@@ -1,2 +1,9 @@
-export type { AgentEvent, AgentEventListener } from "./events";
+export type {
+  AgentEvent,
+  AgentEventListener,
+  AssistantText,
+  ModelHistoryItem,
+  ToolCall,
+  UserText,
+} from "./events";
 export { AgentSession, type SessionInput } from "./session";
