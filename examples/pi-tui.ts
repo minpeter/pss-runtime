@@ -39,7 +39,7 @@ const addLine = (text: string): void => {
 };
 
 const safeText = (text: string): string =>
-  text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g, "");
+  text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, "");
 
 const formatEvent = (event: AgentEvent): string | undefined => {
   switch (event.type) {
