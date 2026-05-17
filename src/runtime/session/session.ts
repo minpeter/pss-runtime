@@ -17,6 +17,7 @@ export class AgentSession {
   readonly #inputQueue: QueuedInput[] = [];
   #running = false;
   #activeAbort?: AbortController;
+  #killed = false;
 
   constructor(llm: Llm) {
     this.#llm = llm;
@@ -28,8 +29,16 @@ export class AgentSession {
   }
 
   submit(input: SessionInput): Promise<void> {
+    if (this.#killed) {
+      return Promise.reject(sessionKilledError());
+    }
+
     const acceptedInput = structuredClone(input);
     this.#emit(acceptedInput);
+
+    if (this.#killed) {
+      return Promise.reject(sessionKilledError());
+    }
 
     const queued = new Promise<void>((resolve, reject) => {
       this.#inputQueue.push({
@@ -47,6 +56,19 @@ export class AgentSession {
     this.#activeAbort?.abort();
   }
 
+  kill(): void {
+    if (this.#killed) {
+      return;
+    }
+
+    this.#killed = true;
+    this.#activeAbort?.abort();
+
+    while (this.#inputQueue.length > 0) {
+      this.#inputQueue.shift()?.reject(sessionKilledError());
+    }
+  }
+
   history(): ModelHistoryItem[] {
     return structuredClone(this.#history);
   }
@@ -59,7 +81,7 @@ export class AgentSession {
     this.#running = true;
 
     try {
-      while (this.#inputQueue.length > 0) {
+      while (!this.#killed && this.#inputQueue.length > 0) {
         const item = this.#inputQueue.shift();
 
         if (!item) {
@@ -106,4 +128,8 @@ function errorMessage(error: unknown): string {
   }
 
   return String(error);
+}
+
+function sessionKilledError(): Error {
+  return new Error("Session killed");
 }

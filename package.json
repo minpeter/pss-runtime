@@ -6,10 +6,12 @@
   "packageManager": "pnpm@10.0.0",
   "scripts": {
     "dev": "tsx examples/basic.ts",
+    "dev:tui": "tsx examples/pi-tui.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx src/runtime/agent-loop.test.ts && tsx src/runtime/session/session.test.ts"
   },
   "devDependencies": {
+    "@earendil-works/pi-tui": "^0.74.1",
     "@types/node": "latest",
     "tsx": "latest",
     "typescript": "latest"

@@ -118,3 +118,74 @@ assert.deepEqual(failingEvents.at(-1), {
   type: "turn-error",
   message: "model unavailable",
 });
+
+const killLlmCall = createDeferred();
+let killCalls = 0;
+const killedSession = new Agent({
+  llm: async () => {
+    killCalls += 1;
+    await killLlmCall.promise;
+    return [{ type: "assistant-text", text: "should not render" }];
+  },
+}).createSession();
+const killedEvents: AgentEvent[] = [];
+killedSession.subscribe((event) => killedEvents.push(event));
+
+const activeSubmit = killedSession.submit({ type: "user-text", text: "active" });
+const queuedSubmit = killedSession.submit({ type: "user-text", text: "queued" });
+const queuedResult = queuedSubmit.then(
+  () => "resolved",
+  (error: unknown) => error
+);
+
+killedSession.kill();
+killLlmCall.resolve();
+
+await activeSubmit;
+const queuedError = await queuedResult;
+
+assert.equal(killCalls, 1);
+assert.ok(queuedError instanceof Error);
+assert.equal(queuedError.message, "Session killed");
+assert.deepEqual(killedSession.history(), [
+  { type: "user-text", text: "active" },
+]);
+await assert.rejects(
+  killedSession.submit({ type: "user-text", text: "after kill" }),
+  /Session killed/
+);
+assert.deepEqual(killedSession.history(), [
+  { type: "user-text", text: "active" },
+]);
+assert.deepEqual(
+  killedEvents.map((event) => event.type),
+  ["user-text", "turn-start", "step-start", "user-text", "turn-abort"]
+);
+
+let listenerKilledCalls = 0;
+const listenerKilledSession = new Agent({
+  llm: async () => {
+    listenerKilledCalls += 1;
+    return [{ type: "assistant-text", text: "should not run" }];
+  },
+}).createSession();
+const listenerKilledEvents: AgentEvent[] = [];
+listenerKilledSession.subscribe((event) => {
+  listenerKilledEvents.push(event);
+
+  if (event.type === "user-text") {
+    listenerKilledSession.kill();
+  }
+});
+
+await assert.rejects(
+  listenerKilledSession.submit({ type: "user-text", text: "kill now" }),
+  /Session killed/
+);
+
+assert.equal(listenerKilledCalls, 0);
+assert.deepEqual(listenerKilledSession.history(), []);
+assert.deepEqual(
+  listenerKilledEvents.map((event) => event.type),
+  ["user-text"]
+);
