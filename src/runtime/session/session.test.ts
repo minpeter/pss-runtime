@@ -1,214 +1,184 @@
-import assert from "node:assert/strict";
-import type {
-  AssistantModelMessage,
-  ModelMessage,
-  ToolCallPart,
-  ToolModelMessage,
-} from "ai";
+import type { ModelMessage } from "ai";
+import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
 import type { Llm } from "../llm";
-import type { AgentEvent, UserText } from "./index";
+import {
+  assistantMessage,
+  continueToolCall,
+  continueToolResult,
+  createDeferred,
+  eventTypes,
+  userText,
+} from "../test-fixtures";
+import type { AgentEvent } from "./index";
 import { userTextToModelMessage } from "./mapping";
 
-const createDeferred = () => {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => {
-    resolve = done;
+describe("AgentSession", () => {
+  it("queues submitted input and aborts the active turn before the next input runs", async () => {
+    const firstLlmCall = createDeferred();
+    const seenHistory: ModelMessage[][] = [];
+    let calls = 0;
+    const llm: Llm = async ({ history }) => {
+      calls += 1;
+      seenHistory.push([...history]);
+
+      if (calls === 1) {
+        await firstLlmCall.promise;
+        const toolCall = continueToolCall("call-interrupted-continue");
+        return [assistantMessage([toolCall]), continueToolResult(toolCall)];
+      }
+
+      return [assistantMessage("DONE")];
+    };
+    const session = new Agent({ llm }).createSession();
+    const events: AgentEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    const firstSubmit = session.submit(userText("first"));
+    const secondSubmit = session.submit(userText("second"));
+
+    session.interrupt();
+    firstLlmCall.resolve();
+
+    await Promise.all([firstSubmit, secondSubmit]);
+
+    expect(calls).toBe(2);
+    expect(seenHistory).toEqual([
+      [userTextToModelMessage(userText("first"))],
+      [
+        userTextToModelMessage(userText("first")),
+        userTextToModelMessage(userText("second")),
+      ],
+    ]);
+    expect(events).toEqual([
+      { type: "user-text", text: "first" },
+      { type: "turn-start" },
+      { type: "step-start" },
+      { type: "user-text", text: "second" },
+      { type: "turn-abort" },
+      { type: "turn-start" },
+      { type: "step-start" },
+      { type: "assistant-text", text: "DONE" },
+      { type: "step-end" },
+      { type: "turn-end" },
+    ]);
   });
-  return { promise, resolve };
-};
 
-const continueToolCall = (toolCallId: string): ToolCallPart => ({
-  type: "tool-call",
-  toolCallId,
-  toolName: "continue",
-  input: {},
-});
+  it("continues the model loop after a continue tool call", async () => {
+    const seenHistory: ModelMessage[][] = [];
+    let calls = 0;
+    const session = new Agent({
+      llm: ({ history }) => {
+        calls += 1;
+        seenHistory.push([...history]);
 
-const userText = (text: string): UserText => ({ type: "user-text", text });
-const assistantMessage = (
-  content: AssistantModelMessage["content"]
-): AssistantModelMessage => ({
-  role: "assistant",
-  content,
-});
+        if (calls === 1) {
+          const toolCall = continueToolCall("call-tool-loop-continue");
+          return Promise.resolve([
+            assistantMessage([toolCall]),
+            continueToolResult(toolCall),
+          ]);
+        }
 
-const continueToolResult = (toolCall: ToolCallPart): ToolModelMessage => ({
-  role: "tool",
-  content: [
-    {
-      type: "tool-result",
-      toolCallId: toolCall.toolCallId,
-      toolName: toolCall.toolName,
-      output: { type: "json", value: {} },
-    },
-  ],
-});
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+    }).createSession();
 
-const firstLlmCall = createDeferred();
-const seenHistory: ModelMessage[][] = [];
-let calls = 0;
-const llm: Llm = async ({ history }) => {
-  calls += 1;
-  seenHistory.push([...history]);
+    await session.submit(userText("remember me"));
 
-  if (calls === 1) {
-    await firstLlmCall.promise;
-    const toolCall = continueToolCall("call-interrupted-continue");
-    return [assistantMessage([toolCall]), continueToolResult(toolCall)];
-  }
-
-  return [assistantMessage("DONE")];
-};
-
-const session = new Agent({ llm }).createSession();
-const events: AgentEvent[] = [];
-session.subscribe((event) => events.push(event));
-
-const firstSubmit = session.submit(userText("first"));
-const secondSubmit = session.submit(userText("second"));
-
-session.interrupt();
-firstLlmCall.resolve();
-
-await Promise.all([firstSubmit, secondSubmit]);
-
-assert.equal(calls, 2);
-assert.deepEqual(seenHistory, [
-  [userTextToModelMessage(userText("first"))],
-  [
-    userTextToModelMessage(userText("first")),
-    userTextToModelMessage(userText("second")),
-  ],
-]);
-assert.deepEqual(
-  events.map((event) => event.type),
-  [
-    "user-text",
-    "turn-start",
-    "step-start",
-    "user-text",
-    "turn-abort",
-    "turn-start",
-    "step-start",
-    "assistant-text",
-    "step-end",
-    "turn-end",
-  ]
-);
-
-const toolLoopHistories: ModelMessage[][] = [];
-let toolLoopCalls = 0;
-const toolLoopSession = new Agent({
-  llm: ({ history }) => {
-    toolLoopCalls += 1;
-    toolLoopHistories.push([...history]);
-
-    if (toolLoopCalls === 1) {
-      const toolCall = continueToolCall("call-tool-loop-continue");
-      return Promise.resolve([
+    const toolCall = continueToolCall("call-tool-loop-continue");
+    expect(seenHistory).toEqual([
+      [userTextToModelMessage(userText("remember me"))],
+      [
+        userTextToModelMessage(userText("remember me")),
         assistantMessage([toolCall]),
         continueToolResult(toolCall),
-      ]);
-    }
+      ],
+    ]);
+  });
 
-    return Promise.resolve([assistantMessage("DONE")]);
-  },
-}).createSession();
+  it("emits turn-error and rejects the submitted input when the LLM fails", async () => {
+    const session = new Agent({
+      llm: () => Promise.reject(new Error("model unavailable")),
+    }).createSession();
+    const events: AgentEvent[] = [];
+    session.subscribe((event) => events.push(event));
 
-await toolLoopSession.submit(userText("remember me"));
+    await expect(session.submit(userText("fail"))).rejects.toThrow(
+      "model unavailable"
+    );
 
-const toolLoopCall = continueToolCall("call-tool-loop-continue");
+    expect(events).toEqual([
+      { type: "user-text", text: "fail" },
+      { type: "turn-start" },
+      { type: "step-start" },
+      { type: "turn-error", message: "model unavailable" },
+    ]);
+  });
 
-assert.deepEqual(toolLoopHistories, [
-  [userTextToModelMessage(userText("remember me"))],
-  [
-    userTextToModelMessage(userText("remember me")),
-    assistantMessage([toolLoopCall]),
-    continueToolResult(toolLoopCall),
-  ],
-]);
+  it("kills the session by aborting active work and rejecting queued input", async () => {
+    const llmCall = createDeferred();
+    let calls = 0;
+    const session = new Agent({
+      llm: async () => {
+        calls += 1;
+        await llmCall.promise;
+        return [assistantMessage("should not render")];
+      },
+    }).createSession();
+    const events: AgentEvent[] = [];
+    session.subscribe((event) => events.push(event));
 
-const failingSession = new Agent({
-  llm: () => Promise.reject(new Error("model unavailable")),
-}).createSession();
-const failingEvents: AgentEvent[] = [];
-failingSession.subscribe((event) => failingEvents.push(event));
+    const activeSubmit = session.submit(userText("active"));
+    const queuedSubmit = session.submit(userText("queued"));
+    const queuedResult = queuedSubmit.then(
+      () => "resolved",
+      (error: unknown) => error
+    );
 
-await assert.rejects(
-  failingSession.submit(userText("fail")),
-  /model unavailable/
-);
+    session.kill();
+    llmCall.resolve();
 
-assert.deepEqual(
-  failingEvents.map((event) => event.type),
-  ["user-text", "turn-start", "step-start", "turn-error"]
-);
-assert.deepEqual(failingEvents.at(-1), {
-  type: "turn-error",
-  message: "model unavailable",
+    await activeSubmit;
+    const queuedError = await queuedResult;
+
+    expect(calls).toBe(1);
+    expect(queuedError).toBeInstanceOf(Error);
+    expect((queuedError as Error).message).toBe("Session killed");
+    await expect(session.submit(userText("after kill"))).rejects.toThrow(
+      "Session killed"
+    );
+    expect(events).toEqual([
+      { type: "user-text", text: "active" },
+      { type: "turn-start" },
+      { type: "step-start" },
+      { type: "user-text", text: "queued" },
+      { type: "turn-abort" },
+    ]);
+  });
+
+  it("rejects input if a user-text listener kills the session before queueing", async () => {
+    let calls = 0;
+    const session = new Agent({
+      llm: () => {
+        calls += 1;
+        return Promise.resolve([assistantMessage("should not run")]);
+      },
+    }).createSession();
+    const events: AgentEvent[] = [];
+    session.subscribe((event) => {
+      events.push(event);
+
+      if (event.type === "user-text") {
+        session.kill();
+      }
+    });
+
+    await expect(session.submit(userText("kill now"))).rejects.toThrow(
+      "Session killed"
+    );
+
+    expect(calls).toBe(0);
+    expect(eventTypes(events)).toEqual(["user-text"]);
+  });
 });
-
-const killLlmCall = createDeferred();
-let killCalls = 0;
-const killedSession = new Agent({
-  llm: async () => {
-    killCalls += 1;
-    await killLlmCall.promise;
-    return [assistantMessage("should not render")];
-  },
-}).createSession();
-const killedEvents: AgentEvent[] = [];
-killedSession.subscribe((event) => killedEvents.push(event));
-
-const activeSubmit = killedSession.submit(userText("active"));
-const queuedSubmit = killedSession.submit(userText("queued"));
-const queuedResult = queuedSubmit.then(
-  () => "resolved",
-  (error: unknown) => error
-);
-
-killedSession.kill();
-killLlmCall.resolve();
-
-await activeSubmit;
-const queuedError = await queuedResult;
-
-assert.equal(killCalls, 1);
-assert.ok(queuedError instanceof Error);
-assert.equal(queuedError.message, "Session killed");
-await assert.rejects(
-  killedSession.submit(userText("after kill")),
-  /Session killed/
-);
-assert.deepEqual(
-  killedEvents.map((event) => event.type),
-  ["user-text", "turn-start", "step-start", "user-text", "turn-abort"]
-);
-
-let listenerKilledCalls = 0;
-const listenerKilledSession = new Agent({
-  llm: () => {
-    listenerKilledCalls += 1;
-    return Promise.resolve([assistantMessage("should not run")]);
-  },
-}).createSession();
-const listenerKilledEvents: AgentEvent[] = [];
-listenerKilledSession.subscribe((event) => {
-  listenerKilledEvents.push(event);
-
-  if (event.type === "user-text") {
-    listenerKilledSession.kill();
-  }
-});
-
-await assert.rejects(
-  listenerKilledSession.submit(userText("kill now")),
-  /Session killed/
-);
-
-assert.equal(listenerKilledCalls, 0);
-assert.deepEqual(
-  listenerKilledEvents.map((event) => event.type),
-  ["user-text"]
-);

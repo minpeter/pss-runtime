@@ -8,7 +8,7 @@
     "dev": "tsx examples/basic.ts",
     "dev:tui": "tsx examples/pi-tui.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx src/runtime/agent-loop.test.ts && tsx src/runtime/session/mapping.test.ts && tsx src/runtime/session/session.test.ts",
+    "test": "vitest run",
     "lint": "ultracite check .",
     "format": "ultracite fix ."
   },
@@ -18,7 +18,8 @@
     "@types/node": "latest",
     "tsx": "latest",
     "typescript": "latest",
-    "ultracite": "7.7.0"
+    "ultracite": "7.7.0",
+    "vitest": "^4.1.6"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "3.0.0-canary.48",
