@@ -1,4 +1,4 @@
-export { Agent } from "./runtime/agent";
+export { Agent, type AgentOptions } from "./runtime/agent";
 export { runAgentLoop } from "./runtime/agent-loop";
 export type {
   CreateLlmOptions,
@@ -17,3 +17,6 @@ export type {
   ToolCall,
   UserText,
 } from "./runtime/session";
+export type { AgentTools, DefaultTools } from "./tools";
+export { tools } from "./tools";
+export { continueTool } from "./tools/continue";
