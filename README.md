@@ -14,16 +14,15 @@ Copy `.env.example` to `.env` and set `AI_API_KEY`, `AI_BASE_URL`, and
 pinned to `minimax/MiniMax-M2.7` by default. Set `TINYFISH_API_KEY` to enable
 the built-in `web_search` and `web_fetch` tools.
 
-`AI_API_KEY` and `TINYFISH_API_KEY` also accept semicolon-delimited token pools:
+`TINYFISH_API_KEY` accepts semicolon-delimited token pools:
 
 ```env
-AI_API_KEY=ai-token-1;ai-token-2;ai-token-3
 TINYFISH_API_KEY=tf-token-1;tf-token-2
 ```
 
 Empty segments and whitespace are ignored (` a ; ; b ` becomes `a`, `b`). The
-default LLM path and TinyFish web tools rotate usable keys across calls so quota
-can be spread across the pool.
+TinyFish web tools rotate usable keys across calls so quota can be spread across
+the pool.
 
 Built-in tools:
 

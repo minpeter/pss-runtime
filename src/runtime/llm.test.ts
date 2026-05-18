@@ -40,11 +40,10 @@ const createNoopTool = () =>
     }),
   });
 
-function mockEnv(apiKeys = ["ai-test-key"]) {
+function mockEnv(apiKey = "ai-test-key") {
   vi.doMock("./env", () => ({
     env: {
-      AI_API_KEY: apiKeys[0],
-      AI_API_KEYS: apiKeys,
+      AI_API_KEY: apiKey,
       AI_BASE_URL: "https://llm.test/v1",
       AI_MODEL: "minimax/MiniMax-M2.7",
     },
@@ -112,53 +111,24 @@ describe("createLlm", () => {
     );
   });
 
-  it("rotates semicolon-delimited AI_API_KEY values for default LLM calls", async () => {
-    mockEnv(["ai-token-1", "ai-token-2"]);
+  it("keeps semicolon-delimited AI_API_KEY as one opaque provider key", async () => {
+    mockEnv("ai-token-1;ai-token-2");
     const createLlm = await loadCreateLlm();
     const signal = new AbortController().signal;
     const history = [{ role: "user" as const, content: "hello" }];
     const llm = createLlm();
 
     await llm({ history, signal });
-    await llm({ history, signal });
 
-    expect(generateTextMock.mock.calls.map(([input]) => input.model)).toEqual([
+    expect(generateTextMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        apiKey: "ai-token-1",
-        baseURL: "https://llm.test/v1",
-        modelId: "minimax/MiniMax-M2.7",
-      }),
-      expect.objectContaining({
-        apiKey: "ai-token-2",
-        baseURL: "https://llm.test/v1",
-        modelId: "minimax/MiniMax-M2.7",
-      }),
-    ]);
-  });
-
-  it("retries the next default LLM key after a rate-limit error", async () => {
-    mockEnv(["ai-token-1", "ai-token-2"]);
-    const createLlm = await loadCreateLlm();
-    const rateLimitError = Object.assign(new Error("rate limited"), {
-      statusCode: 429,
-    });
-    generateTextMock
-      .mockRejectedValueOnce(rateLimitError)
-      .mockResolvedValueOnce({
-        responseMessages: [assistantMessage("DONE")],
-      });
-    const signal = new AbortController().signal;
-    const history = [{ role: "user" as const, content: "hello" }];
-    const llm = createLlm();
-
-    await expect(llm({ history, signal })).resolves.toEqual([
-      assistantMessage("DONE"),
-    ]);
-
-    expect(generateTextMock.mock.calls.map(([input]) => input.model)).toEqual([
-      expect.objectContaining({ apiKey: "ai-token-1" }),
-      expect.objectContaining({ apiKey: "ai-token-2" }),
-    ]);
+        model: expect.objectContaining({
+          apiKey: "ai-token-1;ai-token-2",
+          baseURL: "https://llm.test/v1",
+          modelId: "minimax/MiniMax-M2.7",
+        }),
+      })
+    );
   });
 });
 
