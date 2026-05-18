@@ -13,6 +13,11 @@ import {
 import type { AgentEvent } from "./index";
 import { userTextToModelMessage } from "./mapping";
 
+const continueToolHistoryMarker = (count: number) => ({
+  role: "user" as const,
+  content: `[internal tool result] The continue tool call completed successfully for this step. Count completed in this step: ${count}. If more internal loop steps are still required, call continue again; otherwise answer normally without more continue calls.`,
+});
+
 describe("AgentSession", () => {
   it("queues submitted input and aborts the active turn before the next input runs", async () => {
     const firstLlmCall = createDeferred();
@@ -86,13 +91,11 @@ describe("AgentSession", () => {
 
     await session.submit(userText("remember me"));
 
-    const toolCall = continueToolCall("call-tool-loop-continue");
     expect(seenHistory).toEqual([
       [userTextToModelMessage(userText("remember me"))],
       [
         userTextToModelMessage(userText("remember me")),
-        assistantMessage([toolCall]),
-        continueToolResult(toolCall),
+        continueToolHistoryMarker(1),
       ],
     ]);
   });

@@ -7,30 +7,47 @@ import {
   assistantMessage,
   continueToolCall,
   continueToolResult,
-  createScriptedLlm,
   eventTypes,
 } from "./test-fixtures";
+
+const continueToolHistoryMarker = (count: number) => ({
+  role: "user" as const,
+  content: `[internal tool result] The continue tool call completed successfully for this step. Count completed in this step: ${count}. If more internal loop steps are still required, call continue again; otherwise answer normally without more continue calls.`,
+});
 
 describe("runAgentLoop", () => {
   it("continues while assistant messages request the continue tool", async () => {
     const events: AgentEvent[] = [];
     const history = new AgentModelHistory();
+    const seenHistory: ReturnType<AgentModelHistory["modelSnapshot"]>[] = [];
     const toolCall = continueToolCall("call-continue-1");
-    const llm = createScriptedLlm([
-      [
-        assistantMessage([
-          { type: "text", text: "I should keep going." },
-          toolCall,
-        ]),
-        continueToolResult(toolCall),
-      ],
-      [assistantMessage("DONE")],
-    ]);
+    const llm: Llm = ({ history }) => {
+      seenHistory.push([...history]);
+
+      if (seenHistory.length === 1) {
+        return Promise.resolve([
+          assistantMessage([
+            { type: "text", text: "I should keep going." },
+            toolCall,
+          ]),
+          continueToolResult(toolCall),
+        ]);
+      }
+
+      return Promise.resolve([assistantMessage("DONE")]);
+    };
 
     await expect(
       runAgentLoop({ emit: (event) => events.push(event), history, llm })
     ).resolves.toBe("completed");
 
+    expect(seenHistory).toEqual([
+      [],
+      [
+        assistantMessage([{ type: "text", text: "I should keep going." }]),
+        continueToolHistoryMarker(1),
+      ],
+    ]);
     expect(events).toEqual([
       { type: "step-start" },
       { type: "assistant-text", text: "I should keep going." },
@@ -41,11 +58,45 @@ describe("runAgentLoop", () => {
       { type: "step-end" },
     ]);
     expect(history.modelSnapshot()).toEqual([
-      assistantMessage([
-        { type: "text", text: "I should keep going." },
-        toolCall,
-      ]),
-      continueToolResult(toolCall),
+      assistantMessage([{ type: "text", text: "I should keep going." }]),
+      continueToolHistoryMarker(1),
+      assistantMessage("DONE"),
+    ]);
+  });
+
+  it("replaces continue-only tool protocol with a safe history marker", async () => {
+    const events: AgentEvent[] = [];
+    const history = new AgentModelHistory();
+    const seenHistory: ReturnType<AgentModelHistory["modelSnapshot"]>[] = [];
+    const toolCall = continueToolCall("call-continue-only");
+    const llm: Llm = ({ history }) => {
+      seenHistory.push([...history]);
+
+      if (seenHistory.length === 1) {
+        return Promise.resolve([
+          assistantMessage([toolCall]),
+          continueToolResult(toolCall),
+        ]);
+      }
+
+      return Promise.resolve([assistantMessage("DONE")]);
+    };
+
+    await expect(
+      runAgentLoop({ emit: (event) => events.push(event), history, llm })
+    ).resolves.toBe("completed");
+
+    expect(seenHistory).toEqual([[], [continueToolHistoryMarker(1)]]);
+    expect(events).toEqual([
+      { type: "step-start" },
+      { type: "tool-call", toolName: "continue" },
+      { type: "step-end" },
+      { type: "step-start" },
+      { type: "assistant-text", text: "DONE" },
+      { type: "step-end" },
+    ]);
+    expect(history.modelSnapshot()).toEqual([
+      continueToolHistoryMarker(1),
       assistantMessage("DONE"),
     ]);
   });
