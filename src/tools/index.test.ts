@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getTinyFishApiKey } from "../integrations/tinyfish";
 import { tools } from ".";
-import { getTinyFishApiKey } from "./tinyfish";
 import { webFetchTool } from "./web-fetch";
 import { webSearchTool } from "./web-search";
 

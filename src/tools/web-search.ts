@@ -1,64 +1,23 @@
 import { jsonSchema, tool } from "ai";
 import {
-  getTinyFishApiKey,
-  parseTinyFishJsonResponse,
-  readNumber,
   readObject,
   readString,
-} from "./tinyfish";
+  searchTinyFishWeb,
+  type TinyFishSearchOutput,
+  type TinyFishSearchRequest,
+  type TinyFishSearchResult,
+} from "../integrations/tinyfish";
 
-const searchEndpoint = "https://api.search.tinyfish.ai";
-
-interface TinyFishSearchResponse {
-  page?: unknown;
-  query?: unknown;
-  results?: unknown;
-  total_results?: unknown;
-}
-
-export interface WebSearchResult {
-  position: number;
-  site_name: string;
-  snippet: string;
-  title: string;
-  url: string;
-}
-
-export interface WebSearchOutput {
-  page: number;
-  query: string;
-  results: WebSearchResult[];
-  total_results: number;
-}
-
-interface WebSearchInput {
-  language: string;
-  location: string;
-  page: number;
-  query: string;
-}
+export type WebSearchResult = TinyFishSearchResult;
+export type WebSearchOutput = TinyFishSearchOutput;
 
 export const webSearchTool = tool({
   description:
     "Search the web with TinyFish Search API. Returns ranked results with titles, snippets, and URLs.",
-  execute: async (input): Promise<WebSearchOutput> => {
+  execute: (input): Promise<WebSearchOutput> => {
     const request = parseWebSearchInput(input);
-    const url = new URL(searchEndpoint);
-    url.searchParams.set("query", request.query);
-    url.searchParams.set("location", request.location);
-    url.searchParams.set("language", request.language);
-    url.searchParams.set("page", String(request.page));
 
-    const response = await fetch(url.toString(), {
-      headers: { "X-API-Key": getTinyFishApiKey() },
-      method: "GET",
-    });
-    const body = await parseTinyFishJsonResponse<TinyFishSearchResponse>(
-      response,
-      "search"
-    );
-
-    return sanitizeSearchResponse(body);
+    return searchTinyFishWeb(request);
   },
   inputSchema: jsonSchema({
     additionalProperties: false,
@@ -98,7 +57,7 @@ export const webSearchTool = tool({
   }),
 });
 
-function parseWebSearchInput(input: unknown): WebSearchInput {
+function parseWebSearchInput(input: unknown): TinyFishSearchRequest {
   const object = readObject(input);
   const query = readString(object.query).trim();
 
@@ -128,29 +87,4 @@ function readPage(value: unknown): number {
   }
 
   return value;
-}
-
-function sanitizeSearchResponse(
-  response: TinyFishSearchResponse
-): WebSearchOutput {
-  const results = Array.isArray(response.results) ? response.results : [];
-
-  return {
-    page: readNumber(response.page),
-    query: readString(response.query),
-    results: results.map(sanitizeSearchResult),
-    total_results: readNumber(response.total_results),
-  };
-}
-
-function sanitizeSearchResult(value: unknown): WebSearchResult {
-  const object = readObject(value);
-
-  return {
-    position: readNumber(object.position),
-    site_name: readString(object.site_name),
-    snippet: readString(object.snippet),
-    title: readString(object.title),
-    url: readString(object.url),
-  };
 }

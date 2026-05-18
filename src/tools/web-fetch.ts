@@ -1,89 +1,35 @@
 import { jsonSchema, tool } from "ai";
 import {
-  getTinyFishApiKey,
-  parseTinyFishJsonResponse,
+  fetchTinyFishPages,
   readObject,
-  readOptionalNumber,
-  readOptionalString,
   readString,
-  readStringArray,
-} from "./tinyfish";
+  type TinyFishFetchError,
+  type TinyFishFetchOutput,
+  type TinyFishFetchRequest,
+  type TinyFishFetchResult,
+  tinyFishFetchFormats,
+} from "../integrations/tinyfish";
 
-const fetchEndpoint = "https://api.fetch.tinyfish.ai";
-const fetchFormats = ["markdown", "html", "json"] as const;
-
-type WebFetchFormat = (typeof fetchFormats)[number];
-
-type JsonValue =
-  | boolean
-  | null
-  | number
-  | string
-  | JsonValue[]
-  | { [key: string]: JsonValue };
-
-interface WebFetchInput {
-  format: WebFetchFormat;
-  image_links: boolean;
-  links: boolean;
-  urls: string[];
-}
-
-interface TinyFishFetchResponse {
-  errors?: unknown;
-  results?: unknown;
-}
-
-export interface WebFetchResult {
-  author?: string;
-  description?: string;
-  final_url: string;
-  format: string;
-  image_links?: string[];
-  language?: string;
-  latency_ms?: number;
-  links?: string[];
-  published_date?: string;
-  text: JsonValue;
-  title?: string;
-  url: string;
-}
-
-export interface WebFetchError {
-  error: string;
-  status?: number;
-  url: string;
-}
-
-export interface WebFetchOutput {
-  errors: WebFetchError[];
-  results: WebFetchResult[];
-}
+export type WebFetchResult = TinyFishFetchResult;
+export type WebFetchError = TinyFishFetchError;
+export type WebFetchOutput = TinyFishFetchOutput;
 
 export const webFetchTool = tool({
   description:
     "Fetch and extract clean page content with TinyFish Fetch API. Supports markdown, HTML, and JSON output plus optional links.",
-  execute: async (input): Promise<WebFetchOutput> => {
+  execute: (input): Promise<WebFetchOutput> => {
     const request = parseWebFetchInput(input);
-    const response = await fetch(fetchEndpoint, {
-      body: JSON.stringify(request),
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": getTinyFishApiKey(),
-      },
-      method: "POST",
-    });
-    const body = await parseTinyFishJsonResponse<TinyFishFetchResponse>(
-      response,
-      "fetch"
-    );
 
-    return sanitizeFetchResponse(body);
+    return fetchTinyFishPages(request);
   },
   inputSchema: jsonSchema({
     additionalProperties: false,
     properties: {
-      format: { default: "markdown", enum: fetchFormats, type: "string" },
+      format: {
+        default: "markdown",
+        enum: tinyFishFetchFormats,
+        type: "string",
+      },
       image_links: { default: false, type: "boolean" },
       links: { default: false, type: "boolean" },
       urls: {
@@ -135,7 +81,7 @@ export const webFetchTool = tool({
   }),
 });
 
-function parseWebFetchInput(input: unknown): WebFetchInput {
+function parseWebFetchInput(input: unknown): TinyFishFetchRequest {
   const object = readObject(input);
   const urls = readUrls(object.urls);
 
@@ -175,108 +121,14 @@ function readHttpUrl(value: unknown): string {
   return url;
 }
 
-function readFormat(value: unknown): WebFetchFormat {
+function readFormat(value: unknown): TinyFishFetchRequest["format"] {
   if (value === undefined) {
     return "markdown";
   }
 
-  if (fetchFormats.includes(value as WebFetchFormat)) {
-    return value as WebFetchFormat;
+  if (tinyFishFetchFormats.includes(value as TinyFishFetchRequest["format"])) {
+    return value as TinyFishFetchRequest["format"];
   }
 
   throw new Error("web_fetch format must be one of markdown, html, or json.");
-}
-
-function sanitizeFetchResponse(
-  response: TinyFishFetchResponse
-): WebFetchOutput {
-  const results = Array.isArray(response.results) ? response.results : [];
-  const errors = Array.isArray(response.errors) ? response.errors : [];
-
-  return {
-    errors: errors.map(sanitizeFetchError),
-    results: results.map(sanitizeFetchResult),
-  };
-}
-
-function sanitizeFetchResult(value: unknown): WebFetchResult {
-  const object = readObject(value);
-  const result: WebFetchResult = {
-    final_url: readString(object.final_url),
-    format: readString(object.format),
-    text: normalizeJsonValue(object.text),
-    url: readString(object.url),
-  };
-  const optionalStrings = {
-    author: readOptionalString(object.author),
-    description: readOptionalString(object.description),
-    language: readOptionalString(object.language),
-    published_date: readOptionalString(object.published_date),
-    title: readOptionalString(object.title),
-  };
-  const latencyMs = readOptionalNumber(object.latency_ms);
-  const links = readStringArray(object.links);
-  const imageLinks = readStringArray(object.image_links);
-
-  for (const [key, optionalValue] of Object.entries(optionalStrings)) {
-    if (optionalValue !== undefined) {
-      result[key as keyof typeof optionalStrings] = optionalValue;
-    }
-  }
-
-  if (latencyMs !== undefined) {
-    result.latency_ms = latencyMs;
-  }
-
-  if (links !== undefined) {
-    result.links = links;
-  }
-
-  if (imageLinks !== undefined) {
-    result.image_links = imageLinks;
-  }
-
-  return result;
-}
-
-function sanitizeFetchError(value: unknown): WebFetchError {
-  const object = readObject(value);
-  const error: WebFetchError = {
-    error: readString(object.error),
-    url: readString(object.url),
-  };
-  const status = readOptionalNumber(object.status);
-
-  if (status !== undefined) {
-    error.status = status;
-  }
-
-  return error;
-}
-
-function normalizeJsonValue(value: unknown): JsonValue {
-  if (
-    value === null ||
-    typeof value === "boolean" ||
-    typeof value === "number" ||
-    typeof value === "string"
-  ) {
-    return value;
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(normalizeJsonValue);
-  }
-
-  if (typeof value === "object" && value !== null) {
-    const normalized: { [key: string]: JsonValue } = {};
-
-    for (const [key, nestedValue] of Object.entries(value)) {
-      normalized[key] = normalizeJsonValue(nestedValue);
-    }
-
-    return normalized;
-  }
-
-  return null;
 }
