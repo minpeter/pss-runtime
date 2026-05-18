@@ -1,4 +1,12 @@
 import { z } from "zod";
+import {
+  readNumber,
+  readObject,
+  readOptionalNumber,
+  readOptionalString,
+  readString,
+  readStringArray,
+} from "../utils/unknown";
 
 const fetchEndpoint = "https://api.fetch.tinyfish.ai";
 const requiredApiKeyError =
@@ -171,40 +179,6 @@ function getTinyFishApiKeyPool(): string[] {
   return apiKeys;
 }
 
-export function readObject(value: unknown): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return {};
-  }
-
-  return value as Record<string, unknown>;
-}
-
-export function readString(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
-export function readOptionalString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
-}
-
-export function readNumber(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
-}
-
-export function readOptionalNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
-}
-
-export function readStringArray(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) {
-    return;
-  }
-
-  return value.filter((item): item is string => typeof item === "string");
-}
-
 async function parseTinyFishJsonResponse<T>(
   response: Response,
   serviceName: string
@@ -284,8 +258,8 @@ function sanitizeFetchResponse(
   const errors = Array.isArray(response.errors) ? response.errors : [];
 
   return {
-    errors: errors.map(sanitizeFetchError),
     results: results.map(sanitizeFetchResult),
+    errors: errors.map(sanitizeFetchError),
   };
 }
 

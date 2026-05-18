@@ -1,22 +1,26 @@
 import { jsonSchema, tool } from "ai";
 import {
   fetchTinyFishPages,
-  readObject,
-  readString,
   type TinyFishFetchError,
   type TinyFishFetchOutput,
   type TinyFishFetchRequest,
   type TinyFishFetchResult,
-  tinyFishFetchFormats,
 } from "../integrations/tinyfish";
+import { readObject, readString } from "../utils/unknown";
 
 export type WebFetchResult = TinyFishFetchResult;
 export type WebFetchError = TinyFishFetchError;
 export type WebFetchOutput = TinyFishFetchOutput;
 
+const fetchDefaults = {
+  format: "markdown",
+  image_links: false,
+  links: false,
+} satisfies Pick<TinyFishFetchRequest, "format" | "image_links" | "links">;
+
 export const webFetchTool = tool({
   description:
-    "Fetch and extract clean page content with TinyFish Fetch API. Supports markdown, HTML, and JSON output plus optional links.",
+    "Fetch and extract readable content from up to 10 absolute HTTP(S) URLs. Use after web_search or when the user provides URLs; markdown is the best default format for LLM context.",
   execute: (input): Promise<WebFetchOutput> => {
     const request = parseWebFetchInput(input);
 
@@ -24,16 +28,17 @@ export const webFetchTool = tool({
   },
   inputSchema: jsonSchema({
     additionalProperties: false,
+    description:
+      "URLs to fetch. Format and link extraction are intentionally managed by the tool.",
     properties: {
-      format: {
-        default: "markdown",
-        enum: tinyFishFetchFormats,
-        type: "string",
-      },
-      image_links: { default: false, type: "boolean" },
-      links: { default: false, type: "boolean" },
       urls: {
-        items: { format: "uri", type: "string" },
+        description:
+          "Absolute http or https URLs to fetch. Maximum 10 URLs per request.",
+        items: {
+          description: "Absolute http or https URL.",
+          format: "uri",
+          type: "string",
+        },
         maxItems: 10,
         minItems: 1,
         type: "array",
@@ -44,14 +49,26 @@ export const webFetchTool = tool({
   }),
   outputSchema: jsonSchema({
     additionalProperties: false,
+    description:
+      "Fetched page content plus per-URL failures. Per-URL errors do not prevent other URLs from returning results.",
     properties: {
       errors: {
+        description:
+          "Per-URL fetch failures. Empty when every requested URL succeeds.",
         items: {
           additionalProperties: false,
           properties: {
-            error: { type: "string" },
-            status: { type: "number" },
-            url: { type: "string" },
+            error: {
+              description:
+                "Structured fetch error code such as page_not_found, timeout, bot_blocked, or invalid_url.",
+              type: "string",
+            },
+            status: {
+              description:
+                "Upstream HTTP status when the target returned an HTTP error.",
+              type: "number",
+            },
+            url: { description: "URL that failed.", type: "string" },
           },
           required: ["url", "error"],
           type: "object",
@@ -59,16 +76,36 @@ export const webFetchTool = tool({
         type: "array",
       },
       results: {
+        description: "Successfully fetched pages.",
         items: {
           additionalProperties: true,
           properties: {
-            final_url: { type: "string" },
-            format: { type: "string" },
-            image_links: { items: { type: "string" }, type: "array" },
-            links: { items: { type: "string" }, type: "array" },
-            text: {},
-            title: { type: "string" },
-            url: { type: "string" },
+            final_url: {
+              description: "URL after redirects. May differ from url.",
+              type: "string",
+            },
+            format: {
+              description: "Format used for text: markdown, html, or json.",
+              type: "string",
+            },
+            image_links: {
+              description:
+                "Image source URLs found on the page when image_links was requested.",
+              items: { type: "string" },
+              type: "array",
+            },
+            links: {
+              description:
+                "Hyperlink URLs found on the page when links was requested.",
+              items: { type: "string" },
+              type: "array",
+            },
+            text: {
+              description:
+                "Extracted page content. String for markdown/html, structured object for json, or null if unavailable.",
+            },
+            title: { description: "Page title when detected.", type: "string" },
+            url: { description: "Original requested URL.", type: "string" },
           },
           required: ["url", "final_url", "text", "format"],
           type: "object",
@@ -86,9 +123,7 @@ function parseWebFetchInput(input: unknown): TinyFishFetchRequest {
   const urls = readUrls(object.urls);
 
   return {
-    format: readFormat(object.format),
-    image_links: object.image_links === true,
-    links: object.links === true,
+    ...fetchDefaults,
     urls,
   };
 }
@@ -119,16 +154,4 @@ function readHttpUrl(value: unknown): string {
   }
 
   return url;
-}
-
-function readFormat(value: unknown): TinyFishFetchRequest["format"] {
-  if (value === undefined) {
-    return "markdown";
-  }
-
-  if (tinyFishFetchFormats.includes(value as TinyFishFetchRequest["format"])) {
-    return value as TinyFishFetchRequest["format"];
-  }
-
-  throw new Error("web_fetch format must be one of markdown, html, or json.");
 }

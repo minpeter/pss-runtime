@@ -172,7 +172,7 @@ describe("web tools", () => {
     fetchMock.mockResolvedValue(
       new Response(
         JSON.stringify({
-          page: 2,
+          page: 0,
           query: "tinyfish docs",
           results: [
             {
@@ -190,9 +190,6 @@ describe("web tools", () => {
     );
 
     const output = await executeTool(webSearchTool, {
-      language: "ko",
-      location: "KR",
-      page: 2,
       query: "tinyfish docs",
     });
 
@@ -201,12 +198,12 @@ describe("web tools", () => {
     const parsedUrl = new URL(String(url));
     expect(parsedUrl.origin).toBe("https://api.search.tinyfish.ai");
     expect(parsedUrl.searchParams.get("query")).toBe("tinyfish docs");
-    expect(parsedUrl.searchParams.get("location")).toBe("KR");
-    expect(parsedUrl.searchParams.get("language")).toBe("ko");
-    expect(parsedUrl.searchParams.get("page")).toBe("2");
+    expect(parsedUrl.searchParams.get("location")).toBe("US");
+    expect(parsedUrl.searchParams.get("language")).toBe("en");
+    expect(parsedUrl.searchParams.get("page")).toBe("0");
     expect(init?.headers).toMatchObject({ "X-API-Key": "tf-test-key" });
     expect(output).toEqual({
-      page: 2,
+      page: 0,
       query: "tinyfish docs",
       results: [
         {
@@ -232,7 +229,6 @@ describe("web tools", () => {
             {
               final_url: "https://example.com/",
               format: "markdown",
-              links: ["https://example.com/more"],
               text: "Example body",
               title: "Example Domain",
               url: "https://example.com",
@@ -244,9 +240,6 @@ describe("web tools", () => {
     );
 
     const output = await executeTool(webFetchTool, {
-      format: "markdown",
-      image_links: false,
-      links: true,
       urls: ["https://example.com", "https://x.test/404"],
     });
 
@@ -263,7 +256,7 @@ describe("web tools", () => {
     expect(JSON.parse(String(init?.body))).toEqual({
       format: "markdown",
       image_links: false,
-      links: true,
+      links: false,
       urls: ["https://example.com", "https://x.test/404"],
     });
     expect(output).toEqual({
@@ -274,7 +267,6 @@ describe("web tools", () => {
         {
           final_url: "https://example.com/",
           format: "markdown",
-          links: ["https://example.com/more"],
           text: "Example body",
           title: "Example Domain",
           url: "https://example.com",
