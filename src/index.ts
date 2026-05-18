@@ -19,4 +19,11 @@ export type {
 } from "./runtime/session";
 export type { AgentTools, DefaultTools } from "./tools";
 export { tools } from "./tools";
-export { continueTool } from "./tools/continue";
+export type {
+  WebFetchError,
+  WebFetchOutput,
+  WebFetchResult,
+} from "./tools/web-fetch";
+export { webFetchTool } from "./tools/web-fetch";
+export type { WebSearchOutput, WebSearchResult } from "./tools/web-search";
+export { webSearchTool } from "./tools/web-search";

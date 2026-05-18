@@ -94,7 +94,7 @@ describe("Agent tool wiring", () => {
     );
   });
 
-  it("defaults new Agent() to the shared continue tool map", async () => {
+  it("defaults new Agent() to the shared web tool map", async () => {
     const session = new Agent().createSession();
 
     await session.submit(userText("use default tools"));
@@ -104,6 +104,6 @@ describe("Agent tool wiring", () => {
         tools,
       })
     );
-    expect(tools.continue).toBeDefined();
+    expect(Object.keys(tools).sort()).toEqual(["web_fetch", "web_search"]);
   });
 });
