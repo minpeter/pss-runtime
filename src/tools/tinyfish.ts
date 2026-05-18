@@ -1,12 +1,27 @@
+import { parseEnvTokenPool } from "../runtime/env";
+
 const requiredApiKeyError =
   "TINYFISH_API_KEY is required to use the built-in TinyFish web tools.";
 
-export function getTinyFishApiKey(): string {
-  const apiKey = process.env.TINYFISH_API_KEY?.trim();
+let tinyFishApiKeyPoolSource: string | undefined;
+let tinyFishApiKeyIndex = 0;
 
-  if (!apiKey) {
+export function getTinyFishApiKey(): string {
+  const apiKeyPoolSource = process.env.TINYFISH_API_KEY;
+
+  if (apiKeyPoolSource !== tinyFishApiKeyPoolSource) {
+    tinyFishApiKeyPoolSource = apiKeyPoolSource;
+    tinyFishApiKeyIndex = 0;
+  }
+
+  const apiKeys = parseEnvTokenPool(apiKeyPoolSource);
+
+  if (apiKeys.length === 0) {
     throw new Error(requiredApiKeyError);
   }
+
+  const apiKey = apiKeys[tinyFishApiKeyIndex % apiKeys.length] ?? apiKeys[0];
+  tinyFishApiKeyIndex = (tinyFishApiKeyIndex + 1) % apiKeys.length;
 
   return apiKey;
 }

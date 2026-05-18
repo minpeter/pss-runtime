@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { tools } from ".";
+import { getTinyFishApiKey } from "./tinyfish";
 import { webFetchTool } from "./web-fetch";
 import { webSearchTool } from "./web-search";
 
@@ -49,6 +50,48 @@ describe("web tools", () => {
       executeTool(webSearchTool, { query: "tinyfish" })
     ).rejects.toThrow(missingApiKeyPattern);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects clearly when TINYFISH_API_KEY has no usable semicolon segments", async () => {
+    process.env.TINYFISH_API_KEY = " ; \t ; ";
+
+    await expect(
+      executeTool(webSearchTool, { query: "tinyfish" })
+    ).rejects.toThrow(missingApiKeyPattern);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("normalizes and rotates semicolon-delimited TinyFish API keys", () => {
+    process.env.TINYFISH_API_KEY = " tf-token-1 ; ; tf-token-2 ";
+
+    expect(getTinyFishApiKey()).toBe("tf-token-1");
+    expect(getTinyFishApiKey()).toBe("tf-token-2");
+    expect(getTinyFishApiKey()).toBe("tf-token-1");
+  });
+
+  it("web_search rotates TinyFish API keys across calls", async () => {
+    process.env.TINYFISH_API_KEY = "tf-token-1;tf-token-2";
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            page: 0,
+            query: "tinyfish",
+            results: [],
+            total_results: 0,
+          }),
+          { status: 200 }
+        )
+      )
+    );
+
+    await executeTool(webSearchTool, { query: "tinyfish" });
+    await executeTool(webSearchTool, { query: "tinyfish" });
+
+    expect(fetchMock.mock.calls.map(([, init]) => init?.headers)).toEqual([
+      expect.objectContaining({ "X-API-Key": "tf-token-1" }),
+      expect.objectContaining({ "X-API-Key": "tf-token-2" }),
+    ]);
   });
 
   it("web_search calls TinyFish search with query parameters and API key", async () => {
