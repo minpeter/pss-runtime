@@ -1,9 +1,18 @@
-import { parseEnvTokenPool } from "../runtime/env";
+import { z } from "zod";
 
 const fetchEndpoint = "https://api.fetch.tinyfish.ai";
 const requiredApiKeyError =
   "TINYFISH_API_KEY is required to use the built-in TinyFish web tools.";
 const searchEndpoint = "https://api.search.tinyfish.ai";
+const tinyFishApiKeyPoolSchema = z
+  .string()
+  .default("")
+  .transform((value) =>
+    value
+      .split(";")
+      .map((segment) => segment.trim())
+      .filter((segment) => segment.length > 0)
+  );
 
 export const tinyFishFetchFormats = ["markdown", "html", "json"] as const;
 
@@ -90,17 +99,17 @@ let tinyFishApiKeyIndex = 0;
 export async function fetchTinyFishPages(
   request: TinyFishFetchRequest
 ): Promise<TinyFishFetchOutput> {
-  const response = await fetch(fetchEndpoint, {
-    body: JSON.stringify(request),
-    headers: {
-      "Content-Type": "application/json",
-      "X-API-Key": getTinyFishApiKey(),
-    },
-    method: "POST",
-  });
-  const body = await parseTinyFishJsonResponse<TinyFishFetchResponse>(
-    response,
-    "fetch"
+  const body = await requestTinyFishJson<TinyFishFetchResponse>(
+    "fetch",
+    (apiKey) =>
+      fetch(fetchEndpoint, {
+        body: JSON.stringify(request),
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey,
+        },
+        method: "POST",
+      })
   );
 
   return sanitizeFetchResponse(body);
@@ -115,19 +124,37 @@ export async function searchTinyFishWeb(
   url.searchParams.set("language", request.language);
   url.searchParams.set("page", String(request.page));
 
-  const response = await fetch(url.toString(), {
-    headers: { "X-API-Key": getTinyFishApiKey() },
-    method: "GET",
-  });
-  const body = await parseTinyFishJsonResponse<TinyFishSearchResponse>(
-    response,
-    "search"
+  const body = await requestTinyFishJson<TinyFishSearchResponse>(
+    "search",
+    (apiKey) =>
+      fetch(url.toString(), {
+        headers: { "X-API-Key": apiKey },
+        method: "GET",
+      })
   );
 
   return sanitizeSearchResponse(body);
 }
 
 export function getTinyFishApiKey(): string {
+  const apiKey = getTinyFishApiKeyAttemptOrder()[0];
+
+  if (apiKey === undefined) {
+    throw new Error(requiredApiKeyError);
+  }
+
+  return apiKey;
+}
+
+function getTinyFishApiKeyAttemptOrder(): string[] {
+  const apiKeys = getTinyFishApiKeyPool();
+  const startIndex = tinyFishApiKeyIndex % apiKeys.length;
+  tinyFishApiKeyIndex = (startIndex + 1) % apiKeys.length;
+
+  return [...apiKeys.slice(startIndex), ...apiKeys.slice(0, startIndex)];
+}
+
+function getTinyFishApiKeyPool(): string[] {
   const apiKeyPoolSource = process.env.TINYFISH_API_KEY;
 
   if (apiKeyPoolSource !== tinyFishApiKeyPoolSource) {
@@ -135,16 +162,13 @@ export function getTinyFishApiKey(): string {
     tinyFishApiKeyIndex = 0;
   }
 
-  const apiKeys = parseEnvTokenPool(apiKeyPoolSource);
+  const apiKeys = tinyFishApiKeyPoolSchema.parse(apiKeyPoolSource);
 
   if (apiKeys.length === 0) {
     throw new Error(requiredApiKeyError);
   }
 
-  const apiKey = apiKeys[tinyFishApiKeyIndex % apiKeys.length] ?? apiKeys[0];
-  tinyFishApiKeyIndex = (tinyFishApiKeyIndex + 1) % apiKeys.length;
-
-  return apiKey;
+  return apiKeys;
 }
 
 export function readObject(value: unknown): Record<string, unknown> {
@@ -186,15 +210,71 @@ async function parseTinyFishJsonResponse<T>(
   serviceName: string
 ): Promise<T> {
   const bodyText = await response.text();
-  const body = parseJsonBody(bodyText);
+  const { parseError, value } = parseJsonBody(bodyText);
 
   if (!response.ok) {
-    throw new Error(
-      `TinyFish ${serviceName} request failed with HTTP ${response.status}: ${readErrorMessage(body)}`
-    );
+    throw createTinyFishHttpError(response, serviceName, value, parseError);
   }
 
-  return body as T;
+  if (parseError) {
+    throw new Error(`TinyFish returned invalid JSON: ${parseError}`);
+  }
+
+  return value as T;
+}
+
+async function requestTinyFishJson<T>(
+  serviceName: string,
+  requestWithApiKey: (apiKey: string) => Promise<Response>
+): Promise<T> {
+  const apiKeys = getTinyFishApiKeyAttemptOrder();
+  let lastRateLimitError: Error | undefined;
+
+  for (const apiKey of apiKeys) {
+    const response = await requestWithApiKey(apiKey);
+
+    if (response.status !== 429) {
+      return parseTinyFishJsonResponse<T>(response, serviceName);
+    }
+
+    lastRateLimitError = await readTinyFishHttpError(response, serviceName);
+  }
+
+  if (lastRateLimitError === undefined) {
+    throw new Error(requiredApiKeyError);
+  }
+
+  if (apiKeys.length === 1) {
+    throw lastRateLimitError;
+  }
+
+  throw new Error(
+    `${lastRateLimitError.message} (all ${apiKeys.length} configured TinyFish API keys returned HTTP 429)`
+  );
+}
+
+async function readTinyFishHttpError(
+  response: Response,
+  serviceName: string
+): Promise<Error> {
+  const bodyText = await response.text();
+  const { parseError, value } = parseJsonBody(bodyText);
+
+  return createTinyFishHttpError(response, serviceName, value, parseError);
+}
+
+function createTinyFishHttpError(
+  response: Response,
+  serviceName: string,
+  body: unknown,
+  parseError?: string
+): Error {
+  const retryAfter = response.headers.get("retry-after");
+  const retryAfterMessage = retryAfter ? ` Retry-After: ${retryAfter}.` : "";
+
+  return new Error(
+    `TinyFish ${serviceName} request failed with HTTP ${response.status}: ${readErrorMessage(body, parseError)}.${retryAfterMessage}`
+  );
 }
 
 function sanitizeFetchResponse(
@@ -316,21 +396,29 @@ function normalizeJsonValue(value: unknown): JsonValue {
   return null;
 }
 
-function parseJsonBody(bodyText: string): unknown {
+function parseJsonBody(bodyText: string): {
+  parseError?: string;
+  value: unknown;
+} {
   if (!bodyText.trim()) {
-    return {};
+    return { value: {} };
   }
 
   try {
-    return JSON.parse(bodyText) as unknown;
+    return { value: JSON.parse(bodyText) as unknown };
   } catch (error) {
-    throw new Error(
-      `TinyFish returned invalid JSON: ${error instanceof Error ? error.message : String(error)}`
-    );
+    return {
+      parseError: error instanceof Error ? error.message : String(error),
+      value: bodyText,
+    };
   }
 }
 
-function readErrorMessage(body: unknown): string {
+function readErrorMessage(body: unknown, parseError?: string): string {
+  if (parseError) {
+    return `invalid JSON response body: ${parseError}`;
+  }
+
   const error = readObject(readObject(body).error);
   const message = readOptionalString(error.message);
 
