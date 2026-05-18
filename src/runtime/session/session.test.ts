@@ -4,10 +4,10 @@ import { Agent } from "../agent";
 import type { Llm } from "../llm";
 import {
   assistantMessage,
-  continueToolCall,
-  continueToolResult,
   createDeferred,
   eventTypes,
+  toolCallPart,
+  toolResultFor,
   userText,
 } from "../test-fixtures";
 import type { AgentEvent } from "./index";
@@ -24,8 +24,8 @@ describe("AgentSession", () => {
 
       if (calls === 1) {
         await firstLlmCall.promise;
-        const toolCall = continueToolCall("call-interrupted-continue");
-        return [assistantMessage([toolCall]), continueToolResult(toolCall)];
+        const toolCall = toolCallPart("call-interrupted-tool");
+        return [assistantMessage([toolCall]), toolResultFor(toolCall)];
       }
 
       return [assistantMessage("DONE")];
@@ -64,7 +64,7 @@ describe("AgentSession", () => {
     ]);
   });
 
-  it("continues the model loop after a continue tool call", async () => {
+  it("continues the model loop after a tool call result", async () => {
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
     const session = new Agent({
@@ -73,10 +73,10 @@ describe("AgentSession", () => {
         seenHistory.push([...history]);
 
         if (calls === 1) {
-          const toolCall = continueToolCall("call-tool-loop-continue");
+          const toolCall = toolCallPart("call-tool-loop-1");
           return Promise.resolve([
             assistantMessage([toolCall]),
-            continueToolResult(toolCall),
+            toolResultFor(toolCall),
           ]);
         }
 
@@ -86,13 +86,13 @@ describe("AgentSession", () => {
 
     await session.submit(userText("remember me"));
 
-    const toolCall = continueToolCall("call-tool-loop-continue");
+    const toolCall = toolCallPart("call-tool-loop-1");
     expect(seenHistory).toEqual([
       [userTextToModelMessage(userText("remember me"))],
       [
         userTextToModelMessage(userText("remember me")),
         assistantMessage([toolCall]),
-        continueToolResult(toolCall),
+        toolResultFor(toolCall),
       ],
     ]);
   });

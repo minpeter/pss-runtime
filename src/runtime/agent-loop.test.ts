@@ -5,24 +5,24 @@ import type { AgentEvent } from "./session/events";
 import { AgentModelHistory } from "./session/history";
 import {
   assistantMessage,
-  continueToolCall,
-  continueToolResult,
   createScriptedLlm,
   eventTypes,
+  toolCallPart,
+  toolResultFor,
 } from "./test-fixtures";
 
 describe("runAgentLoop", () => {
-  it("continues while assistant messages request the continue tool", async () => {
+  it("continues after assistant messages request any tool", async () => {
     const events: AgentEvent[] = [];
     const history = new AgentModelHistory();
-    const toolCall = continueToolCall("call-continue-1");
+    const toolCall = toolCallPart("call-tool-1");
     const llm = createScriptedLlm([
       [
         assistantMessage([
           { type: "text", text: "I should keep going." },
           toolCall,
         ]),
-        continueToolResult(toolCall),
+        toolResultFor(toolCall),
       ],
       [assistantMessage("DONE")],
     ]);
@@ -34,7 +34,7 @@ describe("runAgentLoop", () => {
     expect(events).toEqual([
       { type: "step-start" },
       { type: "assistant-text", text: "I should keep going." },
-      { type: "tool-call", toolName: "continue" },
+      { type: "tool-call", toolName: "test_tool" },
       { type: "step-end" },
       { type: "step-start" },
       { type: "assistant-text", text: "DONE" },
@@ -45,7 +45,7 @@ describe("runAgentLoop", () => {
         { type: "text", text: "I should keep going." },
         toolCall,
       ]),
-      continueToolResult(toolCall),
+      toolResultFor(toolCall),
       assistantMessage("DONE"),
     ]);
   });
