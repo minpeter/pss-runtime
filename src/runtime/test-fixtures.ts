@@ -11,12 +11,13 @@ export const assistantMessage = (
 
 export const toolCallPart = (
   toolCallId: string,
-  toolName = "test_tool"
+  toolName = "test_tool",
+  input: unknown = {}
 ): ToolCallPart => ({
   type: "tool-call",
   toolCallId,
   toolName,
-  input: {},
+  input,
 });
 
 export const toolResultFor = (toolCall: ToolCallPart): ToolModelMessage => ({

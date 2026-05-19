@@ -34,7 +34,18 @@ describe("runAgentLoop", () => {
     expect(events).toEqual([
       { type: "step-start" },
       { type: "assistant-text", text: "I should keep going." },
-      { type: "tool-call", toolName: "test_tool" },
+      {
+        type: "tool-call",
+        input: {},
+        toolCallId: "call-tool-1",
+        toolName: "test_tool",
+      },
+      {
+        type: "tool-result",
+        output: { type: "json", value: {} },
+        toolCallId: "call-tool-1",
+        toolName: "test_tool",
+      },
       { type: "step-end" },
       { type: "step-start" },
       { type: "assistant-text", text: "DONE" },

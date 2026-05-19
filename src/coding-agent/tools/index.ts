@@ -1,8 +1,6 @@
-import type { ToolSet } from "ai";
+import type { AgentTools } from "../../runtime/llm";
 import { webFetchTool as defaultWebFetchTool } from "./web-fetch";
 import { webSearchTool as defaultWebSearchTool } from "./web-search";
-
-export type AgentTools = ToolSet;
 
 export const tools = {
   web_fetch: defaultWebFetchTool,

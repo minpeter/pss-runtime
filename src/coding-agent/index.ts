@@ -6,9 +6,22 @@ import {
   Text,
   TUI,
 } from "@earendil-works/pi-tui";
-import { Agent, type AgentEvent } from "../src";
+import { Agent } from "../runtime/agent";
+import type { AgentEvent } from "../runtime/session";
+import { tools } from "./tools";
+import {
+  formatToolCallForTui,
+  formatToolResultForTui,
+  safeInlineText,
+  safeText,
+  truncateDetail,
+} from "./tui-tool-printer";
 
-const agent = new Agent();
+const agent = new Agent({
+  instructions:
+    "Answer in 2 short sentences and 280 characters or fewer unless the user explicitly asks for detail. Avoid headings.",
+  tools,
+});
 const session = agent.createSession();
 
 const terminal = new ProcessTerminal();
@@ -38,30 +51,18 @@ const addLine = (text: string): void => {
   tui.requestRender();
 };
 
-const isTerminalControlCharacter = (value: string): boolean => {
-  const code = value.codePointAt(0);
-
-  return (
-    code !== undefined &&
-    (code <= 0x08 ||
-      (code >= 0x0b && code <= 0x1f) ||
-      (code >= 0x7f && code <= 0x9f))
-  );
-};
-
-const safeText = (text: string): string =>
-  Array.from(text)
-    .filter((value) => !isTerminalControlCharacter(value))
-    .join("");
-
 const formatEvent = (event: AgentEvent): string | undefined => {
   switch (event.type) {
     case "user-text":
       return `\x1b[36myou\x1b[0m: ${safeText(event.text)}`;
     case "assistant-text":
       return `\x1b[32massistant\x1b[0m: ${safeText(event.text)}`;
+    case "assistant-reasoning":
+      return `\x1b[35mreasoning\x1b[0m: ${truncateDetail(safeInlineText(event.text), 240)}`;
     case "tool-call":
-      return `\x1b[33mtool\x1b[0m: ${safeText(event.toolName)}`;
+      return `\x1b[33mtool\x1b[0m ${formatToolCallForTui(event)}`;
+    case "tool-result":
+      return `\x1b[33mtool result\x1b[0m ${formatToolResultForTui(event)}`;
     case "turn-start":
       return "\x1b[2mrunning...\x1b[0m";
     case "turn-abort":

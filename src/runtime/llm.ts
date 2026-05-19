@@ -1,8 +1,13 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { generateText, type LanguageModel, type ModelMessage } from "ai";
-import type { AgentTools } from "../tools";
+import {
+  generateText,
+  type LanguageModel,
+  type ModelMessage,
+  type ToolSet,
+} from "ai";
 import { env } from "./env";
 
+export type AgentTools = ToolSet;
 export type LlmOutput = Awaited<
   ReturnType<typeof generateText>
 >["responseMessages"];
