@@ -1,5 +1,5 @@
 {
-  "name": "@pss-next/coding-agent",
+  "name": "@minpeter/pss-coding-agent",
   "version": "0.0.0",
   "description": "Coding-agent product tools and TUI wiring for pss-next.",
   "type": "module",
@@ -7,12 +7,12 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "@pss-next/source": "./src/index.ts",
+      "@minpeter/pss-source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
     "./tui": {
-      "@pss-next/source": "./src/tui.ts",
+      "@minpeter/pss-source": "./src/tui.ts",
       "types": "./dist/tui.d.ts",
       "import": "./dist/tui.js"
     }
@@ -38,7 +38,7 @@
   },
   "dependencies": {
     "@earendil-works/pi-tui": "^0.74.1",
-    "@pss-next/runtime": "workspace:*",
+    "@minpeter/pss-runtime": "workspace:*",
     "ai": "7.0.0-canary.142",
     "zod": "^4.4.3"
   }

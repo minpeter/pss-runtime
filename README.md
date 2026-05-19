@@ -2,8 +2,8 @@
 
 `pss-next` is now a Turborepo monorepo with two publishable packages:
 
-- `@pss-next/runtime` — generic agent runtime, sessions, model loop, and event stream.
-- `@pss-next/coding-agent` — coding-agent product tools plus optional TUI wiring.
+- `@minpeter/pss-runtime` — generic agent runtime, sessions, model loop, and event stream.
+- `@minpeter/pss-coding-agent` — coding-agent product tools plus optional TUI wiring.
 
 The runtime stays product-agnostic. Import coding-agent tools explicitly when you
 want the web search/fetch product layer.
@@ -21,12 +21,12 @@ pnpm lint
 ```
 
 `pnpm dev` runs `examples/basic.ts` through the workspace package names with the
-`@pss-next/source` condition, so local development uses `packages/*/src` without
+`@minpeter/pss-source` condition, so local development uses `packages/*/src` without
 publishing first.
 
 ```ts
-import { tools } from "@pss-next/coding-agent";
-import { Agent } from "@pss-next/runtime";
+import { tools } from "@minpeter/pss-coding-agent";
+import { Agent } from "@minpeter/pss-runtime";
 
 const agent = new Agent({ tools });
 const session = agent.createSession();
@@ -53,23 +53,23 @@ whitespace are ignored, and the tools rotate usable keys across calls.
 
 ## Packages
 
-### `@pss-next/runtime`
+### `@minpeter/pss-runtime`
 
 Use this package when you need the reusable runtime only:
 
 ```ts
-import { Agent, type RuntimeLlmContext } from "@pss-next/runtime";
+import { Agent, type RuntimeLlmContext } from "@minpeter/pss-runtime";
 ```
 
 The package exposes a narrow runtime API and explicit interop aliases instead of
 re-exporting broad AI SDK canary types from the root declaration.
 
-### `@pss-next/coding-agent`
+### `@minpeter/pss-coding-agent`
 
 Use this package when you need the default coding tools:
 
 ```ts
-import { tools, webFetchTool, webSearchTool } from "@pss-next/coding-agent";
+import { tools, webFetchTool, webSearchTool } from "@minpeter/pss-coding-agent";
 ```
 
 The root import is side-effect-free. Launch the interactive TUI through the
@@ -77,15 +77,13 @@ subpath or the root script:
 
 ```bash
 pnpm dev:tui
-node --conditions=@pss-next/source --import tsx packages/coding-agent/src/tui.ts
+node --conditions=@minpeter/pss-source --import tsx packages/coding-agent/src/tui.ts
 ```
 
 ## Release plan
 
-This repo uses Changesets and public npm packages under the `@pss-next` scope.
-The fallback naming plan is `@minpeter/pss-runtime` and
-`@minpeter/pss-coding-agent` only if authenticated npm dry-runs prove the
-`@pss-next` scope cannot publish.
+This repo uses Changesets and public npm packages under the `@minpeter` scope:
+`@minpeter/pss-runtime` and `@minpeter/pss-coding-agent`.
 
 Release checklist:
 

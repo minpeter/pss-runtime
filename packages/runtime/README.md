@@ -1,9 +1,9 @@
-# @pss-next/runtime
+# @minpeter/pss-runtime
 
 Reusable pss-next agent runtime for sessions, model loops, and event streams.
 
 ```ts
-import { Agent } from "@pss-next/runtime";
+import { Agent } from "@minpeter/pss-runtime";
 
 const agent = new Agent({
   instructions: "Answer briefly.",

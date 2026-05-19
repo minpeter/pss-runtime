@@ -1,4 +1,4 @@
-import type { AgentTools } from "@pss-next/runtime";
+import type { AgentTools } from "@minpeter/pss-runtime";
 import { webFetchTool as defaultWebFetchTool } from "./web-fetch";
 import { webSearchTool as defaultWebSearchTool } from "./web-search";
 

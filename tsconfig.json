@@ -2,7 +2,7 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
-    "customConditions": ["@pss-next/source"]
+    "customConditions": ["@minpeter/pss-source"]
   },
   "include": ["examples/**/*.ts"]
 }

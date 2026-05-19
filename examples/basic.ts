@@ -1,5 +1,5 @@
-import { tools } from "@pss-next/coding-agent";
-import { Agent } from "@pss-next/runtime";
+import { tools } from "@minpeter/pss-coding-agent";
+import { Agent } from "@minpeter/pss-runtime";
 
 const agent = new Agent({
   instructions: "Keep every answer under 3 lines.",

@@ -1,5 +1,5 @@
 {
-  "name": "@pss-next/runtime",
+  "name": "@minpeter/pss-runtime",
   "version": "0.0.0",
   "description": "Generic agent runtime for sessions, model loops, and event streams.",
   "type": "module",
@@ -7,7 +7,7 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "@pss-next/source": "./src/index.ts",
+      "@minpeter/pss-source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }

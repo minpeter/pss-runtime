@@ -6,8 +6,8 @@ import {
   Text,
   TUI,
 } from "@earendil-works/pi-tui";
-import type { AgentEvent } from "@pss-next/runtime";
-import { Agent } from "@pss-next/runtime";
+import type { AgentEvent } from "@minpeter/pss-runtime";
+import { Agent } from "@minpeter/pss-runtime";
 import { tools } from "./tools";
 import {
   formatToolCallForTui,
