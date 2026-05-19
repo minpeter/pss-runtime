@@ -161,5 +161,5 @@ function readHttpUrl(value: unknown): string {
     throw new Error("web_fetch only accepts http and https URLs.");
   }
 
-  return url;
+  return parsedUrl.href;
 }
