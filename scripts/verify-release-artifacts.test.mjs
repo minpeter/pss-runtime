@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -7,6 +13,9 @@ import {
   isMainModule,
   verifyReleaseArtifacts,
 } from "./verify-release-artifacts.mjs";
+
+const cliBinReadFailurePattern =
+  /^packages\/coding-agent\/bin\/pss\.js: cannot read CLI bin target /;
 
 let tempRoots = [];
 
@@ -20,6 +29,21 @@ function createFixture() {
       join(cwd, "packages", packageName, "dist", "index.js"),
       "export const ok = true;\n"
     );
+    writeFileSync(
+      join(cwd, "packages", packageName, "package.json"),
+      JSON.stringify(
+        packageName === "coding-agent"
+          ? {
+              bin: {
+                pss: "./bin/pss.js",
+                "pss-coding-agent": "./bin/pss.js",
+              },
+            }
+          : {},
+        null,
+        2
+      )
+    );
     const declaration =
       packageName === "runtime"
         ? 'export type { AgentModel, AgentTools, RuntimeCreateLlmOptions, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
@@ -32,6 +56,19 @@ function createFixture() {
       writeFileSync(
         join(cwd, "packages", packageName, "dist", "llm.d.ts"),
         "export declare const ok: true;\n"
+      );
+    } else {
+      mkdirSync(join(cwd, "packages", packageName, "bin"), {
+        recursive: true,
+      });
+      writeFileSync(
+        join(cwd, "packages", packageName, "bin", "pss.js"),
+        "#!/usr/bin/env node\nimport '../dist/tui.js';\n",
+        { mode: 0o755 }
+      );
+      writeFileSync(
+        join(cwd, "packages", packageName, "dist", "tui.js"),
+        "export const ok = true;\n"
       );
     }
   }
@@ -108,6 +145,71 @@ describe("verifyReleaseArtifacts", () => {
       "packages/runtime/dist/test-fixtures.d.ts: test or fixture artifact must not be published",
       "packages/coding-agent/dist/web-fetch.test.js: test or fixture artifact must not be published",
     ]);
+  });
+
+  it("rejects missing CLI bin metadata for the coding-agent package", () => {
+    const cwd = createFixture();
+    writeFileSync(
+      join(cwd, "packages", "coding-agent", "package.json"),
+      JSON.stringify({ bin: { pss: "./bin/pss.js" } })
+    );
+
+    expect(verifyReleaseArtifacts({ cwd, packages: ["coding-agent"] })).toEqual(
+      [
+        "packages/coding-agent/package.json: bin.pss-coding-agent must target ./bin/pss.js",
+      ]
+    );
+  });
+
+  it("rejects CLI bin targets without a shebang", () => {
+    const cwd = createFixture();
+    writeFileSync(
+      join(cwd, "packages", "coding-agent", "bin", "pss.js"),
+      "import '../dist/tui.js';\n"
+    );
+
+    expect(verifyReleaseArtifacts({ cwd, packages: ["coding-agent"] })).toEqual(
+      [
+        "packages/coding-agent/bin/pss.js: CLI bin target must start with a shebang",
+      ]
+    );
+  });
+
+  it("rejects CLI bin targets without executable mode", () => {
+    const cwd = createFixture();
+    const binPath = join(cwd, "packages", "coding-agent", "bin", "pss.js");
+    writeFileSync(binPath, "#!/usr/bin/env node\nimport '../dist/tui.js';\n");
+    chmodSync(binPath, 0o644);
+
+    expect(verifyReleaseArtifacts({ cwd, packages: ["coding-agent"] })).toEqual(
+      ["packages/coding-agent/bin/pss.js: CLI bin target must be executable"]
+    );
+  });
+
+  it("skips CLI bin executable mode checks on Windows", () => {
+    const cwd = createFixture();
+    const binPath = join(cwd, "packages", "coding-agent", "bin", "pss.js");
+    writeFileSync(binPath, "#!/usr/bin/env node\nimport '../dist/tui.js';\n");
+    chmodSync(binPath, 0o644);
+
+    expect(
+      verifyReleaseArtifacts({
+        cwd,
+        packages: ["coding-agent"],
+        platform: "win32",
+      })
+    ).toEqual([]);
+  });
+
+  it("reports CLI bin target read failures instead of throwing", () => {
+    const cwd = createFixture();
+    const binPath = join(cwd, "packages", "coding-agent", "bin", "pss.js");
+    rmSync(binPath);
+    mkdirSync(binPath);
+
+    expect(verifyReleaseArtifacts({ cwd, packages: ["coding-agent"] })).toEqual(
+      [expect.stringMatching(cliBinReadFailurePattern)]
+    );
   });
 
   it("rejects raw AI SDK canary types from runtime public declarations", () => {

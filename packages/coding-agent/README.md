@@ -1,26 +1,38 @@
 # @minpeter/pss-coding-agent
 
-Coding-agent product package for pss-next. It provides TinyFish-backed web tools
-and keeps TUI startup isolated from the side-effect-free root import.
+Web tools, model wiring, and the `pss` TUI for pss-next.
 
 ```ts
 import { tools } from "@minpeter/pss-coding-agent";
 import { createCodingAgentModel } from "@minpeter/pss-coding-agent/model";
 import { Agent } from "@minpeter/pss-runtime";
 
-const agent = new Agent({
+const session = new Agent({
   model: createCodingAgentModel(),
   tools,
-});
+}).createSession();
 ```
 
-Set `AI_API_KEY`, `AI_BASE_URL`, and `AI_MODEL` to configure the
-OpenAI-compatible model used by `createCodingAgentModel`; the
-model subpath validates these values before constructing a `LanguageModel`.
-Set `TINYFISH_API_KEY` before invoking `web_search` or `web_fetch`. Token pools
-can be provided as semicolon-delimited values and are validated when the tools
-are invoked.
+## CLI
 
-```bash
-node --conditions=@minpeter/pss-source --import tsx packages/coding-agent/src/tui.ts
+```sh
+pnpm dlx @minpeter/pss-coding-agent
+```
+
+```sh
+pnpm add -g @minpeter/pss-coding-agent
+pss
+```
+
+Bin aliases: `pss`, `pss-coding-agent`.
+
+## Env
+
+Set `AI_API_KEY`, `AI_BASE_URL`, and `AI_MODEL` for the model.
+Set `TINYFISH_API_KEY` before using `web_search` or `web_fetch`.
+
+## Dev
+
+```sh
+pnpm dev:tui
 ```

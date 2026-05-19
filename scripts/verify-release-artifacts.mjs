@@ -5,6 +5,12 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 
 const DEFAULT_PACKAGES = ["runtime", "coding-agent"];
+const REQUIRED_PACKAGE_BINS = {
+  "coding-agent": {
+    pss: "./bin/pss.js",
+    "pss-coding-agent": "./bin/pss.js",
+  },
+};
 const RAW_RUNTIME_DECLARATION_TOKENS = [
   "LanguageModel",
   "ToolSet",
@@ -167,6 +173,142 @@ function findPublishedTestArtifacts({ cwd, packages }) {
   return errors;
 }
 
+function findPackageBinEntrypointErrors({
+  cwd,
+  packages,
+  platform = process.platform,
+}) {
+  const errors = [];
+
+  for (const packageName of packages) {
+    const requiredBins = REQUIRED_PACKAGE_BINS[packageName];
+    if (!requiredBins) {
+      continue;
+    }
+
+    const packageRoot = join(cwd, "packages", packageName);
+    const packageJsonPath = join(packageRoot, "package.json");
+    const packageJson = readJsonForVerification({ cwd, file: packageJsonPath });
+
+    if (packageJson.error) {
+      errors.push(packageJson.error);
+      continue;
+    }
+
+    if (!(isRecord(packageJson.value) && isRecord(packageJson.value.bin))) {
+      errors.push(
+        `${relativeToCwd(cwd, packageJsonPath)}: missing bin object for CLI entrypoints`
+      );
+      continue;
+    }
+
+    const { bin } = packageJson.value;
+    const checkedTargets = new Set();
+    for (const [command, expectedTarget] of Object.entries(requiredBins)) {
+      if (bin[command] !== expectedTarget) {
+        errors.push(
+          `${relativeToCwd(cwd, packageJsonPath)}: bin.${command} must target ${expectedTarget}`
+        );
+        continue;
+      }
+
+      const targetPath = resolve(packageRoot, expectedTarget);
+      if (checkedTargets.has(targetPath)) {
+        continue;
+      }
+
+      checkedTargets.add(targetPath);
+      errors.push(
+        ...findBinTargetFileErrors({
+          command,
+          cwd,
+          packageJsonPath,
+          platform,
+          targetPath,
+        })
+      );
+    }
+  }
+
+  return errors;
+}
+
+function readJsonForVerification({ cwd, file }) {
+  try {
+    return { value: JSON.parse(readFileSync(file, "utf8")) };
+  } catch (error) {
+    return {
+      error: `${relativeToCwd(cwd, file)}: cannot read package.json (${errorMessage(error)})`,
+    };
+  }
+}
+
+function findBinTargetFileErrors({
+  command,
+  cwd,
+  packageJsonPath,
+  platform,
+  targetPath,
+}) {
+  if (!existsSync(targetPath)) {
+    return [
+      `${relativeToCwd(cwd, packageJsonPath)}: bin.${command} target ${relativeToCwd(dirname(packageJsonPath), targetPath)} is missing`,
+    ];
+  }
+
+  const relativeTarget = relativeToCwd(cwd, targetPath);
+  const text = readTextForVerification(targetPath);
+  const mode = readModeForVerification(targetPath);
+  const errors = [];
+
+  if (text.error) {
+    errors.push(
+      `${relativeTarget}: cannot read CLI bin target (${text.error})`
+    );
+  } else if (!text.value.startsWith("#!")) {
+    errors.push(`${relativeTarget}: CLI bin target must start with a shebang`);
+  }
+
+  if (mode.error) {
+    errors.push(
+      `${relativeTarget}: cannot stat CLI bin target (${mode.error})`
+    );
+  } else if (platform !== "win32" && !hasExecutablePermission(mode.value)) {
+    errors.push(`${relativeTarget}: CLI bin target must be executable`);
+  }
+
+  return errors;
+}
+
+function readTextForVerification(file) {
+  try {
+    return { value: readFileSync(file, "utf8") };
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+}
+
+function readModeForVerification(file) {
+  try {
+    return { value: statSync(file).mode };
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+}
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function hasExecutablePermission(mode) {
+  // biome-ignore lint/suspicious/noBitwiseOperators: POSIX file mode checks are the canonical use of execute-bit masks.
+  return (mode & 0o111) !== 0;
+}
+
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function findRuntimeDeclarationLeaks({ cwd, packages }) {
   if (!packages.includes("runtime")) {
     return [];
@@ -227,6 +369,7 @@ function relativeToCwd(cwd, file) {
 function verifyReleaseArtifacts(options) {
   return [
     ...requirePackageDists(options),
+    ...findPackageBinEntrypointErrors(options),
     ...findExtensionlessRelativeImports(options),
     ...findPublishedTestArtifacts(options),
     ...findRuntimeDeclarationLeaks(options),
@@ -259,6 +402,7 @@ if (isMainModule(import.meta.url)) {
 
 export {
   findExtensionlessRelativeImports,
+  findPackageBinEntrypointErrors,
   findPublishedTestArtifacts,
   findRuntimeDeclarationLeaks,
   isMainModule,
