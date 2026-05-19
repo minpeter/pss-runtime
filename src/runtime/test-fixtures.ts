@@ -9,16 +9,17 @@ export const assistantMessage = (
   content,
 });
 
-export const continueToolCall = (toolCallId: string): ToolCallPart => ({
+export const toolCallPart = (
+  toolCallId: string,
+  toolName = "test_tool"
+): ToolCallPart => ({
   type: "tool-call",
   toolCallId,
-  toolName: "continue",
+  toolName,
   input: {},
 });
 
-export const continueToolResult = (
-  toolCall: ToolCallPart
-): ToolModelMessage => ({
+export const toolResultFor = (toolCall: ToolCallPart): ToolModelMessage => ({
   role: "tool",
   content: [
     {

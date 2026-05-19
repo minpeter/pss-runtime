@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   assistantMessage,
-  continueToolCall,
-  continueToolResult,
+  toolCallPart,
+  toolResultFor,
   userText,
 } from "../test-fixtures";
 import { modelMessageToAgentEvents, userTextToModelMessage } from "./mapping";
@@ -16,7 +16,7 @@ describe("session mapping", () => {
   });
 
   it("projects assistant text and tool calls to public agent events", () => {
-    const toolCall = continueToolCall("call-continue");
+    const toolCall = toolCallPart("call-tool");
 
     expect(modelMessageToAgentEvents(assistantMessage("DONE"))).toEqual([
       { type: "assistant-text", text: "DONE" },
@@ -31,16 +31,16 @@ describe("session mapping", () => {
       )
     ).toEqual([
       { type: "assistant-text", text: "thinking aloud" },
-      { type: "tool-call", toolName: "continue" },
+      { type: "tool-call", toolName: "test_tool" },
     ]);
   });
 
   it("does not project non-assistant messages to public agent events", () => {
-    const toolCall = continueToolCall("call-continue");
+    const toolCall = toolCallPart("call-tool");
 
     expect(
       modelMessageToAgentEvents(userTextToModelMessage(userText("hi")))
     ).toEqual([]);
-    expect(modelMessageToAgentEvents(continueToolResult(toolCall))).toEqual([]);
+    expect(modelMessageToAgentEvents(toolResultFor(toolCall))).toEqual([]);
   });
 });
