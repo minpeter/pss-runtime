@@ -11,12 +11,18 @@ const rawNames = [
   "ToolModelMessage",
 ];
 const allowedFiles = new Set([
-  "packages/runtime/dist/agent.d.ts",
-  "packages/runtime/dist/agent-loop.d.ts",
-  "packages/runtime/dist/llm.d.ts",
-  "packages/runtime/dist/session/history.d.ts",
-  "packages/runtime/dist/session/mapping.d.ts",
-  "packages/runtime/dist/test-fixtures.d.ts",
+  "agent.d.ts",
+  "agent-loop.d.ts",
+  "llm.d.ts",
+  "session/history.d.ts",
+  "session/mapping.d.ts",
+  "test-fixtures.d.ts",
+  "src/agent.d.ts",
+  "src/agent-loop.d.ts",
+  "src/env.d.ts",
+  "src/llm.d.ts",
+  "src/session/history.d.ts",
+  "src/session/mapping.d.ts",
 ]);
 const allowedAliasNames = [
   "AgentModel",
@@ -34,16 +40,21 @@ for (const file of collectDeclarationFiles(distRoot)) {
   if (file === "packages/runtime/dist/index.d.ts") {
     for (const rawName of rawNames) {
       if (text.includes(rawName)) {
-        violations.push(`${file}: root declaration exposes raw AI SDK name ${rawName}`);
+        violations.push(
+          `${file}: root declaration exposes raw AI SDK name ${rawName}`
+        );
       }
     }
     continue;
   }
 
-  if (!allowedFiles.has(file)) {
+  const relative = file.slice(distRoot.length + 1);
+  if (!allowedFiles.has(relative)) {
     for (const rawName of rawNames) {
       if (text.includes(rawName)) {
-        violations.push(`${file}: unauthorized raw AI SDK name ${rawName}`);
+        violations.push(
+          `${relative}: unauthorized raw AI SDK name ${rawName} in ${file}`
+        );
       }
     }
   }
@@ -52,7 +63,9 @@ for (const file of collectDeclarationFiles(distRoot)) {
 const indexText = readFileSync("packages/runtime/dist/index.d.ts", "utf8");
 for (const aliasName of allowedAliasNames) {
   if (!indexText.includes(aliasName)) {
-    violations.push(`packages/runtime/dist/index.d.ts: missing explicit interop alias ${aliasName}`);
+    violations.push(
+      `packages/runtime/dist/index.d.ts: missing explicit interop alias ${aliasName}`
+    );
   }
 }
 

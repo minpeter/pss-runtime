@@ -11,16 +11,19 @@
     "dev": "node --conditions=@pss-next/source --import tsx examples/basic.ts",
     "dev:tui": "node --conditions=@pss-next/source --import tsx packages/coding-agent/src/tui.ts",
     "build": "turbo run build",
-    "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
+    "typecheck": "turbo run typecheck && tsc -p tsconfig.json --noEmit",
+    "test": "turbo run test && vitest run scripts/verify-release-artifacts.test.mjs",
     "lint": "ultracite check .",
     "format": "ultracite fix .",
     "check:runtime-api": "node scripts/check-runtime-api.mjs",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "pnpm build && changeset publish"
+    "release": "pnpm build && changeset publish",
+    "verify:release": "pnpm check:runtime-api && node scripts/verify-release-artifacts.mjs"
   },
   "devDependencies": {
+    "@pss-next/coding-agent": "workspace:*",
+    "@pss-next/runtime": "workspace:*",
     "@biomejs/biome": "2.4.15",
     "@changesets/cli": "^2.29.7",
     "@types/node": "latest",

@@ -12,6 +12,21 @@ const RAW_RUNTIME_DECLARATION_TOKENS = [
   "ToolModelMessage",
   "generateText",
 ];
+const RUNTIME_DECLARATION_ALLOWLIST = new Set([
+  "agent.d.ts",
+  "agent-loop.d.ts",
+  "llm.d.ts",
+  "session/history.d.ts",
+  "session/mapping.d.ts",
+]);
+const REQUIRED_RUNTIME_ROOT_ALIASES = [
+  "AgentModel",
+  "AgentTools",
+  "RuntimeCreateLlmOptions",
+  "RuntimeLlm",
+  "RuntimeLlmContext",
+  "RuntimeLlmOutput",
+];
 
 const RELATIVE_IMPORT_RE =
   /(?:from\s+["']|import\s*["'])(\.\.?\/[^"']+)(?:["'])/g;
@@ -156,35 +171,48 @@ function findRuntimeDeclarationLeaks({ cwd }) {
   const declarationFiles = listFiles(runtimeDist, (file) =>
     file.endsWith(".d.ts")
   );
-  const errors = [];
+  const rootDeclarationPath = join(runtimeDist, "index.d.ts");
 
-  for (const file of declarationFiles) {
-    const text = readFileSync(file, "utf8");
-    const publicRootDeclaration = file === join(runtimeDist, "index.d.ts");
+  return declarationFiles.flatMap((file) =>
+    file === rootDeclarationPath
+      ? findRuntimeRootDeclarationLeaks({ cwd, file })
+      : findRuntimeInternalDeclarationLeaks({ cwd, file, runtimeDist })
+  );
+}
 
-    for (const token of RAW_RUNTIME_DECLARATION_TOKENS) {
-      if (!text.includes(token)) {
-        continue;
-      }
+function findRuntimeRootDeclarationLeaks({ cwd, file }) {
+  const text = readFileSync(file, "utf8");
+  const errors = RAW_RUNTIME_DECLARATION_TOKENS.filter((token) =>
+    text.includes(token)
+  ).map(
+    (token) =>
+      `${relativeToCwd(cwd, file)}: root declaration exposes raw AI SDK token ${token}`
+  );
 
-      const lines = text.split("\n");
-      lines.forEach((line, index) => {
-        if (!line.includes(token)) {
-          return;
-        }
-
-        if (!(publicRootDeclaration || line.startsWith("export "))) {
-          return;
-        }
-
-        errors.push(
-          `${relativeToCwd(cwd, file)}:${index + 1}: unauthorized runtime declaration token ${token}`
-        );
-      });
+  for (const alias of REQUIRED_RUNTIME_ROOT_ALIASES) {
+    if (!text.includes(alias)) {
+      errors.push(
+        `${relativeToCwd(cwd, file)}: missing explicit runtime alias ${alias}`
+      );
     }
   }
 
   return errors;
+}
+
+function findRuntimeInternalDeclarationLeaks({ cwd, file, runtimeDist }) {
+  const relative = relativeToCwd(runtimeDist, file);
+  if (RUNTIME_DECLARATION_ALLOWLIST.has(relative)) {
+    return [];
+  }
+
+  const text = readFileSync(file, "utf8");
+  return RAW_RUNTIME_DECLARATION_TOKENS.filter((token) =>
+    text.includes(token)
+  ).map(
+    (token) =>
+      `${relativeToCwd(cwd, file)}: unauthorized runtime declaration token ${token}`
+  );
 }
 
 function relativeToCwd(cwd, file) {

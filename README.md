@@ -1,46 +1,109 @@
 # pss-next
 
-Small prototype split into a generic agent runtime and a coding-agent product
-layer. The runtime owns sessions, model loops, and agent events; the coding-agent
-layer owns concrete web tools and CLI/TUI product wiring.
+`pss-next` is now a Turborepo monorepo with two publishable packages:
+
+- `@pss-next/runtime` — generic agent runtime, sessions, model loop, and event stream.
+- `@pss-next/coding-agent` — coding-agent product tools plus optional TUI wiring.
+
+The runtime stays product-agnostic. Import coding-agent tools explicitly when you
+want the web search/fetch product layer.
+
+## Development
 
 ```bash
 pnpm install
-pnpm run dev
-pnpm run dev:tui
-pnpm run test
-pnpm run typecheck
+pnpm dev
+pnpm dev:tui
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm lint
 ```
 
-Copy `.env.example` to `.env` and set `AI_API_KEY`, `AI_BASE_URL`, and
-`AI_MODEL` to configure the default OpenAI-compatible provider. `AI_MODEL` is
-pinned to `minimax/MiniMax-M2.7` by default.
-
-The runtime does not attach product tools by default. Import coding-agent tools
-explicitly when building a CLI/TUI-style agent:
+`pnpm dev` runs `examples/basic.ts` through the workspace package names with the
+`@pss-next/source` condition, so local development uses `packages/*/src` without
+publishing first.
 
 ```ts
-import { tools } from "./src/coding-agent/tools";
-import { Agent } from "./src/runtime/agent";
+import { tools } from "@pss-next/coding-agent";
+import { Agent } from "@pss-next/runtime";
 
 const agent = new Agent({ tools });
+const session = agent.createSession();
 ```
 
-The coding-agent `web_search` and `web_fetch` tools require `TINYFISH_API_KEY`
-when invoked.
+## Environment
 
-`TINYFISH_API_KEY` accepts semicolon-delimited token pools:
+Copy `.env.example` to `.env` and set the OpenAI-compatible runtime provider:
+
+```env
+AI_API_KEY=...
+AI_BASE_URL=...
+AI_MODEL=minimax/MiniMax-M2.7
+```
+
+Coding-agent web tools additionally require TinyFish credentials when invoked:
 
 ```env
 TINYFISH_API_KEY=tf-token-1;tf-token-2
 ```
 
-Empty segments and whitespace are ignored (` a ; ; b ` becomes `a`, `b`). The
-TinyFish web tools rotate usable keys across calls so quota can be spread across
-the pool.
+`TINYFISH_API_KEY` accepts semicolon-delimited token pools. Empty segments and
+whitespace are ignored, and the tools rotate usable keys across calls.
 
-Coding-agent tools:
+## Packages
 
-- `web_search` — searches with TinyFish Search API and returns ranked results.
-- `web_fetch` — fetches up to 10 URLs per request with TinyFish Fetch API and
-  returns extracted page content plus per-URL errors.
+### `@pss-next/runtime`
+
+Use this package when you need the reusable runtime only:
+
+```ts
+import { Agent, type RuntimeLlmContext } from "@pss-next/runtime";
+```
+
+The package exposes a narrow runtime API and explicit interop aliases instead of
+re-exporting broad AI SDK canary types from the root declaration.
+
+### `@pss-next/coding-agent`
+
+Use this package when you need the default coding tools:
+
+```ts
+import { tools, webFetchTool, webSearchTool } from "@pss-next/coding-agent";
+```
+
+The root import is side-effect-free. Launch the interactive TUI through the
+subpath or the root script:
+
+```bash
+pnpm dev:tui
+node --conditions=@pss-next/source --import tsx packages/coding-agent/src/tui.ts
+```
+
+## Release plan
+
+This repo uses Changesets and public npm packages under the `@pss-next` scope.
+The fallback naming plan is `@minpeter/pss-runtime` and
+`@minpeter/pss-coding-agent` only if authenticated npm dry-runs prove the
+`@pss-next` scope cannot publish.
+
+Release checklist:
+
+```bash
+pnpm changeset
+pnpm version-packages
+pnpm install --lockfile-only
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm verify:release
+npm pack ./packages/runtime --dry-run --json
+npm pack ./packages/coding-agent --dry-run --json
+npm publish ./packages/runtime --dry-run --access public
+npm publish ./packages/coding-agent --dry-run --access public
+```
+
+The GitHub release workflow runs the same validation and then uses
+`changesets/action` with `pnpm release`. Configure `NPM_TOKEN` in GitHub Actions
+before enabling real publishes.

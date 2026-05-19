@@ -16,10 +16,20 @@ function createFixture() {
       join(cwd, "packages", packageName, "dist", "index.js"),
       "export const ok = true;\n"
     );
+    const declaration =
+      packageName === "runtime"
+        ? 'export type { AgentModel, AgentTools, RuntimeCreateLlmOptions, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
+        : "export declare const ok: true;\n";
     writeFileSync(
       join(cwd, "packages", packageName, "dist", "index.d.ts"),
-      "export declare const ok: true;\n"
+      declaration
     );
+    if (packageName === "runtime") {
+      writeFileSync(
+        join(cwd, "packages", packageName, "dist", "llm.d.ts"),
+        "export declare const ok: true;\n"
+      );
+    }
   }
 
   return cwd;
@@ -82,14 +92,29 @@ describe("verifyReleaseArtifacts", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      'import type { LanguageModel } from "ai";\nexport type AgentModel = LanguageModel;\n'
+      'import type { LanguageModel } from "ai";\nexport type AgentModel = LanguageModel;\nexport type { AgentTools, RuntimeCreateLlmOptions, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
     );
 
     expect(
       verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
     ).toEqual([
-      "packages/runtime/dist/index.d.ts:1: unauthorized runtime declaration token LanguageModel",
-      "packages/runtime/dist/index.d.ts:2: unauthorized runtime declaration token LanguageModel",
+      "packages/runtime/dist/index.d.ts: root declaration exposes raw AI SDK token LanguageModel",
     ]);
+  });
+
+  it("allows raw AI SDK types inside allowlisted internal runtime declarations", () => {
+    const cwd = createFixture();
+    writeFileSync(
+      join(cwd, "packages", "runtime", "dist", "index.d.ts"),
+      'export type { AgentModel, AgentTools, RuntimeCreateLlmOptions, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
+    );
+    writeFileSync(
+      join(cwd, "packages", "runtime", "dist", "llm.d.ts"),
+      'import type { LanguageModel } from "ai";\nexport type AgentModel = LanguageModel;\nexport type { AgentTools, RuntimeCreateLlmOptions, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
+    );
+
+    expect(
+      verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
+    ).toEqual([]);
   });
 });

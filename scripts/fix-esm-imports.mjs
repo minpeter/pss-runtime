@@ -1,68 +1,53 @@
-#!/usr/bin/env node
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import fs, { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
-const [root = "dist"] = process.argv.slice(2);
-const rootPath = resolve(root);
-
-const jsFiles = [];
-collectJsFiles(rootPath, jsFiles);
-
-for (const file of jsFiles) {
-  const source = readFileSync(file, "utf8");
-  const fixed = source.replace(
-    /(from\s+["']|import\s*\(\s*["']|import\s+["'])(\.\.?\/[^"']+)(["'])/g,
-    (match, prefix, specifier, suffix) => {
-      const fixedSpecifier = resolveRelativeSpecifier(file, specifier);
-      return fixedSpecifier === specifier
-        ? match
-        : `${prefix}${fixedSpecifier}${suffix}`;
-    }
-  );
-
-  if (fixed !== source) {
-    writeFileSync(file, fixed);
-  }
+const distDir = process.argv[2];
+if (!distDir) {
+  throw new Error("Usage: node fix-esm-imports.mjs <distDir>");
 }
 
-function collectJsFiles(directory, files) {
-  if (!existsSync(directory)) {
-    return;
-  }
-
-  for (const entry of readdirSync(directory)) {
-    const path = join(directory, entry);
-    const stat = statSync(path);
-
-    if (stat.isDirectory()) {
-      collectJsFiles(path, files);
-      continue;
-    }
-
-    if (stat.isFile() && path.endsWith(".js")) {
-      files.push(path);
+function walk(dir, out = []) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const file = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) {
+      walk(file, out);
+    } else if (entry.isFile() && file.endsWith(".js")) {
+      out.push(file);
     }
   }
+  return out;
 }
 
-function resolveRelativeSpecifier(file, specifier) {
-  if (
-    specifier.endsWith(".js") ||
-    specifier.endsWith(".json") ||
-    specifier.endsWith(".node")
-  ) {
-    return specifier;
+const files = walk(distDir);
+const relImportRe = /(?:from\s+|import\()(["'])(\.\.?\/.+?)(\1)/g;
+const importSpecifierRe = /^(\.\.?\/.+)$/;
+for (const file of files) {
+  let content = fs.readFileSync(file, "utf8");
+  let changed = false;
+  content = content.replace(relImportRe, (match, _quote, spec, _full) => {
+    if (
+      !importSpecifierRe.test(spec) ||
+      spec.endsWith(".js") ||
+      spec.endsWith(".json")
+    ) {
+      return match;
+    }
+    const absoluteNoExt = resolve(dirname(file), spec);
+    if (existsSync(`${absoluteNoExt}.js`)) {
+      changed = true;
+      return match.replace(spec, `${spec}.js`);
+    }
+    if (existsSync(join(absoluteNoExt, "index.js"))) {
+      changed = true;
+      return match.replace(
+        spec,
+        `${spec.endsWith("/") ? spec : `${spec}/`}index.js`
+      );
+    }
+    return match;
+  });
+
+  if (changed) {
+    fs.writeFileSync(file, content, "utf8");
   }
-
-  const target = resolve(dirname(file), specifier);
-
-  if (existsSync(`${target}.js`)) {
-    return `${specifier}.js`;
-  }
-
-  if (existsSync(join(target, "index.js"))) {
-    return `${specifier}/index.js`;
-  }
-
-  return specifier;
 }

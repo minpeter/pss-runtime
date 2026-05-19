@@ -18,7 +18,7 @@ const fetchDefaults = {
   links: false,
 } satisfies Pick<TinyFishFetchRequest, "format" | "image_links" | "links">;
 
-export const webFetchTool = tool({
+export const webFetchTool: unknown = tool({
   description:
     "Fetch and extract readable content from up to 10 absolute HTTP(S) URLs. Use after web_search or when the user provides URLs; markdown is the best default format for LLM context.",
   execute: (input, options): Promise<WebFetchOutput> => {
@@ -45,75 +45,6 @@ export const webFetchTool = tool({
       },
     },
     required: ["urls"],
-    type: "object",
-  }),
-  outputSchema: jsonSchema({
-    additionalProperties: false,
-    description:
-      "Fetched page content plus per-URL failures. Per-URL errors do not prevent other URLs from returning results.",
-    properties: {
-      errors: {
-        description:
-          "Per-URL fetch failures. Empty when every requested URL succeeds.",
-        items: {
-          additionalProperties: false,
-          properties: {
-            error: {
-              description:
-                "Structured fetch error code such as page_not_found, timeout, bot_blocked, or invalid_url.",
-              type: "string",
-            },
-            status: {
-              description:
-                "Upstream HTTP status when the target returned an HTTP error.",
-              type: "number",
-            },
-            url: { description: "URL that failed.", type: "string" },
-          },
-          required: ["url", "error"],
-          type: "object",
-        },
-        type: "array",
-      },
-      results: {
-        description: "Successfully fetched pages.",
-        items: {
-          additionalProperties: true,
-          properties: {
-            final_url: {
-              description: "URL after redirects. May differ from url.",
-              type: "string",
-            },
-            format: {
-              description: "Format used for text: markdown, html, or json.",
-              type: "string",
-            },
-            image_links: {
-              description:
-                "Image source URLs found on the page when image_links was requested.",
-              items: { type: "string" },
-              type: "array",
-            },
-            links: {
-              description:
-                "Hyperlink URLs found on the page when links was requested.",
-              items: { type: "string" },
-              type: "array",
-            },
-            text: {
-              description:
-                "Extracted page content. String for markdown/html, structured object for json, or null if unavailable.",
-            },
-            title: { description: "Page title when detected.", type: "string" },
-            url: { description: "Original requested URL.", type: "string" },
-          },
-          required: ["url", "final_url", "text", "format"],
-          type: "object",
-        },
-        type: "array",
-      },
-    },
-    required: ["results", "errors"],
     type: "object",
   }),
 });

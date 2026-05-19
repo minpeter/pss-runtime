@@ -1,8 +1,9 @@
 export { Agent, type AgentOptions } from "./agent";
-export { runAgentLoop, type AgentLoopResult } from "./agent-loop";
+export { type AgentLoopResult, runAgentLoop } from "./agent-loop";
 export type {
   AgentModel,
   AgentTools,
+  LlmOutputPart,
   RuntimeCreateLlmOptions,
   RuntimeLlm,
   RuntimeLlmContext,
@@ -14,9 +15,8 @@ export type {
   AgentEventListener,
   AssistantReasoning,
   AssistantText,
-  SessionInput,
   ToolCall,
   ToolResult,
   UserText,
-} from "./session";
-export { AgentSession } from "./session";
+} from "./session/events";
+export { AgentSession, type SessionInput } from "./session/session";

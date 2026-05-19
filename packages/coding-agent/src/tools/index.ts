@@ -1,10 +1,10 @@
-import type { AgentTools } from "../../runtime/llm";
+import type { AgentTools } from "@pss-next/runtime";
 import { webFetchTool as defaultWebFetchTool } from "./web-fetch";
 import { webSearchTool as defaultWebSearchTool } from "./web-search";
 
-export const tools = {
+export const tools: AgentTools = {
   web_fetch: defaultWebFetchTool,
   web_search: defaultWebSearchTool,
-} satisfies AgentTools;
+};
 
 export type DefaultTools = typeof tools;

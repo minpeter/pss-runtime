@@ -7,7 +7,10 @@
   },
   "overrides": [
     {
-      "includes": ["src/index.ts", "src/runtime/session/index.ts"],
+      "includes": [
+        "packages/*/src/index.ts",
+        "packages/*/src/session/index.ts"
+      ],
       "linter": {
         "rules": {
           "performance": {
