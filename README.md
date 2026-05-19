@@ -105,5 +105,21 @@ npm publish ./packages/coding-agent --dry-run --access public
 ```
 
 The GitHub release workflow runs the same validation and then uses
-`changesets/action` with `pnpm release`. Configure `NPM_TOKEN` in GitHub Actions
-before enabling real publishes.
+`changesets/action` with `pnpm release`. Publishing is configured for npm Trusted
+Publishing/OIDC, not `NPM_TOKEN`. Before real publishes, add a Trusted Publisher
+for each npm package with:
+
+- Provider: GitHub Actions
+- Organization/user: `minpeter`
+- Repository: `pss-next`
+- Workflow filename: `release.yml`
+
+Trusted publishing requires GitHub-hosted runners, `permissions.id-token: write`,
+Node 22.14+ and npm CLI 11.5.1+. The workflow uses Node 24 and does not store a
+long-lived npm publish token.
+
+If these packages do not exist on npm yet, create the first package versions with
+a one-time interactive local publish using your npm account and 2FA, then add the
+Trusted Publisher entries above before relying on the GitHub release workflow for
+subsequent publishes. npm's `npm trust` configuration requires the package to
+already exist on the registry.
