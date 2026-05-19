@@ -30,6 +30,17 @@ export function readRequiredNumber(value: unknown, fieldName: string): number {
   return value;
 }
 
+export function readRequiredArray(
+  value: unknown,
+  fieldName: string
+): unknown[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`Expected ${fieldName} to be an array.`);
+  }
+
+  return value;
+}
+
 export function readOptionalNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value)
     ? value

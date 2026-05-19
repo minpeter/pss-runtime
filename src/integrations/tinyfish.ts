@@ -3,6 +3,7 @@ import {
   readObject,
   readOptionalNumber,
   readOptionalString,
+  readRequiredArray,
   readRequiredNumber,
   readRequiredString,
   readStringArray,
@@ -250,8 +251,8 @@ function createTinyFishHttpError(
 function sanitizeFetchResponse(
   response: TinyFishFetchResponse
 ): TinyFishFetchOutput {
-  const results = Array.isArray(response.results) ? response.results : [];
-  const errors = Array.isArray(response.errors) ? response.errors : [];
+  const results = readRequiredArray(response.results, "TinyFish fetch results");
+  const errors = readRequiredArray(response.errors, "TinyFish fetch errors");
 
   return {
     results: results.map(sanitizeFetchResult),
@@ -325,7 +326,10 @@ function sanitizeFetchError(value: unknown): TinyFishFetchError {
 function sanitizeSearchResponse(
   response: TinyFishSearchResponse
 ): TinyFishSearchOutput {
-  const results = Array.isArray(response.results) ? response.results : [];
+  const results = readRequiredArray(
+    response.results,
+    "TinyFish search results"
+  );
 
   return {
     page: readRequiredNumber(response.page, "TinyFish search page"),

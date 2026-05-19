@@ -12,9 +12,12 @@ interface ExecutableTool {
 
 const missingApiKeyPattern = /TINYFISH_API_KEY/;
 const nonRateLimitErrorPattern = /HTTP 401: invalid api key/;
+const providerFetchErrorsPattern = /fetch errors.*array/;
 const providerFetchFieldPattern = /fetch results\[\]\.final_url.*string/;
+const providerFetchResultsPattern = /fetch results.*array/;
 const providerSearchFieldPattern =
   /search results\[\]\.position.*finite number/;
+const providerSearchResultsPattern = /search results.*array/;
 const rateLimitExhaustedPattern =
   /HTTP 429: rate limit exceeded\. Retry-After: 60\. \(all 2 configured TinyFish API keys returned HTTP 429\)/;
 const tooManyUrlsPattern = /10 URLs/;
@@ -397,6 +400,23 @@ describe("web tools", () => {
     ).rejects.toThrow(providerSearchFieldPattern);
   });
 
+  it("web_search rejects a missing provider results array instead of returning empty results", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          page: 0,
+          query: "tinyfish",
+          total_results: 0,
+        }),
+        { status: 200 }
+      )
+    );
+
+    await expect(
+      executeTool(webSearchTool, { query: "tinyfish" })
+    ).rejects.toThrow(providerSearchResultsPattern);
+  });
+
   it("web_fetch rejects malformed provider fields instead of defaulting them", async () => {
     fetchMock.mockResolvedValue(
       new Response(
@@ -417,5 +437,37 @@ describe("web tools", () => {
     await expect(
       executeTool(webFetchTool, { urls: ["https://example.com"] })
     ).rejects.toThrow(providerFetchFieldPattern);
+  });
+
+  it("web_fetch rejects a missing provider results array instead of returning empty results", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ errors: [] }), { status: 200 })
+    );
+
+    await expect(
+      executeTool(webFetchTool, { urls: ["https://example.com"] })
+    ).rejects.toThrow(providerFetchResultsPattern);
+  });
+
+  it("web_fetch rejects a missing provider errors array instead of returning empty errors", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          results: [
+            {
+              final_url: "https://example.com/",
+              format: "markdown",
+              text: "Example body",
+              url: "https://example.com",
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    );
+
+    await expect(
+      executeTool(webFetchTool, { urls: ["https://example.com"] })
+    ).rejects.toThrow(providerFetchErrorsPattern);
   });
 });
