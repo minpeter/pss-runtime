@@ -1,10 +1,10 @@
 import { z } from "zod";
 import {
-  readNumber,
   readObject,
   readOptionalNumber,
   readOptionalString,
-  readString,
+  readRequiredNumber,
+  readRequiredString,
   readStringArray,
 } from "../utils/unknown";
 
@@ -101,11 +101,16 @@ export interface TinyFishSearchOutput {
   total_results: number;
 }
 
+interface TinyFishRequestOptions {
+  signal?: AbortSignal;
+}
+
 let tinyFishApiKeyPoolSource: string | undefined;
 let tinyFishApiKeyIndex = 0;
 
 export async function fetchTinyFishPages(
-  request: TinyFishFetchRequest
+  request: TinyFishFetchRequest,
+  options: TinyFishRequestOptions = {}
 ): Promise<TinyFishFetchOutput> {
   const body = await requestTinyFishJson<TinyFishFetchResponse>(
     "fetch",
@@ -117,6 +122,7 @@ export async function fetchTinyFishPages(
           "X-API-Key": apiKey,
         },
         method: "POST",
+        signal: options.signal,
       })
   );
 
@@ -124,7 +130,8 @@ export async function fetchTinyFishPages(
 }
 
 export async function searchTinyFishWeb(
-  request: TinyFishSearchRequest
+  request: TinyFishSearchRequest,
+  options: TinyFishRequestOptions = {}
 ): Promise<TinyFishSearchOutput> {
   const url = new URL(searchEndpoint);
   url.searchParams.set("query", request.query);
@@ -138,20 +145,11 @@ export async function searchTinyFishWeb(
       fetch(url.toString(), {
         headers: { "X-API-Key": apiKey },
         method: "GET",
+        signal: options.signal,
       })
   );
 
   return sanitizeSearchResponse(body);
-}
-
-export function getTinyFishApiKey(): string {
-  const apiKey = getTinyFishApiKeyAttemptOrder()[0];
-
-  if (apiKey === undefined) {
-    throw new Error(requiredApiKeyError);
-  }
-
-  return apiKey;
 }
 
 function getTinyFishApiKeyAttemptOrder(): string[] {
@@ -265,11 +263,19 @@ function sanitizeFetchResponse(
 
 function sanitizeFetchResult(value: unknown): TinyFishFetchResult {
   const object = readObject(value);
+  assertHasField(object, "text", "fetch results[].text");
+
   const result: TinyFishFetchResult = {
-    final_url: readString(object.final_url),
-    format: readString(object.format),
+    final_url: readRequiredString(
+      object.final_url,
+      "TinyFish fetch results[].final_url"
+    ),
+    format: readRequiredString(
+      object.format,
+      "TinyFish fetch results[].format"
+    ),
     text: normalizeJsonValue(object.text),
-    url: readString(object.url),
+    url: readRequiredString(object.url, "TinyFish fetch results[].url"),
   };
   const optionalStrings = {
     author: readOptionalString(object.author),
@@ -306,8 +312,8 @@ function sanitizeFetchResult(value: unknown): TinyFishFetchResult {
 function sanitizeFetchError(value: unknown): TinyFishFetchError {
   const object = readObject(value);
   const error: TinyFishFetchError = {
-    error: readString(object.error),
-    url: readString(object.url),
+    error: readRequiredString(object.error, "TinyFish fetch errors[].error"),
+    url: readRequiredString(object.url, "TinyFish fetch errors[].url"),
   };
   const status = readOptionalNumber(object.status);
 
@@ -324,10 +330,13 @@ function sanitizeSearchResponse(
   const results = Array.isArray(response.results) ? response.results : [];
 
   return {
-    page: readNumber(response.page),
-    query: readString(response.query),
+    page: readRequiredNumber(response.page, "TinyFish search page"),
+    query: readRequiredString(response.query, "TinyFish search query"),
     results: results.map(sanitizeSearchResult),
-    total_results: readNumber(response.total_results),
+    total_results: readRequiredNumber(
+      response.total_results,
+      "TinyFish search total_results"
+    ),
   };
 }
 
@@ -335,12 +344,31 @@ function sanitizeSearchResult(value: unknown): TinyFishSearchResult {
   const object = readObject(value);
 
   return {
-    position: readNumber(object.position),
-    site_name: readString(object.site_name),
-    snippet: readString(object.snippet),
-    title: readString(object.title),
-    url: readString(object.url),
+    position: readRequiredNumber(
+      object.position,
+      "TinyFish search results[].position"
+    ),
+    site_name: readRequiredString(
+      object.site_name,
+      "TinyFish search results[].site_name"
+    ),
+    snippet: readRequiredString(
+      object.snippet,
+      "TinyFish search results[].snippet"
+    ),
+    title: readRequiredString(object.title, "TinyFish search results[].title"),
+    url: readRequiredString(object.url, "TinyFish search results[].url"),
   };
+}
+
+function assertHasField(
+  object: Record<string, unknown>,
+  key: string,
+  fieldName: string
+): void {
+  if (!Object.hasOwn(object, key)) {
+    throw new Error(`Expected TinyFish ${fieldName} to be present.`);
+  }
 }
 
 function normalizeJsonValue(value: unknown): JsonValue {

@@ -10,12 +10,28 @@ export function readString(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+export function readRequiredString(value: unknown, fieldName: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`Expected ${fieldName} to be a string.`);
+  }
+
+  return value;
+}
+
 export function readOptionalString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
 export function readNumber(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+export function readRequiredNumber(value: unknown, fieldName: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`Expected ${fieldName} to be a finite number.`);
+  }
+
+  return value;
 }
 
 export function readOptionalNumber(value: unknown): number | undefined {

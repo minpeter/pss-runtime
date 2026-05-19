@@ -13,10 +13,10 @@ export type WebSearchOutput = TinyFishSearchOutput;
 export const webSearchTool = tool({
   description:
     "Search the public web for current or external information. Returns ranked results with titles, snippets, and URLs; use web_fetch afterward to read full page content.",
-  execute: (input): Promise<WebSearchOutput> => {
+  execute: (input, options): Promise<WebSearchOutput> => {
     const request = parseWebSearchInput(input);
 
-    return searchTinyFishWeb(request);
+    return searchTinyFishWeb(request, { signal: options?.abortSignal });
   },
   inputSchema: jsonSchema({
     additionalProperties: false,

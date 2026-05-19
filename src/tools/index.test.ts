@@ -1,21 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getTinyFishApiKey } from "../integrations/tinyfish";
 import { tools } from ".";
 import { webFetchTool } from "./web-fetch";
 import { webSearchTool } from "./web-search";
 
 interface ExecutableTool {
-  execute: (input: unknown) => Promise<unknown> | unknown;
+  execute: (
+    input: unknown,
+    options?: { abortSignal?: AbortSignal }
+  ) => Promise<unknown> | unknown;
 }
 
 const missingApiKeyPattern = /TINYFISH_API_KEY/;
 const nonRateLimitErrorPattern = /HTTP 401: invalid api key/;
+const providerFetchFieldPattern = /fetch results\[\]\.final_url.*string/;
+const providerSearchFieldPattern =
+  /search results\[\]\.position.*finite number/;
 const rateLimitExhaustedPattern =
   /HTTP 429: rate limit exceeded\. Retry-After: 60\. \(all 2 configured TinyFish API keys returned HTTP 429\)/;
 const tooManyUrlsPattern = /10 URLs/;
+const validUrlErrorPattern = /valid absolute http or https URLs/;
 
-const executeTool = async (tool: unknown, input: unknown) =>
-  (tool as ExecutableTool).execute(input);
+const executeTool = async (
+  tool: unknown,
+  input: unknown,
+  options?: { abortSignal?: AbortSignal }
+) => (tool as ExecutableTool).execute(input, options);
 
 const originalTinyFishApiKey = process.env.TINYFISH_API_KEY;
 
@@ -64,16 +73,8 @@ describe("web tools", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("normalizes and rotates semicolon-delimited TinyFish API keys", () => {
-    process.env.TINYFISH_API_KEY = " tf-token-1 ; ; tf-token-2 ";
-
-    expect(getTinyFishApiKey()).toBe("tf-token-1");
-    expect(getTinyFishApiKey()).toBe("tf-token-2");
-    expect(getTinyFishApiKey()).toBe("tf-token-1");
-  });
-
   it("web_search rotates TinyFish API keys across calls", async () => {
-    process.env.TINYFISH_API_KEY = "tf-token-1;tf-token-2";
+    process.env.TINYFISH_API_KEY = " tf-token-1 ; ; tf-token-2 ";
     fetchMock.mockImplementation(() =>
       Promise.resolve(
         new Response(
@@ -169,6 +170,7 @@ describe("web tools", () => {
   });
 
   it("web_search calls TinyFish search with query parameters and API key", async () => {
+    const signal = new AbortController().signal;
     fetchMock.mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -189,9 +191,13 @@ describe("web tools", () => {
       )
     );
 
-    const output = await executeTool(webSearchTool, {
-      query: "tinyfish docs",
-    });
+    const output = await executeTool(
+      webSearchTool,
+      {
+        query: "tinyfish docs",
+      },
+      { abortSignal: signal }
+    );
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] ?? [];
@@ -202,6 +208,7 @@ describe("web tools", () => {
     expect(parsedUrl.searchParams.get("language")).toBe("en");
     expect(parsedUrl.searchParams.get("page")).toBe("0");
     expect(init?.headers).toMatchObject({ "X-API-Key": "tf-test-key" });
+    expect(init?.signal).toBe(signal);
     expect(output).toEqual({
       page: 0,
       query: "tinyfish docs",
@@ -219,6 +226,7 @@ describe("web tools", () => {
   });
 
   it("web_fetch posts URLs and returns parsed results with per-URL errors", async () => {
+    const signal = new AbortController().signal;
     fetchMock.mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -239,9 +247,13 @@ describe("web tools", () => {
       )
     );
 
-    const output = await executeTool(webFetchTool, {
-      urls: ["https://example.com", "https://x.test/404"],
-    });
+    const output = await executeTool(
+      webFetchTool,
+      {
+        urls: ["https://example.com", "https://x.test/404"],
+      },
+      { abortSignal: signal }
+    );
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] ?? [];
@@ -252,6 +264,7 @@ describe("web tools", () => {
         "X-API-Key": "tf-test-key",
       },
       method: "POST",
+      signal,
     });
     expect(JSON.parse(String(init?.body))).toEqual({
       format: "markdown",
@@ -349,5 +362,60 @@ describe("web tools", () => {
       tooManyUrlsPattern
     );
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("web_fetch rejects malformed URLs with a tool-specific validation error", async () => {
+    await expect(
+      executeTool(webFetchTool, { urls: ["not a url"] })
+    ).rejects.toThrow(validUrlErrorPattern);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("web_search rejects malformed provider fields instead of defaulting them", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          page: 0,
+          query: "tinyfish",
+          results: [
+            {
+              position: "1",
+              site_name: "docs.tinyfish.ai",
+              snippet: "TinyFish docs snippet",
+              title: "TinyFish Docs",
+              url: "https://docs.tinyfish.ai/",
+            },
+          ],
+          total_results: 1,
+        }),
+        { status: 200 }
+      )
+    );
+
+    await expect(
+      executeTool(webSearchTool, { query: "tinyfish" })
+    ).rejects.toThrow(providerSearchFieldPattern);
+  });
+
+  it("web_fetch rejects malformed provider fields instead of defaulting them", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          errors: [],
+          results: [
+            {
+              format: "markdown",
+              text: "Example body",
+              url: "https://example.com",
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    );
+
+    await expect(
+      executeTool(webFetchTool, { urls: ["https://example.com"] })
+    ).rejects.toThrow(providerFetchFieldPattern);
   });
 });

@@ -21,10 +21,10 @@ const fetchDefaults = {
 export const webFetchTool = tool({
   description:
     "Fetch and extract readable content from up to 10 absolute HTTP(S) URLs. Use after web_search or when the user provides URLs; markdown is the best default format for LLM context.",
-  execute: (input): Promise<WebFetchOutput> => {
+  execute: (input, options): Promise<WebFetchOutput> => {
     const request = parseWebFetchInput(input);
 
-    return fetchTinyFishPages(request);
+    return fetchTinyFishPages(request, { signal: options?.abortSignal });
   },
   inputSchema: jsonSchema({
     additionalProperties: false,
@@ -147,7 +147,15 @@ function readHttpUrl(value: unknown): string {
     throw new Error("web_fetch URLs must be non-empty strings.");
   }
 
-  const parsedUrl = new URL(url);
+  let parsedUrl: URL;
+
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    throw new Error(
+      "web_fetch URLs must be valid absolute http or https URLs."
+    );
+  }
 
   if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
     throw new Error("web_fetch only accepts http and https URLs.");
