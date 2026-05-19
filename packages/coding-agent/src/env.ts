@@ -4,31 +4,16 @@ import { z } from "zod";
 export const DEFAULT_OPENAI_COMPATIBLE_BASE_URL =
   "https://apis.opengateway.ai/v1";
 export const DEFAULT_OPENAI_COMPATIBLE_MODEL_ID = "minimax/MiniMax-M2.7";
-export const REQUIRED_TINYFISH_API_KEY_ERROR =
+const TINYFISH_API_KEY_ERROR =
   "TINYFISH_API_KEY is required to use the built-in TinyFish web tools.";
 
-export type CodingAgentRuntimeEnv = Record<
-  string,
-  boolean | number | string | undefined
->;
+export type CodingAgentRuntimeEnv = Record<string, string | undefined>;
 
-export interface ReadCodingAgentEnvOptions {
+interface ReadCodingAgentEnvOptions {
   runtimeEnv?: CodingAgentRuntimeEnv;
 }
 
-export type OpenAICompatibleModelEnv = ReturnType<
-  typeof readOpenAICompatibleModelEnv
->;
-
 const requiredTrimmedString = z.string().trim().min(1);
-const openAICompatibleBaseUrl = z
-  .string()
-  .trim()
-  .url()
-  .default(DEFAULT_OPENAI_COMPATIBLE_BASE_URL);
-const openAICompatibleModelId = requiredTrimmedString.default(
-  DEFAULT_OPENAI_COMPATIBLE_MODEL_ID
-);
 const tinyFishApiKeyPool = z
   .string()
   .transform((value) =>
@@ -46,14 +31,20 @@ export function readOpenAICompatibleModelEnv({
 }: ReadCodingAgentEnvOptions = {}) {
   return createEnv({
     emptyStringAsUndefined: true,
-    onValidationError: (issues) => {
-      throw createValidationError("OpenAI-compatible model", issues);
-    },
-    runtimeEnv: copyRuntimeEnv(runtimeEnv),
+    onValidationError: failEnvValidation(
+      "OpenAI-compatible model environment validation failed."
+    ),
+    runtimeEnv: { ...runtimeEnv },
     server: {
       AI_API_KEY: requiredTrimmedString,
-      AI_BASE_URL: openAICompatibleBaseUrl,
-      AI_MODEL: openAICompatibleModelId,
+      AI_BASE_URL: z
+        .string()
+        .trim()
+        .url()
+        .default(DEFAULT_OPENAI_COMPATIBLE_BASE_URL),
+      AI_MODEL: requiredTrimmedString.default(
+        DEFAULT_OPENAI_COMPATIBLE_MODEL_ID
+      ),
     },
   });
 }
@@ -63,10 +54,8 @@ export function readTinyFishApiKeyPoolFromEnv({
 }: ReadCodingAgentEnvOptions = {}): string[] {
   const env = createEnv({
     emptyStringAsUndefined: true,
-    onValidationError: (issues) => {
-      throw createValidationError("TinyFish", issues);
-    },
-    runtimeEnv: copyRuntimeEnv(runtimeEnv),
+    onValidationError: failEnvValidation(TINYFISH_API_KEY_ERROR),
+    runtimeEnv: { ...runtimeEnv },
     server: {
       TINYFISH_API_KEY: tinyFishApiKeyPool,
     },
@@ -75,35 +64,20 @@ export function readTinyFishApiKeyPoolFromEnv({
   return env.TINYFISH_API_KEY;
 }
 
-function copyRuntimeEnv(
-  runtimeEnv: CodingAgentRuntimeEnv
-): CodingAgentRuntimeEnv {
-  return { ...runtimeEnv };
-}
+function failEnvValidation(prefix: string) {
+  return (issues: readonly StandardSchemaV1.Issue[]): never => {
+    const summary = issues
+      .map(({ message, path }) => {
+        const segment = path?.[0];
+        const key =
+          typeof segment === "object" && segment !== null
+            ? segment.key
+            : segment;
 
-function createValidationError(
-  scope: string,
-  issues: readonly StandardSchemaV1.Issue[]
-): Error {
-  const issueSummary = issues.map(formatIssue).join("; ");
-  const prefix =
-    scope === "TinyFish"
-      ? REQUIRED_TINYFISH_API_KEY_ERROR
-      : `${scope} environment validation failed.`;
+        return key === undefined ? message : `${String(key)}: ${message}`;
+      })
+      .join("; ");
 
-  return new Error(`${prefix} ${issueSummary}`.trim());
-}
-
-function formatIssue(issue: StandardSchemaV1.Issue): string {
-  const path = issue.path?.map(formatPathSegment).join(".");
-
-  return path ? `${path}: ${issue.message}` : issue.message;
-}
-
-function formatPathSegment(
-  segment: PropertyKey | StandardSchemaV1.PathSegment
-): string {
-  return typeof segment === "object" && segment !== null
-    ? String(segment.key)
-    : String(segment);
+    throw new Error(`${prefix} ${summary}`.trim());
+  };
 }
