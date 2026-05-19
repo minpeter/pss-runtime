@@ -1,0 +1,39 @@
+{
+  "name": "@pss-next/runtime",
+  "version": "0.0.0",
+  "description": "Generic agent runtime for sessions, model loops, and event streams.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "@pss-next/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/minpeter/pss-next.git",
+    "directory": "packages/runtime"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node ../../scripts/fix-esm-imports.mjs dist",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "ultracite check ."
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "3.0.0-canary.48",
+    "ai": "7.0.0-canary.142",
+    "dotenv": "^17.4.2"
+  }
+}
