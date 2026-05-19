@@ -293,7 +293,7 @@ describe("web tools", () => {
       format: "markdown",
       image_links: false,
       links: false,
-      urls: ["https://example.com", "https://x.test/404"],
+      urls: ["https://example.com/", "https://x.test/404"],
     });
     expect(output).toEqual({
       errors: [
@@ -308,6 +308,38 @@ describe("web tools", () => {
           url: "https://example.com",
         },
       ],
+    });
+  });
+
+  it("web_fetch sends normalized parsed URLs to TinyFish", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          errors: [],
+          results: [
+            {
+              final_url: "https://example.com/b%20c?x=1%202",
+              format: "markdown",
+              text: "Example body",
+              url: "https://example.com/b%20c?x=1%202",
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    );
+
+    await executeTool(webFetchTool, {
+      urls: [" HTTPS://Example.COM:443/a/../b c?x=1 2 "],
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] ?? [];
+    expect(JSON.parse(String(init?.body))).toEqual({
+      format: "markdown",
+      image_links: false,
+      links: false,
+      urls: ["https://example.com/b%20c?x=1%202"],
     });
   });
 
@@ -353,13 +385,13 @@ describe("web tools", () => {
         format: "markdown",
         image_links: false,
         links: false,
-        urls: ["https://example.com"],
+        urls: ["https://example.com/"],
       },
       {
         format: "markdown",
         image_links: false,
         links: false,
-        urls: ["https://example.com"],
+        urls: ["https://example.com/"],
       },
     ]);
     expect(output).toEqual({
