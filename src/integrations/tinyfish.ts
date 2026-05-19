@@ -198,10 +198,19 @@ async function requestTinyFishJson<T>(
   serviceName: string,
   requestWithApiKey: (apiKey: string) => Promise<Response>
 ): Promise<T> {
-  const apiKeys = getTinyFishApiKeyAttemptOrder();
-  let lastRateLimitError: Error | undefined;
+  const [firstApiKey, ...remainingApiKeys] = getTinyFishApiKeyAttemptOrder();
+  const firstResponse = await requestWithApiKey(firstApiKey);
 
-  for (const apiKey of apiKeys) {
+  if (firstResponse.status !== 429) {
+    return parseTinyFishJsonResponse<T>(firstResponse, serviceName);
+  }
+
+  let lastRateLimitError = await readTinyFishHttpError(
+    firstResponse,
+    serviceName
+  );
+
+  for (const apiKey of remainingApiKeys) {
     const response = await requestWithApiKey(apiKey);
 
     if (response.status !== 429) {
@@ -211,16 +220,12 @@ async function requestTinyFishJson<T>(
     lastRateLimitError = await readTinyFishHttpError(response, serviceName);
   }
 
-  if (lastRateLimitError === undefined) {
-    throw new Error(requiredApiKeyError);
-  }
-
-  if (apiKeys.length === 1) {
+  if (remainingApiKeys.length === 0) {
     throw lastRateLimitError;
   }
 
   throw new Error(
-    `${lastRateLimitError.message} (all ${apiKeys.length} configured TinyFish API keys returned HTTP 429)`
+    `${lastRateLimitError.message} (all ${remainingApiKeys.length + 1} configured TinyFish API keys returned HTTP 429)`
   );
 }
 

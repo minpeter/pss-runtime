@@ -20,6 +20,8 @@ const providerSearchFieldPattern =
 const providerSearchResultsPattern = /search results.*array/;
 const rateLimitExhaustedPattern =
   /HTTP 429: rate limit exceeded\. Retry-After: 60\. \(all 2 configured TinyFish API keys returned HTTP 429\)/;
+const singleKeyRateLimitPattern =
+  /HTTP 429: rate limit exceeded\. Retry-After: 30\.$/;
 const tooManyUrlsPattern = /10 URLs/;
 const validUrlErrorPattern = /valid absolute http or https URLs/;
 
@@ -132,6 +134,24 @@ describe("web tools", () => {
       results: [],
       total_results: 0,
     });
+  });
+
+  it("web_search surfaces a single-key TinyFish HTTP 429 without aggregate wording", async () => {
+    process.env.TINYFISH_API_KEY = "tf-exhaust-single";
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ error: { message: "rate limit exceeded" } }),
+        { headers: { "Retry-After": "30" }, status: 429 }
+      )
+    );
+
+    await expect(
+      executeTool(webSearchTool, { query: "tinyfish" })
+    ).rejects.toThrow(singleKeyRateLimitPattern);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).toEqual(
+      expect.objectContaining({ "X-API-Key": "tf-exhaust-single" })
+    );
   });
 
   it("web_search stops after every TinyFish API key returns HTTP 429", async () => {
