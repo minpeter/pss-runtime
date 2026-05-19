@@ -11,8 +11,8 @@ pnpm run typecheck
 
 Copy `.env.example` to `.env` and set `AI_API_KEY`, `AI_BASE_URL`, and
 `AI_MODEL` to configure the default OpenAI-compatible provider. `AI_MODEL` is
-pinned to `minimax/MiniMax-M2.7` by default. Set `TINYFISH_API_KEY` to enable
-the built-in `web_search` and `web_fetch` tools.
+pinned to `minimax/MiniMax-M2.7` by default. The built-in `web_search` and
+`web_fetch` tools require `TINYFISH_API_KEY` when invoked.
 
 `TINYFISH_API_KEY` accepts semicolon-delimited token pools:
 

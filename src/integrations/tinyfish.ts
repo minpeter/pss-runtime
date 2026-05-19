@@ -22,9 +22,7 @@ const tinyFishApiKeyPoolSchema = z
       .filter((segment) => segment.length > 0)
   );
 
-export const tinyFishFetchFormats = ["markdown", "html", "json"] as const;
-
-export type TinyFishFetchFormat = (typeof tinyFishFetchFormats)[number];
+export type TinyFishFetchFormat = "markdown" | "html" | "json";
 
 export type JsonValue =
   | boolean
