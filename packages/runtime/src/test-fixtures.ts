@@ -1,6 +1,6 @@
 import type { AssistantModelMessage, ToolCallPart, ToolModelMessage } from "ai";
 import type { Llm, LlmOutput } from "./llm";
-import type { AgentEvent, UserText } from "./session";
+import type { AgentEvent, UserText } from "./session/events";
 
 export const assistantMessage = (
   content: AssistantModelMessage["content"]

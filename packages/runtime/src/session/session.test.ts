@@ -10,7 +10,7 @@ import {
   toolResultFor,
   userText,
 } from "../test-fixtures";
-import type { AgentEvent } from "./index";
+import type { AgentEvent } from "./events";
 import { userTextToModelMessage } from "./mapping";
 
 describe("AgentSession", () => {

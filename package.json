@@ -4,27 +4,32 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "tsx examples/basic.ts",
-    "dev:tui": "tsx src/coding-agent/index.ts",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "dev": "node --conditions=@minpeter/pss-source --import tsx examples/basic.ts",
+    "dev:tui": "node --conditions=@minpeter/pss-source --import tsx packages/coding-agent/src/tui.ts",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck && tsc -p tsconfig.json --noEmit",
+    "test": "turbo run test && vitest run scripts/*.test.mjs",
     "lint": "ultracite check .",
-    "format": "ultracite fix ."
+    "format": "ultracite fix .",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm build && changeset publish",
+    "verify:release": "node scripts/verify-release-artifacts.mjs"
   },
   "devDependencies": {
+    "@minpeter/pss-coding-agent": "workspace:*",
+    "@minpeter/pss-runtime": "workspace:*",
     "@biomejs/biome": "2.4.15",
-    "@earendil-works/pi-tui": "^0.74.1",
+    "@changesets/cli": "^2.29.7",
     "@types/node": "latest",
     "tsx": "latest",
+    "turbo": "^2.6.1",
     "typescript": "latest",
     "ultracite": "7.7.0",
     "vitest": "^4.1.6"
-  },
-  "dependencies": {
-    "@ai-sdk/openai-compatible": "3.0.0-canary.48",
-    "ai": "7.0.0-canary.142",
-    "dotenv": "^17.4.2",
-    "zod": "^4.4.3"
   }
 }

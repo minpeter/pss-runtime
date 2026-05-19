@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   checks:
-    name: Lint and typecheck
+    name: Validate
     runs-on: ubuntu-latest
 
     steps:
@@ -38,3 +38,12 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Verify release artifacts
+        run: pnpm verify:release

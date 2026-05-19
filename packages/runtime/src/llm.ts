@@ -1,13 +1,24 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import {
-  generateText,
-  type LanguageModel,
-  type ModelMessage,
-  type ToolSet,
-} from "ai";
+import type { LanguageModel, ModelMessage } from "ai";
+import { generateText, type ToolSet } from "ai";
 import { env } from "./env";
 
-export type AgentTools = ToolSet;
+export interface AgentToolExecutionOptions {
+  abortSignal?: AbortSignal;
+  [key: string]: unknown;
+}
+
+export type AgentToolExecute = unknown;
+
+export interface AgentTool {
+  description?: unknown;
+  execute?: AgentToolExecute;
+  inputSchema: unknown;
+  outputSchema?: unknown;
+}
+
+export type AgentTools = Record<string, AgentTool>;
+export type AgentModel = LanguageModel;
 export type LlmOutput = Awaited<
   ReturnType<typeof generateText>
 >["responseMessages"];
@@ -26,26 +37,33 @@ export interface CreateLlmOptions {
   tools?: AgentTools;
 }
 
+export type RuntimeCreateLlmOptions = CreateLlmOptions;
+export type RuntimeLlm = Llm;
+export type RuntimeLlmContext = LlmContext;
+export type RuntimeLlmOutput = LlmOutput;
+
 const defaultProvider = createOpenAICompatible({
   name: "custom",
   apiKey: env.AI_API_KEY,
   baseURL: env.AI_BASE_URL,
 });
 
-export const defaultModel = defaultProvider(env.AI_MODEL);
+export const defaultModel: LanguageModel = defaultProvider(env.AI_MODEL);
 
 export function createLlm({
   model = defaultModel,
   instructions,
   tools,
 }: CreateLlmOptions = {}): Llm {
+  const runtimeTools = tools as ToolSet | undefined;
+
   return async ({ history, signal }) => {
     const { responseMessages } = await generateText({
       abortSignal: signal,
       instructions,
       messages: [...history],
       model,
-      tools,
+      tools: runtimeTools,
     });
 
     return responseMessages;

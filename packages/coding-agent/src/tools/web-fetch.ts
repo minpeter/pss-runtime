@@ -1,4 +1,4 @@
-import { jsonSchema, tool } from "ai";
+import { jsonSchema, type Tool, tool } from "ai";
 import {
   fetchTinyFishPages,
   type TinyFishFetchError,
@@ -18,7 +18,7 @@ const fetchDefaults = {
   links: false,
 } satisfies Pick<TinyFishFetchRequest, "format" | "image_links" | "links">;
 
-export const webFetchTool = tool({
+export const webFetchTool: Tool<unknown, WebFetchOutput> = tool({
   description:
     "Fetch and extract readable content from up to 10 absolute HTTP(S) URLs. Use after web_search or when the user provides URLs; markdown is the best default format for LLM context.",
   execute: (input, options): Promise<WebFetchOutput> => {
@@ -49,71 +49,50 @@ export const webFetchTool = tool({
   }),
   outputSchema: jsonSchema({
     additionalProperties: false,
-    description:
-      "Fetched page content plus per-URL failures. Per-URL errors do not prevent other URLs from returning results.",
     properties: {
       errors: {
-        description:
-          "Per-URL fetch failures. Empty when every requested URL succeeds.",
         items: {
           additionalProperties: false,
           properties: {
-            error: {
-              description:
-                "Structured fetch error code such as page_not_found, timeout, bot_blocked, or invalid_url.",
-              type: "string",
-            },
-            status: {
-              description:
-                "Upstream HTTP status when the target returned an HTTP error.",
-              type: "number",
-            },
-            url: { description: "URL that failed.", type: "string" },
+            error: { type: "string" },
+            status: { type: "number" },
+            url: { type: "string" },
           },
-          required: ["url", "error"],
+          required: ["error", "url"],
           type: "object",
         },
         type: "array",
       },
       results: {
-        description: "Successfully fetched pages.",
         items: {
-          additionalProperties: true,
+          additionalProperties: false,
           properties: {
-            final_url: {
-              description: "URL after redirects. May differ from url.",
-              type: "string",
-            },
-            format: {
-              description: "Format used for text: markdown, html, or json.",
-              type: "string",
-            },
+            author: { type: "string" },
+            description: { type: "string" },
+            final_url: { type: "string" },
+            format: { type: "string" },
             image_links: {
-              description:
-                "Image source URLs found on the page when image_links was requested.",
               items: { type: "string" },
               type: "array",
             },
+            language: { type: "string" },
+            latency_ms: { type: "number" },
             links: {
-              description:
-                "Hyperlink URLs found on the page when links was requested.",
               items: { type: "string" },
               type: "array",
             },
-            text: {
-              description:
-                "Extracted page content. String for markdown/html, structured object for json, or null if unavailable.",
-            },
-            title: { description: "Page title when detected.", type: "string" },
-            url: { description: "Original requested URL.", type: "string" },
+            published_date: { type: "string" },
+            text: {},
+            title: { type: "string" },
+            url: { type: "string" },
           },
-          required: ["url", "final_url", "text", "format"],
+          required: ["final_url", "format", "text", "url"],
           type: "object",
         },
         type: "array",
       },
     },
-    required: ["results", "errors"],
+    required: ["errors", "results"],
     type: "object",
   }),
 });
