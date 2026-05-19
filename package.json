@@ -12,7 +12,7 @@
     "dev:tui": "node --conditions=@minpeter/pss-source --import tsx packages/coding-agent/src/tui.ts",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck && tsc -p tsconfig.json --noEmit",
-    "test": "turbo run test && vitest run scripts/verify-release-artifacts.test.mjs",
+    "test": "turbo run test && vitest run scripts/*.test.mjs",
     "lint": "ultracite check .",
     "format": "ultracite fix .",
     "changeset": "changeset",
