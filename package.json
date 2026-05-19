@@ -15,11 +15,10 @@
     "test": "turbo run test && vitest run scripts/verify-release-artifacts.test.mjs",
     "lint": "ultracite check .",
     "format": "ultracite fix .",
-    "check:runtime-api": "node scripts/check-runtime-api.mjs",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "pnpm build && changeset publish",
-    "verify:release": "pnpm check:runtime-api && node scripts/verify-release-artifacts.mjs"
+    "verify:release": "node scripts/verify-release-artifacts.mjs"
   },
   "devDependencies": {
     "@minpeter/pss-coding-agent": "workspace:*",
