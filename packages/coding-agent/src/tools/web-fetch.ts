@@ -1,4 +1,4 @@
-import { jsonSchema, tool } from "ai";
+import { jsonSchema, type Tool, tool } from "ai";
 import {
   fetchTinyFishPages,
   type TinyFishFetchError,
@@ -18,7 +18,7 @@ const fetchDefaults = {
   links: false,
 } satisfies Pick<TinyFishFetchRequest, "format" | "image_links" | "links">;
 
-export const webFetchTool: unknown = tool({
+export const webFetchTool: Tool<unknown, WebFetchOutput> = tool({
   description:
     "Fetch and extract readable content from up to 10 absolute HTTP(S) URLs. Use after web_search or when the user provides URLs; markdown is the best default format for LLM context.",
   execute: (input, options): Promise<WebFetchOutput> => {
@@ -45,6 +45,54 @@ export const webFetchTool: unknown = tool({
       },
     },
     required: ["urls"],
+    type: "object",
+  }),
+  outputSchema: jsonSchema({
+    additionalProperties: false,
+    properties: {
+      errors: {
+        items: {
+          additionalProperties: false,
+          properties: {
+            error: { type: "string" },
+            status: { type: "number" },
+            url: { type: "string" },
+          },
+          required: ["error", "url"],
+          type: "object",
+        },
+        type: "array",
+      },
+      results: {
+        items: {
+          additionalProperties: false,
+          properties: {
+            author: { type: "string" },
+            description: { type: "string" },
+            final_url: { type: "string" },
+            format: { type: "string" },
+            image_links: {
+              items: { type: "string" },
+              type: "array",
+            },
+            language: { type: "string" },
+            latency_ms: { type: "number" },
+            links: {
+              items: { type: "string" },
+              type: "array",
+            },
+            published_date: { type: "string" },
+            text: {},
+            title: { type: "string" },
+            url: { type: "string" },
+          },
+          required: ["final_url", "format", "text", "url"],
+          type: "object",
+        },
+        type: "array",
+      },
+    },
+    required: ["errors", "results"],
     type: "object",
   }),
 });

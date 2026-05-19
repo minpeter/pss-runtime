@@ -38,7 +38,7 @@
   },
   "dependencies": {
     "@earendil-works/pi-tui": "^0.74.1",
-    "@minpeter/pss-runtime": "workspace:*",
+    "@minpeter/pss-runtime": "workspace:^",
     "ai": "7.0.0-canary.142",
     "zod": "^4.4.3"
   }

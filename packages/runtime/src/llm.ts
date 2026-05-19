@@ -3,7 +3,21 @@ import type { LanguageModel, ModelMessage } from "ai";
 import { generateText, type ToolSet } from "ai";
 import { env } from "./env";
 
-export type AgentTools = Record<string, unknown>;
+export interface AgentToolExecutionOptions {
+  abortSignal?: AbortSignal;
+  [key: string]: unknown;
+}
+
+export type AgentToolExecute = unknown;
+
+export interface AgentTool {
+  description?: unknown;
+  execute?: AgentToolExecute;
+  inputSchema: unknown;
+  outputSchema?: unknown;
+}
+
+export type AgentTools = Record<string, AgentTool>;
 export type AgentModel = LanguageModel;
 export type LlmOutput = Awaited<
   ReturnType<typeof generateText>

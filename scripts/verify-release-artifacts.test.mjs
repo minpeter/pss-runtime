@@ -1,8 +1,12 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { verifyReleaseArtifacts } from "./verify-release-artifacts.mjs";
+import {
+  isMainModule,
+  verifyReleaseArtifacts,
+} from "./verify-release-artifacts.mjs";
 
 let tempRoots = [];
 
@@ -69,6 +73,24 @@ describe("verifyReleaseArtifacts", () => {
     ]);
   });
 
+  it("rejects extensionless dynamic imports that would break Node ESM", () => {
+    const cwd = createFixture();
+    writeFileSync(
+      join(cwd, "packages", "coding-agent", "dist", "chunk.js"),
+      "export const chunk = true;\n"
+    );
+    writeFileSync(
+      join(cwd, "packages", "coding-agent", "dist", "index.js"),
+      'export async function loadChunk() { return import("./chunk"); }\n'
+    );
+
+    expect(
+      verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
+    ).toEqual([
+      "packages/coding-agent/dist/index.js: extensionless relative import ./chunk",
+    ]);
+  });
+
   it("rejects test and fixture files from package dist outputs", () => {
     const cwd = createFixture();
     writeFileSync(
@@ -116,5 +138,36 @@ describe("verifyReleaseArtifacts", () => {
     expect(
       verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
     ).toEqual([]);
+  });
+
+  it("honors package filtering for runtime-only declaration checks", () => {
+    const cwd = createFixture();
+    writeFileSync(
+      join(cwd, "packages", "runtime", "dist", "index.d.ts"),
+      'import type { LanguageModel } from "ai";\nexport type AgentModel = LanguageModel;\n'
+    );
+
+    expect(verifyReleaseArtifacts({ cwd, packages: ["coding-agent"] })).toEqual(
+      []
+    );
+    expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
+      "packages/runtime/dist/index.d.ts: root declaration exposes raw AI SDK token LanguageModel",
+      "packages/runtime/dist/index.d.ts: missing explicit runtime alias AgentTools",
+      "packages/runtime/dist/index.d.ts: missing explicit runtime alias RuntimeCreateLlmOptions",
+      "packages/runtime/dist/index.d.ts: missing explicit runtime alias RuntimeLlm",
+      "packages/runtime/dist/index.d.ts: missing explicit runtime alias RuntimeLlmContext",
+      "packages/runtime/dist/index.d.ts: missing explicit runtime alias RuntimeLlmOutput",
+    ]);
+  });
+
+  it("detects script entrypoints with encoded file URLs", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "pss-script path-"));
+    tempRoots.push(cwd);
+    const scriptPath = resolve(cwd, "verify script.mjs");
+
+    expect(isMainModule(pathToFileURL(scriptPath).href, scriptPath)).toBe(true);
+    expect(
+      isMainModule(pathToFileURL(scriptPath).href, `${scriptPath}.bak`)
+    ).toBe(false);
   });
 });

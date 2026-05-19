@@ -2,6 +2,9 @@ export { Agent, type AgentOptions } from "./agent";
 export { type AgentLoopResult, runAgentLoop } from "./agent-loop";
 export type {
   AgentModel,
+  AgentTool,
+  AgentToolExecute,
+  AgentToolExecutionOptions,
   AgentTools,
   LlmOutputPart,
   RuntimeCreateLlmOptions,

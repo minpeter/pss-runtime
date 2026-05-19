@@ -1,4 +1,4 @@
-import { jsonSchema, tool } from "ai";
+import { jsonSchema, type Tool, tool } from "ai";
 import {
   searchTinyFishWeb,
   type TinyFishSearchOutput,
@@ -10,7 +10,7 @@ import { readObject, readString } from "../utils/unknown";
 export type WebSearchResult = TinyFishSearchResult;
 export type WebSearchOutput = TinyFishSearchOutput;
 
-export const webSearchTool: unknown = tool({
+export const webSearchTool: Tool<unknown, WebSearchOutput> = tool({
   description:
     "Search the public web for current or external information. Returns ranked results with titles, snippets, and URLs; use web_fetch afterward to read full page content.",
   execute: (input, options): Promise<WebSearchOutput> => {
@@ -31,6 +31,31 @@ export const webSearchTool: unknown = tool({
       },
     },
     required: ["query"],
+    type: "object",
+  }),
+  outputSchema: jsonSchema({
+    additionalProperties: false,
+    properties: {
+      page: { type: "number" },
+      query: { type: "string" },
+      results: {
+        items: {
+          additionalProperties: false,
+          properties: {
+            position: { type: "number" },
+            site_name: { type: "string" },
+            snippet: { type: "string" },
+            title: { type: "string" },
+            url: { type: "string" },
+          },
+          required: ["position", "site_name", "snippet", "title", "url"],
+          type: "object",
+        },
+        type: "array",
+      },
+      total_results: { type: "number" },
+    },
+    required: ["page", "query", "results", "total_results"],
     type: "object",
   }),
 });

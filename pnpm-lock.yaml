@@ -45,7 +45,7 @@ importers:
         specifier: ^0.74.1
         version: 0.74.1
       '@minpeter/pss-runtime':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../runtime
       ai:
         specifier: 7.0.0-canary.142

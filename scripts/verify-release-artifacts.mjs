@@ -2,6 +2,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_PACKAGES = ["runtime", "coding-agent"];
 const RAW_RUNTIME_DECLARATION_TOKENS = [
@@ -29,7 +30,7 @@ const REQUIRED_RUNTIME_ROOT_ALIASES = [
 ];
 
 const RELATIVE_IMPORT_RE =
-  /(?:from\s+["']|import\s*["'])(\.\.?\/[^"']+)(?:["'])/g;
+  /(?:from\s+["']|import\s*(?:\(\s*)?["'])(\.\.?\/[^"']+)(?:["'])/g;
 const TEST_ARTIFACT_RE =
   /(?:^|[/\\])(?:__tests__|test-fixtures?)(?:[/\\]|\.)|\.(?:test|spec)\.(?:d\.)?[cm]?js$/i;
 const JAVASCRIPT_ARTIFACT_RE = /\.[cm]?js$/;
@@ -166,7 +167,11 @@ function findPublishedTestArtifacts({ cwd, packages }) {
   return errors;
 }
 
-function findRuntimeDeclarationLeaks({ cwd }) {
+function findRuntimeDeclarationLeaks({ cwd, packages }) {
+  if (!packages.includes("runtime")) {
+    return [];
+  }
+
   const runtimeDist = packageDistPath(cwd, "runtime");
   const declarationFiles = listFiles(runtimeDist, (file) =>
     file.endsWith(".d.ts")
@@ -228,6 +233,13 @@ function verifyReleaseArtifacts(options) {
   ];
 }
 
+function isMainModule(moduleUrl, argvPath = process.argv[1]) {
+  return (
+    argvPath !== undefined &&
+    moduleUrl === pathToFileURL(resolve(argvPath)).href
+  );
+}
+
 function main() {
   const options = parseArgs(process.argv.slice(2));
   const errors = verifyReleaseArtifacts(options);
@@ -241,7 +253,7 @@ function main() {
   console.log("Release artifact verification passed");
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   main();
 }
 
@@ -249,6 +261,7 @@ export {
   findExtensionlessRelativeImports,
   findPublishedTestArtifacts,
   findRuntimeDeclarationLeaks,
+  isMainModule,
   requirePackageDists,
   verifyReleaseArtifacts,
 };
