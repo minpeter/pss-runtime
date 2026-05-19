@@ -2,17 +2,26 @@ import type { LanguageModel } from "ai";
 import { type AgentTools, createLlm, type Llm } from "./llm";
 import { AgentSession } from "./session/session";
 
-export interface AgentOptions {
+interface AgentModelOptions {
   instructions?: string;
-  llm?: Llm;
-  model?: LanguageModel;
+  llm?: never;
+  model: LanguageModel;
   tools?: AgentTools;
 }
+
+interface AgentLlmOptions {
+  instructions?: never;
+  llm: Llm;
+  model?: never;
+  tools?: never;
+}
+
+export type AgentOptions = AgentModelOptions | AgentLlmOptions;
 
 export class Agent {
   readonly #llm: Llm;
 
-  constructor(options: AgentOptions = {}) {
+  constructor(options: AgentOptions) {
     this.#llm =
       options.llm ??
       createLlm({

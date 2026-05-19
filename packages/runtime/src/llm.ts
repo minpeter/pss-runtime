@@ -1,7 +1,5 @@
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel, ModelMessage } from "ai";
 import { generateText, type ToolSet } from "ai";
-import { env } from "./env";
 
 export interface AgentToolExecutionOptions {
   abortSignal?: AbortSignal;
@@ -33,7 +31,7 @@ export type Llm = (context: LlmContext) => Promise<LlmOutput>;
 
 export interface CreateLlmOptions {
   instructions?: string;
-  model?: LanguageModel;
+  model: LanguageModel;
   tools?: AgentTools;
 }
 
@@ -42,19 +40,11 @@ export type RuntimeLlm = Llm;
 export type RuntimeLlmContext = LlmContext;
 export type RuntimeLlmOutput = LlmOutput;
 
-const defaultProvider = createOpenAICompatible({
-  name: "custom",
-  apiKey: env.AI_API_KEY,
-  baseURL: env.AI_BASE_URL,
-});
-
-export const defaultModel: LanguageModel = defaultProvider(env.AI_MODEL);
-
 export function createLlm({
-  model = defaultModel,
+  model,
   instructions,
   tools,
-}: CreateLlmOptions = {}): Llm {
+}: CreateLlmOptions): Llm {
   const runtimeTools = tools as ToolSet | undefined;
 
   return async ({ history, signal }) => {

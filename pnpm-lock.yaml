@@ -41,6 +41,9 @@ importers:
 
   packages/coding-agent:
     dependencies:
+      '@ai-sdk/openai-compatible':
+        specifier: 3.0.0-canary.48
+        version: 3.0.0-canary.48(zod@4.4.3)
       '@earendil-works/pi-tui':
         specifier: ^0.74.1
         version: 0.74.1
@@ -50,21 +53,18 @@ importers:
       ai:
         specifier: 7.0.0-canary.142
         version: 7.0.0-canary.142(zod@4.4.3)
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
       zod:
         specifier: ^4.4.3
         version: 4.4.3
 
   packages/runtime:
     dependencies:
-      '@ai-sdk/openai-compatible':
-        specifier: 3.0.0-canary.48
-        version: 3.0.0-canary.48(zod@4.4.3)
       ai:
         specifier: 7.0.0-canary.142
         version: 7.0.0-canary.142(zod@4.4.3)
-      dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
 
 packages:
 

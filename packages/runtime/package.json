@@ -32,8 +32,6 @@
     "lint": "ultracite check ."
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "3.0.0-canary.48",
-    "ai": "7.0.0-canary.142",
-    "dotenv": "^17.4.2"
+    "ai": "7.0.0-canary.142"
   }
 }

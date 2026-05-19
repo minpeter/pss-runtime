@@ -26,15 +26,20 @@ publishing first.
 
 ```ts
 import { tools } from "@minpeter/pss-coding-agent";
+import { createOpenAICompatibleModelFromDotenv } from "@minpeter/pss-coding-agent/model";
 import { Agent } from "@minpeter/pss-runtime";
 
-const agent = new Agent({ tools });
+const agent = new Agent({
+  model: createOpenAICompatibleModelFromDotenv(),
+  tools,
+});
 const session = agent.createSession();
 ```
 
 ## Environment
 
-Copy `.env.example` to `.env` and set the OpenAI-compatible runtime provider:
+Copy `.env.example` to `.env` and set the OpenAI-compatible model used by the
+example app and coding-agent TUI:
 
 ```env
 AI_API_KEY=...
@@ -58,11 +63,20 @@ whitespace are ignored, and the tools rotate usable keys across calls.
 Use this package when you need the reusable runtime only:
 
 ```ts
-import { Agent, type RuntimeLlmContext } from "@minpeter/pss-runtime";
+import {
+  Agent,
+  type AgentModel,
+  type RuntimeLlmContext,
+} from "@minpeter/pss-runtime";
+
+const model: AgentModel = createYourLanguageModel();
+const agent = new Agent({ model });
 ```
 
-The package exposes a narrow runtime API and explicit interop aliases instead of
-re-exporting broad AI SDK canary types from the root declaration.
+The package accepts a caller-owned `LanguageModel` and does not read
+`AI_API_KEY`, `AI_BASE_URL`, or `AI_MODEL` itself. It exposes a narrow runtime API
+and explicit interop aliases instead of re-exporting broad AI SDK canary types
+from the root declaration.
 
 ### `@minpeter/pss-coding-agent`
 
@@ -70,6 +84,7 @@ Use this package when you need the default coding tools:
 
 ```ts
 import { tools, webFetchTool, webSearchTool } from "@minpeter/pss-coding-agent";
+import { createOpenAICompatibleModelFromDotenv } from "@minpeter/pss-coding-agent/model";
 ```
 
 The root import is side-effect-free. Launch the interactive TUI through the

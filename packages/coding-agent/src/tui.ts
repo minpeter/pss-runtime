@@ -8,6 +8,7 @@ import {
 } from "@earendil-works/pi-tui";
 import type { AgentEvent } from "@minpeter/pss-runtime";
 import { Agent } from "@minpeter/pss-runtime";
+import { createOpenAICompatibleModelFromDotenv } from "./model";
 import { tools } from "./tools";
 import {
   formatToolCallForTui,
@@ -20,6 +21,7 @@ import {
 const agent = new Agent({
   instructions:
     "Answer in 2 short sentences and 280 characters or fewer unless the user explicitly asks for detail. Avoid headings.",
+  model: createOpenAICompatibleModelFromDotenv(),
   tools,
 });
 const session = agent.createSession();
