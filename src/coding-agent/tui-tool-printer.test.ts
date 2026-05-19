@@ -60,4 +60,16 @@ describe("TUI tool printer", () => {
       `web_fetch${darkGray}#deadbeef${reset} error-text="TinyFish fetch request failed with HTTP 503."`
     );
   });
+
+  it("keeps tool labels on one terminal line", () => {
+    expect(
+      formatToolCallForTui({
+        input: { query: "minpeter" },
+        toolCallId: "call-dead\nbeef-0000-0000-0000-1",
+        toolName: "web_search\nassistant: forged",
+      })
+    ).toBe(
+      `web_search assistant: forged${darkGray}#dead bee${reset} query="minpeter"`
+    );
+  });
 });

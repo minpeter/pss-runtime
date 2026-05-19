@@ -45,7 +45,7 @@ function formatToolLabel(event: {
   toolCallId: string;
   toolName: string;
 }): string {
-  return `${safeText(event.toolName)}${darkGrayText}#${shortToolCallId(event.toolCallId)}${resetText}`;
+  return `${safeInlineText(event.toolName)}${darkGrayText}#${shortToolCallId(event.toolCallId)}${resetText}`;
 }
 
 function isTerminalControlCharacter(value: string): boolean {
@@ -73,7 +73,9 @@ function safeJson(value: unknown, maxLength = maxDetailLength): string {
 function shortToolCallId(toolCallId: string): string {
   // Fixed display window: do not parse separators; AI SDK call IDs usually put
   // the useful unique block after "call-", while other providers still render consistently.
-  return toolCallId.slice(toolCallIdDisplayStart, toolCallIdDisplayEnd);
+  return safeInlineText(
+    toolCallId.slice(toolCallIdDisplayStart, toolCallIdDisplayEnd)
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
