@@ -1,6 +1,5 @@
 import type { LanguageModel } from "ai";
-import { type AgentTools, tools as defaultTools } from "../tools";
-import { createLlm, type Llm } from "./llm";
+import { type AgentTools, createLlm, type Llm } from "./llm";
 import { AgentSession } from "./session/session";
 
 export interface AgentOptions {
@@ -19,7 +18,7 @@ export class Agent {
       createLlm({
         instructions: options.instructions,
         model: options.model,
-        tools: options.tools ?? defaultTools,
+        tools: options.tools,
       });
   }
 

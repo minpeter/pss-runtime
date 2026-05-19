@@ -6,7 +6,7 @@
   "packageManager": "pnpm@10.0.0",
   "scripts": {
     "dev": "tsx examples/basic.ts",
-    "dev:tui": "tsx examples/pi-tui.ts",
+    "dev:tui": "tsx src/coding-agent/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "ultracite check .",

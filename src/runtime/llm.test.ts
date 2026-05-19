@@ -1,7 +1,7 @@
 import type { LanguageModel } from "ai";
 import { jsonSchema, tool } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AgentTools } from "../tools";
+import type { AgentTools } from "./llm";
 import { assistantMessage, userText } from "./test-fixtures";
 
 const { createOpenAICompatibleMock, generateTextMock } = vi.hoisted(() => ({
@@ -175,22 +175,16 @@ describe("Agent tool wiring", () => {
     );
   });
 
-  it("defaults new Agent() to the shared web tool map", async () => {
+  it("does not attach product tools by default", async () => {
     const Agent = await loadAgent();
     const session = new Agent().createSession();
 
-    await session.submit(userText("use default tools"));
-
-    const { tools: defaultTools } = await import("../tools");
+    await session.submit(userText("run without product tools"));
 
     expect(generateTextMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        tools: defaultTools,
+        tools: undefined,
       })
     );
-    expect(Object.keys(defaultTools).sort()).toEqual([
-      "web_fetch",
-      "web_search",
-    ]);
   });
 });
