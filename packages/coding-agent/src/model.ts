@@ -1,19 +1,14 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
 import { config } from "dotenv";
-
-const DEFAULT_OPENAI_COMPATIBLE_BASE_URL = "https://apis.opengateway.ai/v1";
-const DEFAULT_OPENAI_COMPATIBLE_MODEL_ID = "minimax/MiniMax-M2.7";
-
-export interface OpenAICompatibleModelEnv {
-  AI_API_KEY?: string;
-  AI_BASE_URL?: string;
-  AI_MODEL?: string;
-}
+import {
+  type CodingAgentRuntimeEnv,
+  readOpenAICompatibleModelEnv,
+} from "./env";
 
 export interface CreateOpenAICompatibleModelFromEnvOptions {
-  env?: OpenAICompatibleModelEnv;
   providerName?: string;
+  runtimeEnv?: CodingAgentRuntimeEnv;
 }
 
 export interface CreateOpenAICompatibleModelFromDotenvOptions {
@@ -23,16 +18,17 @@ export interface CreateOpenAICompatibleModelFromDotenvOptions {
 }
 
 export function createOpenAICompatibleModelFromEnv({
-  env = process.env,
   providerName = "custom",
+  runtimeEnv = process.env,
 }: CreateOpenAICompatibleModelFromEnvOptions = {}): LanguageModel {
+  const env = readOpenAICompatibleModelEnv({ runtimeEnv });
   const provider = createOpenAICompatible({
     name: providerName,
-    apiKey: env.AI_API_KEY?.trim() || undefined,
-    baseURL: env.AI_BASE_URL?.trim() || DEFAULT_OPENAI_COMPATIBLE_BASE_URL,
+    apiKey: env.AI_API_KEY,
+    baseURL: env.AI_BASE_URL,
   });
 
-  return provider(env.AI_MODEL?.trim() || DEFAULT_OPENAI_COMPATIBLE_MODEL_ID);
+  return provider(env.AI_MODEL);
 }
 
 export function createOpenAICompatibleModelFromDotenv({
@@ -43,7 +39,6 @@ export function createOpenAICompatibleModelFromDotenv({
   config({ override, quiet });
 
   return createOpenAICompatibleModelFromEnv({
-    env: process.env,
     providerName,
   });
 }

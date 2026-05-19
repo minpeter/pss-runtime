@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { readTinyFishApiKeyPoolFromEnv } from "../env";
 import {
   readObject,
   readOptionalNumber,
@@ -10,18 +10,7 @@ import {
 } from "../utils/unknown";
 
 const fetchEndpoint = "https://api.fetch.tinyfish.ai";
-const requiredApiKeyError =
-  "TINYFISH_API_KEY is required to use the built-in TinyFish web tools.";
 const searchEndpoint = "https://api.search.tinyfish.ai";
-const tinyFishApiKeyPoolSchema = z
-  .string()
-  .default("")
-  .transform((value) =>
-    value
-      .split(";")
-      .map((segment) => segment.trim())
-      .filter((segment) => segment.length > 0)
-  );
 
 export type TinyFishFetchFormat = "markdown" | "html" | "json";
 
@@ -167,13 +156,9 @@ function getTinyFishApiKeyPool(): string[] {
     tinyFishApiKeyIndex = 0;
   }
 
-  const apiKeys = tinyFishApiKeyPoolSchema.parse(apiKeyPoolSource);
-
-  if (apiKeys.length === 0) {
-    throw new Error(requiredApiKeyError);
-  }
-
-  return apiKeys;
+  return readTinyFishApiKeyPoolFromEnv({
+    runtimeEnv: { TINYFISH_API_KEY: apiKeyPoolSource },
+  });
 }
 
 async function parseTinyFishJsonResponse<T>(

@@ -15,9 +15,11 @@ const agent = new Agent({
 ```
 
 Set `AI_API_KEY`, `AI_BASE_URL`, and `AI_MODEL` to configure the
-OpenAI-compatible model used by `createOpenAICompatibleModelFromDotenv`.
+OpenAI-compatible model used by `createOpenAICompatibleModelFromDotenv`; the
+model subpath validates these values before constructing a `LanguageModel`.
 Set `TINYFISH_API_KEY` before invoking `web_search` or `web_fetch`. Token pools
-can be provided as semicolon-delimited values.
+can be provided as semicolon-delimited values and are validated when the tools
+are invoked.
 
 ```bash
 node --conditions=@minpeter/pss-source --import tsx packages/coding-agent/src/tui.ts

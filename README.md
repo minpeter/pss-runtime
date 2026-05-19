@@ -39,7 +39,8 @@ const session = agent.createSession();
 ## Environment
 
 Copy `.env.example` to `.env` and set the OpenAI-compatible model used by the
-example app and coding-agent TUI:
+example app and coding-agent TUI. `@minpeter/pss-coding-agent/model` validates
+these values before constructing a `LanguageModel`:
 
 ```env
 AI_API_KEY=...

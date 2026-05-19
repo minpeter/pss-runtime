@@ -54,7 +54,7 @@ describe("createOpenAICompatibleModelFromEnv", () => {
     const { createOpenAICompatibleModelFromEnv } = await import("./model");
 
     const model = createOpenAICompatibleModelFromEnv({
-      env: {
+      runtimeEnv: {
         AI_API_KEY: " ai-token-1;ai-token-2 ",
         AI_BASE_URL: " https://llm.test/v1 ",
         AI_MODEL: " minimax/MiniMax-M2.7 ",
