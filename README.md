@@ -26,11 +26,11 @@ publishing first.
 
 ```ts
 import { tools } from "@minpeter/pss-coding-agent";
-import { createOpenAICompatibleModelFromDotenv } from "@minpeter/pss-coding-agent/model";
+import { createCodingAgentModel } from "@minpeter/pss-coding-agent/model";
 import { Agent } from "@minpeter/pss-runtime";
 
 const agent = new Agent({
-  model: createOpenAICompatibleModelFromDotenv(),
+  model: createCodingAgentModel(),
   tools,
 });
 const session = agent.createSession();
@@ -85,7 +85,7 @@ Use this package when you need the default coding tools:
 
 ```ts
 import { tools, webFetchTool, webSearchTool } from "@minpeter/pss-coding-agent";
-import { createOpenAICompatibleModelFromDotenv } from "@minpeter/pss-coding-agent/model";
+import { createCodingAgentModel } from "@minpeter/pss-coding-agent/model";
 ```
 
 The root import is side-effect-free. Launch the interactive TUI through the
