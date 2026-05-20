@@ -13,19 +13,6 @@ interface ReadCodingAgentEnvOptions {
   runtimeEnv?: CodingAgentRuntimeEnv;
 }
 
-const requiredTrimmedString = z.string().trim().min(1);
-const tinyFishApiKeyPool = z
-  .string()
-  .transform((value) =>
-    value
-      .split(";")
-      .map((segment) => segment.trim())
-      .filter((segment) => segment.length > 0)
-  )
-  .refine((apiKeys) => apiKeys.length > 0, {
-    message: "Expected at least one non-empty TinyFish API key.",
-  });
-
 export function readOpenAICompatibleModelEnv({
   runtimeEnv = process.env,
 }: ReadCodingAgentEnvOptions = {}) {
@@ -36,15 +23,17 @@ export function readOpenAICompatibleModelEnv({
     ),
     runtimeEnv: { ...runtimeEnv },
     server: {
-      AI_API_KEY: requiredTrimmedString,
+      AI_API_KEY: z.string().trim().min(1),
       AI_BASE_URL: z
         .string()
         .trim()
         .url()
         .default(DEFAULT_OPENAI_COMPATIBLE_BASE_URL),
-      AI_MODEL: requiredTrimmedString.default(
-        DEFAULT_OPENAI_COMPATIBLE_MODEL_ID
-      ),
+      AI_MODEL: z
+        .string()
+        .trim()
+        .min(1)
+        .default(DEFAULT_OPENAI_COMPATIBLE_MODEL_ID),
     },
   });
 }
@@ -57,7 +46,17 @@ export function readTinyFishApiKeyPoolFromEnv({
     onValidationError: failEnvValidation(TINYFISH_API_KEY_ERROR),
     runtimeEnv: { ...runtimeEnv },
     server: {
-      TINYFISH_API_KEY: tinyFishApiKeyPool,
+      TINYFISH_API_KEY: z
+        .string()
+        .transform((value) =>
+          value
+            .split(";")
+            .map((segment) => segment.trim())
+            .filter((segment) => segment.length > 0)
+        )
+        .refine((apiKeys) => apiKeys.length > 0, {
+          message: "Expected at least one non-empty TinyFish API key.",
+        }),
     },
   });
 
