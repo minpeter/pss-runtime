@@ -210,4 +210,33 @@ describe("AgentSession", () => {
       assistantMessage("DONE"),
     ]);
   });
+
+  it("triggers onHistoryChange callback whenever history is mutated", async () => {
+    const initialHistory: ModelMessage[] = [
+      { role: "user", content: "hello" },
+    ];
+    const historicalSnapshots: ModelMessage[][] = [];
+    const session = new Agent({
+      llm: () => Promise.resolve([assistantMessage("hello there")]),
+    }).createSession({
+      history: initialHistory,
+      onHistoryChange: (history) => {
+        historicalSnapshots.push(history);
+      },
+    });
+
+    await session.submit(userText("remember me"));
+
+    expect(historicalSnapshots).toEqual([
+      [
+        ...initialHistory,
+        userTextToModelMessage(userText("remember me")),
+      ],
+      [
+        ...initialHistory,
+        userTextToModelMessage(userText("remember me")),
+        assistantMessage("hello there"),
+      ],
+    ]);
+  });
 });

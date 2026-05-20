@@ -7,6 +7,7 @@ export type SessionInput = UserText;
 
 export interface SessionOptions {
   history?: AgentMessage[];
+  onHistoryChange?: (history: AgentMessage[]) => void | Promise<void>;
 }
 
 interface QueuedInput {
@@ -26,7 +27,14 @@ export class AgentSession {
 
   constructor(llm: Llm, options?: SessionOptions) {
     this.#llm = llm;
-    this.#history = new AgentModelHistory(options?.history);
+    this.#history = new AgentModelHistory(
+      options?.history,
+      options?.onHistoryChange
+        ? () => {
+            options.onHistoryChange?.(this.getHistory());
+          }
+        : undefined
+    );
   }
 
   getHistory(): AgentMessage[] {

@@ -40,7 +40,22 @@ const session = agent.createSession({
 const currentHistory: AgentMessage[] = session.getHistory();
 ```
 
-### 2. Safe Event Subscriptions
+### 2. Auto-Synchronization with `onHistoryChange`
+Alternatively, instead of retrieving the history snapshot manually after execution, you can register an `onHistoryChange` callback hook. It will be triggered automatically whenever the message history is mutated (e.g. when a user message is appended, or a model/tool message is generated).
+
+This is ideal for stateful serverless environments like **Cloudflare Durable Objects** to synchronize state to local SSD storage or external databases in the background.
+
+```ts
+const session = agent.createSession({
+  history: initialHistory,
+  onHistoryChange: (newHistory) => {
+    // Automatically called whenever history is updated!
+    console.log("History updated, length:", newHistory.length);
+  },
+});
+```
+
+### 3. Safe Event Subscriptions
 When subscribing to session events (such as text streaming, tool calls, and turn lifecycle updates), it is highly recommended to unsubscribe in a `finally` block to prevent event listener leaks, especially in persistent environments or multi-turn execution loops.
 
 ```ts
