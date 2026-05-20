@@ -54,7 +54,12 @@ Objects, where a long-lived session mirrors history into Durable Object Storage,
 SQLite, or another caller-owned store.
 
 ```ts
-import { Agent, type AgentMessage, type AgentSession } from "@minpeter/pss-runtime";
+import {
+  Agent,
+  type AgentEvent,
+  type AgentMessage,
+  type AgentSession,
+} from "@minpeter/pss-runtime";
 
 export class AgentDurableObject {
   private agent: Agent;
@@ -69,21 +74,47 @@ export class AgentDurableObject {
     });
   }
 
-  async fetch(request: Request) {
-    if (!this.session) {
-      const history =
-        (await this.storage.get<AgentMessage[]>("history")) ?? [];
-
-      this.session = this.agent.createSession({
-        history,
-        onHistoryChange: async (nextHistory) => {
-          await this.storage.put("history", nextHistory);
-        },
-      });
+  private async getSession() {
+    if (this.session) {
+      return this.session;
     }
 
-    // Process the incoming request (e.g. submit user text and stream back events).
-    // ...
+    const history =
+      (await this.storage.get<AgentMessage[]>("history")) ?? [];
+
+    this.session = this.agent.createSession({
+      history,
+      onHistoryChange: async (nextHistory) => {
+        await this.storage.put("history", nextHistory);
+      },
+    });
+    return this.session;
+  }
+
+  async fetch(request: Request) {
+    const { message } = await request.json<{ message: string }>();
+    const session = await this.getSession();
+    let responseText = "";
+
+    const unsubscribe = session.subscribe((event: AgentEvent) => {
+      if (event.type === "assistant-text") {
+        // In a real Worker, write this to a TransformStream, WebSocket, or
+        // channel-specific delivery queue. This also receives text emitted
+        // before a tool call in the same model step.
+        responseText += event.text;
+      }
+    });
+
+    try {
+      await session.submit({ type: "user-text", text: message });
+    } finally {
+      unsubscribe();
+    }
+
+    return Response.json({
+      history: session.getHistory(),
+      response: responseText,
+    });
   }
 }
 ```
@@ -103,7 +134,7 @@ const unsubscribe = session.subscribe((event) => {
       process.stdout.write(event.text);
       break;
     case "tool-call":
-      console.log(`\nCalling tool: ${event.name}`);
+      console.log(`\nCalling tool: ${event.toolName}`);
       break;
   }
 });
@@ -115,6 +146,25 @@ try {
   unsubscribe();
 }
 ```
+
+Visible assistant text is emitted as `assistant-text` events in model-message
+order. If a single assistant model message contains both a text part and a
+tool-call part, subscribers receive the text first and the tool call afterward:
+
+```txt
+step-start
+assistant-text   // visible text before the tool call
+tool-call
+tool-result      // if the LLM adapter returns tool results for that step
+step-end
+step-start       // the next loop iteration after tool results are appended
+...
+```
+
+Hosts that deliver “pre-tool” bubbles should subscribe to `assistant-text`
+events instead of reconstructing partial messages from history. Use
+`getHistory()` after `submit()` for durable snapshots, memory indexing, or other
+post-turn inspection.
 
 `submit()` also accepts `text` as an array of strings. The runtime keeps those
 strings together as one user turn and forwards them to the model as AI SDK text

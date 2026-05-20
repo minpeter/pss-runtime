@@ -97,6 +97,56 @@ describe("AgentSession", () => {
     ]);
   });
 
+  it("emits assistant text before tool-call events from the same model message", async () => {
+    let calls = 0;
+    const toolCall = toolCallPart("call-tool-loop-1");
+    const session = new Agent({
+      llm: () => {
+        calls += 1;
+
+        if (calls === 1) {
+          return Promise.resolve([
+            assistantMessage([
+              { type: "text", text: "Let me check that." },
+              toolCall,
+            ]),
+            toolResultFor(toolCall),
+          ]);
+        }
+
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+    }).createSession();
+    const events: AgentEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    await session.submit(userText("check"));
+
+    expect(events).toEqual([
+      { type: "user-text", text: "check" },
+      { type: "turn-start" },
+      { type: "step-start" },
+      { type: "assistant-text", text: "Let me check that." },
+      {
+        type: "tool-call",
+        input: {},
+        toolCallId: "call-tool-loop-1",
+        toolName: "test_tool",
+      },
+      {
+        type: "tool-result",
+        output: { type: "json", value: {} },
+        toolCallId: "call-tool-loop-1",
+        toolName: "test_tool",
+      },
+      { type: "step-end" },
+      { type: "step-start" },
+      { type: "assistant-text", text: "DONE" },
+      { type: "step-end" },
+      { type: "turn-end" },
+    ]);
+  });
+
   it("accepts multipart user text as one submitted turn", async () => {
     const seenHistory: ModelMessage[][] = [];
     const session = new Agent({
