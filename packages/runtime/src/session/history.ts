@@ -6,9 +6,9 @@ export class AgentModelHistory {
   readonly #modelHistory: ModelMessage[] = [];
   readonly #onChange?: () => void;
 
-  constructor(initialHistory?: ModelMessage[], onChange?: () => void) {
-    if (initialHistory) {
-      this.#modelHistory = structuredClone(initialHistory);
+  constructor(history?: ModelMessage[], onChange?: () => void) {
+    if (history) {
+      this.#modelHistory = structuredClone(history);
     }
     this.#onChange = onChange;
   }

@@ -27,13 +27,13 @@ For serverless or stateless environments (like Cloudflare Workers), where the ag
 import { Agent, type AgentMessage } from "@minpeter/pss-runtime";
 
 // Hydrate session with historical messages
-const initialHistory: AgentMessage[] = [
+const history: AgentMessage[] = [
   { role: "user", content: "Hello!" },
   { role: "assistant", content: "Hi! How can I help you today?" }
 ];
 
 const session = agent.createSession({
-  history: initialHistory,
+  history,
 });
 
 // Retrieve history snapshot at any point

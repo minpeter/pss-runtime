@@ -183,7 +183,7 @@ describe("AgentSession", () => {
   });
 
   it("supports initial history hydration and returns getHistory snapshot", async () => {
-    const initialHistory: ModelMessage[] = [
+    const history: ModelMessage[] = [
       { role: "user", content: "hello" },
       { role: "assistant", content: "hi there" },
     ];
@@ -193,31 +193,31 @@ describe("AgentSession", () => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
       },
-    }).createSession({ history: initialHistory });
+    }).createSession({ history });
 
-    expect(session.getHistory()).toEqual(initialHistory);
+    expect(session.getHistory()).toEqual(history);
 
     await session.submit(userText("remember me"));
 
     expect(seenHistory[0]).toEqual([
-      ...initialHistory,
+      ...history,
       userTextToModelMessage(userText("remember me")),
     ]);
 
     expect(session.getHistory()).toEqual([
-      ...initialHistory,
+      ...history,
       userTextToModelMessage(userText("remember me")),
       assistantMessage("DONE"),
     ]);
   });
 
   it("triggers onHistoryChange callback whenever history is mutated", async () => {
-    const initialHistory: ModelMessage[] = [{ role: "user", content: "hello" }];
+    const history: ModelMessage[] = [{ role: "user", content: "hello" }];
     const historicalSnapshots: ModelMessage[][] = [];
     const session = new Agent({
       llm: () => Promise.resolve([assistantMessage("hello there")]),
     }).createSession({
-      history: initialHistory,
+      history,
       onHistoryChange: (history) => {
         historicalSnapshots.push(history);
       },
@@ -226,9 +226,9 @@ describe("AgentSession", () => {
     await session.submit(userText("remember me"));
 
     expect(historicalSnapshots).toEqual([
-      [...initialHistory, userTextToModelMessage(userText("remember me"))],
+      [...history, userTextToModelMessage(userText("remember me"))],
       [
-        ...initialHistory,
+        ...history,
         userTextToModelMessage(userText("remember me")),
         assistantMessage("hello there"),
       ],
