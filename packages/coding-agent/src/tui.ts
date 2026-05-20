@@ -6,7 +6,7 @@ import {
   Text,
   TUI,
 } from "@earendil-works/pi-tui";
-import type { AgentEvent } from "@minpeter/pss-runtime";
+import type { AgentEvent, UserTextContent } from "@minpeter/pss-runtime";
 import { Agent } from "@minpeter/pss-runtime";
 import { createCodingAgentModel } from "./model";
 import { tools } from "./tools";
@@ -53,10 +53,13 @@ const addLine = (text: string): void => {
   tui.requestRender();
 };
 
+const formatUserTextContent = (text: UserTextContent): string =>
+  typeof text === "string" ? text : text.join("\n");
+
 const formatEvent = (event: AgentEvent): string | undefined => {
   switch (event.type) {
     case "user-text":
-      return `\x1b[36myou\x1b[0m: ${safeText(event.text)}`;
+      return `\x1b[36myou\x1b[0m: ${safeText(formatUserTextContent(event.text))}`;
     case "assistant-text":
       return `\x1b[32massistant\x1b[0m: ${safeText(event.text)}`;
     case "assistant-reasoning":

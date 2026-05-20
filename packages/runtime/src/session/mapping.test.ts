@@ -15,6 +15,18 @@ describe("session mapping", () => {
     });
   });
 
+  it("maps multipart user text to AI SDK text content parts", () => {
+    expect(
+      userTextToModelMessage(userText(["context block", "user message"]))
+    ).toEqual({
+      role: "user",
+      content: [
+        { type: "text", text: "context block" },
+        { type: "text", text: "user message" },
+      ],
+    });
+  });
+
   it("projects assistant reasoning, text, and tool calls to public agent events", () => {
     const toolCall = toolCallPart("call-tool", "test_tool", {
       query: "latest OpenAI API updates",

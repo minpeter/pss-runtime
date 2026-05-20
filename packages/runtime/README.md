@@ -115,3 +115,18 @@ try {
   unsubscribe();
 }
 ```
+
+`submit()` also accepts `text` as an array of strings. The runtime keeps those
+strings together as one user turn and forwards them to the model as AI SDK text
+content parts, which is useful when the host needs to prepend per-turn context
+without flattening it into the user's visible message.
+
+```ts
+await session.submit({
+  type: "user-text",
+  text: [
+    "Context: user timezone is Asia/Seoul.",
+    "Please remind me tomorrow morning.",
+  ],
+});
+```

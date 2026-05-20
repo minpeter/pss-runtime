@@ -22,6 +22,7 @@ export type {
   ToolCall,
   ToolResult,
   UserText,
+  UserTextContent,
 } from "./session/events";
 export {
   AgentSession,

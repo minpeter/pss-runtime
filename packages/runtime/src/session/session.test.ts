@@ -97,6 +97,32 @@ describe("AgentSession", () => {
     ]);
   });
 
+  it("accepts multipart user text as one submitted turn", async () => {
+    const seenHistory: ModelMessage[][] = [];
+    const session = new Agent({
+      llm: ({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+    }).createSession();
+    const events: AgentEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    await session.submit(userText(["per-turn context", "hello"]));
+
+    expect(seenHistory).toEqual([
+      [userTextToModelMessage(userText(["per-turn context", "hello"]))],
+    ]);
+    expect(events[0]).toEqual({
+      type: "user-text",
+      text: ["per-turn context", "hello"],
+    });
+    expect(session.getHistory()).toEqual([
+      userTextToModelMessage(userText(["per-turn context", "hello"])),
+      assistantMessage("DONE"),
+    ]);
+  });
+
   it("emits turn-error and rejects the submitted input when the LLM fails", async () => {
     const session = new Agent({
       llm: () => Promise.reject(new Error("model unavailable")),
