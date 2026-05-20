@@ -40,19 +40,40 @@ const session = agent.createSession({
 const currentHistory: AgentMessage[] = session.getHistory();
 ```
 
-### 2. Auto-Synchronization with `onHistoryChange`
-Alternatively, instead of retrieving the history snapshot manually after execution, you can register an `onHistoryChange` callback hook. It will be triggered automatically whenever the message history is mutated (e.g. when a user message is appended, or a model/tool message is generated).
+### 2. Reactive Storage Synchronization (`onHistoryChange`)
+In stateful serverless environments like **Cloudflare Durable Objects**, keeping the agent's message history synchronized to persistent storage (e.g. SQLite, Durable Object Storage) can be tedious. 
 
-This is ideal for stateful serverless environments like **Cloudflare Durable Objects** to synchronize state to local SSD storage or external databases in the background.
+By utilizing the `onHistoryChange` lifecycle hook, you can automatically capture history mutations reactively and persist them out-of-band without cluttering your routing or execution loop logic:
 
 ```ts
-const session = agent.createSession({
-  history: initialHistory,
-  onHistoryChange: (newHistory) => {
-    // Automatically called whenever history is updated!
-    console.log("History updated, length:", newHistory.length);
-  },
-});
+import { Agent, type AgentMessage } from "@minpeter/pss-runtime";
+
+export class AgentDurableObject {
+  private session: AgentSession | null = null;
+  private storage: DurableObjectStorage;
+
+  constructor(state: DurableObjectState) {
+    this.storage = state.storage;
+  }
+
+  async fetch(request: Request) {
+    if (!this.session) {
+      // 1. Hydrate history from the Durable Object local storage on startup
+      const savedHistory = await this.storage.get<AgentMessage[]>("history") || [];
+
+      this.session = agent.createSession({
+        history: savedHistory,
+        onHistoryChange: async (newHistory) => {
+          // 2. Automatically persist mutations reactively in the background!
+          await this.storage.put("history", newHistory);
+        },
+      });
+    }
+
+    // 3. Process the incoming request (e.g. submit user text and stream back events)
+    // ...
+  }
+}
 ```
 
 ### 3. Safe Event Subscriptions
