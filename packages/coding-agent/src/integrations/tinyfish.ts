@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { readTinyFishApiKeyPoolFromEnv } from "../env";
 import {
   readObject,
   readOptionalNumber,
@@ -10,18 +10,7 @@ import {
 } from "../utils/unknown";
 
 const fetchEndpoint = "https://api.fetch.tinyfish.ai";
-const requiredApiKeyError =
-  "TINYFISH_API_KEY is required to use the built-in TinyFish web tools.";
 const searchEndpoint = "https://api.search.tinyfish.ai";
-const tinyFishApiKeyPoolSchema = z
-  .string()
-  .default("")
-  .transform((value) =>
-    value
-      .split(";")
-      .map((segment) => segment.trim())
-      .filter((segment) => segment.length > 0)
-  );
 
 export type TinyFishFetchFormat = "markdown" | "html" | "json";
 
@@ -105,6 +94,7 @@ interface TinyFishRequestOptions {
 }
 
 let tinyFishApiKeyPoolSource: string | undefined;
+let tinyFishApiKeyPool: string[] | undefined;
 let tinyFishApiKeyIndex = 0;
 
 export async function fetchTinyFishPages(
@@ -162,18 +152,18 @@ function getTinyFishApiKeyAttemptOrder(): string[] {
 function getTinyFishApiKeyPool(): string[] {
   const apiKeyPoolSource = process.env.TINYFISH_API_KEY;
 
-  if (apiKeyPoolSource !== tinyFishApiKeyPoolSource) {
+  if (
+    apiKeyPoolSource !== tinyFishApiKeyPoolSource ||
+    tinyFishApiKeyPool === undefined
+  ) {
+    tinyFishApiKeyPool = readTinyFishApiKeyPoolFromEnv({
+      runtimeEnv: { TINYFISH_API_KEY: apiKeyPoolSource },
+    });
     tinyFishApiKeyPoolSource = apiKeyPoolSource;
     tinyFishApiKeyIndex = 0;
   }
 
-  const apiKeys = tinyFishApiKeyPoolSchema.parse(apiKeyPoolSource);
-
-  if (apiKeys.length === 0) {
-    throw new Error(requiredApiKeyError);
-  }
-
-  return apiKeys;
+  return tinyFishApiKeyPool;
 }
 
 async function parseTinyFishJsonResponse<T>(

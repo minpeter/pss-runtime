@@ -4,13 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentTools } from "./llm";
 import { assistantMessage, userText } from "./test-fixtures";
 
-const { createOpenAICompatibleMock, generateTextMock } = vi.hoisted(() => ({
-  createOpenAICompatibleMock: vi.fn(),
+const { generateTextMock } = vi.hoisted(() => ({
   generateTextMock: vi.fn(),
-}));
-
-vi.mock("@ai-sdk/openai-compatible", () => ({
-  createOpenAICompatible: createOpenAICompatibleMock,
 }));
 
 vi.mock("ai", async (importOriginal) => {
@@ -40,16 +35,6 @@ const createNoopTool = () =>
     }),
   });
 
-function mockEnv(apiKey = "ai-test-key") {
-  vi.doMock("./env", () => ({
-    env: {
-      AI_API_KEY: apiKey,
-      AI_BASE_URL: "https://llm.test/v1",
-      AI_MODEL: "minimax/MiniMax-M2.7",
-    },
-  }));
-}
-
 async function loadCreateLlm() {
   const { createLlm } = await import("./llm");
   return createLlm;
@@ -63,26 +48,14 @@ async function loadAgent() {
 describe("createLlm", () => {
   beforeEach(() => {
     vi.resetModules();
-    mockEnv();
     generateTextMock.mockReset();
     generateTextMock.mockResolvedValue({
       responseMessages: [assistantMessage("DONE")],
     });
-    createOpenAICompatibleMock.mockReset();
-    createOpenAICompatibleMock.mockImplementation(
-      (config: { apiKey?: string; baseURL: string; name: string }) =>
-        (modelId: string) =>
-          ({
-            apiKey: config.apiKey,
-            baseURL: config.baseURL,
-            modelId,
-            providerName: config.name,
-          }) as unknown as LanguageModel
-    );
   });
 
   afterEach(() => {
-    vi.doUnmock("./env");
+    vi.restoreAllMocks();
   });
 
   it("passes injected tools to generateText", async () => {
@@ -110,51 +83,19 @@ describe("createLlm", () => {
       })
     );
   });
-
-  it("keeps semicolon-delimited AI_API_KEY as one opaque provider key", async () => {
-    mockEnv("ai-token-1;ai-token-2");
-    const createLlm = await loadCreateLlm();
-    const signal = new AbortController().signal;
-    const history = [{ role: "user" as const, content: "hello" }];
-    const llm = createLlm();
-
-    await llm({ history, signal });
-
-    expect(generateTextMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        model: expect.objectContaining({
-          apiKey: "ai-token-1;ai-token-2",
-          baseURL: "https://llm.test/v1",
-          modelId: "minimax/MiniMax-M2.7",
-        }),
-      })
-    );
-  });
 });
 
 describe("Agent tool wiring", () => {
   beforeEach(() => {
     vi.resetModules();
-    mockEnv();
     generateTextMock.mockReset();
     generateTextMock.mockResolvedValue({
       responseMessages: [assistantMessage("DONE")],
     });
-    createOpenAICompatibleMock.mockReset();
-    createOpenAICompatibleMock.mockImplementation(
-      (config: { apiKey?: string; baseURL: string; name: string }) =>
-        (modelId: string) =>
-          ({
-            apiKey: config.apiKey,
-            baseURL: config.baseURL,
-            modelId,
-            providerName: config.name,
-          }) as unknown as LanguageModel
-    );
   });
 
   afterEach(() => {
-    vi.doUnmock("./env");
+    vi.restoreAllMocks();
   });
 
   it("passes injected AgentOptions tools into createLlm/generateText", async () => {
@@ -177,7 +118,7 @@ describe("Agent tool wiring", () => {
 
   it("does not attach product tools by default", async () => {
     const Agent = await loadAgent();
-    const session = new Agent().createSession();
+    const session = new Agent({ model: fakeModel }).createSession();
 
     await session.submit(userText("run without product tools"));
 

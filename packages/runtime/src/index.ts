@@ -12,7 +12,7 @@ export type {
   RuntimeLlmContext,
   RuntimeLlmOutput,
 } from "./llm";
-export { createLlm, defaultModel } from "./llm";
+export { createLlm } from "./llm";
 export type {
   AgentEvent,
   AgentEventListener,

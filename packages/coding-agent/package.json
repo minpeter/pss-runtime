@@ -11,6 +11,16 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./env": {
+      "@minpeter/pss-source": "./src/env.ts",
+      "types": "./dist/env.d.ts",
+      "import": "./dist/env.js"
+    },
+    "./model": {
+      "@minpeter/pss-source": "./src/model.ts",
+      "types": "./dist/model.d.ts",
+      "import": "./dist/model.js"
+    },
     "./tui": {
       "@minpeter/pss-source": "./src/tui.ts",
       "types": "./dist/tui.d.ts",
@@ -37,9 +47,12 @@
     "lint": "ultracite check ."
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "3.0.0-canary.48",
     "@earendil-works/pi-tui": "^0.74.1",
     "@minpeter/pss-runtime": "workspace:^",
+    "@t3-oss/env-core": "^0.13.11",
     "ai": "7.0.0-canary.142",
+    "dotenv": "^17.4.2",
     "zod": "^4.4.3"
   }
 }
