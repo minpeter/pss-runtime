@@ -5,6 +5,10 @@ import type { Llm } from "./llm";
 
 const fakeModel = {} as LanguageModel;
 const fakeLlm: Llm = () => Promise.resolve([]);
+const ambiguousOptionsPattern = /either options\.llm or options\.model/;
+const invalidLlmPattern = /invalid options\.llm/;
+const missingModelPattern = /missing options\.model/;
+const missingOptionsPattern = /Agent options are required/;
 
 const acceptsModelOptions: AgentOptions = {
   instructions: "Use the injected model.",
@@ -43,5 +47,28 @@ describe("Agent", () => {
 
   it("creates sessions from a caller-owned LLM", () => {
     expect(new Agent({ llm: fakeLlm }).createSession()).toBeDefined();
+  });
+
+  it("rejects missing constructor options with an actionable error", () => {
+    expect(() => new Agent(undefined as unknown as AgentOptions)).toThrow(
+      missingOptionsPattern
+    );
+  });
+
+  it("rejects missing model configuration with an actionable error", () => {
+    expect(() => new Agent({} as AgentOptions)).toThrow(missingModelPattern);
+  });
+
+  it("rejects invalid custom LLM configuration with an actionable error", () => {
+    expect(
+      () => new Agent({ llm: "not-an-llm" } as unknown as AgentOptions)
+    ).toThrow(invalidLlmPattern);
+  });
+
+  it("rejects ambiguous model and custom LLM configuration", () => {
+    expect(
+      () =>
+        new Agent({ llm: fakeLlm, model: fakeModel } as unknown as AgentOptions)
+    ).toThrow(ambiguousOptionsPattern);
   });
 });
