@@ -157,6 +157,49 @@ describe("AgentSession", () => {
     ]);
   });
 
+  it("kills the session by unblocking pending history persistence", async () => {
+    const writeStarted = createDeferred();
+    const write = createDeferred();
+    let calls = 0;
+    const session = new Agent({
+      llm: () => {
+        calls += 1;
+        return Promise.resolve([assistantMessage("should not run")]);
+      },
+    }).createSession({
+      onHistoryChange: async () => {
+        writeStarted.resolve();
+        await write.promise;
+      },
+    });
+    const events: AgentEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    const activeSubmit = session.submit(userText("active"));
+    const queuedSubmit = session.submit(userText("queued"));
+    const queuedResult = queuedSubmit.then(
+      () => "resolved",
+      (error: unknown) => error
+    );
+
+    await writeStarted.promise;
+    session.kill();
+
+    await expect(settleWithin(activeSubmit)).resolves.toBe("resolved");
+    const queuedError = await queuedResult;
+
+    expect(calls).toBe(0);
+    expect(session.getHistory()).toEqual([]);
+    expect(queuedError).toBeInstanceOf(Error);
+    expect((queuedError as Error).message).toBe("Session killed");
+    expect(eventTypes(events)).toEqual([
+      "user-text",
+      "turn-start",
+      "user-text",
+      "turn-abort",
+    ]);
+  });
+
   it("rejects input if a user-text listener kills the session before queueing", async () => {
     let calls = 0;
     const session = new Agent({
@@ -415,3 +458,18 @@ describe("AgentSession", () => {
     expect(session.getHistory()).toEqual([]);
   });
 });
+
+function settleWithin(
+  promise: Promise<void>,
+  timeoutMs = 500
+): Promise<"resolved" | "timeout" | unknown> {
+  return Promise.race([
+    promise.then(
+      () => "resolved" as const,
+      (error: unknown) => error
+    ),
+    new Promise<"timeout">((resolve) => {
+      setTimeout(() => resolve("timeout"), timeoutMs);
+    }),
+  ]);
+}

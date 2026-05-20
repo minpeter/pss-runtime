@@ -30,9 +30,13 @@ export class AgentModelHistory {
     this.#triggerChange();
   }
 
-  rollback(snapshot: ModelMessage[]): void {
+  rollback(snapshot: ModelMessage[], options?: { notify?: boolean }): void {
     this.#modelHistory.length = 0;
     this.#modelHistory.push(...structuredClone(snapshot));
+    if (options?.notify === false) {
+      return;
+    }
+
     this.#triggerChange();
   }
 

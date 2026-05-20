@@ -25,6 +25,7 @@ export class AgentSession {
   readonly #inputQueue: QueuedInput[] = [];
   #running = false;
   #activeAbort?: AbortController;
+  readonly #killAbort = new AbortController();
   #killed = false;
   #historyPromiseChain: Promise<void> = Promise.resolve();
   readonly #pendingWrites = new Set<Promise<void>>();
@@ -86,6 +87,7 @@ export class AgentSession {
     }
 
     this.#killed = true;
+    this.#killAbort.abort();
     this.#activeAbort?.abort();
 
     while (this.#inputQueue.length > 0) {
@@ -122,7 +124,9 @@ export class AgentSession {
       this.#turnErrorEmitted = false;
       this.#emit({ type: "turn-start" });
       this.#history.appendUserInput(item.input);
-      const userHistoryWrite = this.#pendingHistoryWrites();
+      const userHistoryWrite = this.#pendingHistoryWrites({
+        unblockOnKill: true,
+      });
       if (userHistoryWrite) {
         await userHistoryWrite;
       }
@@ -134,7 +138,9 @@ export class AgentSession {
         signal: this.#activeAbort.signal,
       });
 
-      const turnHistoryWrites = this.#pendingHistoryWrites();
+      const turnHistoryWrites = this.#pendingHistoryWrites({
+        unblockOnKill: true,
+      });
       if (turnHistoryWrites) {
         await turnHistoryWrites;
       }
@@ -144,6 +150,13 @@ export class AgentSession {
       });
       item.resolve();
     } catch (error) {
+      if (this.#killed && isSessionKilledError(error)) {
+        this.#history.rollback(historySnapshot, { notify: false });
+        this.#emit({ type: "turn-abort" });
+        item.resolve();
+        return;
+      }
+
       await this.#rollbackAndRejectInput(item, historySnapshot, error);
     } finally {
       this.#pendingWrites.clear();
@@ -160,7 +173,9 @@ export class AgentSession {
     let rejectionError = error;
 
     try {
-      const rollbackHistoryWrite = this.#pendingHistoryWrites();
+      const rollbackHistoryWrite = this.#pendingHistoryWrites({
+        unblockOnKill: true,
+      });
       if (rollbackHistoryWrite) {
         await rollbackHistoryWrite;
       }
@@ -197,12 +212,17 @@ export class AgentSession {
     );
   }
 
-  async #awaitPendingHistoryWrites(): Promise<void> {
+  async #awaitPendingHistoryWrites(options?: {
+    unblockOnKill?: boolean;
+  }): Promise<void> {
     const errors: unknown[] = [];
 
     while (this.#pendingWrites.size > 0) {
       const writes = [...this.#pendingWrites];
-      const results = await Promise.allSettled(writes);
+      const settledWrites = Promise.allSettled(writes);
+      const results = options?.unblockOnKill
+        ? await rejectOnKill(settledWrites, this.#killAbort.signal)
+        : await settledWrites;
 
       for (const result of results) {
         if (result.status === "rejected") {
@@ -216,12 +236,14 @@ export class AgentSession {
     }
   }
 
-  #pendingHistoryWrites(): Promise<void> | undefined {
+  #pendingHistoryWrites(options?: {
+    unblockOnKill?: boolean;
+  }): Promise<void> | undefined {
     if (this.#pendingWrites.size === 0) {
       return;
     }
 
-    return this.#awaitPendingHistoryWrites();
+    return this.#awaitPendingHistoryWrites(options);
   }
 
   #emitTurnError(error: unknown): void {
@@ -274,4 +296,33 @@ function errorMessage(error: unknown): string {
 
 function sessionKilledError(): Error {
   return new Error("Session killed");
+}
+
+function isSessionKilledError(error: unknown): boolean {
+  return error instanceof Error && error.message === "Session killed";
+}
+
+function rejectOnKill<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) {
+    return Promise.reject(sessionKilledError());
+  }
+
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener("abort", onAbort);
+      reject(sessionKilledError());
+    };
+
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      }
+    );
+  });
 }
