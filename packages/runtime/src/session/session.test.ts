@@ -182,7 +182,7 @@ describe("AgentSession", () => {
     expect(eventTypes(events)).toEqual(["user-text"]);
   });
 
-  it("supports initial history hydration and returns getHistory snapshot", async () => {
+  it("supports history hydration and returns getHistory snapshot", async () => {
     const history: ModelMessage[] = [
       { role: "user", content: "hello" },
       { role: "assistant", content: "hi there" },
