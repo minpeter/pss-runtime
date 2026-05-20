@@ -1,5 +1,12 @@
 # @minpeter/pss-coding-agent
 
+## 0.0.4
+
+### Patch Changes
+
+- Updated dependencies [23cce55]
+  - @minpeter/pss-runtime@0.0.4
+
 ## 0.0.3
 
 ### Patch Changes
