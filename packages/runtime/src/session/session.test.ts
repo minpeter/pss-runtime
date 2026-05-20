@@ -287,6 +287,44 @@ describe("AgentSession", () => {
     ]);
   });
 
+  it("preserves persistence failures that settle immediately after kill", async () => {
+    const writeStarted = createDeferred();
+    const events: AgentEvent[] = [];
+    let rejectWrite: (error: Error) => void = () => {
+      throw new Error("write promise was not initialized");
+    };
+    const session = new Agent({
+      llm: () => {
+        throw new Error("should not run");
+      },
+    }).createSession({
+      onHistoryChange: () => {
+        writeStarted.resolve();
+        return new Promise<void>((_resolve, reject) => {
+          rejectWrite = reject;
+        });
+      },
+    });
+    session.subscribe((event) => events.push(event));
+
+    const activeSubmit = session.submit(userText("active"));
+
+    await writeStarted.promise;
+    session.kill();
+    queueMicrotask(() => rejectWrite(new Error("late write failed")));
+
+    await expect(activeSubmit).rejects.toThrow("late write failed");
+    expect(session.getHistory()).toEqual([]);
+    expect(events).toEqual([
+      { type: "user-text", text: "active" },
+      { type: "turn-start" },
+      {
+        type: "turn-error",
+        message: expect.stringContaining("late write failed"),
+      },
+    ]);
+  });
+
   it("rejects input if a user-text listener kills the session before queueing", async () => {
     let calls = 0;
     const session = new Agent({

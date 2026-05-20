@@ -261,10 +261,14 @@ export class AgentSession {
     try {
       return await rejectOnKill(writes, this.#killAbort.signal);
     } catch (error: unknown) {
-      if (isSessionKilledError(error) && this.#settledWriteErrors.size > 0) {
-        const settledErrors = [...this.#settledWriteErrors];
-        this.#settledWriteErrors.clear();
-        throw combinePersistenceErrors(settledErrors);
+      if (isSessionKilledError(error)) {
+        await waitForKillRaceSettlements();
+
+        if (this.#settledWriteErrors.size > 0) {
+          const settledErrors = [...this.#settledWriteErrors];
+          this.#settledWriteErrors.clear();
+          throw combinePersistenceErrors(settledErrors);
+        }
       }
 
       throw error;
@@ -327,25 +331,43 @@ function isSessionKilledError(error: unknown): boolean {
   return error instanceof Error && error.message === "Session killed";
 }
 
+async function waitForKillRaceSettlements(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
 function rejectOnKill<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   if (signal.aborted) {
-    return Promise.reject(sessionKilledError());
+    return new Promise((_, reject) => {
+      setTimeout(() => reject(sessionKilledError()), 0);
+    });
   }
 
   return new Promise((resolve, reject) => {
+    let abortTimeout: ReturnType<typeof setTimeout> | undefined;
+    const cleanup = () => {
+      signal.removeEventListener("abort", onAbort);
+      if (abortTimeout) {
+        clearTimeout(abortTimeout);
+      }
+    };
     const onAbort = () => {
       signal.removeEventListener("abort", onAbort);
-      reject(sessionKilledError());
+      abortTimeout = setTimeout(() => {
+        abortTimeout = undefined;
+        reject(sessionKilledError());
+      }, 0);
     };
 
     signal.addEventListener("abort", onAbort, { once: true });
     promise.then(
       (value) => {
-        signal.removeEventListener("abort", onAbort);
+        cleanup();
         resolve(value);
       },
       (error: unknown) => {
-        signal.removeEventListener("abort", onAbort);
+        cleanup();
         reject(error);
       }
     );
