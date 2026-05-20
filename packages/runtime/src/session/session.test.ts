@@ -325,6 +325,56 @@ describe("AgentSession", () => {
     ]);
   });
 
+  it("interrupts stalled history persistence so queued input can run", async () => {
+    const firstWriteStarted = createDeferred();
+    const seenHistory: ModelMessage[][] = [];
+    let calls = 0;
+    const session = new Agent({
+      llm: ({ history }) => {
+        calls += 1;
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+    }).createSession({
+      onHistoryChange: async (history) => {
+        if (history.length === 1) {
+          firstWriteStarted.resolve();
+          await new Promise(() => {
+            // Keep the first turn persistence pending until interrupt() unblocks it.
+          });
+        }
+      },
+    });
+    const events: AgentEvent[] = [];
+    session.subscribe((event) => events.push(event));
+
+    const firstSubmit = session.submit(userText("first"));
+    const secondSubmit = session.submit(userText("second"));
+
+    await firstWriteStarted.promise;
+    session.interrupt();
+    await Promise.all([firstSubmit, secondSubmit]);
+
+    expect(calls).toBe(1);
+    expect(seenHistory).toEqual([
+      [
+        userTextToModelMessage(userText("first")),
+        userTextToModelMessage(userText("second")),
+      ],
+    ]);
+    expect(eventTypes(events)).toEqual([
+      "user-text",
+      "turn-start",
+      "user-text",
+      "turn-abort",
+      "turn-start",
+      "step-start",
+      "assistant-text",
+      "step-end",
+      "turn-end",
+    ]);
+  });
+
   it("rejects input if a user-text listener kills the session before queueing", async () => {
     let calls = 0;
     const session = new Agent({

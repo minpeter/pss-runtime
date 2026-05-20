@@ -26,6 +26,7 @@ export class AgentSession {
   #running = false;
   #activeAbort?: AbortController;
   readonly #killAbort = new AbortController();
+  #interruptAbort = new AbortController();
   #killed = false;
   #historyPromiseChain: Promise<void> = Promise.resolve();
   readonly #pendingWrites = new Set<Promise<void>>();
@@ -80,6 +81,7 @@ export class AgentSession {
 
   interrupt(): void {
     this.#activeAbort?.abort();
+    this.#interruptAbort.abort();
   }
 
   kill(): void {
@@ -113,6 +115,7 @@ export class AgentSession {
       }
     } finally {
       this.#running = false;
+      this.#interruptAbort = new AbortController();
     }
   }
 
@@ -128,6 +131,7 @@ export class AgentSession {
       this.#history.appendUserInput(item.input);
       const userHistoryWrite = this.#pendingHistoryWrites({
         unblockOnKill: true,
+        unblockOnInterrupt: true,
       });
       if (userHistoryWrite) {
         await userHistoryWrite;
@@ -142,6 +146,7 @@ export class AgentSession {
 
       const turnHistoryWrites = this.#pendingHistoryWrites({
         unblockOnKill: true,
+        unblockOnInterrupt: true,
       });
       if (turnHistoryWrites) {
         await turnHistoryWrites;
@@ -154,6 +159,15 @@ export class AgentSession {
     } catch (error) {
       if (this.#killed && isSessionKilledError(error)) {
         this.#history.rollback(historySnapshot);
+        this.#emit({ type: "turn-abort" });
+        item.resolve();
+        return;
+      }
+
+      if (isSessionInterruptedError(error)) {
+        this.#historyPromiseChain = Promise.resolve();
+        this.#pendingWrites.clear();
+        this.#interruptAbort = new AbortController();
         this.#emit({ type: "turn-abort" });
         item.resolve();
         return;
@@ -218,6 +232,7 @@ export class AgentSession {
   }
 
   async #awaitPendingHistoryWrites(options?: {
+    unblockOnInterrupt?: boolean;
     unblockOnKill?: boolean;
   }): Promise<void> {
     const errors: unknown[] = [];
@@ -241,6 +256,7 @@ export class AgentSession {
   }
 
   #pendingHistoryWrites(options?: {
+    unblockOnInterrupt?: boolean;
     unblockOnKill?: boolean;
   }): Promise<void> | undefined {
     if (this.#pendingWrites.size === 0) {
@@ -252,16 +268,30 @@ export class AgentSession {
 
   async #settleHistoryWrites(
     writes: Promise<PromiseSettledResult<void>[]>,
-    options?: { unblockOnKill?: boolean }
+    options?: { unblockOnInterrupt?: boolean; unblockOnKill?: boolean }
   ): Promise<PromiseSettledResult<void>[]> {
-    if (!options?.unblockOnKill) {
+    if (!(options?.unblockOnKill || options?.unblockOnInterrupt)) {
       return writes;
     }
 
+    let interruptibleWrites = writes;
+    if (options.unblockOnKill) {
+      interruptibleWrites = rejectOnKill(
+        interruptibleWrites,
+        this.#killAbort.signal
+      );
+    }
+    if (options.unblockOnInterrupt) {
+      interruptibleWrites = rejectOnInterrupt(
+        interruptibleWrites,
+        this.#interruptAbort.signal
+      );
+    }
+
     try {
-      return await rejectOnKill(writes, this.#killAbort.signal);
+      return await interruptibleWrites;
     } catch (error: unknown) {
-      if (isSessionKilledError(error)) {
+      if (isSessionKilledError(error) || isSessionInterruptedError(error)) {
         await waitForKillRaceSettlements();
 
         if (this.#settledWriteErrors.size > 0) {
@@ -331,6 +361,14 @@ function isSessionKilledError(error: unknown): boolean {
   return error instanceof Error && error.message === "Session killed";
 }
 
+function sessionInterruptedError(): Error {
+  return new Error("Session interrupted");
+}
+
+function isSessionInterruptedError(error: unknown): boolean {
+  return error instanceof Error && error.message === "Session interrupted";
+}
+
 async function waitForKillRaceSettlements(): Promise<void> {
   await new Promise<void>((resolve) => {
     setTimeout(resolve, 0);
@@ -338,9 +376,24 @@ async function waitForKillRaceSettlements(): Promise<void> {
 }
 
 function rejectOnKill<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  return rejectOnSignal(promise, signal, sessionKilledError);
+}
+
+function rejectOnInterrupt<T>(
+  promise: Promise<T>,
+  signal: AbortSignal
+): Promise<T> {
+  return rejectOnSignal(promise, signal, sessionInterruptedError);
+}
+
+function rejectOnSignal<T>(
+  promise: Promise<T>,
+  signal: AbortSignal,
+  createError: () => Error
+): Promise<T> {
   if (signal.aborted) {
     return new Promise((_, reject) => {
-      setTimeout(() => reject(sessionKilledError()), 0);
+      setTimeout(() => reject(createError()), 0);
     });
   }
 
@@ -356,7 +409,7 @@ function rejectOnKill<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
       signal.removeEventListener("abort", onAbort);
       abortTimeout = setTimeout(() => {
         abortTimeout = undefined;
-        reject(sessionKilledError());
+        reject(createError());
       }, 0);
     };
 
