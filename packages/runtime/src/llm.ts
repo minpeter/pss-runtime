@@ -1,21 +1,16 @@
-import type { LanguageModel, ModelMessage } from "ai";
-import { generateText, type ToolSet } from "ai";
+import type {
+  LanguageModel,
+  ModelMessage,
+  Tool,
+  ToolExecutionOptions,
+  ToolSet,
+} from "ai";
+import { generateText } from "ai";
 
-export interface AgentToolExecutionOptions {
-  abortSignal?: AbortSignal;
-  [key: string]: unknown;
-}
-
-export type AgentToolExecute = unknown;
-
-export interface AgentTool {
-  description?: unknown;
-  execute?: AgentToolExecute;
-  inputSchema: unknown;
-  outputSchema?: unknown;
-}
-
-export type AgentTools = Record<string, AgentTool>;
+export type AgentToolExecutionOptions = ToolExecutionOptions<unknown>;
+export type AgentToolExecute = NonNullable<Tool["execute"]>;
+export type AgentTool = Tool;
+export type AgentTools = ToolSet;
 export type AgentModel = LanguageModel;
 export type AgentMessage = ModelMessage;
 export type LlmOutput = Awaited<
@@ -46,15 +41,13 @@ export function createLlm({
   instructions,
   tools,
 }: CreateLlmOptions): Llm {
-  const runtimeTools = tools as ToolSet | undefined;
-
   return async ({ history, signal }) => {
     const { responseMessages } = await generateText({
       abortSignal: signal,
       instructions,
       messages: [...history],
       model,
-      tools: runtimeTools,
+      tools,
     });
 
     return responseMessages;
