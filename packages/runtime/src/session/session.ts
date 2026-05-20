@@ -39,11 +39,9 @@ export class AgentSession {
                 await onHistoryChange(this.getHistory());
               })
               .catch((error: unknown) => {
-                this.#emit({
-                  type: "turn-error",
-                  message: `onHistoryChange failed: ${errorMessage(error)}`,
-                });
-                throw error;
+                throw new Error(
+                  `onHistoryChange failed: ${errorMessage(error)}`
+                );
               });
 
             this.#historyPromiseChain = writePromise.catch(() => {
