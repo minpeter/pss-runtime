@@ -27,8 +27,13 @@
       "import": "./dist/tui.js"
     }
   },
+  "bin": {
+    "pss": "./bin/pss.js",
+    "pss-coding-agent": "./bin/pss.js"
+  },
   "files": [
     "dist",
+    "bin",
     "README.md"
   ],
   "repository": {
