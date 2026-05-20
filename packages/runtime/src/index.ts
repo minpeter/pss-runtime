@@ -1,6 +1,7 @@
 export { Agent, type AgentOptions } from "./agent";
 export { type AgentLoopResult, runAgentLoop } from "./agent-loop";
 export type {
+  AgentMessage,
   AgentModel,
   AgentTool,
   AgentToolExecute,
@@ -22,4 +23,8 @@ export type {
   ToolResult,
   UserText,
 } from "./session/events";
-export { AgentSession, type SessionInput } from "./session/session";
+export {
+  AgentSession,
+  type SessionInput,
+  type SessionOptions,
+} from "./session/session";

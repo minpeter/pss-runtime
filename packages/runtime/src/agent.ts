@@ -1,6 +1,6 @@
 import type { LanguageModel } from "ai";
 import { type AgentTools, createLlm, type Llm } from "./llm";
-import { AgentSession } from "./session/session";
+import { AgentSession, type SessionOptions } from "./session/session";
 
 interface AgentModelOptions {
   instructions?: string;
@@ -33,8 +33,8 @@ export class Agent {
         });
   }
 
-  createSession(): AgentSession {
-    return new AgentSession(this.#llm);
+  createSession(options?: SessionOptions): AgentSession {
+    return new AgentSession(this.#llm, options);
   }
 }
 
