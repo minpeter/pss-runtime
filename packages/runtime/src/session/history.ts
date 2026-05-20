@@ -39,5 +39,3 @@ export class AgentModelHistory {
     }
   }
 }
-
-

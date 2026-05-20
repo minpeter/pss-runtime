@@ -23,5 +23,8 @@ export type {
   ToolResult,
   UserText,
 } from "./session/events";
-export { AgentSession, type SessionInput, type SessionOptions } from "./session/session";
-
+export {
+  AgentSession,
+  type SessionInput,
+  type SessionOptions,
+} from "./session/session";

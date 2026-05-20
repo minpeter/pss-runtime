@@ -212,9 +212,7 @@ describe("AgentSession", () => {
   });
 
   it("triggers onHistoryChange callback whenever history is mutated", async () => {
-    const initialHistory: ModelMessage[] = [
-      { role: "user", content: "hello" },
-    ];
+    const initialHistory: ModelMessage[] = [{ role: "user", content: "hello" }];
     const historicalSnapshots: ModelMessage[][] = [];
     const session = new Agent({
       llm: () => Promise.resolve([assistantMessage("hello there")]),
@@ -228,10 +226,7 @@ describe("AgentSession", () => {
     await session.submit(userText("remember me"));
 
     expect(historicalSnapshots).toEqual([
-      [
-        ...initialHistory,
-        userTextToModelMessage(userText("remember me")),
-      ],
+      [...initialHistory, userTextToModelMessage(userText("remember me"))],
       [
         ...initialHistory,
         userTextToModelMessage(userText("remember me")),
@@ -246,6 +241,7 @@ describe("AgentSession", () => {
       llm: () => Promise.resolve([assistantMessage("hello there")]),
     }).createSession({
       onHistoryChange: async () => {
+        await Promise.resolve();
         throw new Error("Failed to persist database state");
       },
     });
@@ -259,7 +255,9 @@ describe("AgentSession", () => {
     const errors = events.filter((e) => e.type === "turn-error");
     expect(errors.length).toBeGreaterThanOrEqual(1);
     expect(errors[0].type).toBe("turn-error");
-    expect((errors[0] as any).message).toContain("onHistoryChange failed: Failed to persist database state");
+    expect((errors[0] as any).message).toContain(
+      "onHistoryChange failed: Failed to persist database state"
+    );
   });
 
   it("emits turn-error when onHistoryChange synchronous callback throws", async () => {
@@ -281,6 +279,8 @@ describe("AgentSession", () => {
     const errors = events.filter((e) => e.type === "turn-error");
     expect(errors.length).toBeGreaterThanOrEqual(1);
     expect(errors[0].type).toBe("turn-error");
-    expect((errors[0] as any).message).toContain("onHistoryChange failed: Synchronous database persistence failure");
+    expect((errors[0] as any).message).toContain(
+      "onHistoryChange failed: Synchronous database persistence failure"
+    );
   });
 });
