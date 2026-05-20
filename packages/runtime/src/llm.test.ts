@@ -61,11 +61,15 @@ describe("createLlm", () => {
   it("passes injected tools to generateText", async () => {
     const createLlm = await loadCreateLlm();
     const injectedTools = { injected: createNoopTool() } satisfies AgentTools;
+    const providerOptions = {
+      openaiCompatible: { reasoningEffort: "low" },
+    };
     const signal = new AbortController().signal;
     const history = [{ role: "user" as const, content: "hello" }];
     const llm = createLlm({
       instructions: "test instructions",
       model: fakeModel,
+      providerOptions,
       tools: injectedTools,
     });
 
@@ -79,6 +83,7 @@ describe("createLlm", () => {
         instructions: "test instructions",
         messages: history,
         model: fakeModel,
+        providerOptions,
         tools: injectedTools,
       })
     );
@@ -101,8 +106,12 @@ describe("Agent tool wiring", () => {
   it("passes injected AgentOptions tools into createLlm/generateText", async () => {
     const Agent = await loadAgent();
     const injectedTools = { injected: createNoopTool() } satisfies AgentTools;
+    const providerOptions = {
+      openaiCompatible: { reasoningEffort: "low" },
+    };
     const session = new Agent({
       model: fakeModel,
+      providerOptions,
       tools: injectedTools,
     }).createSession();
 
@@ -111,6 +120,7 @@ describe("Agent tool wiring", () => {
     expect(generateTextMock).toHaveBeenCalledWith(
       expect.objectContaining({
         model: fakeModel,
+        providerOptions,
         tools: injectedTools,
       })
     );

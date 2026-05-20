@@ -13,6 +13,7 @@ const missingOptionsPattern = /Agent options are required/;
 const acceptsModelOptions: AgentOptions = {
   instructions: "Use the injected model.",
   model: fakeModel,
+  providerOptions: { openaiCompatible: { reasoningEffort: "low" } },
   tools: {},
 };
 const acceptsCustomLlmOptions: AgentOptions = { llm: fakeLlm };
@@ -26,6 +27,7 @@ const rejectsAmbiguousModelPrecedence: AgentOptions = {
 // @ts-expect-error custom llm bypasses createLlm-only options such as tools.
 const rejectsIgnoredCreateLlmOptions: AgentOptions = {
   llm: fakeLlm,
+  providerOptions: {},
   tools: {},
 };
 

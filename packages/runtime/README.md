@@ -18,6 +18,21 @@ Pass a caller-owned `LanguageModel` through `model`, or pass a custom `llm`.
 Product tools are intentionally not included; pass tools from a separate package
 when constructing an `Agent`.
 
+Provider-specific options can be passed through without replacing the runtime's
+default model loop:
+
+```ts
+const agent = new Agent({
+  instructions: "Answer briefly.",
+  model,
+  providerOptions: {
+    openaiCompatible: {
+      reasoningEffort: "low",
+    },
+  },
+});
+```
+
 ## Session history
 
 Use `history` when the caller already owns the stored model-message history and

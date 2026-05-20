@@ -6,6 +6,7 @@ interface AgentModelOptions {
   instructions?: string;
   llm?: never;
   model: LanguageModel;
+  providerOptions?: Parameters<typeof createLlm>[0]["providerOptions"];
   tools?: AgentTools;
 }
 
@@ -13,6 +14,7 @@ interface AgentLlmOptions {
   instructions?: never;
   llm: Llm;
   model?: never;
+  providerOptions?: never;
   tools?: never;
 }
 
@@ -29,6 +31,7 @@ export class Agent {
       : createLlm({
           instructions: options.instructions,
           model: options.model,
+          providerOptions: options.providerOptions,
           tools: options.tools,
         });
   }

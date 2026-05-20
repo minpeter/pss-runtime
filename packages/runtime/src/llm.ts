@@ -33,6 +33,7 @@ export type Llm = (context: LlmContext) => Promise<LlmOutput>;
 export interface CreateLlmOptions {
   instructions?: string;
   model: LanguageModel;
+  providerOptions?: Parameters<typeof generateText>[0]["providerOptions"];
   tools?: AgentTools;
 }
 
@@ -44,6 +45,7 @@ export type RuntimeLlmOutput = LlmOutput;
 export function createLlm({
   model,
   instructions,
+  providerOptions,
   tools,
 }: CreateLlmOptions): Llm {
   const runtimeTools = tools as ToolSet | undefined;
@@ -54,6 +56,7 @@ export function createLlm({
       instructions,
       messages: [...history],
       model,
+      providerOptions,
       tools: runtimeTools,
     });
 
