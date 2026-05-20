@@ -110,55 +110,75 @@ export class AgentSession {
       while (!this.#killed && this.#inputQueue.length > 0) {
         const item = this.#inputQueue.shift();
 
-        if (!item) {
-          continue;
-        }
-
-        this.#activeAbort = new AbortController();
-        const historySnapshot = this.#history.modelSnapshot();
-        this.#pendingWrites.clear();
-
-        try {
-          this.#turnErrorEmitted = false;
-          this.#emit({ type: "turn-start" });
-          this.#history.appendUserInput(item.input);
-
-          const result = await runAgentLoop({
-            emit: (event) => this.#emit(event),
-            history: this.#history,
-            llm: this.#llm,
-            signal: this.#activeAbort.signal,
-          });
-
-          await this.#awaitPendingHistoryWrites();
-
-          this.#emit({
-            type: result === "aborted" ? "turn-abort" : "turn-end",
-          });
-          item.resolve();
-        } catch (error) {
-          this.#history.rollback(historySnapshot);
-          let rejectionError = error;
-
-          try {
-            await this.#awaitPendingHistoryWrites();
-          } catch (rollbackOrWriteError) {
-            rejectionError = mergeTurnAndPersistenceErrors(
-              error,
-              rollbackOrWriteError
-            );
-          }
-
-          this.#emitTurnError(rejectionError);
-          item.reject(rejectionError);
-        } finally {
-          this.#pendingWrites.clear();
-          this.#activeAbort = undefined;
+        if (item) {
+          await this.#processQueuedInput(item);
         }
       }
     } finally {
       this.#running = false;
     }
+  }
+
+  async #processQueuedInput(item: QueuedInput): Promise<void> {
+    this.#activeAbort = new AbortController();
+    const historySnapshot = this.#history.modelSnapshot();
+    this.#pendingWrites.clear();
+
+    try {
+      this.#turnErrorEmitted = false;
+      this.#emit({ type: "turn-start" });
+      this.#history.appendUserInput(item.input);
+      const userHistoryWrite = this.#pendingHistoryWrites();
+      if (userHistoryWrite) {
+        await userHistoryWrite;
+      }
+
+      const result = await runAgentLoop({
+        emit: (event) => this.#emit(event),
+        history: this.#history,
+        llm: this.#llm,
+        signal: this.#activeAbort.signal,
+      });
+
+      const turnHistoryWrites = this.#pendingHistoryWrites();
+      if (turnHistoryWrites) {
+        await turnHistoryWrites;
+      }
+
+      this.#emit({
+        type: result === "aborted" ? "turn-abort" : "turn-end",
+      });
+      item.resolve();
+    } catch (error) {
+      await this.#rollbackAndRejectInput(item, historySnapshot, error);
+    } finally {
+      this.#pendingWrites.clear();
+      this.#activeAbort = undefined;
+    }
+  }
+
+  async #rollbackAndRejectInput(
+    item: QueuedInput,
+    historySnapshot: AgentMessage[],
+    error: unknown
+  ): Promise<void> {
+    this.#history.rollback(historySnapshot);
+    let rejectionError = error;
+
+    try {
+      const rollbackHistoryWrite = this.#pendingHistoryWrites();
+      if (rollbackHistoryWrite) {
+        await rollbackHistoryWrite;
+      }
+    } catch (rollbackOrWriteError) {
+      rejectionError = mergeTurnAndPersistenceErrors(
+        error,
+        rollbackOrWriteError
+      );
+    }
+
+    this.#emitTurnError(rejectionError);
+    item.reject(rejectionError);
   }
 
   #enqueueHistoryChange(
@@ -200,6 +220,14 @@ export class AgentSession {
     if (errors.length > 0) {
       throw combinePersistenceErrors(errors);
     }
+  }
+
+  #pendingHistoryWrites(): Promise<void> | undefined {
+    if (this.#pendingWrites.size === 0) {
+      return;
+    }
+
+    return this.#awaitPendingHistoryWrites();
   }
 
   #emitTurnError(error: unknown): void {

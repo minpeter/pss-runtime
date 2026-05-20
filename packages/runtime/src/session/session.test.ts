@@ -237,8 +237,12 @@ describe("AgentSession", () => {
 
   it("emits turn-error and rejects when onHistoryChange async callback throws or rejects", async () => {
     const events: AgentEvent[] = [];
+    let llmCalls = 0;
     const session = new Agent({
-      llm: () => Promise.resolve([assistantMessage("hello there")]),
+      llm: () => {
+        llmCalls += 1;
+        return Promise.resolve([assistantMessage("hello there")]);
+      },
     }).createSession({
       onHistoryChange: async () => {
         await Promise.resolve();
@@ -263,12 +267,17 @@ describe("AgentSession", () => {
       type: "turn-error",
     });
     expect(session.getHistory()).toEqual([]); // Rolled back!
+    expect(llmCalls).toBe(0);
   });
 
   it("emits turn-error and rejects when onHistoryChange synchronous callback throws", async () => {
     const events: AgentEvent[] = [];
+    let llmCalls = 0;
     const session = new Agent({
-      llm: () => Promise.resolve([assistantMessage("hello there")]),
+      llm: () => {
+        llmCalls += 1;
+        return Promise.resolve([assistantMessage("hello there")]);
+      },
     }).createSession({
       onHistoryChange: () => {
         throw new Error("Synchronous database persistence failure");
@@ -292,6 +301,7 @@ describe("AgentSession", () => {
       type: "turn-error",
     });
     expect(session.getHistory()).toEqual([]); // Rolled back!
+    expect(llmCalls).toBe(0);
   });
 
   it("sequences onHistoryChange calls to run sequentially without overlapping", async () => {
@@ -378,9 +388,9 @@ describe("AgentSession", () => {
         const snapshotLength = history.length;
         writes.push(`start-${snapshotLength}`);
 
-        if (snapshotLength === 1) {
+        if (snapshotLength === 2) {
           writes.push(`fail-${snapshotLength}`);
-          throw new Error("first write failed");
+          throw new Error("assistant write failed");
         }
 
         await new Promise((resolve) => setTimeout(resolve, 10));
@@ -389,14 +399,14 @@ describe("AgentSession", () => {
     });
 
     await expect(session.submit(userText("hi"))).rejects.toThrow(
-      "first write failed"
+      "assistant write failed"
     );
 
     expect(writes).toEqual([
       "start-1",
-      "fail-1",
+      "end-1",
       "start-2",
-      "end-2",
+      "fail-2",
       "start-3",
       "end-3",
       "start-0",
