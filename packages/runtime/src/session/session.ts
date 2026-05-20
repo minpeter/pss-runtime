@@ -49,7 +49,9 @@ export class AgentSession {
                   });
                 }
                 const persistenceError = new Error(message);
-                (persistenceError as any).isPersistenceError = true;
+                (
+                  persistenceError as Error & { isPersistenceError: boolean }
+                ).isPersistenceError = true;
                 throw persistenceError;
               });
 
@@ -159,7 +161,7 @@ export class AgentSession {
           this.#history.rollback(historySnapshot);
           this.#pendingWrites = [];
 
-          if (!this.#turnErrorEmitted) {
+          if (!(this.#turnErrorEmitted || isPersistenceError(error))) {
             this.#turnErrorEmitted = true;
             this.#emit({ type: "turn-error", message: errorMessage(error) });
           }
@@ -179,6 +181,14 @@ export class AgentSession {
       listener(event);
     }
   }
+}
+
+function isPersistenceError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error as Error & { isPersistenceError?: boolean }).isPersistenceError ===
+      true
+  );
 }
 
 function errorMessage(error: unknown): string {
