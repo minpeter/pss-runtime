@@ -1,7 +1,7 @@
 export { Agent, type AgentOptions } from "./agent";
 export { type AgentLoopResult, runAgentLoop } from "./agent-loop";
-export type { ModelMessage as AgentMessage } from "ai";
 export type {
+  AgentMessage,
   AgentModel,
   AgentTool,
   AgentToolExecute,

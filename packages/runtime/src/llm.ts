@@ -17,7 +17,9 @@ export interface AgentTool {
 
 export type AgentTools = Record<string, AgentTool>;
 export type AgentModel = LanguageModel;
+export type AgentMessage = ModelMessage;
 export type LlmOutput = Awaited<
+
   ReturnType<typeof generateText>
 >["responseMessages"];
 export type LlmOutputPart = LlmOutput[number];

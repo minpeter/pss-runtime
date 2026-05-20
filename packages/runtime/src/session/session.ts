@@ -1,13 +1,12 @@
-import type { ModelMessage } from "ai";
 import { runAgentLoop } from "../agent-loop";
-import type { Llm } from "../llm";
+import type { AgentMessage, Llm } from "../llm";
 import type { AgentEvent, AgentEventListener, UserText } from "./events";
 import { AgentModelHistory } from "./history";
 
 export type SessionInput = UserText;
 
 export interface SessionOptions {
-  history?: ModelMessage[];
+  history?: AgentMessage[];
 }
 
 interface QueuedInput {
@@ -30,7 +29,7 @@ export class AgentSession {
     this.#history = new AgentModelHistory(options?.history);
   }
 
-  getHistory(): ModelMessage[] {
+  getHistory(): AgentMessage[] {
     return this.#history.modelSnapshot();
   }
 
