@@ -1,5 +1,11 @@
 # @minpeter/pss-runtime
 
+## 0.0.4
+
+### Patch Changes
+
+- 23cce55: Accept AI SDK ToolSet directly for runtime Agent tools.
+
 ## 0.0.3
 
 ### Patch Changes
