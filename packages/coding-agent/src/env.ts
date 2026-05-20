@@ -24,11 +24,7 @@ export function readOpenAICompatibleModelEnv({
     runtimeEnv: { ...runtimeEnv },
     server: {
       AI_API_KEY: z.string().trim().min(1),
-      AI_BASE_URL: z
-        .string()
-        .trim()
-        .url()
-        .default(DEFAULT_OPENAI_COMPATIBLE_BASE_URL),
+      AI_BASE_URL: z.url().trim().default(DEFAULT_OPENAI_COMPATIBLE_BASE_URL),
       AI_MODEL: z
         .string()
         .trim()
