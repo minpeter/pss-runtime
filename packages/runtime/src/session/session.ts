@@ -26,6 +26,7 @@ export class AgentSession {
   #killed = false;
   #historyPromiseChain: Promise<void> = Promise.resolve();
   #pendingWrites: Promise<void>[] = [];
+  #turnErrorEmitted = false;
 
   constructor(llm: Llm, options?: SessionOptions) {
     this.#llm = llm;
@@ -39,9 +40,17 @@ export class AgentSession {
                 await onHistoryChange(this.getHistory());
               })
               .catch((error: unknown) => {
-                throw new Error(
-                  `onHistoryChange failed: ${errorMessage(error)}`
-                );
+                const message = `onHistoryChange failed: ${errorMessage(error)}`;
+                if (!this.#turnErrorEmitted) {
+                  this.#turnErrorEmitted = true;
+                  this.#emit({
+                    type: "turn-error",
+                    message,
+                  });
+                }
+                const persistenceError = new Error(message);
+                (persistenceError as any).isPersistenceError = true;
+                throw persistenceError;
               });
 
             this.#historyPromiseChain = writePromise.catch(() => {
@@ -83,7 +92,10 @@ export class AgentSession {
     });
 
     this.#drainInputQueue().catch((error: unknown) => {
-      this.#emit({ type: "turn-error", message: errorMessage(error) });
+      if (!this.#turnErrorEmitted) {
+        this.#turnErrorEmitted = true;
+        this.#emit({ type: "turn-error", message: errorMessage(error) });
+      }
     });
     return queued;
   }
@@ -125,6 +137,7 @@ export class AgentSession {
         this.#pendingWrites = [];
 
         try {
+          this.#turnErrorEmitted = false;
           this.#emit({ type: "turn-start" });
           this.#history.appendUserInput(item.input);
 
@@ -146,7 +159,10 @@ export class AgentSession {
           this.#history.rollback(historySnapshot);
           this.#pendingWrites = [];
 
-          this.#emit({ type: "turn-error", message: errorMessage(error) });
+          if (!this.#turnErrorEmitted) {
+            this.#turnErrorEmitted = true;
+            this.#emit({ type: "turn-error", message: errorMessage(error) });
+          }
           item.reject(error);
         } finally {
           this.#pendingWrites = [];

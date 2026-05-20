@@ -255,7 +255,7 @@ describe("AgentSession", () => {
     );
 
     const errors = events.filter((e) => e.type === "turn-error");
-    expect(errors.length).toBeGreaterThanOrEqual(1);
+    expect(errors.length).toBe(1);
     expect(errors[0].type).toBe("turn-error");
     expect((errors[0] as any).message).toContain(
       "onHistoryChange failed: Failed to persist database state"
@@ -282,7 +282,7 @@ describe("AgentSession", () => {
     );
 
     const errors = events.filter((e) => e.type === "turn-error");
-    expect(errors.length).toBeGreaterThanOrEqual(1);
+    expect(errors.length).toBe(1);
     expect(errors[0].type).toBe("turn-error");
     expect((errors[0] as any).message).toContain(
       "onHistoryChange failed: Synchronous database persistence failure"
