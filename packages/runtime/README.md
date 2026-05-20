@@ -18,32 +18,40 @@ Pass a caller-owned `LanguageModel` through `model`, or pass a custom `llm`.
 Product tools are intentionally not included; pass tools from a separate package
 when constructing an `Agent`.
 
-## Advanced Features
+## Session history
 
-### 1. Stateless History Hydration & Dehydration
-For serverless or stateless environments (like Cloudflare Workers), where the agent instance is re-created on every request, you can hydrate the session with an existing message history and retrieve the updated history snapshot after execution.
+Use `history` when the caller already owns the stored model-message history and
+needs a new `AgentSession` to continue from that state. This is the best fit for
+stateless request handlers, background jobs, and tests that persist history
+outside the runtime.
 
 ```ts
 import { Agent, type AgentMessage } from "@minpeter/pss-runtime";
 
-// Hydrate session with historical messages
 const history: AgentMessage[] = [
   { role: "user", content: "Hello!" },
-  { role: "assistant", content: "Hi! How can I help you today?" }
+  { role: "assistant", content: "Hi! How can I help you today?" },
 ];
 
-const session = agent.createSession({
-  history,
-});
+const session = agent.createSession({ history });
 
-// Retrieve history snapshot at any point
 const currentHistory: AgentMessage[] = session.getHistory();
 ```
 
-### 2. Reactive Storage Synchronization (`onHistoryChange`)
-In stateful serverless environments like **Cloudflare Durable Objects**, keeping the agent's message history synchronized to persistent storage (e.g. SQLite, Durable Object Storage) can be tedious. 
+`getHistory()` returns a cloned snapshot, so callers can persist or inspect it
+without mutating the session.
 
-By utilizing the `onHistoryChange` lifecycle hook, you can automatically capture history mutations reactively and persist them out-of-band without cluttering your routing or execution loop logic:
+### Reactive storage synchronization
+
+Use `onHistoryChange` when the host should persist every history mutation as the
+turn runs. Calls are serialized, receive the mutation-time snapshot, and are
+awaited before `submit()` resolves, rejects, or advances to the next queued
+turn. If persistence fails, the turn rolls back in-memory history and surfaces a
+`turn-error`.
+
+This is the best fit for stateful serverless hosts such as Cloudflare Durable
+Objects, where a long-lived session mirrors history into Durable Object Storage,
+SQLite, or another caller-owned store.
 
 ```ts
 import { Agent, type AgentMessage, type AgentSession } from "@minpeter/pss-runtime";
@@ -63,14 +71,13 @@ export class AgentDurableObject {
 
   async fetch(request: Request) {
     if (!this.session) {
-      // 1. Hydrate history from the Durable Object local storage on startup
-      const savedHistory = await this.storage.get<AgentMessage[]>("history") || [];
+      const history =
+        (await this.storage.get<AgentMessage[]>("history")) ?? [];
 
       this.session = this.agent.createSession({
-        history: savedHistory,
-        onHistoryChange: async (newHistory) => {
-          // 2. Automatically persist mutations reactively in the background!
-          await this.storage.put("history", newHistory);
+        history,
+        onHistoryChange: async (nextHistory) => {
+          await this.storage.put("history", nextHistory);
         },
       });
     }
@@ -81,8 +88,10 @@ export class AgentDurableObject {
 }
 ```
 
-### 3. Safe Event Subscriptions
-When subscribing to session events (such as text streaming, tool calls, and turn lifecycle updates), it is highly recommended to unsubscribe in a `finally` block to prevent event listener leaks, especially in persistent environments or multi-turn execution loops.
+### Safe event subscriptions
+
+When subscribing to session events, unsubscribe in a `finally` block to prevent
+listener leaks in persistent environments or multi-turn execution loops.
 
 ```ts
 const session = agent.createSession();
@@ -106,4 +115,3 @@ try {
   unsubscribe();
 }
 ```
-

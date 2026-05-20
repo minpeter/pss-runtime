@@ -10,10 +10,18 @@ export interface SessionOptions {
   onHistoryChange?: (history: AgentMessage[]) => void | Promise<void>;
 }
 
+type OnHistoryChange = NonNullable<SessionOptions["onHistoryChange"]>;
+
 interface QueuedInput {
   input: SessionInput;
   reject: (error: unknown) => void;
   resolve: () => void;
+}
+
+const persistenceErrorFlag: unique symbol = Symbol("persistenceError");
+
+interface PersistenceError extends Error {
+  [persistenceErrorFlag]: true;
 }
 
 export class AgentSession {
@@ -25,7 +33,7 @@ export class AgentSession {
   #activeAbort?: AbortController;
   #killed = false;
   #historyPromiseChain: Promise<void> = Promise.resolve();
-  #pendingWrites: Promise<void>[] = [];
+  readonly #pendingWrites = new Set<Promise<void>>();
   #turnErrorEmitted = false;
 
   constructor(llm: Llm, options?: SessionOptions) {
@@ -34,32 +42,7 @@ export class AgentSession {
     this.#history = new AgentModelHistory(
       history,
       onHistoryChange
-        ? () => {
-            const writePromise = this.#historyPromiseChain
-              .then(async () => {
-                await onHistoryChange(this.getHistory());
-              })
-              .catch((error: unknown) => {
-                const message = `onHistoryChange failed: ${errorMessage(error)}`;
-                if (!this.#turnErrorEmitted) {
-                  this.#turnErrorEmitted = true;
-                  this.#emit({
-                    type: "turn-error",
-                    message,
-                  });
-                }
-                const persistenceError = new Error(message);
-                (
-                  persistenceError as Error & { isPersistenceError: boolean }
-                ).isPersistenceError = true;
-                throw persistenceError;
-              });
-
-            this.#historyPromiseChain = writePromise.catch(() => {
-              // Catch errors to ensure the chain continues for subsequent writes
-            });
-            this.#pendingWrites.push(writePromise);
-          }
+        ? (snapshot) => this.#enqueueHistoryChange(snapshot, onHistoryChange)
         : undefined
     );
   }
@@ -94,10 +77,7 @@ export class AgentSession {
     });
 
     this.#drainInputQueue().catch((error: unknown) => {
-      if (!this.#turnErrorEmitted) {
-        this.#turnErrorEmitted = true;
-        this.#emit({ type: "turn-error", message: errorMessage(error) });
-      }
+      this.#emitTurnError(error);
     });
     return queued;
   }
@@ -136,7 +116,7 @@ export class AgentSession {
 
         this.#activeAbort = new AbortController();
         const historySnapshot = this.#history.modelSnapshot();
-        this.#pendingWrites = [];
+        this.#pendingWrites.clear();
 
         try {
           this.#turnErrorEmitted = false;
@@ -150,30 +130,85 @@ export class AgentSession {
             signal: this.#activeAbort.signal,
           });
 
-          await Promise.all(this.#pendingWrites);
+          await this.#awaitPendingHistoryWrites();
 
           this.#emit({
             type: result === "aborted" ? "turn-abort" : "turn-end",
           });
           item.resolve();
         } catch (error) {
-          this.#pendingWrites = [];
           this.#history.rollback(historySnapshot);
-          this.#pendingWrites = [];
+          let rejectionError = error;
 
-          if (!(this.#turnErrorEmitted || isPersistenceError(error))) {
-            this.#turnErrorEmitted = true;
-            this.#emit({ type: "turn-error", message: errorMessage(error) });
+          try {
+            await this.#awaitPendingHistoryWrites();
+          } catch (rollbackOrWriteError) {
+            rejectionError = mergeTurnAndPersistenceErrors(
+              error,
+              rollbackOrWriteError
+            );
           }
-          item.reject(error);
+
+          this.#emitTurnError(rejectionError);
+          item.reject(rejectionError);
         } finally {
-          this.#pendingWrites = [];
+          this.#pendingWrites.clear();
           this.#activeAbort = undefined;
         }
       }
     } finally {
       this.#running = false;
     }
+  }
+
+  #enqueueHistoryChange(
+    snapshot: AgentMessage[],
+    onHistoryChange: OnHistoryChange
+  ): void {
+    const writePromise = this.#historyPromiseChain.then(async () => {
+      try {
+        await onHistoryChange(structuredClone(snapshot));
+      } catch (error: unknown) {
+        throw createPersistenceError(error);
+      }
+    });
+
+    this.#historyPromiseChain = writePromise.catch(() => {
+      // Keep later history writes sequenced even if this write fails.
+    });
+    this.#pendingWrites.add(writePromise);
+    writePromise.then(
+      () => this.#pendingWrites.delete(writePromise),
+      () => this.#pendingWrites.delete(writePromise)
+    );
+  }
+
+  async #awaitPendingHistoryWrites(): Promise<void> {
+    const errors: unknown[] = [];
+
+    while (this.#pendingWrites.size > 0) {
+      const writes = [...this.#pendingWrites];
+      const results = await Promise.allSettled(writes);
+
+      for (const result of results) {
+        if (result.status === "rejected") {
+          errors.push(result.reason);
+        }
+      }
+    }
+
+    if (errors.length > 0) {
+      throw combinePersistenceErrors(errors);
+    }
+  }
+
+  #emitTurnError(error: unknown): void {
+    if (this.#turnErrorEmitted) {
+      return;
+    }
+
+    this.#turnErrorEmitted = true;
+    this.#emit({ type: "turn-error", message: errorMessage(error) });
   }
 
   #emit(event: AgentEvent): void {
@@ -183,11 +218,45 @@ export class AgentSession {
   }
 }
 
+function createPersistenceError(error: unknown): PersistenceError {
+  return Object.assign(
+    new Error(`onHistoryChange failed: ${errorMessage(error)}`),
+    { [persistenceErrorFlag]: true as const }
+  );
+}
+
+function combinePersistenceErrors(errors: unknown[]): unknown {
+  if (errors.length === 1) {
+    return errors[0];
+  }
+
+  const messages = [...new Set(errors.map((error) => errorMessage(error)))];
+  return Object.assign(
+    new Error(`Multiple onHistoryChange failures: ${messages.join("; ")}`),
+    { [persistenceErrorFlag]: true as const }
+  );
+}
+
+function mergeTurnAndPersistenceErrors(
+  turnError: unknown,
+  persistenceError: unknown
+): unknown {
+  if (isPersistenceError(turnError)) {
+    return persistenceError;
+  }
+
+  return new Error(
+    `${errorMessage(turnError)}; history rollback persistence failed: ${errorMessage(
+      persistenceError
+    )}`
+  );
+}
+
 function isPersistenceError(error: unknown): boolean {
   return (
     error instanceof Error &&
-    (error as Error & { isPersistenceError?: boolean }).isPersistenceError ===
-      true
+    persistenceErrorFlag in error &&
+    error[persistenceErrorFlag] === true
   );
 }
 

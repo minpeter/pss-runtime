@@ -254,12 +254,14 @@ describe("AgentSession", () => {
       "Failed to persist database state"
     );
 
-    const errors = events.filter((e) => e.type === "turn-error");
+    const errors = events.filter((event) => event.type === "turn-error");
     expect(errors.length).toBe(1);
-    expect(errors[0].type).toBe("turn-error");
-    expect((errors[0] as any).message).toContain(
-      "onHistoryChange failed: Failed to persist database state"
-    );
+    expect(errors[0]).toMatchObject({
+      message: expect.stringContaining(
+        "onHistoryChange failed: Failed to persist database state"
+      ),
+      type: "turn-error",
+    });
     expect(session.getHistory()).toEqual([]); // Rolled back!
   });
 
@@ -281,12 +283,14 @@ describe("AgentSession", () => {
       "Synchronous database persistence failure"
     );
 
-    const errors = events.filter((e) => e.type === "turn-error");
+    const errors = events.filter((event) => event.type === "turn-error");
     expect(errors.length).toBe(1);
-    expect(errors[0].type).toBe("turn-error");
-    expect((errors[0] as any).message).toContain(
-      "onHistoryChange failed: Synchronous database persistence failure"
-    );
+    expect(errors[0]).toMatchObject({
+      message: expect.stringContaining(
+        "onHistoryChange failed: Synchronous database persistence failure"
+      ),
+      type: "turn-error",
+    });
     expect(session.getHistory()).toEqual([]); // Rolled back!
   });
 
@@ -315,5 +319,89 @@ describe("AgentSession", () => {
 
     expect(invocationOrder).toEqual(["start-1", "end-1", "start-2", "end-2"]);
     expect(session.getHistory().length).toBe(2);
+  });
+
+  it("passes mutation-time snapshots to onHistoryChange", async () => {
+    const userMessage = userTextToModelMessage(userText("hi"));
+    const firstAssistantMessage = assistantMessage("first");
+    const secondAssistantMessage = assistantMessage("second");
+    const historicalSnapshots: ModelMessage[][] = [];
+    const session = new Agent({
+      llm: () =>
+        Promise.resolve([firstAssistantMessage, secondAssistantMessage]),
+    }).createSession({
+      onHistoryChange: (history) => {
+        historicalSnapshots.push(history);
+      },
+    });
+
+    await session.submit(userText("hi"));
+
+    expect(historicalSnapshots).toEqual([
+      [userMessage],
+      [userMessage, firstAssistantMessage],
+      [userMessage, firstAssistantMessage, secondAssistantMessage],
+    ]);
+  });
+
+  it("waits for rollback history persistence before rejecting failed turns", async () => {
+    const writes: string[] = [];
+    const session = new Agent({
+      llm: () => Promise.reject(new Error("model failed")),
+    }).createSession({
+      onHistoryChange: async (history) => {
+        const snapshotLength = history.length;
+        writes.push(`start-${snapshotLength}`);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        writes.push(`end-${snapshotLength}`);
+      },
+    });
+
+    await expect(session.submit(userText("hi"))).rejects.toThrow(
+      "model failed"
+    );
+
+    expect(writes).toEqual(["start-1", "end-1", "start-0", "end-0"]);
+    expect(session.getHistory()).toEqual([]);
+  });
+
+  it("waits for all queued history writes before rollback after persistence failure", async () => {
+    const writes: string[] = [];
+    const session = new Agent({
+      llm: () =>
+        Promise.resolve([
+          assistantMessage("first"),
+          assistantMessage("second"),
+        ]),
+    }).createSession({
+      onHistoryChange: async (history) => {
+        const snapshotLength = history.length;
+        writes.push(`start-${snapshotLength}`);
+
+        if (snapshotLength === 1) {
+          writes.push(`fail-${snapshotLength}`);
+          throw new Error("first write failed");
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        writes.push(`end-${snapshotLength}`);
+      },
+    });
+
+    await expect(session.submit(userText("hi"))).rejects.toThrow(
+      "first write failed"
+    );
+
+    expect(writes).toEqual([
+      "start-1",
+      "fail-1",
+      "start-2",
+      "end-2",
+      "start-3",
+      "end-3",
+      "start-0",
+      "end-0",
+    ]);
+    expect(session.getHistory()).toEqual([]);
   });
 });

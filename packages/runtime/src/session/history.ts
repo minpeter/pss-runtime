@@ -4,9 +4,12 @@ import { userTextToModelMessage } from "./mapping";
 
 export class AgentModelHistory {
   readonly #modelHistory: ModelMessage[] = [];
-  readonly #onChange?: () => void;
+  readonly #onChange?: (snapshot: ModelMessage[]) => void;
 
-  constructor(history?: ModelMessage[], onChange?: () => void) {
+  constructor(
+    history?: ModelMessage[],
+    onChange?: (snapshot: ModelMessage[]) => void
+  ) {
     if (history) {
       this.#modelHistory = structuredClone(history);
     }
@@ -34,14 +37,6 @@ export class AgentModelHistory {
   }
 
   #triggerChange(): void {
-    if (!this.#onChange) {
-      return;
-    }
-    try {
-      this.#onChange();
-    } catch (error: unknown) {
-      // Catch and log synchronous callback errors to prevent them from breaking the core execution loop.
-      console.error("Error in AgentModelHistory onChange callback:", error);
-    }
+    this.#onChange?.(this.modelSnapshot());
   }
 }
