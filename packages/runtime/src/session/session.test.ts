@@ -375,6 +375,85 @@ describe("AgentSession", () => {
     ]);
   });
 
+  it("repairs interrupted persistence after the stalled write resumes", async () => {
+    const firstWriteStarted = createDeferred();
+    const releaseFirstWrite = createDeferred();
+    const repairPersisted = createDeferred();
+    const persistedLengths: number[] = [];
+    let released = false;
+    const session = new Agent({
+      llm: () => Promise.resolve([assistantMessage("DONE")]),
+    }).createSession({
+      onHistoryChange: async (history) => {
+        persistedLengths.push(history.length);
+
+        if (history.length === 1) {
+          firstWriteStarted.resolve();
+          await releaseFirstWrite.promise;
+          released = true;
+          return;
+        }
+
+        if (released && history.length === 3) {
+          repairPersisted.resolve();
+        }
+      },
+    });
+
+    const firstSubmit = session.submit(userText("first"));
+    const secondSubmit = session.submit(userText("second"));
+
+    await firstWriteStarted.promise;
+    session.interrupt();
+    await Promise.all([firstSubmit, secondSubmit]);
+    expect(persistedLengths).toEqual([1, 2, 3]);
+
+    releaseFirstWrite.resolve();
+    await repairPersisted.promise;
+    expect(persistedLengths).toEqual([1, 2, 3, 3]);
+  });
+
+  it("resets interrupt persistence waits before the next queued turn", async () => {
+    const firstLlmCall = createDeferred();
+    const persistedLengths: number[] = [];
+    const seenHistory: ModelMessage[][] = [];
+    let calls = 0;
+    const session = new Agent({
+      llm: async ({ history }) => {
+        calls += 1;
+        seenHistory.push([...history]);
+
+        if (calls === 1) {
+          await firstLlmCall.promise;
+          return [assistantMessage("interrupted")];
+        }
+
+        return [assistantMessage("DONE")];
+      },
+    }).createSession({
+      onHistoryChange: (history) => {
+        persistedLengths.push(history.length);
+      },
+    });
+
+    const firstSubmit = session.submit(userText("first"));
+    const secondSubmit = session.submit(userText("second"));
+
+    session.interrupt();
+    firstLlmCall.resolve();
+
+    await Promise.all([firstSubmit, secondSubmit]);
+
+    expect(calls).toBe(1);
+    expect(seenHistory).toEqual([
+      [
+        userTextToModelMessage(userText("first")),
+        userTextToModelMessage(userText("second")),
+      ],
+    ]);
+    expect(persistedLengths).toEqual([1, 2, 3]);
+  });
+
   it("rejects input if a user-text listener kills the session before queueing", async () => {
     let calls = 0;
     const session = new Agent({

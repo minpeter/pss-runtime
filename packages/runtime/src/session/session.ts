@@ -22,6 +22,7 @@ export class AgentSession {
   readonly #listeners = new Set<AgentEventListener>();
   readonly #llm: Llm;
   readonly #history: AgentModelHistory;
+  readonly #onHistoryChange?: OnHistoryChange;
   readonly #inputQueue: QueuedInput[] = [];
   #running = false;
   #activeAbort?: AbortController;
@@ -36,6 +37,7 @@ export class AgentSession {
   constructor(llm: Llm, options?: SessionOptions) {
     this.#llm = llm;
     const { history, onHistoryChange } = options ?? {};
+    this.#onHistoryChange = onHistoryChange;
     this.#history = new AgentModelHistory(
       history,
       onHistoryChange
@@ -152,9 +154,11 @@ export class AgentSession {
         await turnHistoryWrites;
       }
 
-      this.#emit({
-        type: result === "aborted" ? "turn-abort" : "turn-end",
-      });
+      const interrupted = result === "aborted";
+      this.#emit({ type: interrupted ? "turn-abort" : "turn-end" });
+      if (interrupted) {
+        this.#interruptAbort = new AbortController();
+      }
       item.resolve();
     } catch (error) {
       if (this.#killed && isSessionKilledError(error)) {
@@ -165,7 +169,7 @@ export class AgentSession {
       }
 
       if (isSessionInterruptedError(error)) {
-        this.#historyPromiseChain = Promise.resolve();
+        this.#repairHistoryPersistenceAfterInterruptedWait();
         this.#pendingWrites.clear();
         this.#interruptAbort = new AbortController();
         this.#emit({ type: "turn-abort" });
@@ -231,6 +235,26 @@ export class AgentSession {
     );
   }
 
+  #repairHistoryPersistenceAfterInterruptedWait(): void {
+    const onHistoryChange = this.#onHistoryChange;
+    if (!onHistoryChange) {
+      return;
+    }
+
+    const abandonedChain = this.#historyPromiseChain;
+    this.#historyPromiseChain = Promise.resolve();
+    abandonedChain.then(() => {
+      if (this.#killed) {
+        return;
+      }
+
+      this.#enqueueHistoryChange(
+        this.#history.modelSnapshot(),
+        onHistoryChange
+      );
+    });
+  }
+
   async #awaitPendingHistoryWrites(options?: {
     unblockOnInterrupt?: boolean;
     unblockOnKill?: boolean;
@@ -292,7 +316,7 @@ export class AgentSession {
       return await interruptibleWrites;
     } catch (error: unknown) {
       if (isSessionKilledError(error) || isSessionInterruptedError(error)) {
-        await waitForKillRaceSettlements();
+        await waitForAbortRaceSettlements();
 
         if (this.#settledWriteErrors.size > 0) {
           const settledErrors = [...this.#settledWriteErrors];
@@ -369,7 +393,7 @@ function isSessionInterruptedError(error: unknown): boolean {
   return error instanceof Error && error.message === "Session interrupted";
 }
 
-async function waitForKillRaceSettlements(): Promise<void> {
+async function waitForAbortRaceSettlements(): Promise<void> {
   await new Promise<void>((resolve) => {
     setTimeout(resolve, 0);
   });
