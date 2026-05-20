@@ -82,7 +82,11 @@ export class AgentSession {
   }
 
   interrupt(): void {
-    this.#activeAbort?.abort();
+    if (!this.#activeAbort) {
+      return;
+    }
+
+    this.#activeAbort.abort();
     this.#interruptAbort.abort();
   }
 

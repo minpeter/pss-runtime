@@ -454,6 +454,27 @@ describe("AgentSession", () => {
     expect(persistedLengths).toEqual([1, 2, 3]);
   });
 
+  it("ignores interrupt when no turn is active", async () => {
+    const persistedLengths: number[] = [];
+    let calls = 0;
+    const session = new Agent({
+      llm: () => {
+        calls += 1;
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+    }).createSession({
+      onHistoryChange: (history) => {
+        persistedLengths.push(history.length);
+      },
+    });
+
+    session.interrupt();
+    await session.submit(userText("after idle interrupt"));
+
+    expect(calls).toBe(1);
+    expect(persistedLengths).toEqual([1, 2]);
+  });
+
   it("rejects input if a user-text listener kills the session before queueing", async () => {
     let calls = 0;
     const session = new Agent({
