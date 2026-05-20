@@ -1,5 +1,11 @@
 # @minpeter/pss-runtime
 
+## 0.0.3
+
+### Patch Changes
+
+- c5b7c8b: Allow `AgentSession.submit()` user text to be passed as an array of strings for host-rendered per-turn context.
+
 ## 0.0.2
 
 ### Patch Changes
