@@ -261,4 +261,26 @@ describe("AgentSession", () => {
     expect(errors[0].type).toBe("turn-error");
     expect((errors[0] as any).message).toContain("onHistoryChange failed: Failed to persist database state");
   });
+
+  it("emits turn-error when onHistoryChange synchronous callback throws", async () => {
+    const events: AgentEvent[] = [];
+    const session = new Agent({
+      llm: () => Promise.resolve([assistantMessage("hello there")]),
+    }).createSession({
+      onHistoryChange: () => {
+        throw new Error("Synchronous database persistence failure");
+      },
+    });
+
+    session.subscribe((event) => {
+      events.push(event);
+    });
+
+    await session.submit(userText("remember me"));
+
+    const errors = events.filter((e) => e.type === "turn-error");
+    expect(errors.length).toBeGreaterThanOrEqual(1);
+    expect(errors[0].type).toBe("turn-error");
+    expect((errors[0] as any).message).toContain("onHistoryChange failed: Synchronous database persistence failure");
+  });
 });

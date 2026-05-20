@@ -31,15 +31,15 @@ export class AgentSession {
     this.#history = new AgentModelHistory(
       history,
       onHistoryChange
-        ? () => {
-            Promise.resolve(onHistoryChange(this.getHistory())).catch(
-              (error: unknown) => {
-                this.#emit({
-                  type: "turn-error",
-                  message: `onHistoryChange failed: ${errorMessage(error)}`,
-                });
-              }
-            );
+        ? async () => {
+            try {
+              await onHistoryChange(this.getHistory());
+            } catch (error: unknown) {
+              this.#emit({
+                type: "turn-error",
+                message: `onHistoryChange failed: ${errorMessage(error)}`,
+              });
+            }
           }
         : undefined
     );
