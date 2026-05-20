@@ -181,4 +181,33 @@ describe("AgentSession", () => {
     expect(calls).toBe(0);
     expect(eventTypes(events)).toEqual(["user-text"]);
   });
+
+  it("supports initial history hydration and returns getHistory snapshot", async () => {
+    const initialHistory: ModelMessage[] = [
+      { role: "user", content: "hello" },
+      { role: "assistant", content: "hi there" },
+    ];
+    const seenHistory: ModelMessage[][] = [];
+    const session = new Agent({
+      llm: ({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+    }).createSession({ history: initialHistory });
+
+    expect(session.getHistory()).toEqual(initialHistory);
+
+    await session.submit(userText("remember me"));
+
+    expect(seenHistory[0]).toEqual([
+      ...initialHistory,
+      userTextToModelMessage(userText("remember me")),
+    ]);
+
+    expect(session.getHistory()).toEqual([
+      ...initialHistory,
+      userTextToModelMessage(userText("remember me")),
+      assistantMessage("DONE"),
+    ]);
+  });
 });

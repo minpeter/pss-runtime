@@ -1,9 +1,14 @@
+import type { ModelMessage } from "ai";
 import { runAgentLoop } from "../agent-loop";
 import type { Llm } from "../llm";
 import type { AgentEvent, AgentEventListener, UserText } from "./events";
 import { AgentModelHistory } from "./history";
 
 export type SessionInput = UserText;
+
+export interface SessionOptions {
+  history?: ModelMessage[];
+}
 
 interface QueuedInput {
   input: SessionInput;
@@ -14,14 +19,19 @@ interface QueuedInput {
 export class AgentSession {
   readonly #listeners = new Set<AgentEventListener>();
   readonly #llm: Llm;
-  readonly #history = new AgentModelHistory();
+  readonly #history: AgentModelHistory;
   readonly #inputQueue: QueuedInput[] = [];
   #running = false;
   #activeAbort?: AbortController;
   #killed = false;
 
-  constructor(llm: Llm) {
+  constructor(llm: Llm, options?: SessionOptions) {
     this.#llm = llm;
+    this.#history = new AgentModelHistory(options?.history);
+  }
+
+  getHistory(): ModelMessage[] {
+    return this.#history.modelSnapshot();
   }
 
   subscribe(listener: AgentEventListener): () => void {

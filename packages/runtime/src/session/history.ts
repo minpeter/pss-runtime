@@ -5,6 +5,12 @@ import { userTextToModelMessage } from "./mapping";
 export class AgentModelHistory {
   readonly #modelHistory: ModelMessage[] = [];
 
+  constructor(initialHistory?: ModelMessage[]) {
+    if (initialHistory) {
+      this.#modelHistory = structuredClone(initialHistory);
+    }
+  }
+
   modelSnapshot(): ModelMessage[] {
     return structuredClone(this.#modelHistory);
   }
@@ -17,3 +23,4 @@ export class AgentModelHistory {
     this.#modelHistory.push(structuredClone(message));
   }
 }
+
