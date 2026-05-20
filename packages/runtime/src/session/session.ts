@@ -27,13 +27,10 @@ export class AgentSession {
 
   constructor(llm: Llm, options?: SessionOptions) {
     this.#llm = llm;
+    const { history, onHistoryChange } = options ?? {};
     this.#history = new AgentModelHistory(
-      options?.history,
-      options?.onHistoryChange
-        ? () => {
-            options.onHistoryChange?.(this.getHistory());
-          }
-        : undefined
+      history,
+      onHistoryChange ? () => onHistoryChange(this.getHistory()) : undefined
     );
   }
 
