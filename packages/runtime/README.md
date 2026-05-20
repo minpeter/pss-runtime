@@ -46,7 +46,7 @@ In stateful serverless environments like **Cloudflare Durable Objects**, keeping
 By utilizing the `onHistoryChange` lifecycle hook, you can automatically capture history mutations reactively and persist them out-of-band without cluttering your routing or execution loop logic:
 
 ```ts
-import { Agent, type AgentMessage } from "@minpeter/pss-runtime";
+import { Agent, type AgentMessage, type AgentSession } from "@minpeter/pss-runtime";
 
 export class AgentDurableObject {
   private session: AgentSession | null = null;
