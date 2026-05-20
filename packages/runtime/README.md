@@ -49,11 +49,16 @@ By utilizing the `onHistoryChange` lifecycle hook, you can automatically capture
 import { Agent, type AgentMessage, type AgentSession } from "@minpeter/pss-runtime";
 
 export class AgentDurableObject {
+  private agent: Agent;
   private session: AgentSession | null = null;
   private storage: DurableObjectStorage;
 
   constructor(state: DurableObjectState) {
     this.storage = state.storage;
+    this.agent = new Agent({
+      instructions: "You are a helpful assistant.",
+      model: yourLanguageModel,
+    });
   }
 
   async fetch(request: Request) {
@@ -61,7 +66,7 @@ export class AgentDurableObject {
       // 1. Hydrate history from the Durable Object local storage on startup
       const savedHistory = await this.storage.get<AgentMessage[]>("history") || [];
 
-      this.session = agent.createSession({
+      this.session = this.agent.createSession({
         history: savedHistory,
         onHistoryChange: async (newHistory) => {
           // 2. Automatically persist mutations reactively in the background!

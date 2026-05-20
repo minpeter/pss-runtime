@@ -19,12 +19,24 @@ export class AgentModelHistory {
 
   appendUserInput(input: UserText): void {
     this.#modelHistory.push(userTextToModelMessage(input));
-    this.#onChange?.();
+    this.#triggerChange();
   }
 
   appendModelMessage(message: ModelMessage): void {
     this.#modelHistory.push(structuredClone(message));
-    this.#onChange?.();
+    this.#triggerChange();
+  }
+
+  #triggerChange(): void {
+    if (!this.#onChange) {
+      return;
+    }
+    try {
+      this.#onChange();
+    } catch (error: unknown) {
+      // Catch and log synchronous callback errors to prevent them from breaking the core execution loop.
+      console.error("Error in AgentModelHistory onChange callback:", error);
+    }
   }
 }
 
