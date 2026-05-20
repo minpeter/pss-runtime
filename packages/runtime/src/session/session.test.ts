@@ -239,4 +239,26 @@ describe("AgentSession", () => {
       ],
     ]);
   });
+
+  it("emits turn-error when onHistoryChange async callback throws or rejects", async () => {
+    const events: AgentEvent[] = [];
+    const session = new Agent({
+      llm: () => Promise.resolve([assistantMessage("hello there")]),
+    }).createSession({
+      onHistoryChange: async () => {
+        throw new Error("Failed to persist database state");
+      },
+    });
+
+    session.subscribe((event) => {
+      events.push(event);
+    });
+
+    await session.submit(userText("remember me"));
+
+    const errors = events.filter((e) => e.type === "turn-error");
+    expect(errors.length).toBeGreaterThanOrEqual(1);
+    expect(errors[0].type).toBe("turn-error");
+    expect((errors[0] as any).message).toContain("onHistoryChange failed: Failed to persist database state");
+  });
 });

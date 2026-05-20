@@ -30,7 +30,18 @@ export class AgentSession {
     const { history, onHistoryChange } = options ?? {};
     this.#history = new AgentModelHistory(
       history,
-      onHistoryChange ? () => onHistoryChange(this.getHistory()) : undefined
+      onHistoryChange
+        ? () => {
+            Promise.resolve(onHistoryChange(this.getHistory())).catch(
+              (error: unknown) => {
+                this.#emit({
+                  type: "turn-error",
+                  message: `onHistoryChange failed: ${errorMessage(error)}`,
+                });
+              }
+            );
+          }
+        : undefined
     );
   }
 
