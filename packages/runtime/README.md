@@ -26,7 +26,7 @@ stateless request handlers, background jobs, and tests that persist history
 outside the runtime.
 
 ```ts
-import { Agent, type AgentMessage } from "@minpeter/pss-runtime";
+import { type AgentMessage } from "@minpeter/pss-runtime";
 
 const history: AgentMessage[] = [
   { role: "user", content: "Hello!" },
@@ -82,7 +82,7 @@ export class AgentDurableObject {
       });
     }
 
-    // 3. Process the incoming request (e.g. submit user text and stream back events)
+    // Process the incoming request (e.g. submit user text and stream back events).
     // ...
   }
 }
