@@ -2,5 +2,11 @@
 "@minpeter/pss-runtime": patch
 ---
 
-Add initial message history hydration, `getHistory()` snapshot retrieval, and public `AgentMessage` export to `AgentSession`.
+Enhance `AgentSession` with state hydration, mutation tracking, and broader TypeScript type exports:
+
+- Add `history` hydration via `SessionOptions` in `Agent.createSession()` and `AgentSession` constructor.
+- Introduce `getHistory()` to retrieve the current snapshot of the agent's message history.
+- Add `onHistoryChange` lifecycle callback hook to `AgentSession` (and underlying `AgentModelHistory`) to observe and persist history mutations reactively.
+- Export `AgentMessage` globally from `@minpeter/pss-runtime` for clean external representation of internal AI SDK message structures.
+
 
