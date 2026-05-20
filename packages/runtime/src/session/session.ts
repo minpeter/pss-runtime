@@ -24,6 +24,8 @@ export class AgentSession {
   #running = false;
   #activeAbort?: AbortController;
   #killed = false;
+  #historyPromiseChain: Promise<void> = Promise.resolve();
+  #pendingWrites: Promise<void>[] = [];
 
   constructor(llm: Llm, options?: SessionOptions) {
     this.#llm = llm;
@@ -31,15 +33,23 @@ export class AgentSession {
     this.#history = new AgentModelHistory(
       history,
       onHistoryChange
-        ? async () => {
-            try {
-              await onHistoryChange(this.getHistory());
-            } catch (error: unknown) {
-              this.#emit({
-                type: "turn-error",
-                message: `onHistoryChange failed: ${errorMessage(error)}`,
+        ? () => {
+            const writePromise = this.#historyPromiseChain
+              .then(async () => {
+                await onHistoryChange(this.getHistory());
+              })
+              .catch((error: unknown) => {
+                this.#emit({
+                  type: "turn-error",
+                  message: `onHistoryChange failed: ${errorMessage(error)}`,
+                });
+                throw error;
               });
-            }
+
+            this.#historyPromiseChain = writePromise.catch(() => {
+              // Catch errors to ensure the chain continues for subsequent writes
+            });
+            this.#pendingWrites.push(writePromise);
           }
         : undefined
     );
@@ -113,6 +123,8 @@ export class AgentSession {
         }
 
         this.#activeAbort = new AbortController();
+        const historySnapshot = this.#history.modelSnapshot();
+        this.#pendingWrites = [];
 
         try {
           this.#emit({ type: "turn-start" });
@@ -124,14 +136,22 @@ export class AgentSession {
             llm: this.#llm,
             signal: this.#activeAbort.signal,
           });
+
+          await Promise.all(this.#pendingWrites);
+
           this.#emit({
             type: result === "aborted" ? "turn-abort" : "turn-end",
           });
           item.resolve();
         } catch (error) {
+          this.#pendingWrites = [];
+          this.#history.rollback(historySnapshot);
+          this.#pendingWrites = [];
+
           this.#emit({ type: "turn-error", message: errorMessage(error) });
           item.reject(error);
         } finally {
+          this.#pendingWrites = [];
           this.#activeAbort = undefined;
         }
       }

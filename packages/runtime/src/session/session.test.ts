@@ -235,7 +235,7 @@ describe("AgentSession", () => {
     ]);
   });
 
-  it("emits turn-error when onHistoryChange async callback throws or rejects", async () => {
+  it("emits turn-error and rejects when onHistoryChange async callback throws or rejects", async () => {
     const events: AgentEvent[] = [];
     const session = new Agent({
       llm: () => Promise.resolve([assistantMessage("hello there")]),
@@ -250,7 +250,9 @@ describe("AgentSession", () => {
       events.push(event);
     });
 
-    await session.submit(userText("remember me"));
+    await expect(session.submit(userText("remember me"))).rejects.toThrow(
+      "Failed to persist database state"
+    );
 
     const errors = events.filter((e) => e.type === "turn-error");
     expect(errors.length).toBeGreaterThanOrEqual(1);
@@ -258,9 +260,10 @@ describe("AgentSession", () => {
     expect((errors[0] as any).message).toContain(
       "onHistoryChange failed: Failed to persist database state"
     );
+    expect(session.getHistory()).toEqual([]); // Rolled back!
   });
 
-  it("emits turn-error when onHistoryChange synchronous callback throws", async () => {
+  it("emits turn-error and rejects when onHistoryChange synchronous callback throws", async () => {
     const events: AgentEvent[] = [];
     const session = new Agent({
       llm: () => Promise.resolve([assistantMessage("hello there")]),
@@ -274,7 +277,9 @@ describe("AgentSession", () => {
       events.push(event);
     });
 
-    await session.submit(userText("remember me"));
+    await expect(session.submit(userText("remember me"))).rejects.toThrow(
+      "Synchronous database persistence failure"
+    );
 
     const errors = events.filter((e) => e.type === "turn-error");
     expect(errors.length).toBeGreaterThanOrEqual(1);
@@ -282,5 +287,33 @@ describe("AgentSession", () => {
     expect((errors[0] as any).message).toContain(
       "onHistoryChange failed: Synchronous database persistence failure"
     );
+    expect(session.getHistory()).toEqual([]); // Rolled back!
+  });
+
+  it("sequences onHistoryChange calls to run sequentially without overlapping", async () => {
+    const activeWrites: number[] = [];
+    const invocationOrder: string[] = [];
+    const session = new Agent({
+      llm: () => Promise.resolve([assistantMessage("hello there")]),
+    }).createSession({
+      onHistoryChange: async (history) => {
+        const id = history.length;
+        activeWrites.push(id);
+        // Expect no concurrent overlapping writes - activeWrites should only have 1 element
+        expect(activeWrites.length).toBe(1);
+
+        invocationOrder.push(`start-${id}`);
+        // Simulate asynchronous database delay
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        invocationOrder.push(`end-${id}`);
+
+        activeWrites.pop();
+      },
+    });
+
+    await session.submit(userText("hi"));
+
+    expect(invocationOrder).toEqual(["start-1", "end-1", "start-2", "end-2"]);
+    expect(session.getHistory().length).toBe(2);
   });
 });
