@@ -29,6 +29,7 @@ export class AgentSession {
   #killed = false;
   #historyPromiseChain: Promise<void> = Promise.resolve();
   readonly #pendingWrites = new Set<Promise<void>>();
+  readonly #settledWriteErrors = new Set<unknown>();
   #turnErrorEmitted = false;
 
   constructor(llm: Llm, options?: SessionOptions) {
@@ -119,6 +120,7 @@ export class AgentSession {
     this.#activeAbort = new AbortController();
     const historySnapshot = this.#history.modelSnapshot();
     this.#pendingWrites.clear();
+    this.#settledWriteErrors.clear();
 
     try {
       this.#turnErrorEmitted = false;
@@ -151,7 +153,7 @@ export class AgentSession {
       item.resolve();
     } catch (error) {
       if (this.#killed && isSessionKilledError(error)) {
-        this.#history.rollback(historySnapshot, { notify: false });
+        this.#history.rollback(historySnapshot);
         this.#emit({ type: "turn-abort" });
         item.resolve();
         return;
@@ -208,7 +210,10 @@ export class AgentSession {
     this.#pendingWrites.add(writePromise);
     writePromise.then(
       () => this.#pendingWrites.delete(writePromise),
-      () => this.#pendingWrites.delete(writePromise)
+      (error: unknown) => {
+        this.#settledWriteErrors.add(error);
+        this.#pendingWrites.delete(writePromise);
+      }
     );
   }
 
@@ -220,15 +225,14 @@ export class AgentSession {
     while (this.#pendingWrites.size > 0) {
       const writes = [...this.#pendingWrites];
       const settledWrites = Promise.allSettled(writes);
-      const results = options?.unblockOnKill
-        ? await rejectOnKill(settledWrites, this.#killAbort.signal)
-        : await settledWrites;
+      const results = await this.#settleHistoryWrites(settledWrites, options);
 
       for (const result of results) {
         if (result.status === "rejected") {
           errors.push(result.reason);
         }
       }
+      this.#settledWriteErrors.clear();
     }
 
     if (errors.length > 0) {
@@ -244,6 +248,27 @@ export class AgentSession {
     }
 
     return this.#awaitPendingHistoryWrites(options);
+  }
+
+  async #settleHistoryWrites(
+    writes: Promise<PromiseSettledResult<void>[]>,
+    options?: { unblockOnKill?: boolean }
+  ): Promise<PromiseSettledResult<void>[]> {
+    if (!options?.unblockOnKill) {
+      return writes;
+    }
+
+    try {
+      return await rejectOnKill(writes, this.#killAbort.signal);
+    } catch (error: unknown) {
+      if (isSessionKilledError(error) && this.#settledWriteErrors.size > 0) {
+        const settledErrors = [...this.#settledWriteErrors];
+        this.#settledWriteErrors.clear();
+        throw combinePersistenceErrors(settledErrors);
+      }
+
+      throw error;
+    }
   }
 
   #emitTurnError(error: unknown): void {

@@ -200,6 +200,93 @@ describe("AgentSession", () => {
     ]);
   });
 
+  it("queues rollback persistence after kill without blocking on the stalled write", async () => {
+    const firstWriteStarted = createDeferred();
+    const releaseFirstWrite = createDeferred();
+    const rollbackPersisted = createDeferred();
+    const persistedLengths: number[] = [];
+    let calls = 0;
+    const session = new Agent({
+      llm: () => {
+        calls += 1;
+        return Promise.resolve([assistantMessage("should not run")]);
+      },
+    }).createSession({
+      onHistoryChange: async (history) => {
+        persistedLengths.push(history.length);
+
+        if (history.length === 1) {
+          firstWriteStarted.resolve();
+          await releaseFirstWrite.promise;
+        }
+
+        if (history.length === 0) {
+          rollbackPersisted.resolve();
+        }
+      },
+    });
+
+    const activeSubmit = session.submit(userText("active"));
+
+    await firstWriteStarted.promise;
+    session.kill();
+
+    await expect(settleWithin(activeSubmit)).resolves.toBe("resolved");
+    expect(calls).toBe(0);
+    expect(session.getHistory()).toEqual([]);
+    expect(persistedLengths).toEqual([1]);
+
+    releaseFirstWrite.resolve();
+    await rollbackPersisted.promise;
+    expect(persistedLengths).toEqual([1, 0]);
+  });
+
+  it("preserves persistence failures when kill unblocks remaining writes", async () => {
+    const stalledWriteStarted = createDeferred();
+    const events: AgentEvent[] = [];
+    const session = new Agent({
+      llm: () =>
+        Promise.resolve([
+          assistantMessage("persisted failure"),
+          assistantMessage("stalled write"),
+        ]),
+    }).createSession({
+      onHistoryChange: async (history) => {
+        if (history.length === 2) {
+          throw new Error("assistant write failed");
+        }
+
+        if (history.length === 3) {
+          stalledWriteStarted.resolve();
+          await new Promise(() => {
+            // Keep this write pending until kill() unblocks the turn.
+          });
+        }
+      },
+    });
+    session.subscribe((event) => events.push(event));
+
+    const activeSubmit = session.submit(userText("active"));
+
+    await stalledWriteStarted.promise;
+    session.kill();
+
+    await expect(activeSubmit).rejects.toThrow("assistant write failed");
+    expect(session.getHistory()).toEqual([]);
+    expect(events).toEqual([
+      { type: "user-text", text: "active" },
+      { type: "turn-start" },
+      { type: "step-start" },
+      { type: "assistant-text", text: "persisted failure" },
+      { type: "assistant-text", text: "stalled write" },
+      { type: "step-end" },
+      {
+        type: "turn-error",
+        message: expect.stringContaining("assistant write failed"),
+      },
+    ]);
+  });
+
   it("rejects input if a user-text listener kills the session before queueing", async () => {
     let calls = 0;
     const session = new Agent({
