@@ -94,6 +94,7 @@ interface TinyFishRequestOptions {
 }
 
 let tinyFishApiKeyPoolSource: string | undefined;
+let tinyFishApiKeyPool: string[] | undefined;
 let tinyFishApiKeyIndex = 0;
 
 export async function fetchTinyFishPages(
@@ -151,14 +152,18 @@ function getTinyFishApiKeyAttemptOrder(): string[] {
 function getTinyFishApiKeyPool(): string[] {
   const apiKeyPoolSource = process.env.TINYFISH_API_KEY;
 
-  if (apiKeyPoolSource !== tinyFishApiKeyPoolSource) {
+  if (
+    apiKeyPoolSource !== tinyFishApiKeyPoolSource ||
+    tinyFishApiKeyPool === undefined
+  ) {
+    tinyFishApiKeyPool = readTinyFishApiKeyPoolFromEnv({
+      runtimeEnv: { TINYFISH_API_KEY: apiKeyPoolSource },
+    });
     tinyFishApiKeyPoolSource = apiKeyPoolSource;
     tinyFishApiKeyIndex = 0;
   }
 
-  return readTinyFishApiKeyPoolFromEnv({
-    runtimeEnv: { TINYFISH_API_KEY: apiKeyPoolSource },
-  });
+  return tinyFishApiKeyPool;
 }
 
 async function parseTinyFishJsonResponse<T>(
