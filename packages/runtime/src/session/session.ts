@@ -18,12 +18,6 @@ interface QueuedInput {
   resolve: () => void;
 }
 
-const persistenceErrorFlag: unique symbol = Symbol("persistenceError");
-
-interface PersistenceError extends Error {
-  [persistenceErrorFlag]: true;
-}
-
 export class AgentSession {
   readonly #listeners = new Set<AgentEventListener>();
   readonly #llm: Llm;
@@ -246,11 +240,8 @@ export class AgentSession {
   }
 }
 
-function createPersistenceError(error: unknown): PersistenceError {
-  return Object.assign(
-    new Error(`onHistoryChange failed: ${errorMessage(error)}`),
-    { [persistenceErrorFlag]: true as const }
-  );
+function createPersistenceError(error: unknown): Error {
+  return new Error(`onHistoryChange failed: ${errorMessage(error)}`);
 }
 
 function combinePersistenceErrors(errors: unknown[]): unknown {
@@ -259,32 +250,17 @@ function combinePersistenceErrors(errors: unknown[]): unknown {
   }
 
   const messages = [...new Set(errors.map((error) => errorMessage(error)))];
-  return Object.assign(
-    new Error(`Multiple onHistoryChange failures: ${messages.join("; ")}`),
-    { [persistenceErrorFlag]: true as const }
-  );
+  return new Error(`Multiple onHistoryChange failures: ${messages.join("; ")}`);
 }
 
 function mergeTurnAndPersistenceErrors(
   turnError: unknown,
   persistenceError: unknown
 ): unknown {
-  if (isPersistenceError(turnError)) {
-    return persistenceError;
-  }
-
   return new Error(
     `${errorMessage(turnError)}; history rollback persistence failed: ${errorMessage(
       persistenceError
     )}`
-  );
-}
-
-function isPersistenceError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    persistenceErrorFlag in error &&
-    error[persistenceErrorFlag] === true
   );
 }
 
