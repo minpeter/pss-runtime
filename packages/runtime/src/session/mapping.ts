@@ -11,6 +11,7 @@ import type {
   ToolCall,
   ToolResult,
   UserText,
+  UserTextContent,
 } from "./events";
 
 type AssistantContentPart = Exclude<AssistantContent, string>[number];
@@ -19,7 +20,17 @@ type ModelEvent = AssistantReasoning | AssistantText | ToolCall | ToolResult;
 
 // UserText -> AI SDK UserModelMessage
 export function userTextToModelMessage(input: UserText): UserModelMessage {
-  return { role: "user", content: input.text };
+  return { role: "user", content: userTextContentToUserContent(input.text) };
+}
+
+function userTextContentToUserContent(
+  text: UserTextContent
+): UserModelMessage["content"] {
+  if (typeof text === "string") {
+    return text;
+  }
+
+  return text.map((part) => ({ type: "text", text: part }));
 }
 
 // AI SDK ModelMessage -> public agent events

@@ -1,5 +1,7 @@
+export type UserTextContent = string | readonly string[];
+
 export interface UserText {
-  text: string;
+  text: UserTextContent;
   type: "user-text";
 }
 export interface AssistantText {
