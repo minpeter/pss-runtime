@@ -25,7 +25,7 @@ class SpyStore implements SessionStore {
   readonly commits: Array<{
     key: string;
     next: StoredSession;
-    version?: string;
+    version?: string | null;
   }> = [];
   loadCount = 0;
   loadGate?: Promise<void>;
@@ -41,12 +41,13 @@ class SpyStore implements SessionStore {
   commit(
     key: string,
     next: StoredSession,
-    options?: { expectedVersion?: string }
+    options?: { expectedVersion?: string | null }
   ): Promise<CommitResult> {
     const current = this.sessions.get(key);
+    const currentVersion = current?.version ?? null;
     if (
       options?.expectedVersion !== undefined &&
-      options.expectedVersion !== current?.version
+      options.expectedVersion !== currentVersion
     ) {
       return Promise.resolve({ ok: false, reason: "conflict" });
     }
@@ -60,6 +61,23 @@ class SpyStore implements SessionStore {
     });
     this.sessions.set(key, stored);
     return Promise.resolve({ ok: true, version });
+  }
+}
+
+class ConflictOnceStore extends SpyStore {
+  conflictNextCommit = true;
+
+  override commit(
+    key: string,
+    next: StoredSession,
+    options?: { expectedVersion?: string | null }
+  ): Promise<CommitResult> {
+    if (this.conflictNextCommit) {
+      this.conflictNextCommit = false;
+      return Promise.resolve({ ok: false, reason: "conflict" });
+    }
+
+    return super.commit(key, next, options);
   }
 }
 
@@ -300,6 +318,37 @@ describe("Agent session API", () => {
       expect.objectContaining({ schemaVersion: 1 })
     );
     expect(finalCommit?.next.state).not.toBeInstanceOf(Array);
+  });
+
+  it("refreshes stored state after commit conflicts so the handle can recover", async () => {
+    const remoteHistory = [
+      userTextToModelMessage(userText("remote")),
+      assistantMessage("REMOTE"),
+    ];
+    const seenHistory: ModelMessage[][] = [];
+    const store = new ConflictOnceStore();
+    store.sessions.set("shared", {
+      state: { history: remoteHistory, schemaVersion: 1 },
+      version: "1",
+    });
+    const session = (
+      await Agent.create({
+        llm: ({ history }) => {
+          seenHistory.push([...history]);
+          return Promise.resolve([assistantMessage("DONE")]);
+        },
+        sessions: { store },
+      })
+    ).session("shared");
+
+    expect(eventTypes(await collect(await session.send("loses")))).toContain(
+      "turn-error"
+    );
+    await collect(await session.send("recovers"));
+
+    expect(seenHistory).toEqual([
+      [...remoteHistory, userTextToModelMessage(userText("recovers"))],
+    ]);
   });
 
   it("interrupts the active run without aborting queued input", async () => {

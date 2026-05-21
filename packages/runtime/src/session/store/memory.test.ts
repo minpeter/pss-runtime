@@ -33,6 +33,15 @@ describe("MemorySessionStore", () => {
     ).resolves.toEqual({ ok: false, reason: "conflict" });
   });
 
+  it("detects expectedVersion null conflicts for existing sessions", async () => {
+    const store = new MemorySessionStore();
+    await store.commit("key", { state: { value: 1 } });
+
+    await expect(
+      store.commit("key", { state: { value: 2 } }, { expectedVersion: null })
+    ).resolves.toEqual({ ok: false, reason: "conflict" });
+  });
+
   it("protects committed state from caller mutation", async () => {
     const store = new MemorySessionStore();
     const state = { nested: { value: 1 } };

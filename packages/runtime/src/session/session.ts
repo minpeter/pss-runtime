@@ -105,10 +105,14 @@ export class AgentSession {
       return;
     }
 
+    await this.#replaceWithStoredSession();
+    this.#loaded = true;
+  }
+
+  async #replaceWithStoredSession(): Promise<void> {
     const stored = await this.#persistence.store.load(this.#persistence.key);
     this.#storeVersion = stored?.version;
     this.#history = new AgentModelHistory(decodeStoredHistory(stored));
-    this.#loaded = true;
   }
 
   async #drainInputQueue(): Promise<void> {
@@ -148,6 +152,11 @@ export class AgentSession {
       await this.#commitHistory();
       run.emit({ type: result === "aborted" ? "turn-abort" : "turn-end" });
     } catch (error) {
+      if (error instanceof SessionCommitConflictError) {
+        run.emit({ type: "turn-error", message: error.message });
+        return;
+      }
+
       this.#history.rollback(historySnapshot);
       try {
         await this.#commitHistory();
@@ -174,13 +183,12 @@ export class AgentSession {
         state: encodeHistory(this.#history.modelSnapshot()),
         version: this.#storeVersion,
       },
-      { expectedVersion: this.#storeVersion }
+      { expectedVersion: this.#storeVersion ?? null }
     );
 
     if (!result.ok) {
-      throw new Error(
-        `Session ${JSON.stringify(this.#persistence.key)} commit conflict`
-      );
+      await this.#replaceWithStoredSession();
+      throw new SessionCommitConflictError(this.#persistence.key);
     }
 
     this.#storeVersion = result.version;
@@ -243,4 +251,10 @@ function errorMessage(error: unknown): string {
 
 function sessionKilledError(): Error {
   return new Error("Session killed");
+}
+
+class SessionCommitConflictError extends Error {
+  constructor(key: string) {
+    super(`Session ${JSON.stringify(key)} commit conflict`);
+  }
 }

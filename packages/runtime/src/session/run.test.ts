@@ -43,6 +43,13 @@ describe("AgentRun", () => {
     expect(() => run.stream()).toThrow("can only be consumed once");
   });
 
+  it("returns the same iterator for repeated async iterator access", () => {
+    const run = new BufferedAgentRun();
+    const stream = run.stream();
+
+    expect(stream[Symbol.asyncIterator]()).toBe(stream[Symbol.asyncIterator]());
+  });
+
   it("closes and discards buffered events when the stream returns early", async () => {
     const run = new BufferedAgentRun();
     const iterator = run.stream()[Symbol.asyncIterator]();

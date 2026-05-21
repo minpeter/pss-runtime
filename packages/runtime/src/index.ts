@@ -31,9 +31,9 @@ export type {
 } from "./session/events";
 export type { AgentRun } from "./session/run";
 export type { AgentInput } from "./session/session";
-export { MemorySessionStore } from "./session/store/memory";
 export type {
   CommitResult,
+  ExpectedSessionVersion,
   SessionStore,
   StoredSession,
 } from "./session/store/types";

@@ -56,15 +56,15 @@ export class BufferedAgentRun implements AgentRun {
     }
     this.#streamStarted = true;
 
-    return {
-      [Symbol.asyncIterator]: () => ({
-        next: () => this.#next(),
-        return: () => {
-          this.#cancel();
-          return Promise.resolve({ done: true, value: undefined });
-        },
-      }),
+    const iterator: AsyncIterableIterator<AgentEvent> = {
+      next: () => this.#next(),
+      return: () => {
+        this.#cancel();
+        return Promise.resolve({ done: true, value: undefined });
+      },
+      [Symbol.asyncIterator]: () => iterator,
     };
+    return iterator;
   }
 
   #cancel(): void {

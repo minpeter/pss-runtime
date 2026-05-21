@@ -1,13 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import type { CommitResult, SessionStore, StoredSession } from "./types";
 
-interface StoredFileSession {
-  state: unknown;
-  version: string;
-}
+const LOCK_POLL_INTERVAL_MS = 10;
+const LOCK_STALE_AFTER_MS = 30_000;
+const LOCK_TIMEOUT_MS = 5000;
 
 export class FileSessionStore implements SessionStore {
   readonly #directory: string;
@@ -28,7 +27,9 @@ export class FileSessionStore implements SessionStore {
       }
       if (error instanceof SyntaxError) {
         throw new Error(
-          `FileSessionStore failed to parse ${file}: ${error.message}`
+          `Invalid FileSessionStore file ${JSON.stringify(
+            file
+          )}: invalid JSON (${error.message})`
         );
       }
       throw error;
@@ -38,22 +39,25 @@ export class FileSessionStore implements SessionStore {
   async commit(
     key: string,
     next: StoredSession,
-    options?: { expectedVersion?: string }
+    options?: { expectedVersion?: string | null }
   ): Promise<CommitResult> {
     const file = this.#fileForKey(key);
+    const lockDirectory = `${file}.lock`;
     await mkdir(dirname(file), { recursive: true });
-    return await withFileLock(file, async () => {
+    await acquireFileLock(lockDirectory);
+    try {
       const current = await this.load(key);
+      const currentVersion = current?.version ?? null;
 
       if (
         options?.expectedVersion !== undefined &&
-        options.expectedVersion !== current?.version
+        options.expectedVersion !== currentVersion
       ) {
         return { ok: false, reason: "conflict" };
       }
 
       const version = String((Number(current?.version ?? "0") || 0) + 1);
-      const payload: StoredFileSession = structuredClone({
+      const payload: StoredSession = structuredClone({
         state: next.state,
         version,
       });
@@ -72,7 +76,9 @@ export class FileSessionStore implements SessionStore {
       }
 
       return { ok: true, version };
-    });
+    } finally {
+      await rm(lockDirectory, { force: true, recursive: true });
+    }
   }
 
   #fileForKey(key: string): string {
@@ -86,14 +92,18 @@ export class FileSessionStore implements SessionStore {
 function parseStoredFileSession(value: unknown, file: string): StoredSession {
   if (value === null || typeof value !== "object") {
     throw new Error(
-      `FileSessionStore unsupported session file ${file}: expected object`
+      `Invalid FileSessionStore file ${JSON.stringify(
+        file
+      )}: expected an object`
     );
   }
 
-  const candidate = value as Partial<StoredFileSession>;
+  const candidate = value as Partial<StoredSession>;
   if (typeof candidate.version !== "string" || !("state" in candidate)) {
     throw new Error(
-      `FileSessionStore unsupported session file ${file}: missing version/state`
+      `Invalid FileSessionStore file ${JSON.stringify(
+        file
+      )}: expected state and string version`
     );
   }
 
@@ -107,22 +117,9 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
 }
 
-async function withFileLock<T>(
-  file: string,
-  task: () => Promise<T>
-): Promise<T> {
-  const lockDirectory = `${file}.lock`;
-  await acquireFileLock(lockDirectory);
-  try {
-    return await task();
-  } finally {
-    await rm(lockDirectory, { force: true, recursive: true });
-  }
-}
-
 async function acquireFileLock(lockDirectory: string): Promise<void> {
   const startedAt = Date.now();
-  while (Date.now() - startedAt < 5000) {
+  while (Date.now() - startedAt < LOCK_TIMEOUT_MS) {
     try {
       await mkdir(lockDirectory);
       return;
@@ -130,12 +127,30 @@ async function acquireFileLock(lockDirectory: string): Promise<void> {
       if (!(isNodeError(error) && error.code === "EEXIST")) {
         throw error;
       }
+      await removeStaleLock(lockDirectory);
     }
 
-    await setTimeout(10);
+    await setTimeout(LOCK_POLL_INTERVAL_MS);
   }
 
   throw new Error(
-    `Timed out waiting for FileSessionStore lock ${lockDirectory}`
+    `Timed out waiting for FileSessionStore lock ${JSON.stringify(
+      lockDirectory
+    )}`
   );
+}
+
+async function removeStaleLock(lockDirectory: string): Promise<void> {
+  try {
+    const stats = await stat(lockDirectory);
+    if (Date.now() - stats.mtimeMs < LOCK_STALE_AFTER_MS) {
+      return;
+    }
+    await rm(lockDirectory, { force: true, recursive: true });
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
 }

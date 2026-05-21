@@ -38,7 +38,8 @@ The runtime owns full session state encoding and history compaction semantics.
 Adapters own persistence only through `SessionStore`:
 
 ```ts
-import { MemorySessionStore, type SessionStore } from "@minpeter/pss-runtime";
+import type { SessionStore } from "@minpeter/pss-runtime";
+import { MemorySessionStore } from "@minpeter/pss-runtime/session-store/memory";
 
 const agent = await Agent.create({
   model,

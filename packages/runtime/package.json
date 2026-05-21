@@ -11,6 +11,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./session-store/memory": {
+      "@minpeter/pss-source": "./src/session/store/memory.ts",
+      "types": "./dist/session/store/memory.d.ts",
+      "import": "./dist/session/store/memory.js"
+    },
     "./session-store/file": {
       "@minpeter/pss-source": "./src/session/store/file.ts",
       "types": "./dist/session/store/file.d.ts",

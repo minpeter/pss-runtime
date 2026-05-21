@@ -6,16 +6,16 @@ export class MemorySessionStore implements SessionStore {
 
   load(key: string): Promise<StoredSession | null> {
     const stored = this.#sessions.get(key);
-    return Promise.resolve(stored ? cloneStoredSession(stored) : null);
+    return Promise.resolve(stored ? structuredClone(stored) : null);
   }
 
   commit(
     key: string,
     next: StoredSession,
-    options?: { expectedVersion?: string }
+    options?: { expectedVersion?: string | null }
   ): Promise<CommitResult> {
     const current = this.#sessions.get(key);
-    const currentVersion = current?.version;
+    const currentVersion = current?.version ?? null;
 
     if (
       options?.expectedVersion !== undefined &&
@@ -27,11 +27,7 @@ export class MemorySessionStore implements SessionStore {
     const versionNumber = (this.#versions.get(key) ?? 0) + 1;
     const version = String(versionNumber);
     this.#versions.set(key, versionNumber);
-    this.#sessions.set(key, cloneStoredSession({ ...next, version }));
+    this.#sessions.set(key, structuredClone({ ...next, version }));
     return Promise.resolve({ ok: true, version });
   }
-}
-
-function cloneStoredSession(session: StoredSession): StoredSession {
-  return structuredClone(session);
 }
