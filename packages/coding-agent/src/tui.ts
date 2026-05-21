@@ -40,7 +40,7 @@ const input = new Input();
 
 tui.addChild(
   new Text(
-    `\x1b[1mpss-next\x1b[0m \x1b[2m(session ${sessionConfig.key} · Esc to interrupt · Ctrl-C to quit)\x1b[0m`,
+    `\x1b[1mpss-next\x1b[0m \x1b[2m(session ${safeInlineText(sessionConfig.key)} · Esc to interrupt · Ctrl-C to quit)\x1b[0m`,
     1,
     0
   )
