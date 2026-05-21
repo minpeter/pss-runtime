@@ -36,39 +36,73 @@ const typeFixtures = [
   rejectsIgnoredCreateLlmOptions,
 ];
 
+const collectRun = async (run: Awaited<ReturnType<Agent["send"]>>) => {
+  for await (const _event of run.stream()) {
+    // Drain the stream so the run can finish.
+  }
+};
+
 describe("Agent", () => {
   it("keeps AgentOptions type fixtures reachable", () => {
     expect(typeFixtures).toHaveLength(4);
   });
 
-  it("creates sessions from a caller-owned LanguageModel", () => {
-    expect(new Agent({ model: fakeModel }).createSession()).toBeDefined();
-  });
-
-  it("creates sessions from a caller-owned LLM", () => {
-    expect(new Agent({ llm: fakeLlm }).createSession()).toBeDefined();
-  });
-
-  it("rejects missing constructor options with an actionable error", () => {
-    expect(() => new Agent(undefined as unknown as AgentOptions)).toThrow(
-      missingOptionsPattern
+  it("creates agents from a caller-owned LanguageModel", async () => {
+    await expect(Agent.create({ model: fakeModel })).resolves.toBeInstanceOf(
+      Agent
     );
   });
 
-  it("rejects missing model configuration with an actionable error", () => {
-    expect(() => new Agent({} as AgentOptions)).toThrow(missingModelPattern);
+  it("creates agents from a caller-owned LLM", async () => {
+    await expect(Agent.create({ llm: fakeLlm })).resolves.toBeInstanceOf(Agent);
   });
 
-  it("rejects invalid custom LLM configuration with an actionable error", () => {
-    expect(
-      () => new Agent({ llm: "not-an-llm" } as unknown as AgentOptions)
-    ).toThrow(invalidLlmPattern);
+  it("uses the default session for agent.send", async () => {
+    const agent = await Agent.create({ llm: fakeLlm });
+    await expect(agent.send("hello")).resolves.toBeDefined();
   });
 
-  it("rejects ambiguous model and custom LLM configuration", () => {
-    expect(
-      () =>
-        new Agent({ llm: fakeLlm, model: fakeModel } as unknown as AgentOptions)
-    ).toThrow(ambiguousOptionsPattern);
+  it("reuses handles for named sessions", async () => {
+    const agent = await Agent.create({ llm: fakeLlm });
+    expect(agent.session("a")).toBe(agent.session("a"));
+    expect(agent.session("a")).not.toBe(agent.session("b"));
+  });
+
+  it("drops killed session handles so keys can be reused", async () => {
+    const agent = await Agent.create({ llm: fakeLlm });
+    const first = agent.session("reuse");
+
+    first.kill();
+    const second = agent.session("reuse");
+    await collectRun(await second.send("hello"));
+
+    expect(second).not.toBe(first);
+  });
+
+  it("rejects missing constructor options with an actionable error", async () => {
+    await expect(
+      Agent.create(undefined as unknown as AgentOptions)
+    ).rejects.toThrow(missingOptionsPattern);
+  });
+
+  it("rejects missing model configuration with an actionable error", async () => {
+    await expect(Agent.create({} as AgentOptions)).rejects.toThrow(
+      missingModelPattern
+    );
+  });
+
+  it("rejects invalid custom LLM configuration with an actionable error", async () => {
+    await expect(
+      Agent.create({ llm: "not-an-llm" } as unknown as AgentOptions)
+    ).rejects.toThrow(invalidLlmPattern);
+  });
+
+  it("rejects ambiguous model and custom LLM configuration", async () => {
+    await expect(
+      Agent.create({
+        llm: fakeLlm,
+        model: fakeModel,
+      } as unknown as AgentOptions)
+    ).rejects.toThrow(ambiguousOptionsPattern);
   });
 });

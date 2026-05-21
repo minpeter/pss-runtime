@@ -10,6 +10,11 @@
       "@minpeter/pss-source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./session-store/file": {
+      "@minpeter/pss-source": "./src/session/store/file.ts",
+      "types": "./dist/session/store/file.d.ts",
+      "import": "./dist/session/store/file.js"
     }
   },
   "files": [

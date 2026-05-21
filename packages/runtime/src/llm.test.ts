@@ -45,6 +45,12 @@ async function loadAgent() {
   return Agent;
 }
 
+async function drainRun(run: { stream(): AsyncIterable<unknown> }) {
+  for await (const _event of run.stream()) {
+    // Drain the run so model calls complete before assertions.
+  }
+}
+
 describe("createLlm", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -101,12 +107,12 @@ describe("Agent tool wiring", () => {
   it("passes injected AgentOptions tools into createLlm/generateText", async () => {
     const Agent = await loadAgent();
     const injectedTools = { injected: createNoopTool() } satisfies AgentTools;
-    const session = new Agent({
+    const agent = await Agent.create({
       model: fakeModel,
       tools: injectedTools,
-    }).createSession();
+    });
 
-    await session.submit(userText("use injected tools"));
+    await drainRun(await agent.send(userText("use injected tools")));
 
     expect(generateTextMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -118,9 +124,9 @@ describe("Agent tool wiring", () => {
 
   it("does not attach product tools by default", async () => {
     const Agent = await loadAgent();
-    const session = new Agent({ model: fakeModel }).createSession();
+    const agent = await Agent.create({ model: fakeModel });
 
-    await session.submit(userText("run without product tools"));
+    await drainRun(await agent.send(userText("run without product tools")));
 
     expect(generateTextMock).toHaveBeenCalledWith(
       expect.objectContaining({

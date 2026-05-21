@@ -8,7 +8,9 @@ import {
 } from "@earendil-works/pi-tui";
 import type { AgentEvent, UserTextContent } from "@minpeter/pss-runtime";
 import { Agent } from "@minpeter/pss-runtime";
+import { FileSessionStore } from "@minpeter/pss-runtime/session-store/file";
 import { createCodingAgentModel } from "./model";
+import { resolveCodingAgentSessionConfig } from "./session-config";
 import { tools } from "./tools";
 import {
   formatToolCallForTui,
@@ -18,13 +20,17 @@ import {
   truncateDetail,
 } from "./tui-tool-printer";
 
-const agent = new Agent({
+const sessionConfig = resolveCodingAgentSessionConfig();
+const agent = await Agent.create({
   instructions:
     "Answer in 2 short sentences and 280 characters or fewer unless the user explicitly asks for detail. Avoid headings.",
   model: createCodingAgentModel(),
+  sessions: {
+    store: new FileSessionStore(sessionConfig.directory),
+  },
   tools,
 });
-const session = agent.createSession();
+const session = agent.session(sessionConfig.key);
 
 const terminal = new ProcessTerminal();
 const tui = new TUI(terminal);
@@ -34,7 +40,7 @@ const input = new Input();
 
 tui.addChild(
   new Text(
-    "\x1b[1mpss-next\x1b[0m \x1b[2m(Esc to interrupt · Ctrl-C to quit)\x1b[0m",
+    `\x1b[1mpss-next\x1b[0m \x1b[2m(session ${sessionConfig.key} · Esc to interrupt · Ctrl-C to quit)\x1b[0m`,
     1,
     0
   )
@@ -83,13 +89,6 @@ const formatEvent = (event: AgentEvent): string | undefined => {
       return;
   }
 };
-session.subscribe((event) => {
-  const line = formatEvent(event);
-  if (line) {
-    addLine(line);
-  }
-});
-
 input.onSubmit = (text) => {
   input.setValue("");
 
@@ -100,7 +99,16 @@ input.onSubmit = (text) => {
   }
 
   session
-    .submit({ type: "user-text", text: trimmed })
+    .send(trimmed)
+    .then((run) => run.stream())
+    .then(async (stream) => {
+      for await (const event of stream) {
+        const line = formatEvent(event);
+        if (line) {
+          addLine(line);
+        }
+      }
+    })
     .catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
       addLine(`\x1b[31merror\x1b[0m: ${safeText(message)}`);
