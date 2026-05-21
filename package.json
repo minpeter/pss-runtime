@@ -18,7 +18,10 @@
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "pnpm build && changeset publish",
-    "verify:release": "node scripts/verify-release-artifacts.mjs"
+    "verify:release": "node scripts/verify-release-artifacts.mjs",
+    "boundaries": "turbo boundaries",
+    "repo:packages": "turbo query ls --output json",
+    "repo:affected": "turbo query affected"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",
@@ -26,7 +29,6 @@
     "@minpeter/pss-coding-agent": "workspace:*",
     "@minpeter/pss-runtime": "workspace:*",
     "@types/node": "latest",
-    "tsdown": "^0.22.0",
     "tsx": "latest",
     "turbo": "^2.6.1",
     "typescript": "latest",
