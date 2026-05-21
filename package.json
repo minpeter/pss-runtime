@@ -8,8 +8,8 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "node --conditions=@minpeter/pss-source --import tsx examples/basic.ts",
-    "dev:tui": "node --conditions=@minpeter/pss-source --import tsx packages/coding-agent/src/tui.ts",
+    "dev": "tsx --conditions=@minpeter/pss-source examples/basic.ts",
+    "dev:tui": "tsx --conditions=@minpeter/pss-source packages/coding-agent/src/tui.ts",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck && tsc -p tsconfig.json --noEmit",
     "test": "turbo run test && vitest run scripts/*.test.mjs",
@@ -21,11 +21,12 @@
     "verify:release": "node scripts/verify-release-artifacts.mjs"
   },
   "devDependencies": {
-    "@minpeter/pss-coding-agent": "workspace:*",
-    "@minpeter/pss-runtime": "workspace:*",
     "@biomejs/biome": "2.4.15",
     "@changesets/cli": "^2.29.7",
+    "@minpeter/pss-coding-agent": "workspace:*",
+    "@minpeter/pss-runtime": "workspace:*",
     "@types/node": "latest",
+    "tsdown": "^0.22.0",
     "tsx": "latest",
     "turbo": "^2.6.1",
     "typescript": "latest",
