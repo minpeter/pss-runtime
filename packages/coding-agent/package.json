@@ -46,7 +46,7 @@
     "provenance": true
   },
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.build.json && node ../../scripts/fix-esm-imports.mjs dist",
+    "build": "tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "lint": "ultracite check ."
@@ -59,5 +59,9 @@
     "ai": "7.0.0-canary.142",
     "dotenv": "^17.4.2",
     "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.0",
+    "vitest": "^4.1.6"
   }
 }

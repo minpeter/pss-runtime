@@ -10,6 +10,16 @@
       "@minpeter/pss-source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./session-store/memory": {
+      "@minpeter/pss-source": "./src/session/store/memory.ts",
+      "types": "./dist/session/store/memory.d.ts",
+      "import": "./dist/session/store/memory.js"
+    },
+    "./session-store/file": {
+      "@minpeter/pss-source": "./src/session/store/file.ts",
+      "types": "./dist/session/store/file.d.ts",
+      "import": "./dist/session/store/file.js"
     }
   },
   "files": [
@@ -26,12 +36,16 @@
     "provenance": true
   },
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.build.json && node ../../scripts/fix-esm-imports.mjs dist",
+    "build": "tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "lint": "ultracite check ."
   },
   "dependencies": {
     "ai": "7.0.0-canary.142"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.0",
+    "vitest": "^4.1.6"
   }
 }

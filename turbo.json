@@ -1,9 +1,19 @@
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "https://turborepo.dev/schema.json",
+  "globalDependencies": ["tsconfig.base.json"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "outputs": ["dist/**"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!README.md",
+        "!CHANGELOG.md",
+        "!src/**/*.test.ts",
+        "!src/**/*.spec.ts",
+        "!src/test-fixtures.ts",
+        "!src/**/test-fixtures.ts"
+      ]
     },
     "typecheck": {
       "dependsOn": ["^build"]
@@ -13,7 +23,6 @@
       "cache": false
     },
     "lint": {
-      "dependsOn": ["^lint"],
       "cache": false
     }
   }

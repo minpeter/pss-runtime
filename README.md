@@ -12,10 +12,15 @@ import { tools } from "@minpeter/pss-coding-agent";
 import { createCodingAgentModel } from "@minpeter/pss-coding-agent/model";
 import { Agent } from "@minpeter/pss-runtime";
 
-const session = new Agent({
+const agent = await Agent.create({
+  instructions: "Keep every answer under 3 lines.",
   model: createCodingAgentModel(),
   tools,
-}).createSession();
+});
+const conversation = await agent.send("Hello");
+for await (const event of conversation.stream()) {
+  console.dir(event, { depth: null });
+}
 ```
 
 Run the TUI:
@@ -55,6 +60,10 @@ TINYFISH_API_KEY=...
 ```
 
 `TINYFISH_API_KEY` may contain semicolon-delimited tokens.
+
+The `pss` TUI stores sessions in `~/.pss/sessions` by default. Override with
+`PSS_SESSION_DIR` and `PSS_SESSION_KEY` when you want repo-local storage or a
+shared conversation key.
 
 ## Release
 

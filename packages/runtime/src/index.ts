@@ -1,4 +1,9 @@
-export { Agent, type AgentOptions } from "./agent";
+export {
+  Agent,
+  type AgentOptions,
+  type AgentSessionOptions,
+  type SessionHandle,
+} from "./agent";
 export { type AgentLoopResult, runAgentLoop } from "./agent-loop";
 export type {
   AgentMessage,
@@ -24,8 +29,11 @@ export type {
   UserText,
   UserTextContent,
 } from "./session/events";
-export {
-  AgentSession,
-  type SessionInput,
-  type SessionOptions,
-} from "./session/session";
+export type { AgentRun } from "./session/run";
+export type { AgentInput } from "./session/session";
+export type {
+  CommitResult,
+  ExpectedSessionVersion,
+  SessionStore,
+  StoredSession,
+} from "./session/store/types";

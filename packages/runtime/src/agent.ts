@@ -1,11 +1,15 @@
 import type { LanguageModel } from "ai";
 import { type AgentTools, createLlm, type Llm } from "./llm";
-import { AgentSession, type SessionOptions } from "./session/session";
+import type { AgentRun } from "./session/run";
+import { type AgentInput, AgentSession } from "./session/session";
+import { MemorySessionStore } from "./session/store/memory";
+import type { SessionStore } from "./session/store/types";
 
 interface AgentModelOptions {
   instructions?: string;
   llm?: never;
   model: LanguageModel;
+  sessions?: AgentSessionOptions;
   tools?: AgentTools;
 }
 
@@ -13,17 +17,31 @@ interface AgentLlmOptions {
   instructions?: never;
   llm: Llm;
   model?: never;
+  sessions?: AgentSessionOptions;
   tools?: never;
+}
+
+export interface AgentSessionOptions {
+  store?: SessionStore;
+}
+
+export interface SessionHandle {
+  interrupt(): void;
+  kill(): void;
+  send(input: AgentInput): Promise<AgentRun>;
 }
 
 export type AgentOptions = AgentModelOptions | AgentLlmOptions;
 
 export class Agent {
   readonly #llm: Llm;
+  readonly #sessions = new Map<string, SessionHandle>();
+  readonly #store: SessionStore;
 
-  constructor(options: AgentOptions) {
+  private constructor(options: AgentOptions) {
     assertAgentOptions(options);
 
+    this.#store = options.sessions?.store ?? new MemorySessionStore();
     this.#llm = hasCustomLlm(options)
       ? options.llm
       : createLlm({
@@ -33,8 +51,31 @@ export class Agent {
         });
   }
 
-  createSession(options?: SessionOptions): AgentSession {
-    return new AgentSession(this.#llm, options);
+  static create(options: AgentOptions): Promise<Agent> {
+    return Promise.resolve().then(() => new Agent(options));
+  }
+
+  send(input: AgentInput): Promise<AgentRun> {
+    return this.session("default").send(input);
+  }
+
+  session(key: string): SessionHandle {
+    const existing = this.#sessions.get(key);
+    if (existing) {
+      return existing;
+    }
+
+    const session = new AgentSession(this.#llm, { key, store: this.#store });
+    const handle: SessionHandle = {
+      interrupt: () => session.interrupt(),
+      kill: () => {
+        session.kill();
+        this.#sessions.delete(key);
+      },
+      send: (input) => session.send(input),
+    };
+    this.#sessions.set(key, handle);
+    return handle;
   }
 }
 
@@ -51,16 +92,16 @@ function assertAgentOptions(options: unknown): asserts options is AgentOptions {
 
   if (hasLlm && hasModel) {
     throw new TypeError(
-      "Agent constructor: provide either options.llm or options.model, not both."
+      "Agent.create: provide either options.llm or options.model, not both."
     );
   }
 
   if ("llm" in options && options.llm !== undefined && !hasLlm) {
-    throw new TypeError("Agent constructor: invalid options.llm.");
+    throw new TypeError("Agent.create: invalid options.llm.");
   }
 
   if (!(hasLlm || hasModel)) {
-    throw new TypeError("Agent constructor: missing options.model.");
+    throw new TypeError("Agent.create: missing options.model.");
   }
 }
 
