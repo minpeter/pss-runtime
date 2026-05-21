@@ -1,5 +1,13 @@
 # @minpeter/pss-coding-agent
 
+## 0.0.5
+
+### Patch Changes
+
+- fbe0448: Make agent sessions runtime-owned and durable through an opaque session store boundary, including memory/file stores and coding-agent TUI file-backed sessions.
+- Updated dependencies [fbe0448]
+  - @minpeter/pss-runtime@0.0.5
+
 ## 0.0.4
 
 ### Patch Changes
