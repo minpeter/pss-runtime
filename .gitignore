@@ -6,3 +6,4 @@ dist
 !.env.example
 .turbo
 packages/*/.turbo
+.omo/
