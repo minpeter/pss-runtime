@@ -34,6 +34,7 @@ const REQUIRED_RUNTIME_ROOT_ALIASES = [
   "RuntimeLlmContext",
   "RuntimeLlmOutput",
 ];
+const FORBIDDEN_RUNTIME_ROOT_ALIASES = ["AgentMessage"];
 
 const RELATIVE_IMPORT_RE =
   /(?:from\s+["']|import\s*(?:\(\s*)?["'])(\.\.?\/[^"']+)(?:["'])/g;
@@ -335,6 +336,14 @@ function findRuntimeRootDeclarationLeaks({ cwd, file }) {
     (token) =>
       `${relativeToCwd(cwd, file)}: root declaration exposes raw AI SDK token ${token}`
   );
+
+  for (const alias of FORBIDDEN_RUNTIME_ROOT_ALIASES) {
+    if (text.includes(alias)) {
+      errors.push(
+        `${relativeToCwd(cwd, file)}: root declaration exposes internal runtime alias ${alias}`
+      );
+    }
+  }
 
   for (const alias of REQUIRED_RUNTIME_ROOT_ALIASES) {
     if (!text.includes(alias)) {

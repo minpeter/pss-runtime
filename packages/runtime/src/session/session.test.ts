@@ -302,7 +302,7 @@ describe("Agent session API", () => {
     ]);
   });
 
-  it("persists opaque runtime-owned session state through SessionStore", async () => {
+  it("persists versioned runtime-owned session snapshots through SessionStore", async () => {
     const store = new SpyStore();
     const agent = await Agent.create({
       llm: () => Promise.resolve([assistantMessage("DONE")]),
@@ -315,7 +315,7 @@ describe("Agent session API", () => {
     const finalCommit = store.commits.at(-1);
     expect(finalCommit?.key).toBe("spy");
     expect(finalCommit?.next.state).toEqual(
-      expect.objectContaining({ schemaVersion: 1 })
+      expect.objectContaining({ history: expect.any(Array), schemaVersion: 1 })
     );
     expect(finalCommit?.next.state).not.toBeInstanceOf(Array);
   });

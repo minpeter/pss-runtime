@@ -32,10 +32,18 @@ for await (const event of run.stream()) {
 
 `agent.send(...)` is shorthand for `agent.session("default").send(...)`.
 
+The public transcript protocol is `AgentEvent`: live runs emit runtime-defined
+events through `run.stream()`. Provider/model message history is internal
+continuation state, not a public history API.
+
 ## Session storage and portability
 
 The runtime owns full session state encoding and history compaction semantics.
 Adapters own persistence only through `SessionStore`:
+
+Stored session state is an opaque, versioned runtime snapshot for continuation.
+Do not inspect it as a replay log; exact replay should be modeled separately as
+an `AgentEvent` log if that capability is added later.
 
 ```ts
 import type { SessionStore } from "@minpeter/pss-runtime";

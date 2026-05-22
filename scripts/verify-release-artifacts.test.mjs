@@ -226,6 +226,20 @@ describe("verifyReleaseArtifacts", () => {
     ]);
   });
 
+  it("rejects internal runtime message aliases from root declarations", () => {
+    const cwd = createFixture();
+    writeFileSync(
+      join(cwd, "packages", "runtime", "dist", "index.d.ts"),
+      'export type { AgentMessage, AgentModel, AgentTools, RuntimeCreateLlmOptions, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
+    );
+
+    expect(
+      verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
+    ).toEqual([
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias AgentMessage",
+    ]);
+  });
+
   it("allows raw AI SDK types inside allowlisted internal runtime declarations", () => {
     const cwd = createFixture();
     writeFileSync(
