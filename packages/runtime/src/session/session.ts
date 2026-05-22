@@ -1,10 +1,11 @@
 import { runAgentLoop } from "../agent-loop";
-import type { AgentMessage, Llm } from "../llm";
+import type { Llm } from "../llm";
 import type { UserText } from "./events";
 import { AgentModelHistory } from "./history";
 import type { AgentRun } from "./run";
 import { BufferedAgentRun } from "./run";
-import type { SessionStore, StoredSession } from "./store/types";
+import { decodeStoredSessionSnapshot, encodeSessionSnapshot } from "./snapshot";
+import type { SessionStore } from "./store/types";
 
 export type AgentInput = string | readonly string[] | UserText;
 export type SessionInput = AgentInput;
@@ -18,11 +19,6 @@ interface SessionPersistenceOptions {
 interface QueuedInput {
   readonly input: UserText;
   readonly run: BufferedAgentRun;
-}
-
-interface EncodedSessionState {
-  readonly history: AgentMessage[];
-  readonly schemaVersion: 1;
 }
 
 export class AgentSession {
@@ -112,7 +108,7 @@ export class AgentSession {
   async #replaceWithStoredSession(): Promise<void> {
     const stored = await this.#persistence.store.load(this.#persistence.key);
     this.#storeVersion = stored?.version;
-    this.#history = new AgentModelHistory(decodeStoredHistory(stored));
+    this.#history = new AgentModelHistory(decodeStoredSessionSnapshot(stored));
   }
 
   async #drainInputQueue(): Promise<void> {
@@ -180,7 +176,7 @@ export class AgentSession {
     const result = await this.#persistence.store.commit(
       this.#persistence.key,
       {
-        state: encodeHistory(this.#history.modelSnapshot()),
+        state: encodeSessionSnapshot(this.#history.modelSnapshot()),
         version: this.#storeVersion,
       },
       { expectedVersion: this.#storeVersion ?? null }
@@ -215,30 +211,6 @@ export function normalizeAgentInput(input: AgentInput): UserText {
 
 function isStringArrayInput(input: AgentInput): input is readonly string[] {
   return Array.isArray(input);
-}
-
-function encodeHistory(history: AgentMessage[]): EncodedSessionState {
-  return { schemaVersion: 1, history };
-}
-
-function decodeStoredHistory(stored: StoredSession | null): AgentMessage[] {
-  if (!stored) {
-    return [];
-  }
-
-  const state = stored.state;
-  if (
-    state !== null &&
-    typeof state === "object" &&
-    "schemaVersion" in state &&
-    state.schemaVersion === 1 &&
-    "history" in state &&
-    Array.isArray(state.history)
-  ) {
-    return structuredClone(state.history) as AgentMessage[];
-  }
-
-  throw new Error("Unsupported stored session state");
 }
 
 function errorMessage(error: unknown): string {
