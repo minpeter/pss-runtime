@@ -6,7 +6,6 @@ export {
 } from "./agent";
 export { type AgentLoopResult, runAgentLoop } from "./agent-loop";
 export type {
-  AgentMessage,
   AgentModel,
   AgentTool,
   AgentToolExecute,
