@@ -1,6 +1,6 @@
 {
   "name": "@minpeter/pss-coding-agent",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Coding-agent product tools and TUI wiring for pss-next.",
   "type": "module",
   "main": "./dist/index.js",

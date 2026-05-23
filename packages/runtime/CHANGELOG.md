@@ -1,5 +1,16 @@
 # @minpeter/pss-runtime
 
+## 0.1.0
+
+### Minor Changes
+
+- 37a14b9: Add serializable image/file content parts to `agent.send` and session sends, preserving them through runtime-owned session snapshots.
+
+### Patch Changes
+
+- 37a14b9: Document first-pass image input support in the runtime session/send API.
+- 1b43c77: Keep runtime transcripts event-only while storing session continuation state as an internal versioned snapshot.
+
 ## 0.0.5
 
 ### Patch Changes
