@@ -32,6 +32,40 @@ for await (const event of run.stream()) {
 
 `agent.send(...)` is shorthand for `agent.session("default").send(...)`.
 
+For model providers that support multimodal input, send JSON-serializable content
+parts through the same API. String input and `readonly string[]` remain supported
+shortcuts for text-only turns.
+
+```ts
+const run = await agent.send([
+  { type: "text", text: "Describe this UI screenshot." },
+  {
+    type: "image",
+    image: "data:image/png;base64,iVBORw0KGgo...",
+    mediaType: "image/png",
+  },
+]);
+```
+
+File parts use the same JSON-serializable shape when the selected model supports
+file input:
+
+```ts
+await agent.send([
+  { type: "text", text: "Summarize the attached report." },
+  {
+    type: "file",
+    data: "data:application/pdf;base64,JVBERi0x...",
+    filename: "report.pdf",
+    mediaType: "application/pdf",
+  },
+]);
+```
+
+The runtime normalizes and persists these content parts as session continuation
+state; it does not fetch remote media, decode files, or guarantee provider support
+for every media type.
+
 The public transcript protocol is `AgentEvent`: live runs emit runtime-defined
 events through `run.stream()`. Provider/model message history is internal
 continuation state, not a public history API.

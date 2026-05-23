@@ -3,9 +3,14 @@ import {
   assistantMessage,
   toolCallPart,
   toolResultFor,
+  userMessage,
   userText,
 } from "../test-fixtures";
-import { modelMessageToAgentEvents, userTextToModelMessage } from "./mapping";
+import {
+  modelMessageToAgentEvents,
+  userMessageToModelMessage,
+  userTextToModelMessage,
+} from "./mapping";
 
 describe("session mapping", () => {
   it("maps user text to an AI SDK user model message", () => {
@@ -25,6 +30,63 @@ describe("session mapping", () => {
         { type: "text", text: "user message" },
       ],
     });
+  });
+
+  it("maps user image input to a serializable AI SDK file part", () => {
+    expect(
+      userMessageToModelMessage(
+        userMessage([
+          { type: "text", text: "describe this" },
+          {
+            type: "image",
+            image: "iVBORw0KGgo=",
+            mediaType: "image/png",
+          },
+        ])
+      )
+    ).toEqual({
+      role: "user",
+      content: [
+        { type: "text", text: "describe this" },
+        { type: "file", data: "iVBORw0KGgo=", mediaType: "image/png" },
+      ],
+    });
+  });
+
+  it("maps user file input without non-JSON URL objects", () => {
+    const message = userMessageToModelMessage(
+      userMessage([
+        {
+          type: "file",
+          data: "https://example.com/a.txt",
+          filename: "a.txt",
+          mediaType: "text/plain",
+        },
+        {
+          type: "file",
+          data: { type: "text", text: "inline document" },
+          mediaType: "text/plain",
+        },
+      ])
+    );
+
+    expect(message).toEqual({
+      role: "user",
+      content: [
+        {
+          type: "file",
+          data: "https://example.com/a.txt",
+          filename: "a.txt",
+          mediaType: "text/plain",
+        },
+        {
+          type: "file",
+          data: { type: "text", text: "inline document" },
+          mediaType: "text/plain",
+        },
+      ],
+    });
+    expect(JSON.parse(JSON.stringify(message))).toEqual(message);
   });
 
   it("projects assistant reasoning, text, and tool calls to public agent events", () => {
