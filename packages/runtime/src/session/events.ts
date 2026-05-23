@@ -4,6 +4,43 @@ export interface UserText {
   text: UserTextContent;
   type: "user-text";
 }
+
+export interface UserMessageTextPart {
+  text: string;
+  type: "text";
+}
+
+export interface UserMessageImagePart {
+  image: string;
+  mediaType?: string;
+  type: "image";
+}
+
+export type UserMessageFileData =
+  | string
+  | { data: string; type: "data" }
+  | { reference: Record<string, string>; type: "reference" }
+  | { text: string; type: "text" }
+  | { type: "url"; url: string };
+
+export interface UserMessageFilePart {
+  data: UserMessageFileData;
+  filename?: string;
+  mediaType: string;
+  type: "file";
+}
+
+export type UserMessageContentPart =
+  | UserMessageFilePart
+  | UserMessageImagePart
+  | UserMessageTextPart;
+
+export type UserMessageContent = readonly UserMessageContentPart[];
+
+export interface UserMessage {
+  content: UserMessageContent;
+  type: "user-message";
+}
 export interface AssistantText {
   text: string;
   type: "assistant-text";
@@ -27,7 +64,10 @@ export interface ToolResult {
 
 export type AgentEvent =
   /** User input was accepted into the session queue. */
+  | UserMessage
   | UserText
+  /** User multipart input was accepted into the session queue. */
+  | UserMessage
   /** A queued user input started running as a turn. */
   | { type: "turn-start" }
   /** The active turn was interrupted before normal completion. */

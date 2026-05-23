@@ -1,3 +1,6 @@
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
@@ -7,10 +10,12 @@ import {
   eventTypes,
   toolCallPart,
   toolResultFor,
+  userMessage,
   userText,
 } from "../test-fixtures";
 import type { AgentEvent } from "./events";
 import { userTextToModelMessage } from "./mapping";
+import { FileSessionStore } from "./store/file";
 import type { CommitResult, SessionStore, StoredSession } from "./store/types";
 
 const collect = async (run: Awaited<ReturnType<Agent["send"]>>) => {
@@ -124,6 +129,168 @@ describe("Agent session API", () => {
       type: "user-text",
       text: ["context", "hello"],
     });
+  });
+
+  it("agent.send accepts JSON-serializable user content parts", async () => {
+    const seenHistory: ModelMessage[][] = [];
+    const agent = await Agent.create({
+      llm: ({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+    });
+
+    const input = [
+      { type: "text", text: "describe this" },
+      { type: "image", image: "iVBORw0KGgo=", mediaType: "image/png" },
+      {
+        type: "file",
+        data: { type: "text", text: "inline document" },
+        filename: "note.txt",
+        mediaType: "text/plain",
+      },
+    ] as const;
+    const events = await collect(await agent.send(input));
+
+    expect(seenHistory).toEqual([
+      [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "describe this" },
+            { type: "file", data: "iVBORw0KGgo=", mediaType: "image/png" },
+            {
+              type: "file",
+              data: { type: "text", text: "inline document" },
+              filename: "note.txt",
+              mediaType: "text/plain",
+            },
+          ],
+        },
+      ],
+    ]);
+    expect(events[0]).toEqual({
+      type: "user-message",
+      content: input,
+    });
+  });
+
+  it("rejects malformed multipart input before queueing", async () => {
+    const agent = await Agent.create({
+      llm: () => Promise.resolve([assistantMessage("DONE")]),
+    });
+
+    await expect(
+      agent.send([{ type: "image", mediaType: "image/png" }] as never)
+    ).rejects.toThrow(
+      'Agent input content parts must be { type: "text", text }, { type: "image", image }, or { type: "file", data, mediaType }.'
+    );
+  });
+
+  it("rejects malformed explicit user-message input before queueing", async () => {
+    const agent = await Agent.create({
+      llm: () => Promise.resolve([assistantMessage("DONE")]),
+    });
+
+    await expect(
+      agent.send({
+        type: "user-message",
+        content: [{ type: "file", data: "abc" }],
+      } as never)
+    ).rejects.toThrow(
+      'Agent input content parts must be { type: "text", text }, { type: "image", image }, or { type: "file", data, mediaType }.'
+    );
+  });
+
+  it("file session store preserves image content parts across reload", async () => {
+    const input = userMessage([
+      { type: "text", text: "remember this image" },
+      {
+        type: "image",
+        image: "data:image/png;base64,ZmFrZQ==",
+        mediaType: "image/png",
+      },
+      {
+        type: "file",
+        data: { type: "text", text: "inline note" },
+        filename: "note.txt",
+        mediaType: "text/plain",
+      },
+    ]);
+    const directory = await mkdtemp(join(tmpdir(), "pss-runtime-image-store-"));
+    const store = new FileSessionStore(directory);
+
+    const first = await Agent.create({
+      llm: () => Promise.resolve([assistantMessage("stored")]),
+      sessions: { store },
+    });
+    await collect(await first.session("images").send(input));
+
+    const seenHistory: ModelMessage[][] = [];
+    const second = await Agent.create({
+      llm: ({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+      sessions: { store },
+    });
+
+    await collect(await second.session("images").send("next"));
+
+    expect(seenHistory).toEqual([
+      [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "remember this image" },
+            {
+              type: "file",
+              data: "data:image/png;base64,ZmFrZQ==",
+              mediaType: "image/png",
+            },
+            {
+              type: "file",
+              data: { type: "text", text: "inline note" },
+              filename: "note.txt",
+              mediaType: "text/plain",
+            },
+          ],
+        },
+        assistantMessage("stored"),
+        userTextToModelMessage(userText("next")),
+      ],
+    ]);
+  });
+
+  it("session.send accepts user-message events", async () => {
+    const seenHistory: ModelMessage[][] = [];
+    const agent = await Agent.create({
+      llm: ({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([]);
+      },
+    });
+
+    await collect(
+      await agent.session("custom").send(
+        userMessage([
+          { type: "text", text: "summarize" },
+          { type: "image", image: "iVBORw0KGgo=" },
+        ])
+      )
+    );
+
+    expect(seenHistory).toEqual([
+      [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "summarize" },
+            { type: "file", data: "iVBORw0KGgo=", mediaType: "image" },
+          ],
+        },
+      ],
+    ]);
   });
 
   it("session.send accepts user-text events", async () => {

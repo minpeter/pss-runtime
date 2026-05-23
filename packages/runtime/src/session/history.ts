@@ -1,6 +1,6 @@
 import type { ModelMessage } from "ai";
-import type { UserText } from "./events";
-import { userTextToModelMessage } from "./mapping";
+import { userInputToModelMessage } from "./mapping";
+import type { UserInput } from "./session";
 
 export class AgentModelHistory {
   readonly #modelHistory: ModelMessage[] = [];
@@ -20,8 +20,8 @@ export class AgentModelHistory {
     return structuredClone(this.#modelHistory);
   }
 
-  appendUserInput(input: UserText): void {
-    this.#modelHistory.push(userTextToModelMessage(input));
+  appendUserInput(input: UserInput): void {
+    this.#modelHistory.push(userInputToModelMessage(input));
     this.#triggerChange();
   }
 

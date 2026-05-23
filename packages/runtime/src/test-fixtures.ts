@@ -1,6 +1,12 @@
 import type { AssistantModelMessage, ToolCallPart, ToolModelMessage } from "ai";
 import type { Llm, LlmOutput } from "./llm";
-import type { AgentEvent, UserText, UserTextContent } from "./session/events";
+import type {
+  AgentEvent,
+  UserMessage,
+  UserMessageContent,
+  UserText,
+  UserTextContent,
+} from "./session/events";
 
 export const assistantMessage = (
   content: AssistantModelMessage["content"]
@@ -54,4 +60,9 @@ export const eventTypes = (events: AgentEvent[]) =>
 export const userText = (text: UserTextContent): UserText => ({
   type: "user-text",
   text,
+});
+
+export const userMessage = (content: UserMessageContent): UserMessage => ({
+  type: "user-message",
+  content,
 });

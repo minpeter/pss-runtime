@@ -10,15 +10,28 @@ import type {
   AssistantText,
   ToolCall,
   ToolResult,
+  UserMessage,
+  UserMessageContent,
+  UserMessageContentPart,
+  UserMessageFileData,
   UserText,
   UserTextContent,
 } from "./events";
+import type { UserInput } from "./session";
 
 type AssistantContentPart = Exclude<AssistantContent, string>[number];
 type ToolContentPart = ToolModelMessage["content"][number];
 type ModelEvent = AssistantReasoning | AssistantText | ToolCall | ToolResult;
 
-// UserText -> AI SDK UserModelMessage
+// UserInput -> AI SDK UserModelMessage
+export function userInputToModelMessage(input: UserInput): UserModelMessage {
+  if (input.type === "user-message") {
+    return userMessageToModelMessage(input);
+  }
+
+  return userTextToModelMessage(input);
+}
+
 export function userTextToModelMessage(input: UserText): UserModelMessage {
   return { role: "user", content: userTextContentToUserContent(input.text) };
 }
@@ -31,6 +44,69 @@ function userTextContentToUserContent(
   }
 
   return text.map((part) => ({ type: "text", text: part }));
+}
+
+export function userMessageToModelMessage(
+  input: UserMessage
+): UserModelMessage {
+  return {
+    role: "user",
+    content: userMessageContentToUserContent(input.content),
+  };
+}
+
+function userMessageContentToUserContent(
+  content: UserMessageContent
+): Exclude<UserModelMessage["content"], string> {
+  return content.map(userMessageContentPartToUserContentPart);
+}
+
+function userMessageContentPartToUserContentPart(
+  part: UserMessageContentPart
+): Exclude<UserModelMessage["content"], string>[number] {
+  if (part.type === "text") {
+    return { type: "text", text: part.text };
+  }
+
+  if (part.type === "image") {
+    return {
+      type: "file",
+      data: part.image,
+      mediaType: part.mediaType ?? "image",
+    };
+  }
+
+  return {
+    type: "file",
+    data: userMessageFileDataToFileData(part.data),
+    mediaType: part.mediaType,
+    ...(part.filename === undefined ? {} : { filename: part.filename }),
+  };
+}
+
+function userMessageFileDataToFileData(
+  data: UserMessageFileData
+): Extract<
+  Exclude<UserModelMessage["content"], string>[number],
+  { type: "file" }
+>["data"] {
+  if (typeof data === "string") {
+    return data;
+  }
+
+  if (data.type === "url") {
+    return data.url;
+  }
+
+  if (data.type === "data") {
+    return { type: "data", data: data.data };
+  }
+
+  if (data.type === "reference") {
+    return { type: "reference", reference: { ...data.reference } };
+  }
+
+  return { type: "text", text: data.text };
 }
 
 // AI SDK ModelMessage -> public agent events

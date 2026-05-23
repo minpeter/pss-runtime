@@ -25,11 +25,18 @@ export type {
   AssistantText,
   ToolCall,
   ToolResult,
+  UserMessage,
+  UserMessageContent,
+  UserMessageContentPart,
+  UserMessageFileData,
+  UserMessageFilePart,
+  UserMessageImagePart,
+  UserMessageTextPart,
   UserText,
   UserTextContent,
 } from "./session/events";
 export type { AgentRun } from "./session/run";
-export type { AgentInput } from "./session/session";
+export type { AgentInput, SessionInput, UserInput } from "./session/session";
 export type {
   CommitResult,
   ExpectedSessionVersion,
