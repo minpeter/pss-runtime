@@ -6,8 +6,18 @@ export {
 } from "./agent";
 export { type AgentLoopResult, runAgentLoop } from "./agent-loop";
 export type {
+  AgentAfterStepContext,
+  AgentAfterTurnContext,
+  AgentBeforeStepContext,
+  AgentBeforeTurnContext,
+  AgentHooks,
+  AgentStepResult,
+  AgentTurnResult,
+} from "./hooks";
+export type {
   AgentModel,
   AgentTool,
+  AgentToolChoice,
   AgentToolExecute,
   AgentToolExecutionOptions,
   AgentTools,
