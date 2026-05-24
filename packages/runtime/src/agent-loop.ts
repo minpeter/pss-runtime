@@ -1,4 +1,5 @@
 import type { ModelMessage } from "ai";
+import type { AgentHooks, AgentStepResult } from "./hooks";
 import type { Llm, LlmOutput } from "./llm";
 import type { AgentEventListener } from "./session/events";
 import { modelMessageToAgentEvents } from "./session/mapping";
@@ -11,20 +12,34 @@ interface ModelHistory {
 interface RunAgentLoopOptions {
   emit: AgentEventListener;
   history: ModelHistory;
+  hooks?: AgentHooks;
   llm: Llm;
   signal?: AbortSignal;
 }
 
 export type AgentLoopResult = "completed" | "aborted";
-type StepOutputResult = "continue" | "completed" | "aborted";
+type StepOutputResult = AgentStepResult | "aborted";
 
 export async function runAgentLoop({
   emit,
   history,
+  hooks,
   llm,
   signal = new AbortController().signal,
 }: RunAgentLoopOptions): Promise<AgentLoopResult> {
+  let stepIndex = 0;
+
   while (true) {
+    if (signal.aborted) {
+      return "aborted";
+    }
+
+    await hooks?.beforeStep?.({
+      history: history.modelSnapshot(),
+      signal,
+      stepIndex,
+    });
+
     if (signal.aborted) {
       return "aborted";
     }
@@ -42,12 +57,32 @@ export async function runAgentLoop({
       return "aborted";
     }
 
+    await runAfterStepHook(hooks, {
+      history: history.modelSnapshot(),
+      result,
+      signal,
+      stepIndex,
+    });
     emit({ type: "step-end" });
 
     if (result === "completed") {
       return "completed";
     }
+
+    stepIndex += 1;
   }
+}
+
+async function runAfterStepHook(
+  hooks: AgentHooks | undefined,
+  context: Parameters<NonNullable<AgentHooks["afterStep"]>>[0]
+): Promise<void> {
+  const hook = hooks?.afterStep;
+  if (!hook) {
+    return;
+  }
+
+  await Promise.allSettled([Promise.resolve().then(() => hook(context))]);
 }
 
 async function readLlmOutput({

@@ -89,6 +89,26 @@ describe("createLlm", () => {
       })
     );
   });
+
+  it("passes configured toolChoice to generateText", async () => {
+    const createLlm = await loadCreateLlm();
+    const signal = new AbortController().signal;
+    const history = [{ role: "user" as const, content: "hello" }];
+    const llm = createLlm({
+      model: fakeModel,
+      toolChoice: "required",
+    });
+
+    await expect(llm({ history, signal })).resolves.toEqual([
+      assistantMessage("DONE"),
+    ]);
+
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolChoice: "required",
+      })
+    );
+  });
 });
 
 describe("Agent tool wiring", () => {
@@ -118,6 +138,23 @@ describe("Agent tool wiring", () => {
       expect.objectContaining({
         model: fakeModel,
         tools: injectedTools,
+      })
+    );
+  });
+
+  it("passes AgentOptions toolChoice into createLlm/generateText", async () => {
+    const Agent = await loadAgent();
+    const agent = await Agent.create({
+      model: fakeModel,
+      toolChoice: "required",
+    });
+
+    await drainRun(await agent.send(userText("force tool choice")));
+
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: fakeModel,
+        toolChoice: "required",
       })
     );
   });

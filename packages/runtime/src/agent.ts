@@ -1,23 +1,33 @@
 import type { LanguageModel } from "ai";
-import { type AgentTools, createLlm, type Llm } from "./llm";
+import type { AgentHooks } from "./hooks";
+import {
+  type AgentToolChoice,
+  type AgentTools,
+  createLlm,
+  type Llm,
+} from "./llm";
 import type { AgentRun } from "./session/run";
 import { type AgentInput, AgentSession } from "./session/session";
 import { MemorySessionStore } from "./session/store/memory";
 import type { SessionStore } from "./session/store/types";
 
 interface AgentModelOptions {
+  hooks?: AgentHooks;
   instructions?: string;
   llm?: never;
   model: LanguageModel;
   sessions?: AgentSessionOptions;
+  toolChoice?: AgentToolChoice;
   tools?: AgentTools;
 }
 
 interface AgentLlmOptions {
+  hooks?: AgentHooks;
   instructions?: never;
   llm: Llm;
   model?: never;
   sessions?: AgentSessionOptions;
+  toolChoice?: never;
   tools?: never;
 }
 
@@ -34,6 +44,7 @@ export interface SessionHandle {
 export type AgentOptions = AgentModelOptions | AgentLlmOptions;
 
 export class Agent {
+  readonly #hooks?: AgentHooks;
   readonly #llm: Llm;
   readonly #sessions = new Map<string, SessionHandle>();
   readonly #store: SessionStore;
@@ -42,11 +53,13 @@ export class Agent {
     assertAgentOptions(options);
 
     this.#store = options.sessions?.store ?? new MemorySessionStore();
+    this.#hooks = options.hooks;
     this.#llm = hasCustomLlm(options)
       ? options.llm
       : createLlm({
           instructions: options.instructions,
           model: options.model,
+          toolChoice: options.toolChoice,
           tools: options.tools,
         });
   }
@@ -65,7 +78,11 @@ export class Agent {
       return existing;
     }
 
-    const session = new AgentSession(this.#llm, { key, store: this.#store });
+    const session = new AgentSession(
+      this.#llm,
+      { key, store: this.#store },
+      this.#hooks
+    );
     const handle: SessionHandle = {
       interrupt: () => session.interrupt(),
       kill: () => {
