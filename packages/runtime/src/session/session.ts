@@ -163,13 +163,13 @@ export class AgentSession {
         signal: this.#activeAbort.signal,
       });
 
-      await this.#hooks?.afterTurn?.({
+      await this.#commitHistory();
+      await runAfterTurnHook(this.#hooks, {
         history: this.#history.modelSnapshot(),
         input,
         result,
         signal: this.#activeAbort.signal,
       });
-      await this.#commitHistory();
       run.emit({ type: result === "aborted" ? "turn-abort" : "turn-end" });
     } catch (error) {
       if (error instanceof SessionCommitConflictError) {
@@ -213,6 +213,18 @@ export class AgentSession {
 
     this.#storeVersion = result.version;
   }
+}
+
+async function runAfterTurnHook(
+  hooks: AgentHooks | undefined,
+  context: Parameters<NonNullable<AgentHooks["afterTurn"]>>[0]
+): Promise<void> {
+  const hook = hooks?.afterTurn;
+  if (!hook) {
+    return;
+  }
+
+  await Promise.allSettled([Promise.resolve().then(() => hook(context))]);
 }
 
 export function normalizeAgentInput(input: AgentInput): UserInput {

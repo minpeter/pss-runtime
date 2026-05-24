@@ -139,6 +139,52 @@ describe("Agent session API", () => {
     ]);
   });
 
+  it("commits successful output before afterTurn failures", async () => {
+    const seenHistory: ModelMessage[][] = [];
+    let calls = 0;
+    const agent = await Agent.create({
+      hooks: {
+        afterTurn: () => {
+          throw new Error("after turn failed");
+        },
+      },
+      llm: ({ history }) => {
+        calls += 1;
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage(`DONE ${calls}`)]);
+      },
+    });
+
+    const firstEvents = await collect(
+      await agent.session("after-turn").send("first")
+    );
+    const secondEvents = await collect(
+      await agent.session("after-turn").send("second")
+    );
+
+    expect(eventTypes(firstEvents)).toEqual([
+      "user-text",
+      "turn-start",
+      "step-start",
+      "assistant-text",
+      "step-end",
+      "turn-end",
+    ]);
+    expect(eventTypes(secondEvents)).toEqual([
+      "user-text",
+      "turn-start",
+      "step-start",
+      "assistant-text",
+      "step-end",
+      "turn-end",
+    ]);
+    expect(seenHistory[1]).toEqual([
+      userTextToModelMessage(userText("first")),
+      assistantMessage("DONE 1"),
+      userTextToModelMessage(userText("second")),
+    ]);
+  });
+
   it("agent.send accepts multipart string input without lossy joining", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = await Agent.create({

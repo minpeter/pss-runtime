@@ -52,7 +52,7 @@ export async function runAgentLoop({
       return "aborted";
     }
 
-    await hooks?.afterStep?.({
+    await runAfterStepHook(hooks, {
       history: history.modelSnapshot(),
       result,
       signal,
@@ -66,6 +66,18 @@ export async function runAgentLoop({
 
     stepIndex += 1;
   }
+}
+
+async function runAfterStepHook(
+  hooks: AgentHooks | undefined,
+  context: Parameters<NonNullable<AgentHooks["afterStep"]>>[0]
+): Promise<void> {
+  const hook = hooks?.afterStep;
+  if (!hook) {
+    return;
+  }
+
+  await Promise.allSettled([Promise.resolve().then(() => hook(context))]);
 }
 
 async function readLlmOutput({
