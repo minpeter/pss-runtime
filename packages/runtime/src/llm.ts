@@ -11,6 +11,7 @@ export type AgentToolExecutionOptions = ToolExecutionOptions<unknown>;
 export type AgentToolExecute = NonNullable<Tool["execute"]>;
 export type AgentTool = Tool;
 export type AgentTools = ToolSet;
+export type AgentToolChoice = "auto" | "required";
 export type AgentModel = LanguageModel;
 export type AgentMessage = ModelMessage;
 export type LlmOutput = Awaited<
@@ -28,6 +29,7 @@ export type Llm = (context: LlmContext) => Promise<LlmOutput>;
 export interface CreateLlmOptions {
   instructions?: string;
   model: LanguageModel;
+  toolChoice?: AgentToolChoice;
   tools?: AgentTools;
 }
 
@@ -39,6 +41,7 @@ export type RuntimeLlmOutput = LlmOutput;
 export function createLlm({
   model,
   instructions,
+  toolChoice,
   tools,
 }: CreateLlmOptions): Llm {
   return async ({ history, signal }) => {
@@ -47,6 +50,7 @@ export function createLlm({
       instructions,
       messages: [...history],
       model,
+      toolChoice,
       tools,
     });
 

@@ -89,6 +89,26 @@ describe("createLlm", () => {
       })
     );
   });
+
+  it("passes configured toolChoice to generateText", async () => {
+    const createLlm = await loadCreateLlm();
+    const signal = new AbortController().signal;
+    const history = [{ role: "user" as const, content: "hello" }];
+    const llm = createLlm({
+      model: fakeModel,
+      toolChoice: "required",
+    });
+
+    await expect(llm({ history, signal })).resolves.toEqual([
+      assistantMessage("DONE"),
+    ]);
+
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolChoice: "required",
+      })
+    );
+  });
 });
 
 describe("Agent tool wiring", () => {
