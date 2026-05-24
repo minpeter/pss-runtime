@@ -61,6 +61,49 @@ describe("runAgentLoop", () => {
     ]);
   });
 
+  it("calls step hooks around each model loop step", async () => {
+    const hookCalls: string[] = [];
+    const events: AgentEvent[] = [];
+    const history = new AgentModelHistory();
+    const toolCall = toolCallPart("call-tool-hooks");
+    const llm = createScriptedLlm([
+      [assistantMessage([toolCall]), toolResultFor(toolCall)],
+      [assistantMessage("DONE")],
+    ]);
+
+    await expect(
+      runAgentLoop({
+        emit: (event) => events.push(event),
+        history,
+        hooks: {
+          afterStep: ({ history: snapshot, result, stepIndex }) => {
+            hookCalls.push(`after:${stepIndex}:${result}:${snapshot.length}`);
+          },
+          beforeStep: ({ history: snapshot, stepIndex }) => {
+            hookCalls.push(`before:${stepIndex}:${snapshot.length}`);
+          },
+        },
+        llm,
+      })
+    ).resolves.toBe("completed");
+
+    expect(eventTypes(events)).toEqual([
+      "step-start",
+      "tool-call",
+      "tool-result",
+      "step-end",
+      "step-start",
+      "assistant-text",
+      "step-end",
+    ]);
+    expect(hookCalls).toEqual([
+      "before:0:0",
+      "after:0:continue:2",
+      "before:1:2",
+      "after:1:completed:3",
+    ]);
+  });
+
   it("returns aborted when the LLM rejects after the signal is aborted", async () => {
     const events: AgentEvent[] = [];
     const history = new AgentModelHistory();

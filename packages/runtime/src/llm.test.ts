@@ -142,6 +142,23 @@ describe("Agent tool wiring", () => {
     );
   });
 
+  it("passes AgentOptions toolChoice into createLlm/generateText", async () => {
+    const Agent = await loadAgent();
+    const agent = await Agent.create({
+      model: fakeModel,
+      toolChoice: "required",
+    });
+
+    await drainRun(await agent.send(userText("force tool choice")));
+
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: fakeModel,
+        toolChoice: "required",
+      })
+    );
+  });
+
   it("does not attach product tools by default", async () => {
     const Agent = await loadAgent();
     const agent = await Agent.create({ model: fakeModel });

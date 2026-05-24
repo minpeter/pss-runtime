@@ -109,6 +109,36 @@ describe("Agent session API", () => {
     ]);
   });
 
+  it("calls turn hooks around a queued turn", async () => {
+    const hookCalls: string[] = [];
+    const agent = await Agent.create({
+      hooks: {
+        afterTurn: ({ history, input, result }) => {
+          hookCalls.push(`${input.type}:after:${result}:${history.length}`);
+        },
+        beforeTurn: ({ history, input }) => {
+          hookCalls.push(`${input.type}:before:${history.length}`);
+        },
+      },
+      llm: () => Promise.resolve([assistantMessage("DONE")]),
+    });
+
+    const events = await collect(await agent.send("hello"));
+
+    expect(eventTypes(events)).toEqual([
+      "user-text",
+      "turn-start",
+      "step-start",
+      "assistant-text",
+      "step-end",
+      "turn-end",
+    ]);
+    expect(hookCalls).toEqual([
+      "user-text:before:0",
+      "user-text:after:completed:2",
+    ]);
+  });
+
   it("agent.send accepts multipart string input without lossy joining", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = await Agent.create({

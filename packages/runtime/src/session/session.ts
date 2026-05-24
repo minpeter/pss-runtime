@@ -1,4 +1,5 @@
 import { runAgentLoop } from "../agent-loop";
+import type { AgentHooks } from "../hooks";
 import type { Llm } from "../llm";
 import type { UserMessage, UserMessageContentPart, UserText } from "./events";
 import { AgentModelHistory } from "./history";
@@ -27,6 +28,7 @@ interface QueuedInput {
 }
 
 export class AgentSession {
+  readonly #hooks?: AgentHooks;
   readonly #inputQueue: QueuedInput[] = [];
   readonly #llm: Llm;
   readonly #persistence: SessionPersistenceOptions;
@@ -38,7 +40,12 @@ export class AgentSession {
   #running = false;
   #storeVersion: string | undefined;
 
-  constructor(llm: Llm, persistence: SessionPersistenceOptions) {
+  constructor(
+    llm: Llm,
+    persistence: SessionPersistenceOptions,
+    hooks?: AgentHooks
+  ) {
+    this.#hooks = hooks;
     this.#llm = llm;
     this.#persistence = persistence;
   }
@@ -139,6 +146,11 @@ export class AgentSession {
     const historySnapshot = this.#history.modelSnapshot();
 
     try {
+      await this.#hooks?.beforeTurn?.({
+        history: this.#history.modelSnapshot(),
+        input,
+        signal: this.#activeAbort.signal,
+      });
       run.emit({ type: "turn-start" });
       this.#history.appendUserInput(input);
       await this.#commitHistory();
@@ -146,10 +158,17 @@ export class AgentSession {
       const result = await runAgentLoop({
         emit: (event) => run.emit(event),
         history: this.#history,
+        hooks: this.#hooks,
         llm: this.#llm,
         signal: this.#activeAbort.signal,
       });
 
+      await this.#hooks?.afterTurn?.({
+        history: this.#history.modelSnapshot(),
+        input,
+        result,
+        signal: this.#activeAbort.signal,
+      });
       await this.#commitHistory();
       run.emit({ type: result === "aborted" ? "turn-abort" : "turn-end" });
     } catch (error) {

@@ -11,11 +11,13 @@ const missingModelPattern = /missing options\.model/;
 const missingOptionsPattern = /Agent options are required/;
 
 const acceptsModelOptions: AgentOptions = {
+  hooks: {},
   instructions: "Use the injected model.",
   model: fakeModel,
+  toolChoice: "auto",
   tools: {},
 };
-const acceptsCustomLlmOptions: AgentOptions = { llm: fakeLlm };
+const acceptsCustomLlmOptions: AgentOptions = { hooks: {}, llm: fakeLlm };
 
 // @ts-expect-error custom llm and model options are mutually exclusive.
 const rejectsAmbiguousModelPrecedence: AgentOptions = {

@@ -1,4 +1,5 @@
 import type { ModelMessage } from "ai";
+import type { AgentHooks, AgentStepResult } from "./hooks";
 import type { Llm, LlmOutput } from "./llm";
 import type { AgentEventListener } from "./session/events";
 import { modelMessageToAgentEvents } from "./session/mapping";
@@ -11,24 +12,33 @@ interface ModelHistory {
 interface RunAgentLoopOptions {
   emit: AgentEventListener;
   history: ModelHistory;
+  hooks?: AgentHooks;
   llm: Llm;
   signal?: AbortSignal;
 }
 
 export type AgentLoopResult = "completed" | "aborted";
-type StepOutputResult = "continue" | "completed" | "aborted";
+type StepOutputResult = AgentStepResult | "aborted";
 
 export async function runAgentLoop({
   emit,
   history,
+  hooks,
   llm,
   signal = new AbortController().signal,
 }: RunAgentLoopOptions): Promise<AgentLoopResult> {
+  let stepIndex = 0;
+
   while (true) {
     if (signal.aborted) {
       return "aborted";
     }
 
+    await hooks?.beforeStep?.({
+      history: history.modelSnapshot(),
+      signal,
+      stepIndex,
+    });
     emit({ type: "step-start" });
     const output = await readLlmOutput({ history, llm, signal });
 
@@ -42,11 +52,19 @@ export async function runAgentLoop({
       return "aborted";
     }
 
+    await hooks?.afterStep?.({
+      history: history.modelSnapshot(),
+      result,
+      signal,
+      stepIndex,
+    });
     emit({ type: "step-end" });
 
     if (result === "completed") {
       return "completed";
     }
+
+    stepIndex += 1;
   }
 }
 
