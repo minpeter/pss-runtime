@@ -1,4 +1,4 @@
-import type { ModelMessage } from "ai";
+import type { RuntimeLlmContext } from "./llm";
 import type { UserInput } from "./session/session";
 
 export type AgentTurnResult = "aborted" | "completed";
@@ -6,7 +6,7 @@ export type AgentStepResult = "completed" | "continue";
 type MaybePromise<T> = PromiseLike<T> | T;
 
 export interface AgentBeforeTurnContext {
-  readonly history: readonly ModelMessage[];
+  readonly history: RuntimeLlmContext["history"];
   readonly input: UserInput;
   readonly signal: AbortSignal;
 }
@@ -16,7 +16,7 @@ export interface AgentAfterTurnContext extends AgentBeforeTurnContext {
 }
 
 export interface AgentBeforeStepContext {
-  readonly history: readonly ModelMessage[];
+  readonly history: RuntimeLlmContext["history"];
   readonly signal: AbortSignal;
   readonly stepIndex: number;
 }
