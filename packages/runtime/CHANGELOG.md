@@ -1,5 +1,11 @@
 # @minpeter/pss-runtime
 
+## 0.0.7
+
+### Patch Changes
+
+- c71ea7d: Add runtime `toolChoice` configuration and lifecycle hooks for turns and steps.
+
 ## 0.0.6
 
 ### Patch Changes
