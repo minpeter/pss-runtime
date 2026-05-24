@@ -596,6 +596,7 @@ describe("Agent session API", () => {
 
   it("interrupts the active run without aborting queued input", async () => {
     const firstLlmCall = createDeferred();
+    const firstLlmStarted = createDeferred();
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
     const session = (
@@ -604,6 +605,7 @@ describe("Agent session API", () => {
           calls += 1;
           seenHistory.push([...history]);
           if (calls === 1) {
+            firstLlmStarted.resolve();
             await firstLlmCall.promise;
           }
           return [assistantMessage("DONE")];
@@ -616,6 +618,7 @@ describe("Agent session API", () => {
     const firstEvents = collect(firstRun);
     const secondEvents = collect(secondRun);
 
+    await firstLlmStarted.promise;
     session.interrupt();
     firstLlmCall.resolve();
 

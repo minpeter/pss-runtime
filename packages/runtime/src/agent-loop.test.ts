@@ -157,6 +157,60 @@ describe("runAgentLoop", () => {
     ]);
   });
 
+  it("returns aborted before emitting a step when beforeStep aborts", async () => {
+    const events: AgentEvent[] = [];
+    const history = new AgentModelHistory();
+    const controller = new AbortController();
+    let llmCalled = false;
+
+    await expect(
+      runAgentLoop({
+        emit: (event) => events.push(event),
+        history,
+        hooks: {
+          beforeStep: () => {
+            controller.abort();
+          },
+        },
+        llm: () => {
+          llmCalled = true;
+          return Promise.resolve([assistantMessage("UNREACHABLE")]);
+        },
+        signal: controller.signal,
+      })
+    ).resolves.toBe("aborted");
+
+    expect(events).toEqual([]);
+    expect(llmCalled).toBe(false);
+    expect(history.modelSnapshot()).toEqual([]);
+  });
+
+  it("rejects before emitting a step when beforeStep throws", async () => {
+    const events: AgentEvent[] = [];
+    const history = new AgentModelHistory();
+    let llmCalled = false;
+
+    await expect(
+      runAgentLoop({
+        emit: (event) => events.push(event),
+        history,
+        hooks: {
+          beforeStep: () => {
+            throw new Error("before step failed");
+          },
+        },
+        llm: () => {
+          llmCalled = true;
+          return Promise.resolve([assistantMessage("UNREACHABLE")]);
+        },
+      })
+    ).rejects.toThrow("before step failed");
+
+    expect(events).toEqual([]);
+    expect(llmCalled).toBe(false);
+    expect(history.modelSnapshot()).toEqual([]);
+  });
+
   it("returns aborted when the LLM rejects after the signal is aborted", async () => {
     const events: AgentEvent[] = [];
     const history = new AgentModelHistory();
