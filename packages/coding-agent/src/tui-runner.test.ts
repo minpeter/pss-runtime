@@ -69,6 +69,41 @@ describe("TUI runner", () => {
     expect(runner.activeRun).toBeUndefined();
   });
 
+  it("consumes a distinct run returned by active steering", async () => {
+    let releaseActive: (() => void) | undefined;
+    const activeRun = createRun([
+      { text: "initial", type: "user-text" },
+      new Promise<AgentEvent>((resolve) => {
+        releaseActive = () => resolve({ type: "turn-end" });
+      }),
+    ]);
+    const fallbackRun = createRun([
+      { text: "fallback", type: "user-text" },
+      { type: "turn-end" },
+    ]);
+    const lines: string[] = [];
+    const session = {
+      send: vi.fn().mockResolvedValue(activeRun),
+      steer: vi.fn().mockResolvedValue(fallbackRun),
+    };
+    const runner = createTuiRunner({
+      addLine: (line) => lines.push(line),
+      requestRender: vi.fn(),
+      session,
+    });
+
+    runner.submit("initial");
+    await activeRun.firstEventRead;
+    runner.submit(" fallback ");
+    await fallbackRun.done;
+    releaseActive?.();
+    await activeRun.done;
+
+    expect(session.steer).toHaveBeenCalledWith("fallback");
+    expect(lines).toContain("\x1b[36myou\x1b[0m: fallback");
+    expect(runner.activeRun).toBeUndefined();
+  });
+
   it("renders active steering errors", async () => {
     const run = createRun([
       { text: "initial", type: "user-text" },

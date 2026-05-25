@@ -107,9 +107,16 @@ export function createTuiRunner({
 
     const run = activeRun;
     if (run) {
-      session.steer(trimmed).catch((error: unknown) => {
-        addLine(`\x1b[31merror\x1b[0m: ${safeText(errorMessage(error))}`);
-      });
+      session
+        .steer(trimmed)
+        .then((nextRun) => {
+          if (nextRun !== run) {
+            return consumeRun(nextRun);
+          }
+        })
+        .catch((error: unknown) => {
+          addLine(`\x1b[31merror\x1b[0m: ${safeText(errorMessage(error))}`);
+        });
       return;
     }
 
