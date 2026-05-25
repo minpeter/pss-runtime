@@ -18,6 +18,36 @@ for await (const event of run.stream()) {
 }
 ```
 
+`run.stream()` is synchronized and drives the run. The runtime waits at
+`turn-start`, `step-start`, and `step-end` until the stream consumer continues,
+so consume the stream to let the run progress. During those current-turn input
+windows, `run.input.add(input)` accepts the same input shapes as
+`session.send(input)` and inserts input into the active turn only.
+
+```ts
+const session = agent.session("default");
+const run = await session.send("Explain the latest result.");
+let askedForExample = false;
+
+for await (const event of run.stream()) {
+  if (event.type === "step-end" && !askedForExample) {
+    askedForExample = true;
+    await run.input.add("Add one concrete example.");
+  }
+}
+```
+
+Guard `step-end` additions. Runtime input added at `step-end` intentionally
+continues the current turn before the next model snapshot, even if the assistant
+already printed final-looking text. Adding input on every `step-end` can keep the
+turn running indefinitely.
+
+Runtime additions emit `runtime-input`: runtime/API-originated input mapped
+internally to the model's user role, separate from human `user-text` and
+`user-message` events. `session.send(input)` starts or enqueues a new turn;
+`run.input.add(input)` is current-turn-only and rejects after `turn-end`,
+`turn-error`, `turn-abort`, stream `return()`, or `kill()`.
+
 ## CLI
 
 ```sh
@@ -30,6 +60,11 @@ pss
 ```
 
 Bin aliases: `pss`, `pss-coding-agent`.
+
+When the TUI is idle, submitting text starts a normal `session.send()` turn. When
+a run is active, submitting text calls `activeRun.input.add(trimmed)` so the text
+lands in the current run and renders as dim `runtime: ...` input instead of a
+new human turn.
 
 ## Env
 
