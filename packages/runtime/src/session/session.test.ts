@@ -342,6 +342,152 @@ describe("Agent session API", () => {
     ]);
   });
 
+  it("runtime input at step-end continues the current turn with appended user input", async () => {
+    const seenHistory: ModelMessage[][] = [];
+    let calls = 0;
+    const agent = await Agent.create({
+      llm: ({ history }) => {
+        calls += 1;
+        seenHistory.push([...history]);
+        return Promise.resolve([
+          assistantMessage(calls === 1 ? "This could be final." : "DONE"),
+        ]);
+      },
+    });
+    const run = await agent.send("initial user");
+    const events: AgentEvent[] = [];
+    let injected = false;
+
+    for await (const event of run.stream()) {
+      events.push(event);
+      if (event.type === "step-end" && !injected) {
+        injected = true;
+        await run.input.add("extra");
+      }
+    }
+
+    expect(seenHistory).toEqual([
+      [userTextToModelMessage(userText("initial user"))],
+      [
+        userTextToModelMessage(userText("initial user")),
+        assistantMessage("This could be final."),
+        userTextToModelMessage(userText("extra")),
+      ],
+    ]);
+    expect(events).toEqual([
+      { type: "user-text", text: "initial user" },
+      { type: "turn-start" },
+      { type: "step-start" },
+      { type: "assistant-text", text: "This could be final." },
+      { type: "step-end" },
+      {
+        type: "runtime-input",
+        input: { type: "user-text", text: "extra" },
+        placement: "step-end",
+      },
+      { type: "step-start" },
+      { type: "assistant-text", text: "DONE" },
+      { type: "step-end" },
+      { type: "turn-end" },
+    ]);
+  });
+
+  it("runtime input at turn-start and step-start is visible before the first LLM snapshot", async () => {
+    const seenHistory: ModelMessage[][] = [];
+    const agent = await Agent.create({
+      llm: ({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+    });
+    const run = await agent.send("original");
+    const events: AgentEvent[] = [];
+    let addedTurnStart = false;
+    let addedStepStart = false;
+
+    for await (const event of run.stream()) {
+      events.push(event);
+      if (event.type === "turn-start" && !addedTurnStart) {
+        addedTurnStart = true;
+        await run.input.add("turn runtime");
+      }
+      if (event.type === "step-start" && !addedStepStart) {
+        addedStepStart = true;
+        await run.input.add("step runtime");
+      }
+    }
+
+    expect(seenHistory).toEqual([
+      [
+        userTextToModelMessage(userText("original")),
+        userTextToModelMessage(userText("turn runtime")),
+        userTextToModelMessage(userText("step runtime")),
+      ],
+    ]);
+    expect(events).toEqual([
+      { type: "user-text", text: "original" },
+      { type: "turn-start" },
+      {
+        type: "runtime-input",
+        input: { type: "user-text", text: "turn runtime" },
+        placement: "turn-start",
+      },
+      { type: "step-start" },
+      {
+        type: "runtime-input",
+        input: { type: "user-text", text: "step runtime" },
+        placement: "step-start",
+      },
+      { type: "assistant-text", text: "DONE" },
+      { type: "step-end" },
+      { type: "turn-end" },
+    ]);
+  });
+
+  it("runtime input preserves FIFO order for multiple additions in one window", async () => {
+    const seenHistory: ModelMessage[][] = [];
+    const agent = await Agent.create({
+      llm: ({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+    });
+    const run = await agent.send("initial");
+    const runtimeInputs: AgentEvent[] = [];
+    let added = false;
+
+    for await (const event of run.stream()) {
+      if (event.type === "step-start" && !added) {
+        added = true;
+        await run.input.add("first");
+        await run.input.add("second");
+      }
+      if (event.type === "runtime-input") {
+        runtimeInputs.push(event);
+      }
+    }
+
+    expect(runtimeInputs).toEqual([
+      {
+        type: "runtime-input",
+        input: { type: "user-text", text: "first" },
+        placement: "step-start",
+      },
+      {
+        type: "runtime-input",
+        input: { type: "user-text", text: "second" },
+        placement: "step-start",
+      },
+    ]);
+    expect(seenHistory).toEqual([
+      [
+        userTextToModelMessage(userText("initial")),
+        userTextToModelMessage(userText("first")),
+        userTextToModelMessage(userText("second")),
+      ],
+    ]);
+  });
+
   it("emits turn-error in the run when the LLM fails", async () => {
     const agent = await Agent.create({
       llm: () => Promise.reject(new Error("model unavailable")),
@@ -520,6 +666,7 @@ describe("Agent session API", () => {
 
   it("interrupts the active run without aborting queued input", async () => {
     const firstLlmCall = createDeferred();
+    const firstLlmStarted = createDeferred();
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
     const session = (
@@ -528,6 +675,7 @@ describe("Agent session API", () => {
           calls += 1;
           seenHistory.push([...history]);
           if (calls === 1) {
+            firstLlmStarted.resolve();
             await firstLlmCall.promise;
           }
           return [assistantMessage("DONE")];
@@ -540,6 +688,7 @@ describe("Agent session API", () => {
     const firstEvents = collect(firstRun);
     const secondEvents = collect(secondRun);
 
+    await firstLlmStarted.promise;
     session.interrupt();
     firstLlmCall.resolve();
 

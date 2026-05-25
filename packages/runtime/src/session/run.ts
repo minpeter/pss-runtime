@@ -1,6 +1,7 @@
 import type { AgentEvent } from "./events";
+import type { AgentInput } from "./session";
 
-export type RunInput = unknown;
+export type RunInput = AgentInput;
 
 export interface AgentRunInput {
   add(input: RunInput): Promise<void>;

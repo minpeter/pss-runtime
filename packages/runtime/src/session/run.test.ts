@@ -147,7 +147,7 @@ describe("AgentRun", () => {
   it("delegates input.add to the injected handler", async () => {
     const addInput = vi.fn(async (_input: unknown) => undefined);
     const run = new BufferedAgentRun({ addInput });
-    const input = { type: "user-text", text: "runtime" };
+    const input = { type: "user-text", text: "runtime" } as const;
 
     await expect(run.input.add(input)).resolves.toBeUndefined();
 

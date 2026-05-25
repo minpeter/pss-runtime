@@ -1,6 +1,11 @@
 import { runAgentLoop } from "../agent-loop";
 import type { Llm } from "../llm";
-import type { UserMessage, UserMessageContentPart, UserText } from "./events";
+import type {
+  RuntimeInput,
+  UserMessage,
+  UserMessageContentPart,
+  UserText,
+} from "./events";
 import { AgentModelHistory } from "./history";
 import type { AgentRun } from "./run";
 import { BufferedAgentRun } from "./run";
@@ -24,6 +29,19 @@ interface SessionPersistenceOptions {
 interface QueuedInput {
   readonly input: UserInput;
   readonly run: BufferedAgentRun;
+  readonly runtimeInput: RuntimeInputState;
+}
+
+type RuntimeInputPlacement = RuntimeInput["placement"];
+
+interface QueuedRuntimeInput {
+  readonly input: UserInput;
+  readonly placement: RuntimeInputPlacement;
+}
+
+interface RuntimeInputState {
+  placement?: RuntimeInputPlacement;
+  readonly queue: QueuedRuntimeInput[];
 }
 
 export class AgentSession {
@@ -54,10 +72,28 @@ export class AgentSession {
       throw sessionKilledError();
     }
 
+    const runtimeInput: RuntimeInputState = { queue: [] };
     const acceptedInput = normalizeAgentInput(input);
-    const run = new BufferedAgentRun();
+    const run = new BufferedAgentRun({
+      addInput: (input) => {
+        if (!runtimeInput.placement) {
+          throw new Error(
+            "AgentRun.input.add() can only be used during an active run input window"
+          );
+        }
+
+        runtimeInput.queue.push({
+          input: normalizeAgentInput(input),
+          placement: runtimeInput.placement,
+        });
+      },
+    });
     run.emit(acceptedInput);
-    this.#inputQueue.push({ input: structuredClone(acceptedInput), run });
+    this.#inputQueue.push({
+      input: structuredClone(acceptedInput),
+      run,
+      runtimeInput,
+    });
     this.#drainInputQueue().catch((error: unknown) => {
       run.emit({ type: "turn-error", message: errorMessage(error) });
       run.close();
@@ -134,17 +170,50 @@ export class AgentSession {
     }
   }
 
-  async #processQueuedInput({ input, run }: QueuedInput): Promise<void> {
+  async #processQueuedInput({
+    input,
+    run,
+    runtimeInput,
+  }: QueuedInput): Promise<void> {
     this.#activeAbort = new AbortController();
     const historySnapshot = this.#history.modelSnapshot();
 
     try {
-      run.emit({ type: "turn-start" });
+      await this.#withRuntimeInputWindow(
+        runtimeInput,
+        "turn-start",
+        async () => {
+          await run.emitBoundary({ type: "turn-start" });
+        }
+      );
       this.#history.appendUserInput(input);
       await this.#commitHistory();
+      await this.#drainRuntimeInput(run, runtimeInput, "turn-start");
 
       const result = await runAgentLoop({
-        emit: (event) => run.emit(event),
+        emit: async (event) => {
+          if (event.type === "step-start" || event.type === "step-end") {
+            await this.#withRuntimeInputWindow(
+              runtimeInput,
+              event.type,
+              async () => {
+                await run.emitBoundary(event);
+              }
+            );
+            const runtimeInputAdded = await this.#drainRuntimeInput(
+              run,
+              runtimeInput,
+              event.type
+            );
+
+            if (event.type === "step-end") {
+              return { runtimeInputAdded };
+            }
+            return;
+          }
+
+          run.emit(event);
+        },
         history: this.#history,
         llm: this.#llm,
         signal: this.#activeAbort.signal,
@@ -155,6 +224,7 @@ export class AgentSession {
     } catch (error) {
       if (error instanceof SessionCommitConflictError) {
         run.emit({ type: "turn-error", message: error.message });
+        this.#activeAbort = undefined;
         return;
       }
 
@@ -168,12 +238,13 @@ export class AgentSession {
             rollbackError
           )}`,
         });
+        this.#activeAbort = undefined;
         return;
       }
       run.emit({ type: "turn-error", message: errorMessage(error) });
     } finally {
-      run.close();
       this.#activeAbort = undefined;
+      run.close();
     }
   }
 
@@ -194,6 +265,49 @@ export class AgentSession {
 
     this.#storeVersion = result.version;
   }
+
+  async #withRuntimeInputWindow<T>(
+    runtimeInput: RuntimeInputState,
+    placement: RuntimeInputPlacement,
+    callback: () => Promise<T>
+  ): Promise<T> {
+    runtimeInput.placement = placement;
+    try {
+      return await callback();
+    } finally {
+      runtimeInput.placement = undefined;
+    }
+  }
+
+  async #drainRuntimeInput(
+    run: BufferedAgentRun,
+    runtimeInput: RuntimeInputState,
+    placement: RuntimeInputPlacement
+  ): Promise<boolean> {
+    let added = false;
+    let next = shiftRuntimeInput(runtimeInput, placement);
+    while (next) {
+      added = true;
+      run.emit({ type: "runtime-input", input: next.input, placement });
+      this.#history.appendUserInput(next.input);
+      await this.#commitHistory();
+      next = shiftRuntimeInput(runtimeInput, placement);
+    }
+
+    return added;
+  }
+}
+
+function shiftRuntimeInput(
+  runtimeInput: RuntimeInputState,
+  placement: RuntimeInputPlacement
+): QueuedRuntimeInput | undefined {
+  const index = runtimeInput.queue.findIndex((input) => input.placement === placement);
+  if (index === -1) {
+    return undefined;
+  }
+
+  return runtimeInput.queue.splice(index, 1)[0];
 }
 
 export function normalizeAgentInput(input: AgentInput): UserInput {
