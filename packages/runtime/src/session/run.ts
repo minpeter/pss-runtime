@@ -1,31 +1,72 @@
 import type { AgentEvent } from "./events";
 
+export type RunInput = unknown;
+
+export interface AgentRunInput {
+  add(input: RunInput): Promise<void>;
+}
+
 export interface AgentRun {
+  readonly input: AgentRunInput;
   stream(): AsyncIterable<AgentEvent>;
 }
 
+interface AgentRunOptions {
+  readonly addInput?: (input: RunInput) => Promise<void> | void;
+}
+
+interface QueuedEvent {
+  readonly ack?: () => void;
+  readonly event: AgentEvent;
+}
+
+interface NextWaiter {
+  readonly reject: (error: unknown) => void;
+  readonly resolve: (value: IteratorResult<AgentEvent>) => void;
+}
+
 export class BufferedAgentRun implements AgentRun {
-  readonly #events: AgentEvent[] = [];
-  readonly #waiters: Array<{
-    reject: (error: unknown) => void;
-    resolve: (value: IteratorResult<AgentEvent>) => void;
-  }> = [];
+  readonly #events: QueuedEvent[] = [];
+  readonly #inputHandler: (input: RunInput) => Promise<void> | void;
   #closed = false;
   #error: unknown;
+  #pendingAck: (() => void) | undefined;
+  #resultPending = false;
   #streamStarted = false;
+  #waiter: NextWaiter | undefined;
+
+  readonly input: AgentRunInput = {
+    add: async (input) => {
+      if (this.#closed) {
+        throw new Error(
+          "AgentRun.input.add() cannot be used after the run is closed"
+        );
+      }
+
+      await this.#inputHandler(input);
+    },
+  };
+
+  constructor(options: AgentRunOptions = {}) {
+    this.#inputHandler = options.addInput ?? (() => undefined);
+  }
 
   emit(event: AgentEvent): void {
     if (this.#closed) {
       return;
     }
 
-    const waiter = this.#waiters.shift();
-    if (waiter) {
-      waiter.resolve({ done: false, value: event });
-      return;
+    this.#enqueue({ event: structuredClone(event) });
+  }
+
+  emitBoundary(event: AgentEvent): Promise<void> {
+    if (this.#closed) {
+      return Promise.resolve();
     }
 
-    this.#events.push(structuredClone(event));
+    return new Promise((resolve) => {
+      this.#enqueue({ ack: resolve, event: structuredClone(event) });
+    });
   }
 
   close(error?: unknown): void {
@@ -35,19 +76,19 @@ export class BufferedAgentRun implements AgentRun {
 
     this.#closed = true;
     this.#error = error;
+    this.#settlePendingAck();
 
-    while (this.#waiters.length > 0) {
-      const waiter = this.#waiters.shift();
-      if (!waiter) {
-        continue;
-      }
-
-      if (error) {
-        waiter.reject(error);
-      } else {
-        waiter.resolve({ done: true, value: undefined });
-      }
+    if (!this.#waiter) {
+      return;
     }
+
+    const waiter = this.#waiter;
+    this.#waiter = undefined;
+    if (error) {
+      waiter.reject(error);
+      return;
+    }
+    waiter.resolve({ done: true, value: undefined });
   }
 
   stream(): AsyncIterable<AgentEvent> {
@@ -68,14 +109,34 @@ export class BufferedAgentRun implements AgentRun {
   }
 
   #cancel(): void {
+    this.#settleQueuedAcks();
     this.#events.length = 0;
     this.close();
   }
 
+  #enqueue(event: QueuedEvent): void {
+    const waiter = this.#waiter;
+    if (waiter) {
+      this.#waiter = undefined;
+      this.#deliver(waiter.resolve, event);
+      return;
+    }
+
+    this.#events.push(event);
+  }
+
   #next(): Promise<IteratorResult<AgentEvent>> {
+    if (this.#resultPending || this.#waiter) {
+      return Promise.reject(
+        new Error("AgentRun.stream() does not allow concurrent next() calls")
+      );
+    }
+
+    this.#settlePendingAck();
+
     const event = this.#events.shift();
     if (event) {
-      return Promise.resolve({ done: false, value: event });
+      return new Promise((resolve) => this.#deliver(resolve, event));
     }
 
     if (this.#closed) {
@@ -86,7 +147,31 @@ export class BufferedAgentRun implements AgentRun {
     }
 
     return new Promise((resolve, reject) => {
-      this.#waiters.push({ reject, resolve });
+      this.#waiter = { reject, resolve };
     });
+  }
+
+  #deliver(
+    resolve: (value: IteratorResult<AgentEvent>) => void,
+    { ack, event }: QueuedEvent
+  ): void {
+    this.#resultPending = true;
+    queueMicrotask(() => {
+      this.#resultPending = false;
+    });
+    this.#pendingAck = ack;
+    resolve({ done: false, value: event });
+  }
+
+  #settlePendingAck(): void {
+    const ack = this.#pendingAck;
+    this.#pendingAck = undefined;
+    ack?.();
+  }
+
+  #settleQueuedAcks(): void {
+    for (const event of this.#events) {
+      event.ack?.();
+    }
   }
 }
