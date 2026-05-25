@@ -40,7 +40,9 @@ export class BufferedAgentRun implements AgentRun {
   readonly input: AgentRunInput = {
     add: async (input) => {
       if (this.#closed) {
-        throw new Error(`AgentRun.input.add() cannot be used after ${this.#closedReason}`);
+        throw new Error(
+          `AgentRun.input.add() cannot be used after ${this.#closedReason}`
+        );
       }
 
       await this.#inputHandler(input);

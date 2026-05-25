@@ -33,6 +33,7 @@ interface QueuedInput {
 }
 
 type RuntimeInputPlacement = RuntimeInput["placement"];
+const noBoundaryDecision = undefined;
 
 interface QueuedRuntimeInput {
   readonly input: UserInput;
@@ -41,8 +42,8 @@ interface QueuedRuntimeInput {
 
 interface RuntimeInputState {
   closedReason?: string;
-  placement?: RuntimeInputPlacement;
   pending: Promise<void>;
+  placement?: RuntimeInputPlacement;
   readonly queue: QueuedRuntimeInput[];
 }
 
@@ -75,7 +76,10 @@ export class AgentSession {
       throw sessionKilledError();
     }
 
-    const runtimeInput: RuntimeInputState = { pending: Promise.resolve(), queue: [] };
+    const runtimeInput: RuntimeInputState = {
+      pending: Promise.resolve(),
+      queue: [],
+    };
     const acceptedInput = normalizeAgentInput(input);
     const run = new BufferedAgentRun({
       addInput: (input) => this.#addRuntimeInput(runtimeInput, input),
@@ -104,7 +108,10 @@ export class AgentSession {
 
     this.#killed = true;
     this.#activeAbort?.abort();
-    this.#closeRuntimeInput(this.#activeRuntimeInput, sessionKilledError().message);
+    this.#closeRuntimeInput(
+      this.#activeRuntimeInput,
+      sessionKilledError().message
+    );
 
     while (this.#inputQueue.length > 0) {
       const item = this.#inputQueue.shift();
@@ -204,7 +211,7 @@ export class AgentSession {
             if (event.type === "step-end") {
               return { runtimeInputAdded };
             }
-            return;
+            return noBoundaryDecision;
           }
 
           run.emit(event);
@@ -278,11 +285,9 @@ export class AgentSession {
     runtimeInput: RuntimeInputState | undefined,
     reason = "the run reached a terminal state"
   ): void {
-    if (!runtimeInput?.closedReason) {
-      if (runtimeInput) {
-        runtimeInput.closedReason = reason;
-        runtimeInput.placement = undefined;
-      }
+    if (!runtimeInput?.closedReason && runtimeInput) {
+      runtimeInput.closedReason = reason;
+      runtimeInput.placement = undefined;
     }
   }
 
@@ -340,9 +345,11 @@ function shiftRuntimeInput(
   runtimeInput: RuntimeInputState,
   placement: RuntimeInputPlacement
 ): QueuedRuntimeInput | undefined {
-  const index = runtimeInput.queue.findIndex((input) => input.placement === placement);
+  const index = runtimeInput.queue.findIndex(
+    (input) => input.placement === placement
+  );
   if (index === -1) {
-    return undefined;
+    return;
   }
 
   return runtimeInput.queue.splice(index, 1)[0];

@@ -68,7 +68,9 @@ describe("AgentRun", () => {
   it("rejects duplicate stream readers", () => {
     const run = new BufferedAgentRun();
     run.stream();
-    expect(() => run.stream()).toThrow("AgentRun.stream() can only be consumed once");
+    expect(() => run.stream()).toThrow(
+      "AgentRun.stream() can only be consumed once"
+    );
   });
 
   it("returns the same iterator for repeated async iterator access", () => {

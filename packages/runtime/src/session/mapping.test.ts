@@ -6,12 +6,12 @@ import {
   userMessage,
   userText,
 } from "../test-fixtures";
+import type { AgentEvent, RuntimeInput } from "./events";
 import {
   modelMessageToAgentEvents,
   userMessageToModelMessage,
   userTextToModelMessage,
 } from "./mapping";
-import type { AgentEvent, RuntimeInput } from "./events";
 import type { UserInput } from "./session";
 
 describe("session mapping", () => {
