@@ -23,8 +23,8 @@ export interface TuiRunnerOptions {
 
 export interface TuiRunner {
   readonly activeRun: AgentRun | undefined;
-  consumeRun(run: AgentRun): Promise<void>;
   clearActiveRun(run?: AgentRun): void;
+  consumeRun(run: AgentRun): Promise<void>;
   submit(text: string): void;
 }
 

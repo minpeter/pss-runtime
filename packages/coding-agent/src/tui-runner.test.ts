@@ -17,7 +17,10 @@ describe("TUI runner", () => {
   });
 
   it("starts idle submissions with session.send and consumes the run", async () => {
-    const run = createRun([{ text: "hello", type: "user-text" }, { type: "turn-end" }]);
+    const run = createRun([
+      { text: "hello", type: "user-text" },
+      { type: "turn-end" },
+    ]);
     const session = { send: vi.fn().mockResolvedValue(run) };
     const lines: string[] = [];
     const runner = createTuiRunner({
@@ -133,7 +136,7 @@ function createRun(events: readonly StreamItem[]): TestRun {
     stop: () => {
       stopped = true;
     },
-    stream: async function* () {
+    async *stream() {
       try {
         for (const item of events) {
           if (stopped) {
