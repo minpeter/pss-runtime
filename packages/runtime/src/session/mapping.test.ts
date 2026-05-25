@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   assistantMessage,
   toolCallPart,
@@ -11,8 +11,31 @@ import {
   userMessageToModelMessage,
   userTextToModelMessage,
 } from "./mapping";
+import type { AgentEvent, RuntimeInput } from "./events";
+import type { UserInput } from "./session";
 
 describe("session mapping", () => {
+  it("exposes runtime-input as runtime-originated current-turn input", () => {
+    const input = userText("runtime hint");
+    const event: RuntimeInput = {
+      type: "runtime-input",
+      input,
+      placement: "step-start",
+    };
+    const observed: AgentEvent = event;
+
+    if (observed.type !== "runtime-input") {
+      throw new Error("expected runtime-input event");
+    }
+
+    expectTypeOf(observed.input).toEqualTypeOf<UserInput>();
+    expectTypeOf(observed.placement).toEqualTypeOf<
+      "turn-start" | "step-start" | "step-end"
+    >();
+    expect(observed.input).toEqual(input);
+    expect(observed.placement).toBe("step-start");
+  });
+
   it("maps user text to an AI SDK user model message", () => {
     expect(userTextToModelMessage(userText("hello"))).toEqual({
       role: "user",
@@ -177,5 +200,14 @@ describe("session mapping", () => {
     expect(
       modelMessageToAgentEvents(userTextToModelMessage(userText("hi")))
     ).toEqual([]);
+  });
+
+  it("does not project runtime-input from model output", () => {
+    const eventTypes = modelMessageToAgentEvents(
+      assistantMessage("runtime-input")
+    ).map((event) => event.type);
+
+    expect(eventTypes).toEqual(["assistant-text"]);
+    expect(eventTypes).not.toContain("runtime-input");
   });
 });

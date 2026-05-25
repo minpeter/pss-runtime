@@ -1,3 +1,5 @@
+import type { UserInput } from "./session";
+
 export type UserTextContent = string | readonly string[];
 
 export interface UserText {
@@ -41,6 +43,17 @@ export interface UserMessage {
   content: UserMessageContent;
   type: "user-message";
 }
+
+export interface RuntimeInput {
+  /**
+   * Runtime/API-originated model input inserted into the current turn.
+   * This is distinct from human-originated user-text and user-message input.
+   */
+  input: UserInput;
+  placement: "turn-start" | "step-start" | "step-end";
+  type: "runtime-input";
+}
+
 export interface AssistantText {
   text: string;
   type: "assistant-text";
@@ -64,10 +77,11 @@ export interface ToolResult {
 
 export type AgentEvent =
   /** User input was accepted into the session queue. */
-  | UserMessage
   | UserText
   /** User multipart input was accepted into the session queue. */
   | UserMessage
+  /** Runtime/API-originated input inserted into the current turn, not human input. */
+  | RuntimeInput
   /** A queued user input started running as a turn. */
   | { type: "turn-start" }
   /** The active turn was interrupted before normal completion. */
