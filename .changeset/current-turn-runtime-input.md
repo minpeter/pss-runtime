@@ -1,6 +1,6 @@
 ---
-"@minpeter/pss-runtime": minor
-"@minpeter/pss-coding-agent": minor
+"@minpeter/pss-runtime": patch
+"@minpeter/pss-coding-agent": patch
 ---
 
 Document the synchronized run stream driver, current-turn runtime input API, and TUI active-run input behavior.
