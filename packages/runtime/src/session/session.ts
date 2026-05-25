@@ -40,7 +40,9 @@ interface QueuedRuntimeInput {
 }
 
 interface RuntimeInputState {
+  closedReason?: string;
   placement?: RuntimeInputPlacement;
+  pending: Promise<void>;
   readonly queue: QueuedRuntimeInput[];
 }
 
@@ -49,6 +51,7 @@ export class AgentSession {
   readonly #llm: Llm;
   readonly #persistence: SessionPersistenceOptions;
   #activeAbort?: AbortController;
+  #activeRuntimeInput?: RuntimeInputState;
   #history = new AgentModelHistory();
   #killed = false;
   #loadPromise?: Promise<void>;
@@ -72,21 +75,10 @@ export class AgentSession {
       throw sessionKilledError();
     }
 
-    const runtimeInput: RuntimeInputState = { queue: [] };
+    const runtimeInput: RuntimeInputState = { pending: Promise.resolve(), queue: [] };
     const acceptedInput = normalizeAgentInput(input);
     const run = new BufferedAgentRun({
-      addInput: (input) => {
-        if (!runtimeInput.placement) {
-          throw new Error(
-            "AgentRun.input.add() can only be used during an active run input window"
-          );
-        }
-
-        runtimeInput.queue.push({
-          input: normalizeAgentInput(input),
-          placement: runtimeInput.placement,
-        });
-      },
+      addInput: (input) => this.#addRuntimeInput(runtimeInput, input),
     });
     run.emit(acceptedInput);
     this.#inputQueue.push({
@@ -112,14 +104,16 @@ export class AgentSession {
 
     this.#killed = true;
     this.#activeAbort?.abort();
+    this.#closeRuntimeInput(this.#activeRuntimeInput, sessionKilledError().message);
 
     while (this.#inputQueue.length > 0) {
       const item = this.#inputQueue.shift();
+      this.#closeRuntimeInput(item?.runtimeInput, sessionKilledError().message);
       item?.run.emit({
         type: "turn-error",
         message: sessionKilledError().message,
       });
-      item?.run.close();
+      item?.run.close(undefined, sessionKilledError().message);
     }
   }
 
@@ -176,6 +170,7 @@ export class AgentSession {
     runtimeInput,
   }: QueuedInput): Promise<void> {
     this.#activeAbort = new AbortController();
+    this.#activeRuntimeInput = runtimeInput;
     const historySnapshot = this.#history.modelSnapshot();
 
     try {
@@ -220,10 +215,13 @@ export class AgentSession {
       });
 
       await this.#commitHistory();
-      run.emit({ type: result === "aborted" ? "turn-abort" : "turn-end" });
+      const terminalEvent = result === "aborted" ? "turn-abort" : "turn-end";
+      run.emit({ type: terminalEvent });
+      this.#closeRuntimeInput(runtimeInput, terminalEvent);
     } catch (error) {
       if (error instanceof SessionCommitConflictError) {
         run.emit({ type: "turn-error", message: error.message });
+        this.#closeRuntimeInput(runtimeInput, "a session commit conflict");
         this.#activeAbort = undefined;
         return;
       }
@@ -238,13 +236,53 @@ export class AgentSession {
             rollbackError
           )}`,
         });
+        this.#closeRuntimeInput(runtimeInput, "turn-error");
         this.#activeAbort = undefined;
         return;
       }
       run.emit({ type: "turn-error", message: errorMessage(error) });
+      this.#closeRuntimeInput(runtimeInput, "turn-error");
     } finally {
+      this.#closeRuntimeInput(runtimeInput);
       this.#activeAbort = undefined;
-      run.close();
+      this.#activeRuntimeInput = undefined;
+      run.close(undefined, runtimeInput.closedReason);
+    }
+  }
+
+  #addRuntimeInput(
+    runtimeInput: RuntimeInputState,
+    input: AgentInput
+  ): Promise<void> {
+    const next = runtimeInput.pending.then(() => {
+      if (runtimeInput.closedReason) {
+        throw runtimeInputClosedError(runtimeInput.closedReason);
+      }
+
+      if (!runtimeInput.placement) {
+        throw new Error(
+          "AgentRun.input.add() can only be used during an active run input window"
+        );
+      }
+
+      runtimeInput.queue.push({
+        input: normalizeAgentInput(input),
+        placement: runtimeInput.placement,
+      });
+    });
+    runtimeInput.pending = next.catch(() => undefined);
+    return next;
+  }
+
+  #closeRuntimeInput(
+    runtimeInput: RuntimeInputState | undefined,
+    reason = "the run reached a terminal state"
+  ): void {
+    if (!runtimeInput?.closedReason) {
+      if (runtimeInput) {
+        runtimeInput.closedReason = reason;
+        runtimeInput.placement = undefined;
+      }
     }
   }
 
@@ -441,6 +479,10 @@ function errorMessage(error: unknown): string {
 
 function sessionKilledError(): Error {
   return new Error("Session killed");
+}
+
+function runtimeInputClosedError(reason: string): Error {
+  return new Error(`AgentRun.input.add() cannot be used after ${reason}`);
 }
 
 class SessionCommitConflictError extends Error {

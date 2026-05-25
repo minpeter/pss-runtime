@@ -86,6 +86,24 @@ class ConflictOnceStore extends SpyStore {
   }
 }
 
+class ConflictOnCommitStore extends SpyStore {
+  commitCount = 0;
+  conflictOnCommit = 1;
+
+  override commit(
+    key: string,
+    next: StoredSession,
+    options?: { expectedVersion?: string | null }
+  ): Promise<CommitResult> {
+    this.commitCount += 1;
+    if (this.commitCount === this.conflictOnCommit) {
+      return Promise.resolve({ ok: false, reason: "conflict" });
+    }
+
+    return super.commit(key, next, options);
+  }
+}
+
 describe("Agent session API", () => {
   it("agent.send accepts string input and streams one run", async () => {
     const seenHistory: ModelMessage[][] = [];
@@ -486,6 +504,317 @@ describe("Agent session API", () => {
         userTextToModelMessage(userText("second")),
       ],
     ]);
+  });
+
+  it("runtime input preserves FIFO order for concurrent additions in one window", async () => {
+    const seenHistory: ModelMessage[][] = [];
+    const agent = await Agent.create({
+      llm: ({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+    });
+    const run = await agent.send("initial");
+    const runtimeInputs: AgentEvent[] = [];
+    let added = false;
+
+    for await (const event of run.stream()) {
+      if (event.type === "step-start" && !added) {
+        added = true;
+        await Promise.all([
+          run.input.add("first"),
+          run.input.add("second"),
+          run.input.add("third"),
+        ]);
+      }
+      if (event.type === "runtime-input") {
+        runtimeInputs.push(event);
+      }
+    }
+
+    expect(runtimeInputs).toEqual([
+      {
+        type: "runtime-input",
+        input: { type: "user-text", text: "first" },
+        placement: "step-start",
+      },
+      {
+        type: "runtime-input",
+        input: { type: "user-text", text: "second" },
+        placement: "step-start",
+      },
+      {
+        type: "runtime-input",
+        input: { type: "user-text", text: "third" },
+        placement: "step-start",
+      },
+    ]);
+    expect(seenHistory).toEqual([
+      [
+        userTextToModelMessage(userText("initial")),
+        userTextToModelMessage(userText("first")),
+        userTextToModelMessage(userText("second")),
+        userTextToModelMessage(userText("third")),
+      ],
+    ]);
+  });
+
+  it("keeps queued session.send input as a separate turn while runtime input affects the active turn", async () => {
+    const stepGate = createDeferred();
+    const seenHistory: ModelMessage[][] = [];
+    let calls = 0;
+    const session = (
+      await Agent.create({
+        llm: async ({ history }) => {
+          calls += 1;
+          seenHistory.push([...history]);
+          if (calls === 1) {
+            await stepGate.promise;
+            return [assistantMessage("ACTIVE")];
+          }
+          return [assistantMessage("QUEUED")];
+        },
+      })
+    ).session("queue-separation");
+    const firstRun = await session.send("first");
+    const secondRun = await session.send("second");
+    const firstEvents: AgentEvent[] = [];
+    let added = false;
+    const firstCollecting = (async () => {
+      for await (const event of firstRun.stream()) {
+        firstEvents.push(event);
+        if (event.type === "step-start" && !added) {
+          added = true;
+          await firstRun.input.add("extra");
+          stepGate.resolve();
+        }
+      }
+    })();
+    const secondEvents = collect(secondRun);
+
+    await Promise.all([firstCollecting, secondEvents]);
+
+    expect(firstEvents).toContainEqual({
+      type: "runtime-input",
+      input: { type: "user-text", text: "extra" },
+      placement: "step-start",
+    });
+    expect(seenHistory).toEqual([
+      [
+        userTextToModelMessage(userText("first")),
+        userTextToModelMessage(userText("extra")),
+      ],
+      [
+        userTextToModelMessage(userText("first")),
+        userTextToModelMessage(userText("extra")),
+        assistantMessage("ACTIVE"),
+        userTextToModelMessage(userText("second")),
+      ],
+    ]);
+  });
+
+  it("normalizes multipart image and file runtime input like session.send", async () => {
+    const seenHistory: ModelMessage[][] = [];
+    const agent = await Agent.create({
+      llm: ({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+    });
+    const input = [
+      { type: "text", text: "describe this" },
+      { type: "image", image: "iVBORw0KGgo=", mediaType: "image/png" },
+      {
+        type: "file",
+        data: { type: "text", text: "inline document" },
+        filename: "note.txt",
+        mediaType: "text/plain",
+      },
+    ] as const;
+    const run = await agent.send("initial");
+    const runtimeInputs: AgentEvent[] = [];
+    let added = false;
+
+    for await (const event of run.stream()) {
+      if (event.type === "step-start" && !added) {
+        added = true;
+        await run.input.add(input);
+      }
+      if (event.type === "runtime-input") {
+        runtimeInputs.push(event);
+      }
+    }
+
+    expect(runtimeInputs).toEqual([
+      {
+        type: "runtime-input",
+        input: { type: "user-message", content: input },
+        placement: "step-start",
+      },
+    ]);
+    expect(seenHistory).toEqual([
+      [
+        userTextToModelMessage(userText("initial")),
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "describe this" },
+            { type: "file", data: "iVBORw0KGgo=", mediaType: "image/png" },
+            {
+              type: "file",
+              data: { type: "text", text: "inline document" },
+              filename: "note.txt",
+              mediaType: "text/plain",
+            },
+          ],
+        },
+      ],
+    ]);
+  });
+
+  it("rejects runtime input after turn-end without enqueueing a new session turn", async () => {
+    let calls = 0;
+    const agent = await Agent.create({
+      llm: () => {
+        calls += 1;
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+    });
+    const run = await agent.send("initial");
+
+    await collect(run);
+
+    await expect(run.input.add("late")).rejects.toThrow(
+      "AgentRun.input.add() cannot be used after turn-end"
+    );
+    expect(calls).toBe(1);
+  });
+
+  it("rejects runtime input after model turn-error without enqueueing a new session turn", async () => {
+    let calls = 0;
+    const agent = await Agent.create({
+      llm: () => {
+        calls += 1;
+        return Promise.reject(new Error("model unavailable"));
+      },
+    });
+    const run = await agent.send("initial");
+
+    expect(eventTypes(await collect(run))).toContain("turn-error");
+
+    await expect(run.input.add("late")).rejects.toThrow(
+      "AgentRun.input.add() cannot be used after turn-error"
+    );
+    expect(calls).toBe(1);
+  });
+
+  it("rejects runtime input after interrupt turn-abort and does not hang", async () => {
+    const llmStarted = createDeferred();
+    const llmGate = createDeferred();
+    const session = (
+      await Agent.create({
+        llm: async () => {
+          llmStarted.resolve();
+          await llmGate.promise;
+          return [assistantMessage("DONE")];
+        },
+      })
+    ).session("interrupt-terminal");
+    const run = await session.send("initial");
+    const events = collect(run);
+
+    await llmStarted.promise;
+    session.interrupt();
+    llmGate.resolve();
+
+    expect(eventTypes(await events)).toContain("turn-abort");
+    await expect(run.input.add("late")).rejects.toThrow(
+      "AgentRun.input.add() cannot be used after turn-abort"
+    );
+  });
+
+  it("rejects runtime input after kill and settles queued runs", async () => {
+    const llmStarted = createDeferred();
+    const llmGate = createDeferred();
+    const session = (
+      await Agent.create({
+        llm: async () => {
+          llmStarted.resolve();
+          await llmGate.promise;
+          return [assistantMessage("DONE")];
+        },
+      })
+    ).session("kill-terminal");
+    const firstRun = await session.send("first");
+    const secondRun = await session.send("second");
+    const firstEvents = collect(firstRun);
+    const secondEvents = collect(secondRun);
+
+    await llmStarted.promise;
+    session.kill();
+    llmGate.resolve();
+
+    expect(eventTypes(await firstEvents)).toContain("turn-abort");
+    expect(eventTypes(await secondEvents)).toEqual(["user-text", "turn-error"]);
+    await expect(firstRun.input.add("late")).rejects.toThrow(
+      "AgentRun.input.add() cannot be used after Session killed"
+    );
+    await expect(secondRun.input.add("late")).rejects.toThrow(
+      "AgentRun.input.add() cannot be used after Session killed"
+    );
+  });
+
+  it("rejects runtime input after stream return", async () => {
+    const agent = await Agent.create({
+      llm: () => Promise.resolve([assistantMessage("DONE")]),
+    });
+    const run = await agent.send("initial");
+    const iterator = run.stream()[Symbol.asyncIterator]();
+
+    await expect(iterator.next()).resolves.toEqual({
+      done: false,
+      value: { type: "user-text", text: "initial" },
+    });
+    await expect(iterator.return?.()).resolves.toEqual({
+      done: true,
+      value: undefined,
+    });
+
+    await expect(run.input.add("late")).rejects.toThrow(
+      "AgentRun.input.add() cannot be used after stream return"
+    );
+  });
+
+  it("emits and propagates runtime input commit conflicts without using the conflicted snapshot", async () => {
+    const store = new ConflictOnCommitStore();
+    store.conflictOnCommit = 2;
+    const seenHistory: ModelMessage[][] = [];
+    const session = (
+      await Agent.create({
+        llm: ({ history }) => {
+          seenHistory.push([...history]);
+          return Promise.resolve([assistantMessage("DONE")]);
+        },
+        sessions: { store },
+      })
+    ).session("runtime-conflict");
+    const run = await session.send("initial");
+    const events: AgentEvent[] = [];
+    let runtimeAdd: Promise<void> | undefined;
+
+    for await (const event of run.stream()) {
+      events.push(event);
+      if (event.type === "turn-start" && !runtimeAdd) {
+        runtimeAdd = run.input.add("conflicting runtime");
+      }
+    }
+
+    await expect(runtimeAdd).resolves.toBeUndefined();
+    expect(events).toContainEqual({
+      type: "turn-error",
+      message: 'Session "runtime-conflict" commit conflict',
+    });
+    expect(seenHistory).toEqual([]);
   });
 
   it("emits turn-error in the run when the LLM fails", async () => {

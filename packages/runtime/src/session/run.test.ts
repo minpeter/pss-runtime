@@ -165,6 +165,17 @@ describe("AgentRun", () => {
     expect(addInput).not.toHaveBeenCalled();
   });
 
+  it("rejects input.add with a deterministic terminal close reason", async () => {
+    const addInput = vi.fn(async (_input: unknown) => undefined);
+    const run = new BufferedAgentRun({ addInput });
+    run.close(undefined, "turn-end");
+
+    await expect(run.input.add("runtime")).rejects.toThrow(
+      "AgentRun.input.add() cannot be used after turn-end"
+    );
+    expect(addInput).not.toHaveBeenCalled();
+  });
+
   it("closes and discards queued events when the stream returns early", async () => {
     const run = new BufferedAgentRun();
     const iterator = run.stream()[Symbol.asyncIterator]();
@@ -186,5 +197,8 @@ describe("AgentRun", () => {
       done: true,
       value: undefined,
     });
+    await expect(run.input.add("runtime")).rejects.toThrow(
+      "AgentRun.input.add() cannot be used after stream return"
+    );
   });
 });

@@ -30,6 +30,7 @@ export class BufferedAgentRun implements AgentRun {
   readonly #events: QueuedEvent[] = [];
   readonly #inputHandler: (input: RunInput) => Promise<void> | void;
   #closed = false;
+  #closedReason = "the run is closed";
   #error: unknown;
   #pendingAck: (() => void) | undefined;
   #resultPending = false;
@@ -39,9 +40,7 @@ export class BufferedAgentRun implements AgentRun {
   readonly input: AgentRunInput = {
     add: async (input) => {
       if (this.#closed) {
-        throw new Error(
-          "AgentRun.input.add() cannot be used after the run is closed"
-        );
+        throw new Error(`AgentRun.input.add() cannot be used after ${this.#closedReason}`);
       }
 
       await this.#inputHandler(input);
@@ -70,12 +69,13 @@ export class BufferedAgentRun implements AgentRun {
     });
   }
 
-  close(error?: unknown): void {
+  close(error?: unknown, reason = "the run is closed"): void {
     if (this.#closed) {
       return;
     }
 
     this.#closed = true;
+    this.#closedReason = reason;
     this.#error = error;
     this.#settlePendingAck();
 
@@ -112,7 +112,7 @@ export class BufferedAgentRun implements AgentRun {
   #cancel(): void {
     this.#settleQueuedAcks();
     this.#events.length = 0;
-    this.close();
+    this.close(undefined, "stream return");
   }
 
   #enqueue(event: QueuedEvent): void {
