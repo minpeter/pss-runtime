@@ -257,17 +257,17 @@ describe("Agent session API", () => {
 
       if (event.type === "turn-start" && !addedTurnStart) {
         addedTurnStart = true;
-        await run.input.add("turn runtime");
+        await session.steer("turn runtime");
       }
 
       if (event.type === "step-start" && !addedStepStart) {
         addedStepStart = true;
-        await run.input.add("step runtime");
+        await session.steer("step runtime");
       }
 
       if (event.type === "step-end" && !addedStepEnd) {
         addedStepEnd = true;
-        await run.input.add("step-end runtime");
+        await session.steer("step-end runtime");
       }
     }
 
@@ -592,7 +592,7 @@ describe("Agent session API", () => {
     ]);
   });
 
-  it("runtime input at step-end continues the current turn with appended user input", async () => {
+  it("active session.steer at step-end continues the current turn with appended user input", async () => {
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
     const agent = await Agent.create({
@@ -604,7 +604,8 @@ describe("Agent session API", () => {
         ]);
       },
     });
-    const run = await agent.send("initial user");
+    const session = agent.session("step-end-steer");
+    const run = await session.send("initial user");
     const events: AgentEvent[] = [];
     let injected = false;
 
@@ -612,7 +613,7 @@ describe("Agent session API", () => {
       events.push(event);
       if (event.type === "step-end" && !injected) {
         injected = true;
-        await run.input.add("extra");
+        await session.steer("extra");
       }
     }
 
@@ -642,7 +643,7 @@ describe("Agent session API", () => {
     ]);
   });
 
-  it("runtime input at turn-start and step-start is visible before the first LLM snapshot", async () => {
+  it("active session.steer at turn-start and step-start is visible before the first LLM snapshot", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = await Agent.create({
       llm: ({ history }) => {
@@ -650,7 +651,8 @@ describe("Agent session API", () => {
         return Promise.resolve([assistantMessage("DONE")]);
       },
     });
-    const run = await agent.send("original");
+    const session = agent.session("early-steer");
+    const run = await session.send("original");
     const events: AgentEvent[] = [];
     let addedTurnStart = false;
     let addedStepStart = false;
@@ -659,11 +661,11 @@ describe("Agent session API", () => {
       events.push(event);
       if (event.type === "turn-start" && !addedTurnStart) {
         addedTurnStart = true;
-        await run.input.add("turn runtime");
+        await session.steer("turn runtime");
       }
       if (event.type === "step-start" && !addedStepStart) {
         addedStepStart = true;
-        await run.input.add("step runtime");
+        await session.steer("step runtime");
       }
     }
 
@@ -694,7 +696,93 @@ describe("Agent session API", () => {
     ]);
   });
 
-  it("runtime input preserves FIFO order for multiple additions in one window", async () => {
+  it("drains hook steering at turn-start, step-start, and step-end but not afterTurn", async () => {
+    const seenHistory: ModelMessage[][] = [];
+    let afterTurnRun:
+      | Promise<Awaited<ReturnType<typeof session.steer>>>
+      | undefined;
+    let afterTurnSteered = false;
+    let step = 0;
+    let session: ReturnType<Agent["session"]>;
+    const agent = await Agent.create({
+      hooks: {
+        afterStep: async ({ stepIndex }) => {
+          if (stepIndex === 0) {
+            await session.steer("after step steer");
+          }
+        },
+        afterTurn: () => {
+          if (!afterTurnSteered) {
+            afterTurnSteered = true;
+            afterTurnRun = session.steer("after turn steer");
+          }
+        },
+        beforeStep: async ({ stepIndex }) => {
+          if (stepIndex === 0) {
+            await session.steer("before step steer");
+          }
+        },
+        beforeTurn: async () => {
+          await session.steer("before turn steer");
+        },
+      },
+      llm: ({ history }) => {
+        step += 1;
+        seenHistory.push([...history]);
+        return Promise.resolve([
+          assistantMessage(step === 1 ? "This could be final." : "DONE"),
+        ]);
+      },
+    });
+    session = agent.session("hook-steer");
+
+    const events = await collect(await session.send("original"));
+
+    expect(events).toContainEqual({
+      input: { type: "user-text", text: "before turn steer" },
+      placement: "turn-start",
+      type: "runtime-input",
+    });
+    expect(events).toContainEqual({
+      input: { type: "user-text", text: "before step steer" },
+      placement: "step-start",
+      type: "runtime-input",
+    });
+    expect(events).toContainEqual({
+      input: { type: "user-text", text: "after step steer" },
+      placement: "step-end",
+      type: "runtime-input",
+    });
+    expect(events).not.toContainEqual({
+      input: { type: "user-text", text: "after turn steer" },
+      placement: "step-end",
+      type: "runtime-input",
+    });
+    expect(seenHistory).toEqual([
+      [
+        userTextToModelMessage(userText("original")),
+        userTextToModelMessage(userText("before turn steer")),
+        userTextToModelMessage(userText("before step steer")),
+      ],
+      [
+        userTextToModelMessage(userText("original")),
+        userTextToModelMessage(userText("before turn steer")),
+        userTextToModelMessage(userText("before step steer")),
+        assistantMessage("This could be final."),
+        userTextToModelMessage(userText("after step steer")),
+      ],
+    ]);
+    if (!afterTurnRun) {
+      throw new Error("expected afterTurn steer to start a new run");
+    }
+    const afterTurnEvents = await collect(await afterTurnRun);
+    expect(afterTurnEvents[0]).toEqual({
+      text: "after turn steer",
+      type: "user-text",
+    });
+  });
+
+  it("active session.steer preserves FIFO order for multiple additions in one window", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = await Agent.create({
       llm: ({ history }) => {
@@ -702,15 +790,16 @@ describe("Agent session API", () => {
         return Promise.resolve([assistantMessage("DONE")]);
       },
     });
-    const run = await agent.send("initial");
+    const session = agent.session("steer-fifo");
+    const run = await session.send("initial");
     const runtimeInputs: AgentEvent[] = [];
     let added = false;
 
     for await (const event of run.stream()) {
       if (event.type === "step-start" && !added) {
         added = true;
-        await run.input.add("first");
-        await run.input.add("second");
+        await session.steer("first");
+        await session.steer("second");
       }
       if (event.type === "runtime-input") {
         runtimeInputs.push(event);
@@ -738,7 +827,7 @@ describe("Agent session API", () => {
     ]);
   });
 
-  it("runtime input preserves FIFO order for concurrent additions in one window", async () => {
+  it("active session.steer preserves FIFO order for concurrent additions in one window", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = await Agent.create({
       llm: ({ history }) => {
@@ -746,7 +835,8 @@ describe("Agent session API", () => {
         return Promise.resolve([assistantMessage("DONE")]);
       },
     });
-    const run = await agent.send("initial");
+    const session = agent.session("steer-concurrent-fifo");
+    const run = await session.send("initial");
     const runtimeInputs: AgentEvent[] = [];
     let added = false;
 
@@ -754,9 +844,9 @@ describe("Agent session API", () => {
       if (event.type === "step-start" && !added) {
         added = true;
         await Promise.all([
-          run.input.add("first"),
-          run.input.add("second"),
-          run.input.add("third"),
+          session.steer("first"),
+          session.steer("second"),
+          session.steer("third"),
         ]);
       }
       if (event.type === "runtime-input") {
@@ -791,7 +881,7 @@ describe("Agent session API", () => {
     ]);
   });
 
-  it("keeps queued session.send input as a separate turn while runtime input affects the active turn", async () => {
+  it("keeps active session.send input as a separate turn while session.steer affects the active turn", async () => {
     const stepGate = createDeferred();
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
@@ -817,7 +907,7 @@ describe("Agent session API", () => {
         firstEvents.push(event);
         if (event.type === "step-start" && !added) {
           added = true;
-          await firstRun.input.add("extra");
+          await session.steer("extra");
           stepGate.resolve();
         }
       }
@@ -845,7 +935,7 @@ describe("Agent session API", () => {
     ]);
   });
 
-  it("normalizes multipart image and file runtime input like session.send", async () => {
+  it("normalizes multipart image and file session.steer input like session.send", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = await Agent.create({
       llm: ({ history }) => {
@@ -863,14 +953,15 @@ describe("Agent session API", () => {
         mediaType: "text/plain",
       },
     ] as const;
-    const run = await agent.send("initial");
+    const session = agent.session("multipart-steer");
+    const run = await session.send("initial");
     const runtimeInputs: AgentEvent[] = [];
     let added = false;
 
     for await (const event of run.stream()) {
       if (event.type === "step-start" && !added) {
         added = true;
-        await run.input.add(input);
+        await session.steer(input);
       }
       if (event.type === "runtime-input") {
         runtimeInputs.push(event);
@@ -904,7 +995,7 @@ describe("Agent session API", () => {
     ]);
   });
 
-  it("rejects runtime input after turn-end without enqueueing a new session turn", async () => {
+  it("idle session.steer starts a new run after turn-end", async () => {
     let calls = 0;
     const agent = await Agent.create({
       llm: () => {
@@ -912,17 +1003,16 @@ describe("Agent session API", () => {
         return Promise.resolve([assistantMessage("DONE")]);
       },
     });
-    const run = await agent.send("initial");
+    const session = agent.session("idle-steer-after-turn-end");
+    const run = await session.send("initial");
 
     await collect(run);
 
-    await expect(run.input.add("late")).rejects.toThrow(
-      "AgentRun.input.add() cannot be used after turn-end"
-    );
-    expect(calls).toBe(1);
+    await collect(await session.steer("late"));
+    expect(calls).toBe(2);
   });
 
-  it("rejects runtime input after model turn-error without enqueueing a new session turn", async () => {
+  it("idle session.steer starts a new run after model turn-error", async () => {
     let calls = 0;
     const agent = await Agent.create({
       llm: () => {
@@ -930,17 +1020,18 @@ describe("Agent session API", () => {
         return Promise.reject(new Error("model unavailable"));
       },
     });
-    const run = await agent.send("initial");
+    const session = agent.session("idle-steer-after-turn-error");
+    const run = await session.send("initial");
 
     expect(eventTypes(await collect(run))).toContain("turn-error");
 
-    await expect(run.input.add("late")).rejects.toThrow(
-      "AgentRun.input.add() cannot be used after turn-error"
+    expect(eventTypes(await collect(await session.steer("late")))).toContain(
+      "turn-error"
     );
-    expect(calls).toBe(1);
+    expect(calls).toBe(2);
   });
 
-  it("rejects runtime input after interrupt turn-abort and does not hang", async () => {
+  it("idle session.steer starts a new run after interrupt turn-abort", async () => {
     const llmStarted = createDeferred();
     const llmGate = createDeferred();
     const session = (
@@ -960,8 +1051,8 @@ describe("Agent session API", () => {
     llmGate.resolve();
 
     expect(eventTypes(await events)).toContain("turn-abort");
-    await expect(run.input.add("late")).rejects.toThrow(
-      "AgentRun.input.add() cannot be used after turn-abort"
+    expect(eventTypes(await collect(await session.steer("late")))).toContain(
+      "turn-end"
     );
   });
 
@@ -988,12 +1079,7 @@ describe("Agent session API", () => {
 
     expect(eventTypes(await firstEvents)).toContain("turn-abort");
     expect(eventTypes(await secondEvents)).toEqual(["user-text", "turn-error"]);
-    await expect(firstRun.input.add("late")).rejects.toThrow(
-      "AgentRun.input.add() cannot be used after Session killed"
-    );
-    await expect(secondRun.input.add("late")).rejects.toThrow(
-      "AgentRun.input.add() cannot be used after Session killed"
-    );
+    await expect(session.steer("late")).rejects.toThrow("Session killed");
   });
 
   it("rejects runtime input after stream return", async () => {
@@ -1012,8 +1098,8 @@ describe("Agent session API", () => {
       value: undefined,
     });
 
-    await expect(run.input.add("late")).rejects.toThrow(
-      "AgentRun.input.add() cannot be used after stream return"
+    expect(eventTypes(await collect(await agent.send("late")))).toContain(
+      "turn-end"
     );
   });
 
@@ -1037,7 +1123,7 @@ describe("Agent session API", () => {
     for await (const event of run.stream()) {
       events.push(event);
       if (event.type === "turn-start" && !runtimeAdd) {
-        runtimeAdd = run.input.add("conflicting runtime");
+        runtimeAdd = session.steer("conflicting runtime").then(() => undefined);
       }
     }
 
