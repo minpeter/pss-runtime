@@ -27,17 +27,20 @@ const RUNTIME_DECLARATION_ALLOWLIST = new Set([
   "session/mapping.d.ts",
 ]);
 const REQUIRED_RUNTIME_ROOT_ALIASES = [
-  "AgentRunInput",
   "AgentModel",
+  "AgentRun",
   "AgentTools",
-  "RunInput",
   "RuntimeCreateLlmOptions",
   "RuntimeInput",
   "RuntimeLlm",
   "RuntimeLlmContext",
   "RuntimeLlmOutput",
 ];
-const FORBIDDEN_RUNTIME_ROOT_ALIASES = ["AgentMessage"];
+const FORBIDDEN_RUNTIME_ROOT_ALIASES = [
+  "AgentMessage",
+  "AgentRunInput",
+  "RunInput",
+];
 
 const RELATIVE_IMPORT_RE =
   /(?:from\s+["']|import\s*(?:\(\s*)?["'])(\.\.?\/[^"']+)(?:["'])/g;
