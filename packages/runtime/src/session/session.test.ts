@@ -127,6 +127,238 @@ describe("Agent session API", () => {
     ]);
   });
 
+  it("calls turn hooks around a queued turn", async () => {
+    const hookCalls: string[] = [];
+    const agent = await Agent.create({
+      hooks: {
+        afterTurn: ({ history, input, result }) => {
+          hookCalls.push(`${input.type}:after:${result}:${history.length}`);
+        },
+        beforeTurn: ({ history, input }) => {
+          hookCalls.push(`${input.type}:before:${history.length}`);
+        },
+      },
+      llm: () => Promise.resolve([assistantMessage("DONE")]),
+    });
+
+    const events = await collect(await agent.send("hello"));
+
+    expect(eventTypes(events)).toEqual([
+      "user-text",
+      "turn-start",
+      "step-start",
+      "assistant-text",
+      "step-end",
+      "turn-end",
+    ]);
+    expect(hookCalls).toEqual([
+      "user-text:before:0",
+      "user-text:after:completed:2",
+    ]);
+  });
+
+  it("commits successful output before afterTurn failures", async () => {
+    const seenHistory: ModelMessage[][] = [];
+    let calls = 0;
+    const agent = await Agent.create({
+      hooks: {
+        afterTurn: () => {
+          throw new Error("after turn failed");
+        },
+      },
+      llm: ({ history }) => {
+        calls += 1;
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage(`DONE ${calls}`)]);
+      },
+    });
+
+    const firstEvents = await collect(
+      await agent.session("after-turn").send("first")
+    );
+    const secondEvents = await collect(
+      await agent.session("after-turn").send("second")
+    );
+
+    expect(eventTypes(firstEvents)).toEqual([
+      "user-text",
+      "turn-start",
+      "step-start",
+      "assistant-text",
+      "step-end",
+      "turn-end",
+    ]);
+    expect(eventTypes(secondEvents)).toEqual([
+      "user-text",
+      "turn-start",
+      "step-start",
+      "assistant-text",
+      "step-end",
+      "turn-end",
+    ]);
+    expect(seenHistory[1]).toEqual([
+      userTextToModelMessage(userText("first")),
+      assistantMessage("DONE 1"),
+      userTextToModelMessage(userText("second")),
+    ]);
+  });
+
+  it("orders turn and step hooks around runtime input windows", async () => {
+    const hookCalls: string[] = [];
+    const trace: string[] = [];
+    const seenHistory: ModelMessage[][] = [];
+    let calls = 0;
+    const agent = await Agent.create({
+      hooks: {
+        afterStep: ({ history, result, stepIndex }) => {
+          hookCalls.push(`afterStep:${stepIndex}:${result}:${history.length}`);
+          trace.push(`hook:afterStep:${stepIndex}`);
+        },
+        afterTurn: ({ history, input, result }) => {
+          hookCalls.push(`${input.type}:afterTurn:${result}:${history.length}`);
+          trace.push("hook:afterTurn");
+          throw new Error("after turn failed");
+        },
+        beforeStep: ({ history, stepIndex }) => {
+          hookCalls.push(`beforeStep:${stepIndex}:${history.length}`);
+          trace.push(`hook:beforeStep:${stepIndex}`);
+        },
+        beforeTurn: ({ history, input }) => {
+          hookCalls.push(`${input.type}:beforeTurn:${history.length}`);
+          trace.push("hook:beforeTurn");
+        },
+      },
+      llm: ({ history }) => {
+        trace.push(`llm:${calls}`);
+        seenHistory.push([...history]);
+        calls += 1;
+        return Promise.resolve([
+          assistantMessage(["SEED", "FIRST", "DONE"][calls - 1] ?? "DONE"),
+        ]);
+      },
+    });
+    const session = agent.session("hook-runtime-ordering");
+
+    await collect(await session.send("prior"));
+
+    hookCalls.length = 0;
+    trace.length = 0;
+    seenHistory.length = 0;
+
+    const run = await session.send("original");
+    const events: AgentEvent[] = [];
+    let addedTurnStart = false;
+    let addedStepStart = false;
+    let addedStepEnd = false;
+
+    for await (const event of run.stream()) {
+      events.push(event);
+      trace.push(`event:${event.type}`);
+
+      if (event.type === "turn-start" && !addedTurnStart) {
+        addedTurnStart = true;
+        await run.input.add("turn runtime");
+      }
+
+      if (event.type === "step-start" && !addedStepStart) {
+        addedStepStart = true;
+        await run.input.add("step runtime");
+      }
+
+      if (event.type === "step-end" && !addedStepEnd) {
+        addedStepEnd = true;
+        await run.input.add("step-end runtime");
+      }
+    }
+
+    const priorHistory = [
+      userTextToModelMessage(userText("prior")),
+      assistantMessage("SEED"),
+    ];
+    const firstStepHistory = [
+      ...priorHistory,
+      userTextToModelMessage(userText("original")),
+      userTextToModelMessage(userText("turn runtime")),
+      userTextToModelMessage(userText("step runtime")),
+    ];
+    const secondStepHistory = [
+      ...firstStepHistory,
+      assistantMessage("FIRST"),
+      userTextToModelMessage(userText("step-end runtime")),
+    ];
+    const finalHistory = [...secondStepHistory, assistantMessage("DONE")];
+
+    expect(hookCalls).toEqual([
+      "user-text:beforeTurn:2",
+      "beforeStep:0:4",
+      "afterStep:0:completed:6",
+      "beforeStep:1:7",
+      "afterStep:1:completed:8",
+      "user-text:afterTurn:completed:8",
+    ]);
+    expect(eventTypes(events)).toEqual([
+      "user-text",
+      "turn-start",
+      "runtime-input",
+      "step-start",
+      "runtime-input",
+      "assistant-text",
+      "step-end",
+      "runtime-input",
+      "step-start",
+      "assistant-text",
+      "step-end",
+      "turn-end",
+    ]);
+    expect(events).toContainEqual({
+      type: "runtime-input",
+      input: { type: "user-text", text: "turn runtime" },
+      placement: "turn-start",
+    });
+    expect(events).toContainEqual({
+      type: "runtime-input",
+      input: { type: "user-text", text: "step runtime" },
+      placement: "step-start",
+    });
+    expect(events).toContainEqual({
+      type: "runtime-input",
+      input: { type: "user-text", text: "step-end runtime" },
+      placement: "step-end",
+    });
+    expect(seenHistory).toEqual([firstStepHistory, secondStepHistory]);
+    expect(trace).toEqual([
+      "hook:beforeTurn",
+      "event:user-text",
+      "event:turn-start",
+      "event:runtime-input",
+      "hook:beforeStep:0",
+      "event:step-start",
+      "event:runtime-input",
+      "llm:1",
+      "event:assistant-text",
+      "hook:afterStep:0",
+      "event:step-end",
+      "event:runtime-input",
+      "hook:beforeStep:1",
+      "event:step-start",
+      "llm:2",
+      "event:assistant-text",
+      "hook:afterStep:1",
+      "event:step-end",
+      "hook:afterTurn",
+      "event:turn-end",
+    ]);
+    expect(finalHistory).toEqual([
+      ...priorHistory,
+      userTextToModelMessage(userText("original")),
+      userTextToModelMessage(userText("turn runtime")),
+      userTextToModelMessage(userText("step runtime")),
+      assistantMessage("FIRST"),
+      userTextToModelMessage(userText("step-end runtime")),
+      assistantMessage("DONE"),
+    ]);
+  });
+
   it("agent.send accepts multipart string input without lossy joining", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = await Agent.create({

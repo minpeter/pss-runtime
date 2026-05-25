@@ -228,6 +228,20 @@ describe("verifyReleaseArtifacts", () => {
     ]);
   });
 
+  it("rejects raw AI SDK message types from runtime hook declarations", () => {
+    const cwd = createFixture();
+    writeFileSync(
+      join(cwd, "packages", "runtime", "dist", "hooks.d.ts"),
+      'import type { ModelMessage } from "ai";\nexport interface AgentBeforeTurnContext { readonly history: readonly ModelMessage[]; }\n'
+    );
+
+    expect(
+      verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
+    ).toEqual([
+      "packages/runtime/dist/hooks.d.ts: unauthorized runtime declaration token ModelMessage",
+    ]);
+  });
+
   it("rejects internal runtime message aliases from root declarations", () => {
     const cwd = createFixture();
     writeFileSync(

@@ -1,4 +1,5 @@
 import { runAgentLoop } from "../agent-loop";
+import type { AgentHooks } from "../hooks";
 import type { Llm } from "../llm";
 import type {
   RuntimeInput,
@@ -48,6 +49,7 @@ interface RuntimeInputState {
 }
 
 export class AgentSession {
+  readonly #hooks?: AgentHooks;
   readonly #inputQueue: QueuedInput[] = [];
   readonly #llm: Llm;
   readonly #persistence: SessionPersistenceOptions;
@@ -60,7 +62,12 @@ export class AgentSession {
   #running = false;
   #storeVersion: string | undefined;
 
-  constructor(llm: Llm, persistence: SessionPersistenceOptions) {
+  constructor(
+    llm: Llm,
+    persistence: SessionPersistenceOptions,
+    hooks?: AgentHooks
+  ) {
+    this.#hooks = hooks;
     this.#llm = llm;
     this.#persistence = persistence;
   }
@@ -181,6 +188,11 @@ export class AgentSession {
     const historySnapshot = this.#history.modelSnapshot();
 
     try {
+      await this.#hooks?.beforeTurn?.({
+        history: this.#history.modelSnapshot(),
+        input,
+        signal: this.#activeAbort.signal,
+      });
       await this.#withRuntimeInputWindow(
         runtimeInput,
         "turn-start",
@@ -217,12 +229,19 @@ export class AgentSession {
           run.emit(event);
         },
         history: this.#history,
+        hooks: this.#hooks,
         llm: this.#llm,
         signal: this.#activeAbort.signal,
       });
 
       await this.#commitHistory();
       const terminalEvent = result === "aborted" ? "turn-abort" : "turn-end";
+      await runAfterTurnHook(this.#hooks, {
+        history: this.#history.modelSnapshot(),
+        input,
+        result,
+        signal: this.#activeAbort.signal,
+      });
       run.emit({ type: terminalEvent });
       this.#closeRuntimeInput(runtimeInput, terminalEvent);
     } catch (error) {
@@ -353,6 +372,18 @@ function shiftRuntimeInput(
   }
 
   return runtimeInput.queue.splice(index, 1)[0];
+}
+
+async function runAfterTurnHook(
+  hooks: AgentHooks | undefined,
+  context: Parameters<NonNullable<AgentHooks["afterTurn"]>>[0]
+): Promise<void> {
+  const hook = hooks?.afterTurn;
+  if (!hook) {
+    return;
+  }
+
+  await Promise.allSettled([Promise.resolve().then(() => hook(context))]);
 }
 
 export function normalizeAgentInput(input: AgentInput): UserInput {
