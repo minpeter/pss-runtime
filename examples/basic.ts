@@ -16,6 +16,6 @@ for await (const event of run.stream()) {
 
   if (event.type === "step-end" && !askedForSource) {
     askedForSource = true;
-    await run.input.add("Include the most relevant source you found.");
+    await session.steer("Include the most relevant source you found.");
   }
 }

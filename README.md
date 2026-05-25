@@ -25,9 +25,9 @@ for await (const event of run.stream()) {
 
 `run.stream()` is synchronized and drives the run. Consume it to let the runtime
 cross lifecycle boundaries such as `turn-start`, `step-start`, and `step-end`.
-At those boundaries, code can add current-turn input with `run.input.add(input)`.
-It accepts the same input shapes as `session.send(input)`, but it only works for
-the active turn.
+Use `session.send(input)` for a new user turn. If a run is already active, the
+turn is queued until the active run finishes. Use `session.steer(input)` when the
+input should steer the active run; if no run is active, it starts a normal run.
 
 ```ts
 const session = agent.session("default");
@@ -37,7 +37,7 @@ let addedConstraint = false;
 for await (const event of run.stream()) {
   if (event.type === "step-end" && !addedConstraint) {
     addedConstraint = true;
-    await run.input.add("Keep the second sentence under 10 words.");
+    await session.steer("Keep the second sentence under 10 words.");
   }
 }
 ```
@@ -46,12 +46,9 @@ The guard matters. `step-end` runtime input asks the runtime to continue the
 current turn before the next model snapshot, even after final-looking assistant
 text. Adding input on every `step-end` can keep a turn running indefinitely.
 
-Use `session.send(input)` to start or enqueue a new turn. Use `run.input.add()`
-only inside the current run's input windows. After `turn-end`, `turn-error`,
-`turn-abort`, stream `return()`, or `kill()`, it rejects and never enqueues a new
-turn. Runtime additions appear as `runtime-input` events: runtime/API-originated
-input mapped internally to the model's user role, separate from human
-`user-text` and `user-message` events.
+Steering additions appear as `runtime-input` events: runtime/API-originated input
+mapped internally to the model's user role, separate from human `user-text` and
+`user-message` events.
 
 The runtime `send` API also accepts JSON-serializable multimodal content parts
 for model providers that support them:
@@ -79,8 +76,8 @@ pnpm add -g @minpeter/pss-coding-agent
 pss
 ```
 
-In the `pss` TUI, submitting while a run is active adds runtime input to that
-current run. Submitting while idle starts a normal new turn.
+In the `pss` TUI, submitting while a run is active steers the current run.
+Submitting while idle starts a normal new turn.
 
 ## Develop
 

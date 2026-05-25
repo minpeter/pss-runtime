@@ -76,19 +76,17 @@ The public transcript protocol is `AgentEvent`: live runs emit runtime-defined
 events through `run.stream()`. Provider/model message history is internal
 continuation state, not a public history API.
 
-## Current-turn runtime input
+## Send and Steer
 
-Use `session.send(input)` to start or enqueue a new turn. It never merges into an
-active run. Use `run.input.add(input)` only when you are handling the current
-run's stream and want the active turn to see more input before the next model
-snapshot.
+Use `session.send(input)` for a new user turn. If a run is already active, the
+turn is queued until the active run finishes. Use `session.steer(input)` when the
+input should steer the active run; if no run is active, it starts a normal run.
 
-`run.input.add(input)` accepts the same input shapes as `session.send(input)`:
-strings, arrays of strings, `{ type: "user-text", text }`, and multipart
-`{ type: "user-message", content }` values. The runtime emits those additions as
-`runtime-input` events. A `runtime-input` is runtime/API-originated input mapped
-internally to the model's user role. It is distinct from human-origin
-`user-text` and `user-message` events.
+Both APIs accept the same input shapes: strings, arrays of strings,
+`{ type: "user-text", text }`, and multipart `{ type: "user-message", content }`
+values. Active steering emits `runtime-input` events. A `runtime-input` is
+runtime/API-originated input mapped internally to the model's user role. It is
+distinct from human-origin `user-text` and `user-message` events.
 
 Runtime input windows are tied to synchronized stream events:
 
@@ -102,25 +100,23 @@ on every `step-end` can keep the turn running indefinitely.
 ```ts
 const session = agent.session("room:123:user:456");
 const run = await session.send("Draft a short answer.");
-let addedFollowUp = false;
+let addedSteer = false;
 
 for await (const event of run.stream()) {
   if (event.type === "assistant-text") {
     process.stdout.write(event.text);
   }
 
-  if (event.type === "step-end" && !addedFollowUp) {
-    addedFollowUp = true;
-    await run.input.add("Also mention the main tradeoff.");
+  if (event.type === "step-end" && !addedSteer) {
+    addedSteer = true;
+    await session.steer("Also mention the main tradeoff.");
   }
 }
 ```
 
-`run.input.add()` resolves when the input is accepted into the current run's
-pending input path. It does not wait for a later model snapshot. After a terminal
-state, current-turn input is closed: `turn-end`, `turn-error`, `turn-abort`,
-stream `return()`, and `kill()` all make later `run.input.add()` calls reject.
-Rejected runtime input never enqueues a new turn.
+`session.steer()` resolves when the input is accepted into the active run's
+pending steering path or, when idle, when a new run is scheduled. It does not wait
+for a later model snapshot.
 
 ## Session storage and portability
 
