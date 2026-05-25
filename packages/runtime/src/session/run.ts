@@ -1,19 +1,7 @@
 import type { AgentEvent } from "./events";
-import type { AgentInput } from "./session";
-
-export type RunInput = AgentInput;
-
-export interface AgentRunInput {
-  add(input: RunInput): Promise<void>;
-}
 
 export interface AgentRun {
-  readonly input: AgentRunInput;
   stream(): AsyncIterable<AgentEvent>;
-}
-
-interface AgentRunOptions {
-  readonly addInput?: (input: RunInput) => Promise<void> | void;
 }
 
 interface QueuedEvent {
@@ -28,30 +16,12 @@ interface NextWaiter {
 
 export class BufferedAgentRun implements AgentRun {
   readonly #events: QueuedEvent[] = [];
-  readonly #inputHandler: (input: RunInput) => Promise<void> | void;
   #closed = false;
-  #closedReason = "the run is closed";
   #error: unknown;
   #pendingAck: (() => void) | undefined;
   #resultPending = false;
   #streamStarted = false;
   #waiter: NextWaiter | undefined;
-
-  readonly input: AgentRunInput = {
-    add: async (input) => {
-      if (this.#closed) {
-        throw new Error(
-          `AgentRun.input.add() cannot be used after ${this.#closedReason}`
-        );
-      }
-
-      await this.#inputHandler(input);
-    },
-  };
-
-  constructor(options: AgentRunOptions = {}) {
-    this.#inputHandler = options.addInput ?? (() => undefined);
-  }
 
   emit(event: AgentEvent): void {
     if (this.#closed) {
@@ -71,13 +41,12 @@ export class BufferedAgentRun implements AgentRun {
     });
   }
 
-  close(error?: unknown, reason = "the run is closed"): void {
+  close(error?: unknown, _reason = "the run is closed"): void {
     if (this.#closed) {
       return;
     }
 
     this.#closed = true;
-    this.#closedReason = reason;
     this.#error = error;
     this.#settlePendingAck();
 

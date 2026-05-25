@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { AgentEvent } from "./events";
 import { BufferedAgentRun } from "./run";
 
@@ -146,38 +146,6 @@ describe("AgentRun", () => {
     });
   });
 
-  it("delegates input.add to the injected handler", async () => {
-    const addInput = vi.fn(async (_input: unknown) => undefined);
-    const run = new BufferedAgentRun({ addInput });
-    const input = { type: "user-text", text: "runtime" } as const;
-
-    await expect(run.input.add(input)).resolves.toBeUndefined();
-
-    expect(addInput).toHaveBeenCalledWith(input);
-  });
-
-  it("rejects input.add after close without delegating", async () => {
-    const addInput = vi.fn(async (_input: unknown) => undefined);
-    const run = new BufferedAgentRun({ addInput });
-    run.close();
-
-    await expect(run.input.add("runtime")).rejects.toThrow(
-      "AgentRun.input.add() cannot be used after the run is closed"
-    );
-    expect(addInput).not.toHaveBeenCalled();
-  });
-
-  it("rejects input.add with a deterministic terminal close reason", async () => {
-    const addInput = vi.fn(async (_input: unknown) => undefined);
-    const run = new BufferedAgentRun({ addInput });
-    run.close(undefined, "turn-end");
-
-    await expect(run.input.add("runtime")).rejects.toThrow(
-      "AgentRun.input.add() cannot be used after turn-end"
-    );
-    expect(addInput).not.toHaveBeenCalled();
-  });
-
   it("closes and discards queued events when the stream returns early", async () => {
     const run = new BufferedAgentRun();
     const iterator = run.stream()[Symbol.asyncIterator]();
@@ -199,8 +167,5 @@ describe("AgentRun", () => {
       done: true,
       value: undefined,
     });
-    await expect(run.input.add("runtime")).rejects.toThrow(
-      "AgentRun.input.add() cannot be used after stream return"
-    );
   });
 });
