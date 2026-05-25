@@ -20,9 +20,9 @@ for await (const event of run.stream()) {
 
 `run.stream()` is synchronized and drives the run. The runtime waits at
 `turn-start`, `step-start`, and `step-end` until the stream consumer continues,
-so consume the stream to let the run progress. During those current-turn input
-windows, `run.input.add(input)` accepts the same input shapes as
-`session.send(input)` and inserts input into the active turn only.
+so consume the stream to let the run progress. Use `session.send(input)` for a
+new user turn and `session.steer(input)` to steer the active run. If no run is
+active, `session.steer(input)` starts a normal run.
 
 ```ts
 const session = agent.session("default");
@@ -32,7 +32,7 @@ let askedForExample = false;
 for await (const event of run.stream()) {
   if (event.type === "step-end" && !askedForExample) {
     askedForExample = true;
-    await run.input.add("Add one concrete example.");
+    await session.steer("Add one concrete example.");
   }
 }
 ```
@@ -45,8 +45,7 @@ turn running indefinitely.
 Runtime additions emit `runtime-input`: runtime/API-originated input mapped
 internally to the model's user role, separate from human `user-text` and
 `user-message` events. `session.send(input)` starts or enqueues a new turn;
-`run.input.add(input)` is current-turn-only and rejects after `turn-end`,
-`turn-error`, `turn-abort`, stream `return()`, or `kill()`.
+`session.steer(input)` steers the active run or starts a normal run when idle.
 
 ## CLI
 
@@ -62,9 +61,9 @@ pss
 Bin aliases: `pss`, `pss-coding-agent`.
 
 When the TUI is idle, submitting text starts a normal `session.send()` turn. When
-a run is active, submitting text calls `activeRun.input.add(trimmed)` so the text
-lands in the current run and renders as dim `runtime: ...` input instead of a
-new human turn.
+a run is active, submitting text calls `session.steer(trimmed)` so the text lands
+in the current run and renders as dim `runtime: ...` input instead of a new human
+turn.
 
 ## Env
 

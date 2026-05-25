@@ -3,4 +3,6 @@
 "@minpeter/pss-coding-agent": patch
 ---
 
-Document the synchronized run stream driver, current-turn runtime input API, and TUI active-run input behavior.
+Replace the public current-turn input API with `session.steer(input)` and keep
+`session.send(input)` as the new-turn queue. Active TUI submissions now steer the
+current run through the session API.
