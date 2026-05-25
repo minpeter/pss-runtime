@@ -36,7 +36,7 @@ export type {
   UserText,
   UserTextContent,
 } from "./session/events";
-export type { AgentRun } from "./session/run";
+export type { AgentRun, AgentRunInput, RunInput } from "./session/run";
 export type { AgentInput, SessionInput, UserInput } from "./session/session";
 export type {
   CommitResult,

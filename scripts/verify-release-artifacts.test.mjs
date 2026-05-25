@@ -16,6 +16,8 @@ import {
 
 const cliBinReadFailurePattern =
   /^packages\/coding-agent\/bin\/pss\.js: cannot read CLI bin target /;
+const runtimeRootDeclaration =
+  'export type { AgentModel, AgentRunInput, AgentTools, RunInput, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n';
 
 let tempRoots = [];
 
@@ -46,7 +48,7 @@ function createFixture() {
     );
     const declaration =
       packageName === "runtime"
-        ? 'export type { AgentModel, AgentTools, RuntimeCreateLlmOptions, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
+        ? runtimeRootDeclaration
         : "export declare const ok: true;\n";
     writeFileSync(
       join(cwd, "packages", packageName, "dist", "index.d.ts"),
@@ -216,7 +218,7 @@ describe("verifyReleaseArtifacts", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      'import type { LanguageModel } from "ai";\nexport type AgentModel = LanguageModel;\nexport type { AgentTools, RuntimeCreateLlmOptions, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
+      'import type { LanguageModel } from "ai";\nexport type AgentModel = LanguageModel;\nexport type { AgentRunInput, AgentTools, RunInput, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
     );
 
     expect(
@@ -230,7 +232,7 @@ describe("verifyReleaseArtifacts", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      'export type { AgentMessage, AgentModel, AgentTools, RuntimeCreateLlmOptions, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
+      'export type { AgentMessage, AgentModel, AgentRunInput, AgentTools, RunInput, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
     );
 
     expect(
@@ -244,7 +246,7 @@ describe("verifyReleaseArtifacts", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      'export type { AgentModel, AgentTools, RuntimeCreateLlmOptions, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
+      runtimeRootDeclaration
     );
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "llm.d.ts"),
@@ -268,8 +270,11 @@ describe("verifyReleaseArtifacts", () => {
     );
     expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
       "packages/runtime/dist/index.d.ts: root declaration exposes raw AI SDK token LanguageModel",
+      "packages/runtime/dist/index.d.ts: missing explicit runtime alias AgentRunInput",
       "packages/runtime/dist/index.d.ts: missing explicit runtime alias AgentTools",
+      "packages/runtime/dist/index.d.ts: missing explicit runtime alias RunInput",
       "packages/runtime/dist/index.d.ts: missing explicit runtime alias RuntimeCreateLlmOptions",
+      "packages/runtime/dist/index.d.ts: missing explicit runtime alias RuntimeInput",
       "packages/runtime/dist/index.d.ts: missing explicit runtime alias RuntimeLlm",
       "packages/runtime/dist/index.d.ts: missing explicit runtime alias RuntimeLlmContext",
       "packages/runtime/dist/index.d.ts: missing explicit runtime alias RuntimeLlmOutput",

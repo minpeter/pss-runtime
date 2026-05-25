@@ -27,9 +27,12 @@ const RUNTIME_DECLARATION_ALLOWLIST = new Set([
   "session/mapping.d.ts",
 ]);
 const REQUIRED_RUNTIME_ROOT_ALIASES = [
+  "AgentRunInput",
   "AgentModel",
   "AgentTools",
+  "RunInput",
   "RuntimeCreateLlmOptions",
+  "RuntimeInput",
   "RuntimeLlm",
   "RuntimeLlmContext",
   "RuntimeLlmOutput",
