@@ -18,7 +18,7 @@ import {
 export interface TuiRunnerOptions {
   readonly addLine: (text: string) => void;
   readonly requestRender: () => void;
-  readonly session: Pick<SessionHandle, "send">;
+  readonly session: Pick<SessionHandle, "send" | "steer">;
 }
 
 export interface TuiRunner {
@@ -107,7 +107,7 @@ export function createTuiRunner({
 
     const run = activeRun;
     if (run) {
-      run.input.add(trimmed).catch((error: unknown) => {
+      session.steer(trimmed).catch((error: unknown) => {
         addLine(`\x1b[31merror\x1b[0m: ${safeText(errorMessage(error))}`);
       });
       return;

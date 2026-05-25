@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentRun } from "@minpeter/pss-runtime";
+import type { AgentEvent } from "@minpeter/pss-runtime";
 import { describe, expect, it, vi } from "vitest";
 import { createTuiRunner, formatEvent } from "./tui-runner";
 
@@ -21,7 +21,10 @@ describe("TUI runner", () => {
       { text: "hello", type: "user-text" },
       { type: "turn-end" },
     ]);
-    const session = { send: vi.fn().mockResolvedValue(run) };
+    const session = {
+      send: vi.fn().mockResolvedValue(run),
+      steer: vi.fn().mockResolvedValue(run),
+    };
     const lines: string[] = [];
     const runner = createTuiRunner({
       addLine: (line) => lines.push(line),
@@ -37,7 +40,7 @@ describe("TUI runner", () => {
     expect(runner.activeRun).toBeUndefined();
   });
 
-  it("adds active submissions to the current run without sending a new turn", async () => {
+  it("steers active submissions without sending a new turn", async () => {
     let releaseStream: (() => void) | undefined;
     const run = createRun([
       { text: "initial", type: "user-text" },
@@ -45,7 +48,10 @@ describe("TUI runner", () => {
         releaseStream = () => resolve({ type: "turn-end" });
       }),
     ]);
-    const session = { send: vi.fn().mockResolvedValue(run) };
+    const session = {
+      send: vi.fn().mockResolvedValue(run),
+      steer: vi.fn().mockResolvedValue(run),
+    };
     const runner = createTuiRunner({
       addLine: vi.fn(),
       requestRender: vi.fn(),
@@ -59,8 +65,33 @@ describe("TUI runner", () => {
     await run.done;
 
     expect(session.send).toHaveBeenCalledTimes(1);
-    expect(run.addInput).toHaveBeenCalledWith("extra");
+    expect(session.steer).toHaveBeenCalledWith("extra");
     expect(runner.activeRun).toBeUndefined();
+  });
+
+  it("renders active steering errors", async () => {
+    const run = createRun([
+      { text: "initial", type: "user-text" },
+      new Promise<AgentEvent>(() => undefined),
+    ]);
+    const lines: string[] = [];
+    const session = {
+      send: vi.fn().mockResolvedValue(run),
+      steer: vi.fn().mockRejectedValue(new Error("cannot steer")),
+    };
+    const runner = createTuiRunner({
+      addLine: (line) => lines.push(line),
+      requestRender: vi.fn(),
+      session,
+    });
+
+    runner.submit("initial");
+    await run.firstEventRead;
+    runner.submit(" extra ");
+    await waitUntil(() => lines.includes("\x1b[31merror\x1b[0m: cannot steer"));
+    run.stop();
+
+    expect(session.steer).toHaveBeenCalledWith("extra");
   });
 
   it("clears stale active runs when stream consumption throws", async () => {
@@ -68,7 +99,10 @@ describe("TUI runner", () => {
     const runner = createTuiRunner({
       addLine: vi.fn(),
       requestRender: vi.fn(),
-      session: { send: vi.fn().mockResolvedValue(run) },
+      session: {
+        send: vi.fn().mockResolvedValue(run),
+        steer: vi.fn().mockResolvedValue(run),
+      },
     });
 
     runner.submit("hello");
@@ -93,7 +127,10 @@ describe("TUI runner", () => {
     const runner = createTuiRunner({
       addLine: vi.fn(),
       requestRender: vi.fn(),
-      session: { send: vi.fn().mockResolvedValue(run) },
+      session: {
+        send: vi.fn().mockResolvedValue(run),
+        steer: vi.fn().mockResolvedValue(run),
+      },
     });
 
     runner.submit("initial");
@@ -111,7 +148,6 @@ describe("TUI runner", () => {
 });
 
 function createRun(events: readonly StreamItem[]): TestRun {
-  const addInput = vi.fn().mockResolvedValue(undefined);
   let eventCount = 0;
   let firstEventReadResolve: (() => void) | undefined;
   let doneResolve: (() => void) | undefined;
@@ -125,14 +161,12 @@ function createRun(events: readonly StreamItem[]): TestRun {
   });
 
   const run: TestRun = {
-    addInput,
     done,
     eventsRead: (count) =>
       eventCount >= count
         ? Promise.resolve()
         : new Promise<void>((resolve) => eventWaiters.set(count, resolve)),
     firstEventRead,
-    input: { add: addInput },
     stop: () => {
       stopped = true;
     },
@@ -167,12 +201,12 @@ function createRun(events: readonly StreamItem[]): TestRun {
 
 type StreamItem = AgentEvent | Error | Promise<AgentEvent>;
 
-interface TestRun extends AgentRun {
-  readonly addInput: ReturnType<typeof vi.fn>;
+interface TestRun {
   readonly done: Promise<void>;
   readonly eventsRead: (count: number) => Promise<void>;
   readonly firstEventRead: Promise<void>;
   readonly stop: () => void;
+  stream(): AsyncIterable<AgentEvent>;
 }
 
 async function waitUntil(predicate: () => boolean): Promise<void> {
