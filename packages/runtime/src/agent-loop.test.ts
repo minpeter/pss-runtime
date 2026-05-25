@@ -12,6 +12,8 @@ import {
   toolResultFor,
 } from "./test-fixtures";
 
+const noBoundaryDecision = undefined;
+
 const nextMicrotask = () =>
   new Promise<void>((resolve) => queueMicrotask(() => resolve()));
 
@@ -41,7 +43,13 @@ describe("runAgentLoop", () => {
     ]);
 
     await expect(
-      runAgentLoop({ emit: (event) => void events.push(event), history, llm })
+      runAgentLoop({
+        emit: (event) => {
+          events.push(event);
+        },
+        history,
+        llm,
+      })
     ).resolves.toBe("completed");
 
     expect(events).toEqual([
@@ -85,7 +93,9 @@ describe("runAgentLoop", () => {
 
     await expect(
       runAgentLoop({
-        emit: (event) => void events.push(event),
+        emit: (event) => {
+          events.push(event);
+        },
         history,
         llm: abortingLlm,
         signal: controller.signal,
@@ -107,7 +117,9 @@ describe("runAgentLoop", () => {
 
     await expect(
       runAgentLoop({
-        emit: (event) => void events.push(event),
+        emit: (event) => {
+          events.push(event);
+        },
         history,
         llm: emptyAbortingLlm,
         signal: controller.signal,
@@ -130,10 +142,11 @@ describe("runAgentLoop", () => {
 
     const result = runAgentLoop({
       emit: (event) => {
-        void events.push(event);
+        events.push(event);
         if (event.type === "step-start") {
-          return stepStart.promise;
+          return stepStart.promise.then(() => noBoundaryDecision);
         }
+        return noBoundaryDecision;
       },
       history,
       llm,
@@ -173,13 +186,14 @@ describe("runAgentLoop", () => {
 
     const result = runAgentLoop({
       emit: (event) => {
-        void events.push(event);
+        events.push(event);
         if (event.type === "step-end") {
           stepEndCount += 1;
           if (stepEndCount === 1) {
-            return firstStepEnd.promise;
+            return firstStepEnd.promise.then(() => noBoundaryDecision);
           }
         }
+        return noBoundaryDecision;
       },
       history,
       llm: countingLlm,
@@ -219,10 +233,11 @@ describe("runAgentLoop", () => {
 
     const result = runAgentLoop({
       emit: (event) => {
-        void events.push(event);
+        events.push(event);
         if (event.type === "step-end") {
-          return stepEnd.promise;
+          return stepEnd.promise.then(() => noBoundaryDecision);
         }
+        return noBoundaryDecision;
       },
       history,
       llm,
@@ -263,7 +278,7 @@ describe("runAgentLoop", () => {
     await expect(
       runAgentLoop({
         emit: (event) => {
-          void events.push(event);
+          events.push(event);
           if (event.type === "step-end") {
             stepEndCount += 1;
             return { runtimeInputAdded: stepEndCount === 1 };
@@ -302,10 +317,11 @@ describe("runAgentLoop", () => {
 
     const result = runAgentLoop({
       emit: (event) => {
-        void events.push(event);
+        events.push(event);
         if (event.type === "step-start") {
-          return stepStart.promise;
+          return stepStart.promise.then(() => noBoundaryDecision);
         }
+        return noBoundaryDecision;
       },
       history,
       llm,

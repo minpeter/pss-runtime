@@ -25,7 +25,10 @@ interface AgentLoopBoundaryDecision {
 }
 type AgentLoopEventListener = (
   event: AgentEvent
-) => AgentLoopBoundaryDecision | Promise<AgentLoopBoundaryDecision | void> | void;
+) =>
+  | AgentLoopBoundaryDecision
+  | Promise<AgentLoopBoundaryDecision | undefined>
+  | undefined;
 type StepOutputResult = "continue" | "completed" | "aborted";
 
 export async function runAgentLoop({
@@ -87,7 +90,7 @@ async function emitBoundary({
 }: Pick<RunAgentLoopOptions, "emit"> & {
   event: AgentLoopBoundaryEvent;
   signal: AbortSignal;
-}): Promise<AgentLoopBoundaryDecision | "aborted" | void> {
+}): Promise<AgentLoopBoundaryDecision | "aborted" | undefined> {
   if (signal.aborted) {
     return "aborted";
   }
@@ -110,9 +113,7 @@ function createAbortBoundary(signal: AbortSignal): {
   dispose: () => void;
   promise: Promise<"aborted">;
 } {
-  let dispose = () => {
-    return;
-  };
+  let dispose: () => void = () => undefined;
 
   const promise = new Promise<"aborted">((resolve) => {
     const onAbort = () => resolve("aborted");
