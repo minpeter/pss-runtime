@@ -1,5 +1,15 @@
 # @minpeter/pss-coding-agent
 
+## 0.0.8
+
+### Patch Changes
+
+- c991a6a: Replace the public current-turn input API with `session.steer(input)` and keep
+  `session.send(input)` as the new-turn queue. Active TUI submissions now steer the
+  current run through the session API.
+- Updated dependencies [c991a6a]
+  - @minpeter/pss-runtime@0.0.8
+
 ## 0.0.7
 
 ### Patch Changes
