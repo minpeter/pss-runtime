@@ -3,7 +3,7 @@
   "root": true,
   "extends": ["ultracite/biome/core"],
   "files": {
-    "includes": ["**/*", "!!**/.omx"]
+    "includes": ["**/*", "!!**/.omo", "!!**/.omx"]
   },
   "overrides": [
     {
