@@ -1,7 +1,12 @@
 import { runAgentLoop } from "../agent-loop";
 import type { AgentHooks } from "../hooks";
 import type { Llm } from "../llm";
-import type { UserMessage, UserMessageContentPart, UserText } from "./events";
+import type {
+  RuntimeInput,
+  UserMessage,
+  UserMessageContentPart,
+  UserText,
+} from "./events";
 import { AgentModelHistory } from "./history";
 import type { AgentRun } from "./run";
 import { BufferedAgentRun } from "./run";
@@ -25,6 +30,23 @@ interface SessionPersistenceOptions {
 interface QueuedInput {
   readonly input: UserInput;
   readonly run: BufferedAgentRun;
+  readonly runtimeInput: RuntimeInputState;
+}
+
+type RuntimeInputPlacement = RuntimeInput["placement"];
+const noBoundaryDecision = undefined;
+
+interface QueuedRuntimeInput {
+  readonly input: UserInput;
+  readonly placement: RuntimeInputPlacement;
+}
+
+interface RuntimeInputState {
+  closedReason?: string;
+  pending: Promise<void>;
+  placement?: RuntimeInputPlacement;
+  readonly queue: QueuedRuntimeInput[];
+  steerPlacement?: RuntimeInputPlacement;
 }
 
 export class AgentSession {
@@ -33,6 +55,8 @@ export class AgentSession {
   readonly #llm: Llm;
   readonly #persistence: SessionPersistenceOptions;
   #activeAbort?: AbortController;
+  #activeRun?: BufferedAgentRun;
+  #activeRuntimeInput?: RuntimeInputState;
   #history = new AgentModelHistory();
   #killed = false;
   #loadPromise?: Promise<void>;
@@ -61,14 +85,37 @@ export class AgentSession {
       throw sessionKilledError();
     }
 
+    const runtimeInput: RuntimeInputState = {
+      pending: Promise.resolve(),
+      queue: [],
+    };
     const acceptedInput = normalizeAgentInput(input);
     const run = new BufferedAgentRun();
     run.emit(acceptedInput);
-    this.#inputQueue.push({ input: structuredClone(acceptedInput), run });
+    this.#inputQueue.push({
+      input: structuredClone(acceptedInput),
+      run,
+      runtimeInput,
+    });
     this.#drainInputQueue().catch((error: unknown) => {
       run.emit({ type: "turn-error", message: errorMessage(error) });
       run.close();
     });
+    return run;
+  }
+
+  async steer(input: AgentInput): Promise<AgentRun> {
+    if (this.#killed) {
+      throw sessionKilledError();
+    }
+
+    const runtimeInput = this.#activeRuntimeInput;
+    const run = this.#activeRun;
+    if (!(runtimeInput && run)) {
+      return this.send(input);
+    }
+
+    await this.#addSteeringInput(runtimeInput, input);
     return run;
   }
 
@@ -83,14 +130,19 @@ export class AgentSession {
 
     this.#killed = true;
     this.#activeAbort?.abort();
+    this.#closeRuntimeInput(
+      this.#activeRuntimeInput,
+      sessionKilledError().message
+    );
 
     while (this.#inputQueue.length > 0) {
       const item = this.#inputQueue.shift();
+      this.#closeRuntimeInput(item?.runtimeInput, sessionKilledError().message);
       item?.run.emit({
         type: "turn-error",
         message: sessionKilledError().message,
       });
-      item?.run.close();
+      item?.run.close(undefined, sessionKilledError().message);
     }
   }
 
@@ -141,39 +193,87 @@ export class AgentSession {
     }
   }
 
-  async #processQueuedInput({ input, run }: QueuedInput): Promise<void> {
-    this.#activeAbort = new AbortController();
+  async #processQueuedInput({
+    input,
+    run,
+    runtimeInput,
+  }: QueuedInput): Promise<void> {
+    const activeAbort = new AbortController();
+    this.#activeAbort = activeAbort;
+    this.#activeRun = run;
+    this.#activeRuntimeInput = runtimeInput;
     const historySnapshot = this.#history.modelSnapshot();
 
     try {
-      await this.#hooks?.beforeTurn?.({
-        history: this.#history.modelSnapshot(),
-        input,
-        signal: this.#activeAbort.signal,
-      });
-      run.emit({ type: "turn-start" });
+      await this.#withSteeringPlacement(
+        runtimeInput,
+        "turn-start",
+        async () => {
+          await this.#hooks?.beforeTurn?.({
+            history: this.#history.modelSnapshot(),
+            input,
+            signal: activeAbort.signal,
+          });
+        }
+      );
+      await this.#withRuntimeInputWindow(
+        runtimeInput,
+        "turn-start",
+        async () => {
+          await run.emitBoundary({ type: "turn-start" });
+        }
+      );
       this.#history.appendUserInput(input);
       await this.#commitHistory();
+      await this.#drainRuntimeInput(run, runtimeInput, "turn-start");
 
       const result = await runAgentLoop({
-        emit: (event) => run.emit(event),
+        emit: async (event) => {
+          if (event.type === "step-start" || event.type === "step-end") {
+            await this.#withRuntimeInputWindow(
+              runtimeInput,
+              event.type,
+              async () => {
+                await run.emitBoundary(event);
+              }
+            );
+            const runtimeInputAdded = await this.#drainRuntimeInput(
+              run,
+              runtimeInput,
+              event.type
+            );
+
+            if (event.type === "step-end") {
+              return { runtimeInputAdded };
+            }
+            return noBoundaryDecision;
+          }
+
+          run.emit(event);
+        },
         history: this.#history,
-        hooks: this.#hooks,
+        hooks: this.#hooksForRuntimeInput(runtimeInput),
         llm: this.#llm,
-        signal: this.#activeAbort.signal,
+        signal: activeAbort.signal,
       });
 
       await this.#commitHistory();
+      const terminalEvent = result === "aborted" ? "turn-abort" : "turn-end";
+      this.#closeRuntimeInput(runtimeInput, terminalEvent);
+      this.#activeRuntimeInput = undefined;
+      this.#activeRun = undefined;
       await runAfterTurnHook(this.#hooks, {
         history: this.#history.modelSnapshot(),
         input,
         result,
-        signal: this.#activeAbort.signal,
+        signal: activeAbort.signal,
       });
-      run.emit({ type: result === "aborted" ? "turn-abort" : "turn-end" });
+      run.emit({ type: terminalEvent });
     } catch (error) {
       if (error instanceof SessionCommitConflictError) {
         run.emit({ type: "turn-error", message: error.message });
+        this.#closeRuntimeInput(runtimeInput, "a session commit conflict");
+        this.#activeAbort = undefined;
         return;
       }
 
@@ -187,12 +287,47 @@ export class AgentSession {
             rollbackError
           )}`,
         });
+        this.#closeRuntimeInput(runtimeInput, "turn-error");
+        this.#activeAbort = undefined;
         return;
       }
       run.emit({ type: "turn-error", message: errorMessage(error) });
+      this.#closeRuntimeInput(runtimeInput, "turn-error");
     } finally {
-      run.close();
+      this.#closeRuntimeInput(runtimeInput);
       this.#activeAbort = undefined;
+      this.#activeRun = undefined;
+      this.#activeRuntimeInput = undefined;
+      run.close(undefined, runtimeInput.closedReason);
+    }
+  }
+
+  #addSteeringInput(
+    runtimeInput: RuntimeInputState,
+    input: AgentInput
+  ): Promise<void> {
+    const next = runtimeInput.pending.then(() => {
+      if (runtimeInput.closedReason) {
+        throw runtimeInputClosedError(runtimeInput.closedReason);
+      }
+
+      runtimeInput.queue.push({
+        input: normalizeAgentInput(input),
+        placement:
+          runtimeInput.steerPlacement ?? runtimeInput.placement ?? "step-end",
+      });
+    });
+    runtimeInput.pending = next.catch(() => undefined);
+    return next;
+  }
+
+  #closeRuntimeInput(
+    runtimeInput: RuntimeInputState | undefined,
+    reason = "the run reached a terminal state"
+  ): void {
+    if (!runtimeInput?.closedReason && runtimeInput) {
+      runtimeInput.closedReason = reason;
+      runtimeInput.placement = undefined;
     }
   }
 
@@ -213,6 +348,89 @@ export class AgentSession {
 
     this.#storeVersion = result.version;
   }
+
+  async #withRuntimeInputWindow<T>(
+    runtimeInput: RuntimeInputState,
+    placement: RuntimeInputPlacement,
+    callback: () => Promise<T>
+  ): Promise<T> {
+    const previousSteerPlacement = runtimeInput.steerPlacement;
+    runtimeInput.placement = placement;
+    runtimeInput.steerPlacement = placement;
+    try {
+      return await callback();
+    } finally {
+      runtimeInput.placement = undefined;
+      runtimeInput.steerPlacement = previousSteerPlacement;
+    }
+  }
+
+  async #withSteeringPlacement<T>(
+    runtimeInput: RuntimeInputState,
+    placement: RuntimeInputPlacement,
+    callback: () => Promise<T>
+  ): Promise<T> {
+    const previousSteerPlacement = runtimeInput.steerPlacement;
+    runtimeInput.steerPlacement = placement;
+    try {
+      return await callback();
+    } finally {
+      runtimeInput.steerPlacement = previousSteerPlacement;
+    }
+  }
+
+  #hooksForRuntimeInput(
+    runtimeInput: RuntimeInputState
+  ): AgentHooks | undefined {
+    const hooks = this.#hooks;
+    if (!hooks) {
+      return;
+    }
+
+    return {
+      ...hooks,
+      afterStep: (context) =>
+        this.#withSteeringPlacement(runtimeInput, "step-end", async () => {
+          await hooks.afterStep?.(context);
+        }),
+      beforeStep: (context) =>
+        this.#withSteeringPlacement(runtimeInput, "step-start", async () => {
+          await hooks.beforeStep?.(context);
+        }),
+    };
+  }
+
+  async #drainRuntimeInput(
+    run: BufferedAgentRun,
+    runtimeInput: RuntimeInputState,
+    placement: RuntimeInputPlacement
+  ): Promise<boolean> {
+    let added = false;
+    let next = shiftRuntimeInput(runtimeInput, placement);
+    while (next) {
+      added = true;
+      run.emit({ type: "runtime-input", input: next.input, placement });
+      this.#history.appendUserInput(next.input);
+      await this.#commitHistory();
+      next = shiftRuntimeInput(runtimeInput, placement);
+    }
+
+    return added;
+  }
+}
+
+function shiftRuntimeInput(
+  runtimeInput: RuntimeInputState,
+  placement: RuntimeInputPlacement
+): QueuedRuntimeInput | undefined {
+  const index = runtimeInput.queue.findIndex(
+    (input) => input.placement === placement
+  );
+  if (index === -1) {
+    return;
+  }
+
+  return runtimeInput.queue.splice(index, 1)[0];
 }
 
 async function runAfterTurnHook(
@@ -358,6 +576,10 @@ function errorMessage(error: unknown): string {
 
 function sessionKilledError(): Error {
   return new Error("Session killed");
+}
+
+function runtimeInputClosedError(reason: string): Error {
+  return new Error(`session.steer() cannot be used after ${reason}`);
 }
 
 class SessionCommitConflictError extends Error {

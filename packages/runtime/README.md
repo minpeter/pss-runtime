@@ -20,6 +20,12 @@ for await (const event of run.stream()) {
 }
 ```
 
+`run.stream()` is the run driver. The runtime stops at synchronized lifecycle
+boundaries until the stream consumer asks for the next event, so callers must
+consume the stream for the run to progress. This is what lets code react to
+`turn-start`, `step-start`, and `step-end` before the next model snapshot is
+created.
+
 Per-key conversations use `session(key)`:
 
 ```ts
@@ -69,6 +75,48 @@ for every media type.
 The public transcript protocol is `AgentEvent`: live runs emit runtime-defined
 events through `run.stream()`. Provider/model message history is internal
 continuation state, not a public history API.
+
+## Send and Steer
+
+Use `session.send(input)` for a new user turn. If a run is already active, the
+turn is queued until the active run finishes. Use `session.steer(input)` when the
+input should steer the active run; if no run is active, it starts a normal run.
+
+Both APIs accept the same input shapes: strings, arrays of strings,
+`{ type: "user-text", text }`, and multipart `{ type: "user-message", content }`
+values. Active steering emits `runtime-input` events. A `runtime-input` is
+runtime/API-originated input mapped internally to the model's user role. It is
+distinct from human-origin `user-text` and `user-message` events.
+
+Runtime input windows are tied to synchronized stream events:
+
+- `turn-start`: input is appended after the original turn input and before the first model snapshot.
+- `step-start`: input is appended before that same step's model snapshot.
+- `step-end`: input is appended before the next step and intentionally continues the current turn, even if the assistant text looked final.
+
+Guard `step-end` insertion with a one-shot flag or a real condition. Adding input
+on every `step-end` can keep the turn running indefinitely.
+
+```ts
+const session = agent.session("room:123:user:456");
+const run = await session.send("Draft a short answer.");
+let addedSteer = false;
+
+for await (const event of run.stream()) {
+  if (event.type === "assistant-text") {
+    process.stdout.write(event.text);
+  }
+
+  if (event.type === "step-end" && !addedSteer) {
+    addedSteer = true;
+    await session.steer("Also mention the main tradeoff.");
+  }
+}
+```
+
+`session.steer()` resolves when the input is accepted into the active run's
+pending steering path or, when idle, when a new run is scheduled. It does not wait
+for a later model snapshot.
 
 ## Session storage and portability
 

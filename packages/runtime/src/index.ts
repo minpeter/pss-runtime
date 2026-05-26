@@ -33,6 +33,7 @@ export type {
   AgentEventListener,
   AssistantReasoning,
   AssistantText,
+  RuntimeInput,
   ToolCall,
   ToolResult,
   UserMessage,

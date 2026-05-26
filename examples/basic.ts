@@ -7,7 +7,15 @@ const agent = await Agent.create({
   model: createCodingAgentModel(),
   tools,
 });
-const run = await agent.send("Find information about minpeter.");
+const session = agent.session("default");
+const run = await session.send("Find information about minpeter.");
+let askedForSource = false;
+
 for await (const event of run.stream()) {
   console.dir(event, { depth: null });
+
+  if (event.type === "step-end" && !askedForSource) {
+    askedForSource = true;
+    await session.steer("Include the most relevant source you found.");
+  }
 }

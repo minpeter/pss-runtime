@@ -2,8 +2,8 @@
 
 Small agent runtime workspace.
 
-- `@minpeter/pss-runtime` — runtime, sessions, model loop.
-- `@minpeter/pss-coding-agent` — web tools, model wiring, and the `pss` TUI.
+- `@minpeter/pss-runtime`: runtime, sessions, model loop.
+- `@minpeter/pss-coding-agent`: web tools, model wiring, and the `pss` TUI.
 
 ## Use
 
@@ -17,11 +17,38 @@ const agent = await Agent.create({
   model: createCodingAgentModel(),
   tools,
 });
-const conversation = await agent.send("Hello");
-for await (const event of conversation.stream()) {
+const run = await agent.send("Hello");
+for await (const event of run.stream()) {
   console.dir(event, { depth: null });
 }
 ```
+
+`run.stream()` is synchronized and drives the run. Consume it to let the runtime
+cross lifecycle boundaries such as `turn-start`, `step-start`, and `step-end`.
+Use `session.send(input)` for a new user turn. If a run is already active, the
+turn is queued until the active run finishes. Use `session.steer(input)` when the
+input should steer the active run; if no run is active, it starts a normal run.
+
+```ts
+const session = agent.session("default");
+const run = await session.send("Write a two sentence summary.");
+let addedConstraint = false;
+
+for await (const event of run.stream()) {
+  if (event.type === "step-end" && !addedConstraint) {
+    addedConstraint = true;
+    await session.steer("Keep the second sentence under 10 words.");
+  }
+}
+```
+
+The guard matters. `step-end` runtime input asks the runtime to continue the
+current turn before the next model snapshot, even after final-looking assistant
+text. Adding input on every `step-end` can keep a turn running indefinitely.
+
+Steering additions appear as `runtime-input` events: runtime/API-originated input
+mapped internally to the model's user role, separate from human `user-text` and
+`user-message` events.
 
 The runtime `send` API also accepts JSON-serializable multimodal content parts
 for model providers that support them:
@@ -48,6 +75,9 @@ or install it:
 pnpm add -g @minpeter/pss-coding-agent
 pss
 ```
+
+In the `pss` TUI, submitting while a run is active steers the current run.
+Submitting while idle starts a normal new turn.
 
 ## Develop
 

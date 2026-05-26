@@ -1,7 +1,7 @@
 import type { ModelMessage } from "ai";
 import type { AgentHooks, AgentStepResult } from "./hooks";
 import type { Llm, LlmOutput } from "./llm";
-import type { AgentEventListener } from "./session/events";
+import type { AgentEvent, AgentEventListener } from "./session/events";
 import { modelMessageToAgentEvents } from "./session/mapping";
 
 interface ModelHistory {
@@ -10,7 +10,7 @@ interface ModelHistory {
 }
 
 interface RunAgentLoopOptions {
-  emit: AgentEventListener;
+  emit: AgentLoopEventListener;
   history: ModelHistory;
   hooks?: AgentHooks;
   llm: Llm;
@@ -18,6 +18,19 @@ interface RunAgentLoopOptions {
 }
 
 export type AgentLoopResult = "completed" | "aborted";
+type AgentLoopBoundaryEvent = Extract<
+  AgentEvent,
+  { type: "step-end" } | { type: "step-start" }
+>;
+interface AgentLoopBoundaryDecision {
+  readonly runtimeInputAdded?: boolean;
+}
+type AgentLoopEventListener = (
+  event: AgentEvent
+) =>
+  | AgentLoopBoundaryDecision
+  | Promise<AgentLoopBoundaryDecision | undefined>
+  | undefined;
 type StepOutputResult = AgentStepResult | "aborted";
 
 export async function runAgentLoop({
@@ -44,7 +57,16 @@ export async function runAgentLoop({
       return "aborted";
     }
 
-    emit({ type: "step-start" });
+    const stepStartDecision = await emitBoundary({
+      emit,
+      event: { type: "step-start" },
+      signal,
+    });
+
+    if (stepStartDecision === "aborted") {
+      return "aborted";
+    }
+
     const output = await readLlmOutput({ history, llm, signal });
 
     if (output === "aborted") {
@@ -63,14 +85,67 @@ export async function runAgentLoop({
       signal,
       stepIndex,
     });
-    emit({ type: "step-end" });
 
-    if (result === "completed") {
+    const stepEndDecision = await emitBoundary({
+      emit,
+      event: { type: "step-end" },
+      signal,
+    });
+
+    if (stepEndDecision === "aborted") {
+      return "aborted";
+    }
+
+    // Runtime input after step-end intentionally forces another inference step,
+    // even after final-looking assistant text. Unconditional insertion on every
+    // step-end can create an unbounded loop.
+    if (result === "completed" && !stepEndDecision?.runtimeInputAdded) {
       return "completed";
     }
 
     stepIndex += 1;
   }
+}
+
+async function emitBoundary({
+  emit,
+  event,
+  signal,
+}: Pick<RunAgentLoopOptions, "emit"> & {
+  event: AgentLoopBoundaryEvent;
+  signal: AbortSignal;
+}): Promise<AgentLoopBoundaryDecision | "aborted" | undefined> {
+  if (signal.aborted) {
+    return "aborted";
+  }
+
+  const abort = createAbortBoundary(signal);
+  try {
+    return await Promise.race([Promise.resolve(emit(event)), abort.promise]);
+  } catch (error) {
+    if (signal.aborted) {
+      return "aborted";
+    }
+
+    throw error;
+  } finally {
+    abort.dispose();
+  }
+}
+
+function createAbortBoundary(signal: AbortSignal): {
+  dispose: () => void;
+  promise: Promise<"aborted">;
+} {
+  let dispose: () => void = () => undefined;
+
+  const promise = new Promise<"aborted">((resolve) => {
+    const onAbort = () => resolve("aborted");
+    dispose = () => signal.removeEventListener("abort", onAbort);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+
+  return { dispose, promise };
 }
 
 async function runAfterStepHook(
@@ -108,7 +183,7 @@ function appendStepOutput({
   history,
   output,
   signal,
-}: Pick<RunAgentLoopOptions, "emit" | "history"> & {
+}: { emit: AgentEventListener; history: ModelHistory } & {
   output: LlmOutput;
   signal: AbortSignal;
 }): StepOutputResult {

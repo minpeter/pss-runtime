@@ -6,19 +6,13 @@ import {
   Text,
   TUI,
 } from "@earendil-works/pi-tui";
-import type { AgentEvent, UserTextContent } from "@minpeter/pss-runtime";
 import { Agent } from "@minpeter/pss-runtime";
 import { FileSessionStore } from "@minpeter/pss-runtime/session-store/file";
 import { createCodingAgentModel } from "./model";
 import { resolveCodingAgentSessionConfig } from "./session-config";
 import { tools } from "./tools";
-import {
-  formatToolCallForTui,
-  formatToolResultForTui,
-  safeInlineText,
-  safeText,
-  truncateDetail,
-} from "./tui-tool-printer";
+import { createTuiRunner } from "./tui-runner";
+import { safeInlineText } from "./tui-tool-printer";
 
 const sessionConfig = resolveCodingAgentSessionConfig();
 const agent = await Agent.create({
@@ -59,60 +53,15 @@ const addLine = (text: string): void => {
   tui.requestRender();
 };
 
-const formatUserTextContent = (text: UserTextContent): string =>
-  typeof text === "string" ? text : text.join("\n");
+const runner = createTuiRunner({
+  addLine,
+  requestRender: () => tui.requestRender(),
+  session,
+});
 
-const formatEvent = (event: AgentEvent): string | undefined => {
-  switch (event.type) {
-    case "user-text":
-      return `\x1b[36myou\x1b[0m: ${safeText(formatUserTextContent(event.text))}`;
-    case "assistant-text":
-      return `\x1b[32massistant\x1b[0m: ${safeText(event.text)}`;
-    case "assistant-reasoning":
-      return `\x1b[35mreasoning\x1b[0m: ${truncateDetail(safeInlineText(event.text), 240)}`;
-    case "tool-call":
-      return `\x1b[33mtool\x1b[0m ${formatToolCallForTui(event)}`;
-    case "tool-result":
-      return `\x1b[33mtool result\x1b[0m ${formatToolResultForTui(event)}`;
-    case "turn-start":
-      return "\x1b[2mrunning...\x1b[0m";
-    case "turn-abort":
-      return "\x1b[2minterrupted\x1b[0m";
-    case "turn-error":
-      return `\x1b[31merror\x1b[0m: ${safeText(event.message)}`;
-    case "turn-end":
-      return "\x1b[2mdone\x1b[0m";
-    case "step-start":
-    case "step-end":
-      return;
-    default:
-      return;
-  }
-};
 input.onSubmit = (text) => {
   input.setValue("");
-
-  const trimmed = text.trim();
-  if (!trimmed) {
-    tui.requestRender();
-    return;
-  }
-
-  session
-    .send(trimmed)
-    .then((run) => run.stream())
-    .then(async (stream) => {
-      for await (const event of stream) {
-        const line = formatEvent(event);
-        if (line) {
-          addLine(line);
-        }
-      }
-    })
-    .catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
-      addLine(`\x1b[31merror\x1b[0m: ${safeText(message)}`);
-    });
+  runner.submit(text);
 };
 
 const removeInputListener = tui.addInputListener((data) => {
@@ -128,6 +77,7 @@ const removeInputListener = tui.addInputListener((data) => {
 
   removeInputListener();
   session.kill();
+  runner.clearActiveRun();
   tui.stop();
   finish();
   return { consume: true };

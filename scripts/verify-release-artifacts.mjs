@@ -28,13 +28,19 @@ const RUNTIME_DECLARATION_ALLOWLIST = new Set([
 ]);
 const REQUIRED_RUNTIME_ROOT_ALIASES = [
   "AgentModel",
+  "AgentRun",
   "AgentTools",
   "RuntimeCreateLlmOptions",
+  "RuntimeInput",
   "RuntimeLlm",
   "RuntimeLlmContext",
   "RuntimeLlmOutput",
 ];
-const FORBIDDEN_RUNTIME_ROOT_ALIASES = ["AgentMessage"];
+const FORBIDDEN_RUNTIME_ROOT_ALIASES = [
+  "AgentMessage",
+  "AgentRunInput",
+  "RunInput",
+];
 
 const RELATIVE_IMPORT_RE =
   /(?:from\s+["']|import\s*(?:\(\s*)?["'])(\.\.?\/[^"']+)(?:["'])/g;

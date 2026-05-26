@@ -39,6 +39,7 @@ export interface SessionHandle {
   interrupt(): void;
   kill(): void;
   send(input: AgentInput): Promise<AgentRun>;
+  steer(input: AgentInput): Promise<AgentRun>;
 }
 
 export type AgentOptions = AgentModelOptions | AgentLlmOptions;
@@ -90,6 +91,7 @@ export class Agent {
         this.#sessions.delete(key);
       },
       send: (input) => session.send(input),
+      steer: (input) => session.steer(input),
     };
     this.#sessions.set(key, handle);
     return handle;
