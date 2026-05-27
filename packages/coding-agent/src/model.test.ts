@@ -75,9 +75,9 @@ describe("createOpenAICompatibleModelFromEnv", () => {
     process.env.AI_API_KEY = " dotenv-token ";
     process.env.AI_BASE_URL = " https://dotenv.test/v1 ";
     process.env.AI_MODEL = " dotenv-model ";
-    const { createCodingAgentModel } = await import("./model");
+    const { createCodingLanguageModel } = await import("./model");
 
-    const model = createCodingAgentModel({
+    const model = createCodingLanguageModel({
       override: false,
       providerName: "dotenv-provider",
       quiet: false,

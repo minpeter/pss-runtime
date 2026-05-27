@@ -31,7 +31,7 @@ export function createOpenAICompatibleModelFromEnv({
   return provider(env.AI_MODEL);
 }
 
-export function createCodingAgentModel({
+export function createCodingLanguageModel({
   override = true,
   providerName = "custom",
   quiet = true,
