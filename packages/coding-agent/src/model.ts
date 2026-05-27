@@ -1,5 +1,5 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import type { LanguageModel } from "ai";
+import type { AgentModel } from "@minpeter/pss-runtime";
 import { config } from "dotenv";
 import {
   type CodingAgentRuntimeEnv,
@@ -20,7 +20,7 @@ export interface CreateOpenAICompatibleModelFromDotenvOptions {
 export function createOpenAICompatibleModelFromEnv({
   providerName = "custom",
   runtimeEnv = process.env,
-}: CreateOpenAICompatibleModelFromEnvOptions = {}): LanguageModel {
+}: CreateOpenAICompatibleModelFromEnvOptions = {}): AgentModel {
   const env = readOpenAICompatibleModelEnv({ runtimeEnv });
   const provider = createOpenAICompatible({
     name: providerName,
@@ -35,7 +35,7 @@ export function createCodingAgentModel({
   override = true,
   providerName = "custom",
   quiet = true,
-}: CreateOpenAICompatibleModelFromDotenvOptions = {}): LanguageModel {
+}: CreateOpenAICompatibleModelFromDotenvOptions = {}): AgentModel {
   config({ override, quiet });
 
   return createOpenAICompatibleModelFromEnv({
