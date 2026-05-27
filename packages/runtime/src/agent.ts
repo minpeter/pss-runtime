@@ -1,24 +1,19 @@
-import type { LanguageModel } from "ai";
+import type { LanguageModel, ToolSet } from "ai";
 import type { AgentHooks } from "./hooks";
-import {
-  type AgentToolChoice,
-  type AgentTools,
-  createLlm,
-  type Llm,
-} from "./llm";
+import { type AgentToolChoice, createLlm, type Llm } from "./llm";
 import type { AgentRun } from "./session/run";
 import { type AgentInput, AgentSession } from "./session/session";
 import { MemorySessionStore } from "./session/store/memory";
 import type { SessionStore } from "./session/store/types";
 
-interface AgentModelOptions {
+interface AgentLanguageModelOptions {
   hooks?: AgentHooks;
   instructions?: string;
   llm?: never;
   model: LanguageModel;
   sessions?: AgentSessionOptions;
   toolChoice?: AgentToolChoice;
-  tools?: AgentTools;
+  tools?: ToolSet;
 }
 
 interface AgentLlmOptions {
@@ -42,7 +37,7 @@ export interface SessionHandle {
   steer(input: AgentInput): Promise<AgentRun>;
 }
 
-export type AgentOptions = AgentModelOptions | AgentLlmOptions;
+export type AgentOptions = AgentLanguageModelOptions | AgentLlmOptions;
 
 export class Agent {
   readonly #hooks?: AgentHooks;

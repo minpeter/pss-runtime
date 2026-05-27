@@ -1,2 +1,4 @@
 #!/usr/bin/env node
-import "../dist/tui.js";
+import { startTui } from "../dist/tui.js";
+
+await startTui();

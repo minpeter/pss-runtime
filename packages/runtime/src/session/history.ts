@@ -2,7 +2,7 @@ import type { ModelMessage } from "ai";
 import { userInputToModelMessage } from "./mapping";
 import type { UserInput } from "./session";
 
-export class AgentModelHistory {
+export class ModelMessageHistory {
   readonly #modelHistory: ModelMessage[] = [];
   readonly #onChange?: (snapshot: ModelMessage[]) => void;
 

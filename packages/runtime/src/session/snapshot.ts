@@ -1,22 +1,22 @@
-import type { AgentMessage } from "../llm";
+import type { ModelMessage } from "ai";
 import type { StoredSession } from "./store/types";
 
 export interface AgentSessionSnapshotV1 {
-  readonly history: AgentMessage[];
+  readonly history: ModelMessage[];
   readonly schemaVersion: 1;
 }
 
 export type AgentSessionSnapshot = AgentSessionSnapshotV1;
 
 export function encodeSessionSnapshot(
-  history: AgentMessage[]
+  history: ModelMessage[]
 ): AgentSessionSnapshot {
   return { schemaVersion: 1, history: structuredClone(history) };
 }
 
 export function decodeStoredSessionSnapshot(
   stored: StoredSession | null
-): AgentMessage[] {
+): ModelMessage[] {
   if (!stored) {
     return [];
   }

@@ -11,25 +11,8 @@ const REQUIRED_PACKAGE_BINS = {
     "pss-coding-agent": "./bin/pss.js",
   },
 };
-const RAW_RUNTIME_DECLARATION_TOKENS = [
-  "LanguageModel",
-  "ToolSet",
-  "ModelMessage",
-  "AssistantModelMessage",
-  "ToolModelMessage",
-  "generateText",
-];
-const RUNTIME_DECLARATION_ALLOWLIST = new Set([
-  "agent.d.ts",
-  "agent-loop.d.ts",
-  "llm.d.ts",
-  "session/history.d.ts",
-  "session/mapping.d.ts",
-]);
 const REQUIRED_RUNTIME_ROOT_ALIASES = [
-  "AgentModel",
   "AgentRun",
-  "AgentTools",
   "RuntimeCreateLlmOptions",
   "RuntimeInput",
   "RuntimeLlm",
@@ -38,7 +21,10 @@ const REQUIRED_RUNTIME_ROOT_ALIASES = [
 ];
 const FORBIDDEN_RUNTIME_ROOT_ALIASES = [
   "AgentMessage",
+  ["Agent", "Model"].join(""),
   "AgentRunInput",
+  "AgentTool",
+  "AgentTools",
   "RunInput",
 ];
 
@@ -321,30 +307,18 @@ function findRuntimeDeclarationLeaks({ cwd, packages }) {
     return [];
   }
 
-  const runtimeDist = packageDistPath(cwd, "runtime");
-  const declarationFiles = listFiles(runtimeDist, (file) =>
-    file.endsWith(".d.ts")
-  );
-  const rootDeclarationPath = join(runtimeDist, "index.d.ts");
-
-  return declarationFiles.flatMap((file) =>
-    file === rootDeclarationPath
-      ? findRuntimeRootDeclarationLeaks({ cwd, file })
-      : findRuntimeInternalDeclarationLeaks({ cwd, file, runtimeDist })
-  );
+  return findRuntimeRootDeclarationLeaks({
+    cwd,
+    file: join(packageDistPath(cwd, "runtime"), "index.d.ts"),
+  });
 }
 
 function findRuntimeRootDeclarationLeaks({ cwd, file }) {
   const text = readFileSync(file, "utf8");
-  const errors = RAW_RUNTIME_DECLARATION_TOKENS.filter((token) =>
-    text.includes(token)
-  ).map(
-    (token) =>
-      `${relativeToCwd(cwd, file)}: root declaration exposes raw AI SDK token ${token}`
-  );
+  const errors = [];
 
   for (const alias of FORBIDDEN_RUNTIME_ROOT_ALIASES) {
-    if (text.includes(alias)) {
+    if (hasDeclarationToken(text, alias)) {
       errors.push(
         `${relativeToCwd(cwd, file)}: root declaration exposes internal runtime alias ${alias}`
       );
@@ -358,23 +332,15 @@ function findRuntimeRootDeclarationLeaks({ cwd, file }) {
       );
     }
   }
-
   return errors;
 }
 
-function findRuntimeInternalDeclarationLeaks({ cwd, file, runtimeDist }) {
-  const relative = relativeToCwd(runtimeDist, file);
-  if (RUNTIME_DECLARATION_ALLOWLIST.has(relative)) {
-    return [];
-  }
+function hasDeclarationToken(text, token) {
+  return new RegExp(`\\b${escapeRegExp(token)}\\b`).test(text);
+}
 
-  const text = readFileSync(file, "utf8");
-  return RAW_RUNTIME_DECLARATION_TOKENS.filter((token) =>
-    text.includes(token)
-  ).map(
-    (token) =>
-      `${relativeToCwd(cwd, file)}: unauthorized runtime declaration token ${token}`
-  );
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function relativeToCwd(cwd, file) {

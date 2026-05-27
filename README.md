@@ -9,12 +9,12 @@ Small agent runtime workspace.
 
 ```ts
 import { tools } from "@minpeter/pss-coding-agent";
-import { createCodingAgentModel } from "@minpeter/pss-coding-agent/model";
+import { createCodingLanguageModel } from "@minpeter/pss-coding-agent/model";
 import { Agent } from "@minpeter/pss-runtime";
 
 const agent = await Agent.create({
   instructions: "Keep every answer under 3 lines.",
-  model: createCodingAgentModel(),
+  model: createCodingLanguageModel(),
   tools,
 });
 const run = await agent.send("Hello");
@@ -54,13 +54,10 @@ The runtime `send` API also accepts JSON-serializable multimodal content parts
 for model providers that support them:
 
 ```ts
-await agent.send({
-  type: "user-text",
-  text: [
-    { type: "text", text: "What changed in this screenshot?" },
-    { type: "image", image: "data:image/png;base64,...", mediaType: "image/png" },
-  ],
-});
+await agent.send([
+  { type: "text", text: "What changed in this screenshot?" },
+  { type: "image", image: "data:image/png;base64,...", mediaType: "image/png" },
+]);
 ```
 
 Run the TUI:

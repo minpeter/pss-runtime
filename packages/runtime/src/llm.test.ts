@@ -1,7 +1,6 @@
-import type { LanguageModel } from "ai";
+import type { LanguageModel, ToolSet } from "ai";
 import { jsonSchema, tool } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AgentTools } from "./llm";
 import { assistantMessage, userText } from "./test-fixtures";
 
 const { generateTextMock } = vi.hoisted(() => ({
@@ -66,7 +65,7 @@ describe("createLlm", () => {
 
   it("passes injected tools to generateText", async () => {
     const createLlm = await loadCreateLlm();
-    const injectedTools = { injected: createNoopTool() } satisfies AgentTools;
+    const injectedTools = { injected: createNoopTool() } satisfies ToolSet;
     const signal = new AbortController().signal;
     const history = [{ role: "user" as const, content: "hello" }];
     const llm = createLlm({
@@ -126,7 +125,7 @@ describe("Agent tool wiring", () => {
 
   it("passes injected AgentOptions tools into createLlm/generateText", async () => {
     const Agent = await loadAgent();
-    const injectedTools = { injected: createNoopTool() } satisfies AgentTools;
+    const injectedTools = { injected: createNoopTool() } satisfies ToolSet;
     const agent = await Agent.create({
       model: fakeModel,
       tools: injectedTools,

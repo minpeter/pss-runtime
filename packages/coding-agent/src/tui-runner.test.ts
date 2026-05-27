@@ -180,6 +180,12 @@ describe("TUI runner", () => {
     releaseAfterTerminal?.();
     await run.done;
   });
+
+  it("fails waitUntil assertions when the predicate never passes", async () => {
+    await expect(waitUntil(() => false)).rejects.toThrow(
+      "Timed out waiting for TUI runner test condition"
+    );
+  });
 });
 
 function createRun(events: readonly StreamItem[]): TestRun {
@@ -252,4 +258,6 @@ async function waitUntil(predicate: () => boolean): Promise<void> {
 
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
+
+  throw new Error("Timed out waiting for TUI runner test condition");
 }

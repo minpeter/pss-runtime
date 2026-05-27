@@ -9,11 +9,7 @@ import { generateText } from "ai";
 
 export type AgentToolExecutionOptions = ToolExecutionOptions<unknown>;
 export type AgentToolExecute = NonNullable<Tool["execute"]>;
-export type AgentTool = Tool;
-export type AgentTools = ToolSet;
 export type AgentToolChoice = "auto" | "required";
-export type AgentModel = LanguageModel;
-export type AgentMessage = ModelMessage;
 export type LlmOutput = Awaited<
   ReturnType<typeof generateText>
 >["responseMessages"];
@@ -30,7 +26,7 @@ export interface CreateLlmOptions {
   instructions?: string;
   model: LanguageModel;
   toolChoice?: AgentToolChoice;
-  tools?: AgentTools;
+  tools?: ToolSet;
 }
 
 export type RuntimeCreateLlmOptions = CreateLlmOptions;

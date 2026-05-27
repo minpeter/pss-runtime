@@ -4,11 +4,11 @@ Web tools, model wiring, and the `pss` TUI for pss-next.
 
 ```ts
 import { tools } from "@minpeter/pss-coding-agent";
-import { createCodingAgentModel } from "@minpeter/pss-coding-agent/model";
+import { createCodingLanguageModel } from "@minpeter/pss-coding-agent/model";
 import { Agent } from "@minpeter/pss-runtime";
 
 const agent = await Agent.create({
-  model: createCodingAgentModel(),
+  model: createCodingLanguageModel(),
   tools,
 });
 
