@@ -172,7 +172,9 @@ export class AgentSession {
   async #replaceWithStoredSession(): Promise<void> {
     const stored = await this.#persistence.store.load(this.#persistence.key);
     this.#storeVersion = stored?.version;
-    this.#history = new ModelMessageHistory(decodeStoredSessionSnapshot(stored));
+    this.#history = new ModelMessageHistory(
+      decodeStoredSessionSnapshot(stored)
+    );
   }
 
   async #drainInputQueue(): Promise<void> {

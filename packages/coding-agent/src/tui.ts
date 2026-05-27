@@ -94,7 +94,8 @@ export async function startTui(): Promise<void> {
 
 function isMainModule(moduleUrl: string, argvPath = process.argv[1]): boolean {
   return (
-    argvPath !== undefined && moduleUrl === pathToFileURL(resolve(argvPath)).href
+    argvPath !== undefined &&
+    moduleUrl === pathToFileURL(resolve(argvPath)).href
   );
 }
 
