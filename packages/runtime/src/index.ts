@@ -15,12 +15,9 @@ export type {
   AgentTurnResult,
 } from "./hooks";
 export type {
-  AgentModel,
-  AgentTool,
   AgentToolChoice,
   AgentToolExecute,
   AgentToolExecutionOptions,
-  AgentTools,
   LlmOutputPart,
   RuntimeCreateLlmOptions,
   RuntimeLlm,
