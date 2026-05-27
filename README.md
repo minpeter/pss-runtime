@@ -9,12 +9,12 @@ Small agent runtime workspace.
 
 ```ts
 import { tools } from "@minpeter/pss-coding-agent";
-import { createCodingAgentModel } from "@minpeter/pss-coding-agent/model";
+import { createCodingLanguageModel } from "@minpeter/pss-coding-agent/model";
 import { Agent } from "@minpeter/pss-runtime";
 
 const agent = await Agent.create({
   instructions: "Keep every answer under 3 lines.",
-  model: createCodingAgentModel(),
+  model: createCodingLanguageModel(),
   tools,
 });
 const run = await agent.send("Hello");
