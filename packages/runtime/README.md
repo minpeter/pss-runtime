@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../../assets/runtime-banner.png" alt="@minpeter/pss-runtime banner" width="100%" />
+</p>
+
 # @minpeter/pss-runtime
 
 Minimal, platform-agnostic agent runtime with sessions keyed through `run.stream()` and
