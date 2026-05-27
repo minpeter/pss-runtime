@@ -9,7 +9,7 @@ import { generateText } from "ai";
 
 export type AgentToolExecutionOptions = ToolExecutionOptions<unknown>;
 export type AgentToolExecute = NonNullable<Tool["execute"]>;
-export type AgentTool = Tool;
+export type AgentTool<Input = unknown, Output = unknown> = Tool<Input, Output>;
 export type AgentTools = ToolSet;
 export type AgentToolChoice = "auto" | "required";
 export type AgentModel = LanguageModel;
@@ -28,7 +28,7 @@ export type Llm = (context: LlmContext) => Promise<LlmOutput>;
 
 export interface CreateLlmOptions {
   instructions?: string;
-  model: LanguageModel;
+  model: AgentModel;
   toolChoice?: AgentToolChoice;
   tools?: AgentTools;
 }

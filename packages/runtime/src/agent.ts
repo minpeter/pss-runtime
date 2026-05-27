@@ -1,6 +1,6 @@
-import type { LanguageModel } from "ai";
 import type { AgentHooks } from "./hooks";
 import {
+  type AgentModel,
   type AgentToolChoice,
   type AgentTools,
   createLlm,
@@ -15,7 +15,7 @@ interface AgentModelOptions {
   hooks?: AgentHooks;
   instructions?: string;
   llm?: never;
-  model: LanguageModel;
+  model: AgentModel;
   sessions?: AgentSessionOptions;
   toolChoice?: AgentToolChoice;
   tools?: AgentTools;

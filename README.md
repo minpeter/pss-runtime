@@ -54,13 +54,10 @@ The runtime `send` API also accepts JSON-serializable multimodal content parts
 for model providers that support them:
 
 ```ts
-await agent.send({
-  type: "user-text",
-  text: [
-    { type: "text", text: "What changed in this screenshot?" },
-    { type: "image", image: "data:image/png;base64,...", mediaType: "image/png" },
-  ],
-});
+await agent.send([
+  { type: "text", text: "What changed in this screenshot?" },
+  { type: "image", image: "data:image/png;base64,...", mediaType: "image/png" },
+]);
 ```
 
 Run the TUI:
