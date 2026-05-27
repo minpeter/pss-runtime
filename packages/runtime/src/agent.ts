@@ -10,7 +10,7 @@ import { type AgentInput, AgentSession } from "./session/session";
 import { MemorySessionStore } from "./session/store/memory";
 import type { SessionStore } from "./session/store/types";
 
-interface AgentModelOptions {
+interface AgentLanguageModelOptions {
   hooks?: AgentHooks;
   instructions?: string;
   llm?: never;
@@ -41,7 +41,7 @@ export interface SessionHandle {
   steer(input: AgentInput): Promise<AgentRun>;
 }
 
-export type AgentOptions = AgentModelOptions | AgentLlmOptions;
+export type AgentOptions = AgentLanguageModelOptions | AgentLlmOptions;
 
 export class Agent {
   readonly #hooks?: AgentHooks;

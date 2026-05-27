@@ -7,7 +7,7 @@ import type {
   UserMessageContentPart,
   UserText,
 } from "./events";
-import { AgentModelHistory } from "./history";
+import { ModelMessageHistory } from "./history";
 import type { AgentRun } from "./run";
 import { BufferedAgentRun } from "./run";
 import { decodeStoredSessionSnapshot, encodeSessionSnapshot } from "./snapshot";
@@ -57,7 +57,7 @@ export class AgentSession {
   #activeAbort?: AbortController;
   #activeRun?: BufferedAgentRun;
   #activeRuntimeInput?: RuntimeInputState;
-  #history = new AgentModelHistory();
+  #history = new ModelMessageHistory();
   #killed = false;
   #loadPromise?: Promise<void>;
   #loaded = false;
@@ -172,7 +172,7 @@ export class AgentSession {
   async #replaceWithStoredSession(): Promise<void> {
     const stored = await this.#persistence.store.load(this.#persistence.key);
     this.#storeVersion = stored?.version;
-    this.#history = new AgentModelHistory(decodeStoredSessionSnapshot(stored));
+    this.#history = new ModelMessageHistory(decodeStoredSessionSnapshot(stored));
   }
 
   async #drainInputQueue(): Promise<void> {

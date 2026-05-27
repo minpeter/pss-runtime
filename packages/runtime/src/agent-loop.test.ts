@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { runAgentLoop } from "./agent-loop";
 import type { Llm, RuntimeLlmContext } from "./llm";
 import type { AgentEvent } from "./session/events";
-import { AgentModelHistory } from "./session/history";
+import { ModelMessageHistory } from "./session/history";
 import {
   assistantMessage,
   createDeferred,
@@ -29,7 +29,7 @@ const waitFor = async (condition: () => boolean) => {
 describe("runAgentLoop", () => {
   it("continues after assistant messages request any tool", async () => {
     const events: AgentEvent[] = [];
-    const history = new AgentModelHistory();
+    const history = new ModelMessageHistory();
     const toolCall = toolCallPart("call-tool-1");
     const llm = createScriptedLlm([
       [
@@ -85,7 +85,7 @@ describe("runAgentLoop", () => {
   it("calls step hooks around each model loop step", async () => {
     const hookCalls: string[] = [];
     const events: AgentEvent[] = [];
-    const history = new AgentModelHistory();
+    const history = new ModelMessageHistory();
     const toolCall = toolCallPart("call-tool-hooks");
     const llm = createScriptedLlm([
       [assistantMessage([toolCall]), toolResultFor(toolCall)],
@@ -129,7 +129,7 @@ describe("runAgentLoop", () => {
 
   it("keeps appended output and continues when afterStep throws", async () => {
     const events: AgentEvent[] = [];
-    const history = new AgentModelHistory();
+    const history = new ModelMessageHistory();
     const toolCall = toolCallPart("call-tool-after-step");
     const seenHistory: RuntimeLlmContext["history"][] = [];
     let calls = 0;
@@ -184,7 +184,7 @@ describe("runAgentLoop", () => {
 
   it("returns aborted before emitting a step when beforeStep aborts", async () => {
     const events: AgentEvent[] = [];
-    const history = new AgentModelHistory();
+    const history = new ModelMessageHistory();
     const controller = new AbortController();
     let llmCalled = false;
 
@@ -214,7 +214,7 @@ describe("runAgentLoop", () => {
 
   it("rejects before emitting a step when beforeStep throws", async () => {
     const events: AgentEvent[] = [];
-    const history = new AgentModelHistory();
+    const history = new ModelMessageHistory();
     let llmCalled = false;
 
     await expect(
@@ -242,7 +242,7 @@ describe("runAgentLoop", () => {
 
   it("returns aborted when the LLM rejects after the signal is aborted", async () => {
     const events: AgentEvent[] = [];
-    const history = new AgentModelHistory();
+    const history = new ModelMessageHistory();
     const controller = new AbortController();
     const abortingLlm: Llm = () => {
       controller.abort();
@@ -266,7 +266,7 @@ describe("runAgentLoop", () => {
 
   it("returns aborted when the LLM resolves empty output after the signal is aborted", async () => {
     const events: AgentEvent[] = [];
-    const history = new AgentModelHistory();
+    const history = new ModelMessageHistory();
     const controller = new AbortController();
     const emptyAbortingLlm: Llm = () => {
       controller.abort();
@@ -290,7 +290,7 @@ describe("runAgentLoop", () => {
 
   it("does not call the LLM until the awaited step-start boundary resolves", async () => {
     const events: AgentEvent[] = [];
-    const history = new AgentModelHistory();
+    const history = new ModelMessageHistory();
     const stepStart = createDeferred();
     let llmCalls = 0;
     const llm: Llm = () => {
@@ -328,7 +328,7 @@ describe("runAgentLoop", () => {
 
   it("does not start the next LLM call until the awaited step-end boundary resolves", async () => {
     const events: AgentEvent[] = [];
-    const history = new AgentModelHistory();
+    const history = new ModelMessageHistory();
     const firstStepEnd = createDeferred();
     const toolCall = toolCallPart("call-tool-1");
     let llmCalls = 0;
@@ -384,7 +384,7 @@ describe("runAgentLoop", () => {
 
   it("does not complete until the awaited final step-end boundary resolves", async () => {
     const events: AgentEvent[] = [];
-    const history = new AgentModelHistory();
+    const history = new ModelMessageHistory();
     const stepEnd = createDeferred();
     const llm = createScriptedLlm([[assistantMessage("DONE")]]);
     let settled = false;
@@ -421,7 +421,7 @@ describe("runAgentLoop", () => {
 
   it("continues after step-end boundary input even without a tool call", async () => {
     const events: AgentEvent[] = [];
-    const history = new AgentModelHistory();
+    const history = new ModelMessageHistory();
     let llmCalls = 0;
     let stepEndCount = 0;
     const llm = createScriptedLlm([
@@ -464,7 +464,7 @@ describe("runAgentLoop", () => {
 
   it("returns aborted when aborted while waiting for a boundary", async () => {
     const events: AgentEvent[] = [];
-    const history = new AgentModelHistory();
+    const history = new ModelMessageHistory();
     const controller = new AbortController();
     const stepStart = createDeferred();
     let llmCalls = 0;
