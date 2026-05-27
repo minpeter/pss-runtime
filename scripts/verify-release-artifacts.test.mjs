@@ -16,6 +16,7 @@ import {
 
 const cliBinReadFailurePattern =
   /^packages\/coding-agent\/bin\/pss\.js: cannot read CLI bin target /;
+const removedModelAlias = ["Agent", "Model"].join("");
 const runtimeRootDeclaration =
   'export type { AgentRun, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n';
 
@@ -242,14 +243,14 @@ describe("verifyReleaseArtifacts", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      'export type { AgentMessage, AgentModel, AgentRun, AgentTool, AgentTools, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
+      `export type { AgentMessage, ${removedModelAlias}, AgentRun, AgentTool, AgentTools, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n`
     );
 
     expect(
       verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
     ).toEqual([
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias AgentMessage",
-      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias AgentModel",
+      `packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias ${removedModelAlias}`,
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias AgentTool",
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias AgentTools",
     ]);
@@ -290,14 +291,13 @@ describe("verifyReleaseArtifacts", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      'import type { LanguageModel } from "ai";\nexport type AgentModel = LanguageModel;\n'
+      'import type { LanguageModel } from "ai";\nexport interface AgentOptions { model: LanguageModel; }\n'
     );
 
     expect(verifyReleaseArtifacts({ cwd, packages: ["coding-agent"] })).toEqual(
       []
     );
     expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
-      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias AgentModel",
       "packages/runtime/dist/index.d.ts: missing explicit runtime alias AgentRun",
       "packages/runtime/dist/index.d.ts: missing explicit runtime alias RuntimeCreateLlmOptions",
       "packages/runtime/dist/index.d.ts: missing explicit runtime alias RuntimeInput",

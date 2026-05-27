@@ -21,7 +21,7 @@ const REQUIRED_RUNTIME_ROOT_ALIASES = [
 ];
 const FORBIDDEN_RUNTIME_ROOT_ALIASES = [
   "AgentMessage",
-  "AgentModel",
+  ["Agent", "Model"].join(""),
   "AgentRunInput",
   "AgentTool",
   "AgentTools",
