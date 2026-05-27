@@ -17,7 +17,7 @@ import {
 const cliBinReadFailurePattern =
   /^packages\/coding-agent\/bin\/pss\.js: cannot read CLI bin target /;
 const runtimeRootDeclaration =
-  'export type { AgentModel, AgentRun, AgentTools, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n';
+  'export type { AgentRun, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n';
 
 let tempRoots = [];
 
@@ -214,21 +214,19 @@ describe("verifyReleaseArtifacts", () => {
     );
   });
 
-  it("rejects raw AI SDK canary types from runtime public declarations", () => {
+  it("allows direct AI SDK types in runtime public declarations", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      'import type { LanguageModel } from "ai";\nexport type AgentModel = LanguageModel;\nexport type { AgentRun, AgentTools, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
+      'import type { LanguageModel, ToolSet } from "ai";\nexport interface AgentOptions { model: LanguageModel; tools?: ToolSet; }\nexport type { AgentRun, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
     );
 
     expect(
       verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
-    ).toEqual([
-      "packages/runtime/dist/index.d.ts: root declaration exposes raw AI SDK token LanguageModel",
-    ]);
+    ).toEqual([]);
   });
 
-  it("rejects raw AI SDK message types from runtime hook declarations", () => {
+  it("allows direct AI SDK message types in internal runtime declarations", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "hooks.d.ts"),
@@ -237,22 +235,23 @@ describe("verifyReleaseArtifacts", () => {
 
     expect(
       verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
-    ).toEqual([
-      "packages/runtime/dist/hooks.d.ts: unauthorized runtime declaration token ModelMessage",
-    ]);
+    ).toEqual([]);
   });
 
-  it("rejects internal runtime message aliases from root declarations", () => {
+  it("rejects redundant runtime AI SDK aliases from root declarations", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      'export type { AgentMessage, AgentModel, AgentRun, AgentTools, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
+      'export type { AgentMessage, AgentModel, AgentRun, AgentTool, AgentTools, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
     );
 
     expect(
       verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
     ).toEqual([
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias AgentMessage",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias AgentModel",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias AgentTool",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias AgentTools",
     ]);
   });
 
@@ -260,7 +259,7 @@ describe("verifyReleaseArtifacts", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      'export type { AgentModel, AgentRun, AgentRunInput, AgentTools, RunInput, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
+      'export type { AgentRun, AgentRunInput, RunInput, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
     );
 
     expect(
@@ -271,7 +270,7 @@ describe("verifyReleaseArtifacts", () => {
     ]);
   });
 
-  it("allows raw AI SDK types inside allowlisted internal runtime declarations", () => {
+  it("allows direct AI SDK types inside internal runtime declarations", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
@@ -279,7 +278,7 @@ describe("verifyReleaseArtifacts", () => {
     );
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "llm.d.ts"),
-      'import type { LanguageModel } from "ai";\nexport type AgentModel = LanguageModel;\nexport type { AgentTools, RuntimeCreateLlmOptions, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
+      'import type { LanguageModel, ToolSet } from "ai";\nexport interface CreateLlmOptions { model: LanguageModel; tools?: ToolSet; }\n'
     );
 
     expect(
@@ -298,9 +297,8 @@ describe("verifyReleaseArtifacts", () => {
       []
     );
     expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
-      "packages/runtime/dist/index.d.ts: root declaration exposes raw AI SDK token LanguageModel",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias AgentModel",
       "packages/runtime/dist/index.d.ts: missing explicit runtime alias AgentRun",
-      "packages/runtime/dist/index.d.ts: missing explicit runtime alias AgentTools",
       "packages/runtime/dist/index.d.ts: missing explicit runtime alias RuntimeCreateLlmOptions",
       "packages/runtime/dist/index.d.ts: missing explicit runtime alias RuntimeInput",
       "packages/runtime/dist/index.d.ts: missing explicit runtime alias RuntimeLlm",
