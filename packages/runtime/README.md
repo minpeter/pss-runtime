@@ -131,6 +131,12 @@ Stored session state is an opaque, versioned runtime snapshot for continuation.
 Do not inspect it as a replay log; exact replay should be modeled separately as
 an `AgentEvent` log if that capability is added later.
 
+Custom stores own version generation. `load(key)` returns the opaque `state` with
+the store-minted `version`; `commit(key, { state }, { expectedVersion })` receives
+state only and should reject stale versions by returning `{ ok: false, reason:
+"conflict" }`. On success, the store persists `{ state, version }` and returns the
+new version to the runtime.
+
 ```ts
 import type { SessionStore } from "@minpeter/pss-runtime";
 import { MemorySessionStore } from "@minpeter/pss-runtime/session-store/memory";
