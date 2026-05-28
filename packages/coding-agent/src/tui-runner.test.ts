@@ -41,11 +41,11 @@ describe("TUI runner", () => {
   });
 
   it("steers active submissions without sending a new turn", async () => {
-    let releaseStream: (() => void) | undefined;
+    let releaseEvent: (() => void) | undefined;
     const run = createRun([
       { text: "initial", type: "user-text" },
       new Promise<AgentEvent>((resolve) => {
-        releaseStream = () => resolve({ type: "turn-end" });
+        releaseEvent = () => resolve({ type: "turn-end" });
       }),
     ]);
     const session = {
@@ -61,7 +61,7 @@ describe("TUI runner", () => {
     runner.submit("initial");
     await run.firstEventRead;
     runner.submit(" extra ");
-    releaseStream?.();
+    releaseEvent?.();
     await run.done;
 
     expect(session.send).toHaveBeenCalledTimes(1);
@@ -148,12 +148,12 @@ describe("TUI runner", () => {
   });
 
   it("clears active runs as soon as terminal turn events render", async () => {
-    let releaseStream: (() => void) | undefined;
+    let releaseEvent: (() => void) | undefined;
     let releaseAfterTerminal: (() => void) | undefined;
     const run = createRun([
       { text: "initial", type: "user-text" },
       new Promise<AgentEvent>((resolve) => {
-        releaseStream = () => resolve({ type: "turn-abort" });
+        releaseEvent = () => resolve({ type: "turn-abort" });
       }),
       new Promise<AgentEvent>((resolve) => {
         releaseAfterTerminal = () => resolve({ type: "step-start" });
@@ -172,7 +172,7 @@ describe("TUI runner", () => {
     await run.firstEventRead;
     expect(runner.activeRun).toBe(run);
 
-    releaseStream?.();
+    releaseEvent?.();
     await run.eventsRead(2);
     await waitUntil(() => runner.activeRun === undefined);
 

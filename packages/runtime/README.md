@@ -4,8 +4,8 @@
 
 # @minpeter/pss-runtime
 
-Minimal, platform-agnostic agent runtime with sessions keyed through `run.events()` and
-opaque persistence contracts.
+Minimal, platform-agnostic agent runtime with keyed sessions, synchronized
+`run.events()`, and opaque persistence contracts.
 
 ## Core DX
 

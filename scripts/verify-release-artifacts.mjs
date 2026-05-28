@@ -32,11 +32,11 @@ const FORBIDDEN_RUNTIME_ROOT_ALIASES = [
 const FORBIDDEN_RUNTIME_PUBLIC_PATTERNS = [
   {
     description: "removed AgentRun.stream() API",
-    pattern: /\bstream\(\): AsyncIterable<AgentEvent>/,
+    pattern: /\bstream\(\): AsyncIterable(?:Iterator)?<AgentEvent>/,
   },
   {
-    description: "removed AgentRun.stream() error string",
-    pattern: /AgentRun\.stream\(\)/,
+    description: "removed AgentRun.stream() member",
+    pattern: /(?:\bstream\(\)\s*\{|AgentRun\.stream\(\))/,
   },
 ];
 

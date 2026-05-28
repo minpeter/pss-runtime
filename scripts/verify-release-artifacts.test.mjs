@@ -304,7 +304,7 @@ describe("verifyReleaseArtifacts", () => {
       verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
     ).toEqual([
       "packages/runtime/dist/session/run.d.ts: exposes removed AgentRun.stream() API",
-      "packages/runtime/dist/session/run.js: exposes removed AgentRun.stream() error string",
+      "packages/runtime/dist/session/run.js: exposes removed AgentRun.stream() member",
     ]);
   });
 
