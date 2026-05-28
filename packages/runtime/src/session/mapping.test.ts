@@ -12,7 +12,7 @@ import {
   userMessageToModelMessage,
   userTextToModelMessage,
 } from "./mapping";
-import type { UserInput } from "./session";
+import type { UserInput } from "./input";
 
 describe("session mapping", () => {
   it("exposes runtime-input as runtime-originated current-turn input", () => {

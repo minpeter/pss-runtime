@@ -1,26 +1,15 @@
 import { runAgentLoop } from "../agent-loop";
 import type { AgentHooks } from "../hooks";
 import type { Llm } from "../llm";
-import type {
-  RuntimeInput,
-  UserMessage,
-  UserMessageContentPart,
-  UserText,
-} from "./events";
+import type { RuntimeInput, UserMessage, UserMessageContentPart } from "./events";
 import { ModelMessageHistory } from "./history";
+import type { AgentInput, UserInput } from "./input";
 import type { AgentRun } from "./run";
 import { BufferedAgentRun } from "./run";
 import { decodeStoredSessionSnapshot, encodeSessionSnapshot } from "./snapshot";
 import type { SessionStore } from "./store/types";
-
-export type UserInput = UserMessage | UserText;
-export type AgentInput =
-  | readonly string[]
-  | readonly UserMessageContentPart[]
-  | string
-  | UserInput;
-export type SessionInput = AgentInput;
 export type { AgentRun } from "./run";
+export type { AgentInput, SessionInput, UserInput } from "./input";
 
 interface SessionPersistenceOptions {
   readonly key: string;
@@ -338,7 +327,6 @@ export class AgentSession {
       this.#persistence.key,
       {
         state: encodeSessionSnapshot(this.#history.modelSnapshot()),
-        version: this.#storeVersion,
       },
       { expectedVersion: this.#storeVersion ?? null }
     );
