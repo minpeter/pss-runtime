@@ -18,12 +18,12 @@ const agent = await Agent.create({
   tools,
 });
 const run = await agent.send("Hello");
-for await (const event of run.stream()) {
+for await (const event of run.events()) {
   console.dir(event, { depth: null });
 }
 ```
 
-`run.stream()` is synchronized and drives the run. Consume it to let the runtime
+`run.events()` is synchronized and drives the run. Consume it to let the runtime
 cross lifecycle boundaries such as `turn-start`, `step-start`, and `step-end`.
 Use `session.send(input)` for a new user turn. If a run is already active, the
 turn is queued until the active run finishes. Use `session.steer(input)` when the
@@ -34,7 +34,7 @@ const session = agent.session("default");
 const run = await session.send("Write a two sentence summary.");
 let addedConstraint = false;
 
-for await (const event of run.stream()) {
+for await (const event of run.events()) {
   if (event.type === "step-end" && !addedConstraint) {
     addedConstraint = true;
     await session.steer("Keep the second sentence under 10 words.");
