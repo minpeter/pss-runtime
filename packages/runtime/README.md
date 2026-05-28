@@ -4,8 +4,8 @@
 
 # @minpeter/pss-runtime
 
-Minimal, platform-agnostic agent runtime with sessions keyed through `run.stream()` and
-opaque persistence contracts.
+Minimal, platform-agnostic agent runtime with keyed sessions, synchronized
+`run.events()`, and opaque persistence contracts.
 
 ## Core DX
 
@@ -19,14 +19,14 @@ const agent = await Agent.create({
 });
 
 const run = await agent.send("Hello");
-for await (const event of run.stream()) {
+for await (const event of run.events()) {
   console.log(event);
 }
 ```
 
-`run.stream()` is the run driver. The runtime stops at synchronized lifecycle
-boundaries until the stream consumer asks for the next event, so callers must
-consume the stream for the run to progress. This is what lets code react to
+`run.events()` is the run driver. The runtime stops at synchronized lifecycle
+boundaries until the events consumer asks for the next event, so callers must
+consume the events for the run to progress. This is what lets code react to
 `turn-start`, `step-start`, and `step-end` before the next model snapshot is
 created.
 
@@ -35,8 +35,8 @@ Per-key conversations use `session(key)`:
 ```ts
 const roomSession = agent.session("room:123:user:456");
 const run = await roomSession.send(["Context: user prefers short answers", "Hi"]);
-for await (const event of run.stream()) {
-  // stream events for this single turn
+for await (const event of run.events()) {
+  // events for this single turn
 }
 ```
 
@@ -77,7 +77,7 @@ state; it does not fetch remote media, decode files, or guarantee provider suppo
 for every media type.
 
 The public transcript protocol is `AgentEvent`: live runs emit runtime-defined
-events through `run.stream()`. Provider/model message history is internal
+events through `run.events()`. Provider/model message history is internal
 continuation state, not a public history API.
 
 ## Send and Steer
@@ -92,7 +92,7 @@ values. Active steering emits `runtime-input` events. A `runtime-input` is
 runtime/API-originated input mapped internally to the model's user role. It is
 distinct from human-origin `user-text` and `user-message` events.
 
-Runtime input windows are tied to synchronized stream events:
+Runtime input windows are tied to synchronized events:
 
 - `turn-start`: input is appended after the original turn input and before the first model snapshot.
 - `step-start`: input is appended before that same step's model snapshot.
@@ -106,7 +106,7 @@ const session = agent.session("room:123:user:456");
 const run = await session.send("Draft a short answer.");
 let addedSteer = false;
 
-for await (const event of run.stream()) {
+for await (const event of run.events()) {
   if (event.type === "assistant-text") {
     process.stdout.write(event.text);
   }
@@ -130,6 +130,12 @@ Adapters own persistence only through `SessionStore`:
 Stored session state is an opaque, versioned runtime snapshot for continuation.
 Do not inspect it as a replay log; exact replay should be modeled separately as
 an `AgentEvent` log if that capability is added later.
+
+Custom stores own version generation. `load(key)` returns the opaque `state` with
+the store-minted `version`; `commit(key, { state }, { expectedVersion })` receives
+state only and should reject stale versions by returning `{ ok: false, reason:
+"conflict" }`. On success, the store persists `{ state, version }` and returns the
+new version to the runtime.
 
 ```ts
 import type { SessionStore } from "@minpeter/pss-runtime";

@@ -83,7 +83,7 @@ export function createTuiRunner({
     activeRun = run;
 
     try {
-      for await (const event of run.stream()) {
+      for await (const event of run.events()) {
         const line = formatEvent(event);
         if (line) {
           addLine(line);

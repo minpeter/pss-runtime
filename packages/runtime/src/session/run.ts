@@ -1,7 +1,7 @@
 import type { AgentEvent } from "./events";
 
 export interface AgentRun {
-  stream(): AsyncIterable<AgentEvent>;
+  events(): AsyncIterable<AgentEvent>;
 }
 
 interface QueuedEvent {
@@ -20,7 +20,7 @@ export class BufferedAgentRun implements AgentRun {
   #error: unknown;
   #pendingAck: (() => void) | undefined;
   #resultPending = false;
-  #streamStarted = false;
+  #eventsStarted = false;
   #waiter: NextWaiter | undefined;
 
   emit(event: AgentEvent): void {
@@ -63,11 +63,11 @@ export class BufferedAgentRun implements AgentRun {
     waiter.resolve({ done: true, value: undefined });
   }
 
-  stream(): AsyncIterable<AgentEvent> {
-    if (this.#streamStarted) {
-      throw new Error("AgentRun.stream() can only be consumed once");
+  events(): AsyncIterable<AgentEvent> {
+    if (this.#eventsStarted) {
+      throw new Error("AgentRun.events() can only be consumed once");
     }
-    this.#streamStarted = true;
+    this.#eventsStarted = true;
 
     const iterator: AsyncIterableIterator<AgentEvent> = {
       next: () => this.#next(),
@@ -83,7 +83,7 @@ export class BufferedAgentRun implements AgentRun {
   #cancel(): void {
     this.#settleQueuedAcks();
     this.#events.length = 0;
-    this.close(undefined, "stream return");
+    this.close(undefined, "events return");
   }
 
   #enqueue(event: QueuedEvent): void {
@@ -100,7 +100,7 @@ export class BufferedAgentRun implements AgentRun {
   #next(): Promise<IteratorResult<AgentEvent>> {
     if (this.#resultPending || this.#waiter) {
       return Promise.reject(
-        new Error("AgentRun.stream() does not allow concurrent next() calls")
+        new Error("AgentRun.events() does not allow concurrent next() calls")
       );
     }
 

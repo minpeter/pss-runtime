@@ -271,6 +271,43 @@ describe("verifyReleaseArtifacts", () => {
     ]);
   });
 
+  it("rejects internal agent loop aliases from root declarations", () => {
+    const cwd = createFixture();
+    writeFileSync(
+      join(cwd, "packages", "runtime", "dist", "index.d.ts"),
+      'export { runAgentLoop, type AgentLoopResult } from "./agent-loop";\nexport type { AgentRun, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
+    );
+
+    expect(
+      verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
+    ).toEqual([
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias AgentLoopResult",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias runAgentLoop",
+    ]);
+  });
+
+  it("rejects removed AgentRun stream API from runtime artifacts", () => {
+    const cwd = createFixture();
+    mkdirSync(join(cwd, "packages", "runtime", "dist", "session"), {
+      recursive: true,
+    });
+    writeFileSync(
+      join(cwd, "packages", "runtime", "dist", "session", "run.d.ts"),
+      'import type { AgentEvent } from "./events";\nexport interface AgentRun { stream(): AsyncIterable<AgentEvent>; }\n'
+    );
+    writeFileSync(
+      join(cwd, "packages", "runtime", "dist", "session", "run.js"),
+      'throw new Error("AgentRun.stream() can only be consumed once");\n'
+    );
+
+    expect(
+      verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
+    ).toEqual([
+      "packages/runtime/dist/session/run.d.ts: exposes removed AgentRun.stream() API",
+      "packages/runtime/dist/session/run.js: exposes removed AgentRun.stream() member",
+    ]);
+  });
+
   it("allows direct AI SDK types inside internal runtime declarations", () => {
     const cwd = createFixture();
     writeFileSync(

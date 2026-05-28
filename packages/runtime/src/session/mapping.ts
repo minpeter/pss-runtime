@@ -17,7 +17,7 @@ import type {
   UserText,
   UserTextContent,
 } from "./events";
-import type { UserInput } from "./session";
+import type { UserInput } from "./input";
 
 type AssistantContentPart = Exclude<AssistantContent, string>[number];
 type ToolContentPart = ToolModelMessage["content"][number];

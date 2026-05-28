@@ -5,21 +5,15 @@ import type {
   RuntimeInput,
   UserMessage,
   UserMessageContentPart,
-  UserText,
 } from "./events";
 import { ModelMessageHistory } from "./history";
+import type { AgentInput, UserInput } from "./input";
 import type { AgentRun } from "./run";
 import { BufferedAgentRun } from "./run";
 import { decodeStoredSessionSnapshot, encodeSessionSnapshot } from "./snapshot";
 import type { SessionStore } from "./store/types";
 
-export type UserInput = UserMessage | UserText;
-export type AgentInput =
-  | readonly string[]
-  | readonly UserMessageContentPart[]
-  | string
-  | UserInput;
-export type SessionInput = AgentInput;
+export type { AgentInput, SessionInput, UserInput } from "./input";
 export type { AgentRun } from "./run";
 
 interface SessionPersistenceOptions {
@@ -338,7 +332,6 @@ export class AgentSession {
       this.#persistence.key,
       {
         state: encodeSessionSnapshot(this.#history.modelSnapshot()),
-        version: this.#storeVersion,
       },
       { expectedVersion: this.#storeVersion ?? null }
     );

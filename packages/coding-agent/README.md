@@ -13,14 +13,14 @@ const agent = await Agent.create({
 });
 
 const run = await agent.send("Hello from pss");
-for await (const event of run.stream()) {
+for await (const event of run.events()) {
   console.dir(event, { depth: null });
 }
 ```
 
-`run.stream()` is synchronized and drives the run. The runtime waits at
-`turn-start`, `step-start`, and `step-end` until the stream consumer continues,
-so consume the stream to let the run progress. Use `session.send(input)` for a
+`run.events()` is synchronized and drives the run. The runtime waits at
+`turn-start`, `step-start`, and `step-end` until the events consumer continues,
+so consume the events to let the run progress. Use `session.send(input)` for a
 new user turn and `session.steer(input)` to steer the active run. If no run is
 active, `session.steer(input)` starts a normal run.
 
@@ -29,7 +29,7 @@ const session = agent.session("default");
 const run = await session.send("Explain the latest result.");
 let askedForExample = false;
 
-for await (const event of run.stream()) {
+for await (const event of run.events()) {
   if (event.type === "step-end" && !askedForExample) {
     askedForExample = true;
     await session.steer("Add one concrete example.");

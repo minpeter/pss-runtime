@@ -27,7 +27,7 @@ const session = agent.session("default");
 const run = await session.send("Write a short summary.");
 let steered = false;
 
-for await (const event of run.stream()) {
+for await (const event of run.events()) {
   console.log(event);
 
   if (event.type === "step-end" && !steered) {

@@ -1,6 +1,6 @@
 import type { ModelMessage } from "ai";
+import type { UserInput } from "./input";
 import { userInputToModelMessage } from "./mapping";
-import type { UserInput } from "./session";
 
 export class ModelMessageHistory {
   readonly #modelHistory: ModelMessage[] = [];

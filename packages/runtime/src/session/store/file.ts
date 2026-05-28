@@ -2,7 +2,12 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { setTimeout } from "node:timers/promises";
-import type { CommitResult, SessionStore, StoredSession } from "./types";
+import type {
+  CommitResult,
+  SessionStore,
+  SessionStoreCommit,
+  StoredSession,
+} from "./types";
 
 const LOCK_POLL_INTERVAL_MS = 10;
 const LOCK_STALE_AFTER_MS = 30_000;
@@ -38,8 +43,8 @@ export class FileSessionStore implements SessionStore {
 
   async commit(
     key: string,
-    next: StoredSession,
-    options?: { expectedVersion?: string | null }
+    next: SessionStoreCommit,
+    options: { expectedVersion: string | null }
   ): Promise<CommitResult> {
     const file = this.#fileForKey(key);
     const lockDirectory = `${file}.lock`;
@@ -49,10 +54,7 @@ export class FileSessionStore implements SessionStore {
       const current = await this.load(key);
       const currentVersion = current?.version ?? null;
 
-      if (
-        options?.expectedVersion !== undefined &&
-        options.expectedVersion !== currentVersion
-      ) {
+      if (options.expectedVersion !== currentVersion) {
         return { ok: false, reason: "conflict" };
       }
 

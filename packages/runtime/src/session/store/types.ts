@@ -1,6 +1,10 @@
 export interface StoredSession {
-  state: unknown;
-  version?: string;
+  readonly state: unknown;
+  readonly version: string;
+}
+
+export interface SessionStoreCommit {
+  readonly state: unknown;
 }
 
 export type CommitResult =
@@ -12,8 +16,8 @@ export type ExpectedSessionVersion = string | null;
 export interface SessionStore {
   commit(
     key: string,
-    next: StoredSession,
-    options?: { expectedVersion?: ExpectedSessionVersion }
+    next: SessionStoreCommit,
+    options: { expectedVersion: ExpectedSessionVersion }
   ): Promise<CommitResult>;
   load(key: string): Promise<StoredSession | null>;
 }

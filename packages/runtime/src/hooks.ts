@@ -1,5 +1,5 @@
 import type { RuntimeLlmContext } from "./llm";
-import type { UserInput } from "./session/session";
+import type { UserInput } from "./session/input";
 
 export type AgentTurnResult = "aborted" | "completed";
 export type AgentStepResult = "completed" | "continue";

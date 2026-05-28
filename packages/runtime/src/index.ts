@@ -4,7 +4,6 @@ export {
   type AgentSessionOptions,
   type SessionHandle,
 } from "./agent";
-export { type AgentLoopResult, runAgentLoop } from "./agent-loop";
 export type {
   AgentAfterStepContext,
   AgentAfterTurnContext,
@@ -33,6 +32,7 @@ export type {
   RuntimeInput,
   ToolCall,
   ToolResult,
+  UserInput,
   UserMessage,
   UserMessageContent,
   UserMessageContentPart,
@@ -43,11 +43,12 @@ export type {
   UserText,
   UserTextContent,
 } from "./session/events";
+export type { AgentInput, SessionInput } from "./session/input";
 export type { AgentRun } from "./session/run";
-export type { AgentInput, SessionInput, UserInput } from "./session/session";
 export type {
   CommitResult,
   ExpectedSessionVersion,
   SessionStore,
+  SessionStoreCommit,
   StoredSession,
 } from "./session/store/types";
