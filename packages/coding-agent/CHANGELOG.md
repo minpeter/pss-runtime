@@ -1,5 +1,13 @@
 # @minpeter/pss-coding-agent
 
+## 0.0.10
+
+### Patch Changes
+
+- 92af1da: Update the coding-agent TUI dependency range to pick up the latest `@earendil-works/pi-tui` release.
+- Updated dependencies [5fc427d]
+  - @minpeter/pss-runtime@0.0.10
+
 ## 0.0.9
 
 ### Patch Changes
