@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { MemorySessionStore } from "./memory";
+import type { SessionStoreCommit } from "./types";
 
 describe("MemorySessionStore", () => {
   it("loads null for unknown sessions", async () => {
@@ -28,20 +29,40 @@ describe("MemorySessionStore", () => {
     expect(second).toEqual({ ok: true, version: "2" });
   });
 
-  it("rejects caller-supplied versions in commit payloads", async () => {
-    const store = new MemorySessionStore();
+  it("types commit payloads as state only", () => {
+    type CommitPayloadHasVersion = "version" extends keyof SessionStoreCommit
+      ? true
+      : false;
 
-    await store.commit(
-      "key",
-      // @ts-expect-error stores own versions; callers only commit state.
-      { state: { value: 1 }, version: "caller" },
-      { expectedVersion: null }
-    );
+    expectTypeOf<CommitPayloadHasVersion>().toEqualTypeOf<false>();
+    expectTypeOf<
+      Parameters<MemorySessionStore["commit"]>[1]
+    >().toEqualTypeOf<SessionStoreCommit>();
+  });
+
+  it("does not persist extra runtime payload fields", async () => {
+    const store = new MemorySessionStore();
+    const payload = {
+      state: { value: 1 },
+      ignored: true,
+      version: "caller",
+    } as SessionStoreCommit;
+
+    await store.commit("key", payload, { expectedVersion: null });
+
+    await expect(store.load("key")).resolves.toEqual({
+      state: { value: 1 },
+      version: "1",
+    });
   });
 
   it("detects expectedVersion conflicts", async () => {
     const store = new MemorySessionStore();
-    await store.commit("key", { state: { value: 1 } }, { expectedVersion: null });
+    await store.commit(
+      "key",
+      { state: { value: 1 } },
+      { expectedVersion: null }
+    );
 
     await expect(
       store.commit("key", { state: { value: 2 } }, { expectedVersion: "stale" })
@@ -50,7 +71,11 @@ describe("MemorySessionStore", () => {
 
   it("detects expectedVersion null conflicts for existing sessions", async () => {
     const store = new MemorySessionStore();
-    await store.commit("key", { state: { value: 1 } }, { expectedVersion: null });
+    await store.commit(
+      "key",
+      { state: { value: 1 } },
+      { expectedVersion: null }
+    );
 
     await expect(
       store.commit("key", { state: { value: 2 } }, { expectedVersion: null })

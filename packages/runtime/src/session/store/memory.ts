@@ -29,7 +29,7 @@ export class MemorySessionStore implements SessionStore {
     const versionNumber = (this.#versions.get(key) ?? 0) + 1;
     const version = String(versionNumber);
     this.#versions.set(key, versionNumber);
-    this.#sessions.set(key, structuredClone({ ...next, version }));
+    this.#sessions.set(key, structuredClone({ state: next.state, version }));
     return Promise.resolve({ ok: true, version });
   }
 }
