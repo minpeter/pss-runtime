@@ -16,7 +16,12 @@ import {
 import type { AgentEvent } from "./events";
 import { userTextToModelMessage } from "./mapping";
 import { FileSessionStore } from "./store/file";
-import type { CommitResult, SessionStore, StoredSession } from "./store/types";
+import type {
+  CommitResult,
+  SessionStore,
+  SessionStoreCommit,
+  StoredSession,
+} from "./store/types";
 
 const collect = async (run: Awaited<ReturnType<Agent["send"]>>) => {
   const events: AgentEvent[] = [];
@@ -29,8 +34,8 @@ const collect = async (run: Awaited<ReturnType<Agent["send"]>>) => {
 class SpyStore implements SessionStore {
   readonly commits: Array<{
     key: string;
-    next: StoredSession;
-    version?: string | null;
+    next: SessionStoreCommit;
+    expectedVersion: string | null;
   }> = [];
   loadCount = 0;
   loadGate?: Promise<void>;
@@ -45,15 +50,12 @@ class SpyStore implements SessionStore {
 
   commit(
     key: string,
-    next: StoredSession,
-    options?: { expectedVersion?: string | null }
+    next: SessionStoreCommit,
+    options: { expectedVersion: string | null }
   ): Promise<CommitResult> {
     const current = this.sessions.get(key);
     const currentVersion = current?.version ?? null;
-    if (
-      options?.expectedVersion !== undefined &&
-      options.expectedVersion !== currentVersion
-    ) {
+    if (options.expectedVersion !== currentVersion) {
       return Promise.resolve({ ok: false, reason: "conflict" });
     }
 
@@ -62,7 +64,7 @@ class SpyStore implements SessionStore {
     this.commits.push({
       key,
       next: structuredClone(next),
-      version: options?.expectedVersion,
+      expectedVersion: options.expectedVersion,
     });
     this.sessions.set(key, stored);
     return Promise.resolve({ ok: true, version });
@@ -74,8 +76,8 @@ class ConflictOnceStore extends SpyStore {
 
   override commit(
     key: string,
-    next: StoredSession,
-    options?: { expectedVersion?: string | null }
+    next: SessionStoreCommit,
+    options: { expectedVersion: string | null }
   ): Promise<CommitResult> {
     if (this.conflictNextCommit) {
       this.conflictNextCommit = false;
@@ -92,8 +94,8 @@ class ConflictOnCommitStore extends SpyStore {
 
   override commit(
     key: string,
-    next: StoredSession,
-    options?: { expectedVersion?: string | null }
+    next: SessionStoreCommit,
+    options: { expectedVersion: string | null }
   ): Promise<CommitResult> {
     this.commitCount += 1;
     if (this.commitCount === this.conflictOnCommit) {
@@ -1278,6 +1280,8 @@ describe("Agent session API", () => {
       expect.objectContaining({ history: expect.any(Array), schemaVersion: 1 })
     );
     expect(finalCommit?.next.state).not.toBeInstanceOf(Array);
+    expect(finalCommit?.next).not.toHaveProperty("version");
+    expect(store.commits[0]?.expectedVersion).toBeNull();
   });
 
   it("refreshes stored state after commit conflicts so the handle can recover", async () => {
