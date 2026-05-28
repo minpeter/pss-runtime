@@ -29,12 +29,23 @@ const FORBIDDEN_RUNTIME_ROOT_ALIASES = [
   "RunInput",
   "runAgentLoop",
 ];
+const FORBIDDEN_RUNTIME_PUBLIC_PATTERNS = [
+  {
+    description: "removed AgentRun.stream() API",
+    pattern: /\bstream\(\): AsyncIterable<AgentEvent>/,
+  },
+  {
+    description: "removed AgentRun.stream() error string",
+    pattern: /AgentRun\.stream\(\)/,
+  },
+];
 
 const RELATIVE_IMPORT_RE =
   /(?:from\s+["']|import\s*(?:\(\s*)?["'])(\.\.?\/[^"']+)(?:["'])/g;
 const TEST_ARTIFACT_RE =
   /(?:^|[/\\])(?:__tests__|test-fixtures?)(?:[/\\]|\.)|\.(?:test|spec)\.(?:d\.)?[cm]?js$/i;
 const JAVASCRIPT_ARTIFACT_RE = /\.[cm]?js$/;
+const RUNTIME_PUBLIC_ARTIFACT_RE = /\.(?:d\.ts|[cm]?js)$/;
 
 function parseArgs(argv) {
   const options = {
@@ -309,10 +320,32 @@ function findRuntimeDeclarationLeaks({ cwd, packages }) {
     return [];
   }
 
-  return findRuntimeRootDeclarationLeaks({
-    cwd,
-    file: join(packageDistPath(cwd, "runtime"), "index.d.ts"),
-  });
+  return [
+    ...findRuntimeRootDeclarationLeaks({
+      cwd,
+      file: join(packageDistPath(cwd, "runtime"), "index.d.ts"),
+    }),
+    ...findRuntimePublicPatternLeaks({ cwd }),
+  ];
+}
+
+function findRuntimePublicPatternLeaks({ cwd }) {
+  const errors = [];
+  const distPath = packageDistPath(cwd, "runtime");
+  const files = listFiles(distPath, (file) =>
+    RUNTIME_PUBLIC_ARTIFACT_RE.test(file)
+  );
+
+  for (const file of files) {
+    const text = readFileSync(file, "utf8");
+    for (const { description, pattern } of FORBIDDEN_RUNTIME_PUBLIC_PATTERNS) {
+      if (pattern.test(text)) {
+        errors.push(`${relativeToCwd(cwd, file)}: exposes ${description}`);
+      }
+    }
+  }
+
+  return errors;
 }
 
 function findRuntimeRootDeclarationLeaks({ cwd, file }) {
