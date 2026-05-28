@@ -19,7 +19,11 @@ describe("FileSessionStore", () => {
     const firstStore = new FileSessionStore(dir);
 
     await expect(
-      firstStore.commit("session:a", { state: { count: 1 } })
+      firstStore.commit(
+        "session:a",
+        { state: { count: 1 } },
+        { expectedVersion: null }
+      )
     ).resolves.toEqual({
       ok: true,
       version: "1",
@@ -34,8 +38,8 @@ describe("FileSessionStore", () => {
   it("isolates distinct keys", async () => {
     const dir = await tempDir();
     const store = new FileSessionStore(dir);
-    await store.commit("a", { state: { key: "a" } });
-    await store.commit("b", { state: { key: "b" } });
+    await store.commit("a", { state: { key: "a" } }, { expectedVersion: null });
+    await store.commit("b", { state: { key: "b" } }, { expectedVersion: null });
 
     await expect(store.load("a")).resolves.toMatchObject({
       state: { key: "a" },
@@ -48,7 +52,7 @@ describe("FileSessionStore", () => {
   it("detects expectedVersion conflicts", async () => {
     const dir = await tempDir();
     const store = new FileSessionStore(dir);
-    await store.commit("key", { state: { value: 1 } });
+    await store.commit("key", { state: { value: 1 } }, { expectedVersion: null });
 
     await expect(
       store.commit("key", { state: { value: 2 } }, { expectedVersion: "stale" })
@@ -58,12 +62,12 @@ describe("FileSessionStore", () => {
   it("serializes expectedVersion checks across concurrent writers", async () => {
     const dir = await tempDir();
     const store = new FileSessionStore(dir);
-    await expect(store.commit("key", { state: { value: 1 } })).resolves.toEqual(
-      {
-        ok: true,
-        version: "1",
-      }
-    );
+    await expect(
+      store.commit("key", { state: { value: 1 } }, { expectedVersion: null })
+    ).resolves.toEqual({
+      ok: true,
+      version: "1",
+    });
 
     const results = await Promise.all([
       store.commit("key", { state: { value: 2 } }, { expectedVersion: "1" }),
