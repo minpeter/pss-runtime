@@ -53,7 +53,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "3.0.0-canary.48",
-    "@earendil-works/pi-tui": "^0.74.1",
+    "@earendil-works/pi-tui": "^0.76.0",
     "@minpeter/pss-runtime": "workspace:^",
     "@t3-oss/env-core": "^0.13.11",
     "ai": "7.0.0-canary.142",
@@ -62,6 +62,6 @@
   },
   "devDependencies": {
     "tsdown": "^0.22.0",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.7"
   }
 }
