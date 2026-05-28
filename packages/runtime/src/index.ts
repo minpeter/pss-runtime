@@ -43,12 +43,12 @@ export type {
   UserText,
   UserTextContent,
 } from "./session/events";
-export type { AgentRun } from "./session/run";
 export type { AgentInput, SessionInput } from "./session/input";
+export type { AgentRun } from "./session/run";
 export type {
   CommitResult,
   ExpectedSessionVersion,
-  SessionStoreCommit,
   SessionStore,
+  SessionStoreCommit,
   StoredSession,
 } from "./session/store/types";

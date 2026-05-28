@@ -52,7 +52,11 @@ describe("FileSessionStore", () => {
   it("detects expectedVersion conflicts", async () => {
     const dir = await tempDir();
     const store = new FileSessionStore(dir);
-    await store.commit("key", { state: { value: 1 } }, { expectedVersion: null });
+    await store.commit(
+      "key",
+      { state: { value: 1 } },
+      { expectedVersion: null }
+    );
 
     await expect(
       store.commit("key", { state: { value: 2 } }, { expectedVersion: "stale" })

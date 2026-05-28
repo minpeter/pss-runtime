@@ -7,12 +7,12 @@ import {
   userText,
 } from "../test-fixtures";
 import type { AgentEvent, RuntimeInput } from "./events";
+import type { UserInput } from "./input";
 import {
   modelMessageToAgentEvents,
   userMessageToModelMessage,
   userTextToModelMessage,
 } from "./mapping";
-import type { UserInput } from "./input";
 
 describe("session mapping", () => {
   it("exposes runtime-input as runtime-originated current-turn input", () => {
