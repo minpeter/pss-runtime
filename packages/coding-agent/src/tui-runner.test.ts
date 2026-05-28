@@ -129,8 +129,8 @@ describe("TUI runner", () => {
     expect(session.steer).toHaveBeenCalledWith("extra");
   });
 
-  it("clears stale active runs when stream consumption throws", async () => {
-    const run = createRun([new Error("stream failed")]);
+  it("clears stale active runs when events consumption throws", async () => {
+    const run = createRun([new Error("events failed")]);
     const runner = createTuiRunner({
       addLine: vi.fn(),
       requestRender: vi.fn(),
@@ -188,7 +188,7 @@ describe("TUI runner", () => {
   });
 });
 
-function createRun(events: readonly StreamItem[]): TestRun {
+function createRun(events: readonly EventItem[]): TestRun {
   let eventCount = 0;
   let firstEventReadResolve: (() => void) | undefined;
   let doneResolve: (() => void) | undefined;
@@ -211,7 +211,7 @@ function createRun(events: readonly StreamItem[]): TestRun {
     stop: () => {
       stopped = true;
     },
-    async *stream() {
+    async *events() {
       try {
         for (const item of events) {
           if (stopped) {
@@ -240,14 +240,14 @@ function createRun(events: readonly StreamItem[]): TestRun {
   return run;
 }
 
-type StreamItem = AgentEvent | Error | Promise<AgentEvent>;
+type EventItem = AgentEvent | Error | Promise<AgentEvent>;
 
 interface TestRun {
   readonly done: Promise<void>;
+  events(): AsyncIterable<AgentEvent>;
   readonly eventsRead: (count: number) => Promise<void>;
   readonly firstEventRead: Promise<void>;
   readonly stop: () => void;
-  stream(): AsyncIterable<AgentEvent>;
 }
 
 async function waitUntil(predicate: () => boolean): Promise<void> {

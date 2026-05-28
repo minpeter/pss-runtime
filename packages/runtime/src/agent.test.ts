@@ -39,8 +39,8 @@ const typeFixtures = [
 ];
 
 const collectRun = async (run: Awaited<ReturnType<Agent["send"]>>) => {
-  for await (const _event of run.stream()) {
-    // Drain the stream so the run can finish.
+  for await (const _event of run.events()) {
+    // Drain the events so the run can finish.
   }
 };
 

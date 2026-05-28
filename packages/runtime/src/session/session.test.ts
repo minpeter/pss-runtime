@@ -25,7 +25,7 @@ import type {
 
 const collect = async (run: Awaited<ReturnType<Agent["send"]>>) => {
   const events: AgentEvent[] = [];
-  for await (const event of run.stream()) {
+  for await (const event of run.events()) {
     events.push(event);
   }
   return events;
@@ -253,7 +253,7 @@ describe("Agent session API", () => {
     let addedStepStart = false;
     let addedStepEnd = false;
 
-    for await (const event of run.stream()) {
+    for await (const event of run.events()) {
       events.push(event);
       trace.push(`event:${event.type}`);
 
@@ -611,7 +611,7 @@ describe("Agent session API", () => {
     const events: AgentEvent[] = [];
     let injected = false;
 
-    for await (const event of run.stream()) {
+    for await (const event of run.events()) {
       events.push(event);
       if (event.type === "step-end" && !injected) {
         injected = true;
@@ -659,7 +659,7 @@ describe("Agent session API", () => {
     let addedTurnStart = false;
     let addedStepStart = false;
 
-    for await (const event of run.stream()) {
+    for await (const event of run.events()) {
       events.push(event);
       if (event.type === "turn-start" && !addedTurnStart) {
         addedTurnStart = true;
@@ -797,7 +797,7 @@ describe("Agent session API", () => {
     const runtimeInputs: AgentEvent[] = [];
     let added = false;
 
-    for await (const event of run.stream()) {
+    for await (const event of run.events()) {
       if (event.type === "step-start" && !added) {
         added = true;
         await session.steer("first");
@@ -842,7 +842,7 @@ describe("Agent session API", () => {
     const runtimeInputs: AgentEvent[] = [];
     let added = false;
 
-    for await (const event of run.stream()) {
+    for await (const event of run.events()) {
       if (event.type === "step-start" && !added) {
         added = true;
         await Promise.all([
@@ -905,7 +905,7 @@ describe("Agent session API", () => {
     const firstEvents: AgentEvent[] = [];
     let added = false;
     const firstCollecting = (async () => {
-      for await (const event of firstRun.stream()) {
+      for await (const event of firstRun.events()) {
         firstEvents.push(event);
         if (event.type === "step-start" && !added) {
           added = true;
@@ -960,7 +960,7 @@ describe("Agent session API", () => {
     const runtimeInputs: AgentEvent[] = [];
     let added = false;
 
-    for await (const event of run.stream()) {
+    for await (const event of run.events()) {
       if (event.type === "step-start" && !added) {
         added = true;
         await session.steer(input);
@@ -1084,12 +1084,12 @@ describe("Agent session API", () => {
     await expect(session.steer("late")).rejects.toThrow("Session killed");
   });
 
-  it("rejects runtime input after stream return", async () => {
+  it("rejects runtime input after events return", async () => {
     const agent = await Agent.create({
       llm: () => Promise.resolve([assistantMessage("DONE")]),
     });
     const run = await agent.send("initial");
-    const iterator = run.stream()[Symbol.asyncIterator]();
+    const iterator = run.events()[Symbol.asyncIterator]();
 
     await expect(iterator.next()).resolves.toEqual({
       done: false,
@@ -1122,7 +1122,7 @@ describe("Agent session API", () => {
     const events: AgentEvent[] = [];
     let runtimeAdd: Promise<void> | undefined;
 
-    for await (const event of run.stream()) {
+    for await (const event of run.events()) {
       events.push(event);
       if (event.type === "turn-start" && !runtimeAdd) {
         runtimeAdd = session.steer("conflicting runtime").then(() => undefined);

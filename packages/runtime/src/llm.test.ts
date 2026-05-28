@@ -44,8 +44,8 @@ async function loadAgent() {
   return Agent;
 }
 
-async function drainRun(run: { stream(): AsyncIterable<unknown> }) {
-  for await (const _event of run.stream()) {
+async function drainRun(run: { events(): AsyncIterable<unknown> }) {
+  for await (const _event of run.events()) {
     // Drain the run so model calls complete before assertions.
   }
 }
