@@ -1,4 +1,9 @@
-import type { CommitResult, SessionStore, StoredSession } from "./types";
+import type {
+  CommitResult,
+  SessionStore,
+  SessionStoreCommit,
+  StoredSession,
+} from "./types";
 
 export class MemorySessionStore implements SessionStore {
   readonly #sessions = new Map<string, StoredSession>();
@@ -11,16 +16,13 @@ export class MemorySessionStore implements SessionStore {
 
   commit(
     key: string,
-    next: StoredSession,
-    options?: { expectedVersion?: string | null }
+    next: SessionStoreCommit,
+    options: { expectedVersion: string | null }
   ): Promise<CommitResult> {
     const current = this.#sessions.get(key);
     const currentVersion = current?.version ?? null;
 
-    if (
-      options?.expectedVersion !== undefined &&
-      options.expectedVersion !== currentVersion
-    ) {
+    if (options.expectedVersion !== currentVersion) {
       return Promise.resolve({ ok: false, reason: "conflict" });
     }
 
