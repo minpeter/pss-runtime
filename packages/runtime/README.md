@@ -26,8 +26,9 @@ for await (const event of run.events()) {
 
 `run.events()` is the run driver. The runtime stops at synchronized lifecycle
 boundaries until the events consumer asks for the next event, so callers must
-consume the events for the run to progress. This is what lets code react to
-`turn-start`, `step-start`, and `step-end` before the next model snapshot is
+consume the events for the run to progress. These boundaries are backpressured
+mutation boundaries, not notification-only events. This is what lets code react
+to `turn-start`, `step-start`, and `step-end` before the next model snapshot is
 created.
 
 Per-key conversations use `session(key)`:
@@ -97,6 +98,10 @@ Runtime input windows are tied to synchronized events:
 - `turn-start`: input is appended after the original turn input and before the first model snapshot.
 - `step-start`: input is appended before that same step's model snapshot.
 - `step-end`: input is appended before the next step and intentionally continues the current turn, even if the assistant text looked final.
+
+`turn-start` is a backpressured mutation boundary. To affect the first model
+call, finish `await session.steer(...)` inside the `turn-start` handler before
+continuing event iteration.
 
 Guard `step-end` insertion with a one-shot flag or a real condition. Adding input
 on every `step-end` can keep the turn running indefinitely.

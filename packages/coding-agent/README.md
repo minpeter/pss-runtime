@@ -20,8 +20,9 @@ for await (const event of run.events()) {
 
 `run.events()` is synchronized and drives the run. The runtime waits at
 `turn-start`, `step-start`, and `step-end` until the events consumer continues,
-so consume the events to let the run progress. Use `session.send(input)` for a
-new user turn and `session.steer(input)` to steer the active run. If no run is
+so consume the events to let the run progress. These are backpressured mutation
+boundaries, not notification-only events. Use `session.send(input)` for a new
+user turn and `session.steer(input)` to steer the active run. If no run is
 active, `session.steer(input)` starts a normal run.
 
 ```ts
@@ -46,6 +47,8 @@ Runtime additions emit `runtime-input`: runtime/API-originated input mapped
 internally to the model's user role, separate from human `user-text` and
 `user-message` events. `session.send(input)` starts or enqueues a new turn;
 `session.steer(input)` steers the active run or starts a normal run when idle.
+To affect the first model call, finish `await session.steer(...)` inside the
+`turn-start` handler before continuing event iteration.
 
 ## CLI
 

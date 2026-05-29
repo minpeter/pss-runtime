@@ -25,6 +25,9 @@ for await (const event of run.events()) {
 
 `run.events()` is synchronized and drives the run. Consume it to let the runtime
 cross lifecycle boundaries such as `turn-start`, `step-start`, and `step-end`.
+These are backpressured mutation boundaries, not notification-only events: the
+runtime does not cross the boundary until the events consumer asks for the next
+event.
 Use `session.send(input)` for a new user turn. If a run is already active, the
 turn is queued until the active run finishes. Use `session.steer(input)` when the
 input should steer the active run; if no run is active, it starts a normal run.
@@ -45,6 +48,9 @@ for await (const event of run.events()) {
 The guard matters. `step-end` runtime input asks the runtime to continue the
 current turn before the next model snapshot, even after final-looking assistant
 text. Adding input on every `step-end` can keep a turn running indefinitely.
+
+To affect the first model call, finish `await session.steer(...)` inside the
+`turn-start` handler before continuing event iteration.
 
 Steering additions appear as `runtime-input` events: runtime/API-originated input
 mapped internally to the model's user role, separate from human `user-text` and
