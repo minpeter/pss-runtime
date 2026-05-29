@@ -5,8 +5,11 @@ import type {
   UserInput,
   UserMessage,
   UserMessageContentPart,
+  UserMessageImagePart,
   UserTextContent,
 } from "@minpeter/pss-runtime";
+import type { ClipboardImageReader } from "./clipboard-image";
+import { readClipboardImagePart } from "./clipboard-image";
 import {
   formatToolCallForTui,
   formatToolResultForTui,
@@ -17,12 +20,14 @@ import {
 
 export interface TuiRunnerOptions {
   readonly addLine: (text: string) => void;
+  readonly clipboardImageReader: ClipboardImageReader;
   readonly requestRender: () => void;
   readonly session: Pick<SessionHandle, "send" | "steer">;
 }
 
 export interface TuiRunner {
   readonly activeRun: AgentRun | undefined;
+  attachClipboardImage(): Promise<void>;
   clearActiveRun(run?: AgentRun): void;
   consumeRun(run: AgentRun): Promise<void>;
   submit(text: string): void;
@@ -68,10 +73,12 @@ export const formatEvent = (event: AgentEvent): string | undefined => {
 
 export function createTuiRunner({
   addLine,
+  clipboardImageReader,
   requestRender,
   session,
 }: TuiRunnerOptions): TuiRunner {
   let activeRun: AgentRun | undefined;
+  let draftImageParts: UserMessageImagePart[] = [];
 
   const clearActiveRun = (run?: AgentRun): void => {
     if (run === undefined || activeRun === run) {
@@ -98,17 +105,32 @@ export function createTuiRunner({
     }
   };
 
+  const attachClipboardImage = async (): Promise<void> => {
+    const part = await readClipboardImagePart({ reader: clipboardImageReader });
+
+    if (part.type !== "image") {
+      addLine(`${dimText}${safeText(part.message ?? part.reason)}${resetText}`);
+      return;
+    }
+
+    draftImageParts = [...draftImageParts, part];
+    addLine(`${dimText}[attached ${part.mediaType ?? "image"}]${resetText}`);
+  };
+
   const submit = (text: string): void => {
     const trimmed = text.trim();
-    if (!trimmed) {
+    if (!trimmed && draftImageParts.length === 0) {
       requestRender();
       return;
     }
 
+    const input = buildSubmittedInput(trimmed, draftImageParts);
+    draftImageParts = [];
+
     const run = activeRun;
     if (run) {
       session
-        .steer(trimmed)
+        .steer(input)
         .then((nextRun) => {
           if (nextRun !== run) {
             return consumeRun(nextRun);
@@ -121,7 +143,7 @@ export function createTuiRunner({
     }
 
     session
-      .send(trimmed)
+      .send(input)
       .then((nextRun) => consumeRun(nextRun))
       .catch((error: unknown) => {
         addLine(`\x1b[31merror\x1b[0m: ${safeText(errorMessage(error))}`);
@@ -132,10 +154,22 @@ export function createTuiRunner({
     get activeRun() {
       return activeRun;
     },
+    attachClipboardImage,
     clearActiveRun,
     consumeRun,
     submit,
   };
+}
+
+function buildSubmittedInput(
+  text: string,
+  imageParts: readonly UserMessageImagePart[]
+): string | readonly UserMessageContentPart[] {
+  if (imageParts.length === 0) {
+    return text;
+  }
+
+  return text ? [{ text, type: "text" }, ...imageParts] : [...imageParts];
 }
 
 function errorMessage(error: unknown): string {

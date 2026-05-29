@@ -1,8 +1,32 @@
-import type { AgentEvent } from "@minpeter/pss-runtime";
+import type { AgentEvent, UserMessageImagePart } from "@minpeter/pss-runtime";
 import { describe, expect, it, vi } from "vitest";
+import type {
+  ClipboardImageReader,
+  ClipboardImageReadResult,
+} from "./clipboard-image";
+import { resolveStartTuiClipboardImageReader } from "./tui";
 import { createTuiRunner, formatEvent } from "./tui-runner";
 
+const pngPart: UserMessageImagePart = {
+  image: dataUri("image/png", "fake"),
+  mediaType: "image/png",
+  type: "image",
+};
+const pngClipboardResult: ClipboardImageReadResult = {
+  image: Buffer.from("fake"),
+  mediaType: "image/png",
+  type: "image",
+};
+
 describe("TUI runner", () => {
+  it("uses an injected startTui clipboard reader without constructing the default", () => {
+    const reader = createClipboardImageReader([pngClipboardResult]);
+
+    expect(
+      resolveStartTuiClipboardImageReader({ clipboardImageReader: reader })
+    ).toBe(reader);
+  });
+
   it("renders runtime input distinctly from human input", () => {
     expect(formatEvent({ text: "hello", type: "user-text" })).toBe(
       "\x1b[36myou\x1b[0m: hello"
@@ -28,6 +52,7 @@ describe("TUI runner", () => {
     const lines: string[] = [];
     const runner = createTuiRunner({
       addLine: (line) => lines.push(line),
+      clipboardImageReader: createClipboardImageReader([pngClipboardResult]),
       requestRender: vi.fn(),
       session,
     });
@@ -54,6 +79,7 @@ describe("TUI runner", () => {
     };
     const runner = createTuiRunner({
       addLine: vi.fn(),
+      clipboardImageReader: createClipboardImageReader([pngClipboardResult]),
       requestRender: vi.fn(),
       session,
     });
@@ -88,6 +114,7 @@ describe("TUI runner", () => {
     };
     const runner = createTuiRunner({
       addLine: (line) => lines.push(line),
+      clipboardImageReader: createClipboardImageReader([pngClipboardResult]),
       requestRender: vi.fn(),
       session,
     });
@@ -116,6 +143,7 @@ describe("TUI runner", () => {
     };
     const runner = createTuiRunner({
       addLine: (line) => lines.push(line),
+      clipboardImageReader: createClipboardImageReader([pngClipboardResult]),
       requestRender: vi.fn(),
       session,
     });
@@ -133,6 +161,7 @@ describe("TUI runner", () => {
     const run = createRun([new Error("events failed")]);
     const runner = createTuiRunner({
       addLine: vi.fn(),
+      clipboardImageReader: createClipboardImageReader([pngClipboardResult]),
       requestRender: vi.fn(),
       session: {
         send: vi.fn().mockResolvedValue(run),
@@ -161,6 +190,7 @@ describe("TUI runner", () => {
     ]);
     const runner = createTuiRunner({
       addLine: vi.fn(),
+      clipboardImageReader: createClipboardImageReader([pngClipboardResult]),
       requestRender: vi.fn(),
       session: {
         send: vi.fn().mockResolvedValue(run),
@@ -185,6 +215,170 @@ describe("TUI runner", () => {
     await expect(waitUntil(() => false)).rejects.toThrow(
       "Timed out waiting for TUI runner test condition"
     );
+  });
+
+  it("attaches clipboard images without submitting until Enter", async () => {
+    const run = createRun([
+      {
+        type: "user-message",
+        content: [{ text: "describe", type: "text" }, pngPart],
+      },
+      { type: "turn-end" },
+    ]);
+    const session = {
+      send: vi.fn().mockResolvedValue(run),
+      steer: vi.fn().mockResolvedValue(run),
+    };
+    const lines: string[] = [];
+    const runner = createTuiRunner({
+      addLine: (line) => lines.push(line),
+      clipboardImageReader: createClipboardImageReader([pngClipboardResult]),
+      requestRender: vi.fn(),
+      session,
+    });
+
+    await runner.attachClipboardImage();
+
+    expect(session.send).not.toHaveBeenCalled();
+    expect(lines).toContain("\x1b[2m[attached image/png]\x1b[0m");
+
+    runner.submit(" describe ");
+    await run.done;
+
+    expect(session.send).toHaveBeenCalledWith([
+      { text: "describe", type: "text" },
+      pngPart,
+    ]);
+    expect(lines).toContain("\x1b[36myou\x1b[0m: describe\n[image image/png]");
+  });
+
+  it("steers active submissions with text and attached images", async () => {
+    let releaseEvent: (() => void) | undefined;
+    const run = createRun([
+      { text: "initial", type: "user-text" },
+      new Promise<AgentEvent>((resolve) => {
+        releaseEvent = () => resolve({ type: "turn-end" });
+      }),
+    ]);
+    const session = {
+      send: vi.fn().mockResolvedValue(run),
+      steer: vi.fn().mockResolvedValue(run),
+    };
+    const runner = createTuiRunner({
+      addLine: vi.fn(),
+      clipboardImageReader: createClipboardImageReader([pngClipboardResult]),
+      requestRender: vi.fn(),
+      session,
+    });
+
+    runner.submit("initial");
+    await run.firstEventRead;
+    await runner.attachClipboardImage();
+    runner.submit(" extra ");
+    releaseEvent?.();
+    await run.done;
+
+    expect(session.steer).toHaveBeenCalledWith([
+      { text: "extra", type: "text" },
+      pngPart,
+    ]);
+  });
+
+  it("submits image-only drafts and clears attachments after submit", async () => {
+    const run = createRun([{ type: "turn-end" }]);
+    const session = {
+      send: vi.fn().mockResolvedValue(run),
+      steer: vi.fn().mockResolvedValue(run),
+    };
+    const requestRender = vi.fn();
+    const runner = createTuiRunner({
+      addLine: vi.fn(),
+      clipboardImageReader: createClipboardImageReader([pngClipboardResult]),
+      requestRender,
+      session,
+    });
+
+    await runner.attachClipboardImage();
+    runner.submit("  ");
+    await run.done;
+    runner.submit("  ");
+
+    expect(session.send).toHaveBeenCalledWith([pngPart]);
+    expect(session.send).toHaveBeenCalledTimes(1);
+    expect(requestRender).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps draft attachments when clipboard has no supported image", async () => {
+    const run = createRun([{ type: "turn-end" }]);
+    const session = {
+      send: vi.fn().mockResolvedValue(run),
+      steer: vi.fn().mockResolvedValue(run),
+    };
+    const lines: string[] = [];
+    const runner = createTuiRunner({
+      addLine: (line) => lines.push(line),
+      clipboardImageReader: createClipboardImageReader([
+        pngClipboardResult,
+        {
+          message: "Clipboard does not contain a PNG or JPEG image.",
+          reason: "clipboard_image_not_found",
+          type: "no-image",
+        },
+      ]),
+      requestRender: vi.fn(),
+      session,
+    });
+
+    await runner.attachClipboardImage();
+    await runner.attachClipboardImage();
+    runner.submit("describe");
+    await run.done;
+
+    expect(lines).toContain(
+      "\x1b[2mClipboard does not contain a PNG or JPEG image.\x1b[0m"
+    );
+    expect(session.send).toHaveBeenCalledWith([
+      { text: "describe", type: "text" },
+      pngPart,
+    ]);
+  });
+
+  it("appends multiple clipboard image attachments", async () => {
+    const jpegPart: UserMessageImagePart = {
+      image: dataUri("image/jpeg", "fake2"),
+      mediaType: "image/jpeg",
+      type: "image",
+    };
+    const jpegClipboardResult: ClipboardImageReadResult = {
+      image: Buffer.from("fake2"),
+      mediaType: "image/jpeg",
+      type: "image",
+    };
+    const run = createRun([{ type: "turn-end" }]);
+    const session = {
+      send: vi.fn().mockResolvedValue(run),
+      steer: vi.fn().mockResolvedValue(run),
+    };
+    const runner = createTuiRunner({
+      addLine: vi.fn(),
+      clipboardImageReader: createClipboardImageReader([
+        pngClipboardResult,
+        jpegClipboardResult,
+      ]),
+      requestRender: vi.fn(),
+      session,
+    });
+
+    await runner.attachClipboardImage();
+    await runner.attachClipboardImage();
+    runner.submit("compare");
+    await run.done;
+
+    expect(session.send).toHaveBeenCalledWith([
+      { text: "compare", type: "text" },
+      pngPart,
+      jpegPart,
+    ]);
   });
 });
 
@@ -248,6 +442,31 @@ interface TestRun {
   readonly eventsRead: (count: number) => Promise<void>;
   readonly firstEventRead: Promise<void>;
   readonly stop: () => void;
+}
+
+function createClipboardImageReader(
+  results: readonly ClipboardImageReadResult[]
+): ClipboardImageReader {
+  let index = 0;
+  return {
+    read: () => {
+      const result = results[index] ?? results.at(-1);
+      index += 1;
+      if (!result) {
+        return Promise.resolve({
+          message: "Clipboard does not contain a PNG or JPEG image.",
+          reason: "clipboard_image_not_found",
+          type: "no-image",
+        });
+      }
+
+      return Promise.resolve(result);
+    },
+  };
+}
+
+function dataUri(mediaType: string, text: string): string {
+  return `data:${mediaType};base64,${Buffer.from(text).toString("base64")}`;
 }
 
 async function waitUntil(predicate: () => boolean): Promise<void> {
