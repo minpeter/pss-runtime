@@ -1,6 +1,6 @@
+import { Agent, type RuntimeLlm } from "@minpeter/pss-runtime";
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
-import { Agent, type RuntimeLlm } from "../../runtime/src";
 
 describe("coding-agent runtime steering integration", () => {
   it("puts awaited turn-start steering in the first model history", async () => {

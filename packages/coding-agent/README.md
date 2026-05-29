@@ -48,7 +48,8 @@ internally to the model's user role, separate from human `user-text` and
 `user-message` events. `session.send(input)` starts or enqueues a new turn;
 `session.steer(input)` steers the active run or starts a normal run when idle.
 To affect the first model call, finish `await session.steer(...)` inside the
-`turn-start` handler before continuing event iteration.
+`turn-start` handler before continuing event iteration. `turn-start` is an
+awaited mutation boundary, not a notification-only event.
 
 ## CLI
 

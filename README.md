@@ -50,7 +50,8 @@ current turn before the next model snapshot, even after final-looking assistant
 text. Adding input on every `step-end` can keep a turn running indefinitely.
 
 To affect the first model call, finish `await session.steer(...)` inside the
-`turn-start` handler before continuing event iteration.
+`turn-start` handler before continuing event iteration. `turn-start` is an
+awaited mutation boundary, not a notification-only event.
 
 Steering additions appear as `runtime-input` events: runtime/API-originated input
 mapped internally to the model's user role, separate from human `user-text` and

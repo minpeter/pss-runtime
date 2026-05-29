@@ -101,7 +101,8 @@ Runtime input windows are tied to synchronized events:
 
 `turn-start` is a backpressured mutation boundary. To affect the first model
 call, finish `await session.steer(...)` inside the `turn-start` handler before
-continuing event iteration.
+continuing event iteration. `turn-start` is an awaited mutation boundary, not a
+notification-only event.
 
 Guard `step-end` insertion with a one-shot flag or a real condition. Adding input
 on every `step-end` can keep the turn running indefinitely.
