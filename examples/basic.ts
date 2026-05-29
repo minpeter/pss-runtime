@@ -1,8 +1,10 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { Agent } from "@minpeter/pss-runtime";
 import { createEnv } from "@t3-oss/env-core";
+import { config as loadEnv } from "dotenv";
 import { z } from "zod";
 
+loadEnv({ path: ".env", quiet: true, override: true });
 const env = createEnv({
   runtimeEnv: process.env,
   server: {
