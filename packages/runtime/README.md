@@ -72,9 +72,54 @@ await agent.send([
 ]);
 ```
 
-The runtime normalizes and persists these content parts as session continuation
-state; it does not fetch remote media, decode files, or guarantee provider support
-for every media type.
+The runtime normalizes and persists these content parts as canonical session
+continuation state; it does not fetch remote media, decode files, or guarantee
+provider support for every media type.
+
+## Image delegation with `createLookAtLlm`
+
+Use `createLookAtLlm` when the main model should reason over text while a
+separate vision capable model inspects attached images on demand. The helper
+plugs into the existing custom `llm` seam and injects a `look_at` tool.
+
+```ts
+import { Agent, createLookAtLlm } from "@minpeter/pss-runtime";
+import { createTextModel, createVisionModel } from "./models";
+
+const agent = await Agent.create({
+  llm: createLookAtLlm({
+    model: createTextModel(),
+    visionModel: createVisionModel(),
+  }),
+});
+
+const run = await agent.send([
+  { type: "text", text: "Describe the problem shown here." },
+  { type: "image", image: "data:image/png;base64,...", mediaType: "image/png" },
+]);
+```
+
+The main model receives sanitized history for that call: allowed image parts are
+replaced with handles such as `[image image_1 image/png]`, oversized or
+unsupported media is replaced with short omission text, and embedded image data
+URLs in text are redacted. The canonical session history still preserves the
+original media parts for continuation and future tool calls.
+
+Options:
+
+- `model`: main language model that receives sanitized history and the injected tool.
+- `visionModel`: model used by the `look_at` tool to inspect one original image handle.
+- `tools`: extra tools to expose beside `look_at`; the helper rejects a name conflict.
+- `toolName`: custom tool name. Default: `look_at`.
+- `toolChoice`: forwarded to the main model call.
+- `instructions`: forwarded to the main model call.
+- `allowedMediaTypes`: image media types that can become handles. Default: `image/png`, `image/jpeg`.
+- `maxImageBytes`: byte limit for each image before the main model sees an omission marker. Default: `10485760`.
+- `maxOutputChars`: maximum vision result text returned by the tool. Default: `2000`.
+
+The vision call submits the original media part to `visionModel`. Choose a
+provider and model that support those submitted media parts. For example, image
+file parts require provider support for the mapped file or image input shape.
 
 The public transcript protocol is `AgentEvent`: live runs emit runtime-defined
 events through `run.events()`. Provider/model message history is internal

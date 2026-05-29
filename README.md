@@ -60,6 +60,31 @@ await agent.send([
 ]);
 ```
 
+For text first models, delegate image inspection through the runtime
+`createLookAtLlm` helper. It wraps your main model with a `look_at` tool, gives
+the main model image handles instead of raw media, and sends the original image
+only to a vision-capable model when that tool runs.
+
+```ts
+import { Agent, createLookAtLlm } from "@minpeter/pss-runtime";
+
+const agent = await Agent.create({
+  llm: createLookAtLlm({
+    model: mainModel,
+    visionModel,
+  }),
+});
+
+await agent.send([
+  { type: "text", text: "What is unusual in this screenshot?" },
+  { type: "image", image: "data:image/png;base64,...", mediaType: "image/png" },
+]);
+```
+
+You can also pass your own custom `llm` or call the direct runtime APIs with a
+model that already accepts media parts. The runtime package doesn't require the
+coding agent package for image delegation.
+
 Run the TUI:
 
 ```sh
