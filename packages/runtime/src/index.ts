@@ -24,6 +24,14 @@ export type {
   RuntimeLlmOutput,
 } from "./llm";
 export { createLlm } from "./llm";
+export {
+  type CreateLookAtLlmOptions,
+  createLookAtLlm,
+  DEFAULT_LOOK_AT_ALLOWED_MEDIA_TYPES,
+  DEFAULT_LOOK_AT_MAX_IMAGE_BYTES,
+  DEFAULT_LOOK_AT_MAX_OUTPUT_CHARS,
+  DEFAULT_LOOK_AT_TOOL_NAME,
+} from "./look-at";
 export type {
   AgentEvent,
   AgentEventListener,
