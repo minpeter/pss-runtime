@@ -48,7 +48,7 @@
   "scripts": {
     "build": "tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
+    "test": "NODE_OPTIONS=--conditions=@minpeter/pss-source vitest run",
     "lint": "ultracite check ."
   },
   "dependencies": {
