@@ -7,8 +7,9 @@ describe("release workflow", () => {
     const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 
     expect(packageJson.scripts["release:next"]).toBe(
-      "pnpm build && changeset publish --tag next"
+      "pnpm build && changeset publish"
     );
+    expect(packageJson.scripts["release:next"]).not.toContain("--tag next");
     expect(workflow).toContain("      - main\n      - v0.1");
     expect(workflow).toContain("if: github.ref_name == 'main'");
     expect(workflow).toContain("publish: pnpm release\n");
