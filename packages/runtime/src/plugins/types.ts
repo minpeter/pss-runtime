@@ -54,6 +54,7 @@ export type AgentPluginToolResultResult =
 
 interface AgentPluginBaseEvent {
   readonly history: readonly ModelMessage[];
+  readonly overlay: (input: AgentInput) => Promise<AgentRun>;
   readonly sessionKey: string;
   readonly signal: AbortSignal;
   readonly steer: (input: AgentInput) => Promise<AgentRun>;

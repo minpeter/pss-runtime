@@ -18,6 +18,7 @@ import type { RuntimeInputPlacement, RuntimeInputState } from "./runtime-input";
 export interface AgentSessionLifecycle {
   readonly createScope: (signal: AbortSignal) => AgentPluginScope;
   readonly history: () => ModelMessage[];
+  readonly overlaySession: (input: AgentInput) => Promise<AgentRun>;
   readonly plugins?: ResolvedAgentPlugins;
   readonly sessionKey: string;
   readonly steerCurrentRun: (
@@ -92,6 +93,7 @@ export async function runPluginBeforeTurnHandlers(
       await handler({
         history: lifecycle.history(),
         input,
+        overlay: lifecycle.overlaySession,
         sessionKey: lifecycle.sessionKey,
         signal,
         steer: (nextInput) =>
@@ -123,6 +125,7 @@ export async function runPluginBeforeStepHandlers(
     for (const handler of handlers) {
       await handler({
         history: context.history,
+        overlay: lifecycle.overlaySession,
         sessionKey: lifecycle.sessionKey,
         signal: context.signal,
         steer: (input) => lifecycle.steerCurrentRun(runtimeInput, input),
@@ -156,6 +159,7 @@ export async function runPluginAfterStepHandlers(
         Promise.resolve().then(() =>
           handler({
             history: context.history,
+            overlay: lifecycle.overlaySession,
             result: context.result,
             sessionKey: lifecycle.sessionKey,
             signal: context.signal,
@@ -195,6 +199,10 @@ export async function runPluginAfterTurnHandlers(
           handler({
             history: lifecycle.history(),
             input,
+            overlay: () =>
+              Promise.reject(
+                new Error("Agent plugin overlay cannot be used after turn end.")
+              ),
             result,
             sessionKey: lifecycle.sessionKey,
             signal,

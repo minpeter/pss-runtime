@@ -2,8 +2,10 @@ import type { ModelMessage } from "ai";
 import { runAgentLoop } from "../agent-loop";
 import type { Llm, LlmOutput } from "../llm";
 import type { ResolvedAgentPlugins } from "../plugins/runner";
-import { wrapLlmWithContextTransforms } from "../plugins/runner";
-import type { AgentPluginScope } from "../plugins/scope";
+import {
+  type AgentPluginScope,
+  runWithAgentPluginScope,
+} from "../plugins/scope";
 import type { UserInput } from "./events";
 import { ModelMessageHistory } from "./history";
 import type { AgentInput } from "./input";
@@ -13,6 +15,7 @@ import {
   runPluginAfterTurnHandlers,
   runPluginBeforeTurnHandlers,
 } from "./lifecycle";
+import { SessionOverlayState } from "./overlay";
 import type { AgentRun } from "./run";
 import { BufferedAgentRun } from "./run";
 import {
@@ -62,6 +65,7 @@ export class AgentSession {
   #loaded = false;
   #pluginState: Record<string, unknown> = {};
   #compactions: AgentCompactionOverlay[] = [];
+  readonly #overlays = new SessionOverlayState();
   #running = false;
   #storeVersion: string | undefined;
 
@@ -74,12 +78,7 @@ export class AgentSession {
     this.#internalLlm = internalLlm;
     this.#persistence = persistence;
     this.#plugins = plugins;
-    this.#llm = wrapLlmWithContextTransforms({
-      createScope: (signal) => this.#createPluginScope(signal),
-      llm,
-      sessionKey: persistence.key,
-      transforms: plugins?.contextTransforms ?? [],
-    });
+    this.#llm = llm;
   }
 
   async send(input: AgentInput): Promise<AgentRun> {
@@ -124,6 +123,46 @@ export class AgentSession {
     return run;
   }
 
+  async overlay(input: AgentInput): Promise<AgentRun> {
+    if (this.#killed) {
+      throw sessionKilledError();
+    }
+
+    await this.#ensureLoaded();
+
+    if (this.#killed) {
+      throw sessionKilledError();
+    }
+
+    const activeRun = this.#activeRun;
+    if (activeRun) {
+      const placement =
+        this.#activeRuntimeInput?.steerPlacement ??
+        this.#activeRuntimeInput?.placement ??
+        "idle";
+      const entry = this.#overlays.appendActiveOverlay(input, placement);
+      if (!entry) {
+        throw new Error("Active overlay frame is unavailable.");
+      }
+      activeRun.emit({
+        input: entry.summary,
+        placement: entry.placement,
+        type: "overlay-accepted",
+      });
+      return activeRun;
+    }
+
+    const entry = this.#overlays.appendPendingOverlay(input);
+    const run = new BufferedAgentRun();
+    run.emit({
+      input: entry.summary,
+      placement: entry.placement,
+      type: "overlay-accepted",
+    });
+    run.close();
+    return run;
+  }
+
   interrupt(): void {
     this.#activeAbort?.abort();
   }
@@ -134,6 +173,7 @@ export class AgentSession {
     }
 
     this.#killed = true;
+    this.#expireActiveOverlays("kill");
     this.#activeAbort?.abort();
     closeRuntimeInput(this.#activeRuntimeInput, sessionKilledError().message);
 
@@ -205,6 +245,7 @@ export class AgentSession {
   }: QueuedInput): Promise<void> {
     const activeAbort = new AbortController();
     this.#activeAbort = activeAbort;
+    this.#overlays.startTurn(input);
     this.#activeRun = run;
     this.#activeRuntimeInput = runtimeInput;
     const historySnapshot = this.#history.modelSnapshot();
@@ -242,6 +283,9 @@ export class AgentSession {
                 await run.emitBoundary(event);
               }
             );
+            const overlayInputAdded =
+              event.type === "step-end" &&
+              this.#overlays.consumeStepEndOverlayInputAdded();
             const runtimeInputAdded = await this.#drainRuntimeInput(
               run,
               runtimeInput,
@@ -249,7 +293,10 @@ export class AgentSession {
             );
 
             if (event.type === "step-end") {
-              return { runtimeInputAdded };
+              return {
+                overlayInputAdded,
+                runtimeInputAdded,
+              };
             }
             return noBoundaryDecision;
           }
@@ -263,13 +310,14 @@ export class AgentSession {
           withSteeringPlacement: (placement, callback) =>
             this.#withSteeringPlacement(runtimeInput, placement, callback),
         }),
-        llm: this.#llm,
+        llm: (context) => this.#invokeLlm(context),
         signal: activeAbort.signal,
       });
 
       await this.#commitHistory();
       const terminalEvent = result === "aborted" ? "turn-abort" : "turn-end";
       closeRuntimeInput(runtimeInput, terminalEvent);
+      this.#expireActiveOverlays(terminalEvent);
       this.#activeRuntimeInput = undefined;
       this.#activeRun = undefined;
       const pluginHandlersRan = await runPluginAfterTurnHandlers(
@@ -288,6 +336,7 @@ export class AgentSession {
       if (error instanceof SessionCommitConflictError) {
         run.emit({ type: "turn-error", message: error.message });
         closeRuntimeInput(runtimeInput, "a session commit conflict");
+        this.#expireActiveOverlays("turn-error");
         this.#activeAbort = undefined;
         return;
       }
@@ -303,16 +352,19 @@ export class AgentSession {
           )}`,
         });
         closeRuntimeInput(runtimeInput, "turn-error");
+        this.#expireActiveOverlays("turn-error");
         this.#activeAbort = undefined;
         return;
       }
       run.emit({ type: "turn-error", message: errorMessage(error) });
       closeRuntimeInput(runtimeInput, "turn-error");
+      this.#expireActiveOverlays("turn-error");
     } finally {
       closeRuntimeInput(runtimeInput);
       this.#activeAbort = undefined;
       this.#activeRun = undefined;
       this.#activeRuntimeInput = undefined;
+      this.#overlays.resetActiveTurn();
       run.close(undefined, runtimeInput.closedReason);
     }
   }
@@ -345,6 +397,7 @@ export class AgentSession {
       getPluginState: (pluginName) => this.#pluginState[pluginName],
       history: () => this.#history.modelSnapshot(),
       sessionKey: this.#persistence.key,
+      overlay: (input) => this.overlay(input),
       setCompactions: (compactions) => {
         this.#compactions = structuredClone([...compactions]);
       },
@@ -366,6 +419,7 @@ export class AgentSession {
       history: () => this.#history.modelSnapshot(),
       plugins: this.#plugins,
       sessionKey: this.#persistence.key,
+      overlaySession: (input) => this.overlay(input),
       steerCurrentRun: async (runtimeInput, input) => {
         await addRuntimeInput(runtimeInput, input);
         if (!this.#activeRun) {
@@ -375,6 +429,38 @@ export class AgentSession {
       },
       steerSession: (input) => this.steer(input),
     };
+  }
+
+  #invokeLlm({
+    history,
+    signal,
+  }: {
+    readonly history: readonly ModelMessage[];
+    readonly signal?: AbortSignal;
+  }): Promise<LlmOutput> {
+    const activeSignal = signal ?? new AbortController().signal;
+    const invoke = async () => {
+      let transformedHistory = history;
+      for (const transform of this.#plugins?.contextTransforms ?? []) {
+        transformedHistory = await transform({
+          history: transformedHistory,
+          sessionKey: this.#persistence.key,
+          signal: activeSignal,
+        });
+      }
+
+      const modelHistory = this.#overlays.compose(transformedHistory);
+      this.#overlays.markInferenceStarted();
+      return this.#llm({
+        history: modelHistory,
+        signal: activeSignal,
+      });
+    };
+
+    return runWithAgentPluginScope(
+      this.#createPluginScope(activeSignal),
+      invoke
+    );
   }
 
   async #summarizeForPlugins(
@@ -441,6 +527,17 @@ export class AgentSession {
     }
 
     return added;
+  }
+
+  #expireActiveOverlays(
+    reason: "kill" | "turn-abort" | "turn-end" | "turn-error"
+  ): void {
+    const event = this.#overlays.expireActiveFrame(reason);
+    if (!event) {
+      return;
+    }
+
+    this.#activeRun?.emit(event);
   }
 }
 

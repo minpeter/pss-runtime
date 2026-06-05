@@ -52,6 +52,9 @@ export function userMessageToModelMessage(
   return {
     role: "user",
     content: userMessageContentToUserContent(input.content),
+    ...(input.metadata === undefined
+      ? {}
+      : { providerOptions: structuredClone(input.metadata) }),
   };
 }
 

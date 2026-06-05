@@ -76,6 +76,21 @@ describe("session mapping", () => {
     });
   });
 
+  it("maps user-message metadata to AI SDK provider options", () => {
+    expect(
+      userMessageToModelMessage({
+        ...userMessage([{ type: "text", text: "hello" }]),
+        metadata: { openai: { cacheControl: { type: "ephemeral" } } },
+      })
+    ).toEqual({
+      role: "user",
+      content: [{ type: "text", text: "hello" }],
+      providerOptions: {
+        openai: { cacheControl: { type: "ephemeral" } },
+      },
+    });
+  });
+
   it("maps user file input without non-JSON URL objects", () => {
     const message = userMessageToModelMessage(
       userMessage([
@@ -209,5 +224,15 @@ describe("session mapping", () => {
 
     expect(eventTypes).toEqual(["assistant-text"]);
     expect(eventTypes).not.toContain("runtime-input");
+  });
+
+  it("does not project overlay events from model output", () => {
+    const eventTypes = modelMessageToAgentEvents(
+      assistantMessage("overlay-accepted overlay-expired")
+    ).map((event) => event.type);
+
+    expect(eventTypes).toEqual(["assistant-text"]);
+    expect(eventTypes).not.toContain("overlay-accepted");
+    expect(eventTypes).not.toContain("overlay-expired");
   });
 });

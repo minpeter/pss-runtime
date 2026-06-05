@@ -138,6 +138,42 @@ for await (const event of run.events()) {
 pending steering path or, when idle, when a new run is scheduled. It does not wait
 for a later model snapshot.
 
+## Overlay
+
+Use `session.overlay(input)` for turn-scoped model context that should affect
+the next model snapshot without becoming canonical session history. It accepts
+the same input shapes as `send()` and `steer()` and has no options in v0.
+
+Overlay context accepted before the first model inference in a turn is composed
+above the current user prompt. This keeps the current prompt near the bottom of
+the model snapshot while still giving the model fresh runtime context first.
+Overlay context accepted after a model inference has already happened is
+append-only: it is added after the messages that already existed for that turn
+and never moves earlier content around.
+
+```ts
+const session = agent.session("room:123:user:456");
+
+await session.overlay("Current wall-clock time: 2026-06-05T19:00:00Z");
+const run = await session.send("What should I do next?");
+
+for await (const event of run.events()) {
+  if (event.type === "step-end" && needsOneMorePass()) {
+    await session.overlay("Additional constraint: answer in two sentences.");
+  }
+}
+```
+
+Active `step-end` overlays intentionally continue the current turn for one more
+model snapshot, like `step-end` steering, but they are not persisted as
+`runtime-input`. Idle overlays do not start a turn; they queue for the next
+`send()` on that session.
+
+Runs emit `overlay-accepted` when overlay input is accepted and
+`overlay-expired` when the turn-scoped frame is discarded at turn end, abort,
+error, or kill. Overlay text is not written to stored history, not encoded in
+session snapshots, and does not survive session reload.
+
 ## Plugins, Session Storage, Memory, And Compaction
 
 The runtime owns full session state encoding and history compaction semantics.
@@ -157,8 +193,10 @@ If no persistence plugin is provided, sessions are memory-backed by default.
 
 Reusable middleware belongs in plugins. Plugins can observe turn and step
 lifecycle events and call the scoped `steer` function to insert runtime input at
-the active boundary. App-level control should stay with `run.events()` plus
-`session.steer()`; plugin lifecycle is for reusable policy.
+the active boundary or the scoped `overlay` function to add turn-scoped
+non-persistent context. App-level control should stay with `run.events()` plus
+`session.steer()` or `session.overlay()`; plugin lifecycle is for reusable
+policy.
 
 Plugin event names are dotted middleware names: `turn.before`, `step.before`,
 `step.after`, `turn.after`, `tool.call`, and `tool.result`. These are separate
@@ -171,8 +209,9 @@ import { Agent, definePlugin } from "@minpeter/pss-runtime";
 const continuePlugin = definePlugin({
   name: "continue-policy",
   setup(host) {
-    host.on("step.after", async ({ result, history, steer, stepIndex }) => {
+    host.on("step.after", async ({ result, history, overlay, steer, stepIndex }) => {
       if (result === "completed" && stepIndex === 0 && shouldContinueWork(history)) {
+        await overlay("Continue, but do not persist this policy text.");
         await steer("Continue. The task is not complete yet.");
       }
     });

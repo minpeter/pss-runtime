@@ -31,6 +31,7 @@ interface AgentLlmOptions {
 export interface SessionHandle {
   interrupt(): void;
   kill(): void;
+  overlay(input: AgentInput): Promise<AgentRun>;
   send(input: AgentInput): Promise<AgentRun>;
   steer(input: AgentInput): Promise<AgentRun>;
 }
@@ -101,6 +102,7 @@ export class Agent {
         session.kill();
         this.#sessions.delete(key);
       },
+      overlay: (input) => session.overlay(input),
       send: (input) => session.send(input),
       steer: (input) => session.steer(input),
     };

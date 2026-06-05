@@ -569,6 +569,47 @@ describe("Agent session API", () => {
     ]);
   });
 
+  it("persists user-message metadata as model provider options", async () => {
+    const store = new SpyStore();
+    const seenHistory: ModelMessage[][] = [];
+    const agent = await Agent.create({
+      llm: ({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+      plugins: [sessions.custom(store)],
+    });
+
+    const metadata = {
+      openai: { cacheControl: { type: "ephemeral" } },
+    };
+    const input = {
+      content: [{ type: "text", text: "cache this turn" }],
+      metadata,
+      type: "user-message",
+    } as const;
+
+    const events = await collect(await agent.session("metadata").send(input));
+
+    expect(events[0]).toEqual(input);
+    expect(seenHistory[0]?.[0]).toEqual({
+      role: "user",
+      content: [{ type: "text", text: "cache this turn" }],
+      providerOptions: metadata,
+    });
+    expect(store.sessions.get("metadata")?.state).toEqual(
+      expect.objectContaining({
+        history: expect.arrayContaining([
+          {
+            role: "user",
+            content: [{ type: "text", text: "cache this turn" }],
+            providerOptions: metadata,
+          },
+        ]),
+      })
+    );
+  });
+
   it("session.send accepts user-text events", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = await Agent.create({

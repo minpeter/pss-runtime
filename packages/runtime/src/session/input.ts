@@ -1,3 +1,5 @@
+import type { UserModelMessage } from "ai";
+
 export type UserTextContent = string | readonly string[];
 
 export interface UserText {
@@ -36,9 +38,11 @@ export type UserMessageContentPart =
   | UserMessageTextPart;
 
 export type UserMessageContent = readonly UserMessageContentPart[];
+export type UserMessageMetadata = UserModelMessage["providerOptions"];
 
 export interface UserMessage {
   content: UserMessageContent;
+  metadata?: UserMessageMetadata;
   type: "user-message";
 }
 

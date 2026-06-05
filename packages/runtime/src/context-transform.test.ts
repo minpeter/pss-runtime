@@ -74,6 +74,66 @@ describe("plugin context transforms", () => {
       type: "turn-error",
     });
   });
+
+  it("appends plugin overlays after context transforms without persisting them", async () => {
+    const seenHistories: ModelMessage[][] = [];
+    const transformSeenHistories: ModelMessage[][] = [];
+    const store = new RecordingStore();
+    const agent = await Agent.create({
+      llm: ({ history }) => {
+        seenHistories.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+      plugins: [
+        sessions.custom(store),
+        definePlugin({
+          name: "context-transform",
+          setup(host) {
+            host.transformContext(({ history }) => {
+              transformSeenHistories.push([...history]);
+              return [
+                {
+                  content: "transformed context",
+                  role: "system",
+                },
+                ...history,
+              ];
+            });
+          },
+        }),
+        definePlugin({
+          name: "ephemeral-overlay",
+          setup(host) {
+            host.on("step.before", async ({ overlay }) => {
+              await overlay("model-only overlay");
+            });
+          },
+        }),
+      ],
+    });
+
+    const events = await collectEvents(
+      await agent.session("ctx").send("hello")
+    );
+
+    expect(transformSeenHistories).toEqual([
+      [{ content: "hello", role: "user" }],
+    ]);
+    expect(seenHistories).toEqual([
+      [
+        { content: "transformed context", role: "system" },
+        { content: "model-only overlay", role: "user" },
+        { content: "hello", role: "user" },
+      ],
+    ]);
+    expect(events).not.toContainEqual(
+      expect.objectContaining({ type: "runtime-input" })
+    );
+    expect(readStoredHistory(store, "ctx")).toEqual([
+      { content: "hello", role: "user" },
+      assistantMessage("DONE"),
+    ]);
+  });
 });
 
 class RecordingStore implements SessionStore {
