@@ -21,6 +21,10 @@ export interface CreateSubagentToolsOptions {
   readonly parentAgentNamespace: string;
   readonly parentSession: RuntimeInputSink;
   readonly parentSessionKey: string;
+  registerChildSession(
+    parentSessionKey: string,
+    cleanup: () => Promise<void>
+  ): void;
   readonly subagents: readonly Subagent[];
 }
 

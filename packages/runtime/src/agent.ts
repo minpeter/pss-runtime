@@ -59,6 +59,7 @@ export class Agent {
     readonly model: LanguageModel;
     readonly toolChoice?: AgentToolChoice;
   };
+  readonly #childSessionCleanups = new Map<string, Set<() => Promise<void>>>();
   readonly #sessions = new Map<string, SessionHandle>();
   readonly #sessionNamespace = `agent:${crypto.randomUUID()}`;
   readonly #store: SessionStore;
@@ -118,8 +119,9 @@ export class Agent {
     const handle: SessionHandle = {
       delete: async () => {
         session.kill();
-        this.#sessions.delete(key);
         await this.#store.delete(key);
+        await this.#deleteChildSessions(key);
+        this.#sessions.delete(key);
       },
       interrupt: () => session.interrupt(),
       kill: () => {
@@ -151,6 +153,8 @@ export class Agent {
               parentAgentNamespace: this.#sessionNamespace,
               parentSession: { emitObserverEvent, enqueueRuntimeInput },
               parentSessionKey: key,
+              registerChildSession: (sessionKey, cleanup) =>
+                this.#registerChildSession(sessionKey, cleanup),
               subagents: this.#subagents,
             }),
           };
@@ -161,6 +165,29 @@ export class Agent {
       toolChoice: modelOptions.toolChoice,
       tools,
     };
+  }
+
+  #registerChildSession(
+    parentSessionKey: string,
+    cleanup: () => Promise<void>
+  ): void {
+    const existing = this.#childSessionCleanups.get(parentSessionKey);
+    if (existing) {
+      existing.add(cleanup);
+      return;
+    }
+
+    this.#childSessionCleanups.set(parentSessionKey, new Set([cleanup]));
+  }
+
+  async #deleteChildSessions(parentSessionKey: string): Promise<void> {
+    const cleanups = this.#childSessionCleanups.get(parentSessionKey);
+    if (!cleanups) {
+      return;
+    }
+
+    this.#childSessionCleanups.delete(parentSessionKey);
+    await Promise.all([...cleanups].map((cleanup) => cleanup()));
   }
 }
 

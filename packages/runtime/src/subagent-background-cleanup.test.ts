@@ -8,6 +8,8 @@ import {
   loadAgent,
   toolExecutionOptions,
 } from "./llm-test-utils";
+import { createBackgroundOutputTool } from "./subagent-job-output";
+import type { SubagentJob } from "./subagent-types";
 import { assistantMessage, userText } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
@@ -60,5 +62,44 @@ describe("subagent background cleanup", () => {
     expect(JSON.stringify(childHistories.at(-1))).not.toContain(
       "research this"
     );
+  });
+
+  it("background_output still returns results when cleanup fails", async () => {
+    const jobs = new Map<string, SubagentJob>();
+    jobs.set("bg_done", {
+      abort: () => undefined,
+      cleanup: () => Promise.reject(new Error("cleanup failed")),
+      id: "bg_done",
+      promise: Promise.resolve(),
+      result: {
+        eventCount: 1,
+        result: "completed",
+        run_in_background: false,
+        subagent: "researcher",
+        text: "done",
+      },
+      sessionKey: "child-session",
+      status: "completed",
+      subagent: "researcher",
+    });
+
+    const output = await createBackgroundOutputTool(jobs).execute?.(
+      { task_id: "bg_done" },
+      {
+        abortSignal: new AbortController().signal,
+        context: {},
+        messages: [],
+        toolCallId: "call-1",
+      }
+    );
+
+    expect(output).toEqual(
+      expect.objectContaining({
+        result: expect.objectContaining({ text: "done" }),
+        status: "completed",
+        task_id: "bg_done",
+      })
+    );
+    expect(jobs.has("bg_done")).toBe(false);
   });
 });

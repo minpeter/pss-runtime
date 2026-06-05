@@ -17,6 +17,7 @@ export function createSubagentTools({
   parentAgentNamespace,
   parentSession,
   parentSessionKey,
+  registerChildSession,
   subagents,
 }: CreateSubagentToolsOptions): ToolSet {
   if (subagents.length === 0) {
@@ -41,6 +42,7 @@ export function createSubagentTools({
         parentAgentNamespace,
         parentSession,
         parentSessionKey,
+        registerChildSession,
         subagent,
       });
   }
@@ -53,12 +55,14 @@ function createDelegateTool({
   parentAgentNamespace,
   parentSession,
   parentSessionKey,
+  registerChildSession,
   subagent,
 }: {
   readonly jobs: Map<string, SubagentJob>;
   readonly parentAgentNamespace: string;
   readonly parentSession: RuntimeInputSink;
   readonly parentSessionKey: string;
+  readonly registerChildSession: CreateSubagentToolsOptions["registerChildSession"];
   readonly subagent: Subagent;
 }) {
   return tool<DelegateInput, unknown, Record<string, unknown>>({
@@ -71,6 +75,9 @@ function createDelegateTool({
         sessionKey: input.sessionKey,
         subagent: subagent.name ?? "subagent",
       });
+      registerChildSession(parentSessionKey, () =>
+        subagent.session(sessionKey).delete()
+      );
       if (input.run_in_background === true) {
         return startBackgroundJob({
           abortSignal: abortSignal ?? new AbortController().signal,
