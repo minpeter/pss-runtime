@@ -2,7 +2,12 @@ import type { LanguageModel, Tool, ToolSet } from "ai";
 import { jsonSchema, tool } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentEvent } from "./session/events";
-import { assistantMessage, eventTypes, userText } from "./test-fixtures";
+import {
+  assistantMessage,
+  createDeferred,
+  eventTypes,
+  userText,
+} from "./test-fixtures";
 
 const { generateTextMock } = vi.hoisted(() => ({
   generateTextMock: vi.fn(),
@@ -231,7 +236,7 @@ describe("Agent tool wiring", () => {
     );
   });
 
-  it("defaults omitted run_in_background to blocking", async () => {
+  it("blocking delegation returns compact child text", async () => {
     const Agent = await loadAgent();
     const researcher = new Agent({
       description: "Researches facts.",
@@ -258,6 +263,99 @@ describe("Agent tool wiring", () => {
       subagent: "researcher",
       text: "CHILD DONE",
     });
+    expect(output).not.toHaveProperty("events");
+  });
+
+  it("defaults omitted run_in_background to blocking", async () => {
+    const Agent = await loadAgent();
+    const researcher = new Agent({
+      description: "Researches facts.",
+      llm: async () => [assistantMessage("CHILD DONE")],
+      name: "researcher",
+    });
+    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    await drainRun(await agent.send(userText("delegate")));
+
+    const delegate = executableTool(
+      lastGenerateTextTools(),
+      "delegate_to_researcher"
+    );
+    const output = await delegate.execute?.(
+      { prompt: "research this" },
+      toolExecutionOptions()
+    );
+
+    expect(output).toEqual(
+      expect.objectContaining({
+        result: "completed",
+        run_in_background: false,
+        text: "CHILD DONE",
+      })
+    );
+  });
+
+  it("blocking delegation uses parent-scoped child session key", async () => {
+    const Agent = await loadAgent();
+    const childHistories: unknown[] = [];
+    const researcher = new Agent({
+      description: "Researches facts.",
+      llm: ({ history }) => {
+        childHistories.push(history);
+        return Promise.resolve([assistantMessage("CHILD DONE")]);
+      },
+      name: "researcher",
+    });
+    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    await drainRun(await agent.session("parent-a").send(userText("delegate")));
+    await executableTool(
+      lastGenerateTextTools(),
+      "delegate_to_researcher"
+    ).execute?.({ prompt: "research this" }, toolExecutionOptions());
+    await drainRun(
+      await researcher
+        .session("parent:parent-a:subagent:researcher")
+        .send(userText("check scoped history"))
+    );
+
+    expect(JSON.stringify(childHistories.at(-1))).toContain("research this");
+    expect(JSON.stringify(childHistories.at(-1))).toContain(
+      "check scoped history"
+    );
+  });
+
+  it("blocking delegation uses provided session key", async () => {
+    const Agent = await loadAgent();
+    const childHistories: unknown[] = [];
+    const researcher = new Agent({
+      description: "Researches facts.",
+      llm: ({ history }) => {
+        childHistories.push(history);
+        return Promise.resolve([assistantMessage("CHILD DONE")]);
+      },
+      name: "researcher",
+    });
+    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    await drainRun(await agent.session("parent-a").send(userText("delegate")));
+    await executableTool(
+      lastGenerateTextTools(),
+      "delegate_to_researcher"
+    ).execute?.(
+      { prompt: "research custom", sessionKey: "custom-child-session" },
+      toolExecutionOptions()
+    );
+    await drainRun(
+      await researcher
+        .session("custom-child-session")
+        .send(userText("check custom history"))
+    );
+
+    expect(JSON.stringify(childHistories.at(-1))).toContain("research custom");
+    expect(JSON.stringify(childHistories.at(-1))).toContain(
+      "check custom history"
+    );
   });
 
   it("exposes background_output schema", async () => {
@@ -370,6 +468,51 @@ describe("Agent tool wiring", () => {
     );
   });
 
+  it("background_output can block until completion", async () => {
+    const Agent = await loadAgent();
+    const childGate = createDeferred();
+    const researcher = new Agent({
+      description: "Researches facts.",
+      llm: async () => {
+        await childGate.promise;
+        return [assistantMessage("CHILD DONE")];
+      },
+      name: "researcher",
+    });
+    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    await drainRun(await agent.send(userText("delegate")));
+
+    const tools = lastGenerateTextTools();
+    const launch = (await executableTool(
+      tools,
+      "delegate_to_researcher"
+    ).execute?.(
+      {
+        prompt: "research this",
+        run_in_background: true,
+      },
+      toolExecutionOptions()
+    )) as { task_id: string };
+    const outputPromise = executableTool(tools, "background_output").execute?.(
+      { block: true, task_id: launch.task_id, timeout: 1000 },
+      toolExecutionOptions()
+    );
+
+    childGate.resolve();
+
+    await expect(outputPromise).resolves.toEqual(
+      expect.objectContaining({
+        result: expect.objectContaining({
+          result: "completed",
+          text: "CHILD DONE",
+        }),
+        status: "completed",
+        task_id: launch.task_id,
+      })
+    );
+  });
+
   it("background_output rejects session keys", async () => {
     const Agent = await loadAgent();
     const researcher = new Agent({
@@ -471,6 +614,10 @@ describe("Agent tool wiring", () => {
 
     const events = await collectRun(await agent.send(userText("continue")));
     const reminder = events.find((event) => event.type === "runtime-input");
+    const reminderText =
+      reminder?.type === "runtime-input" && reminder.input.type === "user-text"
+        ? reminder.input.text
+        : "";
 
     expect(reminder).toEqual(
       expect.objectContaining({
@@ -483,7 +630,57 @@ describe("Agent tool wiring", () => {
         placement: "turn-start",
       })
     );
+    expect(reminderText).toEqual(
+      expect.stringContaining("[SUBAGENT JOB RESULT READY]")
+    );
+    expect(reminderText).toEqual(
+      expect.stringContaining(`Task ID: ${launch.task_id}`)
+    );
+    expect(reminderText).toEqual(
+      expect.stringContaining("Subagent: researcher")
+    );
+    expect(reminderText).toEqual(
+      expect.stringContaining("Description: Research facts")
+    );
     expect(JSON.stringify(reminder)).not.toContain("CHILD DONE");
+  });
+
+  it("does not inject full child trace into parent context", async () => {
+    const Agent = await loadAgent();
+    const researcher = new Agent({
+      description: "Researches facts.",
+      llm: async () => [assistantMessage("CHILD TRACE SECRET")],
+      name: "researcher",
+    });
+    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    await drainRun(await agent.send(userText("delegate")));
+
+    const tools = lastGenerateTextTools();
+    const launch = (await executableTool(
+      tools,
+      "delegate_to_researcher"
+    ).execute?.(
+      {
+        description: "Trace should stay out of parent context",
+        prompt: "research this",
+        run_in_background: true,
+      },
+      toolExecutionOptions()
+    )) as { task_id: string };
+    await executableTool(tools, "background_output").execute?.(
+      { block: true, task_id: launch.task_id },
+      toolExecutionOptions()
+    );
+
+    const events = await collectRun(await agent.send(userText("continue")));
+    const runtimeInput = events.find((event) => event.type === "runtime-input");
+    const serializedEvents = JSON.stringify(events);
+
+    expect(runtimeInput).toBeDefined();
+    expect(serializedEvents).toContain("[SUBAGENT JOB RESULT READY]");
+    expect(serializedEvents).not.toContain("CHILD TRACE SECRET");
+    expect(serializedEvents).not.toContain('"events"');
   });
 
   it("emits subagent job lifecycle events while executing generated tools", async () => {
@@ -505,7 +702,25 @@ describe("Agent tool wiring", () => {
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });
 
     const events = await collectRun(await agent.send(userText("delegate")));
+    const start = events.find((event) => event.type === "subagent-job-start");
+    const end = events.find((event) => event.type === "subagent-job-end");
 
+    expect(start).toEqual(
+      expect.objectContaining({
+        run_in_background: false,
+        sessionKey: "parent:default:subagent:researcher",
+        subagent: "researcher",
+        type: "subagent-job-start",
+      })
+    );
+    expect(end).toEqual(
+      expect.objectContaining({
+        eventCount: expect.any(Number),
+        status: "completed",
+        subagent: "researcher",
+        type: "subagent-job-end",
+      })
+    );
     expect(eventTypes(events)).toContain("subagent-job-start");
     expect(eventTypes(events)).toContain("subagent-job-end");
   });
