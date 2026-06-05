@@ -16,6 +16,7 @@ import {
   appendOverlay,
   composeOverlayHistory,
   createInferenceFrame,
+  SessionOverlayState,
 } from "./overlay";
 import {
   createCurrentTurnAnchor,
@@ -526,6 +527,28 @@ describe("session overlays", () => {
     ]);
   });
 
+  it("does not throw when provider option array length traps throw", () => {
+    const currentTurn = {
+      content: [{ type: "text", text: "same" }],
+      providerOptions: proxyArrayProviderOptions(),
+      role: "user",
+    } satisfies ModelMessage;
+    const history = [
+      {
+        content: [{ type: "text", text: "same" }],
+        providerOptions: proxyArrayProviderOptions(),
+        role: "user",
+      },
+    ] satisfies ModelMessage[];
+
+    expect(() =>
+      resolveCurrentTurnIndex({
+        currentTurn: createCurrentTurnAnchor([], currentTurn),
+        history,
+      })
+    ).not.toThrow();
+  });
+
   it("composed overlay history does not expose mutable canonical message references", () => {
     const canonicalHistory = [
       userTextToModelMessage(userText("current prompt")),
@@ -686,6 +709,20 @@ describe("session overlays", () => {
       "overlay-expired",
       "turn-end",
     ]);
+  });
+
+  it("pre-inference step-end overlays do not force an extra model step", () => {
+    const overlays = new SessionOverlayState();
+    overlays.startTurn(userText("hello"), []);
+
+    overlays.appendActiveOverlay("pre", "step-end");
+
+    expect(overlays.consumeStepEndOverlayInputAdded()).toBe(false);
+
+    overlays.markInferenceStarted();
+    overlays.appendActiveOverlay("post", "step-end");
+
+    expect(overlays.consumeStepEndOverlayInputAdded()).toBe(true);
   });
 
   it("plugin turn.after overlay does not leak into the next turn", async () => {
@@ -917,6 +954,20 @@ function sparseArrayProviderOptions(): NonNullable<
   const value: TestJson[] = [];
   value.length = 1_000_000;
   value[999_999] = "tail";
+  return { test: { value } };
+}
+
+function proxyArrayProviderOptions(): NonNullable<
+  ModelMessage["providerOptions"]
+> {
+  const value = new Proxy([] satisfies TestJson[], {
+    get(target, property, receiver) {
+      if (property === "length") {
+        throw new Error("provider option length should not escape");
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  });
   return { test: { value } };
 }
 

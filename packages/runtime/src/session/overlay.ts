@@ -48,13 +48,11 @@ export class SessionOverlayState {
       return;
     }
 
-    const entry = appendOverlay(
-      activeFrame,
-      input,
-      placement,
-      this.#activeInferenceStarted ? "post-inference" : "pre-inference"
-    );
-    if (entry.placement === "step-end") {
+    const phase = this.#activeInferenceStarted
+      ? "post-inference"
+      : "pre-inference";
+    const entry = appendOverlay(activeFrame, input, placement, phase);
+    if (entry.placement === "step-end" && phase === "post-inference") {
       this.#activeStepEndOverlayInputAdded = true;
     }
     return entry;

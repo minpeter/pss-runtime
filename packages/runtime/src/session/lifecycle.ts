@@ -251,5 +251,11 @@ function reportPluginHandlerError({
   eventName,
   reason,
 }: AgentPluginHandlerError): void {
-  console.error(`Agent plugin ${eventName} handler failed:`, reason);
+  console.error(
+    `Agent plugin ${eventName} handler failed: ${errorKind(reason)}`
+  );
+}
+
+function errorKind(reason: unknown): string {
+  return reason instanceof Error ? reason.name : typeof reason;
 }

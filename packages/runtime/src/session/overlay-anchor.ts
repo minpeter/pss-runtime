@@ -199,7 +199,13 @@ function arraysEqual(
     return true;
   }
 
-  if (left.length !== right.length) {
+  const leftLength = arrayLength(left);
+  const rightLength = arrayLength(right);
+  if (
+    leftLength === undefined ||
+    rightLength === undefined ||
+    leftLength !== rightLength
+  ) {
     return false;
   }
 
@@ -252,6 +258,14 @@ function recordsEqual(
 function enumerableKeys(value: object): readonly string[] | undefined {
   try {
     return Object.keys(value);
+  } catch {
+    return;
+  }
+}
+
+function arrayLength(value: readonly unknown[]): number | undefined {
+  try {
+    return value.length;
   } catch {
     return;
   }

@@ -221,10 +221,10 @@ describe("Agent session API", () => {
         userTextToModelMessage(userText("second")),
       ]);
       expect(consoleError).toHaveBeenCalledWith(
-        "Agent plugin turn.after handler failed:",
-        expect.objectContaining({
-          message: "after turn failed with secret-token",
-        })
+        "Agent plugin turn.after handler failed: Error"
+      );
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+        "secret-token"
       );
     } finally {
       consoleError.mockRestore();
@@ -263,10 +263,10 @@ describe("Agent session API", () => {
         "turn-end",
       ]);
       expect(consoleError).toHaveBeenCalledWith(
-        "Agent plugin step.after handler failed:",
-        expect.objectContaining({
-          message: "after step failed with secret-token",
-        })
+        "Agent plugin step.after handler failed: Error"
+      );
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+        "secret-token"
       );
     } finally {
       consoleError.mockRestore();
