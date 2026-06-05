@@ -133,8 +133,9 @@ background_cancel({ task_id: "bg_..." });
 
 The parent model context stays compact by default: completion reminders include
 the task id, subagent name, description, and retrieval instruction. Full child
-traces are not injected into the parent transcript by default. Retrieved
-completed background jobs are forgotten after `background_output` returns.
+traces are not injected into the parent transcript by default. Background jobs
+run in task-scoped child sessions, and retrieved completed jobs are forgotten
+after `background_output` returns.
 
 ## Send and Steer
 

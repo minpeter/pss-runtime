@@ -1,9 +1,7 @@
 import { jsonSchema, type ToolSet, tool } from "ai";
-import {
-  createBackgroundCancelTool,
-  createBackgroundOutputTool,
-  startBackgroundJob,
-} from "./subagent-jobs";
+import { createBackgroundCancelTool } from "./subagent-job-cancel";
+import { createBackgroundOutputTool } from "./subagent-job-output";
+import { startBackgroundJob } from "./subagent-jobs";
 import { runBlockingDelegation, scopedChildSessionKey } from "./subagent-run";
 import type {
   CreateSubagentToolsOptions,

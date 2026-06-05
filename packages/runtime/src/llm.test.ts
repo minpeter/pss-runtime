@@ -501,6 +501,50 @@ describe("Agent tool wiring", () => {
     );
   });
 
+  it("isolates background child session keys per task", async () => {
+    const Agent = await loadAgent();
+    const childGate = new Promise<void>(() => undefined);
+    const researcher = new Agent({
+      description: "Researches facts.",
+      llm: async () => {
+        await childGate;
+        return [assistantMessage("CHILD DONE")];
+      },
+      name: "researcher",
+    });
+    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    await drainRun(await agent.send(userText("delegate")));
+
+    const tools = lastGenerateTextTools();
+    const first = (await executableTool(
+      tools,
+      "delegate_to_researcher"
+    ).execute?.(
+      {
+        prompt: "research first",
+        run_in_background: true,
+      },
+      toolExecutionOptions()
+    )) as { sessionKey: string; task_id: string };
+    const second = (await executableTool(
+      tools,
+      "delegate_to_researcher"
+    ).execute?.(
+      {
+        prompt: "research second",
+        run_in_background: true,
+      },
+      toolExecutionOptions()
+    )) as { sessionKey: string; task_id: string };
+
+    expect(first.sessionKey).toContain("parent:default:subagent:researcher");
+    expect(second.sessionKey).toContain("parent:default:subagent:researcher");
+    expect(first.sessionKey).toContain(first.task_id);
+    expect(second.sessionKey).toContain(second.task_id);
+    expect(first.sessionKey).not.toBe(second.sessionKey);
+  });
+
   it("background_output forgets completed jobs after retrieval", async () => {
     const Agent = await loadAgent();
     const researcher = new Agent({
@@ -534,6 +578,49 @@ describe("Agent tool wiring", () => {
         toolExecutionOptions()
       )
     ).rejects.toThrow(unknownBackgroundTaskPattern);
+  });
+
+  it("does not enqueue completion reminders for pruned background jobs", async () => {
+    const Agent = await loadAgent();
+    const researcher = new Agent({
+      description: "Researches facts.",
+      llm: ({ signal }) =>
+        new Promise((resolve) => {
+          signal.addEventListener("abort", () => resolve([]), { once: true });
+        }),
+      name: "researcher",
+    });
+    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    await drainRun(await agent.send(userText("delegate")));
+
+    const tools = lastGenerateTextTools();
+    const launches: { task_id: string }[] = [];
+    for (let index = 0; index < 65; index += 1) {
+      launches.push(
+        (await executableTool(tools, "delegate_to_researcher").execute?.(
+          {
+            prompt: `research ${index}`,
+            run_in_background: true,
+          },
+          toolExecutionOptions()
+        )) as { task_id: string }
+      );
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    await expect(
+      executableTool(tools, "background_output").execute?.(
+        { task_id: launches[0]?.task_id ?? "" },
+        toolExecutionOptions()
+      )
+    ).rejects.toThrow(unknownBackgroundTaskPattern);
+
+    const events = await collectRun(await agent.send(userText("continue")));
+    const serializedEvents = JSON.stringify(events);
+
+    expect(serializedEvents).not.toContain(launches[0]?.task_id);
   });
 
   it("background_output can block until completion", async () => {

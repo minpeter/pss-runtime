@@ -1,3 +1,4 @@
+---
 "@minpeter/pss-runtime": minor
 ---
 
