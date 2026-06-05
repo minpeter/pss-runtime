@@ -7,6 +7,12 @@ describe("runtime public exports", () => {
     expect(runtime).not.toHaveProperty("runAgentLoop");
   });
 
+  it("exposes consumeRunEvents from package root", async () => {
+    const runtime = await import("./index");
+
+    expect(runtime).toHaveProperty("consumeRunEvents", expect.any(Function));
+  });
+
   it("exposes plugin factories from the plugins module", async () => {
     const plugins = await import("./plugins");
 

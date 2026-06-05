@@ -1,8 +1,9 @@
 import type { ModelMessage } from "ai";
-import type { AgentHooks, AgentStepResult } from "./hooks";
 import type { Llm, LlmOutput } from "./llm";
 import type { AgentEvent, AgentEventListener } from "./session/events";
 import { modelMessageToAgentEvents } from "./session/mapping";
+
+type MaybePromise<T> = Promise<T> | T;
 
 interface ModelHistory {
   appendModelMessage(message: ModelMessage): void;
@@ -12,12 +13,25 @@ interface ModelHistory {
 interface RunAgentLoopOptions {
   emit: AgentLoopEventListener;
   history: ModelHistory;
-  hooks?: AgentHooks;
   llm: Llm;
   signal?: AbortSignal;
+  stepLifecycle?: AgentStepLifecycle;
 }
 
 export type AgentLoopResult = "completed" | "aborted";
+export type AgentStepResult = "completed" | "continue";
+export interface AgentBeforeStepContext {
+  readonly history: readonly ModelMessage[];
+  readonly signal: AbortSignal;
+  readonly stepIndex: number;
+}
+export interface AgentAfterStepContext extends AgentBeforeStepContext {
+  readonly result: AgentStepResult;
+}
+export interface AgentStepLifecycle {
+  afterStep?(context: AgentAfterStepContext): MaybePromise<void>;
+  beforeStep?(context: AgentBeforeStepContext): MaybePromise<void>;
+}
 type AgentLoopBoundaryEvent = Extract<
   AgentEvent,
   { type: "step-end" } | { type: "step-start" }
@@ -36,9 +50,9 @@ type StepOutputResult = AgentStepResult | "aborted";
 export async function runAgentLoop({
   emit,
   history,
-  hooks,
   llm,
   signal = new AbortController().signal,
+  stepLifecycle,
 }: RunAgentLoopOptions): Promise<AgentLoopResult> {
   let stepIndex = 0;
 
@@ -47,7 +61,7 @@ export async function runAgentLoop({
       return "aborted";
     }
 
-    await hooks?.beforeStep?.({
+    await stepLifecycle?.beforeStep?.({
       history: history.modelSnapshot(),
       signal,
       stepIndex,
@@ -79,7 +93,7 @@ export async function runAgentLoop({
       return "aborted";
     }
 
-    await runAfterStepHook(hooks, {
+    await runAfterStepLifecycle(stepLifecycle, {
       history: history.modelSnapshot(),
       result,
       signal,
@@ -148,16 +162,16 @@ function createAbortBoundary(signal: AbortSignal): {
   return { dispose, promise };
 }
 
-async function runAfterStepHook(
-  hooks: AgentHooks | undefined,
-  context: Parameters<NonNullable<AgentHooks["afterStep"]>>[0]
+async function runAfterStepLifecycle(
+  stepLifecycle: AgentStepLifecycle | undefined,
+  context: AgentAfterStepContext
 ): Promise<void> {
-  const hook = hooks?.afterStep;
-  if (!hook) {
+  const afterStep = stepLifecycle?.afterStep;
+  if (!afterStep) {
     return;
   }
 
-  await Promise.allSettled([Promise.resolve().then(() => hook(context))]);
+  await Promise.allSettled([Promise.resolve().then(() => afterStep(context))]);
 }
 
 async function readLlmOutput({

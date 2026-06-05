@@ -1,5 +1,4 @@
 import type { LanguageModel, ToolSet } from "ai";
-import type { AgentHooks } from "./hooks";
 import { type AgentToolChoice, createLlm, type Llm } from "./llm";
 import type { AgentPlugin } from "./plugins";
 import {
@@ -12,7 +11,6 @@ import { MemorySessionStore } from "./session/store/memory";
 import type { SessionStore } from "./session/store/types";
 
 interface AgentLanguageModelOptions {
-  hooks?: AgentHooks;
   instructions?: string;
   llm?: never;
   model: LanguageModel;
@@ -22,7 +20,6 @@ interface AgentLanguageModelOptions {
 }
 
 interface AgentLlmOptions {
-  hooks?: AgentHooks;
   instructions?: never;
   llm: Llm;
   model?: never;
@@ -41,7 +38,6 @@ export interface SessionHandle {
 export type AgentOptions = AgentLanguageModelOptions | AgentLlmOptions;
 
 export class Agent {
-  readonly #hooks?: AgentHooks;
   readonly #internalLlm: Llm;
   readonly #llm: Llm;
   readonly #plugins: ResolvedAgentPlugins;
@@ -57,7 +53,6 @@ export class Agent {
     this.#plugins = resolvedPlugins;
     this.#store =
       resolvedPlugins.sessionStore?.store ?? new MemorySessionStore();
-    this.#hooks = options.hooks;
     if (hasCustomLlm(options)) {
       this.#internalLlm = options.llm;
       this.#llm = options.llm;
@@ -97,7 +92,6 @@ export class Agent {
     const session = new AgentSession(
       this.#llm,
       { key, store: this.#store },
-      this.#hooks,
       this.#plugins,
       this.#internalLlm
     );
@@ -125,6 +119,12 @@ function assertAgentOptions(options: unknown): asserts options is AgentOptions {
   if ("sessions" in options) {
     throw new TypeError(
       "Agent.create: options.sessions was removed. Use plugins: [sessions.custom(store)]."
+    );
+  }
+
+  if ("hooks" in options) {
+    throw new TypeError(
+      "Agent.create: options.hooks was removed. Use run.events() with session.steer() for app control or plugin lifecycle handlers for middleware."
     );
   }
 

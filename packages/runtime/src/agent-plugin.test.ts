@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { Agent, type AgentOptions } from "./agent";
 import type { Llm } from "./llm";
 import { definePlugin, sessions } from "./plugins";
+import type { AgentEvent } from "./session/events";
+import type { AgentRun } from "./session/run";
 import type {
   CommitResult,
   ExpectedSessionVersion,
@@ -16,13 +18,15 @@ const fakeLlm: Llm = () => Promise.resolve([assistantMessage("DONE")]);
 const multipleSessionPersistencePattern = /multiple session persistence/i;
 const removedSessionsOptionPattern = /options\.sessions was removed/i;
 
-const drainRun = async (run: Awaited<ReturnType<Agent["send"]>>) => {
-  let eventCount = 0;
+const collectRun = async (run: AgentRun) => {
+  const events: AgentEvent[] = [];
   for await (const _event of run.events()) {
-    eventCount += 1;
+    events.push(_event);
   }
-  return eventCount;
+  return events;
 };
+
+const drainRun = async (run: AgentRun) => (await collectRun(run)).length;
 
 describe("Agent plugins", () => {
   it("keeps plugin AgentOptions type fixtures reachable", () => {
@@ -102,6 +106,136 @@ describe("Agent plugins", () => {
         { llm: fakeLlm, sessions: { store: new RecordingStore() } },
       ])
     ).rejects.toThrow(removedSessionsOptionPattern);
+  });
+
+  it("supports plugin afterStep steering", async () => {
+    let calls = 0;
+    const seenHistory: ModelMessage[][] = [];
+    const agent = await Agent.create({
+      llm: ({ history }) => {
+        calls += 1;
+        seenHistory.push([...history]);
+        return Promise.resolve([
+          assistantMessage(calls === 1 ? "FIRST" : "DONE"),
+        ]);
+      },
+      plugins: [
+        definePlugin({
+          name: "after-step-steer",
+          setup(host) {
+            host.on("afterStep", async (event) => {
+              if (
+                event.sessionKey === "plugin-after-step" &&
+                event.stepIndex === 0 &&
+                event.result === "completed"
+              ) {
+                await event.steer("plugin continue");
+              }
+            });
+          },
+        }),
+      ],
+    });
+
+    const events = await collectRun(
+      await agent.session("plugin-after-step").send("start")
+    );
+
+    expect(events).toHaveLength(10);
+    expect(events).toContainEqual({
+      input: { text: "plugin continue", type: "user-text" },
+      placement: "step-end",
+      type: "runtime-input",
+    });
+    expect(calls).toBe(2);
+    expect(seenHistory[1]).toEqual(
+      expect.arrayContaining([{ content: "plugin continue", role: "user" }])
+    );
+  });
+
+  it("supports plugin beforeStep steering before the first LLM snapshot", async () => {
+    const seenHistory: ModelMessage[][] = [];
+    const agent = await Agent.create({
+      llm: ({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+      plugins: [
+        definePlugin({
+          name: "before-step-steer",
+          setup(host) {
+            host.on("beforeStep", async ({ sessionKey, steer, stepIndex }) => {
+              if (sessionKey === "plugin-before-step" && stepIndex === 0) {
+                await steer("plugin before step");
+              }
+            });
+          },
+        }),
+      ],
+    });
+
+    const events = await collectRun(
+      await agent.session("plugin-before-step").send("start")
+    );
+
+    expect(events).toContainEqual({
+      input: { text: "plugin before step", type: "user-text" },
+      placement: "step-start",
+      type: "runtime-input",
+    });
+    expect(seenHistory).toEqual([
+      [
+        { content: "start", role: "user" },
+        { content: "plugin before step", role: "user" },
+      ],
+    ]);
+  });
+
+  it("supports plugin afterTurn steering as a separate run", async () => {
+    let afterTurnRun: Promise<AgentRun> | undefined;
+    let afterTurnSteered = false;
+    const seenHistory: ModelMessage[][] = [];
+    const agent = await Agent.create({
+      llm: ({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+      plugins: [
+        definePlugin({
+          name: "after-turn-steer",
+          setup(host) {
+            host.on("afterTurn", ({ sessionKey, steer }) => {
+              if (sessionKey === "plugin-after-turn" && !afterTurnSteered) {
+                afterTurnSteered = true;
+                afterTurnRun = steer("plugin after turn");
+              }
+            });
+          },
+        }),
+      ],
+    });
+    const session = agent.session("plugin-after-turn");
+
+    const firstEvents = await collectRun(await session.send("start"));
+    if (!afterTurnRun) {
+      throw new Error("expected plugin afterTurn steering to start a run");
+    }
+    const afterTurnEvents = await collectRun(await afterTurnRun);
+
+    expect(firstEvents).not.toContainEqual({
+      input: { text: "plugin after turn", type: "user-text" },
+      placement: "step-end",
+      type: "runtime-input",
+    });
+    expect(afterTurnEvents[0]).toEqual({
+      text: "plugin after turn",
+      type: "user-text",
+    });
+    expect(seenHistory[1]).toEqual([
+      { content: "start", role: "user" },
+      assistantMessage("DONE"),
+      { content: "plugin after turn", role: "user" },
+    ]);
   });
 });
 

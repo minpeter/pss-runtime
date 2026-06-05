@@ -82,11 +82,11 @@ describe("runAgentLoop", () => {
     ]);
   });
 
-  it("calls step hooks around each model loop step", async () => {
-    const hookCalls: string[] = [];
+  it("calls step lifecycle around each model loop step", async () => {
+    const lifecycleCalls: string[] = [];
     const events: AgentEvent[] = [];
     const history = new ModelMessageHistory();
-    const toolCall = toolCallPart("call-tool-hooks");
+    const toolCall = toolCallPart("call-tool-lifecycle");
     const llm = createScriptedLlm([
       [assistantMessage([toolCall]), toolResultFor(toolCall)],
       [assistantMessage("DONE")],
@@ -98,12 +98,14 @@ describe("runAgentLoop", () => {
           events.push(event);
         },
         history,
-        hooks: {
+        stepLifecycle: {
           afterStep: ({ history: snapshot, result, stepIndex }) => {
-            hookCalls.push(`after:${stepIndex}:${result}:${snapshot.length}`);
+            lifecycleCalls.push(
+              `after:${stepIndex}:${result}:${snapshot.length}`
+            );
           },
           beforeStep: ({ history: snapshot, stepIndex }) => {
-            hookCalls.push(`before:${stepIndex}:${snapshot.length}`);
+            lifecycleCalls.push(`before:${stepIndex}:${snapshot.length}`);
           },
         },
         llm,
@@ -119,7 +121,7 @@ describe("runAgentLoop", () => {
       "assistant-text",
       "step-end",
     ]);
-    expect(hookCalls).toEqual([
+    expect(lifecycleCalls).toEqual([
       "before:0:0",
       "after:0:continue:2",
       "before:1:2",
@@ -153,7 +155,7 @@ describe("runAgentLoop", () => {
           events.push(event);
         },
         history,
-        hooks: {
+        stepLifecycle: {
           afterStep: () => {
             throw new Error("after step failed");
           },
@@ -194,7 +196,7 @@ describe("runAgentLoop", () => {
           events.push(event);
         },
         history,
-        hooks: {
+        stepLifecycle: {
           beforeStep: () => {
             controller.abort();
           },
@@ -223,7 +225,7 @@ describe("runAgentLoop", () => {
           events.push(event);
         },
         history,
-        hooks: {
+        stepLifecycle: {
           beforeStep: () => {
             throw new Error("before step failed");
           },

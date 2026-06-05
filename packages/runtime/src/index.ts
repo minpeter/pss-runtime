@@ -4,15 +4,6 @@ export {
   type SessionHandle,
 } from "./agent";
 export type {
-  AgentAfterStepContext,
-  AgentAfterTurnContext,
-  AgentBeforeStepContext,
-  AgentBeforeTurnContext,
-  AgentHooks,
-  AgentStepResult,
-  AgentTurnResult,
-} from "./hooks";
-export type {
   AgentToolChoice,
   AgentToolExecute,
   AgentToolExecutionOptions,
@@ -26,11 +17,18 @@ export { createLlm } from "./llm";
 export {
   type AgentContextTransform,
   type AgentPlugin,
+  type AgentPluginAfterStepEvent,
+  type AgentPluginAfterTurnEvent,
+  type AgentPluginBeforeStepEvent,
+  type AgentPluginBeforeTurnEvent,
   type AgentPluginEvent,
+  type AgentPluginEventFor,
   type AgentPluginEventName,
   type AgentPluginHandler,
   type AgentPluginHost,
   type AgentPluginMaybePromise,
+  type AgentPluginStepResult,
+  type AgentPluginTurnResult,
   type CompactionOptions,
   compaction,
   definePlugin,
@@ -57,7 +55,8 @@ export type {
   UserTextContent,
 } from "./session/events";
 export type { AgentInput, SessionInput } from "./session/input";
-export type { AgentRun } from "./session/run";
+export type { AgentRun, AgentRunEventListener } from "./session/run";
+export { consumeRunEvents } from "./session/run";
 export type {
   CommitResult,
   ExpectedSessionVersion,

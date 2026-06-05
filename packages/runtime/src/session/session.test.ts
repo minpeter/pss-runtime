@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
-import { sessions } from "../plugins";
+import { definePlugin, sessions } from "../plugins";
 import {
   assistantMessage,
   createDeferred,
@@ -130,18 +130,25 @@ describe("Agent session API", () => {
     ]);
   });
 
-  it("calls turn hooks around a queued turn", async () => {
-    const hookCalls: string[] = [];
+  it("calls plugin turn lifecycle around a queued turn", async () => {
+    const lifecycleCalls: string[] = [];
     const agent = await Agent.create({
-      hooks: {
-        afterTurn: ({ history, input, result }) => {
-          hookCalls.push(`${input.type}:after:${result}:${history.length}`);
-        },
-        beforeTurn: ({ history, input }) => {
-          hookCalls.push(`${input.type}:before:${history.length}`);
-        },
-      },
       llm: () => Promise.resolve([assistantMessage("DONE")]),
+      plugins: [
+        definePlugin({
+          name: "turn-lifecycle",
+          setup(host) {
+            host.on("afterTurn", ({ history, input, result }) => {
+              lifecycleCalls.push(
+                `${input.type}:after:${result}:${history.length}`
+              );
+            });
+            host.on("beforeTurn", ({ history, input }) => {
+              lifecycleCalls.push(`${input.type}:before:${history.length}`);
+            });
+          },
+        }),
+      ],
     });
 
     const events = await collect(await agent.send("hello"));
@@ -154,7 +161,7 @@ describe("Agent session API", () => {
       "step-end",
       "turn-end",
     ]);
-    expect(hookCalls).toEqual([
+    expect(lifecycleCalls).toEqual([
       "user-text:before:0",
       "user-text:after:completed:2",
     ]);
@@ -164,16 +171,21 @@ describe("Agent session API", () => {
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
     const agent = await Agent.create({
-      hooks: {
-        afterTurn: () => {
-          throw new Error("after turn failed");
-        },
-      },
       llm: ({ history }) => {
         calls += 1;
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage(`DONE ${calls}`)]);
       },
+      plugins: [
+        definePlugin({
+          name: "failing-after-turn",
+          setup(host) {
+            host.on("afterTurn", () => {
+              throw new Error("after turn failed");
+            });
+          },
+        }),
+      ],
     });
 
     const firstEvents = await collect(
@@ -206,31 +218,12 @@ describe("Agent session API", () => {
     ]);
   });
 
-  it("orders turn and step hooks around runtime input windows", async () => {
-    const hookCalls: string[] = [];
+  it("orders plugin lifecycle around runtime input windows", async () => {
+    const lifecycleCalls: string[] = [];
     const trace: string[] = [];
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
     const agent = await Agent.create({
-      hooks: {
-        afterStep: ({ history, result, stepIndex }) => {
-          hookCalls.push(`afterStep:${stepIndex}:${result}:${history.length}`);
-          trace.push(`hook:afterStep:${stepIndex}`);
-        },
-        afterTurn: ({ history, input, result }) => {
-          hookCalls.push(`${input.type}:afterTurn:${result}:${history.length}`);
-          trace.push("hook:afterTurn");
-          throw new Error("after turn failed");
-        },
-        beforeStep: ({ history, stepIndex }) => {
-          hookCalls.push(`beforeStep:${stepIndex}:${history.length}`);
-          trace.push(`hook:beforeStep:${stepIndex}`);
-        },
-        beforeTurn: ({ history, input }) => {
-          hookCalls.push(`${input.type}:beforeTurn:${history.length}`);
-          trace.push("hook:beforeTurn");
-        },
-      },
       llm: ({ history }) => {
         trace.push(`llm:${calls}`);
         seenHistory.push([...history]);
@@ -239,12 +232,40 @@ describe("Agent session API", () => {
           assistantMessage(["SEED", "FIRST", "DONE"][calls - 1] ?? "DONE"),
         ]);
       },
+      plugins: [
+        definePlugin({
+          name: "runtime-ordering",
+          setup(host) {
+            host.on("afterStep", ({ history, result, stepIndex }) => {
+              lifecycleCalls.push(
+                `afterStep:${stepIndex}:${result}:${history.length}`
+              );
+              trace.push(`lifecycle:afterStep:${stepIndex}`);
+            });
+            host.on("afterTurn", ({ history, input, result }) => {
+              lifecycleCalls.push(
+                `${input.type}:afterTurn:${result}:${history.length}`
+              );
+              trace.push("lifecycle:afterTurn");
+              throw new Error("after turn failed");
+            });
+            host.on("beforeStep", ({ history, stepIndex }) => {
+              lifecycleCalls.push(`beforeStep:${stepIndex}:${history.length}`);
+              trace.push(`lifecycle:beforeStep:${stepIndex}`);
+            });
+            host.on("beforeTurn", ({ history, input }) => {
+              lifecycleCalls.push(`${input.type}:beforeTurn:${history.length}`);
+              trace.push("lifecycle:beforeTurn");
+            });
+          },
+        }),
+      ],
     });
-    const session = agent.session("hook-runtime-ordering");
+    const session = agent.session("plugin-runtime-ordering");
 
     await collect(await session.send("prior"));
 
-    hookCalls.length = 0;
+    lifecycleCalls.length = 0;
     trace.length = 0;
     seenHistory.length = 0;
 
@@ -291,7 +312,7 @@ describe("Agent session API", () => {
     ];
     const finalHistory = [...secondStepHistory, assistantMessage("DONE")];
 
-    expect(hookCalls).toEqual([
+    expect(lifecycleCalls).toEqual([
       "user-text:beforeTurn:2",
       "beforeStep:0:4",
       "afterStep:0:completed:6",
@@ -330,25 +351,25 @@ describe("Agent session API", () => {
     });
     expect(seenHistory).toEqual([firstStepHistory, secondStepHistory]);
     expect(trace).toEqual([
-      "hook:beforeTurn",
+      "lifecycle:beforeTurn",
       "event:user-text",
       "event:turn-start",
       "event:runtime-input",
-      "hook:beforeStep:0",
+      "lifecycle:beforeStep:0",
       "event:step-start",
       "event:runtime-input",
       "llm:1",
       "event:assistant-text",
-      "hook:afterStep:0",
+      "lifecycle:afterStep:0",
       "event:step-end",
       "event:runtime-input",
-      "hook:beforeStep:1",
+      "lifecycle:beforeStep:1",
       "event:step-start",
       "llm:2",
       "event:assistant-text",
-      "hook:afterStep:1",
+      "lifecycle:afterStep:1",
       "event:step-end",
-      "hook:afterTurn",
+      "lifecycle:afterTurn",
       "event:turn-end",
     ]);
     expect(finalHistory).toEqual([
@@ -699,36 +720,12 @@ describe("Agent session API", () => {
     ]);
   });
 
-  it("drains hook steering at turn-start, step-start, and step-end but not afterTurn", async () => {
+  it("drains plugin steering at turn-start, step-start, and step-end but not afterTurn", async () => {
     const seenHistory: ModelMessage[][] = [];
-    let afterTurnRun:
-      | Promise<Awaited<ReturnType<typeof session.steer>>>
-      | undefined;
+    let afterTurnRun: Promise<Awaited<ReturnType<Agent["send"]>>> | undefined;
     let afterTurnSteered = false;
     let step = 0;
-    let session: ReturnType<Agent["session"]>;
     const agent = await Agent.create({
-      hooks: {
-        afterStep: async ({ stepIndex }) => {
-          if (stepIndex === 0) {
-            await session.steer("after step steer");
-          }
-        },
-        afterTurn: () => {
-          if (!afterTurnSteered) {
-            afterTurnSteered = true;
-            afterTurnRun = session.steer("after turn steer");
-          }
-        },
-        beforeStep: async ({ stepIndex }) => {
-          if (stepIndex === 0) {
-            await session.steer("before step steer");
-          }
-        },
-        beforeTurn: async () => {
-          await session.steer("before turn steer");
-        },
-      },
       llm: ({ history }) => {
         step += 1;
         seenHistory.push([...history]);
@@ -736,8 +733,34 @@ describe("Agent session API", () => {
           assistantMessage(step === 1 ? "This could be final." : "DONE"),
         ]);
       },
+      plugins: [
+        definePlugin({
+          name: "steering-lifecycle",
+          setup(host) {
+            host.on("afterStep", async ({ steer, stepIndex }) => {
+              if (stepIndex === 0) {
+                await steer("after step steer");
+              }
+            });
+            host.on("afterTurn", ({ steer }) => {
+              if (!afterTurnSteered) {
+                afterTurnSteered = true;
+                afterTurnRun = steer("after turn steer");
+              }
+            });
+            host.on("beforeStep", async ({ steer, stepIndex }) => {
+              if (stepIndex === 0) {
+                await steer("before step steer");
+              }
+            });
+            host.on("beforeTurn", async ({ steer }) => {
+              await steer("before turn steer");
+            });
+          },
+        }),
+      ],
     });
-    session = agent.session("hook-steer");
+    const session = agent.session("plugin-steer");
 
     const events = await collect(await session.send("original"));
 

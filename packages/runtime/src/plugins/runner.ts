@@ -46,7 +46,10 @@ export async function resolveAgentPlugins({
       await plugin.setup({
         on: (event, handler) => {
           const existing = eventHandlers.get(event) ?? [];
-          eventHandlers.set(event, [...existing, handler]);
+          eventHandlers.set(event, [
+            ...existing,
+            handler as AgentPluginHandler,
+          ]);
         },
         registerSessionStore: (store) => {
           sessionStores.push({ pluginName: plugin.name, store });

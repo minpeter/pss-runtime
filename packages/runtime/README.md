@@ -10,7 +10,7 @@ Minimal, platform-agnostic agent runtime with keyed sessions, synchronized
 ## Core DX
 
 ```ts
-import { Agent } from "@minpeter/pss-runtime";
+import { Agent, consumeRunEvents } from "@minpeter/pss-runtime";
 import { createYourLanguageModel } from "...";
 
 const agent = await Agent.create({
@@ -28,7 +28,22 @@ for await (const event of run.events()) {
 boundaries until the events consumer asks for the next event, so callers must
 consume the events for the run to progress. This is what lets code react to
 `turn-start`, `step-start`, and `step-end` before the next model snapshot is
-created.
+created. `AgentRun.events()` is single-consumer; use `consumeRunEvents` when one
+application wants several ordered listeners for rendering, logging, and control.
+Listeners are awaited sequentially for each event before the next event is read,
+which preserves boundary backpressure.
+
+```ts
+const run = await agent.send("Implement the plan.");
+await consumeRunEvents(run, [
+  renderEvent,
+  async (event) => {
+    if (event.type === "step-end" && shouldContinueWork()) {
+      await agent.session("default").steer("Continue. The task is not complete yet.");
+    }
+  },
+]);
+```
 
 Per-key conversations use `session(key)`:
 
@@ -106,16 +121,19 @@ const session = agent.session("room:123:user:456");
 const run = await session.send("Draft a short answer.");
 let addedSteer = false;
 
-for await (const event of run.events()) {
-  if (event.type === "assistant-text") {
-    process.stdout.write(event.text);
-  }
-
-  if (event.type === "step-end" && !addedSteer) {
-    addedSteer = true;
-    await session.steer("Also mention the main tradeoff.");
-  }
-}
+await consumeRunEvents(run, [
+  (event) => {
+    if (event.type === "assistant-text") {
+      process.stdout.write(event.text);
+    }
+  },
+  async (event) => {
+    if (event.type === "step-end" && !addedSteer) {
+      addedSteer = true;
+      await session.steer("Also mention the main tradeoff.");
+    }
+  },
+]);
 ```
 
 `session.steer()` resolves when the input is accepted into the active run's
@@ -138,6 +156,31 @@ const agent = await Agent.create({
 ```
 
 If no persistence plugin is provided, sessions are memory-backed by default.
+
+Reusable middleware belongs in plugins. Plugins can observe turn and step
+lifecycle events and call the scoped `steer` function to insert runtime input at
+the active boundary. App-level control should stay with `run.events()` plus
+`session.steer()`; plugin lifecycle is for reusable policy.
+
+```ts
+import { Agent, definePlugin } from "@minpeter/pss-runtime";
+
+const continuePlugin = definePlugin({
+  name: "continue-policy",
+  setup(host) {
+    host.on("afterStep", async ({ result, history, steer, stepIndex }) => {
+      if (result === "completed" && stepIndex === 0 && shouldContinueWork(history)) {
+        await steer("Continue. The task is not complete yet.");
+      }
+    });
+  },
+});
+
+const agent = await Agent.create({
+  model,
+  plugins: [continuePlugin],
+});
+```
 
 Custom stores still own version generation through `SessionStore`. Use
 `sessions.custom(store)` when the runtime should persist through a caller-owned
