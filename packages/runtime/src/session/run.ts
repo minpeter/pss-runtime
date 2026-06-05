@@ -49,6 +49,7 @@ export class BufferedAgentRun implements AgentRun {
     this.#closed = true;
     this.#error = error;
     this.#settlePendingAck();
+    this.#settleQueuedAcks();
 
     if (!this.#waiter) {
       return;

@@ -148,6 +148,16 @@ describe("AgentRun", () => {
     });
   });
 
+  it("close() settles queued boundary acknowledgements", async () => {
+    const run = new BufferedAgentRun();
+    const boundary = run.emitBoundary({ type: "step-start" });
+    await expectPending(boundary);
+
+    run.close(undefined, "Session killed");
+
+    await expect(boundary).resolves.toBeUndefined();
+  });
+
   it("closes and discards queued events when the events iterator returns early", async () => {
     const run = new BufferedAgentRun();
     const iterator = run.events()[Symbol.asyncIterator]();

@@ -128,6 +128,11 @@ export class AgentSession {
       this.#activeRuntimeInput,
       sessionKilledError().message
     );
+    this.#activeRun?.emit({
+      type: "turn-error",
+      message: sessionKilledError().message,
+    });
+    this.#activeRun?.close(undefined, sessionKilledError().message);
 
     while (this.#inputQueue.length > 0) {
       const item = this.#inputQueue.shift();
