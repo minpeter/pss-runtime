@@ -48,8 +48,6 @@ interface QueuedInput {
   readonly runtimeInput: RuntimeInputState;
 }
 
-const noBoundaryDecision = undefined;
-
 export class AgentSession {
   readonly #inputQueue: QueuedInput[] = [];
   readonly #internalLlm: Llm;
@@ -139,7 +137,7 @@ export class AgentSession {
       const placement =
         this.#activeRuntimeInput?.steerPlacement ??
         this.#activeRuntimeInput?.placement ??
-        "idle";
+        "step-end";
       const entry = this.#overlays.appendActiveOverlay(input, placement);
       if (!entry) {
         throw new Error("Active overlay frame is unavailable.");
@@ -245,10 +243,10 @@ export class AgentSession {
   }: QueuedInput): Promise<void> {
     const activeAbort = new AbortController();
     this.#activeAbort = activeAbort;
-    this.#overlays.startTurn(input);
+    const historySnapshot = this.#history.modelSnapshot();
+    this.#overlays.startTurn(input, historySnapshot);
     this.#activeRun = run;
     this.#activeRuntimeInput = runtimeInput;
-    const historySnapshot = this.#history.modelSnapshot();
 
     try {
       await this.#withSteeringPlacement(
@@ -298,7 +296,7 @@ export class AgentSession {
                 runtimeInputAdded,
               };
             }
-            return noBoundaryDecision;
+            return;
           }
 
           run.emit(event);
@@ -449,7 +447,7 @@ export class AgentSession {
         });
       }
 
-      const modelHistory = this.#overlays.compose(transformedHistory);
+      const modelHistory = this.#overlays.compose(transformedHistory, history);
       this.#overlays.markInferenceStarted();
       return this.#llm({
         history: modelHistory,

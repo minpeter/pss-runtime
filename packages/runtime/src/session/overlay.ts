@@ -2,6 +2,11 @@ import type { ModelMessage, UserModelMessage } from "ai";
 import type { OverlayInputSummary, OverlayPlacement } from "./events";
 import type { AgentInput, UserInput, UserMessageContentPart } from "./input";
 import { userInputToModelMessage } from "./mapping";
+import {
+  type CurrentTurnAnchor,
+  createCurrentTurnAnchor,
+  resolveCurrentTurnIndex,
+} from "./overlay-anchor";
 import { normalizeAgentInput } from "./runtime-input";
 
 export type OverlayPhase = "post-inference" | "pre-inference";
@@ -31,7 +36,7 @@ export class SessionOverlayState {
   #activeFrame?: InferenceFrame;
   #activeInferenceStarted = false;
   #activeStepEndOverlayInputAdded = false;
-  #activeTurnMessage?: ModelMessage;
+  #activeTurn?: CurrentTurnAnchor;
   #pendingEntries: OverlayEntry[] = [];
 
   appendActiveOverlay(
@@ -62,9 +67,13 @@ export class SessionOverlayState {
     return entry;
   }
 
-  compose(history: readonly ModelMessage[]): ModelMessage[] {
+  compose(
+    history: readonly ModelMessage[],
+    canonicalHistory: readonly ModelMessage[]
+  ): ModelMessage[] {
     return composeOverlayHistory({
-      currentTurnMessage: this.#activeTurnMessage,
+      canonicalHistory,
+      currentTurn: this.#activeTurn,
       frame: this.#activeFrame,
       history,
     });
@@ -96,14 +105,18 @@ export class SessionOverlayState {
     this.#activeFrame = undefined;
     this.#activeInferenceStarted = false;
     this.#activeStepEndOverlayInputAdded = false;
-    this.#activeTurnMessage = undefined;
+    this.#activeTurn = undefined;
   }
 
-  startTurn(input: UserInput): void {
+  startTurn(input: UserInput, priorHistory: readonly ModelMessage[]): void {
+    const currentTurnMessage = userInputToModelMessage(input);
     this.#activeFrame = createInferenceFrame(this.#pendingEntries);
     this.#activeInferenceStarted = false;
     this.#activeStepEndOverlayInputAdded = false;
-    this.#activeTurnMessage = userInputToModelMessage(input);
+    this.#activeTurn = createCurrentTurnAnchor(
+      priorHistory,
+      currentTurnMessage
+    );
     this.#pendingEntries = [];
   }
 }
@@ -142,11 +155,13 @@ export function appendOverlay(
 }
 
 export function composeOverlayHistory({
-  currentTurnMessage,
+  canonicalHistory,
+  currentTurn,
   frame,
   history,
 }: {
-  readonly currentTurnMessage?: ModelMessage;
+  readonly canonicalHistory?: readonly ModelMessage[];
+  readonly currentTurn?: CurrentTurnAnchor;
   readonly frame?: InferenceFrame;
   readonly history: readonly ModelMessage[];
 }): ModelMessage[] {
@@ -158,21 +173,25 @@ export function composeOverlayHistory({
     return structuredClone([...history]);
   }
 
-  const snapshot = structuredClone([...history]);
+  const snapshot = [...history];
   const pre = frame.preInferenceContext.map((entry) => entry.message);
   const post = frame.postInferenceContext.map((entry) => entry.message);
-  const currentTurnIndex = findCurrentTurnIndex(snapshot, currentTurnMessage);
+  const resolvedCurrentTurnIndex = resolveCurrentTurnIndex({
+    canonicalHistory,
+    currentTurn,
+    history: snapshot,
+  });
 
-  if (currentTurnIndex === -1) {
-    return [...snapshot, ...structuredClone(pre), ...structuredClone(post)];
+  if (resolvedCurrentTurnIndex === -1) {
+    return structuredClone([...snapshot, ...pre, ...post]);
   }
 
-  return [
-    ...snapshot.slice(0, currentTurnIndex),
-    ...structuredClone(pre),
-    ...snapshot.slice(currentTurnIndex),
-    ...structuredClone(post),
-  ];
+  return structuredClone([
+    ...snapshot.slice(0, resolvedCurrentTurnIndex),
+    ...pre,
+    ...snapshot.slice(resolvedCurrentTurnIndex),
+    ...post,
+  ]);
 }
 
 export function frameOverlayCount(frame: InferenceFrame | undefined): number {
@@ -187,30 +206,12 @@ export function cloneOverlayEntries(
   return structuredClone([...entries]);
 }
 
-function findCurrentTurnIndex(
-  history: readonly ModelMessage[],
-  currentTurnMessage: ModelMessage | undefined
-): number {
-  if (!currentTurnMessage) {
-    return -1;
-  }
-
-  const target = JSON.stringify(currentTurnMessage);
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    if (JSON.stringify(history[index]) === target) {
-      return index;
-    }
-  }
-
-  return -1;
-}
-
 function summarizeOverlayInput(input: UserInput): OverlayInputSummary {
   if (input.type === "user-text") {
     const text =
       typeof input.text === "string" ? input.text : input.text.join("\n");
     return {
-      preview: previewText(text),
+      preview: text ? "text" : "(empty message)",
       textLength: text.length,
       type: "user-text",
     };
@@ -222,7 +223,7 @@ function summarizeOverlayInput(input: UserInput): OverlayInputSummary {
     .join("\n");
   return {
     partCount: input.content.length,
-    preview: text ? previewText(text) : summarizeNonTextParts(input.content),
+    preview: summarizeNonTextParts(input.content),
     textLength: text.length,
     type: "user-message",
   };
@@ -233,13 +234,4 @@ function summarizeNonTextParts(
 ): string {
   const kinds = parts.map((part) => part.type);
   return kinds.length === 0 ? "(empty message)" : kinds.join(", ");
-}
-
-function previewText(text: string): string {
-  const normalized = text.replace(/\s+/g, " ").trim();
-  if (normalized.length <= 80) {
-    return normalized;
-  }
-
-  return `${normalized.slice(0, 80)}...`;
 }

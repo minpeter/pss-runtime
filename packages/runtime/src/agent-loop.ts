@@ -89,6 +89,10 @@ export async function runAgentLoop({
       stepIndex,
     });
 
+    if (signal.aborted) {
+      return "aborted";
+    }
+
     const output = await readLlmOutput({ history, llm, signal });
 
     if (output === "aborted") {

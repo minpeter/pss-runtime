@@ -2,7 +2,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ModelMessage } from "ai";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Agent } from "../agent";
 import { definePlugin, sessions } from "../plugins";
 import {
@@ -168,6 +168,9 @@ describe("Agent session API", () => {
   });
 
   it("commits successful output before turn.after failures", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
     const agent = await Agent.create({
@@ -188,37 +191,88 @@ describe("Agent session API", () => {
       ],
     });
 
-    const firstEvents = await collect(
-      await agent.session("after-turn").send("first")
-    );
-    const secondEvents = await collect(
-      await agent.session("after-turn").send("second")
-    );
+    try {
+      const firstEvents = await collect(
+        await agent.session("after-turn").send("first")
+      );
+      const secondEvents = await collect(
+        await agent.session("after-turn").send("second")
+      );
 
-    expect(eventTypes(firstEvents)).toEqual([
-      "user-text",
-      "turn-start",
-      "step-start",
-      "assistant-text",
-      "step-end",
-      "turn-end",
-    ]);
-    expect(eventTypes(secondEvents)).toEqual([
-      "user-text",
-      "turn-start",
-      "step-start",
-      "assistant-text",
-      "step-end",
-      "turn-end",
-    ]);
-    expect(seenHistory[1]).toEqual([
-      userTextToModelMessage(userText("first")),
-      assistantMessage("DONE 1"),
-      userTextToModelMessage(userText("second")),
-    ]);
+      expect(eventTypes(firstEvents)).toEqual([
+        "user-text",
+        "turn-start",
+        "step-start",
+        "assistant-text",
+        "step-end",
+        "turn-end",
+      ]);
+      expect(eventTypes(secondEvents)).toEqual([
+        "user-text",
+        "turn-start",
+        "step-start",
+        "assistant-text",
+        "step-end",
+        "turn-end",
+      ]);
+      expect(seenHistory[1]).toEqual([
+        userTextToModelMessage(userText("first")),
+        assistantMessage("DONE 1"),
+        userTextToModelMessage(userText("second")),
+      ]);
+      expect(consoleError).toHaveBeenCalledWith(
+        "Agent plugin turn.after handler failed:",
+        expect.any(Error)
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("continues the turn but logs step.after failures", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const agent = await Agent.create({
+      llm: () => Promise.resolve([assistantMessage("DONE")]),
+      plugins: [
+        definePlugin({
+          name: "failing-after-step",
+          setup(host) {
+            host.on("step.after", () => {
+              throw new Error("after step failed");
+            });
+          },
+        }),
+      ],
+    });
+
+    try {
+      const events = await collect(
+        await agent.session("after-step").send("hi")
+      );
+
+      expect(eventTypes(events)).toEqual([
+        "user-text",
+        "turn-start",
+        "step-start",
+        "assistant-text",
+        "step-end",
+        "turn-end",
+      ]);
+      expect(consoleError).toHaveBeenCalledWith(
+        "Agent plugin step.after handler failed:",
+        expect.any(Error)
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it("orders plugin lifecycle around runtime input windows", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     const lifecycleCalls: string[] = [];
     const trace: string[] = [];
     const seenHistory: ModelMessage[][] = [];
@@ -383,6 +437,7 @@ describe("Agent session API", () => {
       userTextToModelMessage(userText("step-end runtime")),
       assistantMessage("DONE"),
     ]);
+    consoleError.mockRestore();
   });
 
   it("agent.send accepts multipart string input without lossy joining", async () => {

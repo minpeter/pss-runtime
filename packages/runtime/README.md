@@ -194,9 +194,11 @@ If no persistence plugin is provided, sessions are memory-backed by default.
 Reusable middleware belongs in plugins. Plugins can observe turn and step
 lifecycle events and call the scoped `steer` function to insert runtime input at
 the active boundary or the scoped `overlay` function to add turn-scoped
-non-persistent context. App-level control should stay with `run.events()` plus
-`session.steer()` or `session.overlay()`; plugin lifecycle is for reusable
-policy.
+non-persistent context before the turn ends. Plugin `overlay` is available from
+`turn.before`, `step.before`, and `step.after`; `turn.after` runs after the
+turn-scoped overlay frame is closed and rejects overlay calls. App-level control
+should stay with `run.events()` plus `session.steer()` or `session.overlay()`;
+plugin lifecycle is for reusable policy.
 
 Plugin event names are dotted middleware names: `turn.before`, `step.before`,
 `step.after`, `turn.after`, `tool.call`, and `tool.result`. These are separate

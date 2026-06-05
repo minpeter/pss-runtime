@@ -153,7 +153,7 @@ export async function runPluginAfterStepHandlers(
   }
 
   const scope = lifecycle.createScope(context.signal);
-  await runWithAgentPluginScope(scope, () =>
+  const settlements = await runWithAgentPluginScope(scope, () =>
     Promise.allSettled(
       handlers.map((handler) =>
         Promise.resolve().then(() =>
@@ -171,6 +171,7 @@ export async function runPluginAfterStepHandlers(
       )
     )
   );
+  logPluginHandlerRejections("step.after", settlements);
   return true;
 }
 
@@ -191,18 +192,19 @@ export async function runPluginAfterTurnHandlers(
     return false;
   }
 
-  const scope = lifecycle.createScope(signal);
-  await runWithAgentPluginScope(scope, () =>
+  const overlay = () =>
+    Promise.reject(
+      new Error("Agent plugin overlay cannot be used after turn end.")
+    );
+  const scope = { ...lifecycle.createScope(signal), overlay };
+  const settlements = await runWithAgentPluginScope(scope, () =>
     Promise.allSettled(
       handlers.map((handler) =>
         Promise.resolve().then(() =>
           handler({
             history: lifecycle.history(),
             input,
-            overlay: () =>
-              Promise.reject(
-                new Error("Agent plugin overlay cannot be used after turn end.")
-              ),
+            overlay,
             result,
             sessionKey: lifecycle.sessionKey,
             signal,
@@ -213,6 +215,7 @@ export async function runPluginAfterTurnHandlers(
       )
     )
   );
+  logPluginHandlerRejections("turn.after", settlements);
   return true;
 }
 
@@ -221,4 +224,18 @@ function pluginHandlers(
   eventName: AgentPluginEventName
 ) {
   return lifecycle.plugins?.eventHandlers.get(eventName) ?? [];
+}
+
+function logPluginHandlerRejections(
+  eventName: AgentPluginEventName,
+  settlements: readonly PromiseSettledResult<unknown>[]
+): void {
+  for (const settlement of settlements) {
+    if (settlement.status === "rejected") {
+      console.error(
+        `Agent plugin ${eventName} handler failed:`,
+        settlement.reason
+      );
+    }
+  }
 }

@@ -1,20 +1,23 @@
 import type { ModelMessage } from "ai";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Agent } from "../agent";
 import { definePlugin, sessions } from "../plugins";
+import { getActiveAgentPluginScope } from "../plugins/scope";
 import {
   assistantMessage,
+  createDeferred,
   eventTypes,
   toolCallPart,
   userText,
 } from "../test-fixtures";
 import type { AgentEvent } from "./events";
-import { userTextToModelMessage } from "./mapping";
+import { userMessageToModelMessage, userTextToModelMessage } from "./mapping";
 import {
   appendOverlay,
   composeOverlayHistory,
   createInferenceFrame,
 } from "./overlay";
+import { createCurrentTurnAnchor } from "./overlay-anchor";
 import type {
   CommitResult,
   ExpectedSessionVersion,
@@ -36,7 +39,10 @@ describe("session overlays", () => {
     const beforeFrame = structuredClone(frame);
 
     const composed = composeOverlayHistory({
-      currentTurnMessage,
+      currentTurn: createCurrentTurnAnchor(
+        canonicalHistory.slice(0, 1),
+        currentTurnMessage
+      ),
       frame,
       history: canonicalHistory,
     });
@@ -54,7 +60,7 @@ describe("session overlays", () => {
     expect(frame).toEqual(beforeFrame);
   });
 
-  it("summarizes overlay input without exposing full payload", async () => {
+  it("summarizes overlay input without exposing text payload", async () => {
     const agent = await Agent.create({
       llm: () => Promise.resolve([assistantMessage("DONE")]),
     });
@@ -83,11 +89,12 @@ describe("session overlays", () => {
     expect(events[0]).toMatchObject({
       input: {
         partCount: 3,
-        preview: expect.stringContaining(injectedText),
+        preview: "text, image, file",
         type: "user-message",
       },
       type: "overlay-accepted",
     });
+    expect(JSON.stringify(events[0])).not.toContain(injectedText);
     expect(JSON.stringify(events[0])).not.toContain("secret tail");
     expect(JSON.stringify(events[0])).not.toContain("ZmFrZV9pbWFnZQ");
     expect(JSON.stringify(events[0])).not.toContain("ZmFrZV9maWxl");
@@ -190,6 +197,44 @@ describe("session overlays", () => {
     expect(eventTypes(events)).toContain("overlay-accepted");
   });
 
+  it("active in-flight overlay defaults to the next step instead of expiring unused", async () => {
+    const releaseLlm = createDeferred();
+    const llmStarted = createDeferred();
+    const seenHistories: ModelMessage[][] = [];
+    const agent = await Agent.create({
+      llm: async ({ history }) => {
+        seenHistories.push([...history]);
+        llmStarted.resolve();
+        await releaseLlm.promise;
+        return [assistantMessage("DONE")];
+      },
+    });
+    const session = agent.session("active-in-flight");
+    const run = await session.send("hello");
+    const eventsPromise = collect(run);
+    await llmStarted.promise;
+
+    const overlayRun = await session.overlay("late overlay");
+    releaseLlm.resolve();
+    const events = await eventsPromise;
+
+    expect(overlayRun).toBe(run);
+    expect(seenHistories).toEqual([
+      [userTextToModelMessage(userText("hello"))],
+      [
+        userTextToModelMessage(userText("hello")),
+        assistantMessage("DONE"),
+        userTextToModelMessage(userText("late overlay")),
+      ],
+    ]);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        placement: "step-end",
+        type: "overlay-accepted",
+      })
+    );
+  });
+
   it("overlay is never persisted to canonical history", async () => {
     const store = new RecordingStore();
     const seenHistories: ModelMessage[][] = [];
@@ -290,7 +335,117 @@ describe("session overlays", () => {
     ]);
   });
 
-  it("overlay event summaries are redacted", async () => {
+  it("context transforms with duplicate user context stay above overlays", async () => {
+    const seenHistories: ModelMessage[][] = [];
+    const agent = await Agent.create({
+      llm: ({ history }) => {
+        seenHistories.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+      plugins: [
+        definePlugin({
+          name: "prepend-duplicate-user-context",
+          setup(host) {
+            host.transformContext(({ history }) => [
+              userTextToModelMessage(userText("same")),
+              ...history,
+            ]);
+          },
+        }),
+      ],
+    });
+    const session = agent.session("duplicate-transform");
+
+    await collect(await session.overlay("overlay ctx"));
+    await collect(await session.send("same"));
+
+    expect(seenHistories).toEqual([
+      [
+        userTextToModelMessage(userText("same")),
+        userTextToModelMessage(userText("overlay ctx")),
+        userTextToModelMessage(userText("same")),
+      ],
+    ]);
+  });
+
+  it("context transforms with duplicate content but different provider options keep overlays above the current turn", async () => {
+    const seenHistories: ModelMessage[][] = [];
+    const syntheticContext = {
+      content: [{ type: "text", text: "same" }],
+      providerOptions: { test: { source: "synthetic" } },
+      role: "user",
+    } satisfies ModelMessage;
+    const tailContext = {
+      content: "tail",
+      role: "system",
+    } satisfies ModelMessage;
+    const currentTurn = userMessageToModelMessage({
+      content: [{ type: "text", text: "same" }],
+      metadata: { test: { source: "current" } },
+      type: "user-message",
+    });
+    const agent = await Agent.create({
+      llm: ({ history }) => {
+        seenHistories.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+      plugins: [
+        definePlugin({
+          name: "provider-options-duplicate-context",
+          setup(host) {
+            host.transformContext(({ history }) => [
+              syntheticContext,
+              ...history,
+              tailContext,
+            ]);
+          },
+        }),
+      ],
+    });
+    const session = agent.session("provider-options-duplicate");
+
+    await collect(await session.overlay("overlay ctx"));
+    await collect(
+      await session.send({
+        content: [{ type: "text", text: "same" }],
+        metadata: { test: { source: "current" } },
+        type: "user-message",
+      })
+    );
+
+    expect(seenHistories).toEqual([
+      [
+        syntheticContext,
+        userTextToModelMessage(userText("overlay ctx")),
+        currentTurn,
+        tailContext,
+      ],
+    ]);
+  });
+
+  it("composed overlay history does not expose mutable canonical message references", () => {
+    const canonicalHistory = [
+      userTextToModelMessage(userText("current prompt")),
+    ] satisfies ModelMessage[];
+    const frame = createInferenceFrame();
+    appendOverlay(frame, "overlay ctx", "turn-start", "pre-inference");
+
+    const composed = composeOverlayHistory({
+      currentTurn: createCurrentTurnAnchor([], canonicalHistory[0]),
+      frame,
+      history: canonicalHistory,
+    });
+    const currentTurn = composed[1];
+    if (currentTurn?.role === "user") {
+      currentTurn.content = "mutated";
+    }
+
+    expect(canonicalHistory).toEqual([
+      userTextToModelMessage(userText("current prompt")),
+    ]);
+  });
+
+  it("overlay event summaries redact text payloads", async () => {
     const agent = await Agent.create({
       llm: () => Promise.resolve([assistantMessage("DONE")]),
     });
@@ -308,11 +463,12 @@ describe("session overlays", () => {
     expect(events[0]).toMatchObject({
       input: {
         partCount: 2,
-        preview: expect.stringContaining("visible prefix"),
+        preview: "text, image",
         type: "user-message",
       },
       type: "overlay-accepted",
     });
+    expect(JSON.stringify(events[0])).not.toContain("visible prefix");
     expect(JSON.stringify(events[0])).not.toContain("hidden suffix");
     expect(JSON.stringify(events[0])).not.toContain("ZmFrZV9pbWFnZQ");
   });
@@ -430,35 +586,145 @@ describe("session overlays", () => {
   });
 
   it("plugin turn.after overlay does not leak into the next turn", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     const seenHistories: ModelMessage[][] = [];
-    const agent = await Agent.create({
-      llm: ({ history }) => {
-        seenHistories.push([...history]);
-        return Promise.resolve([assistantMessage("DONE")]);
-      },
-      plugins: [
-        definePlugin({
-          name: "turn-after-overlay",
-          setup(host) {
-            host.on("turn.after", async ({ overlay }) => {
-              await overlay("stale after-turn overlay");
-            });
-          },
-        }),
+    try {
+      const agent = await Agent.create({
+        llm: ({ history }) => {
+          seenHistories.push([...history]);
+          return Promise.resolve([assistantMessage("DONE")]);
+        },
+        plugins: [
+          definePlugin({
+            name: "turn-after-overlay",
+            setup(host) {
+              host.on("turn.after", async ({ overlay }) => {
+                await overlay("stale after-turn overlay");
+              });
+            },
+          }),
+        ],
+      });
+      const session = agent.session("plugin-turn-after");
+
+      await collect(await session.send("first turn"));
+      await collect(await session.send("second turn"));
+
+      expect(seenHistories).toEqual([
+        [userTextToModelMessage(userText("first turn"))],
+        [
+          userTextToModelMessage(userText("first turn")),
+          assistantMessage("DONE"),
+          userTextToModelMessage(userText("second turn")),
+        ],
+      ]);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("plugin turn.after active scope overlay cannot bypass the no-overlay guard", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const seenHistories: ModelMessage[][] = [];
+    try {
+      const agent = await Agent.create({
+        llm: ({ history }) => {
+          seenHistories.push([...history]);
+          return Promise.resolve([assistantMessage("DONE")]);
+        },
+        plugins: [
+          definePlugin({
+            name: "turn-after-scope-overlay",
+            setup(host) {
+              host.on("turn.after", async () => {
+                await getActiveAgentPluginScope()?.overlay(
+                  "stale scoped overlay"
+                );
+              });
+            },
+          }),
+        ],
+      });
+      const session = agent.session("plugin-turn-after-scope");
+
+      await collect(await session.send("first turn"));
+      await collect(await session.send("second turn"));
+
+      expect(seenHistories).toEqual([
+        [userTextToModelMessage(userText("first turn"))],
+        [
+          userTextToModelMessage(userText("first turn")),
+          assistantMessage("DONE"),
+          userTextToModelMessage(userText("second turn")),
+        ],
+      ]);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("pre-inference overlay uses the actual current turn when transformed history has duplicate prompts", () => {
+    const frame = createInferenceFrame();
+    const currentTurnMessage = userTextToModelMessage(userText("repeat"));
+    appendOverlay(frame, "overlay ctx", "turn-start", "pre-inference");
+
+    const composed = composeOverlayHistory({
+      currentTurn: createCurrentTurnAnchor(
+        [userTextToModelMessage(userText("repeat")), assistantMessage("prior")],
+        currentTurnMessage
+      ),
+      frame,
+      history: [
+        userTextToModelMessage(userText("repeat")),
+        assistantMessage("prior"),
+        currentTurnMessage,
+        userTextToModelMessage(userText("repeat")),
       ],
     });
-    const session = agent.session("plugin-turn-after");
 
-    await collect(await session.send("first turn"));
-    await collect(await session.send("second turn"));
+    expect(composed).toEqual([
+      userTextToModelMessage(userText("repeat")),
+      assistantMessage("prior"),
+      userTextToModelMessage(userText("overlay ctx")),
+      currentTurnMessage,
+      userTextToModelMessage(userText("repeat")),
+    ]);
+  });
 
-    expect(seenHistories).toEqual([
-      [userTextToModelMessage(userText("first turn"))],
-      [
-        userTextToModelMessage(userText("first turn")),
-        assistantMessage("DONE"),
-        userTextToModelMessage(userText("second turn")),
+  it("pre-inference overlay finds a cloned multipart current turn", () => {
+    const frame = createInferenceFrame();
+    const currentTurnMessage = userMessageToModelMessage({
+      content: [
+        { type: "text", text: "repeat" },
+        { image: "data:image/png;base64,ZmFrZQ==", type: "image" },
       ],
+      type: "user-message",
+    });
+    const clonedCurrentTurnMessage = structuredClone(currentTurnMessage);
+    appendOverlay(frame, "overlay ctx", "turn-start", "pre-inference");
+
+    const composed = composeOverlayHistory({
+      currentTurn: createCurrentTurnAnchor(
+        [userTextToModelMessage(userText("repeat")), assistantMessage("prior")],
+        currentTurnMessage
+      ),
+      frame,
+      history: [
+        userTextToModelMessage(userText("repeat")),
+        assistantMessage("prior"),
+        clonedCurrentTurnMessage,
+      ],
+    });
+
+    expect(composed).toEqual([
+      userTextToModelMessage(userText("repeat")),
+      assistantMessage("prior"),
+      userTextToModelMessage(userText("overlay ctx")),
+      clonedCurrentTurnMessage,
     ]);
   });
 });

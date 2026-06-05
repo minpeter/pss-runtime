@@ -1,7 +1,5 @@
 import type { ToolSet } from "ai";
-import type { Llm } from "../llm";
 import type { SessionStore } from "../session/store/types";
-import { type AgentPluginScope, runWithAgentPluginScope } from "./scope";
 import type {
   AgentContextTransform,
   AgentPlugin,
@@ -138,40 +136,6 @@ function addTools(
       claimedBy.set(name, owner);
     }
   }
-}
-
-export function wrapLlmWithContextTransforms({
-  createScope,
-  llm,
-  sessionKey,
-  transforms,
-}: {
-  readonly llm: Llm;
-  readonly createScope?: (signal: AbortSignal) => AgentPluginScope;
-  readonly sessionKey: string;
-  readonly transforms: readonly AgentContextTransform[];
-}): Llm {
-  if (transforms.length === 0 && !createScope) {
-    return llm;
-  }
-
-  return ({ history, signal }) => {
-    const invoke = async () => {
-      let transformedHistory: readonly (typeof history)[number][] = history;
-      for (const transform of transforms) {
-        transformedHistory = await transform({
-          history: transformedHistory,
-          sessionKey,
-          signal,
-        });
-      }
-
-      return llm({ history: transformedHistory, signal });
-    };
-
-    const scope = createScope?.(signal);
-    return scope ? runWithAgentPluginScope(scope, invoke) : invoke();
-  };
 }
 
 export class AgentPluginConflictError extends Error {
