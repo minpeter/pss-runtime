@@ -423,6 +423,32 @@ describe("session overlays", () => {
     ]);
   });
 
+  it("does not recurse indefinitely when provider options contain cycles", () => {
+    const leftProviderOptions = cyclicProviderOptions();
+    const rightProviderOptions = cyclicProviderOptions();
+    const frame = createInferenceFrame();
+    const currentTurn = {
+      content: [{ type: "text", text: "same" }],
+      providerOptions: { test: rightProviderOptions },
+      role: "user",
+    } satisfies ModelMessage;
+    appendOverlay(frame, "overlay ctx", "turn-start", "pre-inference");
+
+    expect(() =>
+      composeOverlayHistory({
+        currentTurn: createCurrentTurnAnchor([], currentTurn),
+        frame,
+        history: [
+          {
+            content: [{ type: "text", text: "same" }],
+            providerOptions: { test: leftProviderOptions },
+            role: "user",
+          },
+        ],
+      })
+    ).not.toThrow();
+  });
+
   it("composed overlay history does not expose mutable canonical message references", () => {
     const canonicalHistory = [
       userTextToModelMessage(userText("current prompt")),
@@ -765,6 +791,12 @@ class RecordingStore implements SessionStore {
     const stored = this.#sessions.get(key);
     return stored ? structuredClone(stored) : undefined;
   }
+}
+
+function cyclicProviderOptions(): NonNullable<ModelMessage["providerOptions"]> {
+  const cycle = { source: "left" };
+  Object.assign(cycle, { self: cycle });
+  return { test: cycle };
 }
 
 function readStoredHistory(

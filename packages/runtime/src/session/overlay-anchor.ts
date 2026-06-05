@@ -1,5 +1,7 @@
 import type { ModelMessage } from "ai";
 
+const maxEqualityDepth = 64;
+
 export interface CurrentTurnAnchor {
   readonly index: number;
   readonly matchOrdinal: number;
@@ -147,40 +149,80 @@ function modelMessageEquals(
   left: ModelMessage | undefined,
   right: ModelMessage
 ): boolean {
-  return left !== undefined && modelContentEquals(left, right);
+  return left !== undefined && modelContentEquals(left, right, createState());
 }
 
-function modelContentEquals(left: unknown, right: unknown): boolean {
+interface EqualityState {
+  readonly depth: number;
+  readonly seen: WeakMap<object, WeakSet<object>>;
+}
+
+function createState(): EqualityState {
+  return { depth: 0, seen: new WeakMap() };
+}
+
+function nextState(state: EqualityState): EqualityState {
+  return { depth: state.depth + 1, seen: state.seen };
+}
+
+function modelContentEquals(
+  left: unknown,
+  right: unknown,
+  state: EqualityState
+): boolean {
   if (Object.is(left, right)) {
     return true;
   }
 
+  if (state.depth >= maxEqualityDepth) {
+    return false;
+  }
+
   if (Array.isArray(left) || Array.isArray(right)) {
-    return arraysEqual(left, right);
+    return arraysEqual(left, right, nextState(state));
   }
 
   if (isRecord(left) || isRecord(right)) {
-    return recordsEqual(left, right);
+    return recordsEqual(left, right, nextState(state));
   }
 
   return false;
 }
 
-function arraysEqual(left: unknown, right: unknown): boolean {
+function arraysEqual(
+  left: unknown,
+  right: unknown,
+  state: EqualityState
+): boolean {
   if (!(Array.isArray(left) && Array.isArray(right))) {
     return false;
+  }
+
+  if (isSeenPair(left, right, state.seen)) {
+    return true;
   }
 
   if (left.length !== right.length) {
     return false;
   }
 
-  return left.every((item, index) => modelContentEquals(item, right[index]));
+  rememberPair(left, right, state.seen);
+  return left.every((item, index) =>
+    modelContentEquals(item, right[index], state)
+  );
 }
 
-function recordsEqual(left: unknown, right: unknown): boolean {
+function recordsEqual(
+  left: unknown,
+  right: unknown,
+  state: EqualityState
+): boolean {
   if (!(isRecord(left) && isRecord(right))) {
     return false;
+  }
+
+  if (isSeenPair(left, right, state.seen)) {
+    return true;
   }
 
   const leftEntries = Object.entries(left);
@@ -188,10 +230,33 @@ function recordsEqual(left: unknown, right: unknown): boolean {
     return false;
   }
 
+  rememberPair(left, right, state.seen);
   return leftEntries.every(
     ([key, value]) =>
-      Object.hasOwn(right, key) && modelContentEquals(value, right[key])
+      Object.hasOwn(right, key) && modelContentEquals(value, right[key], state)
   );
+}
+
+function isSeenPair(
+  left: object,
+  right: object,
+  seen: WeakMap<object, WeakSet<object>>
+): boolean {
+  return seen.get(left)?.has(right) ?? false;
+}
+
+function rememberPair(
+  left: object,
+  right: object,
+  seen: WeakMap<object, WeakSet<object>>
+): void {
+  const rights = seen.get(left);
+  if (rights) {
+    rights.add(right);
+    return;
+  }
+
+  seen.set(left, new WeakSet([right]));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
