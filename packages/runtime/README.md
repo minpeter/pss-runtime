@@ -104,9 +104,11 @@ const coordinator = new Agent({
 
 For each subagent, the parent model receives a generated
 `delegate_to_<name>` tool. The tool accepts `prompt`, optional `description`,
-optional `sessionKey`, and `run_in_background`. Omitting `run_in_background`
-defaults to blocking behavior and returns compact child text, not the full child
-event stream.
+optional `sessionKey` suffix, and `run_in_background`. A provided `sessionKey`
+is always scoped under the parent session and subagent name; the model cannot
+select an arbitrary child session key. Omitting `run_in_background` defaults to
+blocking behavior and returns compact child text, not the full child event
+stream.
 
 ```ts
 delegate_to_researcher({
@@ -131,7 +133,8 @@ background_cancel({ task_id: "bg_..." });
 
 The parent model context stays compact by default: completion reminders include
 the task id, subagent name, description, and retrieval instruction. Full child
-traces are not injected into the parent transcript by default.
+traces are not injected into the parent transcript by default. Retrieved
+completed background jobs are forgotten after `background_output` returns.
 
 ## Send and Steer
 

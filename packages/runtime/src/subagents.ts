@@ -4,7 +4,7 @@ import {
   createBackgroundOutputTool,
   startBackgroundJob,
 } from "./subagent-jobs";
-import { defaultChildSessionKey, runBlockingDelegation } from "./subagent-run";
+import { runBlockingDelegation, scopedChildSessionKey } from "./subagent-run";
 import type {
   CreateSubagentToolsOptions,
   DelegateInput,
@@ -60,18 +60,19 @@ function createDelegateTool({
   return tool<DelegateInput, unknown, Record<string, unknown>>({
     description: `Delegate work to ${subagent.name}: ${subagent.description}`,
     execute: async (input: DelegateInput, { abortSignal }) => {
-      const sessionKey =
-        input.sessionKey ??
-        defaultChildSessionKey(parentSessionKey, subagent.name ?? "subagent");
+      const sessionKey = scopedChildSessionKey({
+        parentSessionKey,
+        sessionKey: input.sessionKey,
+        subagent: subagent.name ?? "subagent",
+      });
       if (input.run_in_background === true) {
         return startBackgroundJob({
           abortSignal: abortSignal ?? new AbortController().signal,
           description: input.description,
           jobs,
           parentSession,
-          parentSessionKey,
           prompt: input.prompt,
-          sessionKey: input.sessionKey,
+          sessionKey,
           subagent,
         });
       }

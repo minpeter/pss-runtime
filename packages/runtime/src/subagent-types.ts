@@ -39,9 +39,15 @@ export interface CompactSubagentResult {
   readonly text: string;
 }
 
+export interface SubagentRunResult {
+  readonly events: readonly AgentEvent[];
+  readonly result: CompactSubagentResult;
+}
+
 export interface SubagentJob {
   readonly abort: () => void;
   readonly description?: string;
+  events?: readonly AgentEvent[];
   readonly id: string;
   promise: Promise<void>;
   result?: CompactSubagentResult;
@@ -63,7 +69,6 @@ export interface BackgroundOutputInput {
   readonly include_thinking?: boolean;
   readonly include_tool_results?: boolean;
   readonly message_limit?: number;
-  readonly since_event_id?: string;
   readonly task_id: string;
   readonly thinking_max_chars?: number;
   readonly timeout?: number;

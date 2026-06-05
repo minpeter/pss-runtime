@@ -1,6 +1,7 @@
 import { jsonSchema, tool } from "ai";
+import type { AgentEvent } from "./session/events";
 import type { AgentInput } from "./session/input";
-import { collectSubagentRun, defaultChildSessionKey } from "./subagent-run";
+import { collectSubagentRunWithEvents } from "./subagent-run";
 import type {
   BackgroundCancelInput,
   BackgroundOutputInput,
@@ -8,6 +9,8 @@ import type {
   Subagent,
   SubagentJob,
 } from "./subagent-types";
+
+const maxBackgroundJobs = 64;
 
 export function createBackgroundOutputTool(jobs: Map<string, SubagentJob>) {
   return tool<BackgroundOutputInput, unknown, Record<string, unknown>>({
@@ -23,13 +26,26 @@ export function createBackgroundOutputTool(jobs: Map<string, SubagentJob>) {
         await waitForJob(job, input.timeout);
       }
 
-      return {
+      const output = {
         result: job.result,
         sessionKey: job.sessionKey,
         status: job.status,
         subagent: job.subagent,
         task_id: job.id,
       };
+      const response =
+        input.full_session === true
+          ? {
+              ...output,
+              events: filterFullSessionEvents(job.events ?? [], input),
+            }
+          : output;
+
+      if (!isActiveJob(job.status)) {
+        jobs.delete(job.id);
+      }
+
+      return response;
     },
     inputSchema: jsonSchema<BackgroundOutputInput>({
       additionalProperties: false,
@@ -39,7 +55,6 @@ export function createBackgroundOutputTool(jobs: Map<string, SubagentJob>) {
         include_thinking: { type: "boolean" },
         include_tool_results: { type: "boolean" },
         message_limit: { minimum: 0, type: "number" },
-        since_event_id: { type: "string" },
         task_id: { type: "string" },
         thinking_max_chars: { minimum: 0, type: "number" },
         timeout: { minimum: 0, type: "number" },
@@ -86,7 +101,6 @@ export function startBackgroundJob({
   description,
   jobs,
   parentSession,
-  parentSessionKey,
   prompt,
   sessionKey,
   subagent,
@@ -95,15 +109,12 @@ export function startBackgroundJob({
   readonly description?: string;
   readonly jobs: Map<string, SubagentJob>;
   readonly parentSession: RuntimeInputSink;
-  readonly parentSessionKey: string;
   readonly prompt: AgentInput;
-  readonly sessionKey?: string;
+  readonly sessionKey: string;
   readonly subagent: Subagent;
 }) {
   const id = `bg_${crypto.randomUUID().replaceAll("-", "")}`;
-  const childSessionKey =
-    sessionKey ??
-    defaultChildSessionKey(parentSessionKey, subagent.name ?? "subagent");
+  const childSessionKey = sessionKey;
   const childSession = subagent.session(childSessionKey);
   const abort = () => childSession.interrupt();
   abortSignal.addEventListener("abort", abort, { once: true });
@@ -125,6 +136,7 @@ export function startBackgroundJob({
   }).finally(() => {
     abortSignal.removeEventListener("abort", abort);
   });
+  pruneJobs(jobs);
   jobs.set(id, job);
   parentSession.emitObserverEvent({
     description,
@@ -162,13 +174,15 @@ async function runBackgroundJob({
 
   job.status = "running";
   try {
-    const result = await collectSubagentRun(
+    const { events, result } = await collectSubagentRunWithEvents(
       await childSession.send(prompt),
-      job.subagent
+      job.subagent,
+      (event) => emitJobUpdate(parentSession, job, event)
     );
     if (isCancelledJob(job)) {
       return;
     }
+    job.events = events;
     job.result = result;
     job.status = result.result;
   } catch (error) {
@@ -197,7 +211,7 @@ async function runBackgroundJob({
         "[SUBAGENT JOB RESULT READY]",
         `Task ID: ${job.id}`,
         `Subagent: ${job.subagent}`,
-        `Description: ${job.description ?? ""}`,
+        `Description: ${sanitizeReminderField(job.description ?? "")}`,
         `Use background_output({ task_id: "${job.id}" }) to retrieve the result.`,
         "</system-reminder>",
       ].join("\n"),
@@ -213,6 +227,30 @@ async function runBackgroundJob({
     task_id: job.id,
     type: "subagent-job-end",
   });
+}
+
+function emitJobUpdate(
+  parentSession: RuntimeInputSink,
+  job: SubagentJob,
+  event: AgentEvent
+): void {
+  const base = {
+    eventType: event.type,
+    status: job.status,
+    subagent: job.subagent,
+    task_id: job.id,
+    type: "subagent-job-update" as const,
+  };
+
+  if (event.type === "assistant-text") {
+    parentSession.emitObserverEvent({
+      ...base,
+      textPreview: event.text.slice(0, 200),
+    });
+    return;
+  }
+
+  parentSession.emitObserverEvent(base);
 }
 
 async function waitForJob(job: SubagentJob, timeout: number | undefined) {
@@ -249,4 +287,63 @@ function isActiveJob(status: SubagentJob["status"]): boolean {
 
 function isCancelledJob(job: SubagentJob): boolean {
   return job.status === "cancelled";
+}
+
+function pruneJobs(jobs: Map<string, SubagentJob>): void {
+  while (jobs.size >= maxBackgroundJobs) {
+    const oldest = jobs.keys().next().value as string | undefined;
+    if (!oldest) {
+      return;
+    }
+
+    const job = jobs.get(oldest);
+    if (job && isActiveJob(job.status)) {
+      job.abort();
+    }
+    jobs.delete(oldest);
+  }
+}
+
+function sanitizeReminderField(value: string): string {
+  return value
+    .replaceAll("\r", " ")
+    .replaceAll("\n", " ")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function filterFullSessionEvents(
+  events: readonly NonNullable<SubagentJob["events"]>[number][],
+  input: BackgroundOutputInput
+) {
+  let filtered = events;
+
+  if (input.include_thinking !== true) {
+    filtered = filtered.filter((event) => event.type !== "assistant-reasoning");
+  }
+
+  if (input.include_tool_results !== true) {
+    filtered = filtered.filter((event) => event.type !== "tool-result");
+  }
+
+  filtered = filtered.map((event) => {
+    if (
+      event.type !== "assistant-reasoning" ||
+      input.thinking_max_chars === undefined ||
+      event.text.length <= input.thinking_max_chars
+    ) {
+      return event;
+    }
+
+    return {
+      ...event,
+      text: event.text.slice(0, input.thinking_max_chars),
+    };
+  });
+
+  if (input.message_limit !== undefined) {
+    return filtered.slice(-input.message_limit);
+  }
+
+  return filtered;
 }

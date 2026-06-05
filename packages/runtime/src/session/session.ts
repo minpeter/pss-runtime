@@ -126,6 +126,11 @@ export class AgentSession {
   ): void {
     const runtimeInput = this.#activeRuntimeInput;
     if (runtimeInput && !runtimeInput.closedReason) {
+      if (placement === "turn-start" && runtimeInput.placement !== placement) {
+        this.#pendingRuntimeInputs.push({ input, placement });
+        return;
+      }
+
       runtimeInput.queue.push({ input, placement });
       return;
     }
