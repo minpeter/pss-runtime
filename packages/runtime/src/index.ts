@@ -1,7 +1,6 @@
 export {
   Agent,
   type AgentOptions,
-  type AgentSessionOptions,
   type SessionHandle,
 } from "./agent";
 export type {
@@ -24,6 +23,20 @@ export type {
   RuntimeLlmOutput,
 } from "./llm";
 export { createLlm } from "./llm";
+export {
+  type AgentContextTransform,
+  type AgentPlugin,
+  type AgentPluginEvent,
+  type AgentPluginEventName,
+  type AgentPluginHandler,
+  type AgentPluginHost,
+  type AgentPluginMaybePromise,
+  type CompactionOptions,
+  compaction,
+  definePlugin,
+  memory,
+  sessions,
+} from "./plugins";
 export type {
   AgentEvent,
   AgentEventListener,

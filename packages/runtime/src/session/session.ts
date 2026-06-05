@@ -1,6 +1,13 @@
+import type { ModelMessage } from "ai";
 import { runAgentLoop } from "../agent-loop";
 import type { AgentHooks } from "../hooks";
-import type { Llm } from "../llm";
+import type { Llm, LlmOutput } from "../llm";
+import type { ResolvedAgentPlugins } from "../plugins/runner";
+import { wrapLlmWithContextTransforms } from "../plugins/runner";
+import {
+  type AgentPluginScope,
+  runWithAgentPluginScope,
+} from "../plugins/scope";
 import type {
   RuntimeInput,
   UserMessage,
@@ -10,7 +17,11 @@ import { ModelMessageHistory } from "./history";
 import type { AgentInput, UserInput } from "./input";
 import type { AgentRun } from "./run";
 import { BufferedAgentRun } from "./run";
-import { decodeStoredSessionSnapshot, encodeSessionSnapshot } from "./snapshot";
+import {
+  type AgentCompactionOverlay,
+  decodeStoredSessionSnapshot,
+  encodeSessionSnapshot,
+} from "./snapshot";
 import type { SessionStore } from "./store/types";
 
 export type { AgentInput, SessionInput, UserInput } from "./input";
@@ -46,8 +57,10 @@ interface RuntimeInputState {
 export class AgentSession {
   readonly #hooks?: AgentHooks;
   readonly #inputQueue: QueuedInput[] = [];
+  readonly #internalLlm: Llm;
   readonly #llm: Llm;
   readonly #persistence: SessionPersistenceOptions;
+  readonly #plugins?: ResolvedAgentPlugins;
   #activeAbort?: AbortController;
   #activeRun?: BufferedAgentRun;
   #activeRuntimeInput?: RuntimeInputState;
@@ -55,17 +68,28 @@ export class AgentSession {
   #killed = false;
   #loadPromise?: Promise<void>;
   #loaded = false;
+  #pluginState: Record<string, unknown> = {};
+  #compactions: AgentCompactionOverlay[] = [];
   #running = false;
   #storeVersion: string | undefined;
 
   constructor(
     llm: Llm,
     persistence: SessionPersistenceOptions,
-    hooks?: AgentHooks
+    hooks?: AgentHooks,
+    plugins?: ResolvedAgentPlugins,
+    internalLlm: Llm = llm
   ) {
     this.#hooks = hooks;
-    this.#llm = llm;
+    this.#internalLlm = internalLlm;
     this.#persistence = persistence;
+    this.#plugins = plugins;
+    this.#llm = wrapLlmWithContextTransforms({
+      createScope: (signal) => this.#createPluginScope(signal),
+      llm,
+      sessionKey: persistence.key,
+      transforms: plugins?.contextTransforms ?? [],
+    });
   }
 
   async send(input: AgentInput): Promise<AgentRun> {
@@ -166,9 +190,10 @@ export class AgentSession {
   async #replaceWithStoredSession(): Promise<void> {
     const stored = await this.#persistence.store.load(this.#persistence.key);
     this.#storeVersion = stored?.version;
-    this.#history = new ModelMessageHistory(
-      decodeStoredSessionSnapshot(stored)
-    );
+    const snapshot = decodeStoredSessionSnapshot(stored);
+    this.#history = new ModelMessageHistory(snapshot.history);
+    this.#pluginState = structuredClone(snapshot.pluginState);
+    this.#compactions = structuredClone(snapshot.compactions);
   }
 
   async #drainInputQueue(): Promise<void> {
@@ -264,6 +289,12 @@ export class AgentSession {
         result,
         signal: activeAbort.signal,
       });
+      const pluginHandlersRan = await this.#runPluginAfterTurnHandlers(
+        activeAbort.signal
+      );
+      if (pluginHandlersRan) {
+        await this.#commitHistory();
+      }
       run.emit({ type: terminalEvent });
     } catch (error) {
       if (error instanceof SessionCommitConflictError) {
@@ -331,7 +362,11 @@ export class AgentSession {
     const result = await this.#persistence.store.commit(
       this.#persistence.key,
       {
-        state: encodeSessionSnapshot(this.#history.modelSnapshot()),
+        state: encodeSessionSnapshot({
+          compactions: this.#compactions,
+          history: this.#history.modelSnapshot(),
+          pluginState: this.#pluginState,
+        }),
       },
       { expectedVersion: this.#storeVersion ?? null }
     );
@@ -342,6 +377,67 @@ export class AgentSession {
     }
 
     this.#storeVersion = result.version;
+  }
+
+  #createPluginScope(signal: AbortSignal): AgentPluginScope {
+    return {
+      getCompactions: () => structuredClone(this.#compactions),
+      getPluginState: (pluginName) => this.#pluginState[pluginName],
+      sessionKey: this.#persistence.key,
+      setCompactions: (compactions) => {
+        this.#compactions = structuredClone([...compactions]);
+      },
+      setPluginState: (pluginName, state) => {
+        this.#pluginState = {
+          ...this.#pluginState,
+          [pluginName]: structuredClone(state),
+        };
+      },
+      signal,
+      summarize: (messages) => this.#summarizeForPlugins(messages, signal),
+    };
+  }
+
+  async #runPluginAfterTurnHandlers(signal: AbortSignal): Promise<boolean> {
+    const handlers = this.#plugins?.eventHandlers.get("afterTurn") ?? [];
+    if (handlers.length === 0) {
+      return false;
+    }
+
+    const scope = this.#createPluginScope(signal);
+    await runWithAgentPluginScope(scope, () =>
+      Promise.allSettled(
+        handlers.map((handler) =>
+          Promise.resolve().then(() =>
+            handler({
+              history: this.#history.modelSnapshot(),
+              sessionKey: this.#persistence.key,
+              signal,
+              type: "afterTurn",
+            })
+          )
+        )
+      )
+    );
+    return true;
+  }
+
+  async #summarizeForPlugins(
+    messages: readonly ModelMessage[],
+    signal: AbortSignal
+  ): Promise<string> {
+    const output = await this.#internalLlm({
+      history: [
+        {
+          content:
+            "Summarize these earlier session messages for future model context.",
+          role: "system",
+        },
+        ...messages,
+      ],
+      signal,
+    });
+    return outputToText(output) || `Summarized ${messages.length} messages.`;
   }
 
   async #withRuntimeInputWindow<T>(
@@ -567,6 +663,28 @@ function errorMessage(error: unknown): string {
   }
 
   return String(error);
+}
+
+function outputToText(output: LlmOutput): string {
+  const parts: string[] = [];
+  for (const message of output) {
+    if (message.role !== "assistant") {
+      continue;
+    }
+
+    if (typeof message.content === "string") {
+      parts.push(message.content);
+      continue;
+    }
+
+    for (const part of message.content) {
+      if (part.type === "text") {
+        parts.push(part.text);
+      }
+    }
+  }
+
+  return parts.join("\n").trim();
 }
 
 function sessionKilledError(): Error {

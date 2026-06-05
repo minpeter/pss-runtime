@@ -1,6 +1,11 @@
 import type { LanguageModel, ToolSet } from "ai";
 import type { AgentHooks } from "./hooks";
 import { type AgentToolChoice, createLlm, type Llm } from "./llm";
+import type { AgentPlugin } from "./plugins";
+import {
+  type ResolvedAgentPlugins,
+  resolveAgentPlugins,
+} from "./plugins/runner";
 import type { AgentRun } from "./session/run";
 import { type AgentInput, AgentSession } from "./session/session";
 import { MemorySessionStore } from "./session/store/memory";
@@ -11,7 +16,7 @@ interface AgentLanguageModelOptions {
   instructions?: string;
   llm?: never;
   model: LanguageModel;
-  sessions?: AgentSessionOptions;
+  plugins?: readonly AgentPlugin[];
   toolChoice?: AgentToolChoice;
   tools?: ToolSet;
 }
@@ -21,13 +26,9 @@ interface AgentLlmOptions {
   instructions?: never;
   llm: Llm;
   model?: never;
-  sessions?: AgentSessionOptions;
+  plugins?: readonly AgentPlugin[];
   toolChoice?: never;
   tools?: never;
-}
-
-export interface AgentSessionOptions {
-  store?: SessionStore;
 }
 
 export interface SessionHandle {
@@ -41,27 +42,46 @@ export type AgentOptions = AgentLanguageModelOptions | AgentLlmOptions;
 
 export class Agent {
   readonly #hooks?: AgentHooks;
+  readonly #internalLlm: Llm;
   readonly #llm: Llm;
+  readonly #plugins: ResolvedAgentPlugins;
   readonly #sessions = new Map<string, SessionHandle>();
   readonly #store: SessionStore;
 
-  private constructor(options: AgentOptions) {
+  private constructor(
+    options: AgentOptions,
+    resolvedPlugins: ResolvedAgentPlugins
+  ) {
     assertAgentOptions(options);
 
-    this.#store = options.sessions?.store ?? new MemorySessionStore();
+    this.#plugins = resolvedPlugins;
+    this.#store =
+      resolvedPlugins.sessionStore?.store ?? new MemorySessionStore();
     this.#hooks = options.hooks;
-    this.#llm = hasCustomLlm(options)
-      ? options.llm
-      : createLlm({
-          instructions: options.instructions,
-          model: options.model,
-          toolChoice: options.toolChoice,
-          tools: options.tools,
-        });
+    if (hasCustomLlm(options)) {
+      this.#internalLlm = options.llm;
+      this.#llm = options.llm;
+    } else {
+      this.#internalLlm = createLlm({
+        instructions: options.instructions,
+        model: options.model,
+      });
+      this.#llm = createLlm({
+        instructions: options.instructions,
+        model: options.model,
+        toolChoice: options.toolChoice,
+        tools: resolvedPlugins.tools,
+      });
+    }
   }
 
-  static create(options: AgentOptions): Promise<Agent> {
-    return Promise.resolve().then(() => new Agent(options));
+  static async create(options: AgentOptions): Promise<Agent> {
+    assertAgentOptions(options);
+    const resolvedPlugins = await resolveAgentPlugins({
+      callerTools: hasCustomLlm(options) ? undefined : options.tools,
+      plugins: options.plugins,
+    });
+    return new Agent(options, resolvedPlugins);
   }
 
   send(input: AgentInput): Promise<AgentRun> {
@@ -77,7 +97,9 @@ export class Agent {
     const session = new AgentSession(
       this.#llm,
       { key, store: this.#store },
-      this.#hooks
+      this.#hooks,
+      this.#plugins,
+      this.#internalLlm
     );
     const handle: SessionHandle = {
       interrupt: () => session.interrupt(),
@@ -97,6 +119,12 @@ function assertAgentOptions(options: unknown): asserts options is AgentOptions {
   if (options === null || typeof options !== "object") {
     throw new TypeError(
       "Agent options are required. Provide either { model } or { llm }."
+    );
+  }
+
+  if ("sessions" in options) {
+    throw new TypeError(
+      "Agent.create: options.sessions was removed. Use plugins: [sessions.custom(store)]."
     );
   }
 

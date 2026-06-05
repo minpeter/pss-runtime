@@ -122,45 +122,58 @@ for await (const event of run.events()) {
 pending steering path or, when idle, when a new run is scheduled. It does not wait
 for a later model snapshot.
 
-## Session storage and portability
+## Plugins, Session Storage, Memory, And Compaction
 
 The runtime owns full session state encoding and history compaction semantics.
-Adapters own persistence only through `SessionStore`:
+Persistence, memory, and compaction are configured through in-process plugins:
 
-Stored session state is an opaque, versioned runtime snapshot for continuation.
-Do not inspect it as a replay log; exact replay should be modeled separately as
-an `AgentEvent` log if that capability is added later.
+```ts
+import { Agent } from "@minpeter/pss-runtime";
+import { compaction, memory, sessions } from "@minpeter/pss-runtime/plugins";
 
-Custom stores own version generation. `load(key)` returns the opaque `state` with
-the store-minted `version`; `commit(key, { state }, { expectedVersion })` receives
-state only and should reject stale versions by returning `{ ok: false, reason:
-"conflict" }`. On success, the store persists `{ state, version }` and returns the
-new version to the runtime.
+const agent = await Agent.create({
+  model,
+  plugins: [sessions.file(".pss/sessions"), memory(), compaction()],
+});
+```
+
+If no persistence plugin is provided, sessions are memory-backed by default.
+
+Custom stores still own version generation through `SessionStore`. Use
+`sessions.custom(store)` when the runtime should persist through a caller-owned
+store:
 
 ```ts
 import type { SessionStore } from "@minpeter/pss-runtime";
-import { MemorySessionStore } from "@minpeter/pss-runtime/session-store/memory";
+import { sessions } from "@minpeter/pss-runtime/plugins";
+
+declare const store: SessionStore;
 
 const agent = await Agent.create({
   model,
-  sessions: {
-    store: new MemorySessionStore(), // default when omitted
-  },
+  plugins: [sessions.custom(store)],
 });
 ```
 
-For durable sessions, use the exported file POC:
+Stored session state is opaque, versioned runtime continuation state:
 
-```ts
-import { FileSessionStore } from "@minpeter/pss-runtime/session-store/file";
+Do not inspect it as a replay log; exact replay should be modeled separately as
+an `AgentEvent` log if that capability is added later.
 
-const agent = await Agent.create({
-  model,
-  sessions: {
-    store: new FileSessionStore(".pss/sessions"),
-  },
-});
-```
+`load(key)` returns the opaque `state` with the store-minted `version`;
+`commit(key, { state }, { expectedVersion })` receives state only and should
+reject stale versions by returning `{ ok: false, reason: "conflict" }`. On
+success, the store persists `{ state, version }` and returns the new version to
+the runtime.
+
+`memory()` adds session-scoped tools named `set_context`, `load_context`, and
+`search_context`. Search is deterministic lexical matching by default; no
+embedding provider is required. Memory is injected into model-facing context
+without mutating top-level instructions.
+
+`compaction()` stores non-destructive overlays with `startIndex` and `endIndex`.
+The full canonical history remains in the session snapshot; summaries are
+applied only to model-facing context.
 
 ## Future adapter boundary: Cloudflare multi-user DX
 

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
+import { sessions } from "../plugins";
 import {
   assistantMessage,
   createDeferred,
@@ -474,7 +475,7 @@ describe("Agent session API", () => {
 
     const first = await Agent.create({
       llm: () => Promise.resolve([assistantMessage("stored")]),
-      sessions: { store },
+      plugins: [sessions.custom(store)],
     });
     await collect(await first.session("images").send(input));
 
@@ -484,7 +485,7 @@ describe("Agent session API", () => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
       },
-      sessions: { store },
+      plugins: [sessions.custom(store)],
     });
 
     await collect(await second.session("images").send("next"));
@@ -1115,7 +1116,7 @@ describe("Agent session API", () => {
           seenHistory.push([...history]);
           return Promise.resolve([assistantMessage("DONE")]);
         },
-        sessions: { store },
+        plugins: [sessions.custom(store)],
       })
     ).session("runtime-conflict");
     const run = await session.send("initial");
@@ -1243,7 +1244,7 @@ describe("Agent session API", () => {
           assistantMessage(`DONE ${seenHistory.length}`),
         ]);
       },
-      sessions: { store },
+      plugins: [sessions.custom(store)],
     });
     const session = agent.session("race");
 
@@ -1268,7 +1269,7 @@ describe("Agent session API", () => {
     const store = new SpyStore();
     const agent = await Agent.create({
       llm: () => Promise.resolve([assistantMessage("DONE")]),
-      sessions: { store },
+      plugins: [sessions.custom(store)],
     });
 
     await collect(await agent.session("spy").send("hello"));
@@ -1277,7 +1278,12 @@ describe("Agent session API", () => {
     const finalCommit = store.commits.at(-1);
     expect(finalCommit?.key).toBe("spy");
     expect(finalCommit?.next.state).toEqual(
-      expect.objectContaining({ history: expect.any(Array), schemaVersion: 1 })
+      expect.objectContaining({
+        compactions: [],
+        history: expect.any(Array),
+        pluginState: {},
+        schemaVersion: 2,
+      })
     );
     expect(finalCommit?.next.state).not.toBeInstanceOf(Array);
     expect(finalCommit?.next).not.toHaveProperty("version");
@@ -1301,7 +1307,7 @@ describe("Agent session API", () => {
           seenHistory.push([...history]);
           return Promise.resolve([assistantMessage("DONE")]);
         },
-        sessions: { store },
+        plugins: [sessions.custom(store)],
       })
     ).session("shared");
 
