@@ -2,6 +2,7 @@ import { runAgentLoop } from "../agent-loop";
 import type { AgentHooks } from "../hooks";
 import type { Llm } from "../llm";
 import type {
+  AgentEvent,
   RuntimeInput,
   UserMessage,
   UserMessageContentPart,
@@ -47,6 +48,7 @@ export class AgentSession {
   readonly #hooks?: AgentHooks;
   readonly #inputQueue: QueuedInput[] = [];
   readonly #llm: Llm;
+  readonly #pendingRuntimeInputs: QueuedRuntimeInput[] = [];
   readonly #persistence: SessionPersistenceOptions;
   #activeAbort?: AbortController;
   #activeRun?: BufferedAgentRun;
@@ -82,7 +84,7 @@ export class AgentSession {
 
     const runtimeInput: RuntimeInputState = {
       pending: Promise.resolve(),
-      queue: [],
+      queue: this.#pendingRuntimeInputs.splice(0),
     };
     const acceptedInput = normalizeAgentInput(input);
     const run = new BufferedAgentRun();
@@ -116,6 +118,23 @@ export class AgentSession {
 
   interrupt(): void {
     this.#activeAbort?.abort();
+  }
+
+  enqueueRuntimeInput(
+    input: UserInput,
+    placement: RuntimeInputPlacement = "turn-start"
+  ): void {
+    const runtimeInput = this.#activeRuntimeInput;
+    if (runtimeInput && !runtimeInput.closedReason) {
+      runtimeInput.queue.push({ input, placement });
+      return;
+    }
+
+    this.#pendingRuntimeInputs.push({ input, placement });
+  }
+
+  emitObserverEvent(event: AgentEvent): void {
+    this.#activeRun?.emit(event);
   }
 
   kill(): void {

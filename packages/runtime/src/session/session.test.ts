@@ -121,7 +121,7 @@ class ConflictOnCommitStore extends SpyStore {
 describe("Agent session API", () => {
   it("agent.send accepts string input and streams one run", async () => {
     const seenHistory: ModelMessage[][] = [];
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: ({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
@@ -143,7 +143,7 @@ describe("Agent session API", () => {
 
   it("calls turn hooks around a queued turn", async () => {
     const hookCalls: string[] = [];
-    const agent = await Agent.create({
+    const agent = new Agent({
       hooks: {
         afterTurn: ({ history, input, result }) => {
           hookCalls.push(`${input.type}:after:${result}:${history.length}`);
@@ -231,7 +231,7 @@ describe("Agent session API", () => {
   it("commits successful output before afterTurn failures", async () => {
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
-    const agent = await Agent.create({
+    const agent = new Agent({
       hooks: {
         afterTurn: () => {
           throw new Error("after turn failed");
@@ -279,7 +279,7 @@ describe("Agent session API", () => {
     const trace: string[] = [];
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
-    const agent = await Agent.create({
+    const agent = new Agent({
       hooks: {
         afterStep: ({ history, result, stepIndex }) => {
           hookCalls.push(`afterStep:${stepIndex}:${result}:${history.length}`);
@@ -432,7 +432,7 @@ describe("Agent session API", () => {
 
   it("agent.send accepts multipart string input without lossy joining", async () => {
     const seenHistory: ModelMessage[][] = [];
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: ({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
@@ -454,7 +454,7 @@ describe("Agent session API", () => {
 
   it("agent.send accepts JSON-serializable user content parts", async () => {
     const seenHistory: ModelMessage[][] = [];
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: ({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
@@ -497,7 +497,7 @@ describe("Agent session API", () => {
   });
 
   it("rejects malformed multipart input before queueing", async () => {
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: () => Promise.resolve([assistantMessage("DONE")]),
     });
 
@@ -509,7 +509,7 @@ describe("Agent session API", () => {
   });
 
   it("rejects malformed explicit user-message input before queueing", async () => {
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: () => Promise.resolve([assistantMessage("DONE")]),
     });
 
@@ -541,14 +541,14 @@ describe("Agent session API", () => {
     const directory = await mkdtemp(join(tmpdir(), "pss-runtime-image-store-"));
     const store = new FileSessionStore(directory);
 
-    const first = await Agent.create({
+    const first = new Agent({
       llm: () => Promise.resolve([assistantMessage("stored")]),
       sessions: { store },
     });
     await collect(await first.session("images").send(input));
 
     const seenHistory: ModelMessage[][] = [];
-    const second = await Agent.create({
+    const second = new Agent({
       llm: ({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
@@ -585,7 +585,7 @@ describe("Agent session API", () => {
 
   it("session.send accepts user-message events", async () => {
     const seenHistory: ModelMessage[][] = [];
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: ({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([]);
@@ -616,7 +616,7 @@ describe("Agent session API", () => {
 
   it("session.send accepts user-text events", async () => {
     const seenHistory: ModelMessage[][] = [];
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: ({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([]);
@@ -633,7 +633,7 @@ describe("Agent session API", () => {
   it("continues the model loop after a tool call result", async () => {
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: ({ history }) => {
         calls += 1;
         seenHistory.push([...history]);
@@ -666,7 +666,7 @@ describe("Agent session API", () => {
   it("active session.steer at step-end continues the current turn with appended user input", async () => {
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: ({ history }) => {
         calls += 1;
         seenHistory.push([...history]);
@@ -716,7 +716,7 @@ describe("Agent session API", () => {
 
   it("active session.steer at turn-start and step-start is visible before the first LLM snapshot", async () => {
     const seenHistory: ModelMessage[][] = [];
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: ({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
@@ -775,7 +775,7 @@ describe("Agent session API", () => {
     let afterTurnSteered = false;
     let step = 0;
     let session: ReturnType<Agent["session"]>;
-    const agent = await Agent.create({
+    const agent = new Agent({
       hooks: {
         afterStep: async ({ stepIndex }) => {
           if (stepIndex === 0) {
@@ -855,7 +855,7 @@ describe("Agent session API", () => {
 
   it("active session.steer preserves FIFO order for multiple additions in one window", async () => {
     const seenHistory: ModelMessage[][] = [];
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: ({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
@@ -900,7 +900,7 @@ describe("Agent session API", () => {
 
   it("active session.steer preserves FIFO order for concurrent additions in one window", async () => {
     const seenHistory: ModelMessage[][] = [];
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: ({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
@@ -956,19 +956,17 @@ describe("Agent session API", () => {
     const stepGate = createDeferred();
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
-    const session = (
-      await Agent.create({
-        llm: async ({ history }) => {
-          calls += 1;
-          seenHistory.push([...history]);
-          if (calls === 1) {
-            await stepGate.promise;
-            return [assistantMessage("ACTIVE")];
-          }
-          return [assistantMessage("QUEUED")];
-        },
-      })
-    ).session("queue-separation");
+    const session = new Agent({
+      llm: async ({ history }) => {
+        calls += 1;
+        seenHistory.push([...history]);
+        if (calls === 1) {
+          await stepGate.promise;
+          return [assistantMessage("ACTIVE")];
+        }
+        return [assistantMessage("QUEUED")];
+      },
+    }).session("queue-separation");
     const firstRun = await session.send("first");
     const secondRun = await session.send("second");
     const firstEvents: AgentEvent[] = [];
@@ -1008,7 +1006,7 @@ describe("Agent session API", () => {
 
   it("normalizes multipart image and file session.steer input like session.send", async () => {
     const seenHistory: ModelMessage[][] = [];
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: ({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
@@ -1068,7 +1066,7 @@ describe("Agent session API", () => {
 
   it("idle session.steer starts a new run after turn-end", async () => {
     let calls = 0;
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: () => {
         calls += 1;
         return Promise.resolve([assistantMessage("DONE")]);
@@ -1085,7 +1083,7 @@ describe("Agent session API", () => {
 
   it("idle session.steer starts a new run after model turn-error", async () => {
     let calls = 0;
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: () => {
         calls += 1;
         return Promise.reject(new Error("model unavailable"));
@@ -1105,15 +1103,13 @@ describe("Agent session API", () => {
   it("idle session.steer starts a new run after interrupt turn-abort", async () => {
     const llmStarted = createDeferred();
     const llmGate = createDeferred();
-    const session = (
-      await Agent.create({
-        llm: async () => {
-          llmStarted.resolve();
-          await llmGate.promise;
-          return [assistantMessage("DONE")];
-        },
-      })
-    ).session("interrupt-terminal");
+    const session = new Agent({
+      llm: async () => {
+        llmStarted.resolve();
+        await llmGate.promise;
+        return [assistantMessage("DONE")];
+      },
+    }).session("interrupt-terminal");
     const run = await session.send("initial");
     const events = collect(run);
 
@@ -1130,15 +1126,13 @@ describe("Agent session API", () => {
   it("rejects runtime input after kill and settles queued runs", async () => {
     const llmStarted = createDeferred();
     const llmGate = createDeferred();
-    const session = (
-      await Agent.create({
-        llm: async () => {
-          llmStarted.resolve();
-          await llmGate.promise;
-          return [assistantMessage("DONE")];
-        },
-      })
-    ).session("kill-terminal");
+    const session = new Agent({
+      llm: async () => {
+        llmStarted.resolve();
+        await llmGate.promise;
+        return [assistantMessage("DONE")];
+      },
+    }).session("kill-terminal");
     const firstRun = await session.send("first");
     const secondRun = await session.send("second");
     const firstEvents = collect(firstRun);
@@ -1154,7 +1148,7 @@ describe("Agent session API", () => {
   });
 
   it("rejects runtime input after events return", async () => {
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: () => Promise.resolve([assistantMessage("DONE")]),
     });
     const run = await agent.send("initial");
@@ -1178,15 +1172,13 @@ describe("Agent session API", () => {
     const store = new ConflictOnCommitStore();
     store.conflictOnCommit = 2;
     const seenHistory: ModelMessage[][] = [];
-    const session = (
-      await Agent.create({
-        llm: ({ history }) => {
-          seenHistory.push([...history]);
-          return Promise.resolve([assistantMessage("DONE")]);
-        },
-        sessions: { store },
-      })
-    ).session("runtime-conflict");
+    const session = new Agent({
+      llm: ({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+      sessions: { store },
+    }).session("runtime-conflict");
     const run = await session.send("initial");
     const events: AgentEvent[] = [];
     let runtimeAdd: Promise<void> | undefined;
@@ -1207,7 +1199,7 @@ describe("Agent session API", () => {
   });
 
   it("emits turn-error in the run when the LLM fails", async () => {
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: () => Promise.reject(new Error("model unavailable")),
     });
 
@@ -1223,7 +1215,7 @@ describe("Agent session API", () => {
 
   it("uses default and explicit default session state interchangeably", async () => {
     const seenHistory: ModelMessage[][] = [];
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: ({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
@@ -1243,7 +1235,7 @@ describe("Agent session API", () => {
   it("isolates named session keys and resumes same-key state", async () => {
     const seenHistory: Record<string, ModelMessage[][]> = { a: [], b: [] };
     let currentKey = "a";
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: ({ history }) => {
         seenHistory[currentKey]?.push([...history]);
         return Promise.resolve([assistantMessage(`DONE ${currentKey}`)]);
@@ -1271,7 +1263,7 @@ describe("Agent session API", () => {
     const firstLlmCall = createDeferred();
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: async ({ history }) => {
         calls += 1;
         seenHistory.push([...history]);
@@ -1305,7 +1297,7 @@ describe("Agent session API", () => {
     const seenHistory: ModelMessage[][] = [];
     const store = new SpyStore();
     store.loadGate = loadGate.promise;
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: ({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([
@@ -1335,7 +1327,7 @@ describe("Agent session API", () => {
 
   it("persists versioned runtime-owned session snapshots through SessionStore", async () => {
     const store = new SpyStore();
-    const agent = await Agent.create({
+    const agent = new Agent({
       llm: () => Promise.resolve([assistantMessage("DONE")]),
       sessions: { store },
     });
@@ -1364,15 +1356,13 @@ describe("Agent session API", () => {
       state: { history: remoteHistory, schemaVersion: 1 },
       version: "1",
     });
-    const session = (
-      await Agent.create({
-        llm: ({ history }) => {
-          seenHistory.push([...history]);
-          return Promise.resolve([assistantMessage("DONE")]);
-        },
-        sessions: { store },
-      })
-    ).session("shared");
+    const session = new Agent({
+      llm: ({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+      sessions: { store },
+    }).session("shared");
 
     expect(eventTypes(await collect(await session.send("loses")))).toContain(
       "turn-error"
@@ -1389,19 +1379,17 @@ describe("Agent session API", () => {
     const firstLlmStarted = createDeferred();
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
-    const session = (
-      await Agent.create({
-        llm: async ({ history }) => {
-          calls += 1;
-          seenHistory.push([...history]);
-          if (calls === 1) {
-            firstLlmStarted.resolve();
-            await firstLlmCall.promise;
-          }
-          return [assistantMessage("DONE")];
-        },
-      })
-    ).session("interrupt");
+    const session = new Agent({
+      llm: async ({ history }) => {
+        calls += 1;
+        seenHistory.push([...history]);
+        if (calls === 1) {
+          firstLlmStarted.resolve();
+          await firstLlmCall.promise;
+        }
+        return [assistantMessage("DONE")];
+      },
+    }).session("interrupt");
 
     const firstRun = await session.send("first");
     const secondRun = await session.send("second");

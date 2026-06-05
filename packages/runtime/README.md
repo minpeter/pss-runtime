@@ -13,7 +13,7 @@ Minimal, platform-agnostic agent runtime with keyed sessions, synchronized
 import { Agent } from "@minpeter/pss-runtime";
 import { createYourLanguageModel } from "...";
 
-const agent = await Agent.create({
+const agent = new Agent({
   instructions: "Answer briefly.",
   model: createYourLanguageModel(),
 });
@@ -80,6 +80,59 @@ The public transcript protocol is `AgentEvent`: live runs emit runtime-defined
 events through `run.events()`. Provider/model message history is internal
 continuation state, not a public history API.
 
+## Subagents
+
+Compose specialist agents by constructing them first and passing them as an
+array. Top-level agents may omit metadata, but agents used as subagents need a
+stable `name` and `description` so the runtime can expose clear model-facing
+delegate tools.
+
+```ts
+const researcher = new Agent({
+  name: "researcher",
+  description: "Researches facts and returns concise evidence.",
+  model,
+  instructions: "Research facts and return concise evidence.",
+});
+
+const coordinator = new Agent({
+  model,
+  instructions: "Coordinate work and delegate when useful.",
+  subagents: [researcher],
+});
+```
+
+For each subagent, the parent model receives a generated
+`delegate_to_<name>` tool. The tool accepts `prompt`, optional `description`,
+optional `sessionKey`, and `run_in_background`. Omitting `run_in_background`
+defaults to blocking behavior and returns compact child text, not the full child
+event stream.
+
+```ts
+delegate_to_researcher({
+  prompt: "Find the current release notes and summarize the evidence.",
+});
+```
+
+When the model sets `run_in_background: true`, the parent run can finish while
+the child keeps working. The launch result includes a `bg_...` `task_id`. A
+compact runtime reminder is queued for the parent when the child finishes, and
+the model can retrieve the result with `background_output`.
+
+```ts
+delegate_to_researcher({
+  prompt: "Compare the API designs.",
+  run_in_background: true,
+});
+
+background_output({ task_id: "bg_...", block: true });
+background_cancel({ task_id: "bg_..." });
+```
+
+The parent model context stays compact by default: completion reminders include
+the task id, subagent name, description, and retrieval instruction. Full child
+traces are not injected into the parent transcript by default.
+
 ## Send and Steer
 
 Use `session.send(input)` for a new user turn. If a run is already active, the
@@ -141,7 +194,7 @@ new version to the runtime.
 import type { SessionStore } from "@minpeter/pss-runtime";
 import { MemorySessionStore } from "@minpeter/pss-runtime/session-store/memory";
 
-const agent = await Agent.create({
+const agent = new Agent({
   model,
   sessions: {
     store: new MemorySessionStore(), // default when omitted
@@ -154,7 +207,7 @@ For durable sessions, use the exported file POC:
 ```ts
 import { FileSessionStore } from "@minpeter/pss-runtime/session-store/file";
 
-const agent = await Agent.create({
+const agent = new Agent({
   model,
   sessions: {
     store: new FileSessionStore(".pss/sessions"),
