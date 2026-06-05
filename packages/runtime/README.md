@@ -162,13 +162,18 @@ lifecycle events and call the scoped `steer` function to insert runtime input at
 the active boundary. App-level control should stay with `run.events()` plus
 `session.steer()`; plugin lifecycle is for reusable policy.
 
+Plugin event names are dotted middleware names: `turn.before`, `step.before`,
+`step.after`, `turn.after`, `tool.call`, and `tool.result`. These are separate
+from public `run.events()` transcript names such as `turn-start`, `step-start`,
+`assistant-text`, `tool-call`, `tool-result`, `step-end`, and `turn-end`.
+
 ```ts
 import { Agent, definePlugin } from "@minpeter/pss-runtime";
 
 const continuePlugin = definePlugin({
   name: "continue-policy",
   setup(host) {
-    host.on("afterStep", async ({ result, history, steer, stepIndex }) => {
+    host.on("step.after", async ({ result, history, steer, stepIndex }) => {
       if (result === "completed" && stepIndex === 0 && shouldContinueWork(history)) {
         await steer("Continue. The task is not complete yet.");
       }
@@ -179,6 +184,77 @@ const continuePlugin = definePlugin({
 const agent = await Agent.create({
   model,
   plugins: [continuePlugin],
+});
+```
+
+`turn.after` is useful for audit, metrics, or scheduling a separate follow-up
+run after the current turn has committed.
+
+```ts
+const auditPlugin = definePlugin({
+  name: "turn-audit",
+  setup(host) {
+    host.on("turn.after", ({ result, sessionKey }) => {
+      recordTurnResult(sessionKey, result);
+    });
+  },
+});
+```
+
+Tool policy hooks apply to runtime-owned tools in the `Agent.create({ model,
+tools })` path, including tools registered by plugins. Custom `llm` callers own
+their tool execution and do not receive synthetic tool hook events.
+
+`tool.call` runs after AI SDK input parsing and before the original tool
+`execute`. Handlers run in plugin registration order. `allow` continues to the
+next handler, `modify` replaces the input for later handlers and execution,
+`reject-and-continue` skips the original tool and returns a rejection payload to
+the model, `synthesize` skips the original tool and returns a synthetic output,
+and `error` fails the active run.
+
+```ts
+import { definePlugin } from "@minpeter/pss-runtime";
+
+const toolPolicyPlugin = definePlugin({
+  name: "tool-policy",
+  setup(host) {
+    host.on("tool.call", ({ input, tool }) => {
+      if (tool === "delete_file") {
+        return {
+          action: "reject-and-continue",
+          message: "delete_file is disabled in this workspace.",
+        };
+      }
+
+      if (tool === "search" && shouldNarrowSearch(input)) {
+        return { action: "modify", input: narrowSearchInput(input) };
+      }
+
+      return { action: "allow" };
+    });
+  },
+});
+```
+
+`tool.result` runs after allowed/modified execution, rejected calls, synthesized
+calls, and original tool errors. It can observe or replace the model-facing
+result with `{ status: "done", output }`, `{ status: "error", error, output }`,
+or `{ status: "cancelled", error, output }`. Replacements flow into later
+`tool.result` handlers.
+
+```ts
+const resultPolicyPlugin = definePlugin({
+  name: "tool-result-policy",
+  setup(host) {
+    host.on("tool.result", ({ output, status, tool }) => {
+      if (tool === "read_secret" && status === "done") {
+        return {
+          status: "done",
+          output: redactSecretOutput(output),
+        };
+      }
+    });
+  },
 });
 ```
 

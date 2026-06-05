@@ -138,12 +138,16 @@ async function callMemoryTools(
   const scope = {
     getCompactions: () => [],
     getPluginState: (key: string) => state.get(key),
+    history: () => [],
     sessionKey: "tools",
     setCompactions: () => undefined,
     setPluginState: (key: string, value: unknown) => {
       state.set(key, value);
     },
     signal: new AbortController().signal,
+    steer: () => {
+      throw new Error("memory tool fixture does not support steering");
+    },
     summarize: () => Promise.resolve("summary"),
   };
 

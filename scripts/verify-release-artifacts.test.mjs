@@ -19,6 +19,17 @@ const cliBinReadFailurePattern =
 const removedModelAlias = ["Agent", "Model"].join("");
 const runtimeRootDeclaration =
   'export type { AgentRun, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n';
+const runtimePluginTypesDeclaration = `
+export declare const AGENT_PLUGIN_EVENT_NAMES: readonly ["turn.before", "step.before", "step.after", "turn.after", "tool.call", "tool.result"];
+export interface AgentPluginTurnBeforeEvent {}
+export interface AgentPluginStepBeforeEvent {}
+export interface AgentPluginStepAfterEvent {}
+export interface AgentPluginTurnAfterEvent {}
+export interface AgentPluginToolCallEvent {}
+export interface AgentPluginToolResultEvent {}
+export type AgentPluginToolCallResult = undefined | { readonly action: "allow" };
+export type AgentPluginToolResultResult = undefined | { readonly status: "done" };
+`;
 
 let tempRoots = [];
 
@@ -56,6 +67,13 @@ function createFixture() {
       declaration
     );
     if (packageName === "runtime") {
+      mkdirSync(join(cwd, "packages", packageName, "dist", "plugins"), {
+        recursive: true,
+      });
+      writeFileSync(
+        join(cwd, "packages", packageName, "dist", "plugins", "types.d.ts"),
+        runtimePluginTypesDeclaration
+      );
       writeFileSync(
         join(cwd, "packages", packageName, "dist", "llm.d.ts"),
         "export declare const ok: true;\n"
@@ -305,6 +323,21 @@ describe("verifyReleaseArtifacts", () => {
     ).toEqual([
       "packages/runtime/dist/session/run.d.ts: exposes removed AgentRun.stream() API",
       "packages/runtime/dist/session/run.js: exposes removed AgentRun.stream() member",
+    ]);
+  });
+
+  it("rejects removed runtime plugin events from plugin declarations", () => {
+    const cwd = createFixture();
+    writeFileSync(
+      join(cwd, "packages", "runtime", "dist", "plugins", "types.d.ts"),
+      runtimePluginTypesDeclaration.replace('"tool.result"', '"afterStep"')
+    );
+
+    expect(
+      verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
+    ).toEqual([
+      "packages/runtime/dist/plugins/types.d.ts: missing plugin event tool.result",
+      'packages/runtime/dist/plugins/types.d.ts: exposes removed plugin token "afterStep"',
     ]);
   });
 

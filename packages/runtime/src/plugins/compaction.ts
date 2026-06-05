@@ -26,7 +26,7 @@ export function compaction(options: CompactionOptions = {}) {
           getActiveAgentPluginScope()?.getCompactions() ?? []
         )
       );
-      host.on("afterTurn", async ({ history }) => {
+      host.on("turn.after", async ({ history }) => {
         await maybeCompact(history, options);
       });
     },

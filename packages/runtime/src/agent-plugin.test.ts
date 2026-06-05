@@ -1,7 +1,15 @@
 import type { ModelMessage } from "ai";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { Agent, type AgentOptions } from "./agent";
 import type { Llm } from "./llm";
+import type {
+  AgentPluginEventName,
+  AgentPluginHandler,
+  AgentPluginToolCallEvent,
+  AgentPluginToolCallResult,
+  AgentPluginToolResultEvent,
+  AgentPluginToolResultResult,
+} from "./plugins";
 import { definePlugin, sessions } from "./plugins";
 import type { AgentEvent } from "./session/events";
 import type { AgentRun } from "./session/run";
@@ -31,6 +39,14 @@ const drainRun = async (run: AgentRun) => (await collectRun(run)).length;
 describe("Agent plugins", () => {
   it("keeps plugin AgentOptions type fixtures reachable", () => {
     expect(pluginTypeFixtures).toHaveLength(1);
+    expect(pluginEventNameFixtures).toHaveLength(6);
+    expectTypeOf(toolCallResultFixtures).toExtend<
+      readonly AgentPluginToolCallResult[]
+    >();
+    expectTypeOf(toolResultResultFixtures).toExtend<
+      readonly AgentPluginToolResultResult[]
+    >();
+    expectTypeOf<NarrowToolCallHandlerIsAssignable>().toEqualTypeOf<false>();
   });
 
   it("awaits async plugin setup before resolving Agent.create", async () => {
@@ -108,7 +124,7 @@ describe("Agent plugins", () => {
     ).rejects.toThrow(removedSessionsOptionPattern);
   });
 
-  it("supports plugin afterStep steering", async () => {
+  it("supports plugin step.after steering", async () => {
     let calls = 0;
     const seenHistory: ModelMessage[][] = [];
     const agent = await Agent.create({
@@ -123,7 +139,7 @@ describe("Agent plugins", () => {
         definePlugin({
           name: "after-step-steer",
           setup(host) {
-            host.on("afterStep", async (event) => {
+            host.on("step.after", async (event) => {
               if (
                 event.sessionKey === "plugin-after-step" &&
                 event.stepIndex === 0 &&
@@ -153,7 +169,7 @@ describe("Agent plugins", () => {
     );
   });
 
-  it("supports plugin beforeStep steering before the first LLM snapshot", async () => {
+  it("supports plugin step.before steering before the first LLM snapshot", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = await Agent.create({
       llm: ({ history }) => {
@@ -164,7 +180,7 @@ describe("Agent plugins", () => {
         definePlugin({
           name: "before-step-steer",
           setup(host) {
-            host.on("beforeStep", async ({ sessionKey, steer, stepIndex }) => {
+            host.on("step.before", async ({ sessionKey, steer, stepIndex }) => {
               if (sessionKey === "plugin-before-step" && stepIndex === 0) {
                 await steer("plugin before step");
               }
@@ -191,9 +207,47 @@ describe("Agent plugins", () => {
     ]);
   });
 
-  it("supports plugin afterTurn steering as a separate run", async () => {
-    let afterTurnRun: Promise<AgentRun> | undefined;
-    let afterTurnSteered = false;
+  it("supports plugin turn.before steering before the first step", async () => {
+    const seenHistory: ModelMessage[][] = [];
+    const agent = await Agent.create({
+      llm: ({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+      plugins: [
+        definePlugin({
+          name: "before-turn-steer",
+          setup(host) {
+            host.on("turn.before", async ({ sessionKey, steer }) => {
+              if (sessionKey === "plugin-before-turn") {
+                await steer("plugin before turn");
+              }
+            });
+          },
+        }),
+      ],
+    });
+
+    const events = await collectRun(
+      await agent.session("plugin-before-turn").send("start")
+    );
+
+    expect(events).toContainEqual({
+      input: { text: "plugin before turn", type: "user-text" },
+      placement: "turn-start",
+      type: "runtime-input",
+    });
+    expect(seenHistory).toEqual([
+      [
+        { content: "start", role: "user" },
+        { content: "plugin before turn", role: "user" },
+      ],
+    ]);
+  });
+
+  it("supports plugin turn.after steering as a separate run", async () => {
+    let turnAfterRun: Promise<AgentRun> | undefined;
+    let turnAfterSteered = false;
     const seenHistory: ModelMessage[][] = [];
     const agent = await Agent.create({
       llm: ({ history }) => {
@@ -204,10 +258,10 @@ describe("Agent plugins", () => {
         definePlugin({
           name: "after-turn-steer",
           setup(host) {
-            host.on("afterTurn", ({ sessionKey, steer }) => {
-              if (sessionKey === "plugin-after-turn" && !afterTurnSteered) {
-                afterTurnSteered = true;
-                afterTurnRun = steer("plugin after turn");
+            host.on("turn.after", ({ sessionKey, steer }) => {
+              if (sessionKey === "plugin-after-turn" && !turnAfterSteered) {
+                turnAfterSteered = true;
+                turnAfterRun = steer("plugin after turn");
               }
             });
           },
@@ -217,17 +271,17 @@ describe("Agent plugins", () => {
     const session = agent.session("plugin-after-turn");
 
     const firstEvents = await collectRun(await session.send("start"));
-    if (!afterTurnRun) {
-      throw new Error("expected plugin afterTurn steering to start a run");
+    if (!turnAfterRun) {
+      throw new Error("expected plugin turn.after steering to start a run");
     }
-    const afterTurnEvents = await collectRun(await afterTurnRun);
+    const turnAfterEvents = await collectRun(await turnAfterRun);
 
     expect(firstEvents).not.toContainEqual({
       input: { text: "plugin after turn", type: "user-text" },
       placement: "step-end",
       type: "runtime-input",
     });
-    expect(afterTurnEvents[0]).toEqual({
+    expect(turnAfterEvents[0]).toEqual({
       text: "plugin after turn",
       type: "user-text",
     });
@@ -236,6 +290,28 @@ describe("Agent plugins", () => {
       assistantMessage("DONE"),
       { content: "plugin after turn", role: "user" },
     ]);
+  });
+
+  it("rejects legacy plugin event names", async () => {
+    const legacyEventName = ["after", "Step"].join("");
+    const unknownLegacyEventPattern = new RegExp(
+      `unknown plugin event.*${legacyEventName}`,
+      "i"
+    );
+
+    await expect(
+      Agent.create({
+        llm: fakeLlm,
+        plugins: [
+          definePlugin({
+            name: "legacy-events",
+            setup(host) {
+              Reflect.apply(host.on, host, [legacyEventName, () => undefined]);
+            },
+          }),
+        ],
+      })
+    ).rejects.toThrow(unknownLegacyEventPattern);
   });
 });
 
@@ -279,9 +355,60 @@ const pluginTypeFixtureStore = new RecordingStore();
 const pluginTypeFixtures: readonly AgentOptions[] = [
   {
     llm: fakeLlm,
-    plugins: [sessions.custom(pluginTypeFixtureStore)],
+    plugins: [
+      sessions.custom(pluginTypeFixtureStore),
+      definePlugin({
+        name: "tool-hook-types",
+        setup(host) {
+          host.on("tool.call", (event) => {
+            expectTypeOf(event).toEqualTypeOf<AgentPluginToolCallEvent>();
+            return { action: "allow" };
+          });
+          host.on("tool.result", (event) => {
+            expectTypeOf(event).toEqualTypeOf<AgentPluginToolResultEvent>();
+            return { output: event.output, status: "done" };
+          });
+        },
+      }),
+    ],
   },
 ];
+
+const pluginEventNameFixtures = [
+  "turn.before",
+  "step.before",
+  "step.after",
+  "turn.after",
+  "tool.call",
+  "tool.result",
+] satisfies readonly AgentPluginEventName[];
+
+const toolCallResultFixtures = [
+  undefined,
+  { action: "allow" },
+  { action: "reject-and-continue", message: "policy rejected" },
+  { action: "modify", input: { next: true } },
+  { action: "synthesize", result: { exitCode: 0, output: "synthetic" } },
+  { action: "error", message: "policy error" },
+] satisfies readonly AgentPluginToolCallResult[];
+
+const toolResultResultFixtures = [
+  undefined,
+  { output: "replacement", status: "done" },
+  { error: "tool failed", output: "fallback", status: "error" },
+  { error: "cancelled", status: "cancelled" },
+] satisfies readonly AgentPluginToolResultResult[];
+
+type NarrowToolCallHandler = (
+  event: AgentPluginToolCallEvent & {
+    readonly input: { readonly mustExist: string };
+  }
+) => AgentPluginToolCallResult;
+
+type NarrowToolCallHandlerIsAssignable =
+  NarrowToolCallHandler extends AgentPluginHandler<AgentPluginToolCallEvent>
+    ? true
+    : false;
 
 function readStoredHistory(
   store: RecordingStore,

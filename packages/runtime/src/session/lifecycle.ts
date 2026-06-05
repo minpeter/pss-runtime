@@ -42,8 +42,8 @@ export function createRuntimeInputStepLifecycle({
   ) => Promise<T>;
 }): AgentStepLifecycle | undefined {
   const hasPluginStepHandlers =
-    pluginHandlers(lifecycle, "afterStep").length > 0 ||
-    pluginHandlers(lifecycle, "beforeStep").length > 0;
+    pluginHandlers(lifecycle, "step.after").length > 0 ||
+    pluginHandlers(lifecycle, "step.before").length > 0;
   if (!(stepLifecycle || hasPluginStepHandlers)) {
     return;
   }
@@ -81,7 +81,7 @@ export async function runPluginBeforeTurnHandlers(
     readonly signal: AbortSignal;
   }
 ): Promise<boolean> {
-  const handlers = pluginHandlers(lifecycle, "beforeTurn");
+  const handlers = pluginHandlers(lifecycle, "turn.before");
   if (handlers.length === 0) {
     return false;
   }
@@ -96,7 +96,7 @@ export async function runPluginBeforeTurnHandlers(
         signal,
         steer: (nextInput) =>
           lifecycle.steerCurrentRun(runtimeInput, nextInput),
-        type: "beforeTurn",
+        type: "turn.before",
       });
     }
   });
@@ -113,7 +113,7 @@ export async function runPluginBeforeStepHandlers(
     readonly runtimeInput: RuntimeInputState;
   }
 ): Promise<boolean> {
-  const handlers = pluginHandlers(lifecycle, "beforeStep");
+  const handlers = pluginHandlers(lifecycle, "step.before");
   if (handlers.length === 0) {
     return false;
   }
@@ -127,7 +127,7 @@ export async function runPluginBeforeStepHandlers(
         signal: context.signal,
         steer: (input) => lifecycle.steerCurrentRun(runtimeInput, input),
         stepIndex: context.stepIndex,
-        type: "beforeStep",
+        type: "step.before",
       });
     }
   });
@@ -144,7 +144,7 @@ export async function runPluginAfterStepHandlers(
     readonly runtimeInput: RuntimeInputState;
   }
 ): Promise<boolean> {
-  const handlers = pluginHandlers(lifecycle, "afterStep");
+  const handlers = pluginHandlers(lifecycle, "step.after");
   if (handlers.length === 0) {
     return false;
   }
@@ -161,7 +161,7 @@ export async function runPluginAfterStepHandlers(
             signal: context.signal,
             steer: (input) => lifecycle.steerCurrentRun(runtimeInput, input),
             stepIndex: context.stepIndex,
-            type: "afterStep",
+            type: "step.after",
           })
         )
       )
@@ -182,7 +182,7 @@ export async function runPluginAfterTurnHandlers(
     readonly signal: AbortSignal;
   }
 ): Promise<boolean> {
-  const handlers = pluginHandlers(lifecycle, "afterTurn");
+  const handlers = pluginHandlers(lifecycle, "turn.after");
   if (handlers.length === 0) {
     return false;
   }
@@ -199,7 +199,7 @@ export async function runPluginAfterTurnHandlers(
             sessionKey: lifecycle.sessionKey,
             signal,
             steer: lifecycle.steerSession,
-            type: "afterTurn",
+            type: "turn.after",
           })
         )
       )

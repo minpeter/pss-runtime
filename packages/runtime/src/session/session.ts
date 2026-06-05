@@ -340,8 +340,10 @@ export class AgentSession {
 
   #createPluginScope(signal: AbortSignal): AgentPluginScope {
     return {
+      eventHandlers: this.#plugins?.eventHandlers,
       getCompactions: () => structuredClone(this.#compactions),
       getPluginState: (pluginName) => this.#pluginState[pluginName],
+      history: () => this.#history.modelSnapshot(),
       sessionKey: this.#persistence.key,
       setCompactions: (compactions) => {
         this.#compactions = structuredClone([...compactions]);
@@ -353,6 +355,7 @@ export class AgentSession {
         };
       },
       signal,
+      steer: (input) => this.steer(input),
       summarize: (messages) => this.#summarizeForPlugins(messages, signal),
     };
   }

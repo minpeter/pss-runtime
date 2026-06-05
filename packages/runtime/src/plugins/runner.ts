@@ -6,8 +6,9 @@ import type {
   AgentContextTransform,
   AgentPlugin,
   AgentPluginEventName,
-  AgentPluginHandler,
+  AgentPluginStoredHandler,
 } from "./types";
+import { isAgentPluginEventName } from "./types";
 
 interface SessionStoreRegistration {
   readonly pluginName: string;
@@ -23,7 +24,7 @@ export interface ResolvedAgentPlugins {
   readonly contextTransforms: readonly AgentContextTransform[];
   readonly eventHandlers: ReadonlyMap<
     AgentPluginEventName,
-    readonly AgentPluginHandler[]
+    readonly AgentPluginStoredHandler[]
   >;
   readonly sessionStore?: SessionStoreRegistration;
   readonly tools?: ToolSet;
@@ -37,7 +38,10 @@ export async function resolveAgentPlugins({
   readonly plugins?: readonly AgentPlugin[];
 }): Promise<ResolvedAgentPlugins> {
   const contextTransforms: AgentContextTransform[] = [];
-  const eventHandlers = new Map<AgentPluginEventName, AgentPluginHandler[]>();
+  const eventHandlers = new Map<
+    AgentPluginEventName,
+    AgentPluginStoredHandler[]
+  >();
   const sessionStores: SessionStoreRegistration[] = [];
   const toolRegistrations: ToolRegistration[] = [];
 
@@ -45,11 +49,12 @@ export async function resolveAgentPlugins({
     try {
       await plugin.setup({
         on: (event, handler) => {
+          if (!isAgentPluginEventName(event)) {
+            throw new AgentPluginUnknownEventError(plugin.name, event);
+          }
+
           const existing = eventHandlers.get(event) ?? [];
-          eventHandlers.set(event, [
-            ...existing,
-            handler as AgentPluginHandler,
-          ]);
+          eventHandlers.set(event, [...existing, handler]);
         },
         registerSessionStore: (store) => {
           sessionStores.push({ pluginName: plugin.name, store });
@@ -177,8 +182,27 @@ export class AgentPluginSetupError extends Error {
   readonly name = "AgentPluginSetupError";
 
   constructor(pluginName: string, cause: unknown) {
-    super(`Agent plugin ${JSON.stringify(pluginName)} setup failed`, {
-      cause,
-    });
+    super(
+      `Agent plugin ${JSON.stringify(pluginName)} setup failed${formatSetupCause(
+        cause
+      )}`,
+      { cause }
+    );
   }
+}
+
+export class AgentPluginUnknownEventError extends Error {
+  readonly name = "AgentPluginUnknownEventError";
+
+  constructor(pluginName: string, event: unknown) {
+    super(
+      `unknown plugin event ${JSON.stringify(event)} registered by ${JSON.stringify(
+        pluginName
+      )}`
+    );
+  }
+}
+
+function formatSetupCause(cause: unknown): string {
+  return cause instanceof Error ? `: ${cause.message}` : "";
 }
