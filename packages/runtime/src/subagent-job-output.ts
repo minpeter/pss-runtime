@@ -1,5 +1,9 @@
 import { jsonSchema, tool } from "ai";
-import { assertBackgroundTaskId, isActiveJob } from "./subagent-jobs";
+import {
+  assertBackgroundTaskId,
+  cleanupJob,
+  isActiveJob,
+} from "./subagent-jobs";
 import type { BackgroundOutputInput, SubagentJob } from "./subagent-types";
 
 export function createBackgroundOutputTool(jobs: Map<string, SubagentJob>) {
@@ -23,6 +27,7 @@ export function createBackgroundOutputTool(jobs: Map<string, SubagentJob>) {
         task_id: job.id,
       };
       if (!isActiveJob(job.status)) {
+        await cleanupJob(job);
         jobs.delete(job.id);
       }
 

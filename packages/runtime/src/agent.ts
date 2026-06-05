@@ -39,6 +39,7 @@ export interface AgentSessionOptions {
 }
 
 export interface SessionHandle {
+  delete(): Promise<void>;
   interrupt(): void;
   kill(): void;
   send(input: AgentInput): Promise<AgentRun>;
@@ -48,7 +49,6 @@ export interface SessionHandle {
 export type AgentOptions = AgentLanguageModelOptions | AgentLlmOptions;
 
 const subagentNamePattern = /^[a-z][a-z0-9_-]{0,63}$/;
-let nextAgentNamespace = 0;
 
 export class Agent {
   readonly #baseTools?: ToolSet;
@@ -60,7 +60,7 @@ export class Agent {
     readonly toolChoice?: AgentToolChoice;
   };
   readonly #sessions = new Map<string, SessionHandle>();
-  readonly #sessionNamespace = `agent:${nextAgentNamespace}`;
+  readonly #sessionNamespace = `agent:${crypto.randomUUID()}`;
   readonly #store: SessionStore;
   readonly #subagents: readonly Agent[];
   readonly description?: string;
@@ -71,7 +71,6 @@ export class Agent {
 
     this.description = options.description;
     this.name = options.name;
-    nextAgentNamespace += 1;
     this.#store = options.sessions?.store ?? new MemorySessionStore();
     this.#hooks = options.hooks;
     assertSubagents(options);
@@ -117,6 +116,11 @@ export class Agent {
       );
     session = new AgentSession(llm, { key, store: this.#store }, this.#hooks);
     const handle: SessionHandle = {
+      delete: async () => {
+        session.kill();
+        this.#sessions.delete(key);
+        await this.#store.delete(key);
+      },
       interrupt: () => session.interrupt(),
       kill: () => {
         session.kill();

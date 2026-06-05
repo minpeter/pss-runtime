@@ -22,6 +22,7 @@ describe("subagent background jobs", () => {
     const subagent: Subagent = {
       name: "researcher",
       session: () => ({
+        delete: async () => undefined,
         interrupt: () => {
           interruptCount += 1;
         },

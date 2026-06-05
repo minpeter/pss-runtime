@@ -14,6 +14,12 @@ export class MemorySessionStore implements SessionStore {
     return Promise.resolve(stored ? structuredClone(stored) : null);
   }
 
+  delete(key: string): Promise<void> {
+    this.#sessions.delete(key);
+    this.#versions.delete(key);
+    return Promise.resolve();
+  }
+
   commit(
     key: string,
     next: SessionStoreCommit,

@@ -19,5 +19,6 @@ export interface SessionStore {
     next: SessionStoreCommit,
     options: { expectedVersion: ExpectedSessionVersion }
   ): Promise<CommitResult>;
+  delete(key: string): Promise<void>;
   load(key: string): Promise<StoredSession | null>;
 }

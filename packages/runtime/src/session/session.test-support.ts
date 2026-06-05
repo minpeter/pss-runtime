@@ -34,6 +34,11 @@ export class SpyStore implements SessionStore {
     return stored ? structuredClone(stored) : null;
   }
 
+  delete(key: string): Promise<void> {
+    this.sessions.delete(key);
+    return Promise.resolve();
+  }
+
   commit(
     key: string,
     next: SessionStoreCommit,

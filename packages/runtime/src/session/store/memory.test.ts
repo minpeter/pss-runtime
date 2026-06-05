@@ -82,6 +82,22 @@ describe("MemorySessionStore", () => {
     ).resolves.toEqual({ ok: false, reason: "conflict" });
   });
 
+  it("deletes committed session state", async () => {
+    const store = new MemorySessionStore();
+    await store.commit(
+      "key",
+      { state: { value: 1 } },
+      { expectedVersion: null }
+    );
+
+    await store.delete("key");
+
+    await expect(store.load("key")).resolves.toBeNull();
+    await expect(
+      store.commit("key", { state: { value: 2 } }, { expectedVersion: null })
+    ).resolves.toEqual({ ok: true, version: "1" });
+  });
+
   it("protects committed state from caller mutation", async () => {
     const store = new MemorySessionStore();
     const state = { nested: { value: 1 } };

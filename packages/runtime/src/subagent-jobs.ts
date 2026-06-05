@@ -41,6 +41,7 @@ export function startBackgroundJob({
 
   const job: SubagentJob = {
     abort,
+    cleanup: () => childSession.delete(),
     description,
     id,
     promise: Promise.resolve(),
@@ -200,6 +201,9 @@ function pruneJobs(jobs: Map<string, SubagentJob>): void {
     if (job && isActiveJob(job.status)) {
       cancelJob(job);
     }
+    if (job) {
+      cleanupJob(job).catch(() => undefined);
+    }
     jobs.delete(oldest);
   }
 }
@@ -207,6 +211,10 @@ function pruneJobs(jobs: Map<string, SubagentJob>): void {
 export function cancelJob(job: SubagentJob): void {
   job.status = "cancelled";
   job.abort();
+}
+
+export function cleanupJob(job: SubagentJob): Promise<void> {
+  return job.cleanup();
 }
 
 function sanitizeReminderField(value: string): string {

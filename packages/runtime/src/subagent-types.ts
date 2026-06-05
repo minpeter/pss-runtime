@@ -6,6 +6,7 @@ export interface Subagent {
   readonly description?: string;
   readonly name?: string;
   session(key: string): {
+    delete(): Promise<void>;
     interrupt(): void;
     send(input: AgentInput): Promise<AgentRun>;
   };
@@ -47,6 +48,7 @@ export interface SubagentRunResult {
 
 export interface SubagentJob {
   readonly abort: () => void;
+  readonly cleanup: () => Promise<void>;
   readonly description?: string;
   readonly id: string;
   promise: Promise<void>;
