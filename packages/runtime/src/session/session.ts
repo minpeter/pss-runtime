@@ -56,6 +56,7 @@ export class AgentSession {
   #loadPromise?: Promise<void>;
   #loaded = false;
   #running = false;
+  #runToCloseOnKill?: BufferedAgentRun;
   #storeVersion: string | undefined;
 
   constructor(
@@ -123,25 +124,24 @@ export class AgentSession {
     }
 
     this.#killed = true;
+    const killedError = sessionKilledError();
     this.#activeAbort?.abort();
-    this.#closeRuntimeInput(
-      this.#activeRuntimeInput,
-      sessionKilledError().message
-    );
-    this.#activeRun?.emit({
+    this.#closeRuntimeInput(this.#activeRuntimeInput, killedError.message);
+    const runToClose = this.#runToCloseOnKill ?? this.#activeRun;
+    runToClose?.emit({
       type: "turn-error",
-      message: sessionKilledError().message,
+      message: killedError.message,
     });
-    this.#activeRun?.close(undefined, sessionKilledError().message);
+    runToClose?.close(undefined, killedError.message);
 
     while (this.#inputQueue.length > 0) {
       const item = this.#inputQueue.shift();
-      this.#closeRuntimeInput(item?.runtimeInput, sessionKilledError().message);
+      this.#closeRuntimeInput(item?.runtimeInput, killedError.message);
       item?.run.emit({
         type: "turn-error",
-        message: sessionKilledError().message,
+        message: killedError.message,
       });
-      item?.run.close(undefined, sessionKilledError().message);
+      item?.run.close(undefined, killedError.message);
     }
   }
 
@@ -203,6 +203,7 @@ export class AgentSession {
     this.#activeAbort = activeAbort;
     this.#activeRun = run;
     this.#activeRuntimeInput = runtimeInput;
+    this.#runToCloseOnKill = run;
     const historySnapshot = this.#history.modelSnapshot();
 
     try {
@@ -299,6 +300,7 @@ export class AgentSession {
       this.#activeAbort = undefined;
       this.#activeRun = undefined;
       this.#activeRuntimeInput = undefined;
+      this.#runToCloseOnKill = undefined;
       run.close(undefined, runtimeInput.closedReason);
     }
   }

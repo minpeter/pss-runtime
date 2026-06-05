@@ -197,6 +197,37 @@ describe("Agent session API", () => {
     ]);
   });
 
+  it("closes the active run when a killed session has a pending afterTurn hook", async () => {
+    const afterTurnStarted = createDeferred();
+    const agent = await Agent.create({
+      hooks: {
+        afterTurn: () => {
+          afterTurnStarted.resolve();
+          return new Promise<never>(() => undefined);
+        },
+      },
+      llm: () => Promise.resolve([assistantMessage("DONE")]),
+    });
+    const session = agent.session("kill-pending-after-turn");
+    const collecting = collect(await session.send("hello"));
+    await afterTurnStarted.promise;
+
+    session.kill();
+
+    const events = await withShortTimeout(collecting);
+    if (events === timeoutMarker) {
+      throw new Error("session.kill() did not close the afterTurn run");
+    }
+    expect(eventTypes(events)).toEqual([
+      "user-text",
+      "turn-start",
+      "step-start",
+      "assistant-text",
+      "step-end",
+      "turn-error",
+    ]);
+  });
+
   it("commits successful output before afterTurn failures", async () => {
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
