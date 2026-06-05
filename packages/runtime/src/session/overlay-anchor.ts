@@ -1,7 +1,5 @@
 import type { ModelMessage } from "ai";
 
-const maxEqualityDepth = 64;
-
 export interface CurrentTurnAnchor {
   readonly index: number;
   readonly matchOrdinal: number;
@@ -149,56 +147,55 @@ function modelMessageEquals(
   left: ModelMessage | undefined,
   right: ModelMessage
 ): boolean {
-  return left !== undefined && modelContentEquals(left, right, createState());
+  return left !== undefined && modelContentEquals(left, right);
 }
 
-interface EqualityState {
-  readonly depth: number;
-  readonly seen: WeakMap<object, WeakSet<object>>;
-}
+function modelContentEquals(left: unknown, right: unknown): boolean {
+  const pending: [unknown, unknown][] = [[left, right]];
+  const seen = new WeakMap<object, WeakSet<object>>();
 
-function createState(): EqualityState {
-  return { depth: 0, seen: new WeakMap() };
-}
+  while (pending.length > 0) {
+    const pair = pending.pop();
+    if (!pair) {
+      continue;
+    }
 
-function nextState(state: EqualityState): EqualityState {
-  return { depth: state.depth + 1, seen: state.seen };
-}
+    const [leftValue, rightValue] = pair;
+    if (Object.is(leftValue, rightValue)) {
+      continue;
+    }
 
-function modelContentEquals(
-  left: unknown,
-  right: unknown,
-  state: EqualityState
-): boolean {
-  if (Object.is(left, right)) {
-    return true;
-  }
+    if (Array.isArray(leftValue) || Array.isArray(rightValue)) {
+      if (!arraysEqual(leftValue, rightValue, seen, pending)) {
+        return false;
+      }
+      continue;
+    }
 
-  if (state.depth >= maxEqualityDepth) {
+    if (isRecord(leftValue) || isRecord(rightValue)) {
+      if (!recordsEqual(leftValue, rightValue, seen, pending)) {
+        return false;
+      }
+      continue;
+    }
+
     return false;
   }
 
-  if (Array.isArray(left) || Array.isArray(right)) {
-    return arraysEqual(left, right, nextState(state));
-  }
-
-  if (isRecord(left) || isRecord(right)) {
-    return recordsEqual(left, right, nextState(state));
-  }
-
-  return false;
+  return true;
 }
 
 function arraysEqual(
   left: unknown,
   right: unknown,
-  state: EqualityState
+  seen: WeakMap<object, WeakSet<object>>,
+  pending: [unknown, unknown][]
 ): boolean {
   if (!(Array.isArray(left) && Array.isArray(right))) {
     return false;
   }
 
-  if (isSeenPair(left, right, state.seen)) {
+  if (isSeenPair(left, right, seen)) {
     return true;
   }
 
@@ -206,22 +203,25 @@ function arraysEqual(
     return false;
   }
 
-  rememberPair(left, right, state.seen);
-  return left.every((item, index) =>
-    modelContentEquals(item, right[index], state)
-  );
+  rememberPair(left, right, seen);
+  for (let index = 0; index < left.length; index += 1) {
+    pending.push([left[index], right[index]]);
+  }
+
+  return true;
 }
 
 function recordsEqual(
   left: unknown,
   right: unknown,
-  state: EqualityState
+  seen: WeakMap<object, WeakSet<object>>,
+  pending: [unknown, unknown][]
 ): boolean {
   if (!(isRecord(left) && isRecord(right))) {
     return false;
   }
 
-  if (isSeenPair(left, right, state.seen)) {
+  if (isSeenPair(left, right, seen)) {
     return true;
   }
 
@@ -230,11 +230,16 @@ function recordsEqual(
     return false;
   }
 
-  rememberPair(left, right, state.seen);
-  return leftEntries.every(
-    ([key, value]) =>
-      Object.hasOwn(right, key) && modelContentEquals(value, right[key], state)
-  );
+  rememberPair(left, right, seen);
+  for (const [key, value] of leftEntries) {
+    if (!Object.hasOwn(right, key)) {
+      return false;
+    }
+
+    pending.push([value, right[key]]);
+  }
+
+  return true;
 }
 
 function isSeenPair(

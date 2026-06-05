@@ -449,6 +449,32 @@ describe("session overlays", () => {
     ).not.toThrow();
   });
 
+  it("keeps pre-inference overlays above deeply nested current turns", () => {
+    const frame = createInferenceFrame();
+    const currentTurn = {
+      content: [{ type: "text", text: "same" }],
+      providerOptions: nestedProviderOptions(80),
+      role: "user",
+    } satisfies ModelMessage;
+    const clonedCurrentTurn = {
+      content: [{ type: "text", text: "same" }],
+      providerOptions: nestedProviderOptions(80),
+      role: "user",
+    } satisfies ModelMessage;
+    appendOverlay(frame, "overlay ctx", "turn-start", "pre-inference");
+
+    const composed = composeOverlayHistory({
+      currentTurn: createCurrentTurnAnchor([], currentTurn),
+      frame,
+      history: [clonedCurrentTurn],
+    });
+
+    expect(composed).toEqual([
+      userTextToModelMessage(userText("overlay ctx")),
+      clonedCurrentTurn,
+    ]);
+  });
+
   it("composed overlay history does not expose mutable canonical message references", () => {
     const canonicalHistory = [
       userTextToModelMessage(userText("current prompt")),
@@ -797,6 +823,22 @@ function cyclicProviderOptions(): NonNullable<ModelMessage["providerOptions"]> {
   const cycle = { source: "left" };
   Object.assign(cycle, { self: cycle });
   return { test: cycle };
+}
+
+interface NestedProviderOption {
+  readonly child?: NestedProviderOption;
+  readonly leaf?: string;
+  readonly [key: string]: NestedProviderOption | string | undefined;
+}
+
+function nestedProviderOptions(
+  depth: number
+): NonNullable<ModelMessage["providerOptions"]> {
+  let value: NestedProviderOption = { leaf: "ok" };
+  for (let index = 0; index < depth; index += 1) {
+    value = { child: value };
+  }
+  return { test: value };
 }
 
 function readStoredHistory(
