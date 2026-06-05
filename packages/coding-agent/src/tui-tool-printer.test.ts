@@ -25,9 +25,9 @@ describe("TUI tool printer", () => {
       formatToolCallForTui({
         input: { query: "minpeter" },
         toolCallId: "call-aaaaaaaa-bbbb-cccc-dddd-0",
-        toolName: "web_search",
+        toolName: "lookup_records",
       })
-    ).toBe(`web_search${darkGray}#aaaaaaaa${reset} query="minpeter"`);
+    ).toBe(`lookup_records${darkGray}#aaaaaaaa${reset} query="minpeter"`);
 
     expect(
       formatToolResultForTui({
@@ -39,10 +39,10 @@ describe("TUI tool printer", () => {
           },
         },
         toolCallId: "call-aaaaaaaa-bbbb-cccc-dddd-0",
-        toolName: "web_search",
+        toolName: "lookup_records",
       })
     ).toBe(
-      `web_search${darkGray}#aaaaaaaa${reset} json results=1 top="Woonggi Min minpeter - GitHub"`
+      `lookup_records${darkGray}#aaaaaaaa${reset} json results=1 top="Woonggi Min minpeter - GitHub"`
     );
   });
 
@@ -51,13 +51,13 @@ describe("TUI tool printer", () => {
       formatToolResultForTui({
         output: {
           type: "error-text",
-          value: "Error: TinyFish fetch request failed with HTTP 503.",
+          value: "Error: provider request failed with HTTP 503.",
         },
         toolCallId: "call-deadbeef-0000-0000-0000-1",
-        toolName: "web_fetch",
+        toolName: "read_page",
       })
     ).toBe(
-      `web_fetch${darkGray}#deadbeef${reset} error-text="TinyFish fetch request failed with HTTP 503."`
+      `read_page${darkGray}#deadbeef${reset} error-text="provider request failed with HTTP 503."`
     );
   });
 
@@ -66,10 +66,10 @@ describe("TUI tool printer", () => {
       formatToolCallForTui({
         input: { query: "minpeter" },
         toolCallId: "call-dead\nbeef-0000-0000-0000-1",
-        toolName: "web_search\nassistant: forged",
+        toolName: "lookup_records\nassistant: forged",
       })
     ).toBe(
-      `web_search assistant: forged${darkGray}#dead bee${reset} query="minpeter"`
+      `lookup_records assistant: forged${darkGray}#dead bee${reset} query="minpeter"`
     );
   });
 });

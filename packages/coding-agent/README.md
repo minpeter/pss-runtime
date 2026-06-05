@@ -1,11 +1,20 @@
 # @minpeter/pss-coding-agent
 
-Web tools, model wiring, and the `pss` TUI for pss-next.
+Model wiring and the `pss` TUI for pss-next.
 
 ```ts
-import { tools } from "@minpeter/pss-coding-agent";
-import { createCodingLanguageModel } from "@minpeter/pss-coding-agent/model";
+import { tool } from "ai";
+import { z } from "zod";
+import { createCodingLanguageModel } from "@minpeter/pss-coding-agent";
 import { Agent } from "@minpeter/pss-runtime";
+
+const tools = {
+  echo: tool({
+    description: "Echo the provided text.",
+    inputSchema: z.object({ text: z.string() }),
+    execute: ({ text }) => ({ text }),
+  }),
+};
 
 const agent = await Agent.create({
   model: createCodingLanguageModel(),
@@ -68,7 +77,6 @@ turn.
 ## Env
 
 Set `AI_API_KEY`, `AI_BASE_URL`, and `AI_MODEL` for the model.
-Set `TINYFISH_API_KEY` before using `web_search` or `web_fetch`.
 
 The TUI persists runtime-owned session state to files by default:
 
