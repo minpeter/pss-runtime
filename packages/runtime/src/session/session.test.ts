@@ -39,7 +39,7 @@ const withShortTimeout = async <T>(
   Promise.race([
     promise,
     new Promise<typeof timeoutMarker>((resolve) => {
-      setTimeout(() => resolve(timeoutMarker), 25);
+      setTimeout(() => resolve(timeoutMarker), 100);
     }),
   ]);
 
