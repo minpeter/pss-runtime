@@ -10,7 +10,7 @@ Minimal, platform-agnostic agent runtime with keyed sessions, synchronized
 ## Core DX
 
 ```ts
-import { Agent, consumeRunEvents } from "@minpeter/pss-runtime";
+import { Agent } from "@minpeter/pss-runtime";
 import { createYourLanguageModel } from "...";
 
 const agent = await Agent.create({
@@ -28,21 +28,22 @@ for await (const event of run.events()) {
 boundaries until the events consumer asks for the next event, so callers must
 consume the events for the run to progress. This is what lets code react to
 `turn-start`, `step-start`, and `step-end` before the next model snapshot is
-created. `AgentRun.events()` is single-consumer; use `consumeRunEvents` when one
-application wants several ordered listeners for rendering, logging, and control.
-Listeners are awaited sequentially for each event before the next event is read,
-which preserves boundary backpressure.
+created. `AgentRun.events()` is single-consumer by design: keep rendering,
+logging, tracing, and continuation policy in the same app-owned loop when those
+concerns must share synchronized boundary control.
 
 ```ts
 const run = await agent.send("Implement the plan.");
-await consumeRunEvents(run, [
-  renderEvent,
-  async (event) => {
-    if (event.type === "step-end" && shouldContinueWork()) {
-      await agent.session("default").steer("Continue. The task is not complete yet.");
-    }
-  },
-]);
+const session = agent.session("default");
+
+for await (const event of run.events()) {
+  renderEvent(event);
+  traceEvent(event);
+
+  if (event.type === "step-end" && shouldContinueWork()) {
+    await session.steer("Continue. The task is not complete yet.");
+  }
+}
 ```
 
 Per-key conversations use `session(key)`:
@@ -121,19 +122,16 @@ const session = agent.session("room:123:user:456");
 const run = await session.send("Draft a short answer.");
 let addedSteer = false;
 
-await consumeRunEvents(run, [
-  (event) => {
-    if (event.type === "assistant-text") {
-      process.stdout.write(event.text);
-    }
-  },
-  async (event) => {
-    if (event.type === "step-end" && !addedSteer) {
-      addedSteer = true;
-      await session.steer("Also mention the main tradeoff.");
-    }
-  },
-]);
+for await (const event of run.events()) {
+  if (event.type === "assistant-text") {
+    process.stdout.write(event.text);
+  }
+
+  if (event.type === "step-end" && !addedSteer) {
+    addedSteer = true;
+    await session.steer("Also mention the main tradeoff.");
+  }
+}
 ```
 
 `session.steer()` resolves when the input is accepted into the active run's

@@ -4,31 +4,6 @@ export interface AgentRun {
   events(): AsyncIterable<AgentEvent>;
 }
 
-export type AgentRunEventListener = (event: AgentEvent) => Promise<void> | void;
-
-export async function consumeRunEvents(
-  run: AgentRun,
-  listeners: readonly AgentRunEventListener[]
-): Promise<void> {
-  const iterator = run.events()[Symbol.asyncIterator]();
-
-  try {
-    while (true) {
-      const next = await iterator.next();
-      if (next.done) {
-        return;
-      }
-
-      for (const listener of listeners) {
-        await listener(next.value);
-      }
-    }
-  } catch (originalError) {
-    await iterator.return?.().catch(() => undefined);
-    throw originalError;
-  }
-}
-
 interface QueuedEvent {
   readonly ack?: () => void;
   readonly event: AgentEvent;

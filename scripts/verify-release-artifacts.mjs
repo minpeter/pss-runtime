@@ -23,10 +23,12 @@ const FORBIDDEN_RUNTIME_ROOT_ALIASES = [
   "AgentMessage",
   ["Agent", "Model"].join(""),
   "AgentLoopResult",
+  "AgentRunEventListener",
   "AgentRunInput",
   "AgentTool",
   "AgentTools",
   "RunInput",
+  "consumeRunEvents",
   "runAgentLoop",
 ];
 const FORBIDDEN_RUNTIME_PUBLIC_PATTERNS = [

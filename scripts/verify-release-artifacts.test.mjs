@@ -304,6 +304,21 @@ describe("verifyReleaseArtifacts", () => {
     ]);
   });
 
+  it("rejects event fanout helpers from root declarations", () => {
+    const cwd = createFixture();
+    writeFileSync(
+      join(cwd, "packages", "runtime", "dist", "index.d.ts"),
+      'export { consumeRunEvents, type AgentRunEventListener } from "./session/run";\nexport type { AgentRun, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
+    );
+
+    expect(
+      verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
+    ).toEqual([
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias AgentRunEventListener",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias consumeRunEvents",
+    ]);
+  });
+
   it("rejects removed AgentRun stream API from runtime artifacts", () => {
     const cwd = createFixture();
     mkdirSync(join(cwd, "packages", "runtime", "dist", "session"), {

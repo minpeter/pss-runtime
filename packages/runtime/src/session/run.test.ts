@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createDeferred } from "../test-fixtures";
 import type { AgentEvent } from "./events";
-import { BufferedAgentRun, consumeRunEvents } from "./run";
+import { BufferedAgentRun } from "./run";
 
 const expectPending = async (promise: Promise<unknown>) => {
   const marker = Symbol("pending");
@@ -104,56 +104,6 @@ describe("AgentRun", () => {
     expect(eventIterator[Symbol.asyncIterator]()).toBe(
       eventIterator[Symbol.asyncIterator]()
     );
-  });
-
-  it("consumeRunEvents fans out events sequentially without prefetching boundaries", async () => {
-    const run = new BufferedAgentRun();
-    const firstListenerEntered = createDeferred();
-    const releaseFirstListener = createDeferred();
-    const boundary = run.emitBoundary({ type: "step-end" });
-    const firstListenerEvents: string[] = [];
-    const secondListenerEvents: string[] = [];
-
-    const consuming = consumeRunEvents(run, [
-      async (event: AgentEvent) => {
-        firstListenerEvents.push(event.type);
-        if (event.type === "step-end") {
-          firstListenerEntered.resolve();
-          await releaseFirstListener.promise;
-        }
-      },
-      (event: AgentEvent) => {
-        secondListenerEvents.push(event.type);
-      },
-    ]);
-
-    await firstListenerEntered.promise;
-    await expectPending(boundary);
-    expect(secondListenerEvents).toEqual([]);
-
-    releaseFirstListener.resolve();
-    run.emit({ type: "turn-end" });
-    run.close();
-    await consuming;
-
-    expect(firstListenerEvents).toEqual(["step-end", "turn-end"]);
-    expect(secondListenerEvents).toEqual(["step-end", "turn-end"]);
-    await expect(boundary).resolves.toBeUndefined();
-  });
-
-  it("consumeRunEvents rejects listener errors and closes the run iterator", async () => {
-    const run = new BufferedAgentRun();
-    const error = new Error("listener failed");
-    const boundary = run.emitBoundary({ type: "step-end" });
-
-    await expect(
-      consumeRunEvents(run, [
-        () => {
-          throw error;
-        },
-      ])
-    ).rejects.toBe(error);
-    await expect(boundary).resolves.toBeUndefined();
   });
 
   it("rejects concurrent next calls so consumers cannot prefetch", async () => {
