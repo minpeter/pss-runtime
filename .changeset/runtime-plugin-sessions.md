@@ -1,5 +1,5 @@
 ---
-"@minpeter/pss-runtime": patch
+"@minpeter/pss-runtime": minor
 ---
 
 Add plugin-first session persistence, memory, and compaction APIs, plus event-first runtime control.
