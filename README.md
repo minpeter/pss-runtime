@@ -8,10 +8,11 @@ Small agent runtime workspace.
 ## Use
 
 ```ts
-import { tool } from "ai";
+import { tool, type LanguageModel } from "ai";
 import { z } from "zod";
-import { createCodingLanguageModel } from "@minpeter/pss-coding-agent";
 import { Agent } from "@minpeter/pss-runtime";
+
+declare const model: LanguageModel;
 
 const tools = {
   echo: tool({
@@ -23,7 +24,7 @@ const tools = {
 
 const agent = await Agent.create({
   instructions: "Keep every answer under 3 lines.",
-  model: createCodingLanguageModel(),
+  model,
   tools,
 });
 const run = await agent.send("Hello");
