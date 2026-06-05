@@ -221,10 +221,10 @@ describe("Agent session API", () => {
         userTextToModelMessage(userText("second")),
       ]);
       expect(consoleError).toHaveBeenCalledWith(
-        "Agent plugin turn.after handler failed: Error"
-      );
-      expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
-        "secret-token"
+        "Agent plugin turn.after handler failed:",
+        expect.objectContaining({
+          message: "after turn failed with secret-token",
+        })
       );
     } finally {
       consoleError.mockRestore();
@@ -263,11 +263,48 @@ describe("Agent session API", () => {
         "turn-end",
       ]);
       expect(consoleError).toHaveBeenCalledWith(
-        "Agent plugin step.after handler failed: Error"
+        "Agent plugin step.after handler failed:",
+        expect.objectContaining({
+          message: "after step failed with secret-token",
+        })
       );
-      expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
-        "secret-token"
-      );
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("routes plugin handler failures to a configured error handler", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const errors: { readonly eventName: string; readonly reason: unknown }[] =
+      [];
+    const agent = await Agent.create({
+      llm: () => Promise.resolve([assistantMessage("DONE")]),
+      onPluginError: (error) => {
+        errors.push(error);
+      },
+      plugins: [
+        definePlugin({
+          name: "custom-error-handler",
+          setup(host) {
+            host.on("turn.after", () => {
+              throw new Error("custom handler error");
+            });
+          },
+        }),
+      ],
+    });
+
+    try {
+      await collect(await agent.session("custom-error-handler").send("hi"));
+
+      expect(consoleError).not.toHaveBeenCalled();
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toMatchObject({
+        eventName: "turn.after",
+        reason: expect.objectContaining({ message: "custom handler error" }),
+      });
     } finally {
       consoleError.mockRestore();
     }

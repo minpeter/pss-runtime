@@ -203,9 +203,17 @@ function arraysEqual(
     return false;
   }
 
+  const leftKeys = enumerableKeys(left);
+  const rightKeys = enumerableKeys(right);
+  if (!(leftKeys && rightKeys && keysEqual(leftKeys, rightKeys))) {
+    return false;
+  }
+
   rememberPair(left, right, seen);
-  for (let index = 0; index < left.length; index += 1) {
-    pending.push([left[index], right[index]]);
+  for (const key of leftKeys) {
+    if (!enqueuePropertyComparison(left, right, key, pending)) {
+      return false;
+    }
   }
 
   return true;
@@ -225,21 +233,79 @@ function recordsEqual(
     return true;
   }
 
-  const leftEntries = Object.entries(left);
-  if (leftEntries.length !== Object.keys(right).length) {
+  const leftKeys = enumerableKeys(left);
+  const rightKeys = enumerableKeys(right);
+  if (!(leftKeys && rightKeys && keysEqual(leftKeys, rightKeys))) {
     return false;
   }
 
   rememberPair(left, right, seen);
-  for (const [key, value] of leftEntries) {
-    if (!Object.hasOwn(right, key)) {
+  for (const key of leftKeys) {
+    if (!enqueuePropertyComparison(left, right, key, pending)) {
       return false;
     }
-
-    pending.push([value, right[key]]);
   }
 
   return true;
+}
+
+function enumerableKeys(value: object): readonly string[] | undefined {
+  try {
+    return Object.keys(value);
+  } catch {
+    return;
+  }
+}
+
+function keysEqual(
+  leftKeys: readonly string[],
+  rightKeys: readonly string[]
+): boolean {
+  if (leftKeys.length !== rightKeys.length) {
+    return false;
+  }
+
+  const rightKeySet = new Set(rightKeys);
+  return leftKeys.every((key) => rightKeySet.has(key));
+}
+
+function enqueuePropertyComparison(
+  left: object,
+  right: object,
+  key: string,
+  pending: [unknown, unknown][]
+): boolean {
+  const leftDescriptor = propertyDescriptor(left, key);
+  const rightDescriptor = propertyDescriptor(right, key);
+  if (!(leftDescriptor?.enumerable && rightDescriptor?.enumerable)) {
+    return false;
+  }
+
+  const leftHasValue = "value" in leftDescriptor;
+  const rightHasValue = "value" in rightDescriptor;
+  if (leftHasValue || rightHasValue) {
+    if (!(leftHasValue && rightHasValue)) {
+      return false;
+    }
+
+    pending.push([leftDescriptor.value, rightDescriptor.value]);
+    return true;
+  }
+
+  pending.push([leftDescriptor.get, rightDescriptor.get]);
+  pending.push([leftDescriptor.set, rightDescriptor.set]);
+  return true;
+}
+
+function propertyDescriptor(
+  value: object,
+  key: string
+): PropertyDescriptor | undefined {
+  try {
+    return Object.getOwnPropertyDescriptor(value, key);
+  } catch {
+    return;
+  }
 }
 
 function isSeenPair(

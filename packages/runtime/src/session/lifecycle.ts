@@ -18,6 +18,7 @@ import type { RuntimeInputPlacement, RuntimeInputState } from "./runtime-input";
 export interface AgentSessionLifecycle {
   readonly createScope: (signal: AbortSignal) => AgentPluginScope;
   readonly history: () => ModelMessage[];
+  readonly onPluginError?: AgentPluginErrorHandler;
   readonly overlaySession: (input: AgentInput) => Promise<AgentRun>;
   readonly plugins?: ResolvedAgentPlugins;
   readonly sessionKey: string;
@@ -27,6 +28,13 @@ export interface AgentSessionLifecycle {
   ) => Promise<AgentRun>;
   readonly steerSession: (input: AgentInput) => Promise<AgentRun>;
 }
+
+export interface AgentPluginHandlerError {
+  readonly eventName: AgentPluginEventName;
+  readonly reason: unknown;
+}
+
+export type AgentPluginErrorHandler = (error: AgentPluginHandlerError) => void;
 
 export function createRuntimeInputStepLifecycle({
   lifecycle,
@@ -171,7 +179,7 @@ export async function runPluginAfterStepHandlers(
       )
     )
   );
-  logPluginHandlerRejections("step.after", settlements);
+  logPluginHandlerRejections(lifecycle, "step.after", settlements);
   return true;
 }
 
@@ -215,7 +223,7 @@ export async function runPluginAfterTurnHandlers(
       )
     )
   );
-  logPluginHandlerRejections("turn.after", settlements);
+  logPluginHandlerRejections(lifecycle, "turn.after", settlements);
   return true;
 }
 
@@ -227,20 +235,21 @@ function pluginHandlers(
 }
 
 function logPluginHandlerRejections(
+  lifecycle: AgentSessionLifecycle,
   eventName: AgentPluginEventName,
   settlements: readonly PromiseSettledResult<unknown>[]
 ): void {
+  const onPluginError = lifecycle.onPluginError ?? reportPluginHandlerError;
   for (const settlement of settlements) {
     if (settlement.status === "rejected") {
-      console.error(
-        `Agent plugin ${eventName} handler failed: ${errorKind(
-          settlement.reason
-        )}`
-      );
+      onPluginError({ eventName, reason: settlement.reason });
     }
   }
 }
 
-function errorKind(reason: unknown): string {
-  return reason instanceof Error ? reason.name : typeof reason;
+function reportPluginHandlerError({
+  eventName,
+  reason,
+}: AgentPluginHandlerError): void {
+  console.error(`Agent plugin ${eventName} handler failed:`, reason);
 }

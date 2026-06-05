@@ -10,6 +10,7 @@ import type { UserInput } from "./events";
 import { ModelMessageHistory } from "./history";
 import type { AgentInput } from "./input";
 import {
+  type AgentPluginErrorHandler,
   type AgentSessionLifecycle,
   createRuntimeInputStepLifecycle,
   runPluginAfterTurnHandlers,
@@ -52,6 +53,7 @@ export class AgentSession {
   readonly #inputQueue: QueuedInput[] = [];
   readonly #internalLlm: Llm;
   readonly #llm: Llm;
+  readonly #onPluginError?: AgentPluginErrorHandler;
   readonly #persistence: SessionPersistenceOptions;
   readonly #plugins?: ResolvedAgentPlugins;
   #activeAbort?: AbortController;
@@ -71,9 +73,11 @@ export class AgentSession {
     llm: Llm,
     persistence: SessionPersistenceOptions,
     plugins?: ResolvedAgentPlugins,
-    internalLlm: Llm = llm
+    internalLlm: Llm = llm,
+    onPluginError?: AgentPluginErrorHandler
   ) {
     this.#internalLlm = internalLlm;
+    this.#onPluginError = onPluginError;
     this.#persistence = persistence;
     this.#plugins = plugins;
     this.#llm = llm;
@@ -415,6 +419,7 @@ export class AgentSession {
     return {
       createScope: (signal) => this.#createPluginScope(signal),
       history: () => this.#history.modelSnapshot(),
+      onPluginError: this.#onPluginError,
       plugins: this.#plugins,
       sessionKey: this.#persistence.key,
       overlaySession: (input) => this.overlay(input),

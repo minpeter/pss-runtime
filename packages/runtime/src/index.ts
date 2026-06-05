@@ -67,6 +67,10 @@ export type {
   UserTextContent,
 } from "./session/events";
 export type { AgentInput, SessionInput } from "./session/input";
+export type {
+  AgentPluginErrorHandler,
+  AgentPluginHandlerError,
+} from "./session/lifecycle";
 export type { AgentRun } from "./session/run";
 export type {
   CommitResult,

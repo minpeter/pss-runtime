@@ -17,7 +17,10 @@ import {
   composeOverlayHistory,
   createInferenceFrame,
 } from "./overlay";
-import { createCurrentTurnAnchor } from "./overlay-anchor";
+import {
+  createCurrentTurnAnchor,
+  resolveCurrentTurnIndex,
+} from "./overlay-anchor";
 import type {
   CommitResult,
   ExpectedSessionVersion,
@@ -475,6 +478,54 @@ describe("session overlays", () => {
     ]);
   });
 
+  it("does not invoke provider option getters while comparing anchors", () => {
+    const currentTurn = {
+      content: [{ type: "text", text: "same" }],
+      providerOptions: getterProviderOptions(),
+      role: "user",
+    } satisfies ModelMessage;
+    const history = [
+      {
+        content: [{ type: "text", text: "same" }],
+        providerOptions: getterProviderOptions(),
+        role: "user",
+      },
+    ] satisfies ModelMessage[];
+
+    expect(() =>
+      resolveCurrentTurnIndex({
+        currentTurn: createCurrentTurnAnchor([], currentTurn),
+        history,
+      })
+    ).not.toThrow();
+  });
+
+  it("keeps sparse provider option arrays from amplifying comparison work", () => {
+    const frame = createInferenceFrame();
+    const currentTurn = {
+      content: [{ type: "text", text: "same" }],
+      providerOptions: sparseArrayProviderOptions(),
+      role: "user",
+    } satisfies ModelMessage;
+    const clonedCurrentTurn = {
+      content: [{ type: "text", text: "same" }],
+      providerOptions: sparseArrayProviderOptions(),
+      role: "user",
+    } satisfies ModelMessage;
+    appendOverlay(frame, "overlay ctx", "turn-start", "pre-inference");
+
+    const composed = composeOverlayHistory({
+      currentTurn: createCurrentTurnAnchor([], currentTurn),
+      frame,
+      history: [clonedCurrentTurn],
+    });
+
+    expect(composed).toEqual([
+      userTextToModelMessage(userText("overlay ctx")),
+      clonedCurrentTurn,
+    ]);
+  });
+
   it("composed overlay history does not expose mutable canonical message references", () => {
     const canonicalHistory = [
       userTextToModelMessage(userText("current prompt")),
@@ -825,6 +876,25 @@ function cyclicProviderOptions(): NonNullable<ModelMessage["providerOptions"]> {
   return { test: cycle };
 }
 
+function getterProviderOptions(): NonNullable<ModelMessage["providerOptions"]> {
+  const options: TestProviderOption = {};
+  Object.defineProperty(options, "value", {
+    enumerable: true,
+    get() {
+      throw new Error("provider option getter should not run");
+    },
+  });
+  return { test: options };
+}
+
+type TestJson =
+  | boolean
+  | null
+  | number
+  | string
+  | TestJson[]
+  | TestProviderOption;
+
 interface NestedProviderOption {
   readonly child?: NestedProviderOption;
   readonly leaf?: string;
@@ -839,6 +909,19 @@ function nestedProviderOptions(
     value = { child: value };
   }
   return { test: value };
+}
+
+function sparseArrayProviderOptions(): NonNullable<
+  ModelMessage["providerOptions"]
+> {
+  const value: TestJson[] = [];
+  value.length = 1_000_000;
+  value[999_999] = "tail";
+  return { test: { value } };
+}
+
+interface TestProviderOption {
+  readonly [key: string]: TestJson | undefined;
 }
 
 function readStoredHistory(
