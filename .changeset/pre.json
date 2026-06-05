@@ -1,0 +1,9 @@
+{
+  "mode": "pre",
+  "tag": "next",
+  "initialVersions": {
+    "@minpeter/pss-coding-agent": "0.0.10",
+    "@minpeter/pss-runtime": "0.0.10"
+  },
+  "changesets": []
+}
