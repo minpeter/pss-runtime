@@ -153,6 +153,34 @@ describe("Agent session lifecycle", () => {
     ]);
   });
 
+  it("does not persist an active turn after session delete", async () => {
+    const llmStarted = createDeferred();
+    const llmGate = createDeferred();
+    const seenHistory: ModelMessage[][] = [];
+    const agent = new Agent({
+      llm: async ({ history }) => {
+        seenHistory.push([...history]);
+        if (seenHistory.length === 1) {
+          llmStarted.resolve();
+          await llmGate.promise;
+        }
+        return [assistantMessage("DONE")];
+      },
+    });
+    const session = agent.session("delete-active");
+    const deletedRun = collect(await session.send("first"));
+
+    await llmStarted.promise;
+    await session.delete();
+    llmGate.resolve();
+    await deletedRun;
+    await collect(await agent.session("delete-active").send("fresh"));
+
+    expect(seenHistory.at(-1)).toEqual([
+      userTextToModelMessage(userText("fresh")),
+    ]);
+  });
+
   it("rejects runtime input after events return", async () => {
     const agent = new Agent({
       llm: () => Promise.resolve([assistantMessage("DONE")]),

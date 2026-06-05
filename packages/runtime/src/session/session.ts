@@ -4,8 +4,7 @@ import type { Llm } from "../llm";
 import type { AgentEvent } from "./events";
 import type { AgentInput, UserInput } from "./input";
 import { normalizeAgentInput } from "./input-normalization";
-import type { AgentRun } from "./run";
-import { BufferedAgentRun } from "./run";
+import { type AgentRun, BufferedAgentRun } from "./run";
 import {
   addSteeringInput,
   closeRuntimeInput,
@@ -24,8 +23,8 @@ import {
   runAfterTurnHook,
   sessionKilledError,
 } from "./session-errors";
-import type { SessionPersistenceOptions } from "./session-state";
-import { SessionState } from "./session-state";
+import { closeKilledRuntimeInputs } from "./session-kill";
+import { type SessionPersistenceOptions, SessionState } from "./session-state";
 import { emitTurnErrorAfterRecovery } from "./session-turn-error";
 
 export type { AgentInput, SessionInput, UserInput } from "./input";
@@ -102,6 +101,12 @@ export class AgentSession {
     this.#activeAbort?.abort();
   }
 
+  async delete(): Promise<void> {
+    const deleted = this.#state.delete();
+    this.kill();
+    await deleted;
+  }
+
   enqueueRuntimeInput(
     input: UserInput,
     placement: RuntimeInputPlacement = "turn-start"
@@ -154,16 +159,11 @@ export class AgentSession {
       message: killedError.message,
     });
     runToClose?.close(undefined, killedError.message);
-
-    while (this.#inputQueue.length > 0) {
-      const item = this.#inputQueue.shift();
-      closeRuntimeInput(item?.runtimeInput, killedError.message);
-      item?.run.emit({
-        type: "turn-error",
-        message: killedError.message,
-      });
-      item?.run.close(undefined, killedError.message);
-    }
+    closeKilledRuntimeInputs({
+      activeRuntimeInput: undefined,
+      inputQueue: this.#inputQueue,
+      message: killedError.message,
+    });
   }
 
   async #drainInputQueue(): Promise<void> {

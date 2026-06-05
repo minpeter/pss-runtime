@@ -17,6 +17,7 @@ export class SessionCommitConflictError extends Error {
 export class SessionState {
   readonly #persistence: SessionPersistenceOptions;
   #history = new ModelMessageHistory();
+  #deleted = false;
   #loadPromise?: Promise<void>;
   #loaded = false;
   #storeVersion: string | undefined;
@@ -30,6 +31,10 @@ export class SessionState {
   }
 
   async ensureLoaded(): Promise<void> {
+    if (this.#deleted) {
+      return;
+    }
+
     if (this.#loaded) {
       return;
     }
@@ -58,6 +63,10 @@ export class SessionState {
   }
 
   async commit(): Promise<void> {
+    if (this.#deleted) {
+      return;
+    }
+
     const result = await this.#persistence.store.commit(
       this.#persistence.key,
       {
@@ -72,6 +81,15 @@ export class SessionState {
     }
 
     this.#storeVersion = result.version;
+  }
+
+  async delete(): Promise<void> {
+    this.#deleted = true;
+    this.#loadPromise = undefined;
+    this.#loaded = true;
+    this.#storeVersion = undefined;
+    this.#history = new ModelMessageHistory();
+    await this.#persistence.store.delete(this.#persistence.key);
   }
 
   async #loadSessionState(): Promise<void> {

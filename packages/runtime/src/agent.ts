@@ -118,8 +118,7 @@ export class Agent {
     session = new AgentSession(llm, { key, store: this.#store }, this.#hooks);
     const handle: SessionHandle = {
       delete: async () => {
-        session.kill();
-        await this.#store.delete(key);
+        await session.delete();
         await this.#deleteChildSessions(key);
         this.#sessions.delete(key);
       },
