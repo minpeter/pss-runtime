@@ -66,9 +66,17 @@ describe("subagent background cleanup", () => {
 
   it("background_output still returns results when cleanup fails", async () => {
     const jobs = new Map<string, SubagentJob>();
+    let failCleanup = true;
     jobs.set("bg_done", {
       abort: () => undefined,
-      cleanup: () => Promise.reject(new Error("cleanup failed")),
+      cleanup: () => {
+        if (failCleanup) {
+          failCleanup = false;
+          return Promise.reject(new Error("cleanup failed"));
+        }
+
+        return Promise.resolve();
+      },
       id: "bg_done",
       promise: Promise.resolve(),
       result: {
@@ -100,6 +108,18 @@ describe("subagent background cleanup", () => {
         task_id: "bg_done",
       })
     );
+    expect(jobs.has("bg_done")).toBe(true);
+
+    await createBackgroundOutputTool(jobs).execute?.(
+      { task_id: "bg_done" },
+      {
+        abortSignal: new AbortController().signal,
+        context: {},
+        messages: [],
+        toolCallId: "call-2",
+      }
+    );
+
     expect(jobs.has("bg_done")).toBe(false);
   });
 });

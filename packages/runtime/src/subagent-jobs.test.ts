@@ -36,6 +36,7 @@ describe("subagent background jobs", () => {
         jobs,
         parentSession,
         prompt: { text: `research ${index}`, type: "user-text" },
+        registerCleanup: () => undefined,
         sessionKey: `${parentSessionKey}:${index}`,
         subagent,
       })

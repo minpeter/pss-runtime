@@ -75,9 +75,6 @@ function createDelegateTool({
         sessionKey: input.sessionKey,
         subagent: subagent.name ?? "subagent",
       });
-      registerChildSession(parentSessionKey, () =>
-        subagent.session(sessionKey).delete()
-      );
       if (input.run_in_background === true) {
         return startBackgroundJob({
           abortSignal: abortSignal ?? new AbortController().signal,
@@ -85,11 +82,16 @@ function createDelegateTool({
           jobs,
           parentSession,
           prompt,
+          registerCleanup: (cleanup) =>
+            registerChildSession(parentSessionKey, cleanup),
           sessionKey,
           subagent,
         });
       }
 
+      registerChildSession(parentSessionKey, () =>
+        subagent.session(sessionKey).delete()
+      );
       parentSession.emitObserverEvent({
         description: input.description,
         run_in_background: false,

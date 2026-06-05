@@ -11,6 +11,7 @@ export function startBackgroundJob({
   jobs,
   parentSession,
   prompt,
+  registerCleanup,
   sessionKey,
   subagent,
 }: {
@@ -19,6 +20,7 @@ export function startBackgroundJob({
   readonly jobs: Map<string, SubagentJob>;
   readonly parentSession: RuntimeInputSink;
   readonly prompt: AgentInput;
+  readonly registerCleanup: (cleanup: () => Promise<void>) => void;
   readonly sessionKey: string;
   readonly subagent: Subagent;
 }) {
@@ -38,10 +40,12 @@ export function startBackgroundJob({
   const childSession = subagent.session(childSessionKey);
   const abort = () => childSession.interrupt();
   abortSignal.addEventListener("abort", abort, { once: true });
+  const cleanup = () => childSession.delete();
+  registerCleanup(cleanup);
 
   const job: SubagentJob = {
     abort,
-    cleanup: () => childSession.delete(),
+    cleanup,
     description,
     id,
     promise: Promise.resolve(),
