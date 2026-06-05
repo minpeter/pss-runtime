@@ -184,7 +184,7 @@ describe("Agent session API", () => {
           name: "failing-after-turn",
           setup(host) {
             host.on("turn.after", () => {
-              throw new Error("after turn failed");
+              throw new Error("after turn failed with secret-token");
             });
           },
         }),
@@ -221,8 +221,10 @@ describe("Agent session API", () => {
         userTextToModelMessage(userText("second")),
       ]);
       expect(consoleError).toHaveBeenCalledWith(
-        "Agent plugin turn.after handler failed:",
-        expect.any(Error)
+        "Agent plugin turn.after handler failed: Error"
+      );
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+        "secret-token"
       );
     } finally {
       consoleError.mockRestore();
@@ -240,7 +242,7 @@ describe("Agent session API", () => {
           name: "failing-after-step",
           setup(host) {
             host.on("step.after", () => {
-              throw new Error("after step failed");
+              throw new Error("after step failed with secret-token");
             });
           },
         }),
@@ -261,8 +263,10 @@ describe("Agent session API", () => {
         "turn-end",
       ]);
       expect(consoleError).toHaveBeenCalledWith(
-        "Agent plugin step.after handler failed:",
-        expect.any(Error)
+        "Agent plugin step.after handler failed: Error"
+      );
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+        "secret-token"
       );
     } finally {
       consoleError.mockRestore();

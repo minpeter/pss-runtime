@@ -233,9 +233,14 @@ function logPluginHandlerRejections(
   for (const settlement of settlements) {
     if (settlement.status === "rejected") {
       console.error(
-        `Agent plugin ${eventName} handler failed:`,
-        settlement.reason
+        `Agent plugin ${eventName} handler failed: ${errorKind(
+          settlement.reason
+        )}`
       );
     }
   }
+}
+
+function errorKind(reason: unknown): string {
+  return reason instanceof Error ? reason.name : typeof reason;
 }
