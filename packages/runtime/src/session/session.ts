@@ -1,66 +1,48 @@
 import { runAgentLoop } from "../agent-loop";
 import type { AgentHooks } from "../hooks";
 import type { Llm } from "../llm";
-import type {
-  AgentEvent,
-  RuntimeInput,
-  UserMessage,
-  UserMessageContentPart,
-  UserText,
-} from "./events";
-import { ModelMessageHistory } from "./history";
+import type { AgentEvent } from "./events";
 import type { AgentInput, UserInput } from "./input";
+import { normalizeAgentInput } from "./input-normalization";
 import type { AgentRun } from "./run";
 import { BufferedAgentRun } from "./run";
-import { decodeStoredSessionSnapshot, encodeSessionSnapshot } from "./snapshot";
-import type { SessionStore } from "./store/types";
+import {
+  addSteeringInput,
+  closeRuntimeInput,
+  createRuntimeInputState,
+  hooksForRuntimeInput,
+  type QueuedInput,
+  type QueuedRuntimeInput,
+  type RuntimeInputPlacement,
+  type RuntimeInputState,
+  shiftRuntimeInput,
+  withRuntimeInputWindow,
+  withSteeringPlacement,
+} from "./runtime-input";
+import {
+  errorMessage,
+  runAfterTurnHook,
+  sessionKilledError,
+} from "./session-errors";
+import type { SessionPersistenceOptions } from "./session-state";
+import { SessionState } from "./session-state";
+import { emitTurnErrorAfterRecovery } from "./session-turn-error";
 
 export type { AgentInput, SessionInput, UserInput } from "./input";
 export type { AgentRun } from "./run";
-
-interface SessionPersistenceOptions {
-  readonly key: string;
-  readonly store: SessionStore;
-}
-
-interface QueuedInput {
-  readonly input: UserInput;
-  readonly run: BufferedAgentRun;
-  readonly runtimeInput: RuntimeInputState;
-}
-
-type RuntimeInputPlacement = RuntimeInput["placement"];
-const noBoundaryDecision = undefined;
-
-interface QueuedRuntimeInput {
-  readonly input: UserInput;
-  readonly placement: RuntimeInputPlacement;
-}
-
-interface RuntimeInputState {
-  closedReason?: string;
-  pending: Promise<void>;
-  placement?: RuntimeInputPlacement;
-  readonly queue: QueuedRuntimeInput[];
-  steerPlacement?: RuntimeInputPlacement;
-}
 
 export class AgentSession {
   readonly #hooks?: AgentHooks;
   readonly #inputQueue: QueuedInput[] = [];
   readonly #llm: Llm;
   readonly #pendingRuntimeInputs: QueuedRuntimeInput[] = [];
-  readonly #persistence: SessionPersistenceOptions;
+  readonly #state: SessionState;
   #activeAbort?: AbortController;
   #activeRun?: BufferedAgentRun;
   #activeRuntimeInput?: RuntimeInputState;
-  #history = new ModelMessageHistory();
   #killed = false;
-  #loadPromise?: Promise<void>;
-  #loaded = false;
   #running = false;
   #runToCloseOnKill?: BufferedAgentRun;
-  #storeVersion: string | undefined;
 
   constructor(
     llm: Llm,
@@ -69,7 +51,7 @@ export class AgentSession {
   ) {
     this.#hooks = hooks;
     this.#llm = llm;
-    this.#persistence = persistence;
+    this.#state = new SessionState(persistence);
   }
 
   async send(input: AgentInput): Promise<AgentRun> {
@@ -77,16 +59,15 @@ export class AgentSession {
       throw sessionKilledError();
     }
 
-    await this.#ensureLoaded();
+    await this.#state.ensureLoaded();
 
     if (this.#killed) {
       throw sessionKilledError();
     }
 
-    const runtimeInput: RuntimeInputState = {
-      pending: Promise.resolve(),
-      queue: this.#pendingRuntimeInputs.splice(0),
-    };
+    const runtimeInput = createRuntimeInputState(
+      this.#pendingRuntimeInputs.splice(0)
+    );
     const acceptedInput = normalizeAgentInput(input);
     const run = new BufferedAgentRun();
     run.emit(acceptedInput);
@@ -113,7 +94,7 @@ export class AgentSession {
       return this.send(input);
     }
 
-    await this.#addSteeringInput(runtimeInput, input);
+    await addSteeringInput(runtimeInput, input);
     return run;
   }
 
@@ -166,7 +147,7 @@ export class AgentSession {
     const killedError = sessionKilledError();
     this.#pendingRuntimeInputs.length = 0;
     this.#activeAbort?.abort();
-    this.#closeRuntimeInput(this.#activeRuntimeInput, killedError.message);
+    closeRuntimeInput(this.#activeRuntimeInput, killedError.message);
     const runToClose = this.#runToCloseOnKill ?? this.#activeRun;
     runToClose?.emit({
       type: "turn-error",
@@ -176,44 +157,13 @@ export class AgentSession {
 
     while (this.#inputQueue.length > 0) {
       const item = this.#inputQueue.shift();
-      this.#closeRuntimeInput(item?.runtimeInput, killedError.message);
+      closeRuntimeInput(item?.runtimeInput, killedError.message);
       item?.run.emit({
         type: "turn-error",
         message: killedError.message,
       });
       item?.run.close(undefined, killedError.message);
     }
-  }
-
-  async #ensureLoaded(): Promise<void> {
-    if (this.#loaded) {
-      return;
-    }
-
-    this.#loadPromise ??= this.#loadSessionState();
-    try {
-      await this.#loadPromise;
-    } catch (error) {
-      this.#loadPromise = undefined;
-      throw error;
-    }
-  }
-
-  async #loadSessionState(): Promise<void> {
-    if (this.#loaded) {
-      return;
-    }
-
-    await this.#replaceWithStoredSession();
-    this.#loaded = true;
-  }
-
-  async #replaceWithStoredSession(): Promise<void> {
-    const stored = await this.#persistence.store.load(this.#persistence.key);
-    this.#storeVersion = stored?.version;
-    this.#history = new ModelMessageHistory(
-      decodeStoredSessionSnapshot(stored)
-    );
   }
 
   async #drainInputQueue(): Promise<void> {
@@ -244,41 +194,29 @@ export class AgentSession {
     this.#activeRun = run;
     this.#activeRuntimeInput = runtimeInput;
     this.#runToCloseOnKill = run;
-    const historySnapshot = this.#history.modelSnapshot();
+    const historySnapshot = this.#state.modelSnapshot();
 
     try {
-      await this.#withSteeringPlacement(
-        runtimeInput,
-        "turn-start",
-        async () => {
-          await this.#hooks?.beforeTurn?.({
-            history: this.#history.modelSnapshot(),
-            input,
-            signal: activeAbort.signal,
-          });
-        }
-      );
-      await this.#withRuntimeInputWindow(
-        runtimeInput,
-        "turn-start",
-        async () => {
-          await run.emitBoundary({ type: "turn-start" });
-        }
-      );
-      this.#history.appendUserInput(input);
-      await this.#commitHistory();
+      await withSteeringPlacement(runtimeInput, "turn-start", async () => {
+        await this.#hooks?.beforeTurn?.({
+          history: this.#state.modelSnapshot(),
+          input,
+          signal: activeAbort.signal,
+        });
+      });
+      await withRuntimeInputWindow(runtimeInput, "turn-start", async () => {
+        await run.emitBoundary({ type: "turn-start" });
+      });
+      this.#state.appendUserInput(input);
+      await this.#state.commit();
       await this.#drainRuntimeInput(run, runtimeInput, "turn-start");
 
       const result = await runAgentLoop({
         emit: async (event) => {
           if (event.type === "step-start" || event.type === "step-end") {
-            await this.#withRuntimeInputWindow(
-              runtimeInput,
-              event.type,
-              async () => {
-                await run.emitBoundary(event);
-              }
-            );
+            await withRuntimeInputWindow(runtimeInput, event.type, async () => {
+              await run.emitBoundary(event);
+            });
             const runtimeInputAdded = await this.#drainRuntimeInput(
               run,
               runtimeInput,
@@ -288,158 +226,56 @@ export class AgentSession {
             if (event.type === "step-end") {
               return { runtimeInputAdded };
             }
-            return noBoundaryDecision;
+            return;
           }
 
           run.emit(event);
         },
-        history: this.#history,
-        hooks: this.#hooksForRuntimeInput(runtimeInput),
+        history: this.#state.history,
+        hooks: hooksForRuntimeInput(this.#hooks, runtimeInput),
         llm: this.#llm,
         signal: activeAbort.signal,
       });
 
-      await this.#commitHistory();
+      await this.#state.commit();
       const terminalEvent = result === "aborted" ? "turn-abort" : "turn-end";
-      this.#closeRuntimeInput(runtimeInput, terminalEvent);
+      closeRuntimeInput(runtimeInput, terminalEvent);
       this.#activeRuntimeInput = undefined;
       this.#activeRun = undefined;
       await runAfterTurnHook(this.#hooks, {
-        history: this.#history.modelSnapshot(),
+        history: this.#state.modelSnapshot(),
         input,
         result,
         signal: activeAbort.signal,
       });
       run.emit({ type: terminalEvent });
     } catch (error) {
-      if (error instanceof SessionCommitConflictError) {
-        run.emit({ type: "turn-error", message: error.message });
-        this.#closeRuntimeInput(runtimeInput, "a session commit conflict");
-        this.#activeAbort = undefined;
+      if (!(error instanceof Error)) {
+        await emitTurnErrorAfterRecovery({
+          error,
+          historySnapshot,
+          run,
+          runtimeInput,
+          state: this.#state,
+        });
         return;
       }
 
-      this.#history.rollback(historySnapshot);
-      try {
-        await this.#commitHistory();
-      } catch (rollbackError) {
-        run.emit({
-          type: "turn-error",
-          message: `${errorMessage(error)}; history rollback persistence failed: ${errorMessage(
-            rollbackError
-          )}`,
-        });
-        this.#closeRuntimeInput(runtimeInput, "turn-error");
-        this.#activeAbort = undefined;
-        return;
-      }
-      run.emit({ type: "turn-error", message: errorMessage(error) });
-      this.#closeRuntimeInput(runtimeInput, "turn-error");
+      await emitTurnErrorAfterRecovery({
+        error,
+        historySnapshot,
+        run,
+        runtimeInput,
+        state: this.#state,
+      });
     } finally {
-      this.#closeRuntimeInput(runtimeInput);
+      closeRuntimeInput(runtimeInput);
       this.#activeAbort = undefined;
       this.#activeRun = undefined;
       this.#activeRuntimeInput = undefined;
       this.#runToCloseOnKill = undefined;
       run.close(undefined, runtimeInput.closedReason);
     }
-  }
-
-  #addSteeringInput(
-    runtimeInput: RuntimeInputState,
-    input: AgentInput
-  ): Promise<void> {
-    const next = runtimeInput.pending.then(() => {
-      if (runtimeInput.closedReason) {
-        throw runtimeInputClosedError(runtimeInput.closedReason);
-      }
-
-      runtimeInput.queue.push({
-        input: normalizeAgentInput(input),
-        placement:
-          runtimeInput.steerPlacement ?? runtimeInput.placement ?? "step-end",
-      });
-    });
-    runtimeInput.pending = next.catch(() => undefined);
-    return next;
-  }
-
-  #closeRuntimeInput(
-    runtimeInput: RuntimeInputState | undefined,
-    reason = "the run reached a terminal state"
-  ): void {
-    if (!runtimeInput?.closedReason && runtimeInput) {
-      runtimeInput.closedReason = reason;
-      runtimeInput.placement = undefined;
-    }
-  }
-
-  async #commitHistory(): Promise<void> {
-    const result = await this.#persistence.store.commit(
-      this.#persistence.key,
-      {
-        state: encodeSessionSnapshot(this.#history.modelSnapshot()),
-      },
-      { expectedVersion: this.#storeVersion ?? null }
-    );
-
-    if (!result.ok) {
-      await this.#replaceWithStoredSession();
-      throw new SessionCommitConflictError(this.#persistence.key);
-    }
-
-    this.#storeVersion = result.version;
-  }
-
-  async #withRuntimeInputWindow<T>(
-    runtimeInput: RuntimeInputState,
-    placement: RuntimeInputPlacement,
-    callback: () => Promise<T>
-  ): Promise<T> {
-    const previousSteerPlacement = runtimeInput.steerPlacement;
-    runtimeInput.placement = placement;
-    runtimeInput.steerPlacement = placement;
-    try {
-      return await callback();
-    } finally {
-      runtimeInput.placement = undefined;
-      runtimeInput.steerPlacement = previousSteerPlacement;
-    }
-  }
-
-  async #withSteeringPlacement<T>(
-    runtimeInput: RuntimeInputState,
-    placement: RuntimeInputPlacement,
-    callback: () => Promise<T>
-  ): Promise<T> {
-    const previousSteerPlacement = runtimeInput.steerPlacement;
-    runtimeInput.steerPlacement = placement;
-    try {
-      return await callback();
-    } finally {
-      runtimeInput.steerPlacement = previousSteerPlacement;
-    }
-  }
-
-  #hooksForRuntimeInput(
-    runtimeInput: RuntimeInputState
-  ): AgentHooks | undefined {
-    const hooks = this.#hooks;
-    if (!hooks) {
-      return;
-    }
-
-    return {
-      ...hooks,
-      afterStep: (context) =>
-        this.#withSteeringPlacement(runtimeInput, "step-end", async () => {
-          await hooks.afterStep?.(context);
-        }),
-      beforeStep: (context) =>
-        this.#withSteeringPlacement(runtimeInput, "step-start", async () => {
-          await hooks.beforeStep?.(context);
-        }),
-    };
   }
 
   async #drainRuntimeInput(
@@ -452,198 +288,11 @@ export class AgentSession {
     while (next) {
       added = true;
       run.emit({ type: "runtime-input", input: next.input, placement });
-      this.#history.appendUserInput(next.input);
-      await this.#commitHistory();
+      this.#state.appendUserInput(next.input);
+      await this.#state.commit();
       next = shiftRuntimeInput(runtimeInput, placement);
     }
 
     return added;
-  }
-}
-
-function shiftRuntimeInput(
-  runtimeInput: RuntimeInputState,
-  placement: RuntimeInputPlacement
-): QueuedRuntimeInput | undefined {
-  const index = runtimeInput.queue.findIndex(
-    (input) => input.placement === placement
-  );
-  if (index === -1) {
-    return;
-  }
-
-  return runtimeInput.queue.splice(index, 1)[0];
-}
-
-async function runAfterTurnHook(
-  hooks: AgentHooks | undefined,
-  context: Parameters<NonNullable<AgentHooks["afterTurn"]>>[0]
-): Promise<void> {
-  const hook = hooks?.afterTurn;
-  if (!hook) {
-    return;
-  }
-
-  await Promise.allSettled([Promise.resolve().then(() => hook(context))]);
-}
-
-export function normalizeAgentInput(input: AgentInput): UserInput {
-  if (typeof input === "string") {
-    return {
-      type: "user-text",
-      text: input,
-    };
-  }
-
-  if (isStringArrayInput(input)) {
-    return {
-      type: "user-text",
-      text: structuredClone(input) as readonly string[],
-    };
-  }
-
-  if (isArrayInput(input)) {
-    assertUserMessageContent(input);
-    return {
-      type: "user-message",
-      content: structuredClone(input) as readonly UserMessageContentPart[],
-    };
-  }
-
-  if (isUserMessage(input)) {
-    assertUserMessageContent(input.content);
-    return structuredClone(input);
-  }
-
-  if (isUserText(input)) {
-    return structuredClone(input);
-  }
-
-  throw new TypeError(
-    "Agent input must be text, text parts, content parts, user-text, or user-message."
-  );
-}
-
-function isStringArrayInput(input: AgentInput): input is readonly string[] {
-  return isArrayInput(input) && input.every((part) => typeof part === "string");
-}
-
-function isArrayInput(
-  input: AgentInput
-): input is readonly string[] | readonly UserMessageContentPart[] {
-  return Array.isArray(input);
-}
-
-function isUserMessage(input: UserInput): input is UserMessage {
-  return (
-    input !== null && typeof input === "object" && input.type === "user-message"
-  );
-}
-
-function isUserText(input: UserInput): input is UserText {
-  return (
-    input !== null &&
-    typeof input === "object" &&
-    input.type === "user-text" &&
-    (typeof input.text === "string" || isStringArrayInput(input.text))
-  );
-}
-
-function assertUserMessageContent(
-  input: readonly unknown[]
-): asserts input is readonly UserMessageContentPart[] {
-  for (const part of input) {
-    if (!isUserMessageContentPart(part)) {
-      throw new TypeError(
-        'Agent input content parts must be { type: "text", text }, { type: "image", image }, or { type: "file", data, mediaType }.'
-      );
-    }
-  }
-}
-
-function isUserMessageContentPart(
-  part: unknown
-): part is UserMessageContentPart {
-  if (part === null || typeof part !== "object" || !("type" in part)) {
-    return false;
-  }
-
-  if (part.type === "text") {
-    return "text" in part && typeof part.text === "string";
-  }
-
-  if (part.type === "image") {
-    return (
-      "image" in part &&
-      typeof part.image === "string" &&
-      (!("mediaType" in part) || typeof part.mediaType === "string")
-    );
-  }
-
-  if (part.type === "file") {
-    return (
-      "data" in part &&
-      isUserMessageFileData(part.data) &&
-      "mediaType" in part &&
-      typeof part.mediaType === "string" &&
-      (!("filename" in part) || typeof part.filename === "string")
-    );
-  }
-
-  return false;
-}
-
-function isUserMessageFileData(data: unknown): boolean {
-  if (typeof data === "string") {
-    return true;
-  }
-
-  if (data === null || typeof data !== "object" || !("type" in data)) {
-    return false;
-  }
-
-  if (data.type === "data") {
-    return "data" in data && typeof data.data === "string";
-  }
-
-  if (data.type === "reference") {
-    return (
-      "reference" in data &&
-      data.reference !== null &&
-      typeof data.reference === "object" &&
-      Object.values(data.reference).every((value) => typeof value === "string")
-    );
-  }
-
-  if (data.type === "text") {
-    return "text" in data && typeof data.text === "string";
-  }
-
-  if (data.type === "url") {
-    return "url" in data && typeof data.url === "string";
-  }
-
-  return false;
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return String(error);
-}
-
-function sessionKilledError(): Error {
-  return new Error("Session killed");
-}
-
-function runtimeInputClosedError(reason: string): Error {
-  return new Error(`session.steer() cannot be used after ${reason}`);
-}
-
-class SessionCommitConflictError extends Error {
-  constructor(key: string) {
-    super(`Session ${JSON.stringify(key)} commit conflict`);
   }
 }

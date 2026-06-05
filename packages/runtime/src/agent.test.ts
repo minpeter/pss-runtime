@@ -9,7 +9,6 @@ const ambiguousOptionsPattern = /either options\.llm or options\.model/;
 const invalidLlmPattern = /invalid options\.llm/;
 const missingModelPattern = /missing options\.model/;
 const missingOptionsPattern = /Agent options are required/;
-const removedFactoryTestName = ["does not expose Agent", "create"].join(".");
 const duplicateSubagentToolNamePattern = /duplicate subagent tool name/;
 const existingToolCollisionPattern = /collides with an existing tool/;
 const objectMapSubagentsPattern = /subagents must be an array/;
@@ -78,7 +77,7 @@ describe("Agent", () => {
     expect(new Agent({ model: fakeModel })).toBeInstanceOf(Agent);
   });
 
-  it(removedFactoryTestName, () => {
+  it("does not expose Agent.create", () => {
     expect(Object.hasOwn(Agent, "create")).toBe(false);
   });
 

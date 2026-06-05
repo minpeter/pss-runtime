@@ -1,5 +1,5 @@
 import { jsonSchema, type ToolSet, tool } from "ai";
-import { normalizeAgentInput } from "./session/session";
+import { normalizeAgentInput } from "./session/input-normalization";
 import { createBackgroundCancelTool } from "./subagent-job-cancel";
 import { createBackgroundOutputTool } from "./subagent-job-output";
 import { startBackgroundJob } from "./subagent-jobs";
