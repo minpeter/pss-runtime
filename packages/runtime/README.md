@@ -28,7 +28,23 @@ for await (const event of run.events()) {
 boundaries until the events consumer asks for the next event, so callers must
 consume the events for the run to progress. This is what lets code react to
 `turn-start`, `step-start`, and `step-end` before the next model snapshot is
-created.
+created. `AgentRun.events()` is single-consumer by design: keep rendering,
+logging, tracing, and continuation policy in the same app-owned loop when those
+concerns must share synchronized boundary control.
+
+```ts
+const run = await agent.send("Implement the plan.");
+const session = agent.session("default");
+
+for await (const event of run.events()) {
+  renderEvent(event);
+  traceEvent(event);
+
+  if (event.type === "step-end" && shouldContinueWork()) {
+    await session.steer("Continue. The task is not complete yet.");
+  }
+}
+```
 
 Per-key conversations use `session(key)`:
 
@@ -122,45 +138,159 @@ for await (const event of run.events()) {
 pending steering path or, when idle, when a new run is scheduled. It does not wait
 for a later model snapshot.
 
-## Session storage and portability
+## Plugins, Session Storage, Memory, And Compaction
 
 The runtime owns full session state encoding and history compaction semantics.
-Adapters own persistence only through `SessionStore`:
+Persistence, memory, and compaction are configured through in-process plugins:
 
-Stored session state is an opaque, versioned runtime snapshot for continuation.
-Do not inspect it as a replay log; exact replay should be modeled separately as
-an `AgentEvent` log if that capability is added later.
+```ts
+import { Agent } from "@minpeter/pss-runtime";
+import { compaction, memory, sessions } from "@minpeter/pss-runtime/plugins";
 
-Custom stores own version generation. `load(key)` returns the opaque `state` with
-the store-minted `version`; `commit(key, { state }, { expectedVersion })` receives
-state only and should reject stale versions by returning `{ ok: false, reason:
-"conflict" }`. On success, the store persists `{ state, version }` and returns the
-new version to the runtime.
+const agent = await Agent.create({
+  model,
+  plugins: [sessions.file(".pss/sessions"), memory(), compaction()],
+});
+```
+
+If no persistence plugin is provided, sessions are memory-backed by default.
+
+Reusable middleware belongs in plugins. Plugins can observe turn and step
+lifecycle events and call the scoped `steer` function to insert runtime input at
+the active boundary. App-level control should stay with `run.events()` plus
+`session.steer()`; plugin lifecycle is for reusable policy.
+
+Plugin event names are dotted middleware names: `turn.before`, `step.before`,
+`step.after`, `turn.after`, `tool.call`, and `tool.result`. These are separate
+from public `run.events()` transcript names such as `turn-start`, `step-start`,
+`assistant-text`, `tool-call`, `tool-result`, `step-end`, and `turn-end`.
+
+```ts
+import { Agent, definePlugin } from "@minpeter/pss-runtime";
+
+const continuePlugin = definePlugin({
+  name: "continue-policy",
+  setup(host) {
+    host.on("step.after", async ({ result, history, steer, stepIndex }) => {
+      if (result === "completed" && stepIndex === 0 && shouldContinueWork(history)) {
+        await steer("Continue. The task is not complete yet.");
+      }
+    });
+  },
+});
+
+const agent = await Agent.create({
+  model,
+  plugins: [continuePlugin],
+});
+```
+
+`turn.after` is useful for audit, metrics, or scheduling a separate follow-up
+run after the current turn has committed.
+
+```ts
+const auditPlugin = definePlugin({
+  name: "turn-audit",
+  setup(host) {
+    host.on("turn.after", ({ result, sessionKey }) => {
+      recordTurnResult(sessionKey, result);
+    });
+  },
+});
+```
+
+Tool policy hooks apply to runtime-owned tools in the `Agent.create({ model,
+tools })` path, including tools registered by plugins. Custom `llm` callers own
+their tool execution and do not receive synthetic tool hook events.
+
+`tool.call` runs after AI SDK input parsing and before the original tool
+`execute`. Handlers run in plugin registration order. `allow` continues to the
+next handler, `modify` replaces the input for later handlers and execution,
+`reject-and-continue` skips the original tool and returns a rejection payload to
+the model, `synthesize` skips the original tool and returns a synthetic output,
+and `error` fails the active run.
+
+```ts
+import { definePlugin } from "@minpeter/pss-runtime";
+
+const toolPolicyPlugin = definePlugin({
+  name: "tool-policy",
+  setup(host) {
+    host.on("tool.call", ({ input, tool }) => {
+      if (tool === "delete_file") {
+        return {
+          action: "reject-and-continue",
+          message: "delete_file is disabled in this workspace.",
+        };
+      }
+
+      if (tool === "search" && shouldNarrowSearch(input)) {
+        return { action: "modify", input: narrowSearchInput(input) };
+      }
+
+      return { action: "allow" };
+    });
+  },
+});
+```
+
+`tool.result` runs after allowed/modified execution, rejected calls, synthesized
+calls, and original tool errors. It can observe or replace the model-facing
+result with `{ status: "done", output }`, `{ status: "error", error, output }`,
+or `{ status: "cancelled", error, output }`. Replacements flow into later
+`tool.result` handlers.
+
+```ts
+const resultPolicyPlugin = definePlugin({
+  name: "tool-result-policy",
+  setup(host) {
+    host.on("tool.result", ({ output, status, tool }) => {
+      if (tool === "read_secret" && status === "done") {
+        return {
+          status: "done",
+          output: redactSecretOutput(output),
+        };
+      }
+    });
+  },
+});
+```
+
+Custom stores still own version generation through `SessionStore`. Use
+`sessions.custom(store)` when the runtime should persist through a caller-owned
+store:
 
 ```ts
 import type { SessionStore } from "@minpeter/pss-runtime";
-import { MemorySessionStore } from "@minpeter/pss-runtime/session-store/memory";
+import { sessions } from "@minpeter/pss-runtime/plugins";
+
+declare const store: SessionStore;
 
 const agent = await Agent.create({
   model,
-  sessions: {
-    store: new MemorySessionStore(), // default when omitted
-  },
+  plugins: [sessions.custom(store)],
 });
 ```
 
-For durable sessions, use the exported file POC:
+Stored session state is opaque, versioned runtime continuation state:
 
-```ts
-import { FileSessionStore } from "@minpeter/pss-runtime/session-store/file";
+Do not inspect it as a replay log; exact replay should be modeled separately as
+an `AgentEvent` log if that capability is added later.
 
-const agent = await Agent.create({
-  model,
-  sessions: {
-    store: new FileSessionStore(".pss/sessions"),
-  },
-});
-```
+`load(key)` returns the opaque `state` with the store-minted `version`;
+`commit(key, { state }, { expectedVersion })` receives state only and should
+reject stale versions by returning `{ ok: false, reason: "conflict" }`. On
+success, the store persists `{ state, version }` and returns the new version to
+the runtime.
+
+`memory()` adds session-scoped tools named `set_context`, `load_context`, and
+`search_context`. Search is deterministic lexical matching by default; no
+embedding provider is required. Memory is injected into model-facing context
+without mutating top-level instructions.
+
+`compaction()` stores non-destructive overlays with `startIndex` and `endIndex`.
+The full canonical history remains in the session snapshot; summaries are
+applied only to model-facing context.
 
 ## Future adapter boundary: Cloudflare multi-user DX
 

@@ -9,15 +9,18 @@ const ambiguousOptionsPattern = /either options\.llm or options\.model/;
 const invalidLlmPattern = /invalid options\.llm/;
 const missingModelPattern = /missing options\.model/;
 const missingOptionsPattern = /Agent options are required/;
+const removedHooksOptionPattern = /options\.hooks was removed/;
 
 const acceptsModelOptions: AgentOptions = {
-  hooks: {},
   instructions: "Use the injected model.",
   model: fakeModel,
   toolChoice: "auto",
   tools: {},
 };
-const acceptsCustomLlmOptions: AgentOptions = { hooks: {}, llm: fakeLlm };
+const acceptsCustomLlmOptions: AgentOptions = { llm: fakeLlm };
+
+// @ts-expect-error top-level hooks are no longer accepted.
+const rejectsHooksOptions: AgentOptions = { hooks: {}, llm: fakeLlm };
 
 // @ts-expect-error custom llm and model options are mutually exclusive.
 const rejectsAmbiguousModelPrecedence: AgentOptions = {
@@ -34,6 +37,7 @@ const rejectsIgnoredCreateLlmOptions: AgentOptions = {
 const typeFixtures = [
   acceptsModelOptions,
   acceptsCustomLlmOptions,
+  rejectsHooksOptions,
   rejectsAmbiguousModelPrecedence,
   rejectsIgnoredCreateLlmOptions,
 ];
@@ -46,7 +50,7 @@ const collectRun = async (run: Awaited<ReturnType<Agent["send"]>>) => {
 
 describe("Agent", () => {
   it("keeps AgentOptions type fixtures reachable", () => {
-    expect(typeFixtures).toHaveLength(4);
+    expect(typeFixtures).toHaveLength(5);
   });
 
   it("creates agents from a caller-owned LanguageModel", async () => {
@@ -106,5 +110,11 @@ describe("Agent", () => {
         model: fakeModel,
       } as unknown as AgentOptions)
     ).rejects.toThrow(ambiguousOptionsPattern);
+  });
+
+  it("rejects removed legacy hooks options", async () => {
+    await expect(
+      Reflect.apply(Agent.create, Agent, [{ hooks: {}, llm: fakeLlm }])
+    ).rejects.toThrow(removedHooksOptionPattern);
   });
 });

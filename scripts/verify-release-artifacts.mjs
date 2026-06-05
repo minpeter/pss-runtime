@@ -23,10 +23,12 @@ const FORBIDDEN_RUNTIME_ROOT_ALIASES = [
   "AgentMessage",
   ["Agent", "Model"].join(""),
   "AgentLoopResult",
+  "AgentRunEventListener",
   "AgentRunInput",
   "AgentTool",
   "AgentTools",
   "RunInput",
+  "consumeRunEvents",
   "runAgentLoop",
 ];
 const FORBIDDEN_RUNTIME_PUBLIC_PATTERNS = [
@@ -38,6 +40,34 @@ const FORBIDDEN_RUNTIME_PUBLIC_PATTERNS = [
     description: "removed AgentRun.stream() member",
     pattern: /(?:\bstream\(\)\s*\{|AgentRun\.stream\(\))/,
   },
+];
+const REQUIRED_RUNTIME_PLUGIN_EVENT_NAMES = [
+  "turn.before",
+  "step.before",
+  "step.after",
+  "turn.after",
+  "tool.call",
+  "tool.result",
+];
+const REQUIRED_RUNTIME_PLUGIN_TYPES = [
+  "AgentPluginTurnBeforeEvent",
+  "AgentPluginStepBeforeEvent",
+  "AgentPluginStepAfterEvent",
+  "AgentPluginTurnAfterEvent",
+  "AgentPluginToolCallEvent",
+  "AgentPluginToolResultEvent",
+  "AgentPluginToolCallResult",
+  "AgentPluginToolResultResult",
+];
+const FORBIDDEN_RUNTIME_PLUGIN_TOKENS = [
+  '"beforeTurn"',
+  '"beforeStep"',
+  '"afterStep"',
+  '"afterTurn"',
+  "AgentPluginBeforeTurnEvent",
+  "AgentPluginBeforeStepEvent",
+  "AgentPluginAfterStepEvent",
+  "AgentPluginAfterTurnEvent",
 ];
 
 const RELATIVE_IMPORT_RE =
@@ -325,8 +355,49 @@ function findRuntimeDeclarationLeaks({ cwd, packages }) {
       cwd,
       file: join(packageDistPath(cwd, "runtime"), "index.d.ts"),
     }),
+    ...findRuntimePluginDeclarationLeaks({
+      cwd,
+      file: join(packageDistPath(cwd, "runtime"), "plugins", "types.d.ts"),
+    }),
     ...findRuntimePublicPatternLeaks({ cwd }),
   ];
+}
+
+function findRuntimePluginDeclarationLeaks({ cwd, file }) {
+  if (!existsSync(file)) {
+    return [
+      `${relativeToCwd(cwd, file)}: missing runtime plugin type declarations`,
+    ];
+  }
+
+  const text = readFileSync(file, "utf8");
+  const errors = [];
+
+  for (const eventName of REQUIRED_RUNTIME_PLUGIN_EVENT_NAMES) {
+    if (!text.includes(JSON.stringify(eventName))) {
+      errors.push(
+        `${relativeToCwd(cwd, file)}: missing plugin event ${eventName}`
+      );
+    }
+  }
+
+  for (const typeName of REQUIRED_RUNTIME_PLUGIN_TYPES) {
+    if (!hasDeclarationToken(text, typeName)) {
+      errors.push(
+        `${relativeToCwd(cwd, file)}: missing plugin type ${typeName}`
+      );
+    }
+  }
+
+  for (const token of FORBIDDEN_RUNTIME_PLUGIN_TOKENS) {
+    if (text.includes(token)) {
+      errors.push(
+        `${relativeToCwd(cwd, file)}: exposes removed plugin token ${token}`
+      );
+    }
+  }
+
+  return errors;
 }
 
 function findRuntimePublicPatternLeaks({ cwd }) {

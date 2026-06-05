@@ -1,16 +1,34 @@
+import type { ModelMessage } from "ai";
 import { runAgentLoop } from "../agent-loop";
-import type { AgentHooks } from "../hooks";
-import type { Llm } from "../llm";
-import type {
-  RuntimeInput,
-  UserMessage,
-  UserMessageContentPart,
-} from "./events";
+import type { Llm, LlmOutput } from "../llm";
+import type { ResolvedAgentPlugins } from "../plugins/runner";
+import { wrapLlmWithContextTransforms } from "../plugins/runner";
+import type { AgentPluginScope } from "../plugins/scope";
+import type { UserInput } from "./events";
 import { ModelMessageHistory } from "./history";
-import type { AgentInput, UserInput } from "./input";
+import type { AgentInput } from "./input";
+import {
+  type AgentSessionLifecycle,
+  createRuntimeInputStepLifecycle,
+  runPluginAfterTurnHandlers,
+  runPluginBeforeTurnHandlers,
+} from "./lifecycle";
 import type { AgentRun } from "./run";
 import { BufferedAgentRun } from "./run";
-import { decodeStoredSessionSnapshot, encodeSessionSnapshot } from "./snapshot";
+import {
+  addRuntimeInput,
+  closeRuntimeInput,
+  createRuntimeInputState,
+  normalizeAgentInput,
+  type RuntimeInputPlacement,
+  type RuntimeInputState,
+  shiftRuntimeInput,
+} from "./runtime-input";
+import {
+  type AgentCompactionOverlay,
+  decodeStoredSessionSnapshot,
+  encodeSessionSnapshot,
+} from "./snapshot";
 import type { SessionStore } from "./store/types";
 
 export type { AgentInput, SessionInput, UserInput } from "./input";
@@ -27,27 +45,14 @@ interface QueuedInput {
   readonly runtimeInput: RuntimeInputState;
 }
 
-type RuntimeInputPlacement = RuntimeInput["placement"];
 const noBoundaryDecision = undefined;
 
-interface QueuedRuntimeInput {
-  readonly input: UserInput;
-  readonly placement: RuntimeInputPlacement;
-}
-
-interface RuntimeInputState {
-  closedReason?: string;
-  pending: Promise<void>;
-  placement?: RuntimeInputPlacement;
-  readonly queue: QueuedRuntimeInput[];
-  steerPlacement?: RuntimeInputPlacement;
-}
-
 export class AgentSession {
-  readonly #hooks?: AgentHooks;
   readonly #inputQueue: QueuedInput[] = [];
+  readonly #internalLlm: Llm;
   readonly #llm: Llm;
   readonly #persistence: SessionPersistenceOptions;
+  readonly #plugins?: ResolvedAgentPlugins;
   #activeAbort?: AbortController;
   #activeRun?: BufferedAgentRun;
   #activeRuntimeInput?: RuntimeInputState;
@@ -55,17 +60,26 @@ export class AgentSession {
   #killed = false;
   #loadPromise?: Promise<void>;
   #loaded = false;
+  #pluginState: Record<string, unknown> = {};
+  #compactions: AgentCompactionOverlay[] = [];
   #running = false;
   #storeVersion: string | undefined;
 
   constructor(
     llm: Llm,
     persistence: SessionPersistenceOptions,
-    hooks?: AgentHooks
+    plugins?: ResolvedAgentPlugins,
+    internalLlm: Llm = llm
   ) {
-    this.#hooks = hooks;
-    this.#llm = llm;
+    this.#internalLlm = internalLlm;
     this.#persistence = persistence;
+    this.#plugins = plugins;
+    this.#llm = wrapLlmWithContextTransforms({
+      createScope: (signal) => this.#createPluginScope(signal),
+      llm,
+      sessionKey: persistence.key,
+      transforms: plugins?.contextTransforms ?? [],
+    });
   }
 
   async send(input: AgentInput): Promise<AgentRun> {
@@ -79,10 +93,7 @@ export class AgentSession {
       throw sessionKilledError();
     }
 
-    const runtimeInput: RuntimeInputState = {
-      pending: Promise.resolve(),
-      queue: [],
-    };
+    const runtimeInput = createRuntimeInputState();
     const acceptedInput = normalizeAgentInput(input);
     const run = new BufferedAgentRun();
     run.emit(acceptedInput);
@@ -109,7 +120,7 @@ export class AgentSession {
       return this.send(input);
     }
 
-    await this.#addSteeringInput(runtimeInput, input);
+    await addRuntimeInput(runtimeInput, input);
     return run;
   }
 
@@ -124,14 +135,11 @@ export class AgentSession {
 
     this.#killed = true;
     this.#activeAbort?.abort();
-    this.#closeRuntimeInput(
-      this.#activeRuntimeInput,
-      sessionKilledError().message
-    );
+    closeRuntimeInput(this.#activeRuntimeInput, sessionKilledError().message);
 
     while (this.#inputQueue.length > 0) {
       const item = this.#inputQueue.shift();
-      this.#closeRuntimeInput(item?.runtimeInput, sessionKilledError().message);
+      closeRuntimeInput(item?.runtimeInput, sessionKilledError().message);
       item?.run.emit({
         type: "turn-error",
         message: sessionKilledError().message,
@@ -166,9 +174,10 @@ export class AgentSession {
   async #replaceWithStoredSession(): Promise<void> {
     const stored = await this.#persistence.store.load(this.#persistence.key);
     this.#storeVersion = stored?.version;
-    this.#history = new ModelMessageHistory(
-      decodeStoredSessionSnapshot(stored)
-    );
+    const snapshot = decodeStoredSessionSnapshot(stored);
+    this.#history = new ModelMessageHistory(snapshot.history);
+    this.#pluginState = structuredClone(snapshot.pluginState);
+    this.#compactions = structuredClone(snapshot.compactions);
   }
 
   async #drainInputQueue(): Promise<void> {
@@ -205,9 +214,9 @@ export class AgentSession {
         runtimeInput,
         "turn-start",
         async () => {
-          await this.#hooks?.beforeTurn?.({
-            history: this.#history.modelSnapshot(),
+          await runPluginBeforeTurnHandlers(this.#pluginLifecycle(), {
             input,
+            runtimeInput,
             signal: activeAbort.signal,
           });
         }
@@ -248,27 +257,37 @@ export class AgentSession {
           run.emit(event);
         },
         history: this.#history,
-        hooks: this.#hooksForRuntimeInput(runtimeInput),
+        stepLifecycle: createRuntimeInputStepLifecycle({
+          lifecycle: this.#pluginLifecycle(),
+          runtimeInput,
+          withSteeringPlacement: (placement, callback) =>
+            this.#withSteeringPlacement(runtimeInput, placement, callback),
+        }),
         llm: this.#llm,
         signal: activeAbort.signal,
       });
 
       await this.#commitHistory();
       const terminalEvent = result === "aborted" ? "turn-abort" : "turn-end";
-      this.#closeRuntimeInput(runtimeInput, terminalEvent);
+      closeRuntimeInput(runtimeInput, terminalEvent);
       this.#activeRuntimeInput = undefined;
       this.#activeRun = undefined;
-      await runAfterTurnHook(this.#hooks, {
-        history: this.#history.modelSnapshot(),
-        input,
-        result,
-        signal: activeAbort.signal,
-      });
+      const pluginHandlersRan = await runPluginAfterTurnHandlers(
+        this.#pluginLifecycle(),
+        {
+          input,
+          result,
+          signal: activeAbort.signal,
+        }
+      );
+      if (pluginHandlersRan) {
+        await this.#commitHistory();
+      }
       run.emit({ type: terminalEvent });
     } catch (error) {
       if (error instanceof SessionCommitConflictError) {
         run.emit({ type: "turn-error", message: error.message });
-        this.#closeRuntimeInput(runtimeInput, "a session commit conflict");
+        closeRuntimeInput(runtimeInput, "a session commit conflict");
         this.#activeAbort = undefined;
         return;
       }
@@ -283,14 +302,14 @@ export class AgentSession {
             rollbackError
           )}`,
         });
-        this.#closeRuntimeInput(runtimeInput, "turn-error");
+        closeRuntimeInput(runtimeInput, "turn-error");
         this.#activeAbort = undefined;
         return;
       }
       run.emit({ type: "turn-error", message: errorMessage(error) });
-      this.#closeRuntimeInput(runtimeInput, "turn-error");
+      closeRuntimeInput(runtimeInput, "turn-error");
     } finally {
-      this.#closeRuntimeInput(runtimeInput);
+      closeRuntimeInput(runtimeInput);
       this.#activeAbort = undefined;
       this.#activeRun = undefined;
       this.#activeRuntimeInput = undefined;
@@ -298,40 +317,15 @@ export class AgentSession {
     }
   }
 
-  #addSteeringInput(
-    runtimeInput: RuntimeInputState,
-    input: AgentInput
-  ): Promise<void> {
-    const next = runtimeInput.pending.then(() => {
-      if (runtimeInput.closedReason) {
-        throw runtimeInputClosedError(runtimeInput.closedReason);
-      }
-
-      runtimeInput.queue.push({
-        input: normalizeAgentInput(input),
-        placement:
-          runtimeInput.steerPlacement ?? runtimeInput.placement ?? "step-end",
-      });
-    });
-    runtimeInput.pending = next.catch(() => undefined);
-    return next;
-  }
-
-  #closeRuntimeInput(
-    runtimeInput: RuntimeInputState | undefined,
-    reason = "the run reached a terminal state"
-  ): void {
-    if (!runtimeInput?.closedReason && runtimeInput) {
-      runtimeInput.closedReason = reason;
-      runtimeInput.placement = undefined;
-    }
-  }
-
   async #commitHistory(): Promise<void> {
     const result = await this.#persistence.store.commit(
       this.#persistence.key,
       {
-        state: encodeSessionSnapshot(this.#history.modelSnapshot()),
+        state: encodeSessionSnapshot({
+          compactions: this.#compactions,
+          history: this.#history.modelSnapshot(),
+          pluginState: this.#pluginState,
+        }),
       },
       { expectedVersion: this.#storeVersion ?? null }
     );
@@ -342,6 +336,63 @@ export class AgentSession {
     }
 
     this.#storeVersion = result.version;
+  }
+
+  #createPluginScope(signal: AbortSignal): AgentPluginScope {
+    return {
+      eventHandlers: this.#plugins?.eventHandlers,
+      getCompactions: () => structuredClone(this.#compactions),
+      getPluginState: (pluginName) => this.#pluginState[pluginName],
+      history: () => this.#history.modelSnapshot(),
+      sessionKey: this.#persistence.key,
+      setCompactions: (compactions) => {
+        this.#compactions = structuredClone([...compactions]);
+      },
+      setPluginState: (pluginName, state) => {
+        this.#pluginState = {
+          ...this.#pluginState,
+          [pluginName]: structuredClone(state),
+        };
+      },
+      signal,
+      steer: (input) => this.steer(input),
+      summarize: (messages) => this.#summarizeForPlugins(messages, signal),
+    };
+  }
+
+  #pluginLifecycle(): AgentSessionLifecycle {
+    return {
+      createScope: (signal) => this.#createPluginScope(signal),
+      history: () => this.#history.modelSnapshot(),
+      plugins: this.#plugins,
+      sessionKey: this.#persistence.key,
+      steerCurrentRun: async (runtimeInput, input) => {
+        await addRuntimeInput(runtimeInput, input);
+        if (!this.#activeRun) {
+          throw new Error("Agent plugin steering requires an active run.");
+        }
+        return this.#activeRun;
+      },
+      steerSession: (input) => this.steer(input),
+    };
+  }
+
+  async #summarizeForPlugins(
+    messages: readonly ModelMessage[],
+    signal: AbortSignal
+  ): Promise<string> {
+    const output = await this.#internalLlm({
+      history: [
+        {
+          content:
+            "Summarize these earlier session messages for future model context.",
+          role: "system",
+        },
+        ...messages,
+      ],
+      signal,
+    });
+    return outputToText(output) || `Summarized ${messages.length} messages.`;
   }
 
   async #withRuntimeInputWindow<T>(
@@ -374,27 +425,6 @@ export class AgentSession {
     }
   }
 
-  #hooksForRuntimeInput(
-    runtimeInput: RuntimeInputState
-  ): AgentHooks | undefined {
-    const hooks = this.#hooks;
-    if (!hooks) {
-      return;
-    }
-
-    return {
-      ...hooks,
-      afterStep: (context) =>
-        this.#withSteeringPlacement(runtimeInput, "step-end", async () => {
-          await hooks.afterStep?.(context);
-        }),
-      beforeStep: (context) =>
-        this.#withSteeringPlacement(runtimeInput, "step-start", async () => {
-          await hooks.beforeStep?.(context);
-        }),
-    };
-  }
-
   async #drainRuntimeInput(
     run: BufferedAgentRun,
     runtimeInput: RuntimeInputState,
@@ -414,153 +444,6 @@ export class AgentSession {
   }
 }
 
-function shiftRuntimeInput(
-  runtimeInput: RuntimeInputState,
-  placement: RuntimeInputPlacement
-): QueuedRuntimeInput | undefined {
-  const index = runtimeInput.queue.findIndex(
-    (input) => input.placement === placement
-  );
-  if (index === -1) {
-    return;
-  }
-
-  return runtimeInput.queue.splice(index, 1)[0];
-}
-
-async function runAfterTurnHook(
-  hooks: AgentHooks | undefined,
-  context: Parameters<NonNullable<AgentHooks["afterTurn"]>>[0]
-): Promise<void> {
-  const hook = hooks?.afterTurn;
-  if (!hook) {
-    return;
-  }
-
-  await Promise.allSettled([Promise.resolve().then(() => hook(context))]);
-}
-
-export function normalizeAgentInput(input: AgentInput): UserInput {
-  if (typeof input === "string") {
-    return {
-      type: "user-text",
-      text: input,
-    };
-  }
-
-  if (isStringArrayInput(input)) {
-    return {
-      type: "user-text",
-      text: structuredClone(input) as readonly string[],
-    };
-  }
-
-  if (isArrayInput(input)) {
-    assertUserMessageContent(input);
-    return {
-      type: "user-message",
-      content: structuredClone(input) as readonly UserMessageContentPart[],
-    };
-  }
-
-  if (isUserMessage(input)) {
-    assertUserMessageContent(input.content);
-  }
-
-  return structuredClone(input);
-}
-
-function isStringArrayInput(input: AgentInput): input is readonly string[] {
-  return isArrayInput(input) && input.every((part) => typeof part === "string");
-}
-
-function isArrayInput(
-  input: AgentInput
-): input is readonly string[] | readonly UserMessageContentPart[] {
-  return Array.isArray(input);
-}
-
-function isUserMessage(input: UserInput): input is UserMessage {
-  return input.type === "user-message";
-}
-
-function assertUserMessageContent(
-  input: readonly unknown[]
-): asserts input is readonly UserMessageContentPart[] {
-  for (const part of input) {
-    if (!isUserMessageContentPart(part)) {
-      throw new TypeError(
-        'Agent input content parts must be { type: "text", text }, { type: "image", image }, or { type: "file", data, mediaType }.'
-      );
-    }
-  }
-}
-
-function isUserMessageContentPart(
-  part: unknown
-): part is UserMessageContentPart {
-  if (part === null || typeof part !== "object" || !("type" in part)) {
-    return false;
-  }
-
-  if (part.type === "text") {
-    return "text" in part && typeof part.text === "string";
-  }
-
-  if (part.type === "image") {
-    return (
-      "image" in part &&
-      typeof part.image === "string" &&
-      (!("mediaType" in part) || typeof part.mediaType === "string")
-    );
-  }
-
-  if (part.type === "file") {
-    return (
-      "data" in part &&
-      isUserMessageFileData(part.data) &&
-      "mediaType" in part &&
-      typeof part.mediaType === "string" &&
-      (!("filename" in part) || typeof part.filename === "string")
-    );
-  }
-
-  return false;
-}
-
-function isUserMessageFileData(data: unknown): boolean {
-  if (typeof data === "string") {
-    return true;
-  }
-
-  if (data === null || typeof data !== "object" || !("type" in data)) {
-    return false;
-  }
-
-  if (data.type === "data") {
-    return "data" in data && typeof data.data === "string";
-  }
-
-  if (data.type === "reference") {
-    return (
-      "reference" in data &&
-      data.reference !== null &&
-      typeof data.reference === "object" &&
-      Object.values(data.reference).every((value) => typeof value === "string")
-    );
-  }
-
-  if (data.type === "text") {
-    return "text" in data && typeof data.text === "string";
-  }
-
-  if (data.type === "url") {
-    return "url" in data && typeof data.url === "string";
-  }
-
-  return false;
-}
-
 function errorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -569,12 +452,30 @@ function errorMessage(error: unknown): string {
   return String(error);
 }
 
-function sessionKilledError(): Error {
-  return new Error("Session killed");
+function outputToText(output: LlmOutput): string {
+  const parts: string[] = [];
+  for (const message of output) {
+    if (message.role !== "assistant") {
+      continue;
+    }
+
+    if (typeof message.content === "string") {
+      parts.push(message.content);
+      continue;
+    }
+
+    for (const part of message.content) {
+      if (part.type === "text") {
+        parts.push(part.text);
+      }
+    }
+  }
+
+  return parts.join("\n").trim();
 }
 
-function runtimeInputClosedError(reason: string): Error {
-  return new Error(`session.steer() cannot be used after ${reason}`);
+function sessionKilledError(): Error {
+  return new Error("Session killed");
 }
 
 class SessionCommitConflictError extends Error {

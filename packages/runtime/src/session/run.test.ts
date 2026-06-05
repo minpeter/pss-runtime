@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createDeferred } from "../test-fixtures";
 import type { AgentEvent } from "./events";
 import { BufferedAgentRun } from "./run";
 
@@ -63,6 +64,29 @@ describe("AgentRun", () => {
       done: false,
       value: { type: "turn-end" },
     });
+  });
+
+  it("keeps boundary emit pending while an async event handler is still running", async () => {
+    const run = new BufferedAgentRun();
+    const handlerEntered = createDeferred();
+    const releaseHandler = createDeferred();
+
+    const boundary = run.emitBoundary({ type: "step-end" });
+    const collecting = (async () => {
+      for await (const event of run.events()) {
+        expect(event).toEqual({ type: "step-end" });
+        handlerEntered.resolve();
+        await releaseHandler.promise;
+        break;
+      }
+    })();
+
+    await handlerEntered.promise;
+    await expectPending(boundary);
+    releaseHandler.resolve();
+
+    await collecting;
+    await expect(boundary).resolves.toBeUndefined();
   });
 
   it("rejects duplicate events readers", () => {

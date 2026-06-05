@@ -17,6 +17,7 @@ vi.mock("ai", async (importOriginal) => {
 });
 
 const fakeModel = {} as LanguageModel;
+const duplicatePluginToolPattern = /duplicate tool "duplicate"/i;
 
 const createNoopTool = () =>
   tool({
@@ -42,6 +43,11 @@ async function loadCreateLlm() {
 async function loadAgent() {
   const { Agent } = await import("./agent");
   return Agent;
+}
+
+async function loadPlugins() {
+  const { definePlugin } = await import("./plugins");
+  return { definePlugin };
 }
 
 async function drainRun(run: { events(): AsyncIterable<unknown> }) {
@@ -156,6 +162,60 @@ describe("Agent tool wiring", () => {
         toolChoice: "required",
       })
     );
+  });
+
+  it("passes plugin tools into createLlm/generateText", async () => {
+    const Agent = await loadAgent();
+    const { definePlugin } = await loadPlugins();
+    const callerTools = { caller: createNoopTool() } satisfies ToolSet;
+    const pluginTools = { plugin: createNoopTool() } satisfies ToolSet;
+    const agent = await Agent.create({
+      model: fakeModel,
+      plugins: [
+        definePlugin({
+          name: "tool-plugin",
+          setup(host) {
+            host.registerTools(pluginTools);
+          },
+        }),
+      ],
+      tools: callerTools,
+    });
+
+    await drainRun(await agent.send(userText("use plugin tools")));
+
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: fakeModel,
+        tools: {
+          ...callerTools,
+          ...pluginTools,
+        },
+      })
+    );
+  });
+
+  it("rejects duplicate plugin tool names before model calls", async () => {
+    const Agent = await loadAgent();
+    const { definePlugin } = await loadPlugins();
+    const duplicatedTools = { duplicate: createNoopTool() } satisfies ToolSet;
+
+    await expect(
+      Agent.create({
+        model: fakeModel,
+        plugins: [
+          definePlugin({
+            name: "duplicate-tool-plugin",
+            setup(host) {
+              host.registerTools(duplicatedTools);
+            },
+          }),
+        ],
+        tools: duplicatedTools,
+      })
+    ).rejects.toThrow(duplicatePluginToolPattern);
+
+    expect(generateTextMock).not.toHaveBeenCalled();
   });
 
   it("does not attach product tools by default", async () => {
