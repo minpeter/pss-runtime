@@ -239,11 +239,35 @@ function logPluginHandlerRejections(
   eventName: AgentPluginEventName,
   settlements: readonly PromiseSettledResult<unknown>[]
 ): void {
-  const onPluginError = lifecycle.onPluginError ?? reportPluginHandlerError;
   for (const settlement of settlements) {
     if (settlement.status === "rejected") {
-      onPluginError({ eventName, reason: settlement.reason });
+      reportPluginHandlerRejection(lifecycle, {
+        eventName,
+        reason: settlement.reason,
+      });
     }
+  }
+}
+
+function reportPluginHandlerRejection(
+  lifecycle: AgentSessionLifecycle,
+  error: AgentPluginHandlerError
+): void {
+  const onPluginError = lifecycle.onPluginError;
+  if (!onPluginError) {
+    reportPluginHandlerError(error);
+    return;
+  }
+
+  try {
+    onPluginError(error);
+  } catch (handlerError) {
+    if (handlerError instanceof Error) {
+      reportPluginErrorHandlerError(handlerError);
+      return;
+    }
+
+    reportPluginErrorHandlerError(handlerError);
   }
 }
 
@@ -258,4 +282,8 @@ function reportPluginHandlerError({
 
 function errorKind(reason: unknown): string {
   return reason instanceof Error ? reason.name : typeof reason;
+}
+
+function reportPluginErrorHandlerError(reason: unknown): void {
+  console.error(`Agent plugin error handler failed: ${errorKind(reason)}`);
 }

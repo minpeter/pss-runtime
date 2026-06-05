@@ -310,6 +310,70 @@ describe("Agent session API", () => {
     }
   });
 
+  it("keeps completed turns committed when the plugin error handler fails", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const seenHistory: ModelMessage[][] = [];
+    let calls = 0;
+    const agent = await Agent.create({
+      llm: ({ history }) => {
+        calls += 1;
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage(`DONE ${calls}`)]);
+      },
+      onPluginError: () => {
+        throw new Error("observer failed with secret-token");
+      },
+      plugins: [
+        definePlugin({
+          name: "throwing-error-handler",
+          setup(host) {
+            host.on("turn.after", () => {
+              throw new Error("after turn failed");
+            });
+          },
+        }),
+      ],
+    });
+
+    try {
+      const session = agent.session("throwing-error-handler");
+      const firstEvents = await collect(await session.send("first"));
+      const secondEvents = await collect(await session.send("second"));
+
+      expect(eventTypes(firstEvents)).toEqual([
+        "user-text",
+        "turn-start",
+        "step-start",
+        "assistant-text",
+        "step-end",
+        "turn-end",
+      ]);
+      expect(eventTypes(secondEvents)).toEqual([
+        "user-text",
+        "turn-start",
+        "step-start",
+        "assistant-text",
+        "step-end",
+        "turn-end",
+      ]);
+      expect(seenHistory[1]).toEqual([
+        userTextToModelMessage(userText("first")),
+        assistantMessage("DONE 1"),
+        userTextToModelMessage(userText("second")),
+      ]);
+      expect(consoleError).toHaveBeenCalledWith(
+        "Agent plugin error handler failed: Error"
+      );
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+        "secret-token"
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   it("orders plugin lifecycle around runtime input windows", async () => {
     const consoleError = vi
       .spyOn(console, "error")
