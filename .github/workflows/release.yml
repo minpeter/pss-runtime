@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - v0.1
   workflow_dispatch:
 
 permissions:
@@ -70,6 +71,7 @@ jobs:
         run: pnpm verify:release
 
       - name: Create release pull request or publish
+        if: github.ref_name == 'main'
         uses: changesets/action@v1
         with:
           publish: pnpm release
@@ -77,4 +79,12 @@ jobs:
           # npm publish is authenticated by npm Trusted Publishing/OIDC.
           # Configure each package on npm with repository minpeter/pss-next
           # and workflow filename release.yml; do not add NPM_TOKEN.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create next release pull request or publish
+        if: github.ref_name == 'v0.1'
+        uses: changesets/action@v1
+        with:
+          publish: pnpm release:next
+        env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
