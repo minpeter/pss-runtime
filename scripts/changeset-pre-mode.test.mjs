@@ -1,0 +1,11 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+
+describe("changeset prerelease mode", () => {
+  it("keeps the v0.1 branch in next prerelease mode", () => {
+    const preState = JSON.parse(readFileSync(".changeset/pre.json", "utf8"));
+
+    expect(preState.mode).toBe("pre");
+    expect(preState.tag).toBe("next");
+  });
+});
