@@ -187,6 +187,17 @@ describe("Agent session API", () => {
     );
   });
 
+  it("rejects sparse text arrays before queueing", async () => {
+    const sparseInput = new Array<string>(1);
+    const agent = new Agent({
+      llm: () => Promise.resolve([assistantMessage("DONE")]),
+    });
+
+    await expect(agent.send(sparseInput)).rejects.toThrow(
+      'Agent input content parts must be { type: "text", text }, { type: "image", image }, or { type: "file", data, mediaType }.'
+    );
+  });
+
   it("rejects malformed explicit user-message input before queueing", async () => {
     const agent = new Agent({
       llm: () => Promise.resolve([assistantMessage("DONE")]),
@@ -199,6 +210,21 @@ describe("Agent session API", () => {
       } as never)
     ).rejects.toThrow(
       'Agent input content parts must be { type: "text", text }, { type: "image", image }, or { type: "file", data, mediaType }.'
+    );
+  });
+
+  it("rejects explicit user-message content that is not an array", async () => {
+    const agent = new Agent({
+      llm: () => Promise.resolve([assistantMessage("DONE")]),
+    });
+
+    await expect(
+      agent.send({
+        content: "not-content-parts",
+        type: "user-message",
+      } as never)
+    ).rejects.toThrow(
+      "Agent input must be text, text parts, content parts, user-text, or user-message."
     );
   });
 

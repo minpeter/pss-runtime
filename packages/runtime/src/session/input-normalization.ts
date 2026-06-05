@@ -44,9 +44,7 @@ export function normalizeAgentInput(input: AgentInput): UserInput {
 }
 
 function isStringArrayInput(input: unknown): input is readonly string[] {
-  return (
-    Array.isArray(input) && input.every((part) => typeof part === "string")
-  );
+  return Array.isArray(input) && hasDenseItems(input, isString);
 }
 
 function isArrayInput(
@@ -60,7 +58,9 @@ function isUserMessage(input: AgentInput): input is UserMessage {
     input !== null &&
     typeof input === "object" &&
     !isArrayInput(input) &&
-    input.type === "user-message"
+    input.type === "user-message" &&
+    "content" in input &&
+    Array.isArray(input.content)
   );
 }
 
@@ -149,4 +149,21 @@ function isUserMessageFileData(data: unknown): boolean {
   }
 
   return false;
+}
+
+function hasDenseItems<T>(
+  input: readonly unknown[],
+  predicate: (value: unknown) => value is T
+): input is readonly T[] {
+  for (let index = 0; index < input.length; index += 1) {
+    if (!(index in input && predicate(input[index]))) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
 }

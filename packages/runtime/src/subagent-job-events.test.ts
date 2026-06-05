@@ -49,7 +49,7 @@ describe("subagent job events", () => {
     expect(start).toEqual(
       expect.objectContaining({
         run_in_background: false,
-        sessionKey: "parent:default:subagent:researcher",
+        sessionKey: expect.stringContaining(":default:subagent:researcher"),
         subagent: "researcher",
         type: "subagent-job-start",
       })

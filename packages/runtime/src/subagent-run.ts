@@ -62,6 +62,7 @@ export async function collectSubagentRunWithEvents(
   const events: AgentEvent[] = [];
   const textParts: string[] = [];
   let textLength = 0;
+  let textTruncated = false;
 
   try {
     for await (const event of run.events()) {
@@ -71,7 +72,9 @@ export async function collectSubagentRunWithEvents(
       }
       onEvent?.(event);
       if (event.type === "assistant-text") {
-        textLength = appendCompactText(textParts, textLength, event.text);
+        const appended = appendCompactText(textParts, textLength, event.text);
+        textLength = appended.length;
+        textTruncated ||= appended.truncated;
       } else if (event.type === "turn-abort") {
         result = "aborted";
       } else if (event.type === "turn-error") {
@@ -83,7 +86,7 @@ export async function collectSubagentRunWithEvents(
             result: "error",
             run_in_background: false,
             subagent,
-            text: compactText(textParts),
+            text: compactText(textParts, textTruncated),
           },
         };
       }
@@ -97,7 +100,7 @@ export async function collectSubagentRunWithEvents(
         result: "error",
         run_in_background: false,
         subagent,
-        text: compactText(textParts),
+        text: compactText(textParts, textTruncated),
       },
     };
   }
@@ -109,28 +112,35 @@ export async function collectSubagentRunWithEvents(
       result,
       run_in_background: false,
       subagent,
-      text: compactText(textParts),
+      text: compactText(textParts, textTruncated),
     },
   };
 }
 
 export function defaultChildSessionKey(
+  parentAgentNamespace: string,
   parentSessionKey: string,
   subagent: string
 ): string {
-  return `parent:${parentSessionKey}:subagent:${subagent}`;
+  return `parent:${parentAgentNamespace}:${parentSessionKey}:subagent:${subagent}`;
 }
 
 export function scopedChildSessionKey({
+  parentAgentNamespace,
   parentSessionKey,
   sessionKey,
   subagent,
 }: {
+  readonly parentAgentNamespace: string;
   readonly parentSessionKey: string;
   readonly sessionKey?: string;
   readonly subagent: string;
 }): string {
-  const base = defaultChildSessionKey(parentSessionKey, subagent);
+  const base = defaultChildSessionKey(
+    parentAgentNamespace,
+    parentSessionKey,
+    subagent
+  );
   if (!sessionKey) {
     return base;
   }
@@ -144,28 +154,27 @@ export function scopedChildSessionKey({
   return `${base}:${sessionKey}`;
 }
 
-function compactText(parts: readonly string[]): string {
+function compactText(parts: readonly string[], truncated: boolean): string {
   const text = parts.join("");
-  if (text.length <= maxCompactTextLength) {
-    return text;
-  }
-
-  return `${text.slice(0, maxCompactTextLength)}…[truncated]`;
+  return truncated ? `${text}…[truncated]` : text;
 }
 
 function appendCompactText(
   parts: string[],
   currentLength: number,
   next: string
-): number {
+): { readonly length: number; readonly truncated: boolean } {
   if (currentLength >= maxCompactTextLength) {
-    return currentLength;
+    return { length: currentLength, truncated: next.length > 0 };
   }
 
   const remaining = maxCompactTextLength - currentLength;
   const chunk = next.length > remaining ? next.slice(0, remaining) : next;
   parts.push(chunk);
-  return currentLength + chunk.length;
+  return {
+    length: currentLength + chunk.length,
+    truncated: next.length > remaining,
+  };
 }
 
 function errorMessage(error: unknown): string {

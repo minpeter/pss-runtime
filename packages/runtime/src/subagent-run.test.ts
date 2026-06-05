@@ -60,4 +60,22 @@ describe("subagent run collection", () => {
       text: "x".repeat(250),
     });
   });
+
+  it("marks compact child text when it is truncated", async () => {
+    async function* events() {
+      await Promise.resolve();
+      yield {
+        text: "x".repeat(20_001),
+        type: "assistant-text",
+      } satisfies AgentEvent;
+    }
+
+    const run: AgentRun = {
+      events,
+    };
+
+    const collected = await collectSubagentRunWithEvents(run, "researcher");
+
+    expect(collected.result.text).toBe(`${"x".repeat(20_000)}…[truncated]`);
+  });
 });

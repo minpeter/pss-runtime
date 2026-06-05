@@ -17,6 +17,7 @@ export interface RuntimeInputSink {
 }
 
 export interface CreateSubagentToolsOptions {
+  readonly parentAgentNamespace: string;
   readonly parentSession: RuntimeInputSink;
   readonly parentSessionKey: string;
   readonly subagents: readonly Subagent[];

@@ -58,8 +58,8 @@ describe("subagent background reminders", () => {
       toolExecutionOptions()
     )) as { sessionKey: string; task_id: string };
 
-    expect(first.sessionKey).toContain("parent:default:subagent:researcher");
-    expect(second.sessionKey).toContain("parent:default:subagent:researcher");
+    expect(first.sessionKey).toContain(":default:subagent:researcher");
+    expect(second.sessionKey).toContain(":default:subagent:researcher");
     expect(first.sessionKey).toContain(first.task_id);
     expect(second.sessionKey).toContain(second.task_id);
     expect(first.sessionKey).not.toBe(second.sessionKey);

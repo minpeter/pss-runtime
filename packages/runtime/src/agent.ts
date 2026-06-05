@@ -48,6 +48,7 @@ export interface SessionHandle {
 export type AgentOptions = AgentLanguageModelOptions | AgentLlmOptions;
 
 const subagentNamePattern = /^[a-z][a-z0-9_-]{0,63}$/;
+let nextAgentNamespace = 0;
 
 export class Agent {
   readonly #baseTools?: ToolSet;
@@ -59,6 +60,7 @@ export class Agent {
     readonly toolChoice?: AgentToolChoice;
   };
   readonly #sessions = new Map<string, SessionHandle>();
+  readonly #sessionNamespace = `agent:${nextAgentNamespace}`;
   readonly #store: SessionStore;
   readonly #subagents: readonly Agent[];
   readonly description?: string;
@@ -69,6 +71,7 @@ export class Agent {
 
     this.description = options.description;
     this.name = options.name;
+    nextAgentNamespace += 1;
     this.#store = options.sessions?.store ?? new MemorySessionStore();
     this.#hooks = options.hooks;
     assertSubagents(options);
@@ -141,6 +144,7 @@ export class Agent {
         : {
             ...this.#baseTools,
             ...createSubagentTools({
+              parentAgentNamespace: this.#sessionNamespace,
               parentSession: { emitObserverEvent, enqueueRuntimeInput },
               parentSessionKey: key,
               subagents: this.#subagents,

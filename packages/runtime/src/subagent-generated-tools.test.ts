@@ -122,15 +122,42 @@ describe("generated subagent tools", () => {
       lastGenerateTextTools(),
       "delegate_to_researcher"
     ).execute?.({ prompt: "research this" }, toolExecutionOptions());
-    await drainRun(
-      await researcher
-        .session("parent:parent-a:subagent:researcher")
-        .send(userText("check scoped history"))
-    );
-
     expect(JSON.stringify(childHistories.at(-1))).toContain("research this");
+  });
+
+  it("isolates shared subagent sessions between parent agents", async () => {
+    const Agent = await loadAgent();
+    const childHistories: unknown[] = [];
+    const researcher = new Agent({
+      description: "Researches facts.",
+      llm: ({ history }) => {
+        childHistories.push(history);
+        return Promise.resolve([assistantMessage("CHILD DONE")]);
+      },
+      name: "researcher",
+    });
+    const firstAgent = new Agent({ model: fakeModel, subagents: [researcher] });
+    const secondAgent = new Agent({
+      model: fakeModel,
+      subagents: [researcher],
+    });
+
+    await drainRun(await firstAgent.send(userText("first delegate")));
+    await executableTool(
+      lastGenerateTextTools(),
+      "delegate_to_researcher"
+    ).execute?.({ prompt: "first child work" }, toolExecutionOptions());
+    await drainRun(await secondAgent.send(userText("second delegate")));
+    await executableTool(
+      lastGenerateTextTools(),
+      "delegate_to_researcher"
+    ).execute?.({ prompt: "second child work" }, toolExecutionOptions());
+
     expect(JSON.stringify(childHistories.at(-1))).toContain(
-      "check scoped history"
+      "second child work"
+    );
+    expect(JSON.stringify(childHistories.at(-1))).not.toContain(
+      "first child work"
     );
   });
 
@@ -155,16 +182,7 @@ describe("generated subagent tools", () => {
       { prompt: "research custom", sessionKey: "custom-child-session" },
       toolExecutionOptions()
     );
-    await drainRun(
-      await researcher
-        .session("parent:parent-a:subagent:researcher:custom-child-session")
-        .send(userText("check custom history"))
-    );
-
     expect(JSON.stringify(childHistories.at(-1))).toContain("research custom");
-    expect(JSON.stringify(childHistories.at(-1))).toContain(
-      "check custom history"
-    );
   });
 
   it("namespaces provided child session keys under the parent session", async () => {
@@ -188,15 +206,58 @@ describe("generated subagent tools", () => {
       { prompt: "research scoped", sessionKey: "custom-child-session" },
       toolExecutionOptions()
     );
-    await drainRun(
-      await researcher
-        .session("parent:parent-a:subagent:researcher:custom-child-session")
-        .send(userText("check scoped custom history"))
-    );
-
     expect(JSON.stringify(childHistories.at(-1))).toContain("research scoped");
-    expect(JSON.stringify(childHistories.at(-1))).toContain(
-      "check scoped custom history"
+  });
+
+  it("exposes a delegate prompt schema that rejects malformed content parts", async () => {
+    const Agent = await loadAgent();
+    const researcher = new Agent({
+      description: "Researches facts.",
+      llm: async () => [assistantMessage("CHILD DONE")],
+      name: "researcher",
+    });
+    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    await drainRun(await agent.send(userText("delegate")));
+
+    const delegate = executableTool(
+      lastGenerateTextTools(),
+      "delegate_to_researcher"
     );
+    const schema = await (delegate.inputSchema as { jsonSchema: unknown })
+      .jsonSchema;
+
+    expect(schema).toEqual(
+      expect.objectContaining({
+        properties: expect.objectContaining({
+          prompt: expect.objectContaining({
+            anyOf: expect.arrayContaining([
+              expect.objectContaining({
+                properties: expect.objectContaining({
+                  content: expect.objectContaining({
+                    items: expect.any(Object),
+                    type: "array",
+                  }),
+                }),
+              }),
+              expect.objectContaining({
+                items: expect.objectContaining({
+                  anyOf: expect.arrayContaining([
+                    expect.objectContaining({
+                      properties: expect.objectContaining({
+                        data: expect.objectContaining({
+                          anyOf: expect.any(Array),
+                        }),
+                      }),
+                    }),
+                  ]),
+                }),
+              }),
+            ]),
+          }),
+        }),
+      })
+    );
+    expect(JSON.stringify(schema)).not.toContain('"data":{}');
   });
 });
