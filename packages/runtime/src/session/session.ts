@@ -250,19 +250,10 @@ export class AgentSession {
       });
       run.emit({ type: terminalEvent });
     } catch (error) {
-      if (!(error instanceof Error)) {
-        await emitTurnErrorAfterRecovery({
-          error,
-          historySnapshot,
-          run,
-          runtimeInput,
-          state: this.#state,
-        });
-        return;
-      }
-
+      const turnError =
+        error instanceof Error ? error : new Error(String(error));
       await emitTurnErrorAfterRecovery({
-        error,
+        error: turnError,
         historySnapshot,
         run,
         runtimeInput,

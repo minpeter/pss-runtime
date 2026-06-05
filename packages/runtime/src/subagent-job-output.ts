@@ -18,7 +18,6 @@ export function createBackgroundOutputTool(jobs: Map<string, SubagentJob>) {
 
       const output = {
         result: job.result,
-        sessionKey: job.sessionKey,
         status: job.status,
         subagent: job.subagent,
         task_id: job.id,

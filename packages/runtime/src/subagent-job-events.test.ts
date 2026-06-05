@@ -103,10 +103,11 @@ describe("subagent job events", () => {
         eventType: "assistant-text",
         status: "running",
         subagent: "researcher",
-        textPreview: "CHILD DONE",
         type: "subagent-job-update",
       })
     );
+    expect(update).not.toHaveProperty("textPreview");
+    expect(JSON.stringify(update)).not.toContain("CHILD DONE");
     expect(eventTypes(events)).toContain("subagent-job-update");
   });
 });

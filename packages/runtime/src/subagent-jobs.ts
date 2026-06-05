@@ -108,9 +108,10 @@ async function runBackgroundJob({
     if (isCancelledJob(job)) {
       return;
     }
+    const jobError = error instanceof Error ? error : new Error(String(error));
     job.status = "error";
     job.result = {
-      error: errorMessage(error),
+      error: errorMessage(jobError),
       eventCount: 0,
       result: "error",
       run_in_background: false,
@@ -153,23 +154,13 @@ function emitJobUpdate(
   job: SubagentJob,
   event: AgentEvent
 ): void {
-  const base = {
+  parentSession.emitObserverEvent({
     eventType: event.type,
     status: job.status,
     subagent: job.subagent,
     task_id: job.id,
     type: "subagent-job-update" as const,
-  };
-
-  if (event.type === "assistant-text") {
-    parentSession.emitObserverEvent({
-      ...base,
-      textPreview: event.text.slice(0, 200),
-    });
-    return;
-  }
-
-  parentSession.emitObserverEvent(base);
+  });
 }
 
 export function assertBackgroundTaskId(value: string, toolName: string): void {

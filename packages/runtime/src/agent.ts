@@ -95,15 +95,21 @@ export class Agent {
       return existing;
     }
 
-    let session!: AgentSession;
+    let session: AgentSession | undefined;
+    const getSession = () => {
+      if (!session) {
+        throw new Error("Agent session is not initialized.");
+      }
+      return session;
+    };
     const llm =
       this.#llm ??
       createLlm(
         this.#createLlmOptionsForSession(
           key,
           (input: UserInput, placement?: "turn-start") =>
-            session.enqueueRuntimeInput(input, placement),
-          (event) => session.emitObserverEvent(event)
+            getSession().enqueueRuntimeInput(input, placement),
+          (event) => getSession().emitObserverEvent(event)
         )
       );
     session = new AgentSession(llm, { key, store: this.#store }, this.#hooks);

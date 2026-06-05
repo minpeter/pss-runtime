@@ -90,7 +90,6 @@ export type AgentEvent =
       status: SubagentJobStatus;
       subagent: string;
       task_id: string;
-      textPreview?: string;
       type: "subagent-job-update";
     }
   | {
