@@ -6,6 +6,7 @@ import type {
   RuntimeInput,
   UserMessage,
   UserMessageContentPart,
+  UserText,
 } from "./events";
 import { ModelMessageHistory } from "./history";
 import type { AgentInput, UserInput } from "./input";
@@ -124,10 +125,14 @@ export class AgentSession {
     input: UserInput,
     placement: RuntimeInputPlacement = "turn-start"
   ): void {
+    if (this.#killed) {
+      return;
+    }
+
     const runtimeInput = this.#activeRuntimeInput;
     if (runtimeInput && !runtimeInput.closedReason) {
       if (placement === "turn-start" && runtimeInput.placement !== placement) {
-        this.#pendingRuntimeInputs.push({ input, placement });
+        this.#enqueuePendingRuntimeInput({ input, placement });
         return;
       }
 
@@ -135,11 +140,21 @@ export class AgentSession {
       return;
     }
 
-    this.#pendingRuntimeInputs.push({ input, placement });
+    this.#enqueuePendingRuntimeInput({ input, placement });
   }
 
   emitObserverEvent(event: AgentEvent): void {
     this.#activeRun?.emit(event);
+  }
+
+  #enqueuePendingRuntimeInput(input: QueuedRuntimeInput): void {
+    const queuedTurn = this.#inputQueue[0];
+    if (input.placement === "turn-start" && queuedTurn) {
+      queuedTurn.runtimeInput.queue.push(input);
+      return;
+    }
+
+    this.#pendingRuntimeInputs.push(input);
   }
 
   kill(): void {
@@ -149,6 +164,7 @@ export class AgentSession {
 
     this.#killed = true;
     const killedError = sessionKilledError();
+    this.#pendingRuntimeInputs.length = 0;
     this.#activeAbort?.abort();
     this.#closeRuntimeInput(this.#activeRuntimeInput, killedError.message);
     const runToClose = this.#runToCloseOnKill ?? this.#activeRun;
@@ -496,9 +512,16 @@ export function normalizeAgentInput(input: AgentInput): UserInput {
 
   if (isUserMessage(input)) {
     assertUserMessageContent(input.content);
+    return structuredClone(input);
   }
 
-  return structuredClone(input);
+  if (isUserText(input)) {
+    return structuredClone(input);
+  }
+
+  throw new TypeError(
+    "Agent input must be text, text parts, content parts, user-text, or user-message."
+  );
 }
 
 function isStringArrayInput(input: AgentInput): input is readonly string[] {
@@ -512,7 +535,18 @@ function isArrayInput(
 }
 
 function isUserMessage(input: UserInput): input is UserMessage {
-  return input.type === "user-message";
+  return (
+    input !== null && typeof input === "object" && input.type === "user-message"
+  );
+}
+
+function isUserText(input: UserInput): input is UserText {
+  return (
+    input !== null &&
+    typeof input === "object" &&
+    input.type === "user-text" &&
+    (typeof input.text === "string" || isStringArrayInput(input.text))
+  );
 }
 
 function assertUserMessageContent(

@@ -8,21 +8,41 @@ import type {
 } from "./subagent-types";
 
 const maxCompactTextLength = 20_000;
+const maxStoredEvents = 200;
 const childSessionKeySuffixPattern = /^[A-Za-z0-9_-]{1,80}$/;
 
 export async function runBlockingDelegation({
+  abortSignal,
   prompt,
   sessionKey,
   subagent,
 }: {
+  readonly abortSignal?: AbortSignal;
   readonly prompt: AgentInput;
   readonly sessionKey: string;
   readonly subagent: Subagent;
 }): Promise<CompactSubagentResult> {
-  return collectSubagentRun(
-    await subagent.session(sessionKey).send(prompt),
-    subagent.name ?? "subagent"
-  );
+  const childSession = subagent.session(sessionKey);
+  if (abortSignal?.aborted) {
+    return {
+      eventCount: 0,
+      result: "aborted",
+      run_in_background: false,
+      subagent: subagent.name ?? "subagent",
+      text: "",
+    };
+  }
+
+  const abort = () => childSession.interrupt();
+  abortSignal?.addEventListener("abort", abort, { once: true });
+  try {
+    return await collectSubagentRun(
+      await childSession.send(prompt),
+      subagent.name ?? "subagent"
+    );
+  } finally {
+    abortSignal?.removeEventListener("abort", abort);
+  }
 }
 
 export async function collectSubagentRun(
@@ -40,29 +60,46 @@ export async function collectSubagentRunWithEvents(
   let eventCount = 0;
   let result: CompactSubagentResult["result"] = "completed";
   const events: AgentEvent[] = [];
-  const text: string[] = [];
+  const textParts: string[] = [];
+  let textLength = 0;
 
-  for await (const event of run.events()) {
-    eventCount += 1;
-    events.push(event);
-    onEvent?.(event);
-    if (event.type === "assistant-text") {
-      text.push(event.text);
-    } else if (event.type === "turn-abort") {
-      result = "aborted";
-    } else if (event.type === "turn-error") {
-      return {
-        events,
-        result: {
-          error: event.message,
-          eventCount,
-          result: "error",
-          run_in_background: false,
-          subagent,
-          text: compactText(text),
-        },
-      };
+  try {
+    for await (const event of run.events()) {
+      eventCount += 1;
+      if (events.length < maxStoredEvents) {
+        events.push(event);
+      }
+      onEvent?.(event);
+      if (event.type === "assistant-text") {
+        textLength = appendCompactText(textParts, textLength, event.text);
+      } else if (event.type === "turn-abort") {
+        result = "aborted";
+      } else if (event.type === "turn-error") {
+        return {
+          events,
+          result: {
+            error: event.message,
+            eventCount,
+            result: "error",
+            run_in_background: false,
+            subagent,
+            text: compactText(textParts),
+          },
+        };
+      }
     }
+  } catch (error) {
+    return {
+      events,
+      result: {
+        error: errorMessage(error),
+        eventCount,
+        result: "error",
+        run_in_background: false,
+        subagent,
+        text: compactText(textParts),
+      },
+    };
   }
 
   return {
@@ -72,7 +109,7 @@ export async function collectSubagentRunWithEvents(
       result,
       run_in_background: false,
       subagent,
-      text: compactText(text),
+      text: compactText(textParts),
     },
   };
 }
@@ -114,4 +151,27 @@ function compactText(parts: readonly string[]): string {
   }
 
   return `${text.slice(0, maxCompactTextLength)}…[truncated]`;
+}
+
+function appendCompactText(
+  parts: string[],
+  currentLength: number,
+  next: string
+): number {
+  if (currentLength >= maxCompactTextLength) {
+    return currentLength;
+  }
+
+  const remaining = maxCompactTextLength - currentLength;
+  const chunk = next.length > remaining ? next.slice(0, remaining) : next;
+  parts.push(chunk);
+  return currentLength + chunk.length;
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
 }

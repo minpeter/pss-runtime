@@ -10,7 +10,7 @@ export function createBackgroundCancelTool(jobs: Map<string, SubagentJob>) {
   return tool<BackgroundCancelInput, unknown, Record<string, unknown>>({
     description: "Cancel an active background subagent job.",
     execute: (input: BackgroundCancelInput) => {
-      assertBackgroundTaskId(input.task_id);
+      assertBackgroundTaskId(input.task_id, "background_cancel");
       const job = jobs.get(input.task_id);
       if (!job) {
         throw new Error(`Unknown background subagent task ${input.task_id}.`);

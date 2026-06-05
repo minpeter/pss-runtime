@@ -1,4 +1,5 @@
 import { jsonSchema, type ToolSet, tool } from "ai";
+import { normalizeAgentInput } from "./session/session";
 import { createBackgroundCancelTool } from "./subagent-job-cancel";
 import { createBackgroundOutputTool } from "./subagent-job-output";
 import { startBackgroundJob } from "./subagent-jobs";
@@ -58,6 +59,7 @@ function createDelegateTool({
   return tool<DelegateInput, unknown, Record<string, unknown>>({
     description: `Delegate work to ${subagent.name}: ${subagent.description}`,
     execute: async (input: DelegateInput, { abortSignal }) => {
+      const prompt = normalizeAgentInput(input.prompt);
       const sessionKey = scopedChildSessionKey({
         parentSessionKey,
         sessionKey: input.sessionKey,
@@ -69,7 +71,7 @@ function createDelegateTool({
           description: input.description,
           jobs,
           parentSession,
-          prompt: input.prompt,
+          prompt,
           sessionKey,
           subagent,
         });
@@ -83,7 +85,8 @@ function createDelegateTool({
         type: "subagent-job-start",
       });
       const result = await runBlockingDelegation({
-        prompt: input.prompt,
+        abortSignal,
+        prompt,
         sessionKey,
         subagent,
       });
@@ -100,7 +103,7 @@ function createDelegateTool({
       additionalProperties: false,
       properties: {
         description: { type: "string" },
-        prompt: {},
+        prompt: delegatePromptSchema,
         run_in_background: { default: false, type: "boolean" },
         sessionKey: { type: "string" },
       },
@@ -109,3 +112,70 @@ function createDelegateTool({
     }),
   });
 }
+
+const delegatePromptSchema = {
+  anyOf: [
+    { type: "string" },
+    { items: { type: "string" }, type: "array" },
+    {
+      additionalProperties: false,
+      properties: {
+        text: {
+          anyOf: [
+            { type: "string" },
+            { items: { type: "string" }, type: "array" },
+          ],
+        },
+        type: { const: "user-text" },
+      },
+      required: ["type", "text"],
+      type: "object",
+    },
+    {
+      additionalProperties: false,
+      properties: {
+        content: { type: "array" },
+        type: { const: "user-message" },
+      },
+      required: ["type", "content"],
+      type: "object",
+    },
+    {
+      items: {
+        anyOf: [
+          {
+            additionalProperties: false,
+            properties: {
+              text: { type: "string" },
+              type: { const: "text" },
+            },
+            required: ["type", "text"],
+            type: "object",
+          },
+          {
+            additionalProperties: false,
+            properties: {
+              image: { type: "string" },
+              mediaType: { type: "string" },
+              type: { const: "image" },
+            },
+            required: ["type", "image"],
+            type: "object",
+          },
+          {
+            additionalProperties: false,
+            properties: {
+              data: {},
+              filename: { type: "string" },
+              mediaType: { type: "string" },
+              type: { const: "file" },
+            },
+            required: ["type", "data", "mediaType"],
+            type: "object",
+          },
+        ],
+      },
+      type: "array",
+    },
+  ],
+};

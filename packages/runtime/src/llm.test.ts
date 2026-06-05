@@ -415,13 +415,13 @@ describe("Agent tool wiring", () => {
       expect.objectContaining({
         properties: expect.objectContaining({
           block: expect.any(Object),
-          full_session: expect.any(Object),
           task_id: expect.any(Object),
           timeout: expect.any(Object),
         }),
         required: ["task_id"],
       })
     );
+    expect(JSON.stringify(schema)).not.toContain("full_session");
   });
 
   it("background delegation returns a job id before child completion", async () => {

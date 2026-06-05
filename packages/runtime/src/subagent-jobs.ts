@@ -24,6 +24,17 @@ export function startBackgroundJob({
 }) {
   const id = `bg_${crypto.randomUUID().replaceAll("-", "")}`;
   const childSessionKey = `${sessionKey}:task:${id}`;
+  if (abortSignal.aborted) {
+    return {
+      message: `Background subagent job ${id} was cancelled before it started.`,
+      run_in_background: true,
+      sessionKey: childSessionKey,
+      status: "cancelled",
+      subagent: subagent.name,
+      task_id: id,
+    };
+  }
+
   const childSession = subagent.session(childSessionKey);
   const abort = () => childSession.interrupt();
   abortSignal.addEventListener("abort", abort, { once: true });
@@ -83,7 +94,7 @@ async function runBackgroundJob({
 
   job.status = "running";
   try {
-    const { events, result } = await collectSubagentRunWithEvents(
+    const { result } = await collectSubagentRunWithEvents(
       await childSession.send(prompt),
       job.subagent,
       (event) => emitJobUpdate(parentSession, job, event)
@@ -91,7 +102,6 @@ async function runBackgroundJob({
     if (isCancelledJob(job)) {
       return;
     }
-    job.events = events;
     job.result = result;
     job.status = result.result;
   } catch (error) {
@@ -162,13 +172,13 @@ function emitJobUpdate(
   parentSession.emitObserverEvent(base);
 }
 
-export function assertBackgroundTaskId(value: string): void {
+export function assertBackgroundTaskId(value: string, toolName: string): void {
   if (value.startsWith("bg_")) {
     return;
   }
 
   throw new Error(
-    `background_output expects a background task_id starting with bg_, not a session key: ${value}`
+    `${toolName} expects a background task_id starting with bg_, not a session key: ${value}`
   );
 }
 

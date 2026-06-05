@@ -47,7 +47,6 @@ export interface SubagentRunResult {
 export interface SubagentJob {
   readonly abort: () => void;
   readonly description?: string;
-  events?: readonly AgentEvent[];
   readonly id: string;
   promise: Promise<void>;
   result?: CompactSubagentResult;
@@ -65,12 +64,7 @@ export interface DelegateInput {
 
 export interface BackgroundOutputInput {
   readonly block?: boolean;
-  readonly full_session?: boolean;
-  readonly include_thinking?: boolean;
-  readonly include_tool_results?: boolean;
-  readonly message_limit?: number;
   readonly task_id: string;
-  readonly thinking_max_chars?: number;
   readonly timeout?: number;
 }
 
