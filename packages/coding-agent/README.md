@@ -7,7 +7,7 @@ import { tools } from "@minpeter/pss-coding-agent";
 import { createCodingLanguageModel } from "@minpeter/pss-coding-agent/model";
 import { Agent } from "@minpeter/pss-runtime";
 
-const agent = await Agent.create({
+const agent = new Agent({
   model: createCodingLanguageModel(),
   tools,
 });

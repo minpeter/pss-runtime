@@ -13,7 +13,7 @@ Minimal, platform-agnostic agent runtime with keyed sessions, synchronized
 import { Agent } from "@minpeter/pss-runtime";
 import { createYourLanguageModel } from "...";
 
-const agent = await Agent.create({
+const agent = new Agent({
   instructions: "Answer briefly.",
   model: createYourLanguageModel(),
 });
@@ -80,6 +80,63 @@ The public transcript protocol is `AgentEvent`: live runs emit runtime-defined
 events through `run.events()`. Provider/model message history is internal
 continuation state, not a public history API.
 
+## Subagents
+
+Compose specialist agents by constructing them first and passing them as an
+array. Top-level agents may omit metadata, but agents used as subagents need a
+stable `name` and `description` so the runtime can expose clear model-facing
+delegate tools.
+
+```ts
+const researcher = new Agent({
+  name: "researcher",
+  description: "Researches facts and returns concise evidence.",
+  model,
+  instructions: "Research facts and return concise evidence.",
+});
+
+const coordinator = new Agent({
+  model,
+  instructions: "Coordinate work and delegate when useful.",
+  subagents: [researcher],
+});
+```
+
+For each subagent, the parent model receives a generated
+`delegate_to_<name>` tool. The tool accepts `prompt`, optional `description`,
+optional `sessionKey` suffix, and `run_in_background`. A provided `sessionKey`
+is always scoped under the parent session and subagent name; the model cannot
+select an arbitrary child session key. Omitting `run_in_background` defaults to
+blocking behavior and returns compact child text, not the full child event
+stream.
+
+```ts
+delegate_to_researcher({
+  prompt: "Find the current release notes and summarize the evidence.",
+});
+```
+
+When the model sets `run_in_background: true`, the parent run can finish while
+the child keeps working. The launch result includes a `bg_...` `task_id`. A
+compact runtime reminder is queued for the parent when the child finishes, and
+the model can retrieve the result with `background_output`.
+
+```ts
+delegate_to_researcher({
+  prompt: "Compare the API designs.",
+  run_in_background: true,
+});
+
+background_output({ task_id: "bg_...", block: true });
+background_cancel({ task_id: "bg_..." });
+```
+
+The parent model context stays compact by default: completion reminders include
+the task id, subagent name, description, and retrieval instruction. Full child
+traces are not injected into the parent transcript by default. Background jobs
+run in task-scoped child sessions, and retrieved completed jobs are forgotten
+after `background_output` returns.
+
 ## Send and Steer
 
 Use `session.send(input)` for a new user turn. If a run is already active, the
@@ -135,28 +192,33 @@ Custom stores own version generation. `load(key)` returns the opaque `state` wit
 the store-minted `version`; `commit(key, { state }, { expectedVersion })` receives
 state only and should reject stale versions by returning `{ ok: false, reason:
 "conflict" }`. On success, the store persists `{ state, version }` and returns the
-new version to the runtime.
+new version to the runtime. `delete(key)` removes the persisted session for that
+key.
 
 ```ts
 import type { SessionStore } from "@minpeter/pss-runtime";
 import { MemorySessionStore } from "@minpeter/pss-runtime/session-store/memory";
 
-const agent = await Agent.create({
+const agent = new Agent({
   model,
   sessions: {
+    namespace: "support-agent",
     store: new MemorySessionStore(), // default when omitted
   },
 });
 ```
 
-For durable sessions, use the exported file POC:
+For durable sessions, use the exported file POC. Set a stable `namespace` when
+subagents also use durable stores, so reconstructed agents map the same parent
+session and child `sessionKey` suffixes back to the same child transcripts:
 
 ```ts
 import { FileSessionStore } from "@minpeter/pss-runtime/session-store/file";
 
-const agent = await Agent.create({
+const agent = new Agent({
   model,
   sessions: {
+    namespace: "support-agent",
     store: new FileSessionStore(".pss/sessions"),
   },
 });

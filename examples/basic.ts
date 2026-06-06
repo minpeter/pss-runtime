@@ -20,7 +20,7 @@ const provider = createOpenAICompatible({
   baseURL: env.AI_BASE_URL,
 });
 
-const agent = await Agent.create({
+const agent = new Agent({
   model: provider(env.AI_MODEL),
   instructions: "Answer briefly.",
 });
