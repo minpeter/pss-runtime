@@ -24,7 +24,7 @@ export interface CreateSubagentToolsOptions {
   registerChildSession(
     parentSessionKey: string,
     cleanup: () => Promise<void>
-  ): void;
+  ): () => void;
   readonly subagents: readonly Subagent[];
 }
 
@@ -60,6 +60,7 @@ export interface SubagentJob {
   readonly sessionKey: string;
   status: JobStatus;
   readonly subagent: string;
+  readonly unregisterCleanup?: () => void;
 }
 
 export interface DelegateInput {

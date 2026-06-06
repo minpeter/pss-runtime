@@ -20,7 +20,7 @@ export function startBackgroundJob({
   readonly jobs: Map<string, SubagentJob>;
   readonly parentSession: RuntimeInputSink;
   readonly prompt: AgentInput;
-  readonly registerCleanup: (cleanup: () => Promise<void>) => void;
+  readonly registerCleanup: (cleanup: () => Promise<void>) => () => void;
   readonly sessionKey: string;
   readonly subagent: Subagent;
 }) {
@@ -51,7 +51,7 @@ export function startBackgroundJob({
   const abort = () => childSession.interrupt();
   abortSignal.addEventListener("abort", abort, { once: true });
   const cleanup = () => childSession.delete();
-  registerCleanup(cleanup);
+  const unregisterCleanup = registerCleanup(cleanup);
 
   const job: SubagentJob = {
     abort,
@@ -62,6 +62,7 @@ export function startBackgroundJob({
     sessionKey: childSessionKey,
     status: "pending",
     subagent: subagent.name ?? "subagent",
+    unregisterCleanup,
   };
   job.promise = runBackgroundJob({
     childSession,
@@ -218,7 +219,9 @@ export function cancelJob(job: SubagentJob): void {
 }
 
 export function cleanupJob(job: SubagentJob): Promise<void> {
-  return job.cleanup();
+  return job.cleanup().then(() => {
+    job.unregisterCleanup?.();
+  });
 }
 
 function sanitizeReminderField(value: string): string {

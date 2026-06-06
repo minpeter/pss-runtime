@@ -8,6 +8,7 @@ import {
   loadAgent,
   toolExecutionOptions,
 } from "./llm-test-utils";
+import { SpyStore } from "./session/session.test-support";
 import { createBackgroundOutputTool } from "./subagent-job-output";
 import type { SubagentJob } from "./subagent-types";
 import { assistantMessage, userText } from "./test-fixtures";
@@ -29,6 +30,7 @@ describe("subagent background cleanup", () => {
 
   it("background_output evicts completed child task sessions", async () => {
     const Agent = await loadAgent();
+    const childStore = new CountingDeleteStore();
     const childHistories: unknown[] = [];
     const researcher = new Agent({
       description: "Researches facts.",
@@ -37,6 +39,7 @@ describe("subagent background cleanup", () => {
         return Promise.resolve([assistantMessage("CHILD DONE")]);
       },
       name: "researcher",
+      sessions: { store: childStore },
     });
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });
 
@@ -67,6 +70,8 @@ describe("subagent background cleanup", () => {
     expect(JSON.stringify(childHistories.at(-1))).not.toContain(
       "research this"
     );
+    await agent.session("default").delete();
+    expect(childStore.deleteCount).toBe(2);
   });
 
   it("background_output still returns results when cleanup fails", async () => {
@@ -128,3 +133,12 @@ describe("subagent background cleanup", () => {
     expect(jobs.has("bg_done")).toBe(false);
   });
 });
+
+class CountingDeleteStore extends SpyStore {
+  deleteCount = 0;
+
+  override async delete(key: string): Promise<void> {
+    this.deleteCount += 1;
+    await super.delete(key);
+  }
+}

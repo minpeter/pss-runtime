@@ -36,7 +36,7 @@ describe("subagent background jobs", () => {
         jobs,
         parentSession,
         prompt: { text: `research ${index}`, type: "user-text" },
-        registerCleanup: () => undefined,
+        registerCleanup: () => () => undefined,
         sessionKey: `${parentSessionKey}:${index}`,
         subagent,
       })
@@ -72,7 +72,7 @@ describe("subagent background jobs", () => {
         jobs,
         parentSession,
         prompt: { text: `research ${index}`, type: "user-text" },
-        registerCleanup: () => undefined,
+        registerCleanup: () => () => undefined,
         sessionKey: `${parentSessionKey}:${index}`,
         subagent,
       })
@@ -83,7 +83,7 @@ describe("subagent background jobs", () => {
       jobs,
       parentSession,
       prompt: { text: "research overflow", type: "user-text" },
-      registerCleanup: () => undefined,
+      registerCleanup: () => () => undefined,
       sessionKey: `${parentSessionKey}:overflow`,
       subagent,
     });
