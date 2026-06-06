@@ -1,5 +1,11 @@
 # @minpeter/pss-runtime
 
+## 0.1.0-next.1
+
+### Patch Changes
+
+- ae8de0e: Replace the async Agent factory with direct construction and add array-based subagents with blocking/background delegation tools.
+
 ## 0.1.0-next.0
 
 ### Minor Changes
