@@ -253,7 +253,7 @@ describe("Agent session lifecycle", () => {
   });
 });
 
-async function withShortTimeout<T>(
+function withShortTimeout<T>(
   promise: Promise<T>
 ): Promise<T | typeof timeoutMarker> {
   return Promise.race([
