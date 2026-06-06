@@ -34,7 +34,9 @@ export interface AgentPluginHandlerError {
   readonly reason: unknown;
 }
 
-export type AgentPluginErrorHandler = (error: AgentPluginHandlerError) => void;
+export type AgentPluginErrorHandler = (
+  error: AgentPluginHandlerError
+) => Promise<void> | void;
 
 export function createRuntimeInputStepLifecycle({
   lifecycle,
@@ -179,7 +181,7 @@ export async function runPluginAfterStepHandlers(
       )
     )
   );
-  logPluginHandlerRejections(lifecycle, "step.after", settlements);
+  await logPluginHandlerRejections(lifecycle, "step.after", settlements);
   return true;
 }
 
@@ -223,7 +225,7 @@ export async function runPluginAfterTurnHandlers(
       )
     )
   );
-  logPluginHandlerRejections(lifecycle, "turn.after", settlements);
+  await logPluginHandlerRejections(lifecycle, "turn.after", settlements);
   return true;
 }
 
@@ -234,25 +236,29 @@ function pluginHandlers(
   return lifecycle.plugins?.eventHandlers.get(eventName) ?? [];
 }
 
-function logPluginHandlerRejections(
+async function logPluginHandlerRejections(
   lifecycle: AgentSessionLifecycle,
   eventName: AgentPluginEventName,
   settlements: readonly PromiseSettledResult<unknown>[]
-): void {
-  for (const settlement of settlements) {
-    if (settlement.status === "rejected") {
-      reportPluginHandlerRejection(lifecycle, {
+): Promise<void> {
+  await Promise.all(
+    settlements.map((settlement) => {
+      if (settlement.status === "fulfilled") {
+        return Promise.resolve();
+      }
+
+      return reportPluginHandlerRejection(lifecycle, {
         eventName,
         reason: settlement.reason,
       });
-    }
-  }
+    })
+  );
 }
 
-function reportPluginHandlerRejection(
+async function reportPluginHandlerRejection(
   lifecycle: AgentSessionLifecycle,
   error: AgentPluginHandlerError
-): void {
+): Promise<void> {
   const onPluginError = lifecycle.onPluginError;
   if (!onPluginError) {
     reportPluginHandlerError(error);
@@ -260,13 +266,8 @@ function reportPluginHandlerRejection(
   }
 
   try {
-    onPluginError(error);
+    await onPluginError(error);
   } catch (handlerError) {
-    if (handlerError instanceof Error) {
-      reportPluginErrorHandlerError(handlerError);
-      return;
-    }
-
     reportPluginErrorHandlerError(handlerError);
   }
 }
