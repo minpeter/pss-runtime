@@ -31,6 +31,18 @@ const collect = async (run: Awaited<ReturnType<Agent["send"]>>) => {
   return events;
 };
 
+const timeoutMarker = Symbol("timeout");
+
+const withShortTimeout = async <T>(
+  promise: Promise<T>
+): Promise<T | typeof timeoutMarker> =>
+  Promise.race([
+    promise,
+    new Promise<typeof timeoutMarker>((resolve) => {
+      setTimeout(() => resolve(timeoutMarker), 100);
+    }),
+  ]);
+
 class SpyStore implements SessionStore {
   readonly commits: Array<{
     key: string;
@@ -156,6 +168,63 @@ describe("Agent session API", () => {
     expect(hookCalls).toEqual([
       "user-text:before:0",
       "user-text:after:completed:2",
+    ]);
+  });
+
+  it("closes the active run when a killed session has a pending model call", async () => {
+    const llmStarted = createDeferred();
+    const agent = await Agent.create({
+      llm: () => {
+        llmStarted.resolve();
+        return new Promise<never>(() => undefined);
+      },
+    });
+    const session = agent.session("kill-pending-model");
+    const collecting = collect(await session.send("hello"));
+    await llmStarted.promise;
+
+    session.kill();
+
+    const events = await withShortTimeout(collecting);
+    if (events === timeoutMarker) {
+      throw new Error("session.kill() did not close the active run");
+    }
+    expect(eventTypes(events)).toEqual([
+      "user-text",
+      "turn-start",
+      "step-start",
+      "turn-error",
+    ]);
+  });
+
+  it("closes the active run when a killed session has a pending afterTurn hook", async () => {
+    const afterTurnStarted = createDeferred();
+    const agent = await Agent.create({
+      hooks: {
+        afterTurn: () => {
+          afterTurnStarted.resolve();
+          return new Promise<never>(() => undefined);
+        },
+      },
+      llm: () => Promise.resolve([assistantMessage("DONE")]),
+    });
+    const session = agent.session("kill-pending-after-turn");
+    const collecting = collect(await session.send("hello"));
+    await afterTurnStarted.promise;
+
+    session.kill();
+
+    const events = await withShortTimeout(collecting);
+    if (events === timeoutMarker) {
+      throw new Error("session.kill() did not close the afterTurn run");
+    }
+    expect(eventTypes(events)).toEqual([
+      "user-text",
+      "turn-start",
+      "step-start",
+      "assistant-text",
+      "step-end",
+      "turn-error",
     ]);
   });
 
@@ -1079,7 +1148,7 @@ describe("Agent session API", () => {
     session.kill();
     llmGate.resolve();
 
-    expect(eventTypes(await firstEvents)).toContain("turn-abort");
+    expect(eventTypes(await firstEvents)).toContain("turn-error");
     expect(eventTypes(await secondEvents)).toEqual(["user-text", "turn-error"]);
     await expect(session.steer("late")).rejects.toThrow("Session killed");
   });
