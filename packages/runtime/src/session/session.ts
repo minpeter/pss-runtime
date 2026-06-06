@@ -102,9 +102,8 @@ export class AgentSession {
   }
 
   async delete(): Promise<void> {
-    const deleted = this.#state.delete();
+    await this.#state.delete();
     this.kill();
-    await deleted;
   }
 
   enqueueRuntimeInput(
