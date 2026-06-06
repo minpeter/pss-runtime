@@ -79,6 +79,10 @@ describe("subagent background jobs", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(jobs.has(launches[0]?.task_id ?? "")).toBe(true);
+    expect(jobs.size).toBe(64);
+    expect(launches.at(-1)).toEqual(
+      expect.objectContaining({ status: "cancelled" })
+    );
   });
 });
 
