@@ -44,14 +44,6 @@ export interface ToolResult {
   type: "tool-result";
 }
 
-type SubagentJobStatus =
-  | "aborted"
-  | "cancelled"
-  | "completed"
-  | "error"
-  | "pending"
-  | "running";
-
 export type AgentEvent =
   /** User input was accepted into the session queue. */
   | UserText
@@ -77,28 +69,6 @@ export type AgentEvent =
   | ToolCall
   /** A tool call returned a result. */
   | ToolResult
-  | {
-      description?: string;
-      run_in_background: boolean;
-      subagent: string;
-      task_id?: string;
-      type: "subagent-job-start";
-    }
-  | {
-      eventType?: AgentEvent["type"];
-      status: SubagentJobStatus;
-      subagent: string;
-      task_id: string;
-      type: "subagent-job-update";
-    }
-  | {
-      error?: string;
-      eventCount: number;
-      status: Exclude<SubagentJobStatus, "pending" | "running">;
-      subagent: string;
-      task_id?: string;
-      type: "subagent-job-end";
-    }
   /** One model/tool-loop iteration finished within the active turn. */
   | { type: "step-end" };
 

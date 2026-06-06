@@ -1,16 +1,54 @@
-import type { ToolSet } from "ai";
+import type { LanguageModel, ToolSet } from "ai";
+import { jsonSchema, tool } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  createNoopTool,
-  drainRun,
-  fakeModel,
-  getGenerateTextMock,
-  loadAgent,
-  loadCreateLlm,
-} from "./llm-test-utils";
 import { assistantMessage, userText } from "./test-fixtures";
 
-const generateTextMock = getGenerateTextMock();
+const { generateTextMock } = vi.hoisted(() => ({
+  generateTextMock: vi.fn(),
+}));
+
+vi.mock("ai", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("ai")>();
+
+  return {
+    ...actual,
+    generateText: generateTextMock,
+  };
+});
+
+const fakeModel = {} as LanguageModel;
+
+const createNoopTool = () =>
+  tool({
+    description: "No-op test tool.",
+    execute: () => ({}),
+    inputSchema: jsonSchema({
+      type: "object",
+      properties: {},
+      additionalProperties: false,
+    }),
+    outputSchema: jsonSchema({
+      type: "object",
+      properties: {},
+      additionalProperties: false,
+    }),
+  });
+
+async function loadCreateLlm() {
+  const { createLlm } = await import("./llm");
+  return createLlm;
+}
+
+async function loadAgent() {
+  const { Agent } = await import("./agent");
+  return Agent;
+}
+
+async function drainRun(run: { events(): AsyncIterable<unknown> }) {
+  for await (const _event of run.events()) {
+    // Drain the run so model calls complete before assertions.
+  }
+}
 
 describe("createLlm", () => {
   beforeEach(() => {
@@ -88,7 +126,7 @@ describe("Agent tool wiring", () => {
   it("passes injected AgentOptions tools into createLlm/generateText", async () => {
     const Agent = await loadAgent();
     const injectedTools = { injected: createNoopTool() } satisfies ToolSet;
-    const agent = new Agent({
+    const agent = await Agent.create({
       model: fakeModel,
       tools: injectedTools,
     });
@@ -105,7 +143,7 @@ describe("Agent tool wiring", () => {
 
   it("passes AgentOptions toolChoice into createLlm/generateText", async () => {
     const Agent = await loadAgent();
-    const agent = new Agent({
+    const agent = await Agent.create({
       model: fakeModel,
       toolChoice: "required",
     });
@@ -122,7 +160,7 @@ describe("Agent tool wiring", () => {
 
   it("does not attach product tools by default", async () => {
     const Agent = await loadAgent();
-    const agent = new Agent({ model: fakeModel });
+    const agent = await Agent.create({ model: fakeModel });
 
     await drainRun(await agent.send(userText("run without product tools")));
 

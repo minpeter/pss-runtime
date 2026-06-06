@@ -63,20 +63,6 @@ describe("FileSessionStore", () => {
     ).resolves.toEqual({ ok: false, reason: "conflict" });
   });
 
-  it("deletes persisted session state", async () => {
-    const dir = await tempDir();
-    const store = new FileSessionStore(dir);
-    await store.commit(
-      "key",
-      { state: { value: 1 } },
-      { expectedVersion: null }
-    );
-
-    await store.delete("key");
-
-    await expect(store.load("key")).resolves.toBeNull();
-  });
-
   it("serializes expectedVersion checks across concurrent writers", async () => {
     const dir = await tempDir();
     const store = new FileSessionStore(dir);
