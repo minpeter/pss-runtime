@@ -14,7 +14,6 @@ import {
   type QueuedRuntimeInput,
   type RuntimeInputPlacement,
   type RuntimeInputState,
-  shiftRuntimeInput,
   withRuntimeInputWindow,
   withSteeringPlacement,
 } from "./runtime-input";
@@ -24,6 +23,7 @@ import {
   sessionKilledError,
 } from "./session-errors";
 import { closeKilledRuntimeInputs } from "./session-kill";
+import { drainRuntimeInput } from "./session-runtime-drain";
 import { type SessionPersistenceOptions, SessionState } from "./session-state";
 import { emitTurnErrorAfterRecovery } from "./session-turn-error";
 
@@ -97,7 +97,9 @@ export class AgentSession {
     return run;
   }
 
-  interrupt(): void { this.#activeAbort?.abort(); }
+  interrupt(): void {
+    this.#activeAbort?.abort();
+  }
 
   async delete(): Promise<void> {
     const deleted = this.#state.delete();
@@ -127,7 +129,9 @@ export class AgentSession {
     this.#enqueuePendingRuntimeInput({ input, placement });
   }
 
-  emitObserverEvent(event: AgentEvent): void { this.#activeRun?.emit(event); }
+  emitObserverEvent(event: AgentEvent): void {
+    this.#activeRun?.emit(event);
+  }
 
   #enqueuePendingRuntimeInput(input: QueuedRuntimeInput): void {
     const queuedTurn = this.#inputQueue[0];
@@ -199,7 +203,12 @@ export class AgentSession {
       });
       this.#state.appendUserInput(input);
       await this.#state.commit();
-      await this.#drainRuntimeInput(run, runtimeInput, "turn-start");
+      await drainRuntimeInput({
+        placement: "turn-start",
+        run,
+        runtimeInput,
+        state: this.#state,
+      });
 
       const result = await runAgentLoop({
         emit: async (event) => {
@@ -207,11 +216,12 @@ export class AgentSession {
             await withRuntimeInputWindow(runtimeInput, event.type, async () => {
               await run.emitBoundary(event);
             });
-            const runtimeInputAdded = await this.#drainRuntimeInput(
+            const runtimeInputAdded = await drainRuntimeInput({
+              placement: event.type,
               run,
               runtimeInput,
-              event.type
-            );
+              state: this.#state,
+            });
 
             return event.type === "step-end"
               ? { runtimeInputAdded }
@@ -256,23 +266,5 @@ export class AgentSession {
       this.#runToCloseOnKill = undefined;
       run.close(undefined, runtimeInput.closedReason);
     }
-  }
-
-  async #drainRuntimeInput(
-    run: BufferedAgentRun,
-    runtimeInput: RuntimeInputState,
-    placement: RuntimeInputPlacement
-  ): Promise<boolean> {
-    let added = false;
-    let next = shiftRuntimeInput(runtimeInput, placement);
-    while (next) {
-      added = true;
-      run.emit({ type: "runtime-input", input: next.input, placement });
-      this.#state.appendUserInput(next.input);
-      await this.#state.commit();
-      next = shiftRuntimeInput(runtimeInput, placement);
-    }
-
-    return added;
   }
 }
