@@ -190,8 +190,8 @@ export class Agent {
       return;
     }
 
-    await Promise.all([...cleanups].map((cleanup) => cleanup()));
     this.#childSessionCleanups.delete(parentSessionKey);
+    await Promise.all([...cleanups].map((cleanup) => cleanup()));
   }
 }
 

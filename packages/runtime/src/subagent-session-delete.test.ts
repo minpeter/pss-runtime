@@ -9,7 +9,7 @@ import {
   toolExecutionOptions,
 } from "./llm-test-utils";
 import { SpyStore } from "./session/session.test-support";
-import { assistantMessage, userText } from "./test-fixtures";
+import { assistantMessage, createDeferred, userText } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
 
@@ -175,10 +175,53 @@ describe("subagent session deletion", () => {
       "second child work"
     );
   });
+
+  it("keeps new child cleanup registrations while prior kill cleanup is pending", async () => {
+    const Agent = await loadAgent();
+    const childStore = new BlockingDeleteStore();
+    const researcher = new Agent({
+      description: "Researches facts.",
+      llm: () => Promise.resolve([assistantMessage("CHILD DONE")]),
+      name: "researcher",
+      sessions: { store: childStore },
+    });
+    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    await drainRun(await agent.send(userText("delegate first")));
+    await executableTool(
+      lastGenerateTextTools(),
+      "delegate_to_researcher"
+    ).execute?.({ prompt: "first child work" }, toolExecutionOptions());
+    agent.session("default").kill();
+    await childStore.deleteStarted.promise;
+    await drainRun(await agent.send(userText("delegate second")));
+    await executableTool(
+      lastGenerateTextTools(),
+      "delegate_to_researcher"
+    ).execute?.({ prompt: "second child work" }, toolExecutionOptions());
+    childStore.allowDelete.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await agent.session("default").delete();
+
+    expect(childStore.deleteCount).toBe(2);
+  });
 });
 
 class RejectingDeleteStore extends SpyStore {
   override delete(_key: string): Promise<void> {
     return Promise.reject(new Error("child cleanup failed"));
+  }
+}
+
+class BlockingDeleteStore extends SpyStore {
+  readonly allowDelete = createDeferred();
+  deleteCount = 0;
+  readonly deleteStarted = createDeferred();
+
+  override async delete(key: string): Promise<void> {
+    this.deleteCount += 1;
+    this.deleteStarted.resolve();
+    await this.allowDelete.promise;
+    await super.delete(key);
   }
 }
