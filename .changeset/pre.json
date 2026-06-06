@@ -5,5 +5,9 @@
     "@minpeter/pss-coding-agent": "0.0.10",
     "@minpeter/pss-runtime": "0.0.10"
   },
-  "changesets": []
+  "changesets": [
+    "remove-coding-agent-tools",
+    "runtime-plugin-sessions",
+    "session-overlays"
+  ]
 }

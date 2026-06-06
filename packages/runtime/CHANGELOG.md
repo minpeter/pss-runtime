@@ -1,5 +1,21 @@
 # @minpeter/pss-runtime
 
+## 0.1.0-next.0
+
+### Minor Changes
+
+- 0ffe9e7: Add plugin-first session persistence, memory, and compaction APIs, plus event-first runtime control.
+
+  - Keep `run.events()` as the app-owned runtime control loop for synchronized rendering, tracing, and continuation policy.
+  - Expand plugin lifecycle middleware with `turn.before`, `step.before`, `step.after`, and `turn.after` handlers that can call scoped `steer(...)`.
+  - Add `Agent.create({ onPluginError })` for routing plugin lifecycle handler failures to caller-owned observability instead of the default console reporter.
+  - Add runtime-owned tool policy middleware with `tool.call` and `tool.result` for allow, modify, reject-and-continue, synthesize, error, and result replacement flows.
+  - Remove legacy top-level `Agent.create({ sessions: { store } })` and `Agent.create({ hooks })` options. Use `plugins: [sessions.custom(store)]` for persistence, `run.events()` plus `session.steer()` for app control, or plugin lifecycle handlers for reusable middleware.
+
+### Patch Changes
+
+- 3761c93: Add turn-scoped session overlays with non-persistent `session.overlay(input)` runtime context, overlay lifecycle events, and plugin lifecycle overlay helpers.
+
 ## 0.0.10
 
 ### Patch Changes
