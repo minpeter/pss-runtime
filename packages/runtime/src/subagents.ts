@@ -95,7 +95,6 @@ function createDelegateTool({
       parentSession.emitObserverEvent({
         description: input.description,
         run_in_background: false,
-        sessionKey,
         subagent: subagent.name ?? "subagent",
         type: "subagent-job-start",
       });

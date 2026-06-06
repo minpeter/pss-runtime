@@ -125,6 +125,7 @@ export class Agent {
       interrupt: () => session.interrupt(),
       kill: () => {
         session.kill();
+        this.#deleteChildSessions(key).catch(() => undefined);
         this.#sessions.delete(key);
       },
       send: (input) => session.send(input),

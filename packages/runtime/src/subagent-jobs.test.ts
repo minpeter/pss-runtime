@@ -48,6 +48,38 @@ describe("subagent background jobs", () => {
     expect(jobs.has(launches[0]?.task_id ?? "")).toBe(false);
     expect(runtimeInputs.join("\n")).not.toContain(launches[0]?.task_id);
   });
+
+  it("keeps pruned active jobs when cleanup fails", async () => {
+    const jobs = new Map<string, SubagentJob>();
+    const parentSession: RuntimeInputSink = {
+      emitObserverEvent: () => undefined,
+      enqueueRuntimeInput: () => undefined,
+    };
+    const subagent: Subagent = {
+      name: "researcher",
+      session: () => ({
+        delete: () => Promise.reject(new Error("cleanup failed")),
+        interrupt: () => undefined,
+        send: async () => createDelayedTextRun("STALE RESULT"),
+      }),
+    };
+
+    const launches = Array.from({ length: 65 }, (_value, index) =>
+      startBackgroundJob({
+        abortSignal: new AbortController().signal,
+        jobs,
+        parentSession,
+        prompt: { text: `research ${index}`, type: "user-text" },
+        registerCleanup: () => undefined,
+        sessionKey: `${parentSessionKey}:${index}`,
+        subagent,
+      })
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(jobs.has(launches[0]?.task_id ?? "")).toBe(true);
+  });
 });
 
 function createDelayedTextRun(text: string): AgentRun {

@@ -97,9 +97,7 @@ export class AgentSession {
     return run;
   }
 
-  interrupt(): void {
-    this.#activeAbort?.abort();
-  }
+  interrupt(): void { this.#activeAbort?.abort(); }
 
   async delete(): Promise<void> {
     const deleted = this.#state.delete();
@@ -129,9 +127,7 @@ export class AgentSession {
     this.#enqueuePendingRuntimeInput({ input, placement });
   }
 
-  emitObserverEvent(event: AgentEvent): void {
-    this.#activeRun?.emit(event);
-  }
+  emitObserverEvent(event: AgentEvent): void { this.#activeRun?.emit(event); }
 
   #enqueuePendingRuntimeInput(input: QueuedRuntimeInput): void {
     const queuedTurn = this.#inputQueue[0];
@@ -152,17 +148,11 @@ export class AgentSession {
     const killedError = sessionKilledError();
     this.#pendingRuntimeInputs.length = 0;
     this.#activeAbort?.abort();
-    closeRuntimeInput(this.#activeRuntimeInput, killedError.message);
-    const runToClose = this.#runToCloseOnKill ?? this.#activeRun;
-    runToClose?.emit({
-      type: "turn-error",
-      message: killedError.message,
-    });
-    runToClose?.close(undefined, killedError.message);
     closeKilledRuntimeInputs({
-      activeRuntimeInput: undefined,
+      activeRuntimeInput: this.#activeRuntimeInput,
       inputQueue: this.#inputQueue,
       message: killedError.message,
+      runToClose: this.#runToCloseOnKill ?? this.#activeRun,
     });
   }
 
@@ -223,10 +213,9 @@ export class AgentSession {
               event.type
             );
 
-            if (event.type === "step-end") {
-              return { runtimeInputAdded };
-            }
-            return;
+            return event.type === "step-end"
+              ? { runtimeInputAdded }
+              : undefined;
           }
 
           run.emit(event);

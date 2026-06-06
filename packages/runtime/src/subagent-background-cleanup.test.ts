@@ -47,15 +47,20 @@ describe("subagent background cleanup", () => {
       tools,
       "delegate_to_researcher"
     ).execute?.(
-      { prompt: "research this", run_in_background: true },
+      {
+        prompt: "research this",
+        run_in_background: true,
+        sessionKey: "cleanup-task",
+      },
       toolExecutionOptions()
-    )) as { sessionKey: string; task_id: string };
+    )) as { task_id: string };
     await executableTool(tools, "background_output").execute?.(
       { block: true, task_id: launch.task_id },
       toolExecutionOptions()
     );
-    await drainRun(
-      await researcher.session(launch.sessionKey).send(userText("fresh task"))
+    await executableTool(tools, "delegate_to_researcher").execute?.(
+      { prompt: "fresh task", sessionKey: "cleanup-task" },
+      toolExecutionOptions()
     );
 
     expect(JSON.stringify(childHistories.at(-1))).toContain("fresh task");

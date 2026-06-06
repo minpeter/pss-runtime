@@ -16,11 +16,13 @@ export class SessionCommitConflictError extends Error {
 
 export class SessionState {
   readonly #persistence: SessionPersistenceOptions;
+  #deleteRequested = false;
   #history = new ModelMessageHistory();
   #deleted = false;
   #loadPromise?: Promise<void>;
   #loaded = false;
   #storeVersion: string | undefined;
+  #writeQueue: Promise<void> = Promise.resolve();
 
   constructor(persistence: SessionPersistenceOptions) {
     this.#persistence = persistence;
@@ -31,7 +33,7 @@ export class SessionState {
   }
 
   async ensureLoaded(): Promise<void> {
-    if (this.#deleted) {
+    if (this.#deleteRequested || this.#deleted) {
       return;
     }
 
@@ -63,40 +65,67 @@ export class SessionState {
   }
 
   async commit(): Promise<void> {
-    if (this.#deleted) {
+    if (this.#deleteRequested || this.#deleted) {
       return;
     }
 
-    const result = await this.#persistence.store.commit(
-      this.#persistence.key,
-      {
-        state: encodeSessionSnapshot(this.#history.modelSnapshot()),
-      },
-      { expectedVersion: this.#storeVersion ?? null }
-    );
-
-    if (this.#deleted) {
-      if (result.ok) {
-        await this.#persistence.store.delete(this.#persistence.key);
+    const snapshot = this.#history.modelSnapshot();
+    await this.#enqueueWrite(async () => {
+      if (this.#deleteRequested || this.#deleted) {
+        return;
       }
-      return;
-    }
 
-    if (!result.ok) {
-      await this.#replaceWithStoredSession();
-      throw new SessionCommitConflictError(this.#persistence.key);
-    }
+      const result = await this.#persistence.store.commit(
+        this.#persistence.key,
+        { state: encodeSessionSnapshot(snapshot) },
+        { expectedVersion: this.#storeVersion ?? null }
+      );
 
-    this.#storeVersion = result.version;
+      if (!result.ok) {
+        await this.#replaceWithStoredSession();
+        throw new SessionCommitConflictError(this.#persistence.key);
+      }
+
+      this.#storeVersion = result.version;
+    });
   }
 
   async delete(): Promise<void> {
-    await this.#persistence.store.delete(this.#persistence.key);
-    this.#deleted = true;
+    if (this.#deleted) {
+      return;
+    }
+
+    const previous = {
+      history: this.#history.modelSnapshot(),
+      loaded: this.#loaded,
+      storeVersion: this.#storeVersion,
+    };
+    this.#deleteRequested = true;
     this.#loadPromise = undefined;
-    this.#loaded = true;
-    this.#storeVersion = undefined;
-    this.#history = new ModelMessageHistory();
+
+    await this.#enqueueWrite(async () => {
+      try {
+        await this.#persistence.store.delete(this.#persistence.key);
+      } catch (error) {
+        this.#deleteRequested = false;
+        this.#loaded = previous.loaded;
+        this.#storeVersion = previous.storeVersion;
+        this.#history = new ModelMessageHistory(previous.history);
+        throw error;
+      }
+
+      this.#deleted = true;
+      this.#loadPromise = undefined;
+      this.#loaded = true;
+      this.#storeVersion = undefined;
+      this.#history = new ModelMessageHistory();
+    });
+  }
+
+  #enqueueWrite(operation: () => Promise<void>): Promise<void> {
+    const next = this.#writeQueue.then(operation, operation);
+    this.#writeQueue = next.catch(() => undefined);
+    return next;
   }
 
   async #loadSessionState(): Promise<void> {

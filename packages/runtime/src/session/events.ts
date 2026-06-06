@@ -80,7 +80,6 @@ export type AgentEvent =
   | {
       description?: string;
       run_in_background: boolean;
-      sessionKey: string;
       subagent: string;
       task_id?: string;
       type: "subagent-job-start";

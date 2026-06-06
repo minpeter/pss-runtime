@@ -55,10 +55,10 @@ describe("SessionState deletion", () => {
     state.appendUserInput(userText("before"));
     const commit = state.commit();
     await store.commitStarted.promise;
-    await state.delete();
+    const deletion = state.delete();
 
     store.allowCommit.resolve();
-    await commit;
+    await Promise.all([commit, deletion]);
 
     expect(loadStored(store, "race")).toBeNull();
   });

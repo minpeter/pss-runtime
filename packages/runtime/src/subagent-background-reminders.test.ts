@@ -27,7 +27,7 @@ describe("subagent background reminders", () => {
     vi.restoreAllMocks();
   });
 
-  it("isolates background child session keys per task", async () => {
+  it("does not expose background child session keys", async () => {
     const Agent = await loadAgent();
     const childGate = new Promise<void>(() => undefined);
     const researcher = new Agent({
@@ -49,20 +49,20 @@ describe("subagent background reminders", () => {
     ).execute?.(
       { prompt: "research first", run_in_background: true },
       toolExecutionOptions()
-    )) as { sessionKey: string; task_id: string };
+    )) as Record<string, unknown>;
     const second = (await executableTool(
       tools,
       "delegate_to_researcher"
     ).execute?.(
       { prompt: "research second", run_in_background: true },
       toolExecutionOptions()
-    )) as { sessionKey: string; task_id: string };
+    )) as Record<string, unknown>;
 
-    expect(first.sessionKey).toContain(":default:subagent:researcher");
-    expect(second.sessionKey).toContain(":default:subagent:researcher");
-    expect(first.sessionKey).toContain(first.task_id);
-    expect(second.sessionKey).toContain(second.task_id);
-    expect(first.sessionKey).not.toBe(second.sessionKey);
+    expect(first).toHaveProperty("task_id");
+    expect(second).toHaveProperty("task_id");
+    expect(first).not.toHaveProperty("sessionKey");
+    expect(second).not.toHaveProperty("sessionKey");
+    expect(first.task_id).not.toBe(second.task_id);
   });
 
   it("does not enqueue completion reminders for pruned background jobs", async () => {

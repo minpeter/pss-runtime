@@ -30,7 +30,6 @@ export function startBackgroundJob({
     return {
       message: `Background subagent job ${id} was cancelled before it started.`,
       run_in_background: true,
-      sessionKey: childSessionKey,
       status: "cancelled",
       subagent: subagent.name,
       task_id: id,
@@ -66,7 +65,6 @@ export function startBackgroundJob({
   parentSession.emitObserverEvent({
     description,
     run_in_background: true,
-    sessionKey: childSessionKey,
     subagent: subagent.name ?? "subagent",
     task_id: id,
     type: "subagent-job-start",
@@ -75,7 +73,6 @@ export function startBackgroundJob({
   return {
     message: `Background subagent job ${id} started. Use background_output({ task_id: "${id}" }) to retrieve the result.`,
     run_in_background: true,
-    sessionKey: childSessionKey,
     status: job.status,
     subagent: subagent.name,
     task_id: id,
@@ -206,9 +203,12 @@ function pruneJobs(jobs: Map<string, SubagentJob>): void {
       cancelJob(job);
     }
     if (job) {
-      cleanupJob(job).catch(() => undefined);
+      cleanupJob(job).then(
+        () => jobs.delete(oldest),
+        () => undefined
+      );
     }
-    jobs.delete(oldest);
+    return;
   }
 }
 

@@ -49,11 +49,11 @@ describe("subagent job events", () => {
     expect(start).toEqual(
       expect.objectContaining({
         run_in_background: false,
-        sessionKey: expect.stringContaining(":default:subagent:researcher"),
         subagent: "researcher",
         type: "subagent-job-start",
       })
     );
+    expect(start).not.toHaveProperty("sessionKey");
     expect(end).toEqual(
       expect.objectContaining({
         eventCount: expect.any(Number),
