@@ -30,6 +30,7 @@ export interface AgentAfterStepContext extends AgentBeforeStepContext {
 }
 export interface AgentStepLifecycle {
   afterStep?(context: AgentAfterStepContext): MaybePromise<void>;
+  beforeInference?(context: AgentBeforeStepContext): MaybePromise<void>;
   beforeStep?(context: AgentBeforeStepContext): MaybePromise<void>;
 }
 type AgentLoopBoundaryEvent = Extract<
@@ -37,6 +38,7 @@ type AgentLoopBoundaryEvent = Extract<
   { type: "step-end" } | { type: "step-start" }
 >;
 interface AgentLoopBoundaryDecision {
+  readonly overlayInputAdded?: boolean;
   readonly runtimeInputAdded?: boolean;
 }
 type AgentLoopEventListener = (
@@ -81,6 +83,16 @@ export async function runAgentLoop({
       return "aborted";
     }
 
+    await stepLifecycle?.beforeInference?.({
+      history: history.modelSnapshot(),
+      signal,
+      stepIndex,
+    });
+
+    if (signal.aborted) {
+      return "aborted";
+    }
+
     const output = await readLlmOutput({ history, llm, signal });
 
     if (output === "aborted") {
@@ -113,7 +125,11 @@ export async function runAgentLoop({
     // Runtime input after step-end intentionally forces another inference step,
     // even after final-looking assistant text. Unconditional insertion on every
     // step-end can create an unbounded loop.
-    if (result === "completed" && !stepEndDecision?.runtimeInputAdded) {
+    if (
+      result === "completed" &&
+      !stepEndDecision?.runtimeInputAdded &&
+      !stepEndDecision?.overlayInputAdded
+    ) {
       return "completed";
     }
 

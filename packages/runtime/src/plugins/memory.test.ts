@@ -139,6 +139,9 @@ async function callMemoryTools(
     getCompactions: () => [],
     getPluginState: (key: string) => state.get(key),
     history: () => [],
+    overlay: () => {
+      throw new Error("memory tool fixture does not support overlays");
+    },
     sessionKey: "tools",
     setCompactions: () => undefined,
     setPluginState: (key: string, value: unknown) => {

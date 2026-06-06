@@ -15,6 +15,7 @@ export interface AgentPluginScope {
   readonly getCompactions: () => readonly AgentCompactionOverlay[];
   readonly getPluginState: (pluginName: string) => unknown;
   readonly history: () => readonly ModelMessage[];
+  readonly overlay: (input: AgentInput) => Promise<AgentRun>;
   readonly sessionKey: string;
   readonly setCompactions: (
     compactions: readonly AgentCompactionOverlay[]

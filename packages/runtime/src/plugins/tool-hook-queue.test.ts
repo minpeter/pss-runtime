@@ -89,6 +89,7 @@ function createScope(
     getCompactions: () => [],
     getPluginState: () => undefined,
     history: () => [],
+    overlay: () => Promise.reject(new Error("unexpected overlay")),
     sessionKey: "tool-queue",
     setCompactions: () => undefined,
     setPluginState: () => undefined,

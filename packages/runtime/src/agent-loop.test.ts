@@ -214,6 +214,36 @@ describe("runAgentLoop", () => {
     expect(history.modelSnapshot()).toEqual([]);
   });
 
+  it("returns aborted before calling the LLM when beforeInference aborts", async () => {
+    const events: AgentEvent[] = [];
+    const history = new ModelMessageHistory();
+    const controller = new AbortController();
+    let llmCalled = false;
+
+    await expect(
+      runAgentLoop({
+        emit: (event) => {
+          events.push(event);
+        },
+        history,
+        stepLifecycle: {
+          beforeInference: () => {
+            controller.abort();
+          },
+        },
+        llm: () => {
+          llmCalled = true;
+          return Promise.resolve([assistantMessage("UNREACHABLE")]);
+        },
+        signal: controller.signal,
+      })
+    ).resolves.toBe("aborted");
+
+    expect(eventTypes(events)).toEqual(["step-start"]);
+    expect(llmCalled).toBe(false);
+    expect(history.modelSnapshot()).toEqual([]);
+  });
+
   it("rejects before emitting a step when beforeStep throws", async () => {
     const events: AgentEvent[] = [];
     const history = new ModelMessageHistory();

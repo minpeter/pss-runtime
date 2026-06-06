@@ -95,6 +95,7 @@ export function normalizeAgentInput(input: AgentInput): UserInput {
 
   if (isUserMessage(input)) {
     assertUserMessageContent(input.content);
+    assertUserMessageMetadata(input.metadata);
   }
 
   return structuredClone(input);
@@ -123,6 +124,19 @@ function assertUserMessageContent(
         'Agent input content parts must be { type: "text", text }, { type: "image", image }, or { type: "file", data, mediaType }.'
       );
     }
+  }
+}
+
+function assertUserMessageMetadata(metadata: unknown): void {
+  if (
+    metadata !== undefined &&
+    (metadata === null ||
+      typeof metadata !== "object" ||
+      Array.isArray(metadata))
+  ) {
+    throw new TypeError(
+      "Agent input metadata must be an object when provided."
+    );
   }
 }
 

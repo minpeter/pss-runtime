@@ -18,6 +18,8 @@ import type { RuntimeInputPlacement, RuntimeInputState } from "./runtime-input";
 export interface AgentSessionLifecycle {
   readonly createScope: (signal: AbortSignal) => AgentPluginScope;
   readonly history: () => ModelMessage[];
+  readonly onPluginError?: AgentPluginErrorHandler;
+  readonly overlaySession: (input: AgentInput) => Promise<AgentRun>;
   readonly plugins?: ResolvedAgentPlugins;
   readonly sessionKey: string;
   readonly steerCurrentRun: (
@@ -26,6 +28,15 @@ export interface AgentSessionLifecycle {
   ) => Promise<AgentRun>;
   readonly steerSession: (input: AgentInput) => Promise<AgentRun>;
 }
+
+export interface AgentPluginHandlerError {
+  readonly eventName: AgentPluginEventName;
+  readonly reason: unknown;
+}
+
+export type AgentPluginErrorHandler = (
+  error: AgentPluginHandlerError
+) => Promise<void> | void;
 
 export function createRuntimeInputStepLifecycle({
   lifecycle,
@@ -92,6 +103,7 @@ export async function runPluginBeforeTurnHandlers(
       await handler({
         history: lifecycle.history(),
         input,
+        overlay: lifecycle.overlaySession,
         sessionKey: lifecycle.sessionKey,
         signal,
         steer: (nextInput) =>
@@ -123,6 +135,7 @@ export async function runPluginBeforeStepHandlers(
     for (const handler of handlers) {
       await handler({
         history: context.history,
+        overlay: lifecycle.overlaySession,
         sessionKey: lifecycle.sessionKey,
         signal: context.signal,
         steer: (input) => lifecycle.steerCurrentRun(runtimeInput, input),
@@ -150,12 +163,13 @@ export async function runPluginAfterStepHandlers(
   }
 
   const scope = lifecycle.createScope(context.signal);
-  await runWithAgentPluginScope(scope, () =>
+  const settlements = await runWithAgentPluginScope(scope, () =>
     Promise.allSettled(
       handlers.map((handler) =>
         Promise.resolve().then(() =>
           handler({
             history: context.history,
+            overlay: lifecycle.overlaySession,
             result: context.result,
             sessionKey: lifecycle.sessionKey,
             signal: context.signal,
@@ -167,6 +181,7 @@ export async function runPluginAfterStepHandlers(
       )
     )
   );
+  await logPluginHandlerRejections(lifecycle, "step.after", settlements);
   return true;
 }
 
@@ -187,14 +202,19 @@ export async function runPluginAfterTurnHandlers(
     return false;
   }
 
-  const scope = lifecycle.createScope(signal);
-  await runWithAgentPluginScope(scope, () =>
+  const overlay = () =>
+    Promise.reject(
+      new Error("Agent plugin overlay cannot be used after turn end.")
+    );
+  const scope = { ...lifecycle.createScope(signal), overlay };
+  const settlements = await runWithAgentPluginScope(scope, () =>
     Promise.allSettled(
       handlers.map((handler) =>
         Promise.resolve().then(() =>
           handler({
             history: lifecycle.history(),
             input,
+            overlay,
             result,
             sessionKey: lifecycle.sessionKey,
             signal,
@@ -205,6 +225,7 @@ export async function runPluginAfterTurnHandlers(
       )
     )
   );
+  await logPluginHandlerRejections(lifecycle, "turn.after", settlements);
   return true;
 }
 
@@ -213,4 +234,57 @@ function pluginHandlers(
   eventName: AgentPluginEventName
 ) {
   return lifecycle.plugins?.eventHandlers.get(eventName) ?? [];
+}
+
+async function logPluginHandlerRejections(
+  lifecycle: AgentSessionLifecycle,
+  eventName: AgentPluginEventName,
+  settlements: readonly PromiseSettledResult<unknown>[]
+): Promise<void> {
+  await Promise.all(
+    settlements.map((settlement) => {
+      if (settlement.status === "fulfilled") {
+        return Promise.resolve();
+      }
+
+      return reportPluginHandlerRejection(lifecycle, {
+        eventName,
+        reason: settlement.reason,
+      });
+    })
+  );
+}
+
+async function reportPluginHandlerRejection(
+  lifecycle: AgentSessionLifecycle,
+  error: AgentPluginHandlerError
+): Promise<void> {
+  const onPluginError = lifecycle.onPluginError;
+  if (!onPluginError) {
+    reportPluginHandlerError(error);
+    return;
+  }
+
+  try {
+    await onPluginError(error);
+  } catch (handlerError) {
+    reportPluginErrorHandlerError(handlerError);
+  }
+}
+
+function reportPluginHandlerError({
+  eventName,
+  reason,
+}: AgentPluginHandlerError): void {
+  console.error(
+    `Agent plugin ${eventName} handler failed: ${errorKind(reason)}`
+  );
+}
+
+function errorKind(reason: unknown): string {
+  return reason instanceof Error ? reason.name : typeof reason;
+}
+
+function reportPluginErrorHandlerError(reason: unknown): void {
+  console.error(`Agent plugin error handler failed: ${errorKind(reason)}`);
 }

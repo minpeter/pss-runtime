@@ -5,6 +5,7 @@ import {
   type ResolvedAgentPlugins,
   resolveAgentPlugins,
 } from "./plugins/runner";
+import type { AgentPluginErrorHandler } from "./session/lifecycle";
 import type { AgentRun } from "./session/run";
 import { type AgentInput, AgentSession } from "./session/session";
 import { MemorySessionStore } from "./session/store/memory";
@@ -14,6 +15,7 @@ interface AgentLanguageModelOptions {
   instructions?: string;
   llm?: never;
   model: LanguageModel;
+  onPluginError?: AgentPluginErrorHandler;
   plugins?: readonly AgentPlugin[];
   toolChoice?: AgentToolChoice;
   tools?: ToolSet;
@@ -23,6 +25,7 @@ interface AgentLlmOptions {
   instructions?: never;
   llm: Llm;
   model?: never;
+  onPluginError?: AgentPluginErrorHandler;
   plugins?: readonly AgentPlugin[];
   toolChoice?: never;
   tools?: never;
@@ -31,6 +34,7 @@ interface AgentLlmOptions {
 export interface SessionHandle {
   interrupt(): void;
   kill(): void;
+  overlay(input: AgentInput): Promise<AgentRun>;
   send(input: AgentInput): Promise<AgentRun>;
   steer(input: AgentInput): Promise<AgentRun>;
 }
@@ -40,6 +44,7 @@ export type AgentOptions = AgentLanguageModelOptions | AgentLlmOptions;
 export class Agent {
   readonly #internalLlm: Llm;
   readonly #llm: Llm;
+  readonly #onPluginError?: AgentPluginErrorHandler;
   readonly #plugins: ResolvedAgentPlugins;
   readonly #sessions = new Map<string, SessionHandle>();
   readonly #store: SessionStore;
@@ -51,6 +56,7 @@ export class Agent {
     assertAgentOptions(options);
 
     this.#plugins = resolvedPlugins;
+    this.#onPluginError = options.onPluginError;
     this.#store =
       resolvedPlugins.sessionStore?.store ?? new MemorySessionStore();
     if (hasCustomLlm(options)) {
@@ -93,7 +99,8 @@ export class Agent {
       this.#llm,
       { key, store: this.#store },
       this.#plugins,
-      this.#internalLlm
+      this.#internalLlm,
+      this.#onPluginError
     );
     const handle: SessionHandle = {
       interrupt: () => session.interrupt(),
@@ -101,6 +108,7 @@ export class Agent {
         session.kill();
         this.#sessions.delete(key);
       },
+      overlay: (input) => session.overlay(input),
       send: (input) => session.send(input),
       steer: (input) => session.steer(input),
     };
@@ -140,6 +148,14 @@ function assertAgentOptions(options: unknown): asserts options is AgentOptions {
 
   if ("llm" in options && options.llm !== undefined && !hasLlm) {
     throw new TypeError("Agent.create: invalid options.llm.");
+  }
+
+  if (
+    "onPluginError" in options &&
+    options.onPluginError !== undefined &&
+    typeof options.onPluginError !== "function"
+  ) {
+    throw new TypeError("Agent.create: invalid options.onPluginError.");
   }
 
   if (!(hasLlm || hasModel)) {

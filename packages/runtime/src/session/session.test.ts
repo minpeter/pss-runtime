@@ -2,7 +2,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ModelMessage } from "ai";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Agent } from "../agent";
 import { definePlugin, sessions } from "../plugins";
 import {
@@ -168,6 +168,9 @@ describe("Agent session API", () => {
   });
 
   it("commits successful output before turn.after failures", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
     const agent = await Agent.create({
@@ -181,6 +184,152 @@ describe("Agent session API", () => {
           name: "failing-after-turn",
           setup(host) {
             host.on("turn.after", () => {
+              throw new Error("after turn failed with secret-token");
+            });
+          },
+        }),
+      ],
+    });
+
+    try {
+      const firstEvents = await collect(
+        await agent.session("after-turn").send("first")
+      );
+      const secondEvents = await collect(
+        await agent.session("after-turn").send("second")
+      );
+
+      expect(eventTypes(firstEvents)).toEqual([
+        "user-text",
+        "turn-start",
+        "step-start",
+        "assistant-text",
+        "step-end",
+        "turn-end",
+      ]);
+      expect(eventTypes(secondEvents)).toEqual([
+        "user-text",
+        "turn-start",
+        "step-start",
+        "assistant-text",
+        "step-end",
+        "turn-end",
+      ]);
+      expect(seenHistory[1]).toEqual([
+        userTextToModelMessage(userText("first")),
+        assistantMessage("DONE 1"),
+        userTextToModelMessage(userText("second")),
+      ]);
+      expect(consoleError).toHaveBeenCalledWith(
+        "Agent plugin turn.after handler failed: Error"
+      );
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+        "secret-token"
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("continues the turn but logs step.after failures", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const agent = await Agent.create({
+      llm: () => Promise.resolve([assistantMessage("DONE")]),
+      plugins: [
+        definePlugin({
+          name: "failing-after-step",
+          setup(host) {
+            host.on("step.after", () => {
+              throw new Error("after step failed with secret-token");
+            });
+          },
+        }),
+      ],
+    });
+
+    try {
+      const events = await collect(
+        await agent.session("after-step").send("hi")
+      );
+
+      expect(eventTypes(events)).toEqual([
+        "user-text",
+        "turn-start",
+        "step-start",
+        "assistant-text",
+        "step-end",
+        "turn-end",
+      ]);
+      expect(consoleError).toHaveBeenCalledWith(
+        "Agent plugin step.after handler failed: Error"
+      );
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+        "secret-token"
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("routes plugin handler failures to a configured error handler", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const errors: { readonly eventName: string; readonly reason: unknown }[] =
+      [];
+    const agent = await Agent.create({
+      llm: () => Promise.resolve([assistantMessage("DONE")]),
+      onPluginError: (error) => {
+        errors.push(error);
+      },
+      plugins: [
+        definePlugin({
+          name: "custom-error-handler",
+          setup(host) {
+            host.on("turn.after", () => {
+              throw new Error("custom handler error");
+            });
+          },
+        }),
+      ],
+    });
+
+    try {
+      await collect(await agent.session("custom-error-handler").send("hi"));
+
+      expect(consoleError).not.toHaveBeenCalled();
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toMatchObject({
+        eventName: "turn.after",
+        reason: expect.objectContaining({ message: "custom handler error" }),
+      });
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("keeps completed turns committed when the plugin error handler fails", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const seenHistory: ModelMessage[][] = [];
+    let calls = 0;
+    const agent = await Agent.create({
+      llm: ({ history }) => {
+        calls += 1;
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage(`DONE ${calls}`)]);
+      },
+      onPluginError: () => {
+        throw new Error("observer failed with secret-token");
+      },
+      plugins: [
+        definePlugin({
+          name: "throwing-error-handler",
+          setup(host) {
+            host.on("turn.after", () => {
               throw new Error("after turn failed");
             });
           },
@@ -188,37 +337,121 @@ describe("Agent session API", () => {
       ],
     });
 
-    const firstEvents = await collect(
-      await agent.session("after-turn").send("first")
-    );
-    const secondEvents = await collect(
-      await agent.session("after-turn").send("second")
-    );
+    try {
+      const session = agent.session("throwing-error-handler");
+      const firstEvents = await collect(await session.send("first"));
+      const secondEvents = await collect(await session.send("second"));
 
-    expect(eventTypes(firstEvents)).toEqual([
-      "user-text",
-      "turn-start",
-      "step-start",
-      "assistant-text",
-      "step-end",
-      "turn-end",
-    ]);
-    expect(eventTypes(secondEvents)).toEqual([
-      "user-text",
-      "turn-start",
-      "step-start",
-      "assistant-text",
-      "step-end",
-      "turn-end",
-    ]);
-    expect(seenHistory[1]).toEqual([
-      userTextToModelMessage(userText("first")),
-      assistantMessage("DONE 1"),
-      userTextToModelMessage(userText("second")),
-    ]);
+      expect(eventTypes(firstEvents)).toEqual([
+        "user-text",
+        "turn-start",
+        "step-start",
+        "assistant-text",
+        "step-end",
+        "turn-end",
+      ]);
+      expect(eventTypes(secondEvents)).toEqual([
+        "user-text",
+        "turn-start",
+        "step-start",
+        "assistant-text",
+        "step-end",
+        "turn-end",
+      ]);
+      expect(seenHistory[1]).toEqual([
+        userTextToModelMessage(userText("first")),
+        assistantMessage("DONE 1"),
+        userTextToModelMessage(userText("second")),
+      ]);
+      expect(consoleError).toHaveBeenCalledWith(
+        "Agent plugin error handler failed: Error"
+      );
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+        "secret-token"
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("handles async plugin error handler failures without unhandled rejections", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const unhandledRejections: unknown[] = [];
+    const collectUnhandledRejection = (reason: unknown) => {
+      unhandledRejections.push(reason);
+    };
+    process.on("unhandledRejection", collectUnhandledRejection);
+    const seenHistory: ModelMessage[][] = [];
+    let calls = 0;
+    const agent = await Agent.create({
+      llm: ({ history }) => {
+        calls += 1;
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage(`DONE ${calls}`)]);
+      },
+      onPluginError: async () => {
+        await Promise.resolve();
+        throw new Error("observer failed with secret-token");
+      },
+      plugins: [
+        definePlugin({
+          name: "async-throwing-error-handler",
+          setup(host) {
+            host.on("turn.after", () => {
+              throw new Error("after turn failed");
+            });
+          },
+        }),
+      ],
+    });
+
+    try {
+      const session = agent.session("async-throwing-error-handler");
+      const firstEvents = await collect(await session.send("first"));
+      const secondEvents = await collect(await session.send("second"));
+      await Promise.resolve();
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+      expect(eventTypes(firstEvents)).toEqual([
+        "user-text",
+        "turn-start",
+        "step-start",
+        "assistant-text",
+        "step-end",
+        "turn-end",
+      ]);
+      expect(eventTypes(secondEvents)).toEqual([
+        "user-text",
+        "turn-start",
+        "step-start",
+        "assistant-text",
+        "step-end",
+        "turn-end",
+      ]);
+      expect(seenHistory[1]).toEqual([
+        userTextToModelMessage(userText("first")),
+        assistantMessage("DONE 1"),
+        userTextToModelMessage(userText("second")),
+      ]);
+      expect(unhandledRejections).toHaveLength(0);
+      expect(consoleError).toHaveBeenCalledWith(
+        "Agent plugin error handler failed: Error"
+      );
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+        "secret-token"
+      );
+    } finally {
+      process.removeListener("unhandledRejection", collectUnhandledRejection);
+      consoleError.mockRestore();
+    }
   });
 
   it("orders plugin lifecycle around runtime input windows", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     const lifecycleCalls: string[] = [];
     const trace: string[] = [];
     const seenHistory: ModelMessage[][] = [];
@@ -383,6 +616,7 @@ describe("Agent session API", () => {
       userTextToModelMessage(userText("step-end runtime")),
       assistantMessage("DONE"),
     ]);
+    consoleError.mockRestore();
   });
 
   it("agent.send accepts multipart string input without lossy joining", async () => {
@@ -567,6 +801,47 @@ describe("Agent session API", () => {
         },
       ],
     ]);
+  });
+
+  it("persists user-message metadata as model provider options", async () => {
+    const store = new SpyStore();
+    const seenHistory: ModelMessage[][] = [];
+    const agent = await Agent.create({
+      llm: ({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      },
+      plugins: [sessions.custom(store)],
+    });
+
+    const metadata = {
+      openai: { cacheControl: { type: "ephemeral" } },
+    };
+    const input = {
+      content: [{ type: "text", text: "cache this turn" }],
+      metadata,
+      type: "user-message",
+    } as const;
+
+    const events = await collect(await agent.session("metadata").send(input));
+
+    expect(events[0]).toEqual(input);
+    expect(seenHistory[0]?.[0]).toEqual({
+      role: "user",
+      content: [{ type: "text", text: "cache this turn" }],
+      providerOptions: metadata,
+    });
+    expect(store.sessions.get("metadata")?.state).toEqual(
+      expect.objectContaining({
+        history: expect.arrayContaining([
+          {
+            role: "user",
+            content: [{ type: "text", text: "cache this turn" }],
+            providerOptions: metadata,
+          },
+        ]),
+      })
+    );
   });
 
   it("session.send accepts user-text events", async () => {

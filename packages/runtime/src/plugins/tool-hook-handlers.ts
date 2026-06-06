@@ -42,6 +42,7 @@ export async function runToolCallHandlers({
     const result = await handler({
       history: cloneToolHookValue(history),
       input: cloneToolHookValue(nextInput),
+      overlay: scope.overlay,
       sessionKey: scope.sessionKey,
       signal: options.abortSignal ?? signal,
       steer: scope.steer,
@@ -100,6 +101,7 @@ export async function runToolResultHandlers({
       error: state.error,
       history: cloneToolHookValue(history),
       input: cloneToolHookValue(input),
+      overlay: scope.overlay,
       output: cloneToolHookValue(state.output),
       sessionKey: scope.sessionKey,
       signal: options.abortSignal ?? signal,
