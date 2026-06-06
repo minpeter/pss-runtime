@@ -3,28 +3,18 @@
 Small agent runtime workspace.
 
 - `@minpeter/pss-runtime`: runtime, sessions, model loop.
-- `@minpeter/pss-coding-agent`: model wiring and the `pss` TUI.
+- `@minpeter/pss-coding-agent`: web tools, model wiring, and the `pss` TUI.
 
 ## Use
 
 ```ts
-import { tool, type LanguageModel } from "ai";
-import { z } from "zod";
+import { tools } from "@minpeter/pss-coding-agent";
+import { createCodingLanguageModel } from "@minpeter/pss-coding-agent/model";
 import { Agent } from "@minpeter/pss-runtime";
 
-declare const model: LanguageModel;
-
-const tools = {
-  echo: tool({
-    description: "Echo the provided text.",
-    inputSchema: z.object({ text: z.string() }),
-    execute: ({ text }) => ({ text }),
-  }),
-};
-
-const agent = await Agent.create({
+const agent = new Agent({
   instructions: "Keep every answer under 3 lines.",
-  model,
+  model: createCodingLanguageModel(),
   tools,
 });
 const run = await agent.send("Hello");
@@ -106,7 +96,10 @@ Copy `.env.example` to `.env`.
 AI_API_KEY=...
 AI_BASE_URL=...
 AI_MODEL=...
+TINYFISH_API_KEY=...
 ```
+
+`TINYFISH_API_KEY` may contain semicolon-delimited tokens.
 
 The `pss` TUI stores sessions in `~/.pss/sessions` by default. Override with
 `PSS_SESSION_DIR` and `PSS_SESSION_KEY` when you want repo-local storage or a

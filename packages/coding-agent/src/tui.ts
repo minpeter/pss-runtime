@@ -9,20 +9,23 @@ import {
   TUI,
 } from "@earendil-works/pi-tui";
 import { Agent } from "@minpeter/pss-runtime";
-import { sessions } from "@minpeter/pss-runtime/plugins";
 import { FileSessionStore } from "@minpeter/pss-runtime/session-store/file";
 import { createCodingLanguageModel } from "./model";
 import { resolveCodingAgentSessionConfig } from "./session-config";
+import { tools } from "./tools";
 import { createTuiRunner } from "./tui-runner";
 import { safeInlineText } from "./tui-tool-printer";
 
 export async function startTui(): Promise<void> {
   const sessionConfig = resolveCodingAgentSessionConfig();
-  const agent = await Agent.create({
+  const agent = new Agent({
     instructions:
       "Answer in 2 short sentences and 280 characters or fewer unless the user explicitly asks for detail. Avoid headings.",
     model: createCodingLanguageModel(),
-    plugins: [sessions.custom(new FileSessionStore(sessionConfig.directory))],
+    sessions: {
+      store: new FileSessionStore(sessionConfig.directory),
+    },
+    tools,
   });
   const session = agent.session(sessionConfig.key);
 

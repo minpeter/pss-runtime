@@ -13,7 +13,7 @@ Minimal, platform-agnostic agent runtime with keyed sessions, synchronized
 import { Agent } from "@minpeter/pss-runtime";
 import { createYourLanguageModel } from "...";
 
-const agent = await Agent.create({
+const agent = new Agent({
   instructions: "Answer briefly.",
   model: createYourLanguageModel(),
 });
@@ -28,23 +28,7 @@ for await (const event of run.events()) {
 boundaries until the events consumer asks for the next event, so callers must
 consume the events for the run to progress. This is what lets code react to
 `turn-start`, `step-start`, and `step-end` before the next model snapshot is
-created. `AgentRun.events()` is single-consumer by design: keep rendering,
-logging, tracing, and continuation policy in the same app-owned loop when those
-concerns must share synchronized boundary control.
-
-```ts
-const run = await agent.send("Implement the plan.");
-const session = agent.session("default");
-
-for await (const event of run.events()) {
-  renderEvent(event);
-  traceEvent(event);
-
-  if (event.type === "step-end" && shouldContinueWork()) {
-    await session.steer("Continue. The task is not complete yet.");
-  }
-}
-```
+created.
 
 Per-key conversations use `session(key)`:
 
@@ -96,6 +80,63 @@ The public transcript protocol is `AgentEvent`: live runs emit runtime-defined
 events through `run.events()`. Provider/model message history is internal
 continuation state, not a public history API.
 
+## Subagents
+
+Compose specialist agents by constructing them first and passing them as an
+array. Top-level agents may omit metadata, but agents used as subagents need a
+stable `name` and `description` so the runtime can expose clear model-facing
+delegate tools.
+
+```ts
+const researcher = new Agent({
+  name: "researcher",
+  description: "Researches facts and returns concise evidence.",
+  model,
+  instructions: "Research facts and return concise evidence.",
+});
+
+const coordinator = new Agent({
+  model,
+  instructions: "Coordinate work and delegate when useful.",
+  subagents: [researcher],
+});
+```
+
+For each subagent, the parent model receives a generated
+`delegate_to_<name>` tool. The tool accepts `prompt`, optional `description`,
+optional `sessionKey` suffix, and `run_in_background`. A provided `sessionKey`
+is always scoped under the parent session and subagent name; the model cannot
+select an arbitrary child session key. Omitting `run_in_background` defaults to
+blocking behavior and returns compact child text, not the full child event
+stream.
+
+```ts
+delegate_to_researcher({
+  prompt: "Find the current release notes and summarize the evidence.",
+});
+```
+
+When the model sets `run_in_background: true`, the parent run can finish while
+the child keeps working. The launch result includes a `bg_...` `task_id`. A
+compact runtime reminder is queued for the parent when the child finishes, and
+the model can retrieve the result with `background_output`.
+
+```ts
+delegate_to_researcher({
+  prompt: "Compare the API designs.",
+  run_in_background: true,
+});
+
+background_output({ task_id: "bg_...", block: true });
+background_cancel({ task_id: "bg_..." });
+```
+
+The parent model context stays compact by default: completion reminders include
+the task id, subagent name, description, and retrieval instruction. Full child
+traces are not injected into the parent transcript by default. Background jobs
+run in task-scoped child sessions, and retrieved completed jobs are forgotten
+after `background_output` returns.
+
 ## Send and Steer
 
 Use `session.send(input)` for a new user turn. If a run is already active, the
@@ -138,200 +179,50 @@ for await (const event of run.events()) {
 pending steering path or, when idle, when a new run is scheduled. It does not wait
 for a later model snapshot.
 
-## Overlay
-
-Use `session.overlay(input)` for turn-scoped model context that should affect
-the next model snapshot without becoming canonical session history. It accepts
-the same input shapes as `send()` and `steer()` and has no options in v0.
-
-Overlay context accepted before the first model inference in a turn is composed
-above the current user prompt. This keeps the current prompt near the bottom of
-the model snapshot while still giving the model fresh runtime context first.
-Overlay context accepted after a model inference has already happened is
-append-only: it is added after the messages that already existed for that turn
-and never moves earlier content around.
-
-```ts
-const session = agent.session("room:123:user:456");
-
-await session.overlay("Current wall-clock time: 2026-06-05T19:00:00Z");
-const run = await session.send("What should I do next?");
-
-for await (const event of run.events()) {
-  if (event.type === "step-end" && needsOneMorePass()) {
-    await session.overlay("Additional constraint: answer in two sentences.");
-  }
-}
-```
-
-Active `step-end` overlays intentionally continue the current turn for one more
-model snapshot, like `step-end` steering, but they are not persisted as
-`runtime-input`. Idle overlays do not start a turn; they queue for the next
-`send()` on that session.
-
-Runs emit `overlay-accepted` when overlay input is accepted and
-`overlay-expired` when the turn-scoped frame is discarded at turn end, abort,
-error, or kill. Overlay text is not written to stored history, not encoded in
-session snapshots, and does not survive session reload.
-
-## Plugins, Session Storage, Memory, And Compaction
+## Session storage and portability
 
 The runtime owns full session state encoding and history compaction semantics.
-Persistence, memory, and compaction are configured through in-process plugins:
+Adapters own persistence only through `SessionStore`:
 
-```ts
-import { Agent } from "@minpeter/pss-runtime";
-import { compaction, memory, sessions } from "@minpeter/pss-runtime/plugins";
-
-const agent = await Agent.create({
-  model,
-  plugins: [sessions.file(".pss/sessions"), memory(), compaction()],
-});
-```
-
-If no persistence plugin is provided, sessions are memory-backed by default.
-
-Reusable middleware belongs in plugins. Plugins can observe turn and step
-lifecycle events and call the scoped `steer` function to insert runtime input at
-the active boundary or the scoped `overlay` function to add turn-scoped
-non-persistent context before the turn ends. Plugin `overlay` is available from
-`turn.before`, `step.before`, and `step.after`; `turn.after` runs after the
-turn-scoped overlay frame is closed and rejects overlay calls. App-level control
-should stay with `run.events()` plus `session.steer()` or `session.overlay()`;
-plugin lifecycle is for reusable policy.
-
-Plugin event names are dotted middleware names: `turn.before`, `step.before`,
-`step.after`, `turn.after`, `tool.call`, and `tool.result`. These are separate
-from public `run.events()` transcript names such as `turn-start`, `step-start`,
-`assistant-text`, `tool-call`, `tool-result`, `step-end`, and `turn-end`.
-
-```ts
-import { Agent, definePlugin } from "@minpeter/pss-runtime";
-
-const continuePlugin = definePlugin({
-  name: "continue-policy",
-  setup(host) {
-    host.on("step.after", async ({ result, history, overlay, steer, stepIndex }) => {
-      if (result === "completed" && stepIndex === 0 && shouldContinueWork(history)) {
-        await overlay("Continue, but do not persist this policy text.");
-        await steer("Continue. The task is not complete yet.");
-      }
-    });
-  },
-});
-
-const agent = await Agent.create({
-  model,
-  plugins: [continuePlugin],
-});
-```
-
-`turn.after` is useful for audit, metrics, or scheduling a separate follow-up
-run after the current turn has committed.
-
-```ts
-const auditPlugin = definePlugin({
-  name: "turn-audit",
-  setup(host) {
-    host.on("turn.after", ({ result, sessionKey }) => {
-      recordTurnResult(sessionKey, result);
-    });
-  },
-});
-```
-
-Tool policy hooks apply to runtime-owned tools in the `Agent.create({ model,
-tools })` path, including tools registered by plugins. Custom `llm` callers own
-their tool execution and do not receive synthetic tool hook events.
-
-`tool.call` runs after AI SDK input parsing and before the original tool
-`execute`. Handlers run in plugin registration order. `allow` continues to the
-next handler, `modify` replaces the input for later handlers and execution,
-`reject-and-continue` skips the original tool and returns a rejection payload to
-the model, `synthesize` skips the original tool and returns a synthetic output,
-and `error` fails the active run.
-
-```ts
-import { definePlugin } from "@minpeter/pss-runtime";
-
-const toolPolicyPlugin = definePlugin({
-  name: "tool-policy",
-  setup(host) {
-    host.on("tool.call", ({ input, tool }) => {
-      if (tool === "delete_file") {
-        return {
-          action: "reject-and-continue",
-          message: "delete_file is disabled in this workspace.",
-        };
-      }
-
-      if (tool === "search" && shouldNarrowSearch(input)) {
-        return { action: "modify", input: narrowSearchInput(input) };
-      }
-
-      return { action: "allow" };
-    });
-  },
-});
-```
-
-`tool.result` runs after allowed/modified execution, rejected calls, synthesized
-calls, and original tool errors. It can observe or replace the model-facing
-result with `{ status: "done", output }`, `{ status: "error", error, output }`,
-or `{ status: "cancelled", error, output }`. Replacements flow into later
-`tool.result` handlers.
-
-```ts
-const resultPolicyPlugin = definePlugin({
-  name: "tool-result-policy",
-  setup(host) {
-    host.on("tool.result", ({ output, status, tool }) => {
-      if (tool === "read_secret" && status === "done") {
-        return {
-          status: "done",
-          output: redactSecretOutput(output),
-        };
-      }
-    });
-  },
-});
-```
-
-Custom stores still own version generation through `SessionStore`. Use
-`sessions.custom(store)` when the runtime should persist through a caller-owned
-store:
-
-```ts
-import type { SessionStore } from "@minpeter/pss-runtime";
-import { sessions } from "@minpeter/pss-runtime/plugins";
-
-declare const store: SessionStore;
-
-const agent = await Agent.create({
-  model,
-  plugins: [sessions.custom(store)],
-});
-```
-
-Stored session state is opaque, versioned runtime continuation state:
-
+Stored session state is an opaque, versioned runtime snapshot for continuation.
 Do not inspect it as a replay log; exact replay should be modeled separately as
 an `AgentEvent` log if that capability is added later.
 
-`load(key)` returns the opaque `state` with the store-minted `version`;
-`commit(key, { state }, { expectedVersion })` receives state only and should
-reject stale versions by returning `{ ok: false, reason: "conflict" }`. On
-success, the store persists `{ state, version }` and returns the new version to
-the runtime.
+Custom stores own version generation. `load(key)` returns the opaque `state` with
+the store-minted `version`; `commit(key, { state }, { expectedVersion })` receives
+state only and should reject stale versions by returning `{ ok: false, reason:
+"conflict" }`. On success, the store persists `{ state, version }` and returns the
+new version to the runtime. `delete(key)` removes the persisted session for that
+key.
 
-`memory()` adds session-scoped tools named `set_context`, `load_context`, and
-`search_context`. Search is deterministic lexical matching by default; no
-embedding provider is required. Memory is injected into model-facing context
-without mutating top-level instructions.
+```ts
+import type { SessionStore } from "@minpeter/pss-runtime";
+import { MemorySessionStore } from "@minpeter/pss-runtime/session-store/memory";
 
-`compaction()` stores non-destructive overlays with `startIndex` and `endIndex`.
-The full canonical history remains in the session snapshot; summaries are
-applied only to model-facing context.
+const agent = new Agent({
+  model,
+  sessions: {
+    namespace: "support-agent",
+    store: new MemorySessionStore(), // default when omitted
+  },
+});
+```
+
+For durable sessions, use the exported file POC. Set a stable `namespace` when
+subagents also use durable stores, so reconstructed agents map the same parent
+session and child `sessionKey` suffixes back to the same child transcripts:
+
+```ts
+import { FileSessionStore } from "@minpeter/pss-runtime/session-store/file";
+
+const agent = new Agent({
+  model,
+  sessions: {
+    namespace: "support-agent",
+    store: new FileSessionStore(".pss/sessions"),
+  },
+});
+```
 
 ## Future adapter boundary: Cloudflare multi-user DX
 

@@ -1,9 +1,8 @@
 import type { ModelMessage } from "ai";
+import type { AgentHooks, AgentStepResult } from "./hooks";
 import type { Llm, LlmOutput } from "./llm";
 import type { AgentEvent, AgentEventListener } from "./session/events";
 import { modelMessageToAgentEvents } from "./session/mapping";
-
-type MaybePromise<T> = Promise<T> | T;
 
 interface ModelHistory {
   appendModelMessage(message: ModelMessage): void;
@@ -13,32 +12,17 @@ interface ModelHistory {
 interface RunAgentLoopOptions {
   emit: AgentLoopEventListener;
   history: ModelHistory;
+  hooks?: AgentHooks;
   llm: Llm;
   signal?: AbortSignal;
-  stepLifecycle?: AgentStepLifecycle;
 }
 
 export type AgentLoopResult = "completed" | "aborted";
-export type AgentStepResult = "completed" | "continue";
-export interface AgentBeforeStepContext {
-  readonly history: readonly ModelMessage[];
-  readonly signal: AbortSignal;
-  readonly stepIndex: number;
-}
-export interface AgentAfterStepContext extends AgentBeforeStepContext {
-  readonly result: AgentStepResult;
-}
-export interface AgentStepLifecycle {
-  afterStep?(context: AgentAfterStepContext): MaybePromise<void>;
-  beforeInference?(context: AgentBeforeStepContext): MaybePromise<void>;
-  beforeStep?(context: AgentBeforeStepContext): MaybePromise<void>;
-}
 type AgentLoopBoundaryEvent = Extract<
   AgentEvent,
   { type: "step-end" } | { type: "step-start" }
 >;
 interface AgentLoopBoundaryDecision {
-  readonly overlayInputAdded?: boolean;
   readonly runtimeInputAdded?: boolean;
 }
 type AgentLoopEventListener = (
@@ -52,9 +36,9 @@ type StepOutputResult = AgentStepResult | "aborted";
 export async function runAgentLoop({
   emit,
   history,
+  hooks,
   llm,
   signal = new AbortController().signal,
-  stepLifecycle,
 }: RunAgentLoopOptions): Promise<AgentLoopResult> {
   let stepIndex = 0;
 
@@ -63,7 +47,7 @@ export async function runAgentLoop({
       return "aborted";
     }
 
-    await stepLifecycle?.beforeStep?.({
+    await hooks?.beforeStep?.({
       history: history.modelSnapshot(),
       signal,
       stepIndex,
@@ -83,16 +67,6 @@ export async function runAgentLoop({
       return "aborted";
     }
 
-    await stepLifecycle?.beforeInference?.({
-      history: history.modelSnapshot(),
-      signal,
-      stepIndex,
-    });
-
-    if (signal.aborted) {
-      return "aborted";
-    }
-
     const output = await readLlmOutput({ history, llm, signal });
 
     if (output === "aborted") {
@@ -105,7 +79,7 @@ export async function runAgentLoop({
       return "aborted";
     }
 
-    await runAfterStepLifecycle(stepLifecycle, {
+    await runAfterStepHook(hooks, {
       history: history.modelSnapshot(),
       result,
       signal,
@@ -125,11 +99,7 @@ export async function runAgentLoop({
     // Runtime input after step-end intentionally forces another inference step,
     // even after final-looking assistant text. Unconditional insertion on every
     // step-end can create an unbounded loop.
-    if (
-      result === "completed" &&
-      !stepEndDecision?.runtimeInputAdded &&
-      !stepEndDecision?.overlayInputAdded
-    ) {
+    if (result === "completed" && !stepEndDecision?.runtimeInputAdded) {
       return "completed";
     }
 
@@ -178,16 +148,16 @@ function createAbortBoundary(signal: AbortSignal): {
   return { dispose, promise };
 }
 
-async function runAfterStepLifecycle(
-  stepLifecycle: AgentStepLifecycle | undefined,
-  context: AgentAfterStepContext
+async function runAfterStepHook(
+  hooks: AgentHooks | undefined,
+  context: Parameters<NonNullable<AgentHooks["afterStep"]>>[0]
 ): Promise<void> {
-  const afterStep = stepLifecycle?.afterStep;
-  if (!afterStep) {
+  const hook = hooks?.afterStep;
+  if (!hook) {
     return;
   }
 
-  await Promise.allSettled([Promise.resolve().then(() => afterStep(context))]);
+  await Promise.allSettled([Promise.resolve().then(() => hook(context))]);
 }
 
 async function readLlmOutput({

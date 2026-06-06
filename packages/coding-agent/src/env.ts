@@ -4,6 +4,8 @@ import { z } from "zod";
 export const DEFAULT_OPENAI_COMPATIBLE_BASE_URL =
   "https://apis.opengateway.ai/v1";
 export const DEFAULT_OPENAI_COMPATIBLE_MODEL_ID = "minimax/MiniMax-M2.7";
+const TINYFISH_API_KEY_ERROR =
+  "TINYFISH_API_KEY is required to use the built-in TinyFish web tools.";
 
 export type CodingAgentRuntimeEnv = Record<string, string | undefined>;
 
@@ -30,6 +32,31 @@ export function readOpenAICompatibleModelEnv({
         .default(DEFAULT_OPENAI_COMPATIBLE_MODEL_ID),
     },
   });
+}
+
+export function readTinyFishApiKeyPoolFromEnv({
+  runtimeEnv = process.env,
+}: ReadCodingAgentEnvOptions = {}): string[] {
+  const env = createEnv({
+    emptyStringAsUndefined: true,
+    onValidationError: failEnvValidation(TINYFISH_API_KEY_ERROR),
+    runtimeEnv: { ...runtimeEnv },
+    server: {
+      TINYFISH_API_KEY: z
+        .string()
+        .transform((value) =>
+          value
+            .split(";")
+            .map((segment) => segment.trim())
+            .filter((segment) => segment.length > 0)
+        )
+        .refine((apiKeys) => apiKeys.length > 0, {
+          message: "Expected at least one non-empty TinyFish API key.",
+        }),
+    },
+  });
+
+  return env.TINYFISH_API_KEY;
 }
 
 function failEnvValidation(prefix: string) {

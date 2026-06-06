@@ -82,11 +82,11 @@ describe("runAgentLoop", () => {
     ]);
   });
 
-  it("calls step lifecycle around each model loop step", async () => {
-    const lifecycleCalls: string[] = [];
+  it("calls step hooks around each model loop step", async () => {
+    const hookCalls: string[] = [];
     const events: AgentEvent[] = [];
     const history = new ModelMessageHistory();
-    const toolCall = toolCallPart("call-tool-lifecycle");
+    const toolCall = toolCallPart("call-tool-hooks");
     const llm = createScriptedLlm([
       [assistantMessage([toolCall]), toolResultFor(toolCall)],
       [assistantMessage("DONE")],
@@ -98,14 +98,12 @@ describe("runAgentLoop", () => {
           events.push(event);
         },
         history,
-        stepLifecycle: {
+        hooks: {
           afterStep: ({ history: snapshot, result, stepIndex }) => {
-            lifecycleCalls.push(
-              `after:${stepIndex}:${result}:${snapshot.length}`
-            );
+            hookCalls.push(`after:${stepIndex}:${result}:${snapshot.length}`);
           },
           beforeStep: ({ history: snapshot, stepIndex }) => {
-            lifecycleCalls.push(`before:${stepIndex}:${snapshot.length}`);
+            hookCalls.push(`before:${stepIndex}:${snapshot.length}`);
           },
         },
         llm,
@@ -121,7 +119,7 @@ describe("runAgentLoop", () => {
       "assistant-text",
       "step-end",
     ]);
-    expect(lifecycleCalls).toEqual([
+    expect(hookCalls).toEqual([
       "before:0:0",
       "after:0:continue:2",
       "before:1:2",
@@ -155,7 +153,7 @@ describe("runAgentLoop", () => {
           events.push(event);
         },
         history,
-        stepLifecycle: {
+        hooks: {
           afterStep: () => {
             throw new Error("after step failed");
           },
@@ -196,7 +194,7 @@ describe("runAgentLoop", () => {
           events.push(event);
         },
         history,
-        stepLifecycle: {
+        hooks: {
           beforeStep: () => {
             controller.abort();
           },
@@ -214,36 +212,6 @@ describe("runAgentLoop", () => {
     expect(history.modelSnapshot()).toEqual([]);
   });
 
-  it("returns aborted before calling the LLM when beforeInference aborts", async () => {
-    const events: AgentEvent[] = [];
-    const history = new ModelMessageHistory();
-    const controller = new AbortController();
-    let llmCalled = false;
-
-    await expect(
-      runAgentLoop({
-        emit: (event) => {
-          events.push(event);
-        },
-        history,
-        stepLifecycle: {
-          beforeInference: () => {
-            controller.abort();
-          },
-        },
-        llm: () => {
-          llmCalled = true;
-          return Promise.resolve([assistantMessage("UNREACHABLE")]);
-        },
-        signal: controller.signal,
-      })
-    ).resolves.toBe("aborted");
-
-    expect(eventTypes(events)).toEqual(["step-start"]);
-    expect(llmCalled).toBe(false);
-    expect(history.modelSnapshot()).toEqual([]);
-  });
-
   it("rejects before emitting a step when beforeStep throws", async () => {
     const events: AgentEvent[] = [];
     const history = new ModelMessageHistory();
@@ -255,7 +223,7 @@ describe("runAgentLoop", () => {
           events.push(event);
         },
         history,
-        stepLifecycle: {
+        hooks: {
           beforeStep: () => {
             throw new Error("before step failed");
           },
