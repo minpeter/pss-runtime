@@ -7,7 +7,7 @@ import type { RuntimeInputSink, Subagent, SubagentJob } from "./subagent-types";
 const parentSessionKey = "parent:default:subagent:researcher";
 
 describe("subagent background jobs", () => {
-  it("does not enqueue completion reminders for pruned active jobs", async () => {
+  it("rejects new background jobs when the active job limit is full", () => {
     const jobs = new Map<string, SubagentJob>();
     const runtimeInputs: string[] = [];
     let interruptCount = 0;
@@ -42,53 +42,16 @@ describe("subagent background jobs", () => {
       })
     );
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
-
-    expect(interruptCount).toBe(1);
-    expect(jobs.has(launches[0]?.task_id ?? "")).toBe(false);
+    expect(interruptCount).toBe(0);
+    expect(jobs.has(launches[0]?.task_id ?? "")).toBe(true);
+    expect(jobs.size).toBe(64);
     expect(launches.at(-1)).toEqual(
-      expect.objectContaining({ status: "running" })
+      expect.objectContaining({ status: "cancelled" })
     );
     expect(runtimeInputs.join("\n")).not.toContain(launches[0]?.task_id);
   });
 
-  it("starts a new job when pruned active job cleanup fails", async () => {
-    const jobs = new Map<string, SubagentJob>();
-    const parentSession: RuntimeInputSink = {
-      emitObserverEvent: () => undefined,
-      enqueueRuntimeInput: () => undefined,
-    };
-    const subagent: Subagent = {
-      name: "researcher",
-      session: () => ({
-        delete: () => Promise.reject(new Error("cleanup failed")),
-        interrupt: () => undefined,
-        send: async () => createDelayedTextRun("STALE RESULT"),
-      }),
-    };
-
-    const launches = Array.from({ length: 65 }, (_value, index) =>
-      startBackgroundJob({
-        abortSignal: new AbortController().signal,
-        jobs,
-        parentSession,
-        prompt: { text: `research ${index}`, type: "user-text" },
-        registerCleanup: () => undefined,
-        sessionKey: `${parentSessionKey}:${index}`,
-        subagent,
-      })
-    );
-
-    await new Promise((resolve) => setTimeout(resolve, 20));
-
-    expect(jobs.has(launches[0]?.task_id ?? "")).toBe(false);
-    expect(jobs.size).toBe(64);
-    expect(launches.at(-1)).toEqual(
-      expect.objectContaining({ status: "running" })
-    );
-  });
-
-  it("does not prune completed jobs before background_output retrieves them", async () => {
+  it("allows new background jobs when retained jobs are completed", async () => {
     const jobs = new Map<string, SubagentJob>();
     const parentSession: RuntimeInputSink = {
       emitObserverEvent: () => undefined,
@@ -115,7 +78,7 @@ describe("subagent background jobs", () => {
       })
     );
     await Promise.all([...jobs.values()].map((job) => job.promise));
-    const rejected = startBackgroundJob({
+    const accepted = startBackgroundJob({
       abortSignal: new AbortController().signal,
       jobs,
       parentSession,
@@ -126,7 +89,8 @@ describe("subagent background jobs", () => {
     });
 
     expect(jobs.has(launches[0]?.task_id ?? "")).toBe(true);
-    expect(rejected).toEqual(expect.objectContaining({ status: "cancelled" }));
+    expect(jobs.size).toBe(65);
+    expect(accepted).toEqual(expect.objectContaining({ status: "running" }));
   });
 });
 

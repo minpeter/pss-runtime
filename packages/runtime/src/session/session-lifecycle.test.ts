@@ -8,7 +8,7 @@ import {
   userText,
 } from "../test-fixtures";
 import { userTextToModelMessage } from "./mapping";
-import { collect } from "./session.test-support";
+import { collect, SpyStore } from "./session.test-support";
 
 const timeoutMarker = Symbol("timeout");
 
@@ -181,6 +181,28 @@ describe("Agent session lifecycle", () => {
     ]);
   });
 
+  it("rejects new input while session delete is pending", async () => {
+    const store = new BlockingDeleteStore();
+    const session = new Agent({
+      llm: () => Promise.resolve([assistantMessage("DONE")]),
+      sessions: { store },
+    }).session("delete-pending");
+
+    await collect(await session.send("before"));
+    const deletion = session.delete();
+    await store.deleteStarted.promise;
+    await expect(session.send("during")).rejects.toThrow(
+      "Session delete in progress"
+    );
+    await expect(session.steer("during")).rejects.toThrow(
+      "Session delete in progress"
+    );
+    store.allowDelete.resolve();
+    await deletion;
+
+    await expect(session.send("after")).rejects.toThrow("Session killed");
+  });
+
   it("rejects runtime input after events return", async () => {
     const agent = new Agent({
       llm: () => Promise.resolve([assistantMessage("DONE")]),
@@ -262,4 +284,15 @@ function withShortTimeout<T>(
       setTimeout(() => resolve(timeoutMarker), 100);
     }),
   ]);
+}
+
+class BlockingDeleteStore extends SpyStore {
+  readonly allowDelete = createDeferred();
+  readonly deleteStarted = createDeferred();
+
+  override async delete(key: string): Promise<void> {
+    this.deleteStarted.resolve();
+    await this.allowDelete.promise;
+    await super.delete(key);
+  }
 }

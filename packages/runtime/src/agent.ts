@@ -121,9 +121,8 @@ export class Agent {
     const handle: SessionHandle = {
       delete: async () => {
         await session.delete();
-        await this.#deleteChildSessions(key).finally(() =>
-          this.#sessions.delete(key)
-        );
+        this.#sessions.delete(key);
+        await this.#deleteChildSessions(key);
       },
       interrupt: () => session.interrupt(),
       kill: () => {

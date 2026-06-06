@@ -11,7 +11,6 @@ import {
 } from "./llm-test-utils";
 import { assistantMessage, userText } from "./test-fixtures";
 
-const unknownBackgroundTaskPattern = /Unknown background subagent task/;
 const generateTextMock = getGenerateTextMock();
 
 describe("subagent background reminders", () => {
@@ -65,7 +64,7 @@ describe("subagent background reminders", () => {
     expect(first.task_id).not.toBe(second.task_id);
   });
 
-  it("does not enqueue completion reminders for pruned background jobs", async () => {
+  it("does not enqueue completion reminders when the active job limit is full", async () => {
     const Agent = await loadAgent();
     const researcher = new Agent({
       description: "Researches facts.",
@@ -80,13 +79,13 @@ describe("subagent background reminders", () => {
     await drainRun(await agent.send(userText("delegate")));
 
     const tools = lastGenerateTextTools();
-    const launches: { task_id: string }[] = [];
+    const launches: { status: string; task_id: string }[] = [];
     for (let index = 0; index < 65; index += 1) {
       launches.push(
         (await executableTool(tools, "delegate_to_researcher").execute?.(
           { prompt: `research ${index}`, run_in_background: true },
           toolExecutionOptions()
-        )) as { task_id: string }
+        )) as { status: string; task_id: string }
       );
     }
 
@@ -97,7 +96,10 @@ describe("subagent background reminders", () => {
         { task_id: launches[0]?.task_id ?? "" },
         toolExecutionOptions()
       )
-    ).rejects.toThrow(unknownBackgroundTaskPattern);
+    ).resolves.toEqual(expect.objectContaining({ status: "running" }));
+    expect(launches.at(-1)).toEqual(
+      expect.objectContaining({ status: "cancelled" })
+    );
 
     const events = await collectRun(await agent.send(userText("continue")));
     const serializedEvents = JSON.stringify(events);

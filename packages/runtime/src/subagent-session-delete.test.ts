@@ -205,6 +205,32 @@ describe("subagent session deletion", () => {
 
     expect(childStore.deleteCount).toBe(2);
   });
+
+  it("drops parent handles while child cleanup is pending during delete", async () => {
+    const Agent = await loadAgent();
+    const childStore = new BlockingDeleteStore();
+    const researcher = new Agent({
+      description: "Researches facts.",
+      llm: () => Promise.resolve([assistantMessage("CHILD DONE")]),
+      name: "researcher",
+      sessions: { store: childStore },
+    });
+    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+    const firstSession = agent.session("default");
+
+    await drainRun(await firstSession.send(userText("delegate first")));
+    await executableTool(
+      lastGenerateTextTools(),
+      "delegate_to_researcher"
+    ).execute?.({ prompt: "first child work" }, toolExecutionOptions());
+    const deletion = firstSession.delete();
+    await childStore.deleteStarted.promise;
+    const secondSession = agent.session("default");
+    childStore.allowDelete.resolve();
+    await deletion;
+
+    expect(secondSession).not.toBe(firstSession);
+  });
 });
 
 class RejectingDeleteStore extends SpyStore {

@@ -26,7 +26,7 @@ export function startBackgroundJob({
 }) {
   const id = `bg_${crypto.randomUUID().replaceAll("-", "")}`;
   const childSessionKey = `${sessionKey}:task:${id}`;
-  if (!pruneJobs(jobs)) {
+  if (!hasJobCapacity(jobs)) {
     return {
       message:
         "Background subagent job was not started because the background job limit is full.",
@@ -201,35 +201,15 @@ function isCancelledJob(job: SubagentJob): boolean {
   return job.status === "cancelled";
 }
 
-function pruneJobs(jobs: Map<string, SubagentJob>): boolean {
-  while (jobs.size >= maxBackgroundJobs) {
-    const pruned = findPrunableJob(jobs);
-    if (!pruned) {
-      return false;
-    }
-
-    const [id, job] = pruned;
-    cancelJob(job);
-    jobs.delete(id);
-    cleanupJob(job).then(
-      () => undefined,
-      () => undefined
-    );
-  }
-
-  return true;
-}
-
-function findPrunableJob(
-  jobs: Map<string, SubagentJob>
-): readonly [string, SubagentJob] | undefined {
-  for (const entry of jobs) {
-    if (isActiveJob(entry[1].status)) {
-      return entry;
+function hasJobCapacity(jobs: Map<string, SubagentJob>): boolean {
+  let activeJobs = 0;
+  for (const job of jobs.values()) {
+    if (isActiveJob(job.status)) {
+      activeJobs += 1;
     }
   }
 
-  return;
+  return activeJobs < maxBackgroundJobs;
 }
 
 export function cancelJob(job: SubagentJob): void {

@@ -21,6 +21,7 @@ import {
   errorMessage,
   runAfterTurnHook,
   sessionKilledError,
+  sessionTerminalError,
 } from "./session-errors";
 import { closeKilledRuntimeInputs } from "./session-kill";
 import { drainRuntimeInput } from "./session-runtime-drain";
@@ -39,6 +40,7 @@ export class AgentSession {
   #activeAbort?: AbortController;
   #activeRun?: BufferedAgentRun;
   #activeRuntimeInput?: RuntimeInputState;
+  #deletePromise?: Promise<void>;
   #killed = false;
   #running = false;
   #runToCloseOnKill?: BufferedAgentRun;
@@ -54,14 +56,14 @@ export class AgentSession {
   }
 
   async send(input: AgentInput): Promise<AgentRun> {
-    if (this.#killed) {
-      throw sessionKilledError();
+    if (this.#killed || this.#deletePromise) {
+      throw sessionTerminalError(this.#killed);
     }
 
     await this.#state.ensureLoaded();
 
-    if (this.#killed) {
-      throw sessionKilledError();
+    if (this.#killed || this.#deletePromise) {
+      throw sessionTerminalError(this.#killed);
     }
 
     const runtimeInput = createRuntimeInputState(
@@ -83,8 +85,8 @@ export class AgentSession {
   }
 
   async steer(input: AgentInput): Promise<AgentRun> {
-    if (this.#killed) {
-      throw sessionKilledError();
+    if (this.#killed || this.#deletePromise) {
+      throw sessionTerminalError(this.#killed);
     }
 
     const runtimeInput = this.#activeRuntimeInput;
@@ -101,9 +103,15 @@ export class AgentSession {
     this.#activeAbort?.abort();
   }
 
-  async delete(): Promise<void> {
-    await this.#state.delete();
-    this.kill();
+  delete(): Promise<void> {
+    this.#deletePromise ??= this.#state.delete().then(
+      () => this.kill(),
+      (error: unknown) => {
+        this.#deletePromise = undefined;
+        throw error;
+      }
+    );
+    return this.#deletePromise;
   }
 
   enqueueRuntimeInput(
