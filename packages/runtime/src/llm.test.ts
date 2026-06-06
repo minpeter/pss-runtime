@@ -1,60 +1,16 @@
-import type { LanguageModel, ToolSet } from "ai";
-import { jsonSchema, tool } from "ai";
+import type { ToolSet } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  createNoopTool,
+  drainRun,
+  fakeModel,
+  getGenerateTextMock,
+  loadAgent,
+  loadCreateLlm,
+} from "./llm-test-utils";
 import { assistantMessage, userText } from "./test-fixtures";
 
-const { generateTextMock } = vi.hoisted(() => ({
-  generateTextMock: vi.fn(),
-}));
-
-vi.mock("ai", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("ai")>();
-
-  return {
-    ...actual,
-    generateText: generateTextMock,
-  };
-});
-
-const fakeModel = {} as LanguageModel;
-const duplicatePluginToolPattern = /duplicate tool "duplicate"/i;
-
-const createNoopTool = () =>
-  tool({
-    description: "No-op test tool.",
-    execute: () => ({}),
-    inputSchema: jsonSchema({
-      type: "object",
-      properties: {},
-      additionalProperties: false,
-    }),
-    outputSchema: jsonSchema({
-      type: "object",
-      properties: {},
-      additionalProperties: false,
-    }),
-  });
-
-async function loadCreateLlm() {
-  const { createLlm } = await import("./llm");
-  return createLlm;
-}
-
-async function loadAgent() {
-  const { Agent } = await import("./agent");
-  return Agent;
-}
-
-async function loadPlugins() {
-  const { definePlugin } = await import("./plugins");
-  return { definePlugin };
-}
-
-async function drainRun(run: { events(): AsyncIterable<unknown> }) {
-  for await (const _event of run.events()) {
-    // Drain the run so model calls complete before assertions.
-  }
-}
+const generateTextMock = getGenerateTextMock();
 
 describe("createLlm", () => {
   beforeEach(() => {
@@ -132,7 +88,7 @@ describe("Agent tool wiring", () => {
   it("passes injected AgentOptions tools into createLlm/generateText", async () => {
     const Agent = await loadAgent();
     const injectedTools = { injected: createNoopTool() } satisfies ToolSet;
-    const agent = await Agent.create({
+    const agent = new Agent({
       model: fakeModel,
       tools: injectedTools,
     });
@@ -149,7 +105,7 @@ describe("Agent tool wiring", () => {
 
   it("passes AgentOptions toolChoice into createLlm/generateText", async () => {
     const Agent = await loadAgent();
-    const agent = await Agent.create({
+    const agent = new Agent({
       model: fakeModel,
       toolChoice: "required",
     });
@@ -164,63 +120,9 @@ describe("Agent tool wiring", () => {
     );
   });
 
-  it("passes plugin tools into createLlm/generateText", async () => {
-    const Agent = await loadAgent();
-    const { definePlugin } = await loadPlugins();
-    const callerTools = { caller: createNoopTool() } satisfies ToolSet;
-    const pluginTools = { plugin: createNoopTool() } satisfies ToolSet;
-    const agent = await Agent.create({
-      model: fakeModel,
-      plugins: [
-        definePlugin({
-          name: "tool-plugin",
-          setup(host) {
-            host.registerTools(pluginTools);
-          },
-        }),
-      ],
-      tools: callerTools,
-    });
-
-    await drainRun(await agent.send(userText("use plugin tools")));
-
-    expect(generateTextMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        model: fakeModel,
-        tools: {
-          ...callerTools,
-          ...pluginTools,
-        },
-      })
-    );
-  });
-
-  it("rejects duplicate plugin tool names before model calls", async () => {
-    const Agent = await loadAgent();
-    const { definePlugin } = await loadPlugins();
-    const duplicatedTools = { duplicate: createNoopTool() } satisfies ToolSet;
-
-    await expect(
-      Agent.create({
-        model: fakeModel,
-        plugins: [
-          definePlugin({
-            name: "duplicate-tool-plugin",
-            setup(host) {
-              host.registerTools(duplicatedTools);
-            },
-          }),
-        ],
-        tools: duplicatedTools,
-      })
-    ).rejects.toThrow(duplicatePluginToolPattern);
-
-    expect(generateTextMock).not.toHaveBeenCalled();
-  });
-
   it("does not attach product tools by default", async () => {
     const Agent = await loadAgent();
-    const agent = await Agent.create({ model: fakeModel });
+    const agent = new Agent({ model: fakeModel });
 
     await drainRun(await agent.send(userText("run without product tools")));
 

@@ -11,11 +11,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./plugins": {
-      "@minpeter/pss-source": "./src/plugins/index.ts",
-      "types": "./dist/plugins/index.d.ts",
-      "import": "./dist/plugins/index.js"
-    },
     "./session-store/memory": {
       "@minpeter/pss-source": "./src/session/store/memory.ts",
       "types": "./dist/session/store/memory.d.ts",

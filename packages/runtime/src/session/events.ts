@@ -23,31 +23,6 @@ export interface RuntimeInput {
   type: "runtime-input";
 }
 
-export type OverlayPlacement =
-  | "idle"
-  | "step-end"
-  | "step-start"
-  | "turn-start";
-
-export interface OverlayInputSummary {
-  partCount?: number;
-  preview: string;
-  textLength?: number;
-  type: UserInput["type"];
-}
-
-export interface OverlayAccepted {
-  input: OverlayInputSummary;
-  placement: OverlayPlacement;
-  type: "overlay-accepted";
-}
-
-export interface OverlayExpired {
-  count: number;
-  reason: "kill" | "turn-abort" | "turn-end" | "turn-error";
-  type: "overlay-expired";
-}
-
 export interface AssistantText {
   text: string;
   type: "assistant-text";
@@ -69,6 +44,14 @@ export interface ToolResult {
   type: "tool-result";
 }
 
+type SubagentJobStatus =
+  | "aborted"
+  | "cancelled"
+  | "completed"
+  | "error"
+  | "pending"
+  | "running";
+
 export type AgentEvent =
   /** User input was accepted into the session queue. */
   | UserText
@@ -76,8 +59,6 @@ export type AgentEvent =
   | UserMessage
   /** Runtime/API-originated input inserted into the current turn, not human input. */
   | RuntimeInput
-  | OverlayAccepted
-  | OverlayExpired
   /** A queued user input started running as a turn. */
   | { type: "turn-start" }
   /** The active turn was interrupted before normal completion. */
@@ -96,6 +77,28 @@ export type AgentEvent =
   | ToolCall
   /** A tool call returned a result. */
   | ToolResult
+  | {
+      description?: string;
+      run_in_background: boolean;
+      subagent: string;
+      task_id?: string;
+      type: "subagent-job-start";
+    }
+  | {
+      eventType?: AgentEvent["type"];
+      status: SubagentJobStatus;
+      subagent: string;
+      task_id: string;
+      type: "subagent-job-update";
+    }
+  | {
+      error?: string;
+      eventCount: number;
+      status: Exclude<SubagentJobStatus, "pending" | "running">;
+      subagent: string;
+      task_id?: string;
+      type: "subagent-job-end";
+    }
   /** One model/tool-loop iteration finished within the active turn. */
   | { type: "step-end" };
 

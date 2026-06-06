@@ -1,88 +1,99 @@
 import type { LanguageModel, ToolSet } from "ai";
-import { type AgentToolChoice, createLlm, type Llm } from "./llm";
-import type { AgentPlugin } from "./plugins";
 import {
-  type ResolvedAgentPlugins,
-  resolveAgentPlugins,
-} from "./plugins/runner";
-import type { AgentPluginErrorHandler } from "./session/lifecycle";
+  agentNamespace,
+  parentSessionNamespace,
+  randomAgentNamespace,
+} from "./agent-namespace";
+import { assertSubagents } from "./agent-validation";
+import { ChildSessionCleanups } from "./child-session-cleanups";
+import type { AgentHooks } from "./hooks";
+import { type AgentToolChoice, createLlm, type Llm } from "./llm";
+import type { UserInput } from "./session/events";
 import type { AgentRun } from "./session/run";
 import { type AgentInput, AgentSession } from "./session/session";
 import { MemorySessionStore } from "./session/store/memory";
 import type { SessionStore } from "./session/store/types";
+import { createSubagentTools } from "./subagents";
 
 interface AgentLanguageModelOptions {
+  description?: string;
+  hooks?: AgentHooks;
   instructions?: string;
   llm?: never;
   model: LanguageModel;
-  onPluginError?: AgentPluginErrorHandler;
-  plugins?: readonly AgentPlugin[];
+  name?: string;
+  sessions?: AgentSessionOptions;
+  subagents?: readonly Agent[];
   toolChoice?: AgentToolChoice;
   tools?: ToolSet;
 }
 
 interface AgentLlmOptions {
+  description?: string;
+  hooks?: AgentHooks;
   instructions?: never;
   llm: Llm;
   model?: never;
-  onPluginError?: AgentPluginErrorHandler;
-  plugins?: readonly AgentPlugin[];
+  name?: string;
+  sessions?: AgentSessionOptions;
+  subagents?: never;
   toolChoice?: never;
   tools?: never;
 }
 
+export interface AgentSessionOptions {
+  namespace?: string;
+  store?: SessionStore;
+}
+
 export interface SessionHandle {
+  delete(): Promise<void>;
   interrupt(): void;
   kill(): void;
-  overlay(input: AgentInput): Promise<AgentRun>;
   send(input: AgentInput): Promise<AgentRun>;
   steer(input: AgentInput): Promise<AgentRun>;
 }
 
 export type AgentOptions = AgentLanguageModelOptions | AgentLlmOptions;
+type AgentModelOptions = Pick<
+  AgentLanguageModelOptions,
+  "instructions" | "model" | "toolChoice"
+>;
 
 export class Agent {
-  readonly #internalLlm: Llm;
-  readonly #llm: Llm;
-  readonly #onPluginError?: AgentPluginErrorHandler;
-  readonly #plugins: ResolvedAgentPlugins;
+  readonly #baseTools?: ToolSet;
+  readonly #hooks?: AgentHooks;
+  readonly #llm?: Llm;
+  readonly #modelOptions?: AgentModelOptions;
+  readonly #childSessionCleanups = new ChildSessionCleanups();
+  readonly #sessionGenerations = new Map<string, number>();
   readonly #sessions = new Map<string, SessionHandle>();
+  readonly #sessionNamespace: string;
   readonly #store: SessionStore;
+  readonly #subagents: readonly Agent[];
+  readonly description?: string;
+  readonly name?: string;
 
-  private constructor(
-    options: AgentOptions,
-    resolvedPlugins: ResolvedAgentPlugins
-  ) {
+  constructor(options: AgentOptions) {
     assertAgentOptions(options);
 
-    this.#plugins = resolvedPlugins;
-    this.#onPluginError = options.onPluginError;
-    this.#store =
-      resolvedPlugins.sessionStore?.store ?? new MemorySessionStore();
+    this.description = options.description;
+    this.name = options.name;
+    this.#sessionNamespace = stableAgentNamespace(options);
+    this.#store = options.sessions?.store ?? new MemorySessionStore();
+    this.#hooks = options.hooks;
+    assertSubagents(options, Agent, hasCustomLlm(options));
+    this.#subagents = hasCustomLlm(options) ? [] : (options.subagents ?? []);
     if (hasCustomLlm(options)) {
-      this.#internalLlm = options.llm;
       this.#llm = options.llm;
     } else {
-      this.#internalLlm = createLlm({
-        instructions: options.instructions,
-        model: options.model,
-      });
-      this.#llm = createLlm({
+      this.#baseTools = options.tools;
+      this.#modelOptions = {
         instructions: options.instructions,
         model: options.model,
         toolChoice: options.toolChoice,
-        tools: resolvedPlugins.tools,
-      });
+      };
     }
-  }
-
-  static async create(options: AgentOptions): Promise<Agent> {
-    assertAgentOptions(options);
-    const resolvedPlugins = await resolveAgentPlugins({
-      callerTools: hasCustomLlm(options) ? undefined : options.tools,
-      plugins: options.plugins,
-    });
-    return new Agent(options, resolvedPlugins);
   }
 
   send(input: AgentInput): Promise<AgentRun> {
@@ -95,26 +106,98 @@ export class Agent {
       return existing;
     }
 
-    const session = new AgentSession(
-      this.#llm,
-      { key, store: this.#store },
-      this.#plugins,
-      this.#internalLlm,
-      this.#onPluginError
-    );
+    let session: AgentSession | undefined;
+    const getSession = () => {
+      if (!session) {
+        throw new Error("Agent session is not initialized.");
+      }
+      return session;
+    };
+    const parentAgentNamespace = parentSessionNamespace({
+      generation: this.#sessionGenerations.get(key) ?? 0,
+      sessionKey: key,
+      sessionNamespace: this.#sessionNamespace,
+    });
+    const llm =
+      this.#llm ??
+      createLlm(
+        this.#createLlmOptionsForSession(
+          key,
+          parentAgentNamespace,
+          (input: UserInput, placement?: "turn-start") =>
+            getSession().enqueueRuntimeInput(input, placement),
+          (event) => getSession().emitObserverEvent(event)
+        )
+      );
+    session = new AgentSession(llm, { key, store: this.#store }, this.#hooks);
     const handle: SessionHandle = {
+      delete: async () => {
+        await session.delete();
+        this.#sessions.delete(key);
+        this.#sessionGenerations.set(
+          key,
+          (this.#sessionGenerations.get(key) ?? 0) + 1
+        );
+        await this.#deleteChildSessions(key);
+      },
       interrupt: () => session.interrupt(),
       kill: () => {
         session.kill();
+        this.#sessionGenerations.set(
+          key,
+          (this.#sessionGenerations.get(key) ?? 0) + 1
+        );
+        this.#deleteChildSessions(key).catch(() => undefined);
         this.#sessions.delete(key);
       },
-      overlay: (input) => session.overlay(input),
       send: (input) => session.send(input),
       steer: (input) => session.steer(input),
     };
     this.#sessions.set(key, handle);
     return handle;
   }
+
+  #createLlmOptionsForSession(
+    key: string,
+    parentAgentNamespace: string,
+    enqueueRuntimeInput: AgentSession["enqueueRuntimeInput"],
+    emitObserverEvent: AgentSession["emitObserverEvent"]
+  ): Parameters<typeof createLlm>[0] {
+    const modelOptions = this.#modelOptions;
+    if (!modelOptions) {
+      throw new Error("Agent: missing model options.");
+    }
+    const tools =
+      this.#subagents.length === 0
+        ? this.#baseTools
+        : {
+            ...this.#baseTools,
+            ...createSubagentTools({
+              parentAgentNamespace,
+              parentSession: { emitObserverEvent, enqueueRuntimeInput },
+              parentSessionKey: key,
+              registerChildSession: (sessionKey, cleanup) =>
+                this.#childSessionCleanups.register(sessionKey, cleanup),
+              subagents: this.#subagents,
+            }),
+          };
+
+    return {
+      instructions: modelOptions.instructions,
+      model: modelOptions.model,
+      toolChoice: modelOptions.toolChoice,
+      tools,
+    };
+  }
+
+  async #deleteChildSessions(parentSessionKey: string): Promise<void> {
+    await this.#childSessionCleanups.delete(parentSessionKey);
+  }
+}
+
+function stableAgentNamespace(options: AgentOptions): string {
+  const namespace = options.sessions?.namespace ?? options.name;
+  return namespace ? agentNamespace(namespace) : randomAgentNamespace();
 }
 
 function assertAgentOptions(options: unknown): asserts options is AgentOptions {
@@ -124,42 +207,19 @@ function assertAgentOptions(options: unknown): asserts options is AgentOptions {
     );
   }
 
-  if ("sessions" in options) {
-    throw new TypeError(
-      "Agent.create: options.sessions was removed. Use plugins: [sessions.custom(store)]."
-    );
-  }
-
-  if ("hooks" in options) {
-    throw new TypeError(
-      "Agent.create: options.hooks was removed. Use run.events() with session.steer() for app control or plugin lifecycle handlers for middleware."
-    );
-  }
-
   const hasLlm = hasCustomLlm(options);
-  const hasModel =
-    "model" in options && options.model !== undefined && options.model !== null;
+  const hasModel = "model" in options && options.model != null;
 
   if (hasLlm && hasModel) {
-    throw new TypeError(
-      "Agent.create: provide either options.llm or options.model, not both."
-    );
+    throw new TypeError("Agent: provide either options.llm or options.model.");
   }
 
   if ("llm" in options && options.llm !== undefined && !hasLlm) {
-    throw new TypeError("Agent.create: invalid options.llm.");
-  }
-
-  if (
-    "onPluginError" in options &&
-    options.onPluginError !== undefined &&
-    typeof options.onPluginError !== "function"
-  ) {
-    throw new TypeError("Agent.create: invalid options.onPluginError.");
+    throw new TypeError("Agent: invalid options.llm.");
   }
 
   if (!(hasLlm || hasModel)) {
-    throw new TypeError("Agent.create: missing options.model.");
+    throw new TypeError("Agent: missing options.model.");
   }
 }
 

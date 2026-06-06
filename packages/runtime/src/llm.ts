@@ -6,7 +6,6 @@ import type {
   ToolSet,
 } from "ai";
 import { generateText } from "ai";
-import { wrapToolsWithPluginHooks } from "./plugins/tool-hooks";
 
 export type AgentToolExecutionOptions = ToolExecutionOptions<unknown>;
 export type AgentToolExecute = NonNullable<Tool["execute"]>;
@@ -42,18 +41,13 @@ export function createLlm({
   tools,
 }: CreateLlmOptions): Llm {
   return async ({ history, signal }) => {
-    const scopedTools = wrapToolsWithPluginHooks({
-      history,
-      signal,
-      tools,
-    });
     const { responseMessages } = await generateText({
       abortSignal: signal,
       instructions,
       messages: [...history],
       model,
       toolChoice,
-      tools: scopedTools,
+      tools,
     });
 
     return responseMessages;
