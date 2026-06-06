@@ -1,4 +1,10 @@
 import type { LanguageModel, ToolSet } from "ai";
+import {
+  agentNamespace,
+  parentSessionNamespace,
+  randomAgentNamespace,
+} from "./agent-namespace";
+import { assertSubagents } from "./agent-validation";
 import { ChildSessionCleanups } from "./child-session-cleanups";
 import type { AgentHooks } from "./hooks";
 import { type AgentToolChoice, createLlm, type Llm } from "./llm";
@@ -36,6 +42,7 @@ interface AgentLlmOptions {
 }
 
 export interface AgentSessionOptions {
+  namespace?: string;
   store?: SessionStore;
 }
 
@@ -53,16 +60,15 @@ type AgentModelOptions = Pick<
   "instructions" | "model" | "toolChoice"
 >;
 
-const subagentNamePattern = /^[a-z][a-z0-9_-]{0,51}$/;
-
 export class Agent {
   readonly #baseTools?: ToolSet;
   readonly #hooks?: AgentHooks;
   readonly #llm?: Llm;
   readonly #modelOptions?: AgentModelOptions;
   readonly #childSessionCleanups = new ChildSessionCleanups();
+  readonly #sessionGenerations = new Map<string, number>();
   readonly #sessions = new Map<string, SessionHandle>();
-  readonly #sessionNamespace = `agent:${crypto.randomUUID()}`;
+  readonly #sessionNamespace: string;
   readonly #store: SessionStore;
   readonly #subagents: readonly Agent[];
   readonly description?: string;
@@ -73,9 +79,10 @@ export class Agent {
 
     this.description = options.description;
     this.name = options.name;
+    this.#sessionNamespace = stableAgentNamespace(options);
     this.#store = options.sessions?.store ?? new MemorySessionStore();
     this.#hooks = options.hooks;
-    assertSubagents(options);
+    assertSubagents(options, Agent, hasCustomLlm(options));
     this.#subagents = hasCustomLlm(options) ? [] : (options.subagents ?? []);
     if (hasCustomLlm(options)) {
       this.#llm = options.llm;
@@ -106,7 +113,11 @@ export class Agent {
       }
       return session;
     };
-    const parentAgentNamespace = `${this.#sessionNamespace}:session:${crypto.randomUUID()}`;
+    const parentAgentNamespace = parentSessionNamespace({
+      generation: this.#sessionGenerations.get(key) ?? 0,
+      sessionKey: key,
+      sessionNamespace: this.#sessionNamespace,
+    });
     const llm =
       this.#llm ??
       createLlm(
@@ -123,11 +134,19 @@ export class Agent {
       delete: async () => {
         await session.delete();
         this.#sessions.delete(key);
+        this.#sessionGenerations.set(
+          key,
+          (this.#sessionGenerations.get(key) ?? 0) + 1
+        );
         await this.#deleteChildSessions(key);
       },
       interrupt: () => session.interrupt(),
       kill: () => {
         session.kill();
+        this.#sessionGenerations.set(
+          key,
+          (this.#sessionGenerations.get(key) ?? 0) + 1
+        );
         this.#deleteChildSessions(key).catch(() => undefined);
         this.#sessions.delete(key);
       },
@@ -176,6 +195,11 @@ export class Agent {
   }
 }
 
+function stableAgentNamespace(options: AgentOptions): string {
+  const namespace = options.sessions?.namespace ?? options.name;
+  return namespace ? agentNamespace(namespace) : randomAgentNamespace();
+}
+
 function assertAgentOptions(options: unknown): asserts options is AgentOptions {
   if (options === null || typeof options !== "object") {
     throw new TypeError(
@@ -199,69 +223,6 @@ function assertAgentOptions(options: unknown): asserts options is AgentOptions {
   }
 }
 
-function assertSubagents(options: AgentOptions): void {
-  if (!("subagents" in options) || options.subagents === undefined) {
-    return;
-  }
-
-  if (hasCustomLlm(options)) {
-    throw new TypeError("Agent: subagents require options.model.");
-  }
-
-  if (!Array.isArray(options.subagents)) {
-    throw new TypeError("Agent: subagents must be an array.");
-  }
-
-  const toolNames = new Set(Object.keys(options.tools ?? {}));
-  const generatedToolNames = new Set<string>();
-  for (const [index, subagent] of options.subagents.entries()) {
-    if (!(subagent instanceof Agent)) {
-      throw new TypeError(`Agent: subagents[${index}] must be an Agent.`);
-    }
-
-    if (!isValidSubagentName(subagent.name)) {
-      throw new TypeError(
-        `Agent: subagents[${index}].name is required or too long.`
-      );
-    }
-
-    if (!isNonEmptyText(subagent.description)) {
-      throw new TypeError(
-        `Agent: subagents[${index}].description is required.`
-      );
-    }
-
-    const toolName = `delegate_to_${subagent.name.replaceAll("-", "_")}`;
-    if (toolNames.has(toolName)) {
-      throw new TypeError(
-        `Agent: subagent tool ${toolName} collides with an existing tool.`
-      );
-    }
-
-    if (generatedToolNames.has(toolName)) {
-      throw new TypeError(`Agent: duplicate subagent tool name ${toolName}.`);
-    }
-
-    generatedToolNames.add(toolName);
-  }
-
-  for (const reservedToolName of ["background_output", "background_cancel"]) {
-    if (toolNames.has(reservedToolName)) {
-      throw new TypeError(
-        `Agent: ${reservedToolName} collides with a reserved subagent tool.`
-      );
-    }
-  }
-}
-
 function hasCustomLlm(options: object): options is AgentLlmOptions {
   return "llm" in options && typeof options.llm === "function";
-}
-
-function isNonEmptyText(value: string | undefined): value is string {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-function isValidSubagentName(value: string | undefined): value is string {
-  return typeof value === "string" && subagentNamePattern.test(value);
 }

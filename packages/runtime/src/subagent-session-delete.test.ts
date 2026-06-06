@@ -231,6 +231,55 @@ describe("subagent session deletion", () => {
 
     expect(secondSession).not.toBe(firstSession);
   });
+
+  it("keeps child session keys stable across reconstructed parent agents", async () => {
+    const Agent = await loadAgent();
+    const childStore = new SpyStore();
+    const childHistories: unknown[] = [];
+    const createResearcher = () =>
+      new Agent({
+        description: "Researches facts.",
+        llm: ({ history }) => {
+          childHistories.push(history);
+          return Promise.resolve([assistantMessage("CHILD DONE")]);
+        },
+        name: "researcher",
+        sessions: { store: childStore },
+      });
+    const createParent = () =>
+      new Agent({
+        model: fakeModel,
+        sessions: { namespace: "parent" },
+        subagents: [createResearcher()],
+      });
+
+    const firstParent = createParent();
+    await drainRun(await firstParent.session("default").send(userText("one")));
+    await executableTool(
+      lastGenerateTextTools(),
+      "delegate_to_researcher"
+    ).execute?.(
+      { prompt: "first durable child work", sessionKey: "durable-topic" },
+      toolExecutionOptions()
+    );
+
+    const secondParent = createParent();
+    await drainRun(await secondParent.session("default").send(userText("two")));
+    await executableTool(
+      lastGenerateTextTools(),
+      "delegate_to_researcher"
+    ).execute?.(
+      { prompt: "second durable child work", sessionKey: "durable-topic" },
+      toolExecutionOptions()
+    );
+
+    expect(JSON.stringify(childHistories.at(-1))).toContain(
+      "first durable child work"
+    );
+    expect(JSON.stringify(childHistories.at(-1))).toContain(
+      "second durable child work"
+    );
+  });
 });
 
 class RejectingDeleteStore extends SpyStore {

@@ -192,7 +192,8 @@ Custom stores own version generation. `load(key)` returns the opaque `state` wit
 the store-minted `version`; `commit(key, { state }, { expectedVersion })` receives
 state only and should reject stale versions by returning `{ ok: false, reason:
 "conflict" }`. On success, the store persists `{ state, version }` and returns the
-new version to the runtime.
+new version to the runtime. `delete(key)` removes the persisted session for that
+key.
 
 ```ts
 import type { SessionStore } from "@minpeter/pss-runtime";
@@ -201,12 +202,15 @@ import { MemorySessionStore } from "@minpeter/pss-runtime/session-store/memory";
 const agent = new Agent({
   model,
   sessions: {
+    namespace: "support-agent",
     store: new MemorySessionStore(), // default when omitted
   },
 });
 ```
 
-For durable sessions, use the exported file POC:
+For durable sessions, use the exported file POC. Set a stable `namespace` when
+subagents also use durable stores, so reconstructed agents map the same parent
+session and child `sessionKey` suffixes back to the same child transcripts:
 
 ```ts
 import { FileSessionStore } from "@minpeter/pss-runtime/session-store/file";
@@ -214,6 +218,7 @@ import { FileSessionStore } from "@minpeter/pss-runtime/session-store/file";
 const agent = new Agent({
   model,
   sessions: {
+    namespace: "support-agent",
     store: new FileSessionStore(".pss/sessions"),
   },
 });
