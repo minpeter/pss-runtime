@@ -1,5 +1,14 @@
 # @minpeter/pss-coding-agent
 
+## 0.0.11-next.0
+
+### Patch Changes
+
+- e8bd679: Remove the built-in web tools from the coding-agent package and TUI. Callers can still pass their own tools through `@minpeter/pss-runtime`.
+- Updated dependencies [0ffe9e7]
+- Updated dependencies [3761c93]
+  - @minpeter/pss-runtime@0.1.0-next.0
+
 ## 0.0.10
 
 ### Patch Changes
