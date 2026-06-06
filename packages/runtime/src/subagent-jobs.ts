@@ -6,7 +6,7 @@ import type { RuntimeInputSink, Subagent, SubagentJob } from "./subagent-types";
 const maxBackgroundJobs = 64;
 const maxRetainedBackgroundJobs = maxBackgroundJobs * 4;
 
-export function startBackgroundJob({
+export async function startBackgroundJob({
   abortSignal,
   description,
   jobs,
@@ -66,6 +66,14 @@ export function startBackgroundJob({
     subagent: subagent.name ?? "subagent",
     unregisterCleanup,
   };
+  jobs.set(id, job);
+  await parentSession.emitObserverEvent({
+    description,
+    run_in_background: true,
+    subagent: subagent.name ?? "subagent",
+    task_id: id,
+    type: "subagent-job-start",
+  });
   job.promise = runBackgroundJob({
     childSession,
     job,
@@ -74,14 +82,6 @@ export function startBackgroundJob({
   }).finally(() => {
     abortSignal.removeEventListener("abort", abort);
     job.settled = true;
-  });
-  jobs.set(id, job);
-  parentSession.emitObserverEvent({
-    description,
-    run_in_background: true,
-    subagent: subagent.name ?? "subagent",
-    task_id: id,
-    type: "subagent-job-start",
   });
 
   return {
@@ -155,7 +155,7 @@ async function runBackgroundJob({
     },
     "turn-start"
   );
-  parentSession.emitObserverEvent({
+  await parentSession.emitObserverEvent({
     error: job.result?.error,
     eventCount: job.result?.eventCount ?? 0,
     status: job.result?.result ?? "error",
@@ -169,14 +169,28 @@ function emitJobUpdate(
   parentSession: RuntimeInputSink,
   job: SubagentJob,
   event: AgentEvent
-): void {
-  parentSession.emitObserverEvent({
+): Promise<void> {
+  if (!isParentVisibleJobUpdate(event)) {
+    return Promise.resolve();
+  }
+
+  return parentSession.emitObserverEvent({
     eventType: event.type,
     status: job.status,
     subagent: job.subagent,
     task_id: job.id,
     type: "subagent-job-update" as const,
   });
+}
+
+function isParentVisibleJobUpdate(event: AgentEvent): boolean {
+  return (
+    event.type === "assistant-text" ||
+    event.type === "tool-call" ||
+    event.type === "tool-result" ||
+    event.type === "turn-abort" ||
+    event.type === "turn-error"
+  );
 }
 
 export function assertBackgroundTaskId(value: string, toolName: string): void {
@@ -225,10 +239,9 @@ export function cancelJob(job: SubagentJob): void {
   job.abort();
 }
 
-export function cleanupJob(job: SubagentJob): Promise<void> {
-  return job.cleanup().then(() => {
-    job.unregisterCleanup?.();
-  });
+export async function cleanupJob(job: SubagentJob): Promise<void> {
+  await job.cleanup();
+  job.unregisterCleanup?.();
 }
 
 function sanitizeReminderField(value: string): string {

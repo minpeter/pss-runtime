@@ -11,21 +11,27 @@ const REQUIRED_PACKAGE_BINS = {
     "pss-coding-agent": "./bin/pss.js",
   },
 };
-const REQUIRED_RUNTIME_ROOT_ALIASES = [
+const REQUIRED_RUNTIME_ROOT_EXPORTS = [
   "AgentRun",
   "RuntimeCreateLlmOptions",
   "RuntimeInput",
   "RuntimeLlm",
   "RuntimeLlmContext",
   "RuntimeLlmOutput",
+  "RuntimeLlmOutputPart",
 ];
-const FORBIDDEN_RUNTIME_ROOT_ALIASES = [
+const FORBIDDEN_RUNTIME_ROOT_NAMES = [
   "AgentMessage",
   ["Agent", "Model"].join(""),
   "AgentLoopResult",
   "AgentRunInput",
   "AgentTool",
   "AgentTools",
+  "CreateLlmOptions",
+  "Llm",
+  "LlmContext",
+  "LlmOutput",
+  "LlmOutputPart",
   "RunInput",
   "runAgentLoop",
 ];
@@ -352,18 +358,18 @@ function findRuntimeRootDeclarationLeaks({ cwd, file }) {
   const text = readFileSync(file, "utf8");
   const errors = [];
 
-  for (const alias of FORBIDDEN_RUNTIME_ROOT_ALIASES) {
-    if (hasDeclarationToken(text, alias)) {
+  for (const name of FORBIDDEN_RUNTIME_ROOT_NAMES) {
+    if (hasDeclarationToken(text, name)) {
       errors.push(
-        `${relativeToCwd(cwd, file)}: root declaration exposes internal runtime alias ${alias}`
+        `${relativeToCwd(cwd, file)}: root declaration exposes internal runtime name ${name}`
       );
     }
   }
 
-  for (const alias of REQUIRED_RUNTIME_ROOT_ALIASES) {
-    if (!text.includes(alias)) {
+  for (const name of REQUIRED_RUNTIME_ROOT_EXPORTS) {
+    if (!text.includes(name)) {
       errors.push(
-        `${relativeToCwd(cwd, file)}: missing explicit runtime alias ${alias}`
+        `${relativeToCwd(cwd, file)}: missing explicit runtime export ${name}`
       );
     }
   }

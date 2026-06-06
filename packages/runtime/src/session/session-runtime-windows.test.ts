@@ -7,31 +7,22 @@ import { userTextToModelMessage } from "./mapping";
 import { collect } from "./session.test-support";
 
 describe("Agent session runtime input windows", () => {
-  it("orders turn and step hooks around runtime input windows", async () => {
-    const hookCalls: string[] = [];
+  it("orders event plugins around runtime input windows", async () => {
+    const pluginCalls: string[] = [];
     const trace: string[] = [];
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
     const agent = new Agent({
-      hooks: {
-        afterStep: ({ history, result, stepIndex }) => {
-          hookCalls.push(`afterStep:${stepIndex}:${result}:${history.length}`);
-          trace.push(`hook:afterStep:${stepIndex}`);
+      plugins: [
+        {
+          events: {
+            on: ({ event, history }) => {
+              pluginCalls.push(`${event.type}:${history.length}`);
+              trace.push(`plugin:${event.type}`);
+            },
+          },
         },
-        afterTurn: ({ history, input, result }) => {
-          hookCalls.push(`${input.type}:afterTurn:${result}:${history.length}`);
-          trace.push("hook:afterTurn");
-          throw new Error("after turn failed");
-        },
-        beforeStep: ({ history, stepIndex }) => {
-          hookCalls.push(`beforeStep:${stepIndex}:${history.length}`);
-          trace.push(`hook:beforeStep:${stepIndex}`);
-        },
-        beforeTurn: ({ history, input }) => {
-          hookCalls.push(`${input.type}:beforeTurn:${history.length}`);
-          trace.push("hook:beforeTurn");
-        },
-      },
+      ],
       llm: ({ history }) => {
         trace.push(`llm:${calls}`);
         seenHistory.push([...history]);
@@ -41,11 +32,11 @@ describe("Agent session runtime input windows", () => {
         ]);
       },
     });
-    const session = agent.session("hook-runtime-ordering");
+    const session = agent.session("plugin-runtime-ordering");
 
     await collect(await session.send("prior"));
 
-    hookCalls.length = 0;
+    pluginCalls.length = 0;
     trace.length = 0;
     seenHistory.length = 0;
 
@@ -92,13 +83,19 @@ describe("Agent session runtime input windows", () => {
     ];
     const finalHistory = [...secondStepHistory, assistantMessage("DONE")];
 
-    expect(hookCalls).toEqual([
-      "user-text:beforeTurn:2",
-      "beforeStep:0:4",
-      "afterStep:0:completed:6",
-      "beforeStep:1:7",
-      "afterStep:1:completed:8",
-      "user-text:afterTurn:completed:8",
+    expect(pluginCalls).toEqual([
+      "user-text:2",
+      "turn-start:3",
+      "runtime-input:3",
+      "step-start:4",
+      "runtime-input:4",
+      "assistant-text:6",
+      "step-end:6",
+      "runtime-input:6",
+      "step-start:7",
+      "assistant-text:8",
+      "step-end:8",
+      "turn-end:8",
     ]);
     expect(eventTypes(events)).toEqual([
       "user-text",
@@ -131,25 +128,31 @@ describe("Agent session runtime input windows", () => {
     });
     expect(seenHistory).toEqual([firstStepHistory, secondStepHistory]);
     expect(trace).toEqual([
-      "hook:beforeTurn",
+      "plugin:user-text",
       "event:user-text",
+      "plugin:turn-start",
       "event:turn-start",
+      "plugin:runtime-input",
       "event:runtime-input",
-      "hook:beforeStep:0",
+      "plugin:step-start",
       "event:step-start",
+      "plugin:runtime-input",
       "event:runtime-input",
       "llm:1",
+      "plugin:assistant-text",
       "event:assistant-text",
-      "hook:afterStep:0",
+      "plugin:step-end",
       "event:step-end",
+      "plugin:runtime-input",
       "event:runtime-input",
-      "hook:beforeStep:1",
+      "plugin:step-start",
       "event:step-start",
       "llm:2",
+      "plugin:assistant-text",
       "event:assistant-text",
-      "hook:afterStep:1",
+      "plugin:step-end",
       "event:step-end",
-      "hook:afterTurn",
+      "plugin:turn-end",
       "event:turn-end",
     ]);
     expect(finalHistory).toEqual([

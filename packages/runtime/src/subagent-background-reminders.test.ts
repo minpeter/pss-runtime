@@ -1,3 +1,4 @@
+import type { ToolSet } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   collectRun,
@@ -9,7 +10,7 @@ import {
   loadAgent,
   toolExecutionOptions,
 } from "./llm-test-utils";
-import { assistantMessage, userText } from "./test-fixtures";
+import { assistantMessage, toolCallPart, userText } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
 
@@ -163,6 +164,82 @@ describe("subagent background reminders", () => {
       expect.stringContaining("Description: Research facts")
     );
     expect(JSON.stringify(reminder)).not.toContain("CHILD DONE");
+  });
+
+  it("lets the parent retrieve a ready background result with background_output", async () => {
+    const Agent = await loadAgent();
+    const researcher = new Agent({
+      description: "Researches facts.",
+      llm: async () => [assistantMessage("CHILD DONE")],
+      name: "researcher",
+    });
+    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    await drainRun(await agent.send(userText("delegate")));
+
+    const tools = lastGenerateTextTools();
+    const launch = (await executableTool(
+      tools,
+      "delegate_to_researcher"
+    ).execute?.(
+      {
+        description: "Research facts",
+        prompt: "research this",
+        run_in_background: true,
+      },
+      toolExecutionOptions()
+    )) as { task_id: string };
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const toolCall = toolCallPart(
+      "call-background-output",
+      "background_output",
+      {
+        task_id: launch.task_id,
+      }
+    );
+    generateTextMock.mockImplementationOnce(
+      async ({
+        messages,
+        tools: nextTools,
+      }: {
+        messages: unknown;
+        tools?: ToolSet;
+      }) => {
+        const serializedMessages = JSON.stringify(messages);
+        expect(serializedMessages).toContain("[SUBAGENT JOB RESULT READY]");
+        expect(serializedMessages).toContain(launch.task_id);
+        const output = await nextTools?.background_output?.execute?.(
+          { task_id: launch.task_id },
+          toolExecutionOptions()
+        );
+
+        return {
+          responseMessages: [
+            assistantMessage([toolCall]),
+            {
+              content: [
+                {
+                  output: { type: "json", value: output },
+                  toolCallId: "call-background-output",
+                  toolName: "background_output",
+                  type: "tool-result",
+                },
+              ],
+              role: "tool",
+            },
+            assistantMessage("USED CHILD DONE"),
+          ],
+        };
+      }
+    );
+
+    const events = await collectRun(await agent.send(userText("continue")));
+    const serializedEvents = JSON.stringify(events);
+
+    expect(serializedEvents).toContain('"toolName":"background_output"');
+    expect(serializedEvents).toContain("CHILD DONE");
+    expect(serializedEvents).toContain("USED CHILD DONE");
   });
 
   it("does not inject full child trace into parent context", async () => {

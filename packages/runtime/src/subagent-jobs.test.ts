@@ -7,12 +7,12 @@ import type { RuntimeInputSink, Subagent, SubagentJob } from "./subagent-types";
 const parentSessionKey = "parent:default:subagent:researcher";
 
 describe("subagent background jobs", () => {
-  it("rejects new background jobs when the active job limit is full", () => {
+  it("rejects new background jobs when the active job limit is full", async () => {
     const jobs = new Map<string, SubagentJob>();
     const runtimeInputs: string[] = [];
     let interruptCount = 0;
     const parentSession: RuntimeInputSink = {
-      emitObserverEvent: () => undefined,
+      emitObserverEvent: () => Promise.resolve(),
       enqueueRuntimeInput: (input) => {
         if (input.type === "user-text" && typeof input.text === "string") {
           runtimeInputs.push(input.text);
@@ -30,16 +30,18 @@ describe("subagent background jobs", () => {
       }),
     };
 
-    const launches = Array.from({ length: 65 }, (_value, index) =>
-      startBackgroundJob({
-        abortSignal: new AbortController().signal,
-        jobs,
-        parentSession,
-        prompt: { text: `research ${index}`, type: "user-text" },
-        registerCleanup: () => () => undefined,
-        sessionKey: `${parentSessionKey}:${index}`,
-        subagent,
-      })
+    const launches = await Promise.all(
+      Array.from({ length: 65 }, (_value, index) =>
+        startBackgroundJob({
+          abortSignal: new AbortController().signal,
+          jobs,
+          parentSession,
+          prompt: { text: `research ${index}`, type: "user-text" },
+          registerCleanup: () => () => undefined,
+          sessionKey: `${parentSessionKey}:${index}`,
+          subagent,
+        })
+      )
     );
 
     expect(interruptCount).toBe(0);
@@ -54,7 +56,7 @@ describe("subagent background jobs", () => {
   it("allows new background jobs when retained jobs are completed", async () => {
     const jobs = new Map<string, SubagentJob>();
     const parentSession: RuntimeInputSink = {
-      emitObserverEvent: () => undefined,
+      emitObserverEvent: () => Promise.resolve(),
       enqueueRuntimeInput: () => undefined,
     };
     const subagent: Subagent = {
@@ -66,19 +68,21 @@ describe("subagent background jobs", () => {
       }),
     };
 
-    const launches = Array.from({ length: 64 }, (_value, index) =>
-      startBackgroundJob({
-        abortSignal: new AbortController().signal,
-        jobs,
-        parentSession,
-        prompt: { text: `research ${index}`, type: "user-text" },
-        registerCleanup: () => () => undefined,
-        sessionKey: `${parentSessionKey}:${index}`,
-        subagent,
-      })
+    const launches = await Promise.all(
+      Array.from({ length: 64 }, (_value, index) =>
+        startBackgroundJob({
+          abortSignal: new AbortController().signal,
+          jobs,
+          parentSession,
+          prompt: { text: `research ${index}`, type: "user-text" },
+          registerCleanup: () => () => undefined,
+          sessionKey: `${parentSessionKey}:${index}`,
+          subagent,
+        })
+      )
     );
     await Promise.all([...jobs.values()].map((job) => job.promise));
-    const accepted = startBackgroundJob({
+    const accepted = await startBackgroundJob({
       abortSignal: new AbortController().signal,
       jobs,
       parentSession,
@@ -93,10 +97,10 @@ describe("subagent background jobs", () => {
     expect(accepted).toEqual(expect.objectContaining({ status: "running" }));
   });
 
-  it("rejects new background jobs when retained jobs reach the total limit", () => {
+  it("rejects new background jobs when retained jobs reach the total limit", async () => {
     const jobs = new Map<string, SubagentJob>();
     const parentSession: RuntimeInputSink = {
-      emitObserverEvent: () => undefined,
+      emitObserverEvent: () => Promise.resolve(),
       enqueueRuntimeInput: () => undefined,
     };
     const subagent: Subagent = {
@@ -121,7 +125,7 @@ describe("subagent background jobs", () => {
       });
     }
 
-    const rejected = startBackgroundJob({
+    const rejected = await startBackgroundJob({
       abortSignal: new AbortController().signal,
       jobs,
       parentSession,
@@ -134,10 +138,10 @@ describe("subagent background jobs", () => {
     expect(rejected).toEqual(expect.objectContaining({ status: "cancelled" }));
   });
 
-  it("counts cancelled unsettled jobs toward the active job limit", () => {
+  it("counts cancelled unsettled jobs toward the active job limit", async () => {
     const jobs = new Map<string, SubagentJob>();
     const parentSession: RuntimeInputSink = {
-      emitObserverEvent: () => undefined,
+      emitObserverEvent: () => Promise.resolve(),
       enqueueRuntimeInput: () => undefined,
     };
     const subagent: Subagent = {
@@ -162,7 +166,7 @@ describe("subagent background jobs", () => {
       });
     }
 
-    const rejected = startBackgroundJob({
+    const rejected = await startBackgroundJob({
       abortSignal: new AbortController().signal,
       jobs,
       parentSession,

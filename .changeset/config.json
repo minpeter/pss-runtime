@@ -7,5 +7,9 @@
   "access": "public",
   "baseBranch": "v0.1",
   "updateInternalDependencies": "patch",
-  "ignore": []
+  "ignore": [
+    "@minpeter/pss-example-basic",
+    "@minpeter/pss-example-plugin",
+    "@minpeter/pss-example-subagent"
+  ]
 }

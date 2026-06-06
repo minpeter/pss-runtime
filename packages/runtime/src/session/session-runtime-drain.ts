@@ -1,4 +1,4 @@
-import type { BufferedAgentRun } from "./run";
+import type { RuntimeInput } from "./events";
 import {
   type RuntimeInputPlacement,
   type RuntimeInputState,
@@ -7,13 +7,13 @@ import {
 import type { SessionState } from "./session-state";
 
 export async function drainRuntimeInput({
+  emit,
   placement,
-  run,
   runtimeInput,
   state,
 }: {
+  readonly emit: (event: RuntimeInput) => Promise<void>;
   readonly placement: RuntimeInputPlacement;
-  readonly run: BufferedAgentRun;
   readonly runtimeInput: RuntimeInputState;
   readonly state: SessionState;
 }): Promise<boolean> {
@@ -21,7 +21,7 @@ export async function drainRuntimeInput({
   let next = shiftRuntimeInput(runtimeInput, placement);
   while (next) {
     added = true;
-    run.emit({ type: "runtime-input", input: next.input, placement });
+    await emit({ type: "runtime-input", input: next.input, placement });
     state.appendUserInput(next.input);
     await state.commit();
     next = shiftRuntimeInput(runtimeInput, placement);

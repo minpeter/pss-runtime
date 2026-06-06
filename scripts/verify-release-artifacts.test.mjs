@@ -18,7 +18,7 @@ const cliBinReadFailurePattern =
   /^packages\/coding-agent\/bin\/pss\.js: cannot read CLI bin target /;
 const removedModelAlias = ["Agent", "Model"].join("");
 const runtimeRootDeclaration =
-  'export type { AgentRun, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n';
+  'export type { AgentRun, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput, RuntimeLlmOutputPart } from "./llm";\n';
 
 let tempRoots = [];
 
@@ -219,7 +219,7 @@ describe("verifyReleaseArtifacts", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      'import type { LanguageModel, ToolSet } from "ai";\nexport interface AgentOptions { model: LanguageModel; tools?: ToolSet; }\nexport type { AgentRun, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
+      'import type { LanguageModel, ToolSet } from "ai";\nexport interface AgentOptions { model: LanguageModel; tools?: ToolSet; }\nexport type { AgentRun, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput, RuntimeLlmOutputPart } from "./llm";\n'
     );
 
     expect(
@@ -227,11 +227,11 @@ describe("verifyReleaseArtifacts", () => {
     ).toEqual([]);
   });
 
-  it("allows direct AI SDK message types in internal runtime declarations", () => {
+  it("allows direct AI SDK message types in plugin runtime declarations", () => {
     const cwd = createFixture();
     writeFileSync(
-      join(cwd, "packages", "runtime", "dist", "hooks.d.ts"),
-      'import type { ModelMessage } from "ai";\nexport interface AgentBeforeTurnContext { readonly history: readonly ModelMessage[]; }\n'
+      join(cwd, "packages", "runtime", "dist", "plugins.d.ts"),
+      'import type { RuntimeLlmContext } from "./llm";\nexport interface AgentEventContext { readonly history: RuntimeLlmContext["history"]; }\n'
     );
 
     expect(
@@ -239,50 +239,55 @@ describe("verifyReleaseArtifacts", () => {
     ).toEqual([]);
   });
 
-  it("rejects redundant runtime AI SDK aliases from root declarations", () => {
+  it("rejects redundant runtime AI SDK names from root declarations", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      `export type { AgentMessage, ${removedModelAlias}, AgentRun, AgentTool, AgentTools, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n`
+      `export type { AgentMessage, ${removedModelAlias}, AgentRun, AgentTool, AgentTools, CreateLlmOptions, Llm, LlmContext, LlmOutput, LlmOutputPart, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput, RuntimeLlmOutputPart } from "./llm";\n`
     );
 
     expect(
       verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
     ).toEqual([
-      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias AgentMessage",
-      `packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias ${removedModelAlias}`,
-      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias AgentTool",
-      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias AgentTools",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name AgentMessage",
+      `packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ${removedModelAlias}`,
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name AgentTool",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name AgentTools",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name CreateLlmOptions",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name Llm",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name LlmContext",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name LlmOutput",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name LlmOutputPart",
     ]);
   });
 
-  it("rejects removed runtime input aliases from root declarations", () => {
+  it("rejects removed runtime input names from root declarations", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      'export type { AgentRun, AgentRunInput, RunInput, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
+      'export type { AgentRun, AgentRunInput, RunInput, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput, RuntimeLlmOutputPart } from "./llm";\n'
     );
 
     expect(
       verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
     ).toEqual([
-      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias AgentRunInput",
-      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias RunInput",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name AgentRunInput",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name RunInput",
     ]);
   });
 
-  it("rejects internal agent loop aliases from root declarations", () => {
+  it("rejects internal agent loop names from root declarations", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      'export { runAgentLoop, type AgentLoopResult } from "./agent-loop";\nexport type { AgentRun, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput } from "./llm";\n'
+      'export { runAgentLoop, type AgentLoopResult } from "./agent-loop";\nexport type { AgentRun, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput, RuntimeLlmOutputPart } from "./llm";\n'
     );
 
     expect(
       verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
     ).toEqual([
-      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias AgentLoopResult",
-      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime alias runAgentLoop",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name AgentLoopResult",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name runAgentLoop",
     ]);
   });
 
@@ -316,7 +321,7 @@ describe("verifyReleaseArtifacts", () => {
     );
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "llm.d.ts"),
-      'import type { LanguageModel, ToolSet } from "ai";\nexport interface CreateLlmOptions { model: LanguageModel; tools?: ToolSet; }\n'
+      'import type { LanguageModel, ToolSet } from "ai";\nexport interface RuntimeCreateLlmOptions { model: LanguageModel; tools?: ToolSet; }\n'
     );
 
     expect(
@@ -335,12 +340,13 @@ describe("verifyReleaseArtifacts", () => {
       []
     );
     expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
-      "packages/runtime/dist/index.d.ts: missing explicit runtime alias AgentRun",
-      "packages/runtime/dist/index.d.ts: missing explicit runtime alias RuntimeCreateLlmOptions",
-      "packages/runtime/dist/index.d.ts: missing explicit runtime alias RuntimeInput",
-      "packages/runtime/dist/index.d.ts: missing explicit runtime alias RuntimeLlm",
-      "packages/runtime/dist/index.d.ts: missing explicit runtime alias RuntimeLlmContext",
-      "packages/runtime/dist/index.d.ts: missing explicit runtime alias RuntimeLlmOutput",
+      "packages/runtime/dist/index.d.ts: missing explicit runtime export AgentRun",
+      "packages/runtime/dist/index.d.ts: missing explicit runtime export RuntimeCreateLlmOptions",
+      "packages/runtime/dist/index.d.ts: missing explicit runtime export RuntimeInput",
+      "packages/runtime/dist/index.d.ts: missing explicit runtime export RuntimeLlm",
+      "packages/runtime/dist/index.d.ts: missing explicit runtime export RuntimeLlmContext",
+      "packages/runtime/dist/index.d.ts: missing explicit runtime export RuntimeLlmOutput",
+      "packages/runtime/dist/index.d.ts: missing explicit runtime export RuntimeLlmOutputPart",
     ]);
   });
 

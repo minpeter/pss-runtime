@@ -13,7 +13,7 @@ export interface Subagent {
 }
 
 export interface RuntimeInputSink {
-  emitObserverEvent(event: AgentEvent): void;
+  emitObserverEvent(event: AgentEvent): Promise<void>;
   enqueueRuntimeInput(input: UserInput, placement?: "turn-start"): void;
 }
 

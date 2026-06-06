@@ -6,11 +6,9 @@ export interface AgentSessionSnapshotV1 {
   readonly schemaVersion: 1;
 }
 
-export type AgentSessionSnapshot = AgentSessionSnapshotV1;
-
 export function encodeSessionSnapshot(
   history: ModelMessage[]
-): AgentSessionSnapshot {
+): AgentSessionSnapshotV1 {
   return { schemaVersion: 1, history: structuredClone(history) };
 }
 

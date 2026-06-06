@@ -25,15 +25,10 @@ const agent = new Agent({
   instructions: "Answer briefly.",
 });
 
-const session = agent.session("default");
-const run = await session.send("Write a short summary.");
-let steered = false;
+const run = await agent.send(
+  "Summarize in one sentence: pss-runtime runs agent sessions."
+);
 
 for await (const event of run.events()) {
   console.log(event);
-
-  if (event.type === "step-end" && !steered) {
-    steered = true;
-    await session.steer("Also mention the main tradeoff.");
-  }
 }

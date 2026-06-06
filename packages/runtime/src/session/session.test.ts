@@ -8,7 +8,9 @@ import {
   userText,
 } from "../test-fixtures";
 import { userTextToModelMessage } from "./mapping";
+import { AgentSession } from "./session";
 import { collect } from "./session.test-support";
+import { MemorySessionStore } from "./store/memory";
 
 describe("Agent session API", () => {
   it("agent.send accepts string input and streams one run", async () => {
@@ -33,17 +35,18 @@ describe("Agent session API", () => {
     ]);
   });
 
-  it("calls turn hooks around a queued turn", async () => {
-    const hookCalls: string[] = [];
+  it("calls event plugins for queued turn events", async () => {
+    const pluginCalls: string[] = [];
     const agent = new Agent({
-      hooks: {
-        afterTurn: ({ history, input, result }) => {
-          hookCalls.push(`${input.type}:after:${result}:${history.length}`);
+      plugins: [
+        {
+          events: {
+            on: ({ event, history }) => {
+              pluginCalls.push(`${event.type}:${history.length}`);
+            },
+          },
         },
-        beforeTurn: ({ history, input }) => {
-          hookCalls.push(`${input.type}:before:${history.length}`);
-        },
-      },
+      ],
       llm: () => Promise.resolve([assistantMessage("DONE")]),
     });
 
@@ -57,21 +60,95 @@ describe("Agent session API", () => {
       "step-end",
       "turn-end",
     ]);
-    expect(hookCalls).toEqual([
-      "user-text:before:0",
-      "user-text:after:completed:2",
+    expect(pluginCalls).toEqual([
+      "user-text:0",
+      "turn-start:1",
+      "step-start:1",
+      "assistant-text:2",
+      "step-end:2",
+      "turn-end:2",
     ]);
   });
 
-  it("commits successful output before afterTurn failures", async () => {
+  it("lets plugins branch on emitted run events", async () => {
+    const pluginEventTypes: string[] = [];
+    const agent = new Agent({
+      plugins: [
+        {
+          events: {
+            on: async ({ event }) => {
+              if (event.type === "subagent-job-start") {
+                await Promise.resolve();
+              }
+              pluginEventTypes.push(event.type);
+            },
+          },
+        },
+      ],
+      llm: () => Promise.resolve([assistantMessage("DONE")]),
+    });
+
+    const events = await collect(await agent.send("hello"));
+
+    expect(pluginEventTypes).toEqual(eventTypes(events));
+  });
+
+  it("routes observer events through event plugins", async () => {
+    const pluginEventTypes: string[] = [];
+    const session = new AgentSession(
+      () => Promise.resolve([assistantMessage("DONE")]),
+      { key: "observer-events", store: new MemorySessionStore() },
+      [
+        {
+          events: {
+            on: ({ event }) => {
+              pluginEventTypes.push(event.type);
+            },
+          },
+        },
+      ]
+    );
+
+    const run = await session.send("hello");
+    const iterator = run.events()[Symbol.asyncIterator]();
+
+    expect((await iterator.next()).value).toEqual({
+      type: "user-text",
+      text: "hello",
+    });
+    expect((await iterator.next()).value).toEqual({ type: "turn-start" });
+
+    await session.emitObserverEvent({
+      run_in_background: false,
+      subagent: "researcher",
+      type: "subagent-job-start",
+    });
+
+    const events = [
+      (await iterator.next()).value,
+      (await iterator.next()).value,
+    ];
+    await iterator.return?.();
+
+    expect(eventTypes(events)).toContain("subagent-job-start");
+    expect(pluginEventTypes).toContain("subagent-job-start");
+  });
+
+  it("commits successful output before terminal event plugin failures", async () => {
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
     const agent = new Agent({
-      hooks: {
-        afterTurn: () => {
-          throw new Error("after turn failed");
+      plugins: [
+        {
+          events: {
+            on: ({ event }) => {
+              if (event.type === "turn-end") {
+                throw new Error("turn-end plugin failed");
+              }
+            },
+          },
         },
-      },
+      ],
       llm: ({ history }) => {
         calls += 1;
         seenHistory.push([...history]);
@@ -80,10 +157,10 @@ describe("Agent session API", () => {
     });
 
     const firstEvents = await collect(
-      await agent.session("after-turn").send("first")
+      await agent.session("terminal-event").send("first")
     );
     const secondEvents = await collect(
-      await agent.session("after-turn").send("second")
+      await agent.session("terminal-event").send("second")
     );
 
     expect(eventTypes(firstEvents)).toEqual([
@@ -92,7 +169,7 @@ describe("Agent session API", () => {
       "step-start",
       "assistant-text",
       "step-end",
-      "turn-end",
+      "turn-error",
     ]);
     expect(eventTypes(secondEvents)).toEqual([
       "user-text",
@@ -100,7 +177,7 @@ describe("Agent session API", () => {
       "step-start",
       "assistant-text",
       "step-end",
-      "turn-end",
+      "turn-error",
     ]);
     expect(seenHistory[1]).toEqual([
       userTextToModelMessage(userText("first")),

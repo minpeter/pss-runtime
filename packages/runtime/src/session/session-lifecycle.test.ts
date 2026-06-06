@@ -122,26 +122,32 @@ describe("Agent session lifecycle", () => {
     ]);
   });
 
-  it("closes the active run when a killed session has a pending afterTurn hook", async () => {
-    const afterTurnStarted = createDeferred();
+  it("closes the active run when a killed session has a pending terminal event plugin", async () => {
+    const terminalPluginStarted = createDeferred();
     const agent = new Agent({
-      hooks: {
-        afterTurn: () => {
-          afterTurnStarted.resolve();
-          return new Promise<never>(() => undefined);
+      plugins: [
+        {
+          events: {
+            on: ({ event }) => {
+              if (event.type === "turn-end") {
+                terminalPluginStarted.resolve();
+                return new Promise<never>(() => undefined);
+              }
+            },
+          },
         },
-      },
+      ],
       llm: () => Promise.resolve([assistantMessage("DONE")]),
     });
-    const session = agent.session("kill-pending-after-turn");
+    const session = agent.session("kill-pending-terminal-event");
     const collecting = collect(await session.send("hello"));
-    await afterTurnStarted.promise;
+    await terminalPluginStarted.promise;
 
     session.kill();
 
     const events = await withShortTimeout(collecting);
     if (events === timeoutMarker) {
-      throw new Error("session.kill() did not close the afterTurn run");
+      throw new Error("session.kill() did not close the terminal event run");
     }
     expect(eventTypes(events)).toEqual([
       "user-text",

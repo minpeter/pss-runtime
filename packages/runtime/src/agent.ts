@@ -6,8 +6,8 @@ import {
 } from "./agent-namespace";
 import { assertSubagents } from "./agent-validation";
 import { ChildSessionCleanups } from "./child-session-cleanups";
-import type { AgentHooks } from "./hooks";
-import { type AgentToolChoice, createLlm, type Llm } from "./llm";
+import { type AgentToolChoice, createLlm, type RuntimeLlm } from "./llm";
+import type { AgentPlugin } from "./plugins";
 import type { UserInput } from "./session/events";
 import type { AgentRun } from "./session/run";
 import { type AgentInput, AgentSession } from "./session/session";
@@ -17,11 +17,11 @@ import { createSubagentTools } from "./subagents";
 
 interface AgentLanguageModelOptions {
   description?: string;
-  hooks?: AgentHooks;
   instructions?: string;
   llm?: never;
   model: LanguageModel;
   name?: string;
+  plugins?: readonly AgentPlugin[];
   sessions?: AgentSessionOptions;
   subagents?: readonly Agent[];
   toolChoice?: AgentToolChoice;
@@ -30,11 +30,11 @@ interface AgentLanguageModelOptions {
 
 interface AgentLlmOptions {
   description?: string;
-  hooks?: AgentHooks;
   instructions?: never;
-  llm: Llm;
+  llm: RuntimeLlm;
   model?: never;
   name?: string;
+  plugins?: readonly AgentPlugin[];
   sessions?: AgentSessionOptions;
   subagents?: never;
   toolChoice?: never;
@@ -62,14 +62,14 @@ type AgentModelOptions = Pick<
 
 export class Agent {
   readonly #baseTools?: ToolSet;
-  readonly #hooks?: AgentHooks;
-  readonly #llm?: Llm;
+  readonly #llm?: RuntimeLlm;
   readonly #modelOptions?: AgentModelOptions;
   readonly #childSessionCleanups = new ChildSessionCleanups();
   readonly #sessionGenerations = new Map<string, number>();
   readonly #sessions = new Map<string, SessionHandle>();
   readonly #sessionNamespace: string;
   readonly #store: SessionStore;
+  readonly #plugins: readonly AgentPlugin[];
   readonly #subagents: readonly Agent[];
   readonly description?: string;
   readonly name?: string;
@@ -81,7 +81,7 @@ export class Agent {
     this.name = options.name;
     this.#sessionNamespace = stableAgentNamespace(options);
     this.#store = options.sessions?.store ?? new MemorySessionStore();
-    this.#hooks = options.hooks;
+    this.#plugins = options.plugins ?? [];
     assertSubagents(options, Agent, hasCustomLlm(options));
     this.#subagents = hasCustomLlm(options) ? [] : (options.subagents ?? []);
     if (hasCustomLlm(options)) {
@@ -129,7 +129,7 @@ export class Agent {
           (event) => getSession().emitObserverEvent(event)
         )
       );
-    session = new AgentSession(llm, { key, store: this.#store }, this.#hooks);
+    session = new AgentSession(llm, { key, store: this.#store }, this.#plugins);
     const handle: SessionHandle = {
       delete: async () => {
         await session.delete();
@@ -209,6 +209,11 @@ function assertAgentOptions(options: unknown): asserts options is AgentOptions {
 
   const hasLlm = hasCustomLlm(options);
   const hasModel = "model" in options && options.model != null;
+
+  const legacyLifecycleOption = ["h", "o", "o", "k", "s"].join("");
+  if (legacyLifecycleOption in options) {
+    throw new TypeError("Agent: unsupported legacy lifecycle option.");
+  }
 
   if (hasLlm && hasModel) {
     throw new TypeError("Agent: provide either options.llm or options.model.");

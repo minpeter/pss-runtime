@@ -1,5 +1,5 @@
 import type { AssistantModelMessage, ToolCallPart, ToolModelMessage } from "ai";
-import type { Llm, LlmOutput } from "./llm";
+import type { RuntimeLlm, RuntimeLlmOutput } from "./llm";
 import type {
   AgentEvent,
   UserMessage,
@@ -49,7 +49,7 @@ export const createDeferred = (): {
   return { promise, resolve };
 };
 
-export const createScriptedLlm = (outputs: LlmOutput[]): Llm => {
+export const createScriptedLlm = (outputs: RuntimeLlmOutput[]): RuntimeLlm => {
   let index = 0;
   return () => Promise.resolve(outputs[index++] ?? []);
 };

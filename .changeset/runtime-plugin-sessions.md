@@ -5,6 +5,7 @@
 Add plugin-first session persistence, memory, and compaction APIs, plus event-first runtime control.
 
 - Keep `run.events()` as the app-owned runtime control loop for synchronized rendering, tracing, and continuation policy.
+- Add constructor-level `plugins: [...]` lifecycle middleware support and reject legacy `hooks` constructor options.
 - Expand plugin lifecycle middleware with `turn.before`, `step.before`, `step.after`, and `turn.after` handlers that can call scoped `steer(...)`.
 - Add `Agent.create({ onPluginError })` for routing plugin lifecycle handler failures to caller-owned observability instead of the default console reporter.
 - Add runtime-owned tool policy middleware with `tool.call` and `tool.result` for allow, modify, reject-and-continue, synthesize, error, and result replacement flows.

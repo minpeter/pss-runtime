@@ -1,6 +1,6 @@
 import { runAgentLoop } from "../agent-loop";
-import type { AgentHooks } from "../hooks";
-import type { Llm } from "../llm";
+import type { RuntimeLlm } from "../llm";
+import { type AgentPlugin, runEventPlugins } from "../plugins";
 import type { AgentEvent } from "./events";
 import type { AgentInput, UserInput } from "./input";
 import { normalizeAgentInput } from "./input-normalization";
@@ -9,17 +9,14 @@ import {
   addSteeringInput,
   closeRuntimeInput,
   createRuntimeInputState,
-  hooksForRuntimeInput,
   type QueuedInput,
   type QueuedRuntimeInput,
   type RuntimeInputPlacement,
   type RuntimeInputState,
   withRuntimeInputWindow,
-  withSteeringPlacement,
 } from "./runtime-input";
 import {
   errorMessage,
-  runAfterTurnHook,
   sessionKilledError,
   sessionTerminalError,
 } from "./session-errors";
@@ -32,12 +29,13 @@ export type { AgentInput, SessionInput, UserInput } from "./input";
 export type { AgentRun } from "./run";
 
 export class AgentSession {
-  readonly #hooks?: AgentHooks;
   readonly #inputQueue: QueuedInput[] = [];
-  readonly #llm: Llm;
+  readonly #llm: RuntimeLlm;
   readonly #pendingRuntimeInputs: QueuedRuntimeInput[] = [];
+  readonly #plugins: readonly AgentPlugin[];
   readonly #state: SessionState;
   #activeAbort?: AbortController;
+  #observerEventBuffer?: AgentEvent[];
   #activeRun?: BufferedAgentRun;
   #activeRuntimeInput?: RuntimeInputState;
   #deletePromise?: Promise<void>;
@@ -46,12 +44,12 @@ export class AgentSession {
   #runToCloseOnKill?: BufferedAgentRun;
 
   constructor(
-    llm: Llm,
+    llm: RuntimeLlm,
     persistence: SessionPersistenceOptions,
-    hooks?: AgentHooks
+    plugins: readonly AgentPlugin[] = []
   ) {
-    this.#hooks = hooks;
     this.#llm = llm;
+    this.#plugins = plugins;
     this.#state = new SessionState(persistence);
   }
 
@@ -71,7 +69,7 @@ export class AgentSession {
     );
     const acceptedInput = normalizeAgentInput(input);
     const run = new BufferedAgentRun();
-    run.emit(acceptedInput);
+    await this.#emitRunEvent(run, acceptedInput);
     this.#inputQueue.push({
       input: structuredClone(acceptedInput),
       run,
@@ -136,8 +134,19 @@ export class AgentSession {
     this.#enqueuePendingRuntimeInput({ input, placement });
   }
 
-  emitObserverEvent(event: AgentEvent): void {
-    this.#activeRun?.emit(event);
+  emitObserverEvent(event: AgentEvent): Promise<void> {
+    const observerEventBuffer = this.#observerEventBuffer;
+    if (observerEventBuffer) {
+      observerEventBuffer.push(structuredClone(event));
+      return Promise.resolve();
+    }
+
+    const run = this.#activeRun;
+    if (!run) {
+      return Promise.resolve();
+    }
+
+    return this.#emitRunEvent(run, event);
   }
 
   #enqueuePendingRuntimeInput(input: QueuedRuntimeInput): void {
@@ -198,21 +207,14 @@ export class AgentSession {
     const historySnapshot = this.#state.modelSnapshot();
 
     try {
-      await withSteeringPlacement(runtimeInput, "turn-start", async () => {
-        await this.#hooks?.beforeTurn?.({
-          history: this.#state.modelSnapshot(),
-          input,
-          signal: activeAbort.signal,
-        });
-      });
-      await withRuntimeInputWindow(runtimeInput, "turn-start", async () => {
-        await run.emitBoundary({ type: "turn-start" });
-      });
       this.#state.appendUserInput(input);
       await this.#state.commit();
+      await withRuntimeInputWindow(runtimeInput, "turn-start", async () => {
+        await this.#emitRunBoundaryEvent(run, { type: "turn-start" });
+      });
       await drainRuntimeInput({
+        emit: (event) => this.#emitRunEvent(run, event),
         placement: "turn-start",
-        run,
         runtimeInput,
         state: this.#state,
       });
@@ -221,11 +223,12 @@ export class AgentSession {
         emit: async (event) => {
           if (event.type === "step-start" || event.type === "step-end") {
             await withRuntimeInputWindow(runtimeInput, event.type, async () => {
-              await run.emitBoundary(event);
+              await this.#emitRunBoundaryEvent(run, event);
             });
             const runtimeInputAdded = await drainRuntimeInput({
+              emit: (runtimeInputEvent) =>
+                this.#emitRunEvent(run, runtimeInputEvent),
               placement: event.type,
-              run,
               runtimeInput,
               state: this.#state,
             });
@@ -235,11 +238,12 @@ export class AgentSession {
               : undefined;
           }
 
-          run.emit(event);
+          await this.#emitRunEvent(run, event);
         },
         history: this.#state.history,
-        hooks: hooksForRuntimeInput(this.#hooks, runtimeInput),
         llm: this.#llm,
+        captureObserverEvents: (callback) =>
+          this.#captureObserverEvents(run, callback),
         signal: activeAbort.signal,
       });
 
@@ -248,13 +252,12 @@ export class AgentSession {
       closeRuntimeInput(runtimeInput, terminalEvent);
       this.#activeRuntimeInput = undefined;
       this.#activeRun = undefined;
-      await runAfterTurnHook(this.#hooks, {
-        history: this.#state.modelSnapshot(),
-        input,
-        result,
-        signal: activeAbort.signal,
-      });
-      run.emit({ type: terminalEvent });
+      try {
+        await this.#emitRunEvent(run, { type: terminalEvent });
+      } catch (terminalError) {
+        run.emit({ type: "turn-error", message: errorMessage(terminalError) });
+        closeRuntimeInput(runtimeInput, "turn-error");
+      }
     } catch (error) {
       const turnError =
         error instanceof Error ? error : new Error(String(error));
@@ -272,6 +275,58 @@ export class AgentSession {
       this.#activeRuntimeInput = undefined;
       this.#runToCloseOnKill = undefined;
       run.close(undefined, runtimeInput.closedReason);
+    }
+  }
+
+  async #emitRunBoundaryEvent(
+    run: BufferedAgentRun,
+    event: AgentEvent
+  ): Promise<void> {
+    await runEventPlugins(this.#plugins, {
+      event,
+      history: this.#state.modelSnapshot(),
+      signal: this.#activeAbort?.signal,
+    });
+    await run.emitBoundary(event);
+  }
+
+  async #emitRunEvent(run: BufferedAgentRun, event: AgentEvent): Promise<void> {
+    await runEventPlugins(this.#plugins, {
+      event,
+      history: this.#state.modelSnapshot(),
+      signal: this.#activeAbort?.signal,
+    });
+    run.emit(event);
+  }
+
+  async #captureObserverEvents<T>(
+    run: BufferedAgentRun,
+    callback: () => Promise<T>
+  ): Promise<{
+    readonly events: AgentEvent[];
+    readonly release: () => void;
+    readonly value: T;
+  }> {
+    const previousBuffer = this.#observerEventBuffer;
+    const buffer: AgentEvent[] = [];
+    this.#observerEventBuffer = buffer;
+    try {
+      const value = await callback();
+      return {
+        events: buffer,
+        release: () => {
+          if (this.#observerEventBuffer === buffer) {
+            this.#observerEventBuffer = previousBuffer;
+          }
+        },
+        value,
+      };
+    } catch (error) {
+      for (const event of buffer.splice(0)) {
+        await this.#emitRunEvent(run, event);
+      }
+      this.#observerEventBuffer = previousBuffer;
+      throw error;
     }
   }
 }

@@ -1,4 +1,3 @@
-import type { AgentHooks } from "../hooks";
 import type { RuntimeInput } from "./events";
 import type { AgentInput, UserInput } from "./input";
 import { normalizeAgentInput } from "./input-normalization";
@@ -91,27 +90,6 @@ export async function withSteeringPlacement<T>(
   } finally {
     runtimeInput.steerPlacement = previousSteerPlacement;
   }
-}
-
-export function hooksForRuntimeInput(
-  hooks: AgentHooks | undefined,
-  runtimeInput: RuntimeInputState
-): AgentHooks | undefined {
-  if (!hooks) {
-    return;
-  }
-
-  return {
-    ...hooks,
-    afterStep: (context) =>
-      withSteeringPlacement(runtimeInput, "step-end", async () => {
-        await hooks.afterStep?.(context);
-      }),
-    beforeStep: (context) =>
-      withSteeringPlacement(runtimeInput, "step-start", async () => {
-        await hooks.beforeStep?.(context);
-      }),
-  };
 }
 
 export function shiftRuntimeInput(

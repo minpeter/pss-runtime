@@ -55,7 +55,7 @@ export async function collectSubagentRun(
 export async function collectSubagentRunWithEvents(
   run: AgentRun,
   subagent: string,
-  onEvent?: (event: AgentEvent) => void
+  onEvent?: (event: AgentEvent) => Promise<void> | void
 ): Promise<SubagentRunResult> {
   let eventCount = 0;
   let result: CompactSubagentResult["result"] = "completed";
@@ -70,7 +70,7 @@ export async function collectSubagentRunWithEvents(
       if (events.length < maxStoredEvents) {
         events.push(event);
       }
-      onEvent?.(event);
+      await onEvent?.(event);
       if (event.type === "assistant-text") {
         const appended = appendCompactText(textParts, textLength, event.text);
         textLength = appended.length;

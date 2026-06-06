@@ -1,7 +1,6 @@
 import type { ModelMessage } from "ai";
-import type { AgentHooks, AgentStepResult } from "./hooks";
-import type { Llm, LlmOutput } from "./llm";
-import type { AgentEvent, AgentEventListener } from "./session/events";
+import type { RuntimeLlm, RuntimeLlmOutput } from "./llm";
+import type { AgentEvent } from "./session/events";
 import { modelMessageToAgentEvents } from "./session/mapping";
 
 interface ModelHistory {
@@ -10,14 +9,14 @@ interface ModelHistory {
 }
 
 interface RunAgentLoopOptions {
+  captureObserverEvents?: ObserverEventCapture;
   emit: AgentLoopEventListener;
   history: ModelHistory;
-  hooks?: AgentHooks;
-  llm: Llm;
+  llm: RuntimeLlm;
   signal?: AbortSignal;
 }
 
-export type AgentLoopResult = "completed" | "aborted";
+type AgentLoopResult = "completed" | "aborted";
 type AgentLoopBoundaryEvent = Extract<
   AgentEvent,
   { type: "step-end" } | { type: "step-start" }
@@ -31,28 +30,24 @@ type AgentLoopEventListener = (
   | AgentLoopBoundaryDecision
   | Promise<AgentLoopBoundaryDecision | undefined>
   | undefined;
-type StepOutputResult = AgentStepResult | "aborted";
+type StepOutputResult = "aborted" | "completed" | "continue";
+interface ObserverEventCaptureResult<T> {
+  readonly events: AgentEvent[];
+  readonly release: () => void;
+  readonly value: T;
+}
+type ObserverEventCapture = <T>(
+  callback: () => Promise<T>
+) => Promise<ObserverEventCaptureResult<T>>;
 
 export async function runAgentLoop({
+  captureObserverEvents = captureNoObserverEvents,
   emit,
   history,
-  hooks,
   llm,
   signal = new AbortController().signal,
 }: RunAgentLoopOptions): Promise<AgentLoopResult> {
-  let stepIndex = 0;
-
   while (true) {
-    if (signal.aborted) {
-      return "aborted";
-    }
-
-    await hooks?.beforeStep?.({
-      history: history.modelSnapshot(),
-      signal,
-      stepIndex,
-    });
-
     if (signal.aborted) {
       return "aborted";
     }
@@ -67,24 +62,26 @@ export async function runAgentLoop({
       return "aborted";
     }
 
-    const output = await readLlmOutput({ history, llm, signal });
+    const capturedOutput = await captureObserverEvents(() =>
+      readLlmOutput({ history, llm, signal })
+    );
+    const output = capturedOutput.value;
 
     if (output === "aborted") {
       return "aborted";
     }
 
-    const result = appendStepOutput({ emit, history, output, signal });
+    const result = await appendCapturedStepOutput({
+      capturedOutput,
+      emit,
+      history,
+      output,
+      signal,
+    });
 
     if (result === "aborted") {
       return "aborted";
     }
-
-    await runAfterStepHook(hooks, {
-      history: history.modelSnapshot(),
-      result,
-      signal,
-      stepIndex,
-    });
 
     const stepEndDecision = await emitBoundary({
       emit,
@@ -102,8 +99,6 @@ export async function runAgentLoop({
     if (result === "completed" && !stepEndDecision?.runtimeInputAdded) {
       return "completed";
     }
-
-    stepIndex += 1;
   }
 }
 
@@ -148,16 +143,20 @@ function createAbortBoundary(signal: AbortSignal): {
   return { dispose, promise };
 }
 
-async function runAfterStepHook(
-  hooks: AgentHooks | undefined,
-  context: Parameters<NonNullable<AgentHooks["afterStep"]>>[0]
-): Promise<void> {
-  const hook = hooks?.afterStep;
-  if (!hook) {
-    return;
-  }
+async function captureNoObserverEvents<T>(callback: () => Promise<T>): Promise<{
+  readonly events: AgentEvent[];
+  readonly release: () => void;
+  readonly value: T;
+}> {
+  return {
+    events: [],
+    release: releaseNoObserverEvents,
+    value: await callback(),
+  };
+}
 
-  await Promise.allSettled([Promise.resolve().then(() => hook(context))]);
+function releaseNoObserverEvents(): void {
+  return;
 }
 
 async function readLlmOutput({
@@ -166,7 +165,7 @@ async function readLlmOutput({
   signal,
 }: Pick<RunAgentLoopOptions, "history" | "llm"> & {
   signal: AbortSignal;
-}): Promise<LlmOutput | "aborted"> {
+}): Promise<RuntimeLlmOutput | "aborted"> {
   try {
     return await llm({ history: history.modelSnapshot(), signal });
   } catch (error) {
@@ -178,20 +177,60 @@ async function readLlmOutput({
   }
 }
 
-function appendStepOutput({
+async function appendCapturedStepOutput({
+  capturedOutput,
   emit,
   history,
   output,
   signal,
-}: { emit: AgentEventListener; history: ModelHistory } & {
-  output: LlmOutput;
+}: Pick<RunAgentLoopOptions, "emit"> & { history: ModelHistory } & {
+  capturedOutput: ObserverEventCaptureResult<RuntimeLlmOutput | "aborted">;
+  output: RuntimeLlmOutput;
   signal: AbortSignal;
-}): StepOutputResult {
+}): Promise<StepOutputResult> {
+  try {
+    return await appendStepOutput({
+      emit,
+      history,
+      observerEvents: capturedOutput.events,
+      output,
+      signal,
+    });
+  } finally {
+    capturedOutput.release();
+  }
+}
+
+async function appendStepOutput({
+  emit,
+  history,
+  observerEvents,
+  output,
+  signal,
+}: Pick<RunAgentLoopOptions, "emit"> & { history: ModelHistory } & {
+  observerEvents: AgentEvent[];
+  output: RuntimeLlmOutput;
+  signal: AbortSignal;
+}): Promise<StepOutputResult> {
   if (signal.aborted) {
     return "aborted";
   }
 
   let shouldContinue = false;
+  const pendingObserverEvents = observerEvents;
+  const flushObserverEvents = async (
+    shouldFlush: (event: AgentEvent) => boolean = () => true
+  ) => {
+    for (let index = 0; index < pendingObserverEvents.length; ) {
+      const event = pendingObserverEvents[index];
+      if (!(event && shouldFlush(event))) {
+        index += 1;
+        continue;
+      }
+      pendingObserverEvents.splice(index, 1);
+      await emit(event);
+    }
+  };
 
   for (const message of output) {
     if (signal.aborted) {
@@ -200,15 +239,30 @@ function appendStepOutput({
 
     history.appendModelMessage(message);
     const events = modelMessageToAgentEvents(message);
+    const hasToolResult = events.some((event) => event.type === "tool-result");
 
     for (const event of events) {
-      emit(event);
+      await emit(event);
+      if (event.type === "tool-call") {
+        shouldContinue = true;
+        await flushObserverEvents(isLaunchOrBlockingObserverEvent);
+      }
     }
 
-    if (events.some((event) => event.type === "tool-call")) {
-      shouldContinue = true;
+    if (hasToolResult) {
+      await flushObserverEvents();
     }
   }
 
+  await flushObserverEvents();
+
   return shouldContinue ? "continue" : "completed";
+}
+
+function isLaunchOrBlockingObserverEvent(event: AgentEvent): boolean {
+  if (event.type === "subagent-job-update") {
+    return false;
+  }
+
+  return !(event.type === "subagent-job-end" && event.task_id);
 }

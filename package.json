@@ -5,10 +5,11 @@
   "type": "module",
   "packageManager": "pnpm@10.0.0",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "examples/*"
   ],
   "scripts": {
-    "dev": "tsx --conditions=@minpeter/pss-source examples/basic.ts",
+    "dev": "pnpm --filter @minpeter/pss-example-basic start",
     "dev:tui": "tsx --conditions=@minpeter/pss-source packages/coding-agent/src/tui.ts",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck && tsc -p tsconfig.json --noEmit",

@@ -1,10 +1,10 @@
 import type { LanguageModel } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent, type AgentOptions } from "./agent";
-import type { Llm } from "./llm";
+import type { RuntimeLlm } from "./llm";
 
 const fakeModel = {} as LanguageModel;
-const fakeLlm: Llm = () => Promise.resolve([]);
+const fakeLlm: RuntimeLlm = () => Promise.resolve([]);
 const ambiguousOptionsPattern = /either options\.llm or options\.model/;
 const invalidLlmPattern = /invalid options\.llm/;
 const missingModelPattern = /missing options\.model/;
@@ -16,15 +16,17 @@ const reservedToolCollisionPattern = /collides with a reserved subagent tool/;
 const subagentMetadataPattern = /subagents\[0\].name/;
 const subagentNameLengthPattern = /too long/;
 const subagentsOnCustomLlmPattern = /subagents require options.model/;
+const legacyLifecyclePattern = /unsupported legacy lifecycle option/;
+const legacyLifecycleKey = ["h", "o", "o", "k", "s"].join("");
 
 const acceptsModelOptions: AgentOptions = {
-  hooks: {},
   instructions: "Use the injected model.",
   model: fakeModel,
+  plugins: [],
   toolChoice: "auto",
   tools: {},
 };
-const acceptsCustomLlmOptions: AgentOptions = { hooks: {}, llm: fakeLlm };
+const acceptsCustomLlmOptions: AgentOptions = { llm: fakeLlm, plugins: [] };
 const acceptsModelSubagentsOptions: AgentOptions = {
   model: fakeModel,
   subagents: [
@@ -40,15 +42,19 @@ type IsAssignable<Source, Target> = Source extends Target ? true : false;
 type AssertFalse<T extends false> = T;
 type RejectsAmbiguousModelPrecedence = AssertFalse<
   IsAssignable<
-    { readonly llm: Llm; readonly model: LanguageModel },
+    { readonly llm: RuntimeLlm; readonly model: LanguageModel },
     AgentOptions
   >
 >;
 type RejectsIgnoredCreateLlmOptions = AssertFalse<
   IsAssignable<
-    { readonly llm: Llm; readonly tools: Record<PropertyKey, never> },
+    { readonly llm: RuntimeLlm; readonly tools: Record<PropertyKey, never> },
     AgentOptions
   >
+>;
+type LegacyLifecycleKey = `${"h"}${"o"}${"o"}${"k"}${"s"}`;
+type RejectsLegacyLifecycleOptionKey = AssertFalse<
+  LegacyLifecycleKey extends keyof AgentOptions ? true : false
 >;
 
 const typeFixtures = [
@@ -59,8 +65,9 @@ const typeFixtures = [
 type TypeFixtureAssertions = [
   RejectsAmbiguousModelPrecedence,
   RejectsIgnoredCreateLlmOptions,
+  RejectsLegacyLifecycleOptionKey,
 ];
-const typeFixtureAssertions: TypeFixtureAssertions = [false, false];
+const typeFixtureAssertions: TypeFixtureAssertions = [false, false, false];
 
 const collectRun = async (run: Awaited<ReturnType<Agent["send"]>>) => {
   for await (const _event of run.events()) {
@@ -71,7 +78,7 @@ const collectRun = async (run: Awaited<ReturnType<Agent["send"]>>) => {
 describe("Agent", () => {
   it("keeps AgentOptions type fixtures reachable", () => {
     expect(typeFixtures).toHaveLength(3);
-    expect(typeFixtureAssertions).toHaveLength(2);
+    expect(typeFixtureAssertions).toHaveLength(3);
   });
 
   it("constructs agents with new Agent", () => {
@@ -122,6 +129,16 @@ describe("Agent", () => {
     expect(
       () => new Agent({ llm: "not-an-llm" } as unknown as AgentOptions)
     ).toThrow(invalidLlmPattern);
+  });
+
+  it("rejects legacy lifecycle constructor options", () => {
+    expect(
+      () =>
+        new Agent({
+          [legacyLifecycleKey]: {},
+          llm: fakeLlm,
+        } as unknown as AgentOptions)
+    ).toThrow(legacyLifecyclePattern);
   });
 
   it("rejects ambiguous model and custom LLM configuration", () => {

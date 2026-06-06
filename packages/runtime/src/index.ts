@@ -5,25 +5,18 @@ export {
   type SessionHandle,
 } from "./agent";
 export type {
-  AgentAfterStepContext,
-  AgentAfterTurnContext,
-  AgentBeforeStepContext,
-  AgentBeforeTurnContext,
-  AgentHooks,
-  AgentStepResult,
-  AgentTurnResult,
-} from "./hooks";
-export type {
   AgentToolChoice,
-  AgentToolExecute,
-  AgentToolExecutionOptions,
-  LlmOutputPart,
   RuntimeCreateLlmOptions,
   RuntimeLlm,
   RuntimeLlmContext,
   RuntimeLlmOutput,
+  RuntimeLlmOutputPart,
 } from "./llm";
 export { createLlm } from "./llm";
+export type {
+  AgentEventContext,
+  AgentPlugin,
+} from "./plugins";
 export type {
   AgentEvent,
   AgentEventListener,

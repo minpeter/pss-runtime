@@ -1,45 +1,34 @@
-import type {
-  LanguageModel,
-  ModelMessage,
-  Tool,
-  ToolExecutionOptions,
-  ToolSet,
-} from "ai";
+import type { LanguageModel, ModelMessage, ToolSet } from "ai";
 import { generateText } from "ai";
 
-export type AgentToolExecutionOptions = ToolExecutionOptions<unknown>;
-export type AgentToolExecute = NonNullable<Tool["execute"]>;
 export type AgentToolChoice = "auto" | "required";
-export type LlmOutput = Awaited<
+export type RuntimeLlmOutput = Awaited<
   ReturnType<typeof generateText>
 >["responseMessages"];
-export type LlmOutputPart = LlmOutput[number];
+export type RuntimeLlmOutputPart = RuntimeLlmOutput[number];
 
-export interface LlmContext {
+export interface RuntimeLlmContext {
   history: readonly ModelMessage[];
   signal: AbortSignal;
 }
 
-export type Llm = (context: LlmContext) => Promise<LlmOutput>;
+export type RuntimeLlm = (
+  context: RuntimeLlmContext
+) => Promise<RuntimeLlmOutput>;
 
-export interface CreateLlmOptions {
+export interface RuntimeCreateLlmOptions {
   instructions?: string;
   model: LanguageModel;
   toolChoice?: AgentToolChoice;
   tools?: ToolSet;
 }
 
-export type RuntimeCreateLlmOptions = CreateLlmOptions;
-export type RuntimeLlm = Llm;
-export type RuntimeLlmContext = LlmContext;
-export type RuntimeLlmOutput = LlmOutput;
-
 export function createLlm({
   model,
   instructions,
   toolChoice,
   tools,
-}: CreateLlmOptions): Llm {
+}: RuntimeCreateLlmOptions): RuntimeLlm {
   return async ({ history, signal }) => {
     const { responseMessages } = await generateText({
       abortSignal: signal,

@@ -8,6 +8,17 @@ describe("changeset prerelease mode", () => {
 
     expect(preState.mode).toBe("pre");
     expect(preState.tag).toBe("next");
+    expect(preState.changesets).not.toContain("runtime-plugin-constructor");
     expect(config.baseBranch).toBe("v0.1");
+  });
+
+  it("ignores private example packages for release status", () => {
+    const config = JSON.parse(readFileSync(".changeset/config.json", "utf8"));
+
+    expect(config.ignore).toEqual([
+      "@minpeter/pss-example-basic",
+      "@minpeter/pss-example-plugin",
+      "@minpeter/pss-example-subagent",
+    ]);
   });
 });
