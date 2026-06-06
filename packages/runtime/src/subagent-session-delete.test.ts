@@ -8,6 +8,7 @@ import {
   loadAgent,
   toolExecutionOptions,
 } from "./llm-test-utils";
+import { SpyStore } from "./session/session.test-support";
 import { assistantMessage, userText } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
@@ -139,4 +140,45 @@ describe("subagent session deletion", () => {
       "background child work"
     );
   });
+
+  it("does not reuse a killed parent handle when child cleanup fails", async () => {
+    const Agent = await loadAgent();
+    const childStore = new RejectingDeleteStore();
+    const childHistories: unknown[] = [];
+    const researcher = new Agent({
+      description: "Researches facts.",
+      llm: ({ history }) => {
+        childHistories.push(history);
+        return Promise.resolve([assistantMessage("CHILD DONE")]);
+      },
+      name: "researcher",
+      sessions: { store: childStore },
+    });
+    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+    const firstSession = agent.session("default");
+
+    await drainRun(await agent.send(userText("delegate first")));
+    await executableTool(
+      lastGenerateTextTools(),
+      "delegate_to_researcher"
+    ).execute?.({ prompt: "first child work" }, toolExecutionOptions());
+    await expect(firstSession.delete()).rejects.toThrow("child cleanup failed");
+    const secondSession = agent.session("default");
+    await drainRun(await secondSession.send(userText("delegate second")));
+    await executableTool(
+      lastGenerateTextTools(),
+      "delegate_to_researcher"
+    ).execute?.({ prompt: "second child work" }, toolExecutionOptions());
+
+    expect(secondSession).not.toBe(firstSession);
+    expect(JSON.stringify(childHistories.at(-1))).toContain(
+      "second child work"
+    );
+  });
 });
+
+class RejectingDeleteStore extends SpyStore {
+  override delete(_key: string): Promise<void> {
+    return Promise.reject(new Error("child cleanup failed"));
+  }
+}

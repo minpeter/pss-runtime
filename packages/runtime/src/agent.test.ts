@@ -14,6 +14,7 @@ const existingToolCollisionPattern = /collides with an existing tool/;
 const objectMapSubagentsPattern = /subagents must be an array/;
 const reservedToolCollisionPattern = /collides with a reserved subagent tool/;
 const subagentMetadataPattern = /subagents\[0\].name/;
+const subagentNameLengthPattern = /too long/;
 const subagentsOnCustomLlmPattern = /subagents require options.model/;
 
 const acceptsModelOptions: AgentOptions = {
@@ -174,6 +175,23 @@ describe("Agent", () => {
           subagents: [unnamed],
         })
     ).toThrow(subagentMetadataPattern);
+  });
+
+  it("rejects subagent names that exceed generated tool name limits", () => {
+    const longName = `a${"b".repeat(52)}`;
+    const researcher = new Agent({
+      description: "Researches facts.",
+      llm: fakeLlm,
+      name: longName,
+    });
+
+    expect(
+      () =>
+        new Agent({
+          model: fakeModel,
+          subagents: [researcher],
+        })
+    ).toThrow(subagentNameLengthPattern);
   });
 
   it("rejects subagents on custom llm parents", () => {

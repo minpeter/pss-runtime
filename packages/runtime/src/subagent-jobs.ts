@@ -203,25 +203,33 @@ function isCancelledJob(job: SubagentJob): boolean {
 
 function pruneJobs(jobs: Map<string, SubagentJob>): boolean {
   while (jobs.size >= maxBackgroundJobs) {
-    const oldest = jobs.keys().next().value as string | undefined;
-    if (!oldest) {
-      return true;
+    const pruned = findPrunableJob(jobs);
+    if (!pruned) {
+      return false;
     }
 
-    const job = jobs.get(oldest);
-    if (job && isActiveJob(job.status)) {
-      cancelJob(job);
-    }
-    if (job) {
-      cleanupJob(job).then(
-        () => jobs.delete(oldest),
-        () => undefined
-      );
-    }
-    return jobs.size < maxBackgroundJobs;
+    const [id, job] = pruned;
+    cancelJob(job);
+    jobs.delete(id);
+    cleanupJob(job).then(
+      () => undefined,
+      () => undefined
+    );
   }
 
   return true;
+}
+
+function findPrunableJob(
+  jobs: Map<string, SubagentJob>
+): readonly [string, SubagentJob] | undefined {
+  for (const entry of jobs) {
+    if (isActiveJob(entry[1].status)) {
+      return entry;
+    }
+  }
+
+  return;
 }
 
 export function cancelJob(job: SubagentJob): void {

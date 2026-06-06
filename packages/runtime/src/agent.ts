@@ -47,18 +47,18 @@ export interface SessionHandle {
 }
 
 export type AgentOptions = AgentLanguageModelOptions | AgentLlmOptions;
+type AgentModelOptions = Pick<
+  AgentLanguageModelOptions,
+  "instructions" | "model" | "toolChoice"
+>;
 
-const subagentNamePattern = /^[a-z][a-z0-9_-]{0,63}$/;
+const subagentNamePattern = /^[a-z][a-z0-9_-]{0,51}$/;
 
 export class Agent {
   readonly #baseTools?: ToolSet;
   readonly #hooks?: AgentHooks;
   readonly #llm?: Llm;
-  readonly #modelOptions?: {
-    readonly instructions?: string;
-    readonly model: LanguageModel;
-    readonly toolChoice?: AgentToolChoice;
-  };
+  readonly #modelOptions?: AgentModelOptions;
   readonly #childSessionCleanups = new Map<string, Set<() => Promise<void>>>();
   readonly #sessions = new Map<string, SessionHandle>();
   readonly #sessionNamespace = `agent:${crypto.randomUUID()}`;
@@ -121,8 +121,9 @@ export class Agent {
     const handle: SessionHandle = {
       delete: async () => {
         await session.delete();
-        await this.#deleteChildSessions(key);
-        this.#sessions.delete(key);
+        await this.#deleteChildSessions(key).finally(() =>
+          this.#sessions.delete(key)
+        );
       },
       interrupt: () => session.interrupt(),
       kill: () => {
@@ -202,13 +203,10 @@ function assertAgentOptions(options: unknown): asserts options is AgentOptions {
   }
 
   const hasLlm = hasCustomLlm(options);
-  const hasModel =
-    "model" in options && options.model !== undefined && options.model !== null;
+  const hasModel = "model" in options && options.model != null;
 
   if (hasLlm && hasModel) {
-    throw new TypeError(
-      "Agent: provide either options.llm or options.model, not both."
-    );
+    throw new TypeError("Agent: provide either options.llm or options.model.");
   }
 
   if ("llm" in options && options.llm !== undefined && !hasLlm) {
@@ -241,7 +239,9 @@ function assertSubagents(options: AgentOptions): void {
     }
 
     if (!isValidSubagentName(subagent.name)) {
-      throw new TypeError(`Agent: subagents[${index}].name is required.`);
+      throw new TypeError(
+        `Agent: subagents[${index}].name is required or too long.`
+      );
     }
 
     if (!isNonEmptyText(subagent.description)) {
