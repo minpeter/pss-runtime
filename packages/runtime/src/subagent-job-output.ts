@@ -9,7 +9,7 @@ import type { BackgroundOutputInput, SubagentJob } from "./subagent-types";
 export function createBackgroundOutputTool(jobs: Map<string, SubagentJob>) {
   return tool<BackgroundOutputInput, unknown, Record<string, unknown>>({
     description: "Retrieve compact output for a background subagent job.",
-    execute: async (input: BackgroundOutputInput) => {
+    execute: async (input: BackgroundOutputInput, { abortSignal }) => {
       assertBackgroundTaskId(input.task_id, "background_output");
       const job = jobs.get(input.task_id);
       if (!job) {
@@ -17,7 +17,7 @@ export function createBackgroundOutputTool(jobs: Map<string, SubagentJob>) {
       }
 
       if (input.block === true && isActiveJob(job.status)) {
-        await waitForJob(job, input.timeout);
+        await waitForJob(job, input.timeout, abortSignal);
       }
 
       const output = {
@@ -51,12 +51,28 @@ export function createBackgroundOutputTool(jobs: Map<string, SubagentJob>) {
   });
 }
 
-async function waitForJob(job: SubagentJob, timeout: number | undefined) {
+async function waitForJob(
+  job: SubagentJob,
+  timeout: number | undefined,
+  abortSignal: AbortSignal | undefined
+) {
+  if (abortSignal?.aborted) {
+    return;
+  }
+
   const timeoutMs = Math.min(timeout ?? 60_000, 600_000);
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  let abortListener: (() => void) | undefined;
+  const abortPromise = abortSignal
+    ? new Promise<void>((resolve) => {
+        abortListener = resolve;
+        abortSignal.addEventListener("abort", abortListener, { once: true });
+      })
+    : undefined;
   try {
     await Promise.race([
       job.promise,
+      ...(abortPromise ? [abortPromise] : []),
       new Promise<void>((resolve) => {
         timeoutId = setTimeout(resolve, timeoutMs);
       }),
@@ -64,6 +80,9 @@ async function waitForJob(job: SubagentJob, timeout: number | undefined) {
   } finally {
     if (timeoutId) {
       clearTimeout(timeoutId);
+    }
+    if (abortListener) {
+      abortSignal?.removeEventListener("abort", abortListener);
     }
   }
 }

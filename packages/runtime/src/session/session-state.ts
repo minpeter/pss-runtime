@@ -75,6 +75,13 @@ export class SessionState {
       { expectedVersion: this.#storeVersion ?? null }
     );
 
+    if (this.#deleted) {
+      if (result.ok) {
+        await this.#persistence.store.delete(this.#persistence.key);
+      }
+      return;
+    }
+
     if (!result.ok) {
       await this.#replaceWithStoredSession();
       throw new SessionCommitConflictError(this.#persistence.key);
@@ -84,12 +91,12 @@ export class SessionState {
   }
 
   async delete(): Promise<void> {
+    await this.#persistence.store.delete(this.#persistence.key);
     this.#deleted = true;
     this.#loadPromise = undefined;
     this.#loaded = true;
     this.#storeVersion = undefined;
     this.#history = new ModelMessageHistory();
-    await this.#persistence.store.delete(this.#persistence.key);
   }
 
   async #loadSessionState(): Promise<void> {
