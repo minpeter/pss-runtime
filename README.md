@@ -12,7 +12,7 @@ import { tools } from "@minpeter/pss-coding-agent";
 import { createCodingLanguageModel } from "@minpeter/pss-coding-agent/model";
 import { Agent } from "@minpeter/pss-runtime";
 
-const agent = new Agent({
+const agent = await Agent.create({
   instructions: "Keep every answer under 3 lines.",
   model: createCodingLanguageModel(),
   tools,

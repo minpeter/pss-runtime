@@ -18,7 +18,7 @@ import { safeInlineText } from "./tui-tool-printer";
 
 export async function startTui(): Promise<void> {
   const sessionConfig = resolveCodingAgentSessionConfig();
-  const agent = new Agent({
+  const agent = await Agent.create({
     instructions:
       "Answer in 2 short sentences and 280 characters or fewer unless the user explicitly asks for detail. Avoid headings.",
     model: createCodingLanguageModel(),

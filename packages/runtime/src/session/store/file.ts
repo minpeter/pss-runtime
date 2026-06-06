@@ -83,18 +83,6 @@ export class FileSessionStore implements SessionStore {
     }
   }
 
-  async delete(key: string): Promise<void> {
-    const file = this.#fileForKey(key);
-    const lockDirectory = `${file}.lock`;
-    await mkdir(dirname(file), { recursive: true });
-    await acquireFileLock(lockDirectory);
-    try {
-      await rm(file, { force: true });
-    } finally {
-      await rm(lockDirectory, { force: true, recursive: true });
-    }
-  }
-
   #fileForKey(key: string): string {
     return join(
       this.#directory,
