@@ -4,6 +4,7 @@ import { collectSubagentRunWithEvents } from "./subagent-run";
 import type { RuntimeInputSink, Subagent, SubagentJob } from "./subagent-types";
 
 const maxBackgroundJobs = 64;
+const maxRetainedBackgroundJobs = maxBackgroundJobs * 4;
 
 export function startBackgroundJob({
   abortSignal,
@@ -60,6 +61,7 @@ export function startBackgroundJob({
     id,
     promise: Promise.resolve(),
     sessionKey: childSessionKey,
+    settled: false,
     status: "pending",
     subagent: subagent.name ?? "subagent",
     unregisterCleanup,
@@ -71,6 +73,7 @@ export function startBackgroundJob({
     prompt,
   }).finally(() => {
     abortSignal.removeEventListener("abort", abort);
+    job.settled = true;
   });
   jobs.set(id, job);
   parentSession.emitObserverEvent({
@@ -203,9 +206,13 @@ function isCancelledJob(job: SubagentJob): boolean {
 }
 
 function hasJobCapacity(jobs: Map<string, SubagentJob>): boolean {
+  if (jobs.size >= maxRetainedBackgroundJobs) {
+    return false;
+  }
+
   let activeJobs = 0;
   for (const job of jobs.values()) {
-    if (isActiveJob(job.status)) {
+    if (isActiveJob(job.status) || !job.settled) {
       activeJobs += 1;
     }
   }

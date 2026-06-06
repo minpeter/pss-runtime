@@ -1,5 +1,13 @@
 type ChildSessionCleanup = () => Promise<void>;
 
+type CleanupResult =
+  | { readonly cleanup: ChildSessionCleanup; readonly ok: true }
+  | {
+      readonly cleanup: ChildSessionCleanup;
+      readonly error: unknown;
+      readonly ok: false;
+    };
+
 export class ChildSessionCleanups {
   readonly #byParentSession = new Map<string, Set<ChildSessionCleanup>>();
 
@@ -10,7 +18,26 @@ export class ChildSessionCleanups {
     }
 
     this.#byParentSession.delete(parentSessionKey);
-    await Promise.all([...cleanups].map((cleanup) => cleanup()));
+    const results = await Promise.all([...cleanups].map(runCleanup));
+    const failedCleanups: ChildSessionCleanup[] = [];
+    let firstError: unknown;
+    for (const result of results) {
+      if (result.ok) {
+        continue;
+      }
+
+      firstError ??= result.error;
+      failedCleanups.push(result.cleanup);
+    }
+
+    if (failedCleanups.length === 0) {
+      return;
+    }
+
+    this.#restore(parentSessionKey, failedCleanups);
+    throw firstError instanceof Error
+      ? firstError
+      : new Error(String(firstError));
   }
 
   register(parentSessionKey: string, cleanup: ChildSessionCleanup): () => void {
@@ -37,5 +64,31 @@ export class ChildSessionCleanups {
     ) {
       this.#byParentSession.delete(parentSessionKey);
     }
+  }
+
+  #restore(
+    parentSessionKey: string,
+    failedCleanups: readonly ChildSessionCleanup[]
+  ): void {
+    const current = this.#byParentSession.get(parentSessionKey);
+    if (current) {
+      for (const cleanup of failedCleanups) {
+        current.add(cleanup);
+      }
+      return;
+    }
+
+    this.#byParentSession.set(parentSessionKey, new Set(failedCleanups));
+  }
+}
+
+async function runCleanup(
+  cleanup: ChildSessionCleanup
+): Promise<CleanupResult> {
+  try {
+    await cleanup();
+    return { cleanup, ok: true };
+  } catch (error) {
+    return { cleanup, error, ok: false };
   }
 }

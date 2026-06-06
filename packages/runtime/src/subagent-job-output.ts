@@ -26,7 +26,7 @@ export function createBackgroundOutputTool(jobs: Map<string, SubagentJob>) {
         subagent: job.subagent,
         task_id: job.id,
       };
-      if (!isActiveJob(job.status)) {
+      if (!(isActiveJob(job.status) || !job.settled)) {
         const cleaned = await cleanupJob(job).then(
           () => true,
           () => false

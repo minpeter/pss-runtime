@@ -11,6 +11,7 @@ describe("subagent background output aborts", () => {
       id: "bg_waiting",
       promise: new Promise(() => undefined),
       sessionKey: "parent:child:task:bg_waiting",
+      settled: false,
       status: "running",
       subagent: "researcher",
     });
@@ -35,6 +36,43 @@ describe("subagent background output aborts", () => {
         task_id: "bg_waiting",
       })
     );
+  });
+
+  it("keeps cancelled jobs until the child run settles", async () => {
+    const jobs = new Map<string, SubagentJob>();
+    let cleanupCount = 0;
+    jobs.set("bg_cancelled", {
+      abort: () => undefined,
+      cleanup: () => {
+        cleanupCount += 1;
+        return Promise.resolve();
+      },
+      id: "bg_cancelled",
+      promise: new Promise(() => undefined),
+      sessionKey: "parent:child:task:bg_cancelled",
+      settled: false,
+      status: "cancelled",
+      subagent: "researcher",
+    });
+
+    const output = await createBackgroundOutputTool(jobs).execute?.(
+      { task_id: "bg_cancelled" },
+      {
+        abortSignal: new AbortController().signal,
+        context: {},
+        messages: [],
+        toolCallId: "call-1",
+      }
+    );
+
+    expect(output).toEqual(
+      expect.objectContaining({
+        status: "cancelled",
+        task_id: "bg_cancelled",
+      })
+    );
+    expect(cleanupCount).toBe(0);
+    expect(jobs.has("bg_cancelled")).toBe(true);
   });
 });
 

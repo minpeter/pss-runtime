@@ -58,6 +58,7 @@ export interface SubagentJob {
   promise: Promise<void>;
   result?: CompactSubagentResult;
   readonly sessionKey: string;
+  settled: boolean;
   status: JobStatus;
   readonly subagent: string;
   readonly unregisterCleanup?: () => void;

@@ -97,6 +97,7 @@ describe("subagent background cleanup", () => {
         text: "done",
       },
       sessionKey: "child-session",
+      settled: true,
       status: "completed",
       subagent: "researcher",
     });

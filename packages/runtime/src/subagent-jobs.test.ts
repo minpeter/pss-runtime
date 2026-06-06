@@ -92,6 +92,88 @@ describe("subagent background jobs", () => {
     expect(jobs.size).toBe(65);
     expect(accepted).toEqual(expect.objectContaining({ status: "running" }));
   });
+
+  it("rejects new background jobs when retained jobs reach the total limit", () => {
+    const jobs = new Map<string, SubagentJob>();
+    const parentSession: RuntimeInputSink = {
+      emitObserverEvent: () => undefined,
+      enqueueRuntimeInput: () => undefined,
+    };
+    const subagent: Subagent = {
+      name: "researcher",
+      session: () => ({
+        delete: async () => undefined,
+        interrupt: () => undefined,
+        send: async () => createDelayedTextRun("STALE RESULT"),
+      }),
+    };
+
+    for (let index = 0; index < 256; index += 1) {
+      jobs.set(`bg_completed_${index}`, {
+        abort: () => undefined,
+        cleanup: () => Promise.resolve(),
+        id: `bg_completed_${index}`,
+        promise: Promise.resolve(),
+        sessionKey: `${parentSessionKey}:completed:${index}`,
+        settled: true,
+        status: "completed",
+        subagent: "researcher",
+      });
+    }
+
+    const rejected = startBackgroundJob({
+      abortSignal: new AbortController().signal,
+      jobs,
+      parentSession,
+      prompt: { text: "research overflow", type: "user-text" },
+      registerCleanup: () => () => undefined,
+      sessionKey: `${parentSessionKey}:overflow`,
+      subagent,
+    });
+
+    expect(rejected).toEqual(expect.objectContaining({ status: "cancelled" }));
+  });
+
+  it("counts cancelled unsettled jobs toward the active job limit", () => {
+    const jobs = new Map<string, SubagentJob>();
+    const parentSession: RuntimeInputSink = {
+      emitObserverEvent: () => undefined,
+      enqueueRuntimeInput: () => undefined,
+    };
+    const subagent: Subagent = {
+      name: "researcher",
+      session: () => ({
+        delete: async () => undefined,
+        interrupt: () => undefined,
+        send: async () => createDelayedTextRun("STALE RESULT"),
+      }),
+    };
+
+    for (let index = 0; index < 64; index += 1) {
+      jobs.set(`bg_cancelled_${index}`, {
+        abort: () => undefined,
+        cleanup: () => Promise.resolve(),
+        id: `bg_cancelled_${index}`,
+        promise: new Promise(() => undefined),
+        sessionKey: `${parentSessionKey}:cancelled:${index}`,
+        settled: false,
+        status: "cancelled",
+        subagent: "researcher",
+      });
+    }
+
+    const rejected = startBackgroundJob({
+      abortSignal: new AbortController().signal,
+      jobs,
+      parentSession,
+      prompt: { text: "research overflow", type: "user-text" },
+      registerCleanup: () => () => undefined,
+      sessionKey: `${parentSessionKey}:overflow`,
+      subagent,
+    });
+
+    expect(rejected).toEqual(expect.objectContaining({ status: "cancelled" }));
+  });
 });
 
 function createDelayedTextRun(text: string): AgentRun {
