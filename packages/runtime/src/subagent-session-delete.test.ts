@@ -125,7 +125,6 @@ describe("subagent session deletion", () => {
       toolExecutionOptions()
     );
     agent.session("default").kill();
-    await new Promise((resolve) => setTimeout(resolve, 0));
     await drainRun(await agent.send(userText("delegate second")));
     await executableTool(
       lastGenerateTextTools(),
