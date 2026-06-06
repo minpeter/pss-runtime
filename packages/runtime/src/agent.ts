@@ -105,11 +105,13 @@ export class Agent {
       }
       return session;
     };
+    const parentAgentNamespace = `${this.#sessionNamespace}:session:${crypto.randomUUID()}`;
     const llm =
       this.#llm ??
       createLlm(
         this.#createLlmOptionsForSession(
           key,
+          parentAgentNamespace,
           (input: UserInput, placement?: "turn-start") =>
             getSession().enqueueRuntimeInput(input, placement),
           (event) => getSession().emitObserverEvent(event)
@@ -137,6 +139,7 @@ export class Agent {
 
   #createLlmOptionsForSession(
     key: string,
+    parentAgentNamespace: string,
     enqueueRuntimeInput: AgentSession["enqueueRuntimeInput"],
     emitObserverEvent: AgentSession["emitObserverEvent"]
   ): Parameters<typeof createLlm>[0] {
@@ -150,7 +153,7 @@ export class Agent {
         : {
             ...this.#baseTools,
             ...createSubagentTools({
-              parentAgentNamespace: this.#sessionNamespace,
+              parentAgentNamespace,
               parentSession: { emitObserverEvent, enqueueRuntimeInput },
               parentSessionKey: key,
               registerChildSession: (sessionKey, cleanup) =>
