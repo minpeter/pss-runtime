@@ -1,5 +1,11 @@
 # @minpeter/pss-runtime
 
+## 0.0.11
+
+### Patch Changes
+
+- ce108ef: Close active run streams immediately when sessions are killed.
+
 ## 0.0.10
 
 ### Patch Changes
