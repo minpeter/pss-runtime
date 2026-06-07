@@ -67,7 +67,7 @@ function createDelegateTool({
 }) {
   return tool<DelegateInput, unknown, Record<string, unknown>>({
     description: `Delegate work to ${subagent.name}: ${subagent.description}`,
-    execute: async (input: DelegateInput, { abortSignal }) => {
+    execute: async (input: DelegateInput, { abortSignal, toolCallId }) => {
       const prompt = normalizeAgentInput(input.prompt);
       const sessionKey = scopedChildSessionKey({
         parentAgentNamespace,
@@ -80,6 +80,7 @@ function createDelegateTool({
           abortSignal: abortSignal ?? new AbortController().signal,
           description: input.description,
           jobs,
+          delegateToolCallId: toolCallId,
           parentSession,
           prompt,
           registerCleanup: (cleanup) =>
@@ -94,6 +95,7 @@ function createDelegateTool({
       );
       await parentSession.emitObserverEvent({
         description: input.description,
+        delegateToolCallId: toolCallId,
         run_in_background: false,
         subagent: subagent.name ?? "subagent",
         type: "subagent-job-start",
@@ -107,6 +109,7 @@ function createDelegateTool({
       await parentSession.emitObserverEvent({
         error: result.error,
         eventCount: result.eventCount,
+        delegateToolCallId: toolCallId,
         status: result.result,
         subagent: subagent.name ?? "subagent",
         type: "subagent-job-end",

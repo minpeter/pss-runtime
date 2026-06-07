@@ -79,6 +79,7 @@ export type AgentEvent =
   | ToolResult
   | {
       description?: string;
+      delegateToolCallId?: string;
       run_in_background: boolean;
       subagent: string;
       task_id?: string;
@@ -86,6 +87,7 @@ export type AgentEvent =
     }
   | {
       eventType?: AgentEvent["type"];
+      delegateToolCallId?: string;
       status: SubagentJobStatus;
       subagent: string;
       task_id: string;
@@ -94,6 +96,7 @@ export type AgentEvent =
   | {
       error?: string;
       eventCount: number;
+      delegateToolCallId?: string;
       status: Exclude<SubagentJobStatus, "pending" | "running">;
       subagent: string;
       task_id?: string;

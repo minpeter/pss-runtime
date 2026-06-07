@@ -10,6 +10,7 @@ export async function startBackgroundJob({
   abortSignal,
   description,
   jobs,
+  delegateToolCallId,
   parentSession,
   prompt,
   registerCleanup,
@@ -19,6 +20,7 @@ export async function startBackgroundJob({
   readonly abortSignal: AbortSignal;
   readonly description?: string;
   readonly jobs: Map<string, SubagentJob>;
+  readonly delegateToolCallId?: string;
   readonly parentSession: RuntimeInputSink;
   readonly prompt: AgentInput;
   readonly registerCleanup: (cleanup: () => Promise<void>) => () => void;
@@ -59,6 +61,7 @@ export async function startBackgroundJob({
     cleanup,
     description,
     id,
+    delegateToolCallId,
     promise: Promise.resolve(),
     sessionKey: childSessionKey,
     settled: false,
@@ -69,6 +72,7 @@ export async function startBackgroundJob({
   jobs.set(id, job);
   await parentSession.emitObserverEvent({
     description,
+    delegateToolCallId,
     run_in_background: true,
     subagent: subagent.name ?? "subagent",
     task_id: id,
@@ -158,6 +162,7 @@ async function runBackgroundJob({
   await parentSession.emitObserverEvent({
     error: job.result?.error,
     eventCount: job.result?.eventCount ?? 0,
+    delegateToolCallId: job.delegateToolCallId,
     status: job.result?.result ?? "error",
     subagent: job.subagent,
     task_id: job.id,
@@ -176,6 +181,7 @@ function emitJobUpdate(
 
   return parentSession.emitObserverEvent({
     eventType: event.type,
+    delegateToolCallId: job.delegateToolCallId,
     status: job.status,
     subagent: job.subagent,
     task_id: job.id,

@@ -53,6 +53,7 @@ export interface SubagentRunResult {
 export interface SubagentJob {
   readonly abort: () => void;
   readonly cleanup: () => Promise<void>;
+  readonly delegateToolCallId?: string;
   readonly description?: string;
   readonly id: string;
   promise: Promise<void>;

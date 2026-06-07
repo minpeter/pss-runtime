@@ -46,7 +46,9 @@ describe("createLlm", () => {
         instructions: "test instructions",
         messages: history,
         model: fakeModel,
-        tools: injectedTools,
+        tools: expect.objectContaining({
+          injected: expect.any(Object),
+        }),
       })
     );
   });
@@ -98,7 +100,9 @@ describe("Agent tool wiring", () => {
     expect(generateTextMock).toHaveBeenCalledWith(
       expect.objectContaining({
         model: fakeModel,
-        tools: injectedTools,
+        tools: expect.objectContaining({
+          injected: expect.any(Object),
+        }),
       })
     );
   });

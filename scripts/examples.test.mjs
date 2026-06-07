@@ -110,6 +110,23 @@ describe("examples workspace packages", () => {
     expect(subagentSource).toContain("coordinator.send(");
     expect(subagentSource).not.toContain("session.kill()");
   });
+
+  it("includes a background subagent task example", () => {
+    const packageJson = readJson("examples/subagent/package.json");
+    const backgroundSource = readText("examples/subagent/src/background.ts");
+
+    expect(packageJson.scripts["start:background"]).toBe(
+      "tsx --conditions=@minpeter/pss-source src/background.ts"
+    );
+    expect(backgroundSource).toContain("subagents: [researcher]");
+    expect(backgroundSource).toContain("run_in_background: true");
+    expect(backgroundSource).toContain("background_output");
+    expect(backgroundSource).toContain("task_id");
+    expect(backgroundSource).toContain("background_cancel");
+    expect(backgroundSource).toContain("coordinator.send(");
+    expect(backgroundSource.trim()).toMatch(finalRunEventsLoopPattern);
+    expect(backgroundSource).not.toContain("@minpeter/pss-coding-agent");
+  });
 });
 
 describe("runtime plugin source surface", () => {

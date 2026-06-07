@@ -17,6 +17,8 @@ import {
 } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
+const blockingDelegateToolCallId = "call_7eTeYjF9tUaDKah9T3mwUQpA";
+const backgroundDelegateToolCallId = "call_KeYrzFNLHiz0yjKPQd04vBD5";
 
 describe("subagent job events", () => {
   beforeEach(() => {
@@ -42,7 +44,10 @@ describe("subagent job events", () => {
       async ({ tools }: { tools?: ToolSet }) => {
         await tools?.delegate_to_researcher?.execute?.(
           { prompt: "research this" },
-          toolExecutionOptions()
+          {
+            ...toolExecutionOptions(),
+            toolCallId: blockingDelegateToolCallId,
+          }
         );
         return { responseMessages: [assistantMessage("PARENT DONE")] };
       }
@@ -56,19 +61,27 @@ describe("subagent job events", () => {
     expect(start).toEqual(
       expect.objectContaining({
         run_in_background: false,
+        delegateToolCallId: blockingDelegateToolCallId,
         subagent: "researcher",
         type: "subagent-job-start",
       })
     );
+    expect(start).not.toHaveProperty(
+      "delegateToolCallId",
+      "delegate_to_researcher:0"
+    );
+    expect(start).not.toHaveProperty("parentToolCallId");
     expect(start).not.toHaveProperty("sessionKey");
     expect(end).toEqual(
       expect.objectContaining({
+        delegateToolCallId: blockingDelegateToolCallId,
         eventCount: expect.any(Number),
         status: "completed",
         subagent: "researcher",
         type: "subagent-job-end",
       })
     );
+    expect(end).not.toHaveProperty("parentToolCallId");
     expect(eventTypes(events)).toContain("subagent-job-start");
     expect(eventTypes(events)).toContain("subagent-job-end");
   });
@@ -91,7 +104,10 @@ describe("subagent job events", () => {
       async ({ tools }: { tools?: ToolSet }) => {
         await tools?.delegate_to_researcher?.execute?.(
           { prompt: "research this" },
-          toolExecutionOptions()
+          {
+            ...toolExecutionOptions(),
+            toolCallId: "call_93XP9pImzGPvxIlwqKBxy0QU",
+          }
         );
         return {
           responseMessages: [
@@ -147,7 +163,10 @@ describe("subagent job events", () => {
             prompt: "research this",
             run_in_background: true,
           },
-          toolExecutionOptions()
+          {
+            ...toolExecutionOptions(),
+            toolCallId: "call_EQKLyqCmMocIZh6LPbCAb7ts",
+          }
         );
         return {
           responseMessages: [
@@ -193,6 +212,64 @@ describe("subagent job events", () => {
     );
     expect(events.indexOf("subagent-job-end")).toBeGreaterThan(
       events.indexOf("tool-result")
+    );
+  });
+
+  it("correlates background subagent lifecycle events to the parent tool call", async () => {
+    const Agent = await loadAgent();
+    const researcher = new Agent({
+      description: "Researches facts.",
+      llm: async () => [assistantMessage("CHILD DONE")],
+      name: "researcher",
+    });
+    generateTextMock.mockImplementationOnce(
+      async ({ tools }: { tools?: ToolSet }) => {
+        const launch = (await tools?.delegate_to_researcher?.execute?.(
+          {
+            prompt: "research this",
+            run_in_background: true,
+          },
+          {
+            ...toolExecutionOptions(),
+            toolCallId: backgroundDelegateToolCallId,
+          }
+        )) as { task_id: string };
+        await tools?.background_output?.execute?.(
+          { block: true, task_id: launch.task_id },
+          toolExecutionOptions()
+        );
+        return { responseMessages: [assistantMessage("PARENT DONE")] };
+      }
+    );
+    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    const events = await collectRun(await agent.send(userText("delegate")));
+    const lifecycleEvents = events.filter(
+      (event) =>
+        event.type === "subagent-job-start" ||
+        event.type === "subagent-job-update" ||
+        event.type === "subagent-job-end"
+    );
+
+    expect(lifecycleEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          delegateToolCallId: backgroundDelegateToolCallId,
+          type: "subagent-job-start",
+        }),
+        expect.objectContaining({
+          delegateToolCallId: backgroundDelegateToolCallId,
+          type: "subagent-job-update",
+        }),
+        expect.objectContaining({
+          delegateToolCallId: backgroundDelegateToolCallId,
+          type: "subagent-job-end",
+        }),
+      ])
+    );
+    expect(JSON.stringify(lifecycleEvents)).not.toContain("parentToolCallId");
+    expect(JSON.stringify(lifecycleEvents)).not.toContain(
+      "delegate_to_researcher:0"
     );
   });
 

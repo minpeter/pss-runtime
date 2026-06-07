@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "tsx --conditions=@minpeter/pss-source src/index.ts",
+    "start:background": "tsx --conditions=@minpeter/pss-source src/background.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
