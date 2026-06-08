@@ -10,7 +10,7 @@ describe("Agent session runtime input queueing", () => {
   it("active session.steer preserves FIFO order for multiple additions in one window", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
-      llm: ({ history }) => {
+      model: ({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
       },
@@ -55,7 +55,7 @@ describe("Agent session runtime input queueing", () => {
   it("active session.steer preserves FIFO order for concurrent additions in one window", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
-      llm: ({ history }) => {
+      model: ({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
       },
@@ -111,7 +111,7 @@ describe("Agent session runtime input queueing", () => {
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
     const session = new Agent({
-      llm: async ({ history }) => {
+      model: async ({ history }) => {
         calls += 1;
         seenHistory.push([...history]);
         if (calls === 1) {

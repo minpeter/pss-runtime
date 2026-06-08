@@ -34,12 +34,12 @@ describe("subagent background cleanup", () => {
     const childHistories: unknown[] = [];
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: ({ history }) => {
+      model: ({ history }) => {
         childHistories.push(history);
         return Promise.resolve([assistantMessage("CHILD DONE")]);
       },
+      host: { sessionStore: childStore },
       name: "researcher",
-      sessions: { store: childStore },
     });
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });
 

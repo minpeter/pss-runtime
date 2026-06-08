@@ -15,7 +15,7 @@ describe("Agent session tool loop", () => {
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
     const agent = new Agent({
-      llm: ({ history }) => {
+      model: ({ history }) => {
         calls += 1;
         seenHistory.push([...history]);
 

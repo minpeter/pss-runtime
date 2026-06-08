@@ -72,7 +72,7 @@ describe("subagent hardening", () => {
     const childAborted = createDeferred();
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: ({ signal }) =>
+      model: ({ signal }) =>
         new Promise((resolve) => {
           childStarted.resolve();
           signal.addEventListener(
@@ -113,7 +113,7 @@ describe("subagent hardening", () => {
     let childStarts = 0;
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: () => {
+      model: () => {
         childStarts += 1;
         return Promise.resolve([assistantMessage("SHOULD NOT START")]);
       },
@@ -146,7 +146,7 @@ describe("subagent hardening", () => {
     let childStarts = 0;
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: () => {
+      model: () => {
         childStarts += 1;
         return Promise.resolve([assistantMessage("SHOULD NOT START")]);
       },

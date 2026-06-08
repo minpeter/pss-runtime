@@ -14,9 +14,9 @@
 
   - Keep `run.events()` as the app-owned runtime control loop for synchronized rendering, tracing, and continuation policy.
   - Expand plugin lifecycle middleware with `turn.before`, `step.before`, `step.after`, and `turn.after` handlers that can call scoped `steer(...)`.
-  - Add `Agent.create({ onPluginError })` for routing plugin lifecycle handler failures to caller-owned observability instead of the default console reporter.
+  - Route plugin lifecycle handler failures through the returned run so callers own observability.
   - Add runtime-owned tool policy middleware with `tool.call` and `tool.result` for allow, modify, reject-and-continue, synthesize, error, and result replacement flows.
-  - Remove legacy top-level `Agent.create({ sessions: { store } })` and `Agent.create({ hooks })` options. Use `plugins: [sessions.custom(store)]` for persistence, `run.events()` plus `session.steer()` for app control, or plugin lifecycle handlers for reusable middleware.
+  - Use `host: { sessionStore }` for persistence, `run.events()` plus `session.steer()` for app control, or plugin lifecycle handlers for reusable middleware.
 
 ### Patch Changes
 
@@ -34,7 +34,7 @@
 
 ### Patch Changes
 
-- 20103d2: Make the coding-agent TUI subpath import-safe, correct multimodal docs, and remove redundant runtime type aliases.
+- 20103d2: Make the coding-agent TUI subpath import-safe, correct multimodal docs, and trim redundant runtime type exports.
 
 ## 0.0.8
 
@@ -48,7 +48,7 @@
 
 ### Patch Changes
 
-- c71ea7d: Add runtime `toolChoice` configuration and lifecycle hooks for turns and steps.
+- c71ea7d: Add runtime `toolChoice` configuration and lifecycle events for turns and steps.
 
 ## 0.0.6
 
@@ -82,9 +82,9 @@
 
 - f503ccd: Enhance `AgentSession` with state hydration, mutation tracking, and broader TypeScript type exports:
 
-  - Add `history` hydration via `SessionOptions` in `Agent.createSession()` and `AgentSession` constructor.
+  - Add `history` hydration through `AgentSession` constructor options.
   - Introduce `getHistory()` to retrieve the current snapshot of the agent's message history.
-  - Add `onHistoryChange` lifecycle callback hook to `AgentSession` (and underlying model history) to observe and persist serialized mutation-time history snapshots.
+  - Add lifecycle callbacks to `AgentSession` and model history for serialized mutation-time history snapshots.
   - Keep `kill()` from hanging active turns that are waiting on stalled history persistence.
   - Export `AgentMessage` globally from `@minpeter/pss-runtime` for clean external representation of internal AI SDK message structures.
 

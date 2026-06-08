@@ -29,7 +29,7 @@ describe("generated subagent tools", () => {
     const Agent = await loadAgent();
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: async () => [],
+      model: async () => [],
       name: "researcher",
     });
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });
@@ -53,7 +53,7 @@ describe("generated subagent tools", () => {
     const Agent = await loadAgent();
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: async () => [assistantMessage("CHILD DONE")],
+      model: async () => [assistantMessage("CHILD DONE")],
       name: "researcher",
     });
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });
@@ -83,7 +83,7 @@ describe("generated subagent tools", () => {
     const Agent = await loadAgent();
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: async () => [assistantMessage("CHILD DONE")],
+      model: async () => [assistantMessage("CHILD DONE")],
       name: "researcher",
     });
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });
@@ -109,7 +109,7 @@ describe("generated subagent tools", () => {
     const childHistories: unknown[] = [];
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: ({ history }) => {
+      model: ({ history }) => {
         childHistories.push(history);
         return Promise.resolve([assistantMessage("CHILD DONE")]);
       },
@@ -130,7 +130,7 @@ describe("generated subagent tools", () => {
     const childHistories: unknown[] = [];
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: ({ history }) => {
+      model: ({ history }) => {
         childHistories.push(history);
         return Promise.resolve([assistantMessage("CHILD DONE")]);
       },
@@ -166,7 +166,7 @@ describe("generated subagent tools", () => {
     const childHistories: unknown[] = [];
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: ({ history }) => {
+      model: ({ history }) => {
         childHistories.push(history);
         return Promise.resolve([assistantMessage("CHILD DONE")]);
       },
@@ -190,7 +190,7 @@ describe("generated subagent tools", () => {
     const childHistories: unknown[] = [];
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: ({ history }) => {
+      model: ({ history }) => {
         childHistories.push(history);
         return Promise.resolve([assistantMessage("CHILD DONE")]);
       },
@@ -213,7 +213,7 @@ describe("generated subagent tools", () => {
     const Agent = await loadAgent();
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: async () => [assistantMessage("CHILD DONE")],
+      model: async () => [assistantMessage("CHILD DONE")],
       name: "researcher",
     });
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });

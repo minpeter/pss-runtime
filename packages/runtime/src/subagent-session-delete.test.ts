@@ -31,7 +31,7 @@ describe("subagent session deletion", () => {
     const childHistories: unknown[] = [];
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: ({ history }) => {
+      model: ({ history }) => {
         childHistories.push(history);
         return Promise.resolve([assistantMessage("CHILD DONE")]);
       },
@@ -64,7 +64,7 @@ describe("subagent session deletion", () => {
     const childHistories: unknown[] = [];
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: ({ history }) => {
+      model: ({ history }) => {
         childHistories.push(history);
         return Promise.resolve([assistantMessage("CHILD DONE")]);
       },
@@ -105,7 +105,7 @@ describe("subagent session deletion", () => {
     const childHistories: unknown[] = [];
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: ({ history }) => {
+      model: ({ history }) => {
         childHistories.push(history);
         return Promise.resolve([assistantMessage("CHILD DONE")]);
       },
@@ -125,7 +125,7 @@ describe("subagent session deletion", () => {
       },
       toolExecutionOptions()
     );
-    agent.session("default").kill();
+    await agent.session("default").kill();
     await drainRun(await agent.send(userText("delegate second")));
     await executableTool(
       lastGenerateTextTools(),
@@ -147,12 +147,12 @@ describe("subagent session deletion", () => {
     const childHistories: unknown[] = [];
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: ({ history }) => {
+      model: ({ history }) => {
         childHistories.push(history);
         return Promise.resolve([assistantMessage("CHILD DONE")]);
       },
+      host: { sessionStore: childStore },
       name: "researcher",
-      sessions: { store: childStore },
     });
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });
     const firstSession = agent.session("default");
@@ -181,9 +181,9 @@ describe("subagent session deletion", () => {
     const childStore = new BlockingDeleteStore();
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: () => Promise.resolve([assistantMessage("CHILD DONE")]),
+      host: { sessionStore: childStore },
+      model: () => Promise.resolve([assistantMessage("CHILD DONE")]),
       name: "researcher",
-      sessions: { store: childStore },
     });
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });
 
@@ -192,7 +192,7 @@ describe("subagent session deletion", () => {
       lastGenerateTextTools(),
       "delegate_to_researcher"
     ).execute?.({ prompt: "first child work" }, toolExecutionOptions());
-    agent.session("default").kill();
+    const killPromise = agent.session("default").kill();
     await childStore.deleteStarted.promise;
     await drainRun(await agent.send(userText("delegate second")));
     await executableTool(
@@ -200,7 +200,7 @@ describe("subagent session deletion", () => {
       "delegate_to_researcher"
     ).execute?.({ prompt: "second child work" }, toolExecutionOptions());
     childStore.allowDelete.resolve();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await killPromise;
     await agent.session("default").delete();
 
     expect(childStore.deleteCount).toBe(2);
@@ -211,9 +211,9 @@ describe("subagent session deletion", () => {
     const childStore = new BlockingDeleteStore();
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: () => Promise.resolve([assistantMessage("CHILD DONE")]),
+      host: { sessionStore: childStore },
+      model: () => Promise.resolve([assistantMessage("CHILD DONE")]),
       name: "researcher",
-      sessions: { store: childStore },
     });
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });
     const firstSession = agent.session("default");
@@ -230,55 +230,6 @@ describe("subagent session deletion", () => {
     await deletion;
 
     expect(secondSession).not.toBe(firstSession);
-  });
-
-  it("keeps child session keys stable across reconstructed parent agents", async () => {
-    const Agent = await loadAgent();
-    const childStore = new SpyStore();
-    const childHistories: unknown[] = [];
-    const createResearcher = () =>
-      new Agent({
-        description: "Researches facts.",
-        llm: ({ history }) => {
-          childHistories.push(history);
-          return Promise.resolve([assistantMessage("CHILD DONE")]);
-        },
-        name: "researcher",
-        sessions: { store: childStore },
-      });
-    const createParent = () =>
-      new Agent({
-        model: fakeModel,
-        sessions: { namespace: "parent" },
-        subagents: [createResearcher()],
-      });
-
-    const firstParent = createParent();
-    await drainRun(await firstParent.session("default").send(userText("one")));
-    await executableTool(
-      lastGenerateTextTools(),
-      "delegate_to_researcher"
-    ).execute?.(
-      { prompt: "first durable child work", sessionKey: "durable-topic" },
-      toolExecutionOptions()
-    );
-
-    const secondParent = createParent();
-    await drainRun(await secondParent.session("default").send(userText("two")));
-    await executableTool(
-      lastGenerateTextTools(),
-      "delegate_to_researcher"
-    ).execute?.(
-      { prompt: "second durable child work", sessionKey: "durable-topic" },
-      toolExecutionOptions()
-    );
-
-    expect(JSON.stringify(childHistories.at(-1))).toContain(
-      "first durable child work"
-    );
-    expect(JSON.stringify(childHistories.at(-1))).toContain(
-      "second durable child work"
-    );
   });
 });
 

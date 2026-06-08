@@ -11,14 +11,7 @@ describe("subagent background jobs", () => {
     const jobs = new Map<string, SubagentJob>();
     const runtimeInputs: string[] = [];
     let interruptCount = 0;
-    const parentSession: RuntimeInputSink = {
-      emitObserverEvent: () => Promise.resolve(),
-      enqueueRuntimeInput: (input) => {
-        if (input.type === "user-text" && typeof input.text === "string") {
-          runtimeInputs.push(input.text);
-        }
-      },
-    };
+    const parentSession = createParentSession(runtimeInputs);
     const subagent: Subagent = {
       name: "researcher",
       session: () => ({
@@ -55,10 +48,7 @@ describe("subagent background jobs", () => {
 
   it("allows new background jobs when retained jobs are completed", async () => {
     const jobs = new Map<string, SubagentJob>();
-    const parentSession: RuntimeInputSink = {
-      emitObserverEvent: () => Promise.resolve(),
-      enqueueRuntimeInput: () => undefined,
-    };
+    const parentSession = createParentSession();
     const subagent: Subagent = {
       name: "researcher",
       session: () => ({
@@ -99,10 +89,7 @@ describe("subagent background jobs", () => {
 
   it("rejects new background jobs when retained jobs reach the total limit", async () => {
     const jobs = new Map<string, SubagentJob>();
-    const parentSession: RuntimeInputSink = {
-      emitObserverEvent: () => Promise.resolve(),
-      enqueueRuntimeInput: () => undefined,
-    };
+    const parentSession = createParentSession();
     const subagent: Subagent = {
       name: "researcher",
       session: () => ({
@@ -140,10 +127,7 @@ describe("subagent background jobs", () => {
 
   it("counts cancelled unsettled jobs toward the active job limit", async () => {
     const jobs = new Map<string, SubagentJob>();
-    const parentSession: RuntimeInputSink = {
-      emitObserverEvent: () => Promise.resolve(),
-      enqueueRuntimeInput: () => undefined,
-    };
+    const parentSession = createParentSession();
     const subagent: Subagent = {
       name: "researcher",
       session: () => ({
@@ -179,6 +163,24 @@ describe("subagent background jobs", () => {
     expect(rejected).toEqual(expect.objectContaining({ status: "cancelled" }));
   });
 });
+
+function createParentSession(runtimeInputs: string[] = []): RuntimeInputSink {
+  return {
+    emitObserverEvent: () => Promise.resolve(),
+    enqueueRuntimeInput: (input) => {
+      if (input.type === "user-text" && typeof input.text === "string") {
+        runtimeInputs.push(input.text);
+      }
+    },
+    notify: (input) => {
+      if (input.type === "user-text" && typeof input.text === "string") {
+        runtimeInputs.push(input.text);
+      }
+
+      return Promise.resolve(createImmediateTextRun("NOTIFIED"));
+    },
+  };
+}
 
 function createDelayedTextRun(text: string): AgentRun {
   async function* events(): AsyncIterable<AgentEvent> {

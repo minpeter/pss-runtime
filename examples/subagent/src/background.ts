@@ -32,12 +32,14 @@ const researcher = new Agent({
 const coordinator = new Agent({
   model,
   instructions:
-    "Coordinate the task. Start researcher work with delegate_to_researcher({ prompt: 'Give one sentence on why task IDs matter for background subagents.', run_in_background: true }), save the returned task_id, then call background_output({ task_id, block: true }) before answering. Use background_cancel({ task_id }) only when the background task is no longer needed.",
+    "Coordinate the task. Start researcher work with delegate_to_researcher({ prompt: 'Give one sentence on why task IDs matter for background subagents.', run_in_background: true }) and save the returned task_id. Do not call background_output until a <system-reminder> says the task completed. If no reminder is present, finish after confirming the background task started. Use background_cancel({ task_id }) only when the background task is no longer needed.",
   subagents: [researcher],
 });
 
-const run = await coordinator.send(
-  "Start the one-sentence background researcher task, retrieve it with background_output, then summarize the result."
+const session = coordinator.session("default");
+
+const run = await session.send(
+  "Start the one-sentence background researcher task and return after the launch is recorded."
 );
 
 for await (const event of run.events()) {

@@ -32,7 +32,7 @@ describe("subagent background reminders", () => {
     const childGate = new Promise<void>(() => undefined);
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: async () => {
+      model: async () => {
         await childGate;
         return [assistantMessage("CHILD DONE")];
       },
@@ -69,7 +69,7 @@ describe("subagent background reminders", () => {
     const Agent = await loadAgent();
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: ({ signal }) =>
+      model: ({ signal }) =>
         new Promise((resolve) => {
           signal.addEventListener("abort", () => resolve([]), { once: true });
         }),
@@ -112,7 +112,7 @@ describe("subagent background reminders", () => {
     const Agent = await loadAgent();
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: async () => [assistantMessage("CHILD DONE")],
+      model: async () => [assistantMessage("CHILD DONE")],
       name: "researcher",
     });
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });
@@ -170,7 +170,7 @@ describe("subagent background reminders", () => {
     const Agent = await loadAgent();
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: async () => [assistantMessage("CHILD DONE")],
+      model: async () => [assistantMessage("CHILD DONE")],
       name: "researcher",
     });
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });
@@ -246,7 +246,7 @@ describe("subagent background reminders", () => {
     const Agent = await loadAgent();
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: async () => [assistantMessage("CHILD TRACE SECRET")],
+      model: async () => [assistantMessage("CHILD TRACE SECRET")],
       name: "researcher",
     });
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });

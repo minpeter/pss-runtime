@@ -12,6 +12,7 @@ const REQUIRED_PACKAGE_BINS = {
   },
 };
 const REQUIRED_RUNTIME_ROOT_EXPORTS = [
+  "AgentHost",
   "AgentRun",
   "RuntimeCreateLlmOptions",
   "RuntimeInput",
@@ -20,6 +21,25 @@ const REQUIRED_RUNTIME_ROOT_EXPORTS = [
   "RuntimeLlmOutput",
   "RuntimeLlmOutputPart",
 ];
+const REQUIRED_RUNTIME_EXECUTION_EXPORTS = [
+  "AgentHostCapabilities",
+  "CheckpointStore",
+  "createInMemoryExecutionHost",
+  "EventStore",
+  "ExecutionHost",
+  "ExecutionScheduler",
+  "ExecutionStore",
+  "ExecutionStoreTransaction",
+  "NotificationInbox",
+  "NotificationRecord",
+  "RunRecord",
+  "RunStore",
+  "RuntimeToolExecutionCheckpoint",
+  "RuntimeToolExecutionContext",
+  "RuntimeToolExecutionDecision",
+  "RuntimeToolRetryPolicy",
+  "ToolExecutionNeedsRecoveryError",
+];
 const FORBIDDEN_RUNTIME_ROOT_NAMES = [
   "AgentMessage",
   ["Agent", "Model"].join(""),
@@ -27,21 +47,38 @@ const FORBIDDEN_RUNTIME_ROOT_NAMES = [
   "AgentRunInput",
   "AgentTool",
   "AgentTools",
+  "AgentHostCapabilities",
+  "CheckpointStore",
+  "createInMemoryExecutionHost",
   "CreateLlmOptions",
+  "EventStore",
+  "ExecutionHost",
+  "ExecutionScheduler",
+  "ExecutionStore",
+  "ExecutionStoreTransaction",
   "Llm",
   "LlmContext",
   "LlmOutput",
   "LlmOutputPart",
+  "NotificationInbox",
+  "NotificationRecord",
+  "RunRecord",
   "RunInput",
+  "RunStore",
+  "RuntimeToolExecutionCheckpoint",
+  "RuntimeToolExecutionContext",
+  "RuntimeToolExecutionDecision",
+  "RuntimeToolRetryPolicy",
   "runAgentLoop",
+  "ToolExecutionNeedsRecoveryError",
 ];
 const FORBIDDEN_RUNTIME_PUBLIC_PATTERNS = [
   {
-    description: "removed AgentRun.stream() API",
+    description: "AgentRun.stream() API",
     pattern: /\bstream\(\): AsyncIterable(?:Iterator)?<AgentEvent>/,
   },
   {
-    description: "removed AgentRun.stream() member",
+    description: "AgentRun.stream() member",
     pattern: /(?:\bstream\(\)\s*\{|AgentRun\.stream\(\))/,
   },
 ];
@@ -327,9 +364,17 @@ function findRuntimeDeclarationLeaks({ cwd, packages }) {
   }
 
   return [
-    ...findRuntimeRootDeclarationLeaks({
+    ...findRuntimeDeclarationExportLeaks({
       cwd,
       file: join(packageDistPath(cwd, "runtime"), "index.d.ts"),
+      requiredExports: REQUIRED_RUNTIME_ROOT_EXPORTS,
+      surface: "root",
+    }),
+    ...findRuntimeDeclarationExportLeaks({
+      cwd,
+      file: join(packageDistPath(cwd, "runtime"), "execution", "index.d.ts"),
+      requiredExports: REQUIRED_RUNTIME_EXECUTION_EXPORTS,
+      surface: "execution",
     }),
     ...findRuntimePublicPatternLeaks({ cwd }),
   ];
@@ -354,22 +399,35 @@ function findRuntimePublicPatternLeaks({ cwd }) {
   return errors;
 }
 
-function findRuntimeRootDeclarationLeaks({ cwd, file }) {
+function findRuntimeDeclarationExportLeaks({
+  cwd,
+  file,
+  requiredExports,
+  surface,
+}) {
+  if (!existsSync(file)) {
+    return [
+      `${relativeToCwd(cwd, file)}: missing ${surface} runtime declaration`,
+    ];
+  }
+
   const text = readFileSync(file, "utf8");
   const errors = [];
 
-  for (const name of FORBIDDEN_RUNTIME_ROOT_NAMES) {
-    if (hasDeclarationToken(text, name)) {
-      errors.push(
-        `${relativeToCwd(cwd, file)}: root declaration exposes internal runtime name ${name}`
-      );
+  if (surface === "root") {
+    for (const name of FORBIDDEN_RUNTIME_ROOT_NAMES) {
+      if (hasDeclarationToken(text, name)) {
+        errors.push(
+          `${relativeToCwd(cwd, file)}: root declaration exposes internal runtime name ${name}`
+        );
+      }
     }
   }
 
-  for (const name of REQUIRED_RUNTIME_ROOT_EXPORTS) {
+  for (const name of requiredExports) {
     if (!text.includes(name)) {
       errors.push(
-        `${relativeToCwd(cwd, file)}: missing explicit runtime export ${name}`
+        `${relativeToCwd(cwd, file)}: missing explicit ${surface} runtime export ${name}`
       );
     }
   }

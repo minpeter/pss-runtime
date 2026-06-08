@@ -1,6 +1,8 @@
+import type { ExecutionHost } from "./execution/types";
 import type { AgentEvent } from "./session/events";
 import type { AgentInput, UserInput } from "./session/input";
 import type { AgentRun } from "./session/run";
+import type { NotifyOptions } from "./session/session";
 
 export interface Subagent {
   readonly description?: string;
@@ -13,11 +15,16 @@ export interface Subagent {
 }
 
 export interface RuntimeInputSink {
+  currentBackgroundGroupId?(): string | undefined;
+  currentRunId?(): string | undefined;
   emitObserverEvent(event: AgentEvent): Promise<void>;
   enqueueRuntimeInput(input: UserInput, placement?: "turn-start"): void;
+  notify(input: UserInput, options?: NotifyOptions): Promise<AgentRun>;
 }
 
 export interface CreateSubagentToolsOptions {
+  readonly backgroundSubagents: boolean;
+  readonly executionHost?: ExecutionHost;
   readonly parentAgentNamespace: string;
   readonly parentSession: RuntimeInputSink;
   readonly parentSessionKey: string;
@@ -46,16 +53,24 @@ export interface CompactSubagentResult {
 }
 
 export interface SubagentRunResult {
-  readonly events: readonly AgentEvent[];
   readonly result: CompactSubagentResult;
+  readonly retainedEvents: readonly AgentEvent[];
 }
 
 export interface SubagentJob {
   readonly abort: () => void;
+  readonly childRunId?: string;
+  readonly childRunLeaseId?: string;
   readonly cleanup: () => Promise<void>;
+  readonly dedupeKey?: string;
   readonly delegateToolCallId?: string;
   readonly description?: string;
+  readonly executionHost?: ExecutionHost;
+  readonly groupId?: string;
   readonly id: string;
+  readonly ownerNamespace?: string;
+  readonly parentRunId?: string;
+  readonly parentSessionKey?: string;
   promise: Promise<void>;
   result?: CompactSubagentResult;
   readonly sessionKey: string;
@@ -63,6 +78,14 @@ export interface SubagentJob {
   status: JobStatus;
   readonly subagent: string;
   readonly unregisterCleanup?: () => void;
+}
+
+export interface SubagentJobGroup {
+  readonly completedEvents: Extract<AgentEvent, { type: "subagent-job-end" }>[];
+  readonly failedNotifiedJobIds: Set<string>;
+  finalNotified: boolean;
+  readonly id: string;
+  readonly jobIds: Set<string>;
 }
 
 export interface DelegateInput {

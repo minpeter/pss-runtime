@@ -23,7 +23,7 @@ describe("Agent session runtime input windows", () => {
           },
         },
       ],
-      llm: ({ history }) => {
+      model: ({ history }) => {
         trace.push(`llm:${calls}`);
         seenHistory.push([...history]);
         calls += 1;
@@ -169,7 +169,7 @@ describe("Agent session runtime input windows", () => {
   it("active session.steer at turn-start and step-start is visible before the first LLM snapshot", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
-      llm: ({ history }) => {
+      model: ({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
       },

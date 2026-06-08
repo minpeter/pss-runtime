@@ -4,20 +4,18 @@ import { Agent, type AgentOptions } from "./agent";
 import type { RuntimeLlm } from "./llm";
 
 const fakeModel = {} as LanguageModel;
-const fakeLlm: RuntimeLlm = () => Promise.resolve([]);
-const ambiguousOptionsPattern = /either options\.llm or options\.model/;
-const invalidLlmPattern = /invalid options\.llm/;
+const fakeRuntimeModel: RuntimeLlm = () => Promise.resolve([]);
+const invalidModelPattern = /invalid options\.model/;
 const missingModelPattern = /missing options\.model/;
 const missingOptionsPattern = /Agent options are required/;
+const unsupportedLlmPattern = /unsupported options\.llm/;
 const duplicateSubagentToolNamePattern = /duplicate subagent tool name/;
 const existingToolCollisionPattern = /collides with an existing tool/;
 const objectMapSubagentsPattern = /subagents must be an array/;
 const reservedToolCollisionPattern = /collides with a reserved subagent tool/;
 const subagentMetadataPattern = /subagents\[0\].name/;
 const subagentNameLengthPattern = /too long/;
-const subagentsOnCustomLlmPattern = /subagents require options.model/;
-const legacyLifecyclePattern = /unsupported legacy lifecycle option/;
-const legacyLifecycleKey = ["h", "o", "o", "k", "s"].join("");
+const subagentsOnRuntimeModelPattern = /subagents require an AI SDK model/;
 
 const acceptsModelOptions: AgentOptions = {
   instructions: "Use the injected model.",
@@ -26,48 +24,32 @@ const acceptsModelOptions: AgentOptions = {
   toolChoice: "auto",
   tools: {},
 };
-const acceptsCustomLlmOptions: AgentOptions = { llm: fakeLlm, plugins: [] };
+const acceptsRuntimeModelOptions: AgentOptions = {
+  model: fakeRuntimeModel,
+  plugins: [],
+};
 const acceptsModelSubagentsOptions: AgentOptions = {
   model: fakeModel,
   subagents: [
     new Agent({
       description: "Researches facts.",
-      llm: fakeLlm,
+      model: fakeRuntimeModel,
       name: "researcher",
     }),
   ],
 };
 
-type IsAssignable<Source, Target> = Source extends Target ? true : false;
 type AssertFalse<T extends false> = T;
-type RejectsAmbiguousModelPrecedence = AssertFalse<
-  IsAssignable<
-    { readonly llm: RuntimeLlm; readonly model: LanguageModel },
-    AgentOptions
-  >
+type RejectsLlmOptionKey = AssertFalse<
+  "llm" extends keyof AgentOptions ? true : false
 >;
-type RejectsIgnoredCreateLlmOptions = AssertFalse<
-  IsAssignable<
-    { readonly llm: RuntimeLlm; readonly tools: Record<PropertyKey, never> },
-    AgentOptions
-  >
->;
-type LegacyLifecycleKey = `${"h"}${"o"}${"o"}${"k"}${"s"}`;
-type RejectsLegacyLifecycleOptionKey = AssertFalse<
-  LegacyLifecycleKey extends keyof AgentOptions ? true : false
->;
-
 const typeFixtures = [
   acceptsModelOptions,
-  acceptsCustomLlmOptions,
+  acceptsRuntimeModelOptions,
   acceptsModelSubagentsOptions,
 ];
-type TypeFixtureAssertions = [
-  RejectsAmbiguousModelPrecedence,
-  RejectsIgnoredCreateLlmOptions,
-  RejectsLegacyLifecycleOptionKey,
-];
-const typeFixtureAssertions: TypeFixtureAssertions = [false, false, false];
+type TypeFixtureAssertions = [RejectsLlmOptionKey];
+const typeFixtureAssertions: TypeFixtureAssertions = [false];
 
 const collectRun = async (run: Awaited<ReturnType<Agent["send"]>>) => {
   for await (const _event of run.events()) {
@@ -78,37 +60,37 @@ const collectRun = async (run: Awaited<ReturnType<Agent["send"]>>) => {
 describe("Agent", () => {
   it("keeps AgentOptions type fixtures reachable", () => {
     expect(typeFixtures).toHaveLength(3);
-    expect(typeFixtureAssertions).toHaveLength(3);
+    expect(typeFixtureAssertions).toHaveLength(1);
   });
 
   it("constructs agents with new Agent", () => {
     expect(new Agent({ model: fakeModel })).toBeInstanceOf(Agent);
   });
 
-  it("does not expose Agent.create", () => {
+  it("does not expose a static factory", () => {
     expect(Object.hasOwn(Agent, "create")).toBe(false);
   });
 
-  it("creates agents from a caller-owned LLM", () => {
-    expect(new Agent({ llm: fakeLlm })).toBeInstanceOf(Agent);
+  it("creates agents from a caller-owned runtime model", () => {
+    expect(new Agent({ model: fakeRuntimeModel })).toBeInstanceOf(Agent);
   });
 
   it("uses the default session for agent.send", async () => {
-    const agent = new Agent({ llm: fakeLlm });
+    const agent = new Agent({ model: fakeRuntimeModel });
     await expect(agent.send("hello")).resolves.toBeDefined();
   });
 
   it("reuses handles for named sessions", () => {
-    const agent = new Agent({ llm: fakeLlm });
+    const agent = new Agent({ model: fakeRuntimeModel });
     expect(agent.session("a")).toBe(agent.session("a"));
     expect(agent.session("a")).not.toBe(agent.session("b"));
   });
 
   it("drops killed session handles so keys can be reused", async () => {
-    const agent = new Agent({ llm: fakeLlm });
+    const agent = new Agent({ model: fakeRuntimeModel });
     const first = agent.session("reuse");
 
-    first.kill();
+    await first.kill();
     const second = agent.session("reuse");
     await collectRun(await second.send("hello"));
 
@@ -125,36 +107,26 @@ describe("Agent", () => {
     expect(() => new Agent({} as AgentOptions)).toThrow(missingModelPattern);
   });
 
-  it("rejects invalid custom LLM configuration with an actionable error", () => {
+  it("rejects invalid model configuration with an actionable error", () => {
     expect(
-      () => new Agent({ llm: "not-an-llm" } as unknown as AgentOptions)
-    ).toThrow(invalidLlmPattern);
+      () => new Agent({ model: "not-a-model" } as unknown as AgentOptions)
+    ).toThrow(invalidModelPattern);
   });
 
-  it("rejects legacy lifecycle constructor options", () => {
+  it("rejects unsupported llm configuration with an actionable error", () => {
     expect(
       () =>
         new Agent({
-          [legacyLifecycleKey]: {},
-          llm: fakeLlm,
-        } as unknown as AgentOptions)
-    ).toThrow(legacyLifecyclePattern);
-  });
-
-  it("rejects ambiguous model and custom LLM configuration", () => {
-    expect(
-      () =>
-        new Agent({
-          llm: fakeLlm,
+          llm: fakeRuntimeModel,
           model: fakeModel,
         } as unknown as AgentOptions)
-    ).toThrow(ambiguousOptionsPattern);
+    ).toThrow(unsupportedLlmPattern);
   });
 
   it("accepts array subagents with child metadata while main metadata is omitted", () => {
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: fakeLlm,
+      model: fakeRuntimeModel,
       name: "researcher",
     });
 
@@ -169,7 +141,7 @@ describe("Agent", () => {
   it("rejects object-map subagents", () => {
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: fakeLlm,
+      model: fakeRuntimeModel,
       name: "researcher",
     });
 
@@ -183,7 +155,7 @@ describe("Agent", () => {
   });
 
   it("requires child subagent metadata", () => {
-    const unnamed = new Agent({ llm: fakeLlm });
+    const unnamed = new Agent({ model: fakeRuntimeModel });
 
     expect(
       () =>
@@ -198,7 +170,7 @@ describe("Agent", () => {
     const longName = `a${"b".repeat(52)}`;
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: fakeLlm,
+      model: fakeRuntimeModel,
       name: longName,
     });
 
@@ -211,31 +183,31 @@ describe("Agent", () => {
     ).toThrow(subagentNameLengthPattern);
   });
 
-  it("rejects subagents on custom llm parents", () => {
+  it("rejects subagents on runtime model parents", () => {
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: fakeLlm,
+      model: fakeRuntimeModel,
       name: "researcher",
     });
 
     expect(
       () =>
         new Agent({
-          llm: fakeLlm,
+          model: fakeRuntimeModel,
           subagents: [researcher],
         } as unknown as AgentOptions)
-    ).toThrow(subagentsOnCustomLlmPattern);
+    ).toThrow(subagentsOnRuntimeModelPattern);
   });
 
   it("rejects duplicate normalized subagent names", () => {
     const one = new Agent({
       description: "Researches facts.",
-      llm: fakeLlm,
+      model: fakeRuntimeModel,
       name: "research-agent",
     });
     const two = new Agent({
       description: "Researches facts again.",
-      llm: fakeLlm,
+      model: fakeRuntimeModel,
       name: "research_agent",
     });
 
@@ -251,7 +223,7 @@ describe("Agent", () => {
   it("rejects generated tool collisions", () => {
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: fakeLlm,
+      model: fakeRuntimeModel,
       name: "researcher",
     });
 
@@ -268,7 +240,7 @@ describe("Agent", () => {
   it("rejects reserved background tool collisions", () => {
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: fakeLlm,
+      model: fakeRuntimeModel,
       name: "researcher",
     });
 

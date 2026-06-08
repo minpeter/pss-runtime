@@ -41,18 +41,18 @@ describe("Agent session persistence", () => {
     const store = new FileSessionStore(directory);
 
     const first = new Agent({
-      llm: () => Promise.resolve([assistantMessage("stored")]),
-      sessions: { store },
+      host: { sessionStore: store },
+      model: () => Promise.resolve([assistantMessage("stored")]),
     });
     await collect(await first.session("images").send(input));
 
     const seenHistory: ModelMessage[][] = [];
     const second = new Agent({
-      llm: ({ history }) => {
+      host: { sessionStore: store },
+      model: ({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
       },
-      sessions: { store },
     });
 
     await collect(await second.session("images").send("next"));
@@ -87,11 +87,11 @@ describe("Agent session persistence", () => {
     store.conflictOnCommit = 2;
     const seenHistory: ModelMessage[][] = [];
     const session = new Agent({
-      llm: ({ history }) => {
+      host: { sessionStore: store },
+      model: ({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
       },
-      sessions: { store },
     }).session("runtime-conflict");
     const run = await session.send("initial");
     const events: AgentEvent[] = [];
@@ -115,7 +115,7 @@ describe("Agent session persistence", () => {
   it("uses default and explicit default session state interchangeably", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
-      llm: ({ history }) => {
+      model: ({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
       },
@@ -135,7 +135,7 @@ describe("Agent session persistence", () => {
     const seenHistory: Record<string, ModelMessage[][]> = { a: [], b: [] };
     let currentKey = "a";
     const agent = new Agent({
-      llm: ({ history }) => {
+      model: ({ history }) => {
         seenHistory[currentKey]?.push([...history]);
         return Promise.resolve([assistantMessage(`DONE ${currentKey}`)]);
       },
@@ -163,7 +163,7 @@ describe("Agent session persistence", () => {
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
     const agent = new Agent({
-      llm: async ({ history }) => {
+      model: async ({ history }) => {
         calls += 1;
         seenHistory.push([...history]);
         if (calls === 1) {
@@ -197,13 +197,13 @@ describe("Agent session persistence", () => {
     const store = new SpyStore();
     store.loadGate = loadGate.promise;
     const agent = new Agent({
-      llm: ({ history }) => {
+      host: { sessionStore: store },
+      model: ({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([
           assistantMessage(`DONE ${seenHistory.length}`),
         ]);
       },
-      sessions: { store },
     });
     const session = agent.session("race");
 
@@ -227,8 +227,8 @@ describe("Agent session persistence", () => {
   it("persists versioned runtime-owned session snapshots through SessionStore", async () => {
     const store = new SpyStore();
     const agent = new Agent({
-      llm: () => Promise.resolve([assistantMessage("DONE")]),
-      sessions: { store },
+      host: { sessionStore: store },
+      model: () => Promise.resolve([assistantMessage("DONE")]),
     });
 
     await collect(await agent.session("spy").send("hello"));
@@ -256,11 +256,11 @@ describe("Agent session persistence", () => {
       version: "1",
     });
     const session = new Agent({
-      llm: ({ history }) => {
+      host: { sessionStore: store },
+      model: ({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
       },
-      sessions: { store },
     }).session("shared");
 
     expect(eventTypes(await collect(await session.send("loses")))).toContain(

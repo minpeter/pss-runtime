@@ -1,18 +1,36 @@
 import { jsonSchema, tool } from "ai";
+import type { ExecutionHost, RunStatus } from "./execution/types";
 import {
   assertBackgroundTaskId,
   cleanupJob,
   isActiveJob,
-} from "./subagent-jobs";
+} from "./subagent-job-state";
 import type { BackgroundOutputInput, SubagentJob } from "./subagent-types";
 
-export function createBackgroundOutputTool(jobs: Map<string, SubagentJob>) {
+interface BackgroundToolScope {
+  readonly childSessionKeyPrefix: string;
+}
+
+export function createBackgroundOutputTool(
+  jobs: Map<string, SubagentJob>,
+  executionHost?: ExecutionHost,
+  scope?: BackgroundToolScope
+) {
   return tool<BackgroundOutputInput, unknown, Record<string, unknown>>({
     description: "Retrieve compact output for a background subagent job.",
     execute: async (input: BackgroundOutputInput, { abortSignal }) => {
       assertBackgroundTaskId(input.task_id, "background_output");
       const job = jobs.get(input.task_id);
       if (!job) {
+        const durableOutput = await durableBackgroundOutput(
+          input.task_id,
+          executionHost,
+          scope
+        );
+        if (durableOutput) {
+          return durableOutput;
+        }
+
         throw new Error(`Unknown background subagent task ${input.task_id}.`);
       }
 
@@ -20,7 +38,13 @@ export function createBackgroundOutputTool(jobs: Map<string, SubagentJob>) {
         await waitForJob(job, input.timeout, abortSignal);
       }
 
-      const output = {
+      const durableOutput = await durableBackgroundOutput(
+        input.task_id,
+        job.executionHost ?? executionHost,
+        scope,
+        job.subagent
+      );
+      const output = durableOutput ?? {
         result: job.result,
         status: job.status,
         subagent: job.subagent,
@@ -49,6 +73,53 @@ export function createBackgroundOutputTool(jobs: Map<string, SubagentJob>) {
       type: "object",
     }),
   });
+}
+
+async function durableBackgroundOutput(
+  taskId: string,
+  executionHost: ExecutionHost | undefined,
+  scope: BackgroundToolScope | undefined,
+  fallbackSubagent = "subagent"
+): Promise<Record<string, unknown> | null> {
+  const record = await executionHost?.store.runs.get(`background:${taskId}`);
+  if (record?.kind !== "background-subagent") {
+    return null;
+  }
+  if (scope && !record.sessionKey.startsWith(scope.childSessionKeyPrefix)) {
+    return null;
+  }
+
+  return {
+    result: record.output,
+    status: backgroundStatus(record.status),
+    subagent: subagentName(record.output, fallbackSubagent),
+    task_id: taskId,
+  };
+}
+
+function backgroundStatus(status: RunStatus): string {
+  if (status === "completed" || status === "cancelled" || status === "error") {
+    return status;
+  }
+
+  if (status === "running" || status === "leased") {
+    return "running";
+  }
+
+  return "pending";
+}
+
+function subagentName(output: unknown, fallback: string): string {
+  if (
+    typeof output === "object" &&
+    output !== null &&
+    "subagent" in output &&
+    typeof output.subagent === "string"
+  ) {
+    return output.subagent;
+  }
+
+  return fallback;
 }
 
 async function waitForJob(

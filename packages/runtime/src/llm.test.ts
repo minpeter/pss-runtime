@@ -72,6 +72,29 @@ describe("createLlm", () => {
       })
     );
   });
+
+  it("passes a configured named toolChoice to generateText", async () => {
+    const createLlm = await loadCreateLlm();
+    const signal = new AbortController().signal;
+    const history = [{ role: "user" as const, content: "hello" }];
+    const tools = { injected: createNoopTool() } satisfies ToolSet;
+    const toolChoice = { type: "tool", toolName: "injected" } as const;
+    const llm = createLlm({
+      model: fakeModel,
+      toolChoice,
+      tools,
+    });
+
+    await expect(llm({ history, signal })).resolves.toEqual([
+      assistantMessage("DONE"),
+    ]);
+
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolChoice,
+      })
+    );
+  });
 });
 
 describe("Agent tool wiring", () => {

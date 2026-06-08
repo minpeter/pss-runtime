@@ -1,19 +1,20 @@
 import type { ToolSet } from "ai";
-import type { Agent, AgentOptions } from "./agent";
+import type { Agent } from "./agent";
+import type { AgentOptions } from "./agent-options";
 
 const subagentNamePattern = /^[a-z][a-z0-9_-]{0,51}$/;
 
 export function assertSubagents(
   options: AgentOptions,
   agentClass: new (options: AgentOptions) => Agent,
-  hasCustomLlm: boolean
+  hasRuntimeModel: boolean
 ): void {
   if (!("subagents" in options) || options.subagents === undefined) {
     return;
   }
 
-  if (hasCustomLlm) {
-    throw new TypeError("Agent: subagents require options.model.");
+  if (hasRuntimeModel) {
+    throw new TypeError("Agent: subagents require an AI SDK model.");
   }
 
   if (!Array.isArray(options.subagents)) {

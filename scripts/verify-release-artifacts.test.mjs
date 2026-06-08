@@ -16,9 +16,19 @@ import {
 
 const cliBinReadFailurePattern =
   /^packages\/coding-agent\/bin\/pss\.js: cannot read CLI bin target /;
-const removedModelAlias = ["Agent", "Model"].join("");
-const runtimeRootDeclaration =
-  'export type { AgentRun, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput, RuntimeLlmOutputPart } from "./llm";\n';
+const forbiddenModelName = ["Agent", "Model"].join("");
+const runtimeRootDeclaration = [
+  'export type { AgentHost } from "./execution/types";',
+  'export type { AgentRun, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput, RuntimeLlmOutputPart } from "./llm";',
+  "",
+].join("\n");
+const runtimeExecutionDeclaration = [
+  'export { createInMemoryExecutionHost } from "./memory";',
+  'export type { AgentHostCapabilities, CheckpointStore, EventStore, ExecutionHost, ExecutionScheduler, ExecutionStore, ExecutionStoreTransaction, NotificationInbox, NotificationRecord, RunRecord, RunStore } from "./types";',
+  'export type { RuntimeToolExecutionCheckpoint, RuntimeToolExecutionContext, RuntimeToolExecutionDecision, RuntimeToolRetryPolicy } from "../llm-tool-execution";',
+  'export { ToolExecutionNeedsRecoveryError } from "../llm-tool-execution";',
+  "",
+].join("\n");
 
 let tempRoots = [];
 
@@ -56,6 +66,13 @@ function createFixture() {
       declaration
     );
     if (packageName === "runtime") {
+      mkdirSync(join(cwd, "packages", packageName, "dist", "execution"), {
+        recursive: true,
+      });
+      writeFileSync(
+        join(cwd, "packages", packageName, "dist", "execution", "index.d.ts"),
+        runtimeExecutionDeclaration
+      );
       writeFileSync(
         join(cwd, "packages", packageName, "dist", "llm.d.ts"),
         "export declare const ok: true;\n"
@@ -219,7 +236,7 @@ describe("verifyReleaseArtifacts", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      'import type { LanguageModel, ToolSet } from "ai";\nexport interface AgentOptions { model: LanguageModel; tools?: ToolSet; }\nexport type { AgentRun, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput, RuntimeLlmOutputPart } from "./llm";\n'
+      `import type { LanguageModel, ToolSet } from "ai";\nexport interface AgentOptions { model: LanguageModel; tools?: ToolSet; }\n${runtimeRootDeclaration}`
     );
 
     expect(
@@ -243,14 +260,14 @@ describe("verifyReleaseArtifacts", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      `export type { AgentMessage, ${removedModelAlias}, AgentRun, AgentTool, AgentTools, CreateLlmOptions, Llm, LlmContext, LlmOutput, LlmOutputPart, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput, RuntimeLlmOutputPart } from "./llm";\n`
+      `export type { AgentMessage, ${forbiddenModelName}, AgentRun, AgentTool, AgentTools, CreateLlmOptions, Llm, LlmContext, LlmOutput, LlmOutputPart, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput, RuntimeLlmOutputPart } from "./llm";\nexport type { AgentHost } from "./execution/types";\n`
     );
 
     expect(
       verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
     ).toEqual([
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name AgentMessage",
-      `packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ${removedModelAlias}`,
+      `packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ${forbiddenModelName}`,
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name AgentTool",
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name AgentTools",
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name CreateLlmOptions",
@@ -261,11 +278,11 @@ describe("verifyReleaseArtifacts", () => {
     ]);
   });
 
-  it("rejects removed runtime input names from root declarations", () => {
+  it("rejects internal runtime input names from root declarations", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      'export type { AgentRun, AgentRunInput, RunInput, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput, RuntimeLlmOutputPart } from "./llm";\n'
+      `${runtimeRootDeclaration}export type { AgentRunInput, RunInput } from "./llm";\n`
     );
 
     expect(
@@ -280,7 +297,7 @@ describe("verifyReleaseArtifacts", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      'export { runAgentLoop, type AgentLoopResult } from "./agent-loop";\nexport type { AgentRun, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput, RuntimeLlmOutputPart } from "./llm";\n'
+      `export { runAgentLoop, type AgentLoopResult } from "./agent-loop";\n${runtimeRootDeclaration}`
     );
 
     expect(
@@ -291,7 +308,26 @@ describe("verifyReleaseArtifacts", () => {
     ]);
   });
 
-  it("rejects removed AgentRun stream API from runtime artifacts", () => {
+  it("rejects advanced execution contracts from root declarations", () => {
+    const cwd = createFixture();
+    writeFileSync(
+      join(cwd, "packages", "runtime", "dist", "index.d.ts"),
+      `${runtimeRootDeclaration}export type { ExecutionHost, ExecutionScheduler, ExecutionStore, RuntimeToolExecutionContext } from "./execution";\nexport { ToolExecutionNeedsRecoveryError, createInMemoryExecutionHost } from "./execution";\n`
+    );
+
+    expect(
+      verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
+    ).toEqual([
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name createInMemoryExecutionHost",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ExecutionHost",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ExecutionScheduler",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ExecutionStore",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name RuntimeToolExecutionContext",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ToolExecutionNeedsRecoveryError",
+    ]);
+  });
+
+  it("rejects AgentRun stream API from runtime artifacts", () => {
     const cwd = createFixture();
     mkdirSync(join(cwd, "packages", "runtime", "dist", "session"), {
       recursive: true,
@@ -308,8 +344,8 @@ describe("verifyReleaseArtifacts", () => {
     expect(
       verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
     ).toEqual([
-      "packages/runtime/dist/session/run.d.ts: exposes removed AgentRun.stream() API",
-      "packages/runtime/dist/session/run.js: exposes removed AgentRun.stream() member",
+      "packages/runtime/dist/session/run.d.ts: exposes AgentRun.stream() API",
+      "packages/runtime/dist/session/run.js: exposes AgentRun.stream() member",
     ]);
   });
 
@@ -340,13 +376,51 @@ describe("verifyReleaseArtifacts", () => {
       []
     );
     expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
-      "packages/runtime/dist/index.d.ts: missing explicit runtime export AgentRun",
-      "packages/runtime/dist/index.d.ts: missing explicit runtime export RuntimeCreateLlmOptions",
-      "packages/runtime/dist/index.d.ts: missing explicit runtime export RuntimeInput",
-      "packages/runtime/dist/index.d.ts: missing explicit runtime export RuntimeLlm",
-      "packages/runtime/dist/index.d.ts: missing explicit runtime export RuntimeLlmContext",
-      "packages/runtime/dist/index.d.ts: missing explicit runtime export RuntimeLlmOutput",
-      "packages/runtime/dist/index.d.ts: missing explicit runtime export RuntimeLlmOutputPart",
+      "packages/runtime/dist/index.d.ts: missing explicit root runtime export AgentHost",
+      "packages/runtime/dist/index.d.ts: missing explicit root runtime export AgentRun",
+      "packages/runtime/dist/index.d.ts: missing explicit root runtime export RuntimeCreateLlmOptions",
+      "packages/runtime/dist/index.d.ts: missing explicit root runtime export RuntimeInput",
+      "packages/runtime/dist/index.d.ts: missing explicit root runtime export RuntimeLlm",
+      "packages/runtime/dist/index.d.ts: missing explicit root runtime export RuntimeLlmContext",
+      "packages/runtime/dist/index.d.ts: missing explicit root runtime export RuntimeLlmOutput",
+      "packages/runtime/dist/index.d.ts: missing explicit root runtime export RuntimeLlmOutputPart",
+    ]);
+  });
+
+  it("requires the runtime execution declaration entrypoint", () => {
+    const cwd = createFixture();
+    rmSync(join(cwd, "packages", "runtime", "dist", "execution", "index.d.ts"));
+
+    expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
+      "packages/runtime/dist/execution/index.d.ts: missing execution runtime declaration",
+    ]);
+  });
+
+  it("checks advanced runtime contracts on the execution declaration subpath", () => {
+    const cwd = createFixture();
+    writeFileSync(
+      join(cwd, "packages", "runtime", "dist", "execution", "index.d.ts"),
+      "export {};\n"
+    );
+
+    expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export AgentHostCapabilities",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export CheckpointStore",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export createInMemoryExecutionHost",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export EventStore",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ExecutionHost",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ExecutionScheduler",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ExecutionStore",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ExecutionStoreTransaction",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export NotificationInbox",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export NotificationRecord",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RunRecord",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RunStore",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RuntimeToolExecutionCheckpoint",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RuntimeToolExecutionContext",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RuntimeToolExecutionDecision",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RuntimeToolRetryPolicy",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ToolExecutionNeedsRecoveryError",
     ]);
   });
 
