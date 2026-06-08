@@ -1,4 +1,4 @@
-import { Agent } from "@minpeter/pss-runtime";
+import { Agent, type AgentHost } from "@minpeter/pss-runtime";
 import {
   type CloudflareDurableObjectStorage,
   createCloudflareDurableObjectHost,
@@ -11,6 +11,7 @@ import { workerStorePrefix } from "../worker/constants";
 import { createStressModel, workerResearcherModel } from "./model";
 
 export interface WorkerCoordinatorOptions {
+  readonly host?: AgentHost;
   readonly pluginCounter?: StressPluginCounter;
   readonly prefix?: string;
   readonly scenario?: ScenarioId;
@@ -22,10 +23,12 @@ export function createWorkerCoordinator(
   options: WorkerCoordinatorOptions = {}
 ): Agent {
   const scenario = options.scenario ?? "durable-background";
-  const host = createCloudflareDurableObjectHost({
-    prefix: options.prefix ?? workerStorePrefix,
-    storage,
-  });
+  const host =
+    options.host ??
+    createCloudflareDurableObjectHost({
+      prefix: options.prefix ?? workerStorePrefix,
+      storage,
+    });
   const researcher = new Agent({
     description: "Produces compact research notes for the coordinator.",
     host,

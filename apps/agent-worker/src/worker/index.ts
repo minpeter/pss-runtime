@@ -2,7 +2,8 @@ import {
   type CloudflareAlarmDrainSummary,
   type CloudflareDurableObjectNamespace,
   type CloudflareDurableObjectState,
-  drainCloudflareAlarm,
+  createCloudflareAgentContext,
+  fetchCloudflareDurableObject,
 } from "@minpeter/pss-runtime/cloudflare";
 import { createWorkerCoordinator } from "../agent/factory";
 import { jsonResponse, readTurnRequest } from "../request/http";
@@ -77,15 +78,20 @@ export class AgentDurableObject {
   }
 
   async alarm(): Promise<AlarmDrainSummary> {
-    const route = await readWorkerRoute(this.#state.storage);
-    return await drainCloudflareAlarm({
-      agent: createWorkerCoordinator(this.#state.storage, this.#env, {
-        prefix: route?.storePrefix ?? workerStorePrefix,
-        scenario: "background-output",
-      }),
-      prefix: route?.storePrefix ?? workerStorePrefix,
+    const context = createCloudflareAgentContext({
+      createAgent: ({ env, host, prefix, storage }) =>
+        createWorkerCoordinator(storage, env, {
+          host,
+          prefix,
+          scenario: "background-output",
+        }),
+      defaultPrefix: workerStorePrefix,
+      env: this.#env,
+      readPrefix: async ({ storage }) =>
+        (await readWorkerRoute(storage))?.storePrefix,
       storage: this.#state.storage,
     });
+    return await context.drainAlarm();
   }
 }
 
@@ -119,10 +125,13 @@ export default {
       return routeError();
     }
 
-    const id = env?.AGENT_DURABLE_OBJECT?.idFromName(route.objectName);
-    const stub = id ? env?.AGENT_DURABLE_OBJECT?.get(id) : undefined;
-    if (stub) {
-      return await stub.fetch(request);
+    const response = await fetchCloudflareDurableObject({
+      namespace: env?.AGENT_DURABLE_OBJECT,
+      objectName: route.objectName,
+      request,
+    });
+    if (response) {
+      return response;
     }
 
     return jsonResponse(

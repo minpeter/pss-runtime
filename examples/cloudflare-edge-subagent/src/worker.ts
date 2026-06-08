@@ -1,12 +1,13 @@
-import { Agent } from "@minpeter/pss-runtime";
+import { Agent, type AgentHost } from "@minpeter/pss-runtime";
 import {
   type CloudflareAlarmDrainSummary,
   type CloudflareDurableObjectNamespace,
   type CloudflareDurableObjectState,
   type CloudflareDurableObjectStorage,
+  createCloudflareAgentContext,
   createCloudflareDurableObjectHost,
   drainAgentRun,
-  drainCloudflareAlarm,
+  fetchCloudflareDurableObject,
 } from "@minpeter/pss-runtime/cloudflare";
 import { workerStorePrefix } from "./worker-constants";
 import {
@@ -50,7 +51,8 @@ export class AgentDurableObject {
       await writeWorkerRoute(this.#state.storage, route);
       const input = readTextInput(body);
       const events = await drainAgentRun(
-        await this.#agent(route.storePrefix)
+        await this.#context()
+          .agent(route.storePrefix)
           .session(route.sessionKey)
           .send(input)
       );
@@ -64,16 +66,19 @@ export class AgentDurableObject {
   }
 
   async alarm(): Promise<AlarmDrainSummary> {
-    const route = await readWorkerRoute(this.#state.storage);
-    return await drainCloudflareAlarm({
-      agent: this.#agent(route?.storePrefix ?? workerStorePrefix),
-      prefix: route?.storePrefix ?? workerStorePrefix,
-      storage: this.#state.storage,
-    });
+    return await this.#context().drainAlarm();
   }
 
-  #agent(prefix = workerStorePrefix): Agent {
-    return createWorkerCoordinator(this.#state.storage, this.#env, { prefix });
+  #context() {
+    return createCloudflareAgentContext({
+      createAgent: ({ env, host, prefix, storage }) =>
+        createWorkerCoordinator(storage, env, { host, prefix }),
+      defaultPrefix: workerStorePrefix,
+      env: this.#env,
+      readPrefix: async ({ storage }) =>
+        (await readWorkerRoute(storage))?.storePrefix,
+      storage: this.#state.storage,
+    });
   }
 }
 
@@ -90,10 +95,13 @@ export default {
       );
     }
 
-    const id = env.AGENT_DURABLE_OBJECT?.idFromName(route.objectName);
-    const stub = id ? env.AGENT_DURABLE_OBJECT?.get(id) : undefined;
-    if (stub) {
-      return await stub.fetch(request);
+    const response = await fetchCloudflareDurableObject({
+      namespace: env.AGENT_DURABLE_OBJECT,
+      objectName: route.objectName,
+      request,
+    });
+    if (response) {
+      return response;
     }
 
     return jsonResponse(
@@ -109,12 +117,14 @@ export default {
 export function createWorkerCoordinator(
   storage: CloudflareDurableObjectStorage,
   _env: Env = {},
-  options: { readonly prefix?: string } = {}
+  options: { readonly host?: AgentHost; readonly prefix?: string } = {}
 ): Agent {
-  const host = createCloudflareDurableObjectHost({
-    prefix: options.prefix ?? workerStorePrefix,
-    storage,
-  });
+  const host =
+    options.host ??
+    createCloudflareDurableObjectHost({
+      prefix: options.prefix ?? workerStorePrefix,
+      storage,
+    });
   const researcher = new Agent({
     description: "Produces compact research notes for the coordinator.",
     host,

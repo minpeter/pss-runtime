@@ -19,8 +19,8 @@ export const runtimeExecutionDeclaration = [
   "",
 ].join("\n");
 export const runtimeCloudflareDeclaration = [
-  'export { ackScheduledCloudflareRun, ackScheduledCloudflareSessionPrompt, createCloudflareAlarmScheduler, createCloudflareDurableObjectHost, drainAgentRun, drainCloudflareAlarm, InMemoryCloudflareDurableObjectStorage, listScheduledCloudflareRuns, listScheduledCloudflareSessionPrompts, rescheduleCloudflareAlarm } from "./index";',
-  'export type { CloudflareAlarmAgent, CloudflareAlarmDrainSummary, CloudflareDurableObjectStorage, CloudflareScheduledSessionPrompt } from "./index";',
+  'export { ackScheduledCloudflareRun, ackScheduledCloudflareSessionPrompt, createCloudflareAlarmScheduler, createCloudflareAgentContext, createCloudflareDurableObjectHost, drainAgentRun, drainCloudflareAlarm, fetchCloudflareDurableObject, getCloudflareDurableObjectStub, InMemoryCloudflareDurableObjectStorage, listScheduledCloudflareRuns, listScheduledCloudflareSessionPrompts, rescheduleCloudflareAlarm } from "./index";',
+  'export type { CloudflareAgentContext, CloudflareAgentContextFactoryOptions, CloudflareAgentContextOptions, CloudflareAgentContextPrefixOptions, CloudflareAgentRunDrainOptions, CloudflareAlarmAgent, CloudflareAlarmDrainSummary, CloudflareDurableObjectFetchOptions, CloudflareDurableObjectId, CloudflareDurableObjectNamespace, CloudflareDurableObjectState, CloudflareDurableObjectStorage, CloudflareDurableObjectStub, CloudflareDurableObjectStubOptions, CloudflareScheduledSessionPrompt } from "./index";',
   "",
 ].join("\n");
 
