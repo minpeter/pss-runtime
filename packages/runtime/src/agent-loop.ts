@@ -1,5 +1,6 @@
 import type { ModelMessage } from "ai";
 import type { RuntimeLlm, RuntimeLlmOutput } from "./llm";
+import type { RuntimeToolExecutionContext } from "./llm-tool-execution";
 import type { AgentEvent } from "./session/events";
 import { modelMessageToAgentEvents } from "./session/mapping";
 
@@ -14,6 +15,7 @@ interface RunAgentLoopOptions {
   history: ModelHistory;
   llm: RuntimeLlm;
   signal?: AbortSignal;
+  toolExecution?: RuntimeToolExecutionContext;
 }
 
 type AgentLoopResult = "completed" | "aborted";
@@ -46,6 +48,7 @@ export async function runAgentLoop({
   history,
   llm,
   signal = new AbortController().signal,
+  toolExecution,
 }: RunAgentLoopOptions): Promise<AgentLoopResult> {
   while (true) {
     if (signal.aborted) {
@@ -63,7 +66,7 @@ export async function runAgentLoop({
     }
 
     const capturedOutput = await captureObserverEvents(() =>
-      readLlmOutput({ history, llm, signal })
+      readLlmOutput({ history, llm, signal, toolExecution })
     );
     const output = capturedOutput.value;
 
@@ -163,11 +166,17 @@ async function readLlmOutput({
   history,
   llm,
   signal,
+  toolExecution,
 }: Pick<RunAgentLoopOptions, "history" | "llm"> & {
   signal: AbortSignal;
+  toolExecution?: RuntimeToolExecutionContext;
 }): Promise<RuntimeLlmOutput | "aborted"> {
   try {
-    return await llm({ history: history.modelSnapshot(), signal });
+    return await llm({
+      history: history.modelSnapshot(),
+      signal,
+      toolExecution,
+    });
   } catch (error) {
     if (signal.aborted) {
       return "aborted";

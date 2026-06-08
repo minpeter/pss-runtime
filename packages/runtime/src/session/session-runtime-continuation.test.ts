@@ -10,7 +10,7 @@ describe("Agent session runtime input continuation", () => {
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
     const agent = new Agent({
-      llm: ({ history }) => {
+      model: ({ history }) => {
         calls += 1;
         seenHistory.push([...history]);
         return Promise.resolve([
@@ -60,7 +60,7 @@ describe("Agent session runtime input continuation", () => {
   it("normalizes multipart image and file session.steer input like session.send", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
-      llm: ({ history }) => {
+      model: ({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
       },

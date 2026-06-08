@@ -17,6 +17,7 @@ vi.mock("ai", async (importOriginal) => {
 });
 
 const fakeModel = {} as LanguageModel;
+const messageLimitAttackKey = ["message", "limit"].join("_");
 
 async function loadAgent() {
   const { Agent } = await import("./agent");
@@ -79,7 +80,7 @@ describe("subagent background hardening", () => {
     const Agent = await loadAgent();
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: async () => [assistantMessage("CHILD DONE")],
+      model: async () => [assistantMessage("CHILD DONE")],
       name: "researcher",
     });
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });
@@ -103,7 +104,7 @@ describe("subagent background hardening", () => {
         full_session: true,
         include_thinking: true,
         include_tool_results: true,
-        message_limit: 0,
+        [messageLimitAttackKey]: 0,
         block: true,
         task_id: launch.task_id,
       },
@@ -125,19 +126,19 @@ describe("subagent background hardening", () => {
     const Agent = await loadAgent();
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: async () => [],
+      model: async () => [],
       name: "researcher",
     });
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });
 
     await drainRun(await agent.send(userText("delegate")));
 
-    expect(() =>
+    await expect(
       executableTool(lastGenerateTextTools(), "background_cancel").execute?.(
         { task_id: "parent:default:subagent:researcher" },
         toolExecutionOptions()
       )
-    ).toThrow("background_cancel expects a background task_id");
+    ).rejects.toThrow("background_cancel expects a background task_id");
   });
 
   it("delivers late turn-start reminders to an already queued next turn", async () => {
@@ -148,7 +149,7 @@ describe("subagent background hardening", () => {
     let launchedTaskId = "";
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: async () => {
+      model: async () => {
         await childCanFinish.promise;
         return [assistantMessage("CHILD DONE")];
       },

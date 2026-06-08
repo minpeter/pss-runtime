@@ -79,7 +79,7 @@ export async function collectSubagentRunWithEvents(
         result = "aborted";
       } else if (event.type === "turn-error") {
         return {
-          events,
+          retainedEvents: events,
           result: {
             error: event.message,
             eventCount,
@@ -93,7 +93,7 @@ export async function collectSubagentRunWithEvents(
     }
   } catch (error) {
     return {
-      events,
+      retainedEvents: events,
       result: {
         error: errorMessage(error),
         eventCount,
@@ -106,7 +106,7 @@ export async function collectSubagentRunWithEvents(
   }
 
   return {
-    events,
+    retainedEvents: events,
     result: {
       eventCount,
       result,

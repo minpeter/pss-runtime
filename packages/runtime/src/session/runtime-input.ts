@@ -1,4 +1,4 @@
-import type { RuntimeInput } from "./events";
+import type { AgentEvent, RuntimeInput } from "./events";
 import type { AgentInput, UserInput } from "./input";
 import { normalizeAgentInput } from "./input-normalization";
 import type { BufferedAgentRun } from "./run";
@@ -19,7 +19,9 @@ export interface RuntimeInputState {
 }
 
 export interface QueuedInput {
-  readonly input: UserInput;
+  readonly initialEvents: AgentEvent[];
+  readonly input?: UserInput;
+  readonly preUserRuntimeInputs: QueuedRuntimeInput[];
   readonly run: BufferedAgentRun;
   readonly runtimeInput: RuntimeInputState;
 }
@@ -42,7 +44,7 @@ export function addSteeringInput(
       throw runtimeInputClosedError(runtimeInput.closedReason);
     }
 
-    runtimeInput.queue.push({
+    queueRuntimeInput(runtimeInput, {
       input: normalizeAgentInput(input),
       placement:
         runtimeInput.steerPlacement ?? runtimeInput.placement ?? "step-end",
@@ -104,6 +106,13 @@ export function shiftRuntimeInput(
   }
 
   return runtimeInput.queue.splice(index, 1)[0];
+}
+
+export function queueRuntimeInput(
+  runtimeInput: RuntimeInputState,
+  input: QueuedRuntimeInput
+): void {
+  runtimeInput.queue.push(input);
 }
 
 function runtimeInputClosedError(reason: string): Error {

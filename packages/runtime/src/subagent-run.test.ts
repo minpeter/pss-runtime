@@ -22,7 +22,7 @@ describe("subagent run collection", () => {
     await expect(
       collectSubagentRunWithEvents(run, "researcher")
     ).resolves.toEqual({
-      events: [{ text: "partial", type: "assistant-text" }],
+      retainedEvents: [{ text: "partial", type: "assistant-text" }],
       result: {
         error: "stream failed",
         eventCount: 1,
@@ -51,7 +51,7 @@ describe("subagent run collection", () => {
 
     const collected = await collectSubagentRunWithEvents(run, "researcher");
 
-    expect(collected.events).toHaveLength(200);
+    expect(collected.retainedEvents).toHaveLength(200);
     expect(collected.result).toEqual({
       eventCount: 250,
       result: "completed",

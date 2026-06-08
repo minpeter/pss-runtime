@@ -21,7 +21,7 @@
 
 ### Patch Changes
 
-- 20103d2: Make the coding-agent TUI subpath import-safe, correct multimodal docs, and remove redundant runtime type aliases.
+- 20103d2: Make the coding-agent TUI subpath import-safe, correct multimodal docs, and remove redundant runtime type exports.
 - Updated dependencies [20103d2]
   - @minpeter/pss-runtime@0.0.9
 

@@ -9,6 +9,13 @@ const examplePackages = [
     requiredSource: "src/index.ts",
   },
   {
+    name: "@minpeter/pss-example-cloudflare-edge-subagent",
+    path: "examples/cloudflare-edge-subagent",
+    requiredSource: "src/index.ts",
+    startScript:
+      "tsx --conditions=@minpeter/pss-source src/worker-simulation.ts",
+  },
+  {
     name: "@minpeter/pss-example-plugin",
     path: "examples/plugin",
     requiredSource: "src/index.ts",
@@ -21,15 +28,9 @@ const examplePackages = [
 ];
 const finalRunEventsLoopPattern =
   /for await \(const event of run\.events\(\)\) \{\s+console\.log\(event\);\s+\}$/;
-const legacyLifecycleTerm = ["h", "o", "o", "k"].join("");
-const legacyLifecyclePlural = `${legacyLifecycleTerm}s`;
-const legacyLifecycleType = `Agent${["H", "o", "o", "k", "s"].join("")}`;
-const legacyLifecycleAdapter = `pluginsTo${["H", "o", "o", "k", "s"].join("")}`;
-const legacyRuntimeInputAdapter = `${legacyLifecyclePlural}ForRuntimeInput`;
-const legacyAfterTurnRunner = `runAfterTurn${["H", "o", "o", "k"].join("")}`;
-const legacyLifecycleOption = `${legacyLifecyclePlural}:`;
-const legacyBeforeTurnName = `before${["T", "u", "r", "n"].join("")}`;
-const legacyAfterTurnName = `after${["T", "u", "r", "n"].join("")}`;
+const legacyCloudflareSessionKeyPattern =
+  /`\$\{this\.#prefix\}:\$\{encodeURIComponent\(key\)\}`/;
+const removedTurnModeEnvName = ["PSS", "TURN", "MODE"].join("_");
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
@@ -52,12 +53,13 @@ describe("examples workspace packages", () => {
         examplePackage.requiredSource
       );
       const packageJson = readJson(packageJsonPath);
+      const startScript =
+        examplePackage.startScript ??
+        "tsx --conditions=@minpeter/pss-source src/index.ts";
 
       expect(packageJson.private).toBe(true);
       expect(packageJson.name).toBe(examplePackage.name);
-      expect(packageJson.scripts.start).toBe(
-        "tsx --conditions=@minpeter/pss-source src/index.ts"
-      );
+      expect(packageJson.scripts.start).toBe(startScript);
       expect(packageJson.dependencies["@minpeter/pss-runtime"]).toBe(
         "workspace:*"
       );
@@ -99,10 +101,6 @@ describe("examples workspace packages", () => {
     expect(pluginSource).toContain("plugins:");
     expect(pluginSource).toContain("events:");
     expect(pluginSource).toContain("event.type");
-    expect(pluginSource).not.toContain(legacyLifecycleOption);
-    expect(pluginSource).not.toContain(legacyLifecycleType);
-    expect(pluginSource).not.toContain(legacyBeforeTurnName);
-    expect(pluginSource).not.toContain(legacyAfterTurnName);
     expect(pluginSource).not.toContain("process.argv");
 
     expect(subagentSource).toContain("subagents: [researcher]");
@@ -114,52 +112,224 @@ describe("examples workspace packages", () => {
   it("includes a background subagent task example", () => {
     const packageJson = readJson("examples/subagent/package.json");
     const backgroundSource = readText("examples/subagent/src/background.ts");
+    const backgroundWaitSource = readText(
+      "examples/subagent/src/background-wait.ts"
+    );
+    const localBackgroundModelSource = readText(
+      "examples/subagent/src/local-background-model.ts"
+    );
 
     expect(packageJson.scripts["start:background"]).toBe(
       "tsx --conditions=@minpeter/pss-source src/background.ts"
+    );
+    expect(packageJson.scripts["start:background:wait"]).toBe(
+      "tsx --conditions=@minpeter/pss-source src/background-wait.ts"
     );
     expect(backgroundSource).toContain("subagents: [researcher]");
     expect(backgroundSource).toContain("run_in_background: true");
     expect(backgroundSource).toContain("background_output");
     expect(backgroundSource).toContain("task_id");
     expect(backgroundSource).toContain("background_cancel");
-    expect(backgroundSource).toContain("coordinator.send(");
+    expect(backgroundSource).toContain('coordinator.session("default")');
+    expect(backgroundSource).toContain("session.send(");
     expect(backgroundSource.trim()).toMatch(finalRunEventsLoopPattern);
     expect(backgroundSource).not.toContain("@minpeter/pss-coding-agent");
-  });
-});
 
-describe("runtime plugin source surface", () => {
-  it("does not keep the legacy lifecycle adapter as a runtime layer", () => {
-    const agentLoopSource = readText("packages/runtime/src/agent-loop.ts");
-    const agentSource = readText("packages/runtime/src/agent.ts");
-    const pluginSource = readText("packages/runtime/src/plugins.ts");
-    const runtimeInputSource = readText(
-      "packages/runtime/src/session/runtime-input.ts"
+    expect(backgroundWaitSource).toContain("subagents: [researcher]");
+    expect(backgroundWaitSource).toContain("run_in_background: true");
+    expect(backgroundWaitSource).toContain(
+      'import { localHost } from "./local-host"'
     );
-    const sessionSource = readText("packages/runtime/src/session/session.ts");
-    const pluginsSource = readText("packages/runtime/src/plugins.ts");
+    expect(backgroundWaitSource).toContain(
+      "localHost({ agent: createCoordinator })"
+    );
+    expect(backgroundWaitSource).toContain("host.resumeSession()");
+    expect(backgroundWaitSource).toContain("background_output");
+    expect(backgroundWaitSource).toContain("block: true");
+    expect(backgroundWaitSource).not.toContain("@minpeter/pss-coding-agent");
 
-    expect(existsSync(`packages/runtime/src/${legacyLifecyclePlural}.ts`)).toBe(
+    expect(existsSync("examples/subagent/src/local-host.ts")).toBe(true);
+    expect(existsSync("examples/subagent/src/local-background-host.ts")).toBe(
       false
     );
-    for (const source of [
-      agentLoopSource,
-      agentSource,
-      pluginSource,
-      runtimeInputSource,
-      sessionSource,
-      pluginsSource,
-    ]) {
-      expect(source).not.toContain(legacyLifecycleType);
-      expect(source).not.toContain(legacyLifecycleAdapter);
-      expect(source).not.toContain(legacyRuntimeInputAdapter);
-      expect(source).not.toContain(legacyAfterTurnRunner);
-      expect(source).not.toContain(legacyLifecycleOption);
+    const localHostSource = readText("examples/subagent/src/local-host.ts");
+
+    expect(localHostSource).toContain("createInMemoryExecutionHost");
+    expect(localHostSource).toContain('backgroundSubagents: "durable"');
+    expect(localHostSource).toContain("resumeSession");
+    expect(localHostSource).toContain("agent().resume(");
+    expect(localHostSource).toContain("ResumeSessionOptions");
+
+    expect(localBackgroundModelSource).toContain('"delegate_to_researcher"');
+    expect(localBackgroundModelSource).toContain('"background_output"');
+    expect(localBackgroundModelSource).not.toContain("createOpenAICompatible");
+  });
+
+  it("uses a Cloudflare Worker/Durable Object adapter surface", () => {
+    const packageJson = readJson(
+      "examples/cloudflare-edge-subagent/package.json"
+    );
+    const source = readText("examples/cloudflare-edge-subagent/src/index.ts");
+    const hostSource = readText(
+      "examples/cloudflare-edge-subagent/src/cloudflare-host.ts"
+    );
+    const storeSource = readText(
+      "examples/cloudflare-edge-subagent/src/cloudflare-execution-store.ts"
+    );
+    const workerSource = readText(
+      "examples/cloudflare-edge-subagent/src/worker.ts"
+    );
+    const workerRouteSource = readText(
+      "examples/cloudflare-edge-subagent/src/worker-route.ts"
+    );
+    const alarmDrainerSource = readText(
+      "examples/cloudflare-edge-subagent/src/cloudflare-alarm-drainer.ts"
+    );
+    const workerTsconfig = readJson(
+      "examples/cloudflare-edge-subagent/tsconfig.worker.json"
+    );
+    const readme = readText("examples/cloudflare-edge-subagent/README.md");
+
+    expect(packageJson.scripts["start:worker-sim"]).toBe(
+      "tsx --conditions=@minpeter/pss-source src/worker-simulation.ts"
+    );
+    expect(packageJson.scripts["start:cli"]).toBe(
+      "tsx --conditions=@minpeter/pss-source src/index.ts"
+    );
+    expect(packageJson.scripts["typecheck:worker"]).toBe(
+      "tsc -p tsconfig.worker.json --noEmit"
+    );
+    expect(packageJson.scripts["dev:worker"]).toBe("wrangler dev");
+    expect(packageJson.scripts["deploy:worker"]).toBe("wrangler deploy");
+    expect(packageJson.devDependencies.wrangler).toBeDefined();
+    expect(source).not.toContain("createFakeCloudflareDurableObjectHost");
+    expect(source).not.toContain(removedTurnModeEnvName);
+    expect(hostSource).not.toContain("createFakeCloudflareDurableObjectHost");
+    expect(readme).not.toContain(removedTurnModeEnvName);
+    expect(readme).not.toContain("fake host");
+    expect(readme).not.toContain("in-memory fake");
+    expect(readme).toContain("support-agent");
+    expect(readme).toContain("dev:worker");
+    expect(source).toContain(
+      'import { workerStorePrefix } from "./worker-constants"'
+    );
+    expect(source).not.toContain('"cloudflare-edge-subagent-demo"');
+    expect(hostSource).toContain("createCloudflareDurableObjectHost");
+    expect(hostSource).toContain("createCloudflareAlarmScheduler");
+    expect(storeSource).toContain("DurableObjectExecutionStore");
+    expect(workerSource).toContain("export class AgentDurableObject");
+    expect(workerSource).toContain("alarm()");
+    expect(workerSource).toContain("routeWorkerRequest");
+    expect(workerRouteSource).toContain("sessionKeyFromRoute");
+    expect(workerSource).not.toContain('idFromName("default")');
+    expect(workerSource).not.toContain('url.pathname === "/alarm"');
+    expect(alarmDrainerSource).toContain("agent.resume(");
+    expect(alarmDrainerSource).toContain("ackScheduledCloudflareRun");
+    expect(alarmDrainerSource).toContain("rescheduleCloudflareAlarm");
+    expect(hostSource).toContain("setAlarm");
+    expect(workerTsconfig.compilerOptions.types).toEqual([
+      "@cloudflare/workers-types",
+    ]);
+    const sessionStoreSource = readText(
+      "examples/cloudflare-edge-subagent/src/durable-object-session-store.ts"
+    );
+    expect(sessionStoreSource).toContain('storeKey(this.#prefix, "session"');
+    expect(sessionStoreSource).not.toMatch(legacyCloudflareSessionKeyPattern);
+  });
+
+  it("drives Cloudflare scheduled runs and session prompts through stored alarms", async () => {
+    const {
+      InMemoryCloudflareDurableObjectStorage,
+      ackScheduledCloudflareRun,
+      ackScheduledCloudflareSessionPrompt,
+      createCloudflareDurableObjectHost,
+      listScheduledCloudflareRuns,
+      listScheduledCloudflareSessionPrompts,
+    } = await import(
+      "../examples/cloudflare-edge-subagent/src/cloudflare-host.ts"
+    );
+    const storage = new InMemoryCloudflareDurableObjectStorage();
+    const host = createCloudflareDurableObjectHost({ storage });
+    const runId = "background:bg_cloudflare_delayed";
+    const idempotencyKey = "background-complete:example:bg_delayed";
+    const notificationRunId = "notification-run-delayed";
+
+    await host.scheduler.enqueueRun(runId);
+    await host.scheduler.resumeSession("example", {
+      idempotencyKey,
+      runId: notificationRunId,
+    });
+    await host.store.notifications.enqueue({
+      idempotencyKey,
+      input: { text: "ready", type: "user-text" },
+      notificationId: "notification-delayed",
+      runId: notificationRunId,
+      sessionKey: "example",
+      status: "pending",
+    });
+
+    await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([
+      runId,
+    ]);
+    await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([
+      runId,
+    ]);
+    await ackScheduledCloudflareRun(storage, runId);
+    await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([]);
+    const prompt = {
+      idempotencyKey,
+      runId: notificationRunId,
+      sessionKey: "example",
+    };
+    await expect(
+      listScheduledCloudflareSessionPrompts(storage)
+    ).resolves.toEqual([prompt]);
+    await expect(
+      listScheduledCloudflareSessionPrompts(storage)
+    ).resolves.toEqual([prompt]);
+    await ackScheduledCloudflareSessionPrompt(storage, prompt);
+    await expect(
+      listScheduledCloudflareSessionPrompts(storage)
+    ).resolves.toEqual([]);
+    await expect(
+      host.store.notifications.claimByIdempotencyKey(idempotencyKey)
+    ).resolves.toMatchObject({ ok: true });
+  });
+
+  it("keeps durable runtime review fixes locked", async () => {
+    const runnerSource = readText(
+      "packages/runtime/src/subagent-background-runner.ts"
+    );
+    const resumeSource = readText("packages/runtime/src/agent-resume.ts");
+    const { InMemoryCloudflareDurableObjectStorage } = await import(
+      "../examples/cloudflare-edge-subagent/src/cloudflare-host.ts"
+    );
+    const { DurableObjectSessionStore } = await import(
+      "../examples/cloudflare-edge-subagent/src/durable-object-session-store.ts"
+    );
+
+    class CountingTransactionStorage extends InMemoryCloudflareDurableObjectStorage {
+      transactionCount = 0;
+
+      async transaction(fn) {
+        this.transactionCount += 1;
+        return await super.transaction(fn);
+      }
     }
 
-    expect(pluginsSource).toContain("export interface AgentEventContext");
-    expect(pluginsSource).toContain("export interface AgentPlugin");
-    expect(pluginsSource).toContain("export function runEventPlugins");
+    const storage = new CountingTransactionStorage();
+    const sessions = new DurableObjectSessionStore(storage);
+
+    await sessions.commit(
+      "session:review",
+      { state: { persisted: true } },
+      { expectedVersion: null }
+    );
+
+    expect(storage.transactionCount).toBe(1);
+    expect(runnerSource).toContain("const durableCancelPollMs = 250;");
+    expect(runnerSource).not.toContain("const durableCancelPollMs = 25;");
+    expect(resumeSource).toContain("}).finally(() => {");
+    expect(resumeSource).toContain("job.settled = true;");
   });
 });

@@ -58,7 +58,7 @@ pnpm add -g @minpeter/pss-coding-agent
 pss
 ```
 
-Bin aliases: `pss`, `pss-coding-agent`.
+CLI commands: `pss`, `pss-coding-agent`.
 
 When the TUI is idle, submitting text starts a normal `session.send()` turn. When
 a run is active, submitting text calls `session.steer(trimmed)` so the text lands

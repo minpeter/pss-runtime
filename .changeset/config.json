@@ -9,6 +9,7 @@
   "updateInternalDependencies": "patch",
   "ignore": [
     "@minpeter/pss-example-basic",
+    "@minpeter/pss-example-cloudflare-edge-subagent",
     "@minpeter/pss-example-plugin",
     "@minpeter/pss-example-subagent"
   ]

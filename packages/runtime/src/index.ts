@@ -1,9 +1,9 @@
 export {
   Agent,
   type AgentOptions,
-  type AgentSessionOptions,
   type SessionHandle,
 } from "./agent";
+export type { AgentHost } from "./execution/types";
 export type {
   AgentToolChoice,
   RuntimeCreateLlmOptions,

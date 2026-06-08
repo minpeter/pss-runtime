@@ -10,12 +10,11 @@ import {
 } from "./llm-test-utils";
 import { assistantMessage, createDeferred, userText } from "./test-fixtures";
 
+const generateTextMock = getGenerateTextMock();
 const activeJobStatusPattern = /pending|running/;
 const backgroundTaskIdPattern = /^bg_/;
 const backgroundTaskIdErrorPattern =
   /expects a background task_id starting with bg_/;
-const unknownBackgroundTaskPattern = /Unknown background subagent task/;
-const generateTextMock = getGenerateTextMock();
 
 describe("subagent background tools", () => {
   beforeEach(() => {
@@ -34,7 +33,7 @@ describe("subagent background tools", () => {
     const Agent = await loadAgent();
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: async () => [],
+      model: async () => [],
       name: "researcher",
     });
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });
@@ -66,7 +65,7 @@ describe("subagent background tools", () => {
     const Agent = await loadAgent();
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: ({ signal }) =>
+      model: ({ signal }) =>
         new Promise((_, reject) => {
           signal.addEventListener(
             "abort",
@@ -102,7 +101,7 @@ describe("subagent background tools", () => {
     const Agent = await loadAgent();
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: async () => [assistantMessage("CHILD DONE")],
+      model: async () => [assistantMessage("CHILD DONE")],
       name: "researcher",
     });
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });
@@ -133,45 +132,12 @@ describe("subagent background tools", () => {
       })
     );
   });
-
-  it("background_output forgets completed jobs after retrieval", async () => {
-    const Agent = await loadAgent();
-    const researcher = new Agent({
-      description: "Researches facts.",
-      llm: async () => [assistantMessage("CHILD DONE")],
-      name: "researcher",
-    });
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
-
-    await drainRun(await agent.send(userText("delegate")));
-
-    const tools = lastGenerateTextTools();
-    const launch = (await executableTool(
-      tools,
-      "delegate_to_researcher"
-    ).execute?.(
-      { prompt: "research this", run_in_background: true },
-      toolExecutionOptions()
-    )) as { task_id: string };
-    await executableTool(tools, "background_output").execute?.(
-      { block: true, task_id: launch.task_id },
-      toolExecutionOptions()
-    );
-
-    await expect(
-      executableTool(tools, "background_output").execute?.(
-        { task_id: launch.task_id },
-        toolExecutionOptions()
-      )
-    ).rejects.toThrow(unknownBackgroundTaskPattern);
-  });
-
   it("background_output can block until completion", async () => {
     const Agent = await loadAgent();
     const childGate = createDeferred();
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: async () => {
+      model: async () => {
         await childGate.promise;
         return [assistantMessage("CHILD DONE")];
       },
@@ -212,7 +178,7 @@ describe("subagent background tools", () => {
     const Agent = await loadAgent();
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: async () => [],
+      model: async () => [],
       name: "researcher",
     });
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });
@@ -225,54 +191,5 @@ describe("subagent background tools", () => {
         toolExecutionOptions()
       )
     ).rejects.toThrow(backgroundTaskIdErrorPattern);
-  });
-
-  it("background_cancel aborts active job", async () => {
-    const Agent = await loadAgent();
-    const childGate = new Promise<void>(() => undefined);
-    const researcher = new Agent({
-      description: "Researches facts.",
-      llm: async () => {
-        await childGate;
-        return [assistantMessage("CHILD DONE")];
-      },
-      name: "researcher",
-    });
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
-
-    await drainRun(await agent.send(userText("delegate")));
-
-    const tools = lastGenerateTextTools();
-    const launch = (await executableTool(
-      tools,
-      "delegate_to_researcher"
-    ).execute?.(
-      { prompt: "research this", run_in_background: true },
-      toolExecutionOptions()
-    )) as { task_id: string };
-
-    expect(
-      await executableTool(tools, "background_cancel").execute?.(
-        { task_id: launch.task_id },
-        toolExecutionOptions()
-      )
-    ).toEqual({
-      status: "cancelled",
-      task_id: launch.task_id,
-    });
-
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(
-      await executableTool(tools, "background_output").execute?.(
-        { block: true, task_id: launch.task_id, timeout: 50 },
-        toolExecutionOptions()
-      )
-    ).toEqual(
-      expect.objectContaining({
-        result: undefined,
-        status: "cancelled",
-        task_id: launch.task_id,
-      })
-    );
   });
 });

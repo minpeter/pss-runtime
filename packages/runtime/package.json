@@ -20,6 +20,16 @@
       "@minpeter/pss-source": "./src/session/store/file.ts",
       "types": "./dist/session/store/file.d.ts",
       "import": "./dist/session/store/file.js"
+    },
+    "./execution": {
+      "@minpeter/pss-source": "./src/execution/index.ts",
+      "types": "./dist/execution/index.d.ts",
+      "import": "./dist/execution/index.js"
+    },
+    "./execution/memory": {
+      "@minpeter/pss-source": "./src/execution/memory.ts",
+      "types": "./dist/execution/memory.d.ts",
+      "import": "./dist/execution/memory.js"
     }
   },
   "files": [

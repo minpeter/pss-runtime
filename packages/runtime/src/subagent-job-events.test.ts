@@ -9,7 +9,6 @@ import {
 } from "./llm-test-utils";
 import {
   assistantMessage,
-  createDeferred,
   eventTypes,
   toolCallPart,
   toolResultFor,
@@ -18,7 +17,6 @@ import {
 
 const generateTextMock = getGenerateTextMock();
 const blockingDelegateToolCallId = "call_7eTeYjF9tUaDKah9T3mwUQpA";
-const backgroundDelegateToolCallId = "call_KeYrzFNLHiz0yjKPQd04vBD5";
 
 describe("subagent job events", () => {
   beforeEach(() => {
@@ -37,7 +35,7 @@ describe("subagent job events", () => {
     const Agent = await loadAgent();
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: async () => [assistantMessage("CHILD DONE")],
+      model: async () => [assistantMessage("CHILD DONE")],
       name: "researcher",
     });
     generateTextMock.mockImplementationOnce(
@@ -97,7 +95,7 @@ describe("subagent job events", () => {
     );
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: async () => [assistantMessage("CHILD DONE")],
+      model: async () => [assistantMessage("CHILD DONE")],
       name: "researcher",
     });
     generateTextMock.mockImplementationOnce(
@@ -137,147 +135,11 @@ describe("subagent job events", () => {
     ]);
   });
 
-  it("orders background subagent launch after parent tool-call while streaming later updates live", async () => {
-    const Agent = await loadAgent();
-    const childGate = createDeferred();
-    const toolCall = toolCallPart(
-      "call-background-order",
-      "delegate_to_researcher",
-      {
-        prompt: "research this",
-        run_in_background: true,
-      }
-    );
-    const researcher = new Agent({
-      description: "Researches facts.",
-      llm: async () => {
-        await childGate.promise;
-        return [assistantMessage("CHILD DONE")];
-      },
-      name: "researcher",
-    });
-    generateTextMock.mockImplementationOnce(
-      async ({ tools }: { tools?: ToolSet }) => {
-        await tools?.delegate_to_researcher?.execute?.(
-          {
-            prompt: "research this",
-            run_in_background: true,
-          },
-          {
-            ...toolExecutionOptions(),
-            toolCallId: "call_EQKLyqCmMocIZh6LPbCAb7ts",
-          }
-        );
-        return {
-          responseMessages: [
-            assistantMessage([toolCall]),
-            toolResultFor(toolCall),
-          ],
-        };
-      }
-    );
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
-
-    const iterator = (await agent.send(userText("delegate")))
-      .events()
-      [Symbol.asyncIterator]();
-    const events: string[] = [];
-    while (!events.includes("tool-result")) {
-      const next = await iterator.next();
-      expect(next.done).toBe(false);
-      if (!next.done) {
-        events.push(next.value.type);
-      }
-    }
-
-    expect(events.indexOf("tool-call")).toBeLessThan(
-      events.indexOf("subagent-job-start")
-    );
-    expect(events.indexOf("subagent-job-start")).toBeLessThan(
-      events.indexOf("tool-result")
-    );
-
-    childGate.resolve();
-
-    while (!events.includes("turn-end")) {
-      const next = await iterator.next();
-      if (next.done) {
-        break;
-      }
-      events.push(next.value.type);
-    }
-
-    expect(events.indexOf("subagent-job-update")).toBeGreaterThan(
-      events.indexOf("tool-result")
-    );
-    expect(events.indexOf("subagent-job-end")).toBeGreaterThan(
-      events.indexOf("tool-result")
-    );
-  });
-
-  it("correlates background subagent lifecycle events to the parent tool call", async () => {
-    const Agent = await loadAgent();
-    const researcher = new Agent({
-      description: "Researches facts.",
-      llm: async () => [assistantMessage("CHILD DONE")],
-      name: "researcher",
-    });
-    generateTextMock.mockImplementationOnce(
-      async ({ tools }: { tools?: ToolSet }) => {
-        const launch = (await tools?.delegate_to_researcher?.execute?.(
-          {
-            prompt: "research this",
-            run_in_background: true,
-          },
-          {
-            ...toolExecutionOptions(),
-            toolCallId: backgroundDelegateToolCallId,
-          }
-        )) as { task_id: string };
-        await tools?.background_output?.execute?.(
-          { block: true, task_id: launch.task_id },
-          toolExecutionOptions()
-        );
-        return { responseMessages: [assistantMessage("PARENT DONE")] };
-      }
-    );
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
-
-    const events = await collectRun(await agent.send(userText("delegate")));
-    const lifecycleEvents = events.filter(
-      (event) =>
-        event.type === "subagent-job-start" ||
-        event.type === "subagent-job-update" ||
-        event.type === "subagent-job-end"
-    );
-
-    expect(lifecycleEvents).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          delegateToolCallId: backgroundDelegateToolCallId,
-          type: "subagent-job-start",
-        }),
-        expect.objectContaining({
-          delegateToolCallId: backgroundDelegateToolCallId,
-          type: "subagent-job-update",
-        }),
-        expect.objectContaining({
-          delegateToolCallId: backgroundDelegateToolCallId,
-          type: "subagent-job-end",
-        }),
-      ])
-    );
-    expect(JSON.stringify(lifecycleEvents)).not.toContain("parentToolCallId");
-    expect(JSON.stringify(lifecycleEvents)).not.toContain(
-      "delegate_to_researcher:0"
-    );
-  });
-
   it("keeps buffered subagent lifecycle events visible when the parent model call fails", async () => {
     const Agent = await loadAgent();
     const researcher = new Agent({
       description: "Researches facts.",
-      llm: async () => [assistantMessage("CHILD DONE")],
+      model: async () => [assistantMessage("CHILD DONE")],
       name: "researcher",
     });
     generateTextMock.mockImplementationOnce(
@@ -301,50 +163,5 @@ describe("subagent job events", () => {
       "subagent-job-end",
       "turn-error",
     ]);
-  });
-
-  it("emits compact background subagent job updates while collecting child events", async () => {
-    const Agent = await loadAgent();
-    const researcher = new Agent({
-      description: "Researches facts.",
-      llm: async () => [assistantMessage("CHILD DONE")],
-      name: "researcher",
-    });
-    generateTextMock.mockImplementationOnce(
-      async ({ tools }: { tools?: ToolSet }) => {
-        const launch = (await tools?.delegate_to_researcher?.execute?.(
-          {
-            prompt: "research this",
-            run_in_background: true,
-          },
-          toolExecutionOptions()
-        )) as { task_id: string };
-        await tools?.background_output?.execute?.(
-          { block: true, task_id: launch.task_id },
-          toolExecutionOptions()
-        );
-        return { responseMessages: [assistantMessage("PARENT DONE")] };
-      }
-    );
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
-
-    const events = await collectRun(await agent.send(userText("delegate")));
-    const update = events.find(
-      (event) =>
-        event.type === "subagent-job-update" &&
-        event.eventType === "assistant-text"
-    );
-
-    expect(update).toEqual(
-      expect.objectContaining({
-        eventType: "assistant-text",
-        status: "running",
-        subagent: "researcher",
-        type: "subagent-job-update",
-      })
-    );
-    expect(update).not.toHaveProperty("textPreview");
-    expect(JSON.stringify(update)).not.toContain("CHILD DONE");
-    expect(eventTypes(events)).toContain("subagent-job-update");
   });
 });

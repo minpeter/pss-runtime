@@ -42,7 +42,7 @@ describe("Agent session runtime input plugins", () => {
           },
         },
       ],
-      llm: ({ history }) => {
+      model: ({ history }) => {
         step += 1;
         seenHistory.push([...history]);
         return Promise.resolve([
