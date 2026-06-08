@@ -1,10 +1,11 @@
-import { createWorkerCoordinator } from "./agent-factory";
 import {
   type CloudflareAlarmDrainSummary,
+  type CloudflareDurableObjectStorage,
   drainCloudflareAlarm,
-} from "./cloudflare-alarm-drainer";
-import type { CloudflareDurableObjectStorage } from "./cloudflare-host";
+} from "@minpeter/pss-runtime/cloudflare";
+import { createWorkerCoordinator } from "./agent-factory";
 import { jsonResponse, readTurnRequest } from "./http";
+import { appBudgets, totalHeaderBytes } from "./request-schema";
 import type { StressScenarioResult } from "./stress-result";
 import { createHealthPayload, runStressScenario } from "./stress-scenarios";
 import { workerStorePrefix } from "./worker-constants";
@@ -18,6 +19,7 @@ const lastResultStorageKey = "__pss_worker_last_result";
 
 export interface Env {
   readonly AGENT_DURABLE_OBJECT?: AgentDurableObjectNamespace;
+  readonly AGENT_WORKER_TOKEN?: string;
 }
 
 interface AgentDurableObjectNamespace {
@@ -28,7 +30,7 @@ interface AgentDurableObjectNamespace {
 type AgentDurableObjectId = unknown;
 
 interface AgentDurableObjectStub {
-  fetch(request: unknown): Promise<Response>;
+  fetch(request: Request): Promise<Response>;
 }
 
 export interface CloudflareDurableObjectState {
@@ -46,6 +48,10 @@ export class AgentDurableObject {
   }
 
   async fetch(request: Request): Promise<Response> {
+    const headerError = rejectLargeHeaders(request);
+    if (headerError) {
+      return headerError;
+    }
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/health") {
       return jsonResponse(createHealthPayload({ bindingPresent: true }));
@@ -100,6 +106,10 @@ export class AgentDurableObject {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const headerError = rejectLargeHeaders(request);
+    if (headerError) {
+      return headerError;
+    }
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/health") {
       return jsonResponse(
@@ -107,6 +117,10 @@ export default {
           bindingPresent: Boolean(env.AGENT_DURABLE_OBJECT),
         })
       );
+    }
+    const authorizationError = authorizeProtectedRequest(request, env);
+    if (authorizationError) {
+      return authorizationError;
     }
     const routeResult =
       request.method === "GET"
@@ -164,4 +178,34 @@ function routeError(): Response {
     { error: "tenantId, userId, and conversationId are required." },
     400
   );
+}
+
+function rejectLargeHeaders(request: Request): Response | undefined {
+  if (totalHeaderBytes(request.headers) <= appBudgets.maxHeaderBytes) {
+    return;
+  }
+  return jsonResponse(
+    { error: "request headers exceed the agent-worker header budget" },
+    431
+  );
+}
+
+function authorizeProtectedRequest(
+  request: Request,
+  env: Env
+): Response | undefined {
+  const token = env.AGENT_WORKER_TOKEN?.trim();
+  if (!token) {
+    return jsonResponse(
+      {
+        error:
+          "AGENT_WORKER_TOKEN is required for agent-worker /turn and /events routes.",
+      },
+      500
+    );
+  }
+  if (request.headers.get("authorization") === `Bearer ${token}`) {
+    return;
+  }
+  return jsonResponse({ error: "unauthorized" }, 401);
 }

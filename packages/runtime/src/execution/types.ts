@@ -1,12 +1,8 @@
 import type { AgentEvent, UserInput } from "../session/events";
 import type { SessionStore } from "../session/store/types";
+import type { DurableBackgroundHost, SessionHost } from "./capabilities";
 
-export type AgentHost = SessionHost | ExecutionHost;
-
-interface SessionHost {
-  readonly capabilities?: AgentHostCapabilities;
-  readonly sessionStore?: SessionStore;
-}
+export type AgentHost = DurableBackgroundHost | ExecutionHost | SessionHost;
 
 export interface ExecutionHost {
   readonly capabilities: AgentHostCapabilities;

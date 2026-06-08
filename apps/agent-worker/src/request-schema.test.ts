@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readTurnRequest } from "./http";
 import {
   appBudgets,
   parseTurnBody,
@@ -119,5 +120,32 @@ describe("agent worker request schema", () => {
         {}
       )
     ).toBeUndefined();
+  });
+
+  it("rejects declared oversized bodies before reading request text", async () => {
+    const result = await readTurnRequest({
+      headers: new Headers([
+        ["content-length", String(appBudgets.maxBodyBytes + 1)],
+      ]),
+      text: () => Promise.reject(new Error("request text should not be read")),
+    });
+
+    expect(result).toMatchObject({ ok: false, status: 413 });
+  });
+
+  it("rejects oversized streamed bodies without using request text", async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(appBudgets.maxBodyBytes + 1));
+        controller.close();
+      },
+    });
+    const result = await readTurnRequest({
+      body,
+      headers: new Headers(),
+      text: () => Promise.reject(new Error("request text should not be read")),
+    });
+
+    expect(result).toMatchObject({ ok: false, status: 413 });
   });
 });

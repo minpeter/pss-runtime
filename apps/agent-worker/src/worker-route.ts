@@ -1,4 +1,4 @@
-import type { CloudflareDurableObjectStorage } from "./cloudflare-host";
+import type { CloudflareDurableObjectStorage } from "@minpeter/pss-runtime/cloudflare";
 import { appBudgets } from "./request-schema";
 import { workerStorePrefix } from "./worker-constants";
 

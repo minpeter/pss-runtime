@@ -1,4 +1,3 @@
-import type { SessionStore } from "@minpeter/pss-runtime";
 import type {
   CheckpointStore,
   EventStore,
@@ -6,7 +5,8 @@ import type {
   ExecutionStoreTransaction,
   NotificationInbox,
   RunStore,
-} from "@minpeter/pss-runtime/execution";
+} from "../execution";
+import type { SessionStore } from "../index";
 import { DurableObjectCheckpointStore } from "./cloudflare-checkpoint-store";
 import { DurableObjectEventStore } from "./cloudflare-event-store";
 import { DurableObjectExecutionSessionStore } from "./cloudflare-execution-session-store";

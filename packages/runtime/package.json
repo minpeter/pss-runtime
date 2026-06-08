@@ -21,6 +21,11 @@
       "types": "./dist/session/store/file.d.ts",
       "import": "./dist/session/store/file.js"
     },
+    "./cloudflare": {
+      "@minpeter/pss-source": "./src/cloudflare/index.ts",
+      "types": "./dist/cloudflare/index.d.ts",
+      "import": "./dist/cloudflare/index.js"
+    },
     "./execution": {
       "@minpeter/pss-source": "./src/execution/index.ts",
       "types": "./dist/execution/index.d.ts",

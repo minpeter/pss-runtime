@@ -67,6 +67,7 @@ pnpm --filter @minpeter/pss-agent-worker typecheck:worker
 Run the actual Worker/Durable Object entrypoint locally:
 
 ```sh
+cp apps/agent-worker/.dev.vars.example apps/agent-worker/.dev.vars
 pnpm --filter @minpeter/pss-agent-worker dev:worker
 ```
 
@@ -79,13 +80,18 @@ pnpm --filter @minpeter/pss-agent-worker exec wrangler dev --ip 127.0.0.1 --port
 Smoke it with curl:
 
 ```sh
+TOKEN=replace-with-local-dev-token
+
 curl -i http://127.0.0.1:8791/health
 
 curl -i -X POST http://127.0.0.1:8791/turn \
+  -H "Authorization: Bearer ${TOKEN}" \
   -H 'Content-Type: application/json' \
   --data '{"tenantId":"tenant-a","userId":"user-a","conversationId":"ticket-a","scenario":"foreground-basic","input":"hello"}'
 
-curl -i 'http://127.0.0.1:8791/events?tenant=tenant-a&user=user-a&conversation=ticket-a'
+curl -i \
+  -H "Authorization: Bearer ${TOKEN}" \
+  'http://127.0.0.1:8791/events?tenant=tenant-a&user=user-a&conversation=ticket-a'
 ```
 
 Local Wrangler persistence can be reset with:
@@ -121,11 +127,14 @@ Real deploy is manual and account-owned. Prerequisites:
 - Cloudflare account access and a valid Wrangler login.
 - Confirm `wrangler.jsonc` uses the intended Worker name, compatibility date,
   `AGENT_DURABLE_OBJECT` binding, and Durable Object migration.
+- Set `AGENT_WORKER_TOKEN`; `GET /health` is public, but `POST /turn` and
+  `GET /events` require `Authorization: Bearer <token>`.
 - Re-check current Cloudflare limits before raising stress budgets.
 
 Deploy:
 
 ```sh
+pnpm --filter @minpeter/pss-agent-worker exec wrangler secret put AGENT_WORKER_TOKEN
 pnpm --filter @minpeter/pss-agent-worker deploy:worker
 ```
 

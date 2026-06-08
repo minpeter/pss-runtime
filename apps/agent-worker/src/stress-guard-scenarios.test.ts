@@ -1,5 +1,5 @@
+import { InMemoryCloudflareDurableObjectStorage } from "@minpeter/pss-runtime/cloudflare";
 import { describe, expect, it } from "vitest";
-import { InMemoryCloudflareDurableObjectStorage } from "./cloudflare-host";
 import { appBudgets, parseTurnBody } from "./request-schema";
 import { scenarioResult } from "./stress-result";
 import { runStressScenario } from "./stress-scenarios";

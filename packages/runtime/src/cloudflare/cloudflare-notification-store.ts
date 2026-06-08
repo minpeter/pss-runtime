@@ -3,7 +3,7 @@ import type {
   NotificationInbox,
   NotificationRecord,
   NotificationWriteResult,
-} from "@minpeter/pss-runtime/execution";
+} from "../execution";
 import {
   getNotification,
   putNotification,

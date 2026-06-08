@@ -1,10 +1,11 @@
+import { InMemoryCloudflareDurableObjectStorage } from "@minpeter/pss-runtime/cloudflare";
 import { describe, expect, it } from "vitest";
-import { InMemoryCloudflareDurableObjectStorage } from "./cloudflare-host";
 import { appBudgets, parseTurnBody, scenarioIds } from "./request-schema";
 import { createHealthPayload, runStressScenario } from "./stress-scenarios";
 import worker, {
   AgentDurableObject,
   type CloudflareDurableObjectState,
+  type Env,
 } from "./worker";
 import { routeWorkerRequest } from "./worker-route";
 
@@ -70,6 +71,12 @@ describe("agent worker stress scenarios", () => {
         "https://worker.example/events?tenant=tenant-a&user=user-a&conversation=ticket-1"
       )
     );
+    const oversizedEventsHeader = await object.fetch(
+      new Request(
+        "https://worker.example/events?tenant=tenant-a&user=user-a&conversation=ticket-1",
+        { headers: { "x-fill": "x".repeat(appBudgets.maxHeaderBytes) } }
+      )
+    );
 
     await expect(health.json()).resolves.toMatchObject({
       app: "pss-agent-worker",
@@ -79,9 +86,30 @@ describe("agent worker stress scenarios", () => {
     expect(oversizedHeader.status).toBe(431);
     expect(oversizedBody.status).toBe(413);
     expect(turn.status).toBe(200);
+    expect(oversizedEventsHeader.status).toBe(431);
     await expect(events.json()).resolves.toMatchObject({
       markers: ["scenario:foreground-basic"],
     });
+  });
+
+  it("requires bearer auth before durable object lookup on protected routes", async () => {
+    const url =
+      "https://worker.example/events?tenant=tenant-a&user=user-a&conversation=ticket-1";
+    const unauthorized = await worker.fetch(
+      new Request(url),
+      envWithThrowingNamespace("secret-token")
+    );
+    const oversizedHeaders = await worker.fetch(
+      new Request(url, {
+        headers: { "x-fill": "x".repeat(appBudgets.maxHeaderBytes) },
+      }),
+      envWithThrowingNamespace("secret-token")
+    );
+    const missingSecret = await worker.fetch(new Request(url), {});
+
+    expect(unauthorized.status).toBe(401);
+    expect(oversizedHeaders.status).toBe(431);
+    expect(missingSecret.status).toBe(500);
   });
 
   it("runs every scenario deterministically", async () => {
@@ -154,5 +182,19 @@ function stateFor(
         throw error;
       });
     },
+  };
+}
+
+function envWithThrowingNamespace(token: string): Env {
+  return {
+    AGENT_DURABLE_OBJECT: {
+      get: () => {
+        throw new Error("durable object lookup should not run");
+      },
+      idFromName: () => {
+        throw new Error("durable object lookup should not run");
+      },
+    },
+    AGENT_WORKER_TOKEN: token,
   };
 }

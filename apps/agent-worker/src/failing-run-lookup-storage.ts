@@ -1,4 +1,4 @@
-import type { CloudflareDurableObjectStorage } from "./cloudflare-host";
+import type { CloudflareDurableObjectStorage } from "@minpeter/pss-runtime/cloudflare";
 
 export class FailingRunLookupStorage implements CloudflareDurableObjectStorage {
   readonly #runId: string;

@@ -4,7 +4,7 @@ import type {
   SessionStore,
   SessionStoreCommit,
   StoredSession,
-} from "@minpeter/pss-runtime";
+} from "../index";
 import {
   getSession,
   putSession,

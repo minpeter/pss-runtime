@@ -1,4 +1,4 @@
-import { InMemoryCloudflareDurableObjectStorage } from "./cloudflare-host";
+import { InMemoryCloudflareDurableObjectStorage } from "@minpeter/pss-runtime/cloudflare";
 import { type ScenarioId, scenarioIds } from "./request-schema";
 import type { StressScenarioResult } from "./stress-result";
 import {

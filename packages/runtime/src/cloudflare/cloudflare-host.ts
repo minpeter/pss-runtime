@@ -1,8 +1,5 @@
-import type { SessionStore } from "@minpeter/pss-runtime";
-import type {
-  ExecutionHost,
-  ExecutionScheduler,
-} from "@minpeter/pss-runtime/execution";
+import type { ExecutionHost, ExecutionScheduler } from "../execution";
+import type { SessionStore } from "../index";
 import { DurableObjectExecutionStore } from "./cloudflare-execution-store";
 import {
   InMemoryCloudflareDurableObjectStorage as BaseInMemoryCloudflareDurableObjectStorage,

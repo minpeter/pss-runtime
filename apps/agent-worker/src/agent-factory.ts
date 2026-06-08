@@ -1,6 +1,8 @@
 import { Agent } from "@minpeter/pss-runtime";
-import type { CloudflareDurableObjectStorage } from "./cloudflare-host";
-import { createCloudflareDurableObjectHost } from "./cloudflare-host";
+import {
+  type CloudflareDurableObjectStorage,
+  createCloudflareDurableObjectHost,
+} from "@minpeter/pss-runtime/cloudflare";
 import type { ScenarioId } from "./request-schema";
 import type { StressPluginCounter } from "./stress-plugin";
 import { createStressPluginCounter } from "./stress-plugin";

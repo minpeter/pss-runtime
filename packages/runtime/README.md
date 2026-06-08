@@ -284,15 +284,20 @@ const agent = new Agent({
 });
 ```
 
-Hosts that need durable runs pass `host:` into `Agent`. A durable host owns
-execution state, scheduling, and its session snapshot store through
-`store.sessions`; `ExecutionHost` does not accept a separate `sessionStore`
-override.
+Hosts that need durable runs pass `host:` into `Agent`. The execution subpath
+keeps the durable surface split by responsibility, so hosts can implement only
+the capabilities they need: `SessionHost`, `RunHost`, `CheckpointHost`,
+`EventHost`, `NotificationHost`, `BackgroundSchedulerHost`, and
+`ExecutionTransactionHost`. `ExecutionHost` remains the aggregate contract for
+in-process or full-store hosts, while `DurableBackgroundHost` and
+`DurableNotificationResumeHost` describe the smaller durable surfaces required
+for background scheduling and notification resume.
 
 ```ts
 import { Agent } from "@minpeter/pss-runtime";
 import {
   createInMemoryExecutionHost,
+  type DurableBackgroundHost,
   type ExecutionHost,
 } from "@minpeter/pss-runtime/execution";
 
@@ -304,10 +309,14 @@ const agent = new Agent({
   namespace: "support-agent",
 });
 
-const durableHost: ExecutionHost = {
+const durableHost: DurableBackgroundHost = {
   capabilities: { backgroundSubagents: "durable" },
-  scheduler,
-  store,
+  backgroundScheduler,
+  checkpointStore,
+  eventStore,
+  notificationInbox,
+  runStore,
+  sessionStore,
 };
 ```
 
@@ -325,14 +334,16 @@ available while that process owns the work. `FileSessionStore` persists session
 snapshots only; it does not make background work durable by itself.
 
 Cloudflare Durable Objects and similar edge hosts should reconstruct `Agent`
-objects per turn and persist opaque session state through `store.sessions`.
+objects per turn and persist opaque session state through a durable
+`sessionStore`.
 When a host does not advertise background subagent capability, the runtime hides
 background tools from the parent model and exposes blocking delegation only.
 This avoids pretending that in-memory background work survived a hibernation,
 isolate restart, or request deadline.
 
-See `apps/agent-worker` for an edge-hosted turn loop with a
-Worker/Durable Object-shaped host, and `examples/subagent` for a long-running
+Use `@minpeter/pss-runtime/cloudflare` for the packaged Cloudflare Durable
+Object adapter. See `apps/agent-worker` for an edge-hosted turn loop that
+consumes that adapter, and `examples/subagent` for a long-running
 local background subagent flow.
 
 The same core API supports room/user/session routing through stable session keys.
@@ -348,11 +359,10 @@ storage is durable across hibernation/restores, while in-memory state remains
 request-local. Do not store canonical agent session or run state in memory
 attachments.
 
-Durable background subagents require a host capability that owns task ids,
-attempts, leases, checkpoints, cancellation, scheduling, and completion
-notifications. The Cloudflare edge example includes a Worker/Durable
-Object-shaped host that persists scheduled runs and session prompts, sets alarms, and
-resumes work through `Agent.resume(...)`.
+Durable background subagents require host capabilities that own task ids,
+attempts, leases, checkpoints, cancellation, scheduling, session snapshots, and
+completion notifications. The Cloudflare adapter persists scheduled runs and
+session prompts, sets alarms, and resumes work through `Agent.resume(...)`.
 
 ## Checkpoints and Cancellation
 

@@ -1,10 +1,10 @@
-import { drainCloudflareAlarm } from "./cloudflare-alarm-drainer";
 import {
   createCloudflareDurableObjectHost,
+  drainCloudflareAlarm,
   InMemoryCloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
   listScheduledCloudflareSessionPrompts,
-} from "./cloudflare-host";
+} from "@minpeter/pss-runtime/cloudflare";
 import { createQueuedRun } from "./edge-case-helpers";
 import { FailingRunLookupStorage } from "./failing-run-lookup-storage";
 import { AgentDurableObject } from "./worker";

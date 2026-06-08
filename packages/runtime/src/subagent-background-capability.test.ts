@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createInMemoryExecutionHost } from "./execution/memory";
 import {
   drainRun,
   executableTool,
@@ -112,5 +113,91 @@ describe("subagent background capability", () => {
     ).rejects.toThrow(
       "Background subagent delegation is not available for this host."
     );
+  });
+
+  it("hides background tools when a durable host has only session storage and a scheduler", async () => {
+    const Agent = await loadAgent();
+    const researcher = new Agent({
+      description: "Researches facts.",
+      model: async () => [assistantMessage("CHILD DONE")],
+      name: "researcher",
+    });
+    const agent = new Agent({
+      host: {
+        backgroundScheduler: {
+          enqueueRun: async () => undefined,
+          resumeSession: async () => undefined,
+        },
+        capabilities: { backgroundSubagents: "durable" },
+        sessionStore: new SessionOnlyStore(),
+      },
+      model: fakeModel,
+      subagents: [researcher],
+    });
+
+    await drainRun(await agent.send(userText("delegate")));
+
+    const tools = lastGenerateTextTools();
+    expect(Object.keys(tools).sort()).toEqual(["delegate_to_researcher"]);
+
+    const delegate = executableTool(tools, "delegate_to_researcher");
+    await expect(
+      delegate.execute?.(
+        { prompt: "research this", run_in_background: true },
+        toolExecutionOptions()
+      )
+    ).rejects.toThrow(
+      "Background subagent delegation is not available for this host."
+    );
+  });
+
+  it("schedules background work when a durable split-capability host has the required ports", async () => {
+    const Agent = await loadAgent();
+    const baseHost = createInMemoryExecutionHost();
+    const scheduledRunIds: string[] = [];
+    const researcher = new Agent({
+      description: "Researches facts.",
+      host: baseHost,
+      model: async () => [assistantMessage("CHILD DONE")],
+      name: "researcher",
+    });
+    const agent = new Agent({
+      host: {
+        backgroundScheduler: {
+          enqueueRun: async (runId, options) => {
+            scheduledRunIds.push(runId);
+            await baseHost.scheduler.enqueueRun(runId, options);
+          },
+          resumeSession: (sessionKey, options) =>
+            baseHost.scheduler.resumeSession(sessionKey, options),
+        },
+        capabilities: { backgroundSubagents: "durable" },
+        checkpointStore: baseHost.store.checkpoints,
+        eventStore: baseHost.store.events,
+        notificationInbox: baseHost.store.notifications,
+        runStore: baseHost.store.runs,
+        sessionStore: baseHost.store.sessions,
+        transaction: (fn) => baseHost.store.transaction(fn),
+      },
+      model: fakeModel,
+      subagents: [researcher],
+    });
+
+    await drainRun(await agent.send(userText("delegate")));
+
+    const delegate = executableTool(
+      lastGenerateTextTools(),
+      "delegate_to_researcher"
+    );
+    await expect(
+      delegate.execute?.(
+        { prompt: "research this", run_in_background: true },
+        toolExecutionOptions()
+      )
+    ).resolves.toMatchObject({
+      run_in_background: true,
+      status: "pending",
+    });
+    expect(scheduledRunIds).toHaveLength(1);
   });
 });
