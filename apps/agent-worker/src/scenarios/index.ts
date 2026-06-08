@@ -19,6 +19,7 @@ import {
   runResumeRetryScenario,
 } from "./edge";
 import { guardScenario } from "./guards";
+import { runLongRunningPingPongScenario } from "./pingpong";
 import { createStressPluginCounter } from "./plugin";
 import { type StressScenarioResult, scenarioResult } from "./result";
 
@@ -56,6 +57,7 @@ export function createHealthPayload(options: {
       "background_cancel",
       "session.steer",
       "Agent.resume",
+      "long-running-alarm-pingpong",
       "bounded-guards",
     ],
     scenarioIds,
@@ -85,6 +87,8 @@ export async function runStressScenario(
       return await runResumeRetryScenario(options);
     case "cancel-stale-child":
       return await runCancelStaleChildScenario(options);
+    case "long-running-pingpong":
+      return await runLongRunningPingPongScenario(options);
     case "request-rejection":
     case "fanout-guard":
     case "large-history-guard":

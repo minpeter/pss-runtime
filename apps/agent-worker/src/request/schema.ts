@@ -18,6 +18,7 @@ export const scenarioIds = [
   "duplicate-alarm",
   "resume-retry",
   "cancel-stale-child",
+  "long-running-pingpong",
   "request-rejection",
   "fanout-guard",
   "large-history-guard",
@@ -38,6 +39,8 @@ export const appBudgets = {
   maxHistoryItems: 32,
   maxInputChars: 2048,
   maxMultipartParts: 4,
+  maxPingPongDelayMs: 5 * 60 * 1000,
+  maxPingPongHops: 12,
   maxPartChars: 2048,
   maxRouteTokenChars: 80,
   maxSummaryBytes: 8 * 1024,
@@ -57,6 +60,8 @@ export interface StressOptions {
   readonly checkpointBytes: number;
   readonly fanout: number;
   readonly historyItems: number;
+  readonly pingPongDelayMs: number;
+  readonly pingPongHops: number;
   readonly summaryEvents: number;
 }
 
@@ -84,6 +89,18 @@ const stressSchema = z
       .int()
       .min(0)
       .max(appBudgets.maxHistoryItems)
+      .optional(),
+    pingPongDelayMs: z
+      .number()
+      .int()
+      .min(1)
+      .max(appBudgets.maxPingPongDelayMs)
+      .optional(),
+    pingPongHops: z
+      .number()
+      .int()
+      .min(1)
+      .max(appBudgets.maxPingPongHops)
       .optional(),
     summaryEvents: z
       .number()
@@ -177,6 +194,8 @@ export function parseTurnBody(value: unknown): ParseTurnBodyResult {
           parsed.data.stress?.checkpointBytes ?? appBudgets.maxCheckpointBytes,
         fanout: parsed.data.stress?.fanout ?? 1,
         historyItems: parsed.data.stress?.historyItems ?? 1,
+        pingPongDelayMs: parsed.data.stress?.pingPongDelayMs ?? 60_000,
+        pingPongHops: parsed.data.stress?.pingPongHops ?? 6,
         summaryEvents:
           parsed.data.stress?.summaryEvents ?? appBudgets.maxSummaryEvents,
       },

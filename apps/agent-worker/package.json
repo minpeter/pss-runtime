@@ -13,7 +13,7 @@
     "start:cli": "tsx --conditions=@minpeter/pss-source src/cli/index.ts",
     "start:edge-cases": "tsx --conditions=@minpeter/pss-source src/simulation/edge-cases.ts",
     "start:worker-sim": "tsx --conditions=@minpeter/pss-source src/simulation/index.ts",
-    "test": "vitest run src/request/schema.test.ts src/scenarios/index.test.ts src/scenarios/guards.test.ts src/cloudflare/durable.test.ts",
+    "test": "vitest run src/request/schema.test.ts src/scenarios/index.test.ts src/scenarios/pingpong.test.ts src/scenarios/guards.test.ts src/cloudflare/durable.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:worker": "tsc -p tsconfig.worker.json --noEmit"
   },

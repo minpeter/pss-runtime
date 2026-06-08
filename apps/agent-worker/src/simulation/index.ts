@@ -23,6 +23,7 @@ const simulationScenarios: readonly ScenarioId[] = [
   "duplicate-alarm",
   "resume-retry",
   "cancel-stale-child",
+  "long-running-pingpong",
   "budget-guard",
 ];
 

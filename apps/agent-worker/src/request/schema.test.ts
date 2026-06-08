@@ -23,6 +23,7 @@ describe("agent worker request schema", () => {
       "duplicate-alarm",
       "resume-retry",
       "cancel-stale-child",
+      "long-running-pingpong",
       "request-rejection",
       "fanout-guard",
       "large-history-guard",
@@ -87,6 +88,43 @@ describe("agent worker request schema", () => {
         userId: "user-a",
       }).status
     ).toBe(400);
+    expect(
+      parseTurnBody({
+        conversationId: "ticket-1",
+        input: "hello",
+        scenario: "long-running-pingpong",
+        stress: { pingPongHops: appBudgets.maxPingPongHops + 1 },
+        tenantId: "tenant-a",
+        userId: "user-a",
+      }).status
+    ).toBe(400);
+    expect(
+      parseTurnBody({
+        conversationId: "ticket-1",
+        input: "hello",
+        scenario: "long-running-pingpong",
+        stress: { pingPongDelayMs: appBudgets.maxPingPongDelayMs + 1 },
+        tenantId: "tenant-a",
+        userId: "user-a",
+      }).status
+    ).toBe(400);
+  });
+
+  it("accepts bounded long-running ping-pong stress knobs", () => {
+    const parsed = parseTurnBody({
+      conversationId: "ticket-1",
+      input: "hello",
+      scenario: "long-running-pingpong",
+      stress: { pingPongDelayMs: 60_000, pingPongHops: 6 },
+      tenantId: "tenant-a",
+      userId: "user-a",
+    });
+
+    expect(parsed.ok).toBe(true);
+    expect(parsed.ok ? parsed.value.stress : undefined).toMatchObject({
+      pingPongDelayMs: 60_000,
+      pingPongHops: 6,
+    });
   });
 
   it("computes bounded header size and isolated route keys", () => {

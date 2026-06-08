@@ -11,8 +11,8 @@ The app covers:
 - Foreground `run.events()` drain, multipart text/image/file input, plugins,
   injected tools, `toolChoice`, blocking subagents, durable background
   subagents, `background_output`, `background_cancel`, `session.steer`,
-  `Agent.resume`, duplicate delivery, retry, cancellation, and app-level
-  budget guards.
+  `Agent.resume`, duplicate delivery, retry, cancellation, long-running alarm
+  ping-pong, and app-level budget guards.
 - Durable Object alarm draining from storage. `waitUntil()` is not used as the
   durable background execution strategy.
 
@@ -33,6 +33,7 @@ steer-step-end
 duplicate-alarm
 resume-retry
 cancel-stale-child
+long-running-pingpong
 request-rejection
 fanout-guard
 large-history-guard
@@ -151,6 +152,7 @@ Default app budgets are deliberately below platform limits:
 - summary events: 24
 - checkpoint payload: 16 KiB
 - history items: 32
+- long-running ping-pong: 6 default one-minute alarm hops, 12 hops max
 
 Relevant Cloudflare docs:
 
