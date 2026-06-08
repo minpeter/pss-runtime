@@ -1,9 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import type { AgentEvent, AgentRun } from "../index";
 import {
   ackScheduledCloudflareRun,
   ackScheduledCloudflareSessionPrompt,
   type CloudflareAlarmAgent,
+  type CloudflareDurableObjectId,
+  type CloudflareDurableObjectNamespace,
+  type CloudflareDurableObjectState,
+  type CloudflareDurableObjectStorage,
+  type CloudflareDurableObjectStub,
   createCloudflareDurableObjectHost,
+  drainAgentRun,
   drainCloudflareAlarm,
   InMemoryCloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
@@ -119,4 +126,55 @@ describe("Cloudflare Durable Object host adapter", () => {
     ]);
     expect(storage.alarmTime()).not.toBeUndefined();
   });
+
+  it("observes drained run events when an event callback is provided", async () => {
+    const runEvents = [
+      { text: "first", type: "assistant-text" },
+      { text: "second", type: "assistant-text" },
+    ] satisfies readonly AgentEvent[];
+    const observedEvents: AgentEvent[] = [];
+
+    const drainedEvents = await drainAgentRun(runWithEvents(runEvents), {
+      onEvent: (event) => {
+        observedEvents.push(event);
+      },
+    });
+
+    expect(drainedEvents).toEqual(runEvents);
+    expect(observedEvents).toEqual(runEvents);
+  });
+
+  it("types Durable Object platform shapes without Cloudflare worker globals", () => {
+    type ExtraStub = CloudflareDurableObjectStub & {
+      readonly kind: "extra";
+    };
+
+    expectTypeOf<
+      CloudflareDurableObjectState["storage"]
+    >().toEqualTypeOf<CloudflareDurableObjectStorage>();
+    expectTypeOf<
+      Parameters<CloudflareDurableObjectState["waitUntil"]>[0]
+    >().toEqualTypeOf<Promise<unknown>>();
+    expectTypeOf<
+      ReturnType<CloudflareDurableObjectNamespace<ExtraStub>["idFromName"]>
+    >().toEqualTypeOf<CloudflareDurableObjectId>();
+    expectTypeOf<
+      ReturnType<CloudflareDurableObjectNamespace<ExtraStub>["get"]>
+    >().toEqualTypeOf<ExtraStub>();
+  });
 });
+
+function runWithEvents(events: readonly AgentEvent[]): AgentRun {
+  return {
+    events: () => eventStream(events),
+  };
+}
+
+async function* eventStream(
+  events: readonly AgentEvent[]
+): AsyncIterable<AgentEvent> {
+  for (const event of events) {
+    await Promise.resolve();
+    yield event;
+  }
+}

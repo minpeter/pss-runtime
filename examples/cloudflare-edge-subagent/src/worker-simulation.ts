@@ -1,13 +1,10 @@
 import type { AgentEvent } from "@minpeter/pss-runtime";
 import {
+  type CloudflareDurableObjectState,
   createCloudflareDurableObjectHost,
   InMemoryCloudflareDurableObjectStorage,
 } from "@minpeter/pss-runtime/cloudflare";
-import {
-  AgentDurableObject,
-  type CloudflareDurableObjectState,
-  createWorkerCoordinator,
-} from "./worker";
+import { AgentDurableObject, createWorkerCoordinator } from "./worker";
 import { routeWorkerRequest, sessionKeyFromRoute } from "./worker-route";
 
 const route = {

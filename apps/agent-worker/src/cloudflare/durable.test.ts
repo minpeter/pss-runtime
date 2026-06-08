@@ -1,6 +1,7 @@
 import type { AgentEvent, AgentRun } from "@minpeter/pss-runtime";
 import {
   createCloudflareDurableObjectHost,
+  drainAgentRun,
   drainCloudflareAlarm,
   InMemoryCloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
@@ -171,7 +172,7 @@ describe("Cloudflare durable alarm contract", () => {
       }
     );
     const sessionKey = "tenant:a:conversation:b:user:c";
-    const events = await collectEvents(
+    const events = await drainAgentRun(
       await agent.session(sessionKey).send("start durable work")
     );
     const taskId = backgroundTaskIdFromEvents(events);
@@ -201,14 +202,6 @@ function runWithText(text: string): AgentRun {
       yield { text, type: "assistant-text" };
     },
   };
-}
-
-async function collectEvents(run: AgentRun): Promise<AgentEvent[]> {
-  const events: AgentEvent[] = [];
-  for await (const event of run.events()) {
-    events.push(event);
-  }
-  return events;
 }
 
 function backgroundTaskIdFromEvents(events: readonly AgentEvent[]): string {

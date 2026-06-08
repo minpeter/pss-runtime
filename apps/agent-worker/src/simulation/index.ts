@@ -1,10 +1,10 @@
-import { InMemoryCloudflareDurableObjectStorage } from "@minpeter/pss-runtime/cloudflare";
+import {
+  type CloudflareDurableObjectState,
+  InMemoryCloudflareDurableObjectStorage,
+} from "@minpeter/pss-runtime/cloudflare";
 import { type ScenarioId, scenarioIds } from "../request/schema";
 import type { StressScenarioResult } from "../scenarios/result";
-import {
-  AgentDurableObject,
-  type CloudflareDurableObjectState,
-} from "../worker";
+import { AgentDurableObject } from "../worker";
 
 const route = {
   conversationId: "edge-task-ids",

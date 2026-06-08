@@ -17,6 +17,24 @@ export interface CloudflareScheduledSessionPrompt {
 
 export type CloudflareDurableObjectStorage = DurableObjectStoragePort;
 
+export type CloudflareDurableObjectId = unknown;
+
+export interface CloudflareDurableObjectStub {
+  fetch(request: Request): Promise<Response>;
+}
+
+export interface CloudflareDurableObjectNamespace<
+  Stub extends CloudflareDurableObjectStub = CloudflareDurableObjectStub,
+> {
+  get(id: CloudflareDurableObjectId): Stub;
+  idFromName(name: string): CloudflareDurableObjectId;
+}
+
+export interface CloudflareDurableObjectState {
+  readonly storage: CloudflareDurableObjectStorage;
+  waitUntil(promise: Promise<unknown>): void;
+}
+
 export class InMemoryCloudflareDurableObjectStorage extends BaseInMemoryCloudflareDurableObjectStorage {}
 
 export function createCloudflareDurableObjectHost({

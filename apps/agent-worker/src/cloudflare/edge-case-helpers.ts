@@ -1,16 +1,6 @@
 import type { AgentEvent } from "@minpeter/pss-runtime";
 import type { ExecutionHost, RunKind } from "@minpeter/pss-runtime/execution";
 
-export async function collectEvents(run: {
-  events(): AsyncIterable<AgentEvent>;
-}): Promise<AgentEvent[]> {
-  const events: AgentEvent[] = [];
-  for await (const event of run.events()) {
-    events.push(event);
-  }
-  return events;
-}
-
 export function backgroundTaskIdFromEvents(
   events: readonly AgentEvent[]
 ): string {

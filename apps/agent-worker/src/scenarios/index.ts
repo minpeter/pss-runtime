@@ -1,6 +1,7 @@
 import type { AgentEvent } from "@minpeter/pss-runtime";
 import {
   type CloudflareDurableObjectStorage,
+  drainAgentRun,
   drainCloudflareAlarm,
   listScheduledCloudflareRuns,
 } from "@minpeter/pss-runtime/cloudflare";
@@ -106,7 +107,7 @@ async function runAgentScenario(
     prefix: options.route.storePrefix,
     scenario: options.request.scenario,
   });
-  const events = await collectEvents(
+  const events = await drainAgentRun(
     await agent.session(options.route.sessionKey).send(input)
   );
   const markers = [`scenario:${options.request.scenario}`];
@@ -140,7 +141,7 @@ async function runPluginScenario(
     prefix: options.route.storePrefix,
     scenario: options.request.scenario,
   });
-  const events = await collectEvents(
+  const events = await drainAgentRun(
     await agent
       .session(options.route.sessionKey)
       .send(inputText(options.request))
@@ -161,7 +162,7 @@ async function runBackgroundOutputScenario(
     prefix: options.route.storePrefix,
     scenario: "background-output",
   });
-  const launchEvents = await collectEvents(
+  const launchEvents = await drainAgentRun(
     await agent
       .session(options.route.sessionKey)
       .send(inputText(options.request))
@@ -205,16 +206,6 @@ async function runSteerScenario(
     undefined,
     options.request.stress.summaryEvents
   );
-}
-
-async function collectEvents(run: {
-  events(): AsyncIterable<AgentEvent>;
-}): Promise<AgentEvent[]> {
-  const events: AgentEvent[] = [];
-  for await (const event of run.events()) {
-    events.push(event);
-  }
-  return events;
 }
 
 function inputText(request: TurnRequest): string {

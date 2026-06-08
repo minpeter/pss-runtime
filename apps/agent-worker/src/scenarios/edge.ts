@@ -1,7 +1,7 @@
-import type { AgentEvent } from "@minpeter/pss-runtime";
 import {
   ackScheduledCloudflareRun,
   createCloudflareDurableObjectHost,
+  drainAgentRun,
   drainCloudflareAlarm,
   listScheduledCloudflareRuns,
 } from "@minpeter/pss-runtime/cloudflare";
@@ -68,7 +68,7 @@ export async function runCancelStaleChildScenario(
     prefix: options.route.storePrefix,
     scenario: "durable-background",
   });
-  const events = await collectEvents(
+  const events = await drainAgentRun(
     await agent.session(options.route.sessionKey).send(inputText(options))
   );
   const runId = (
@@ -94,16 +94,6 @@ export async function runCancelStaleChildScenario(
     undefined,
     options.request.stress.summaryEvents
   );
-}
-
-async function collectEvents(run: {
-  events(): AsyncIterable<AgentEvent>;
-}): Promise<AgentEvent[]> {
-  const events: AgentEvent[] = [];
-  for await (const event of run.events()) {
-    events.push(event);
-  }
-  return events;
 }
 
 function inputText(options: RunStressScenarioOptions): string {

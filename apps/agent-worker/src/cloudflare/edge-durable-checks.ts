@@ -1,6 +1,7 @@
 import {
   ackScheduledCloudflareRun,
   createCloudflareDurableObjectHost,
+  drainAgentRun,
   InMemoryCloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
 } from "@minpeter/pss-runtime/cloudflare";
@@ -9,7 +10,6 @@ import { workerStorePrefix } from "../worker/constants";
 import {
   backgroundNotificationKey,
   backgroundTaskIdFromEvents,
-  collectEvents,
   createQueuedRun,
 } from "./edge-case-helpers";
 
@@ -43,7 +43,7 @@ export async function checkDuplicateAlarmDelivery(): Promise<boolean> {
 export async function checkCancelledRunNotification(): Promise<boolean> {
   const storage = new InMemoryCloudflareDurableObjectStorage();
   const agent = createWorkerCoordinator(storage);
-  const launchEvents = await collectEvents(
+  const launchEvents = await drainAgentRun(
     await agent.session(sessionKey).send("Start background research.")
   );
   const taskId = backgroundTaskIdFromEvents(launchEvents);

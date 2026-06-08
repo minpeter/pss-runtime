@@ -1,6 +1,8 @@
 import { Agent } from "@minpeter/pss-runtime";
 import {
   type CloudflareAlarmDrainSummary,
+  type CloudflareDurableObjectNamespace,
+  type CloudflareDurableObjectState,
   type CloudflareDurableObjectStorage,
   createCloudflareDurableObjectHost,
   drainAgentRun,
@@ -18,23 +20,7 @@ import {
 } from "./worker-route";
 
 export interface Env {
-  readonly AGENT_DURABLE_OBJECT?: AgentDurableObjectNamespace;
-}
-
-interface AgentDurableObjectNamespace {
-  get(id: AgentDurableObjectId): AgentDurableObjectStub;
-  idFromName(name: string): AgentDurableObjectId;
-}
-
-type AgentDurableObjectId = unknown;
-
-interface AgentDurableObjectStub {
-  fetch(request: unknown): Promise<Response>;
-}
-
-export interface CloudflareDurableObjectState {
-  readonly storage: CloudflareDurableObjectStorage;
-  waitUntil(promise: Promise<unknown>): void;
+  readonly AGENT_DURABLE_OBJECT?: CloudflareDurableObjectNamespace;
 }
 
 export class AgentDurableObject {

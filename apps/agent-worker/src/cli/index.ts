@@ -3,16 +3,13 @@ import type { AgentHost } from "@minpeter/pss-runtime";
 import {
   Agent,
   type AgentEvent,
-  type AgentRun,
   type SessionHandle,
 } from "@minpeter/pss-runtime";
 import {
-  ackScheduledCloudflareRun,
-  ackScheduledCloudflareSessionPrompt,
   createCloudflareDurableObjectHost,
+  drainAgentRun,
+  drainCloudflareAlarm,
   InMemoryCloudflareDurableObjectStorage,
-  listScheduledCloudflareRuns,
-  listScheduledCloudflareSessionPrompts,
 } from "@minpeter/pss-runtime/cloudflare";
 import type { ExecutionHost } from "@minpeter/pss-runtime/execution";
 import { createEnv } from "@t3-oss/env-core";
@@ -115,61 +112,24 @@ async function runTurn({
 }): Promise<AgentEvent[]> {
   console.log(`\n=== ${label} ===`);
   console.log(`user: ${input}`);
-  return await drainRun(await session.send(input));
-}
-
-async function drainRun(run: AgentRun): Promise<AgentEvent[]> {
-  const events: AgentEvent[] = [];
-  for await (const event of run.events()) {
-    events.push(event);
-    console.log(event);
-  }
-  return events;
+  return await drainAgentRun(await session.send(input), {
+    onEvent: (event) => {
+      console.log(event);
+    },
+  });
 }
 
 async function drainCloudflareScheduledWork(
   agent: Agent,
   storage: InMemoryCloudflareDurableObjectStorage
 ): Promise<void> {
-  const runIds = await listScheduledCloudflareRuns(storage, {
+  const summary = await drainCloudflareAlarm({
+    agent,
     prefix: workerStorePrefix,
+    storage,
   });
-  for (const runId of runIds) {
-    const run = await agent.resume(runId);
-    if (run) {
-      await drainRun(run);
-    }
-    await ackScheduledCloudflareRun(storage, runId, {
-      prefix: workerStorePrefix,
-    });
-  }
-
-  const prompts = await listScheduledCloudflareSessionPrompts(storage, {
-    prefix: workerStorePrefix,
-  });
-  for (const prompt of prompts) {
-    const runId =
-      prompt.runId ??
-      (prompt.idempotencyKey
-        ? await notificationRunId(
-            createCloudflareDurableObjectHost({
-              prefix: workerStorePrefix,
-              storage,
-            }),
-            prompt.idempotencyKey
-          )
-        : undefined);
-    if (!runId) {
-      throw new Error("Scheduled session prompt did not resolve to a run id.");
-    }
-
-    const run = await agent.resume(runId);
-    if (run) {
-      await drainRun(run);
-    }
-    await ackScheduledCloudflareSessionPrompt(storage, prompt, {
-      prefix: workerStorePrefix,
-    });
+  for (const event of summary.events) {
+    console.log(event);
   }
 }
 

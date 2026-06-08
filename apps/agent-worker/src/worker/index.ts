@@ -1,6 +1,7 @@
 import {
   type CloudflareAlarmDrainSummary,
-  type CloudflareDurableObjectStorage,
+  type CloudflareDurableObjectNamespace,
+  type CloudflareDurableObjectState,
   drainCloudflareAlarm,
 } from "@minpeter/pss-runtime/cloudflare";
 import { createWorkerCoordinator } from "../agent/factory";
@@ -18,24 +19,8 @@ import { workerStorePrefix } from "./constants";
 const lastResultStorageKey = "__pss_worker_last_result";
 
 export interface Env {
-  readonly AGENT_DURABLE_OBJECT?: AgentDurableObjectNamespace;
+  readonly AGENT_DURABLE_OBJECT?: CloudflareDurableObjectNamespace;
   readonly AGENT_WORKER_TOKEN?: string;
-}
-
-interface AgentDurableObjectNamespace {
-  get(id: AgentDurableObjectId): AgentDurableObjectStub;
-  idFromName(name: string): AgentDurableObjectId;
-}
-
-type AgentDurableObjectId = unknown;
-
-interface AgentDurableObjectStub {
-  fetch(request: Request): Promise<Response>;
-}
-
-export interface CloudflareDurableObjectState {
-  readonly storage: CloudflareDurableObjectStorage;
-  waitUntil(promise: Promise<unknown>): void;
 }
 
 export class AgentDurableObject {

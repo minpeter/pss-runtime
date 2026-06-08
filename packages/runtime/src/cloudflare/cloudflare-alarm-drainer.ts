@@ -24,6 +24,10 @@ export interface CloudflareAlarmAgent {
   resume(runId: string): Promise<AgentRun | null>;
 }
 
+export interface CloudflareAgentRunDrainOptions {
+  readonly onEvent?: (event: AgentEvent) => Promise<void> | void;
+}
+
 interface FailedScheduledWork {
   readonly error: string;
   readonly id: string;
@@ -84,10 +88,14 @@ export async function drainCloudflareAlarm({
   };
 }
 
-export async function drainAgentRun(run: AgentRun): Promise<AgentEvent[]> {
+export async function drainAgentRun(
+  run: AgentRun,
+  options: CloudflareAgentRunDrainOptions = {}
+): Promise<AgentEvent[]> {
   const events: AgentEvent[] = [];
   for await (const event of run.events()) {
     events.push(event);
+    await options.onEvent?.(event);
   }
   return events;
 }

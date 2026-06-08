@@ -2,6 +2,7 @@ import type { AgentEvent } from "@minpeter/pss-runtime";
 import {
   ackScheduledCloudflareRun,
   createCloudflareDurableObjectHost,
+  drainAgentRun,
   drainCloudflareAlarm,
   InMemoryCloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
@@ -43,7 +44,7 @@ async function checkDuplicateAlarmDelivery(): Promise<boolean> {
 async function checkCancelledRunNotification(): Promise<boolean> {
   const storage = new InMemoryCloudflareDurableObjectStorage();
   const agent = createWorkerCoordinator(storage);
-  const launchEvents = await collectEvents(
+  const launchEvents = await drainAgentRun(
     await agent.session(sessionKey).send("Start background research.")
   );
   const taskId = backgroundTaskIdFromEvents(launchEvents);
@@ -204,16 +205,6 @@ async function checkUnclaimableSessionPromptKeepsPromptScheduled(): Promise<bool
     pendingPrompts[0]?.runId === runId &&
     storage.alarmTime() !== undefined
   );
-}
-
-async function collectEvents(run: {
-  events(): AsyncIterable<AgentEvent>;
-}): Promise<AgentEvent[]> {
-  const events: AgentEvent[] = [];
-  for await (const event of run.events()) {
-    events.push(event);
-  }
-  return events;
 }
 
 function backgroundTaskIdFromEvents(events: readonly AgentEvent[]): string {
