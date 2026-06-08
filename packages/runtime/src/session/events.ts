@@ -106,3 +106,90 @@ export type AgentEvent =
   | { type: "step-end" };
 
 export type AgentEventListener = (event: AgentEvent) => void;
+
+const visibleAgentEventTypes = {
+  "assistant-text": true,
+  "user-message": true,
+  "user-text": true,
+} satisfies Partial<Record<AgentEvent["type"], true>>;
+
+const lifecycleAgentEventTypes = {
+  "step-end": true,
+  "step-start": true,
+  "turn-abort": true,
+  "turn-end": true,
+  "turn-error": true,
+  "turn-start": true,
+} satisfies Partial<Record<AgentEvent["type"], true>>;
+
+const toolAgentEventTypes = {
+  "tool-call": true,
+  "tool-result": true,
+} satisfies Partial<Record<AgentEvent["type"], true>>;
+
+const subagentStatusAgentEventTypes = {
+  "subagent-job-end": true,
+  "subagent-job-start": true,
+  "subagent-job-update": true,
+} satisfies Partial<Record<AgentEvent["type"], true>>;
+
+const telemetryAgentEventTypes = {
+  "assistant-reasoning": true,
+  "runtime-input": true,
+} satisfies Partial<Record<AgentEvent["type"], true>>;
+
+export type VisibleAgentEvent = Extract<
+  AgentEvent,
+  { type: keyof typeof visibleAgentEventTypes }
+>;
+export type LifecycleAgentEvent = Extract<
+  AgentEvent,
+  { type: keyof typeof lifecycleAgentEventTypes }
+>;
+export type ToolAgentEvent = Extract<
+  AgentEvent,
+  { type: keyof typeof toolAgentEventTypes }
+>;
+export type SubagentStatusAgentEvent = Extract<
+  AgentEvent,
+  { type: keyof typeof subagentStatusAgentEventTypes }
+>;
+export type TelemetryAgentEvent = Extract<
+  AgentEvent,
+  { type: keyof typeof telemetryAgentEventTypes }
+>;
+export type ControlAgentEvent = Exclude<AgentEvent, VisibleAgentEvent>;
+
+export function isVisibleAgentEvent(
+  event: AgentEvent
+): event is VisibleAgentEvent {
+  return event.type in visibleAgentEventTypes;
+}
+
+export function isLifecycleAgentEvent(
+  event: AgentEvent
+): event is LifecycleAgentEvent {
+  return event.type in lifecycleAgentEventTypes;
+}
+
+export function isToolAgentEvent(event: AgentEvent): event is ToolAgentEvent {
+  return event.type in toolAgentEventTypes;
+}
+
+export function isSubagentStatusAgentEvent(
+  event: AgentEvent
+): event is SubagentStatusAgentEvent {
+  return event.type in subagentStatusAgentEventTypes;
+}
+
+export function isTelemetryAgentEvent(
+  event: AgentEvent
+): event is TelemetryAgentEvent {
+  return event.type in telemetryAgentEventTypes;
+}
+
+export function isControlAgentEvent(
+  event: AgentEvent
+): event is ControlAgentEvent {
+  return !isVisibleAgentEvent(event);
+}

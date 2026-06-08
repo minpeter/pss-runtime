@@ -30,13 +30,21 @@ export function routeWorkerRequest(
     return;
   }
 
+  return createWorkerRoute({ conversationId, tenantId, userId });
+}
+
+export function createWorkerRoute(route: {
+  readonly conversationId: string;
+  readonly tenantId: string;
+  readonly userId: string;
+}): WorkerRoute {
   return {
-    conversationId,
-    objectName: objectNameFromRoute({ conversationId, tenantId, userId }),
-    sessionKey: sessionKeyFromRoute({ conversationId, tenantId, userId }),
-    storePrefix: storePrefixFromRoute({ conversationId, tenantId, userId }),
-    tenantId,
-    userId,
+    conversationId: route.conversationId,
+    objectName: objectNameFromRoute(route),
+    sessionKey: sessionKeyFromRoute(route),
+    storePrefix: storePrefixFromRoute(route),
+    tenantId: route.tenantId,
+    userId: route.userId,
   };
 }
 

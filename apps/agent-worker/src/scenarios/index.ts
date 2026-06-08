@@ -22,6 +22,7 @@ import { guardScenario } from "./guards";
 import { runLongRunningPingPongScenario } from "./pingpong";
 import { createStressPluginCounter } from "./plugin";
 import { type StressScenarioResult, scenarioResult } from "./result";
+import { runUserSandboxFileEditScenario } from "./sandbox";
 
 export interface HealthPayload {
   readonly app: "pss-agent-worker";
@@ -58,6 +59,7 @@ export function createHealthPayload(options: {
       "session.steer",
       "Agent.resume",
       "long-running-alarm-pingpong",
+      "per-user-sandbox-file-edit",
       "bounded-guards",
     ],
     scenarioIds,
@@ -89,6 +91,8 @@ export async function runStressScenario(
       return await runCancelStaleChildScenario(options);
     case "long-running-pingpong":
       return await runLongRunningPingPongScenario(options);
+    case "user-sandbox-file-edit":
+      return await runUserSandboxFileEditScenario(options);
     case "request-rejection":
     case "fanout-guard":
     case "large-history-guard":

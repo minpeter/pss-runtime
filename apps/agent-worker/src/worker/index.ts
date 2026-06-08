@@ -13,13 +13,20 @@ import {
   writeWorkerRoute,
 } from "../request/route";
 import { appBudgets, totalHeaderBytes } from "../request/schema";
-import { createHealthPayload, runStressScenario } from "../scenarios";
+import { runStressScenario } from "../scenarios";
 import type { StressScenarioResult } from "../scenarios/result";
-import { workerStorePrefix } from "./constants";
+import {
+  durableAgentApiRouteResponse,
+  type WorkerAgentApiEnv,
+  workerAgentApiRouteResponse,
+} from "./agent-api-routes";
+import { alarmDrainBudget, workerStorePrefix } from "./constants";
+import { publicWorkerResponse } from "./public-routes";
+import { durableRunRouteResponse } from "./run-routes";
 
 const lastResultStorageKey = "__pss_worker_last_result";
 
-export interface Env {
+export interface Env extends WorkerAgentApiEnv {
   readonly AGENT_DURABLE_OBJECT?: CloudflareDurableObjectNamespace;
   readonly AGENT_WORKER_TOKEN?: string;
 }
@@ -39,8 +46,20 @@ export class AgentDurableObject {
       return headerError;
     }
     const url = new URL(request.url);
-    if (request.method === "GET" && url.pathname === "/health") {
-      return jsonResponse(createHealthPayload({ bindingPresent: true }));
+    const publicResponse = publicWorkerResponse(request, {
+      bindingPresent: true,
+    });
+    if (publicResponse) {
+      return publicResponse;
+    }
+    const apiResponse = await durableAgentApiRouteResponse({
+      env: this.#env,
+      lastResultStorageKey,
+      request,
+      storage: this.#state.storage,
+    });
+    if (apiResponse) {
+      return apiResponse;
     }
     if (request.method === "GET" && url.pathname === "/events") {
       const route = routeWorkerRequest(request.url, {});
@@ -73,6 +92,17 @@ export class AgentDurableObject {
       await this.#state.storage.put(lastResultStorageKey, result);
       return jsonResponse(result);
     }
+    const runResponse = await durableRunRouteResponse({
+      env: this.#env,
+      onResult: async (result) => {
+        await this.#state.storage.put(lastResultStorageKey, result);
+      },
+      request,
+      storage: this.#state.storage,
+    });
+    if (runResponse) {
+      return runResponse;
+    }
 
     return jsonResponse({ error: "not found" }, 404);
   }
@@ -91,7 +121,7 @@ export class AgentDurableObject {
         (await readWorkerRoute(storage))?.storePrefix,
       storage: this.#state.storage,
     });
-    return await context.drainAlarm();
+    return await context.drainAlarm(alarmDrainBudget);
   }
 }
 
@@ -101,17 +131,19 @@ export default {
     if (headerError) {
       return headerError;
     }
-    const url = new URL(request.url);
-    if (request.method === "GET" && url.pathname === "/health") {
-      return jsonResponse(
-        createHealthPayload({
-          bindingPresent: Boolean(env?.AGENT_DURABLE_OBJECT),
-        })
-      );
+    const publicResponse = publicWorkerResponse(request, {
+      bindingPresent: Boolean(env?.AGENT_DURABLE_OBJECT),
+    });
+    if (publicResponse) {
+      return publicResponse;
     }
     const authorizationError = authorizeProtectedRequest(request, env);
     if (authorizationError) {
       return authorizationError;
+    }
+    const apiResponse = await workerAgentApiRouteResponse({ env, request });
+    if (apiResponse) {
+      return apiResponse;
     }
     const routeResult =
       request.method === "GET"
@@ -193,7 +225,7 @@ function authorizeProtectedRequest(
     return jsonResponse(
       {
         error:
-          "AGENT_WORKER_TOKEN is required for agent-worker /turn and /events routes.",
+          "AGENT_WORKER_TOKEN is required for agent-worker /turn, /runs, and /events routes.",
       },
       500
     );

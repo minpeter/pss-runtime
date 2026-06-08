@@ -24,6 +24,7 @@ const simulationScenarios: readonly ScenarioId[] = [
   "resume-retry",
   "cancel-stale-child",
   "long-running-pingpong",
+  "user-sandbox-file-edit",
   "budget-guard",
 ];
 
@@ -37,18 +38,18 @@ async function runScenario(scenario: ScenarioId): Promise<void> {
   const storage = new InMemoryCloudflareDurableObjectStorage();
   const object = new AgentDurableObject(stateFor(storage), {});
   const response = await object.fetch(
-    new Request("https://worker.example/turn", {
+    new Request("https://worker.example/runs", {
       body: JSON.stringify({
         conversationId: route.conversationId,
         input: inputForScenario(scenario),
-        scenario,
+        scenario: scenarioRequest(scenario),
         tenantId: route.tenantId,
         userId: route.userId,
       }),
       method: "POST",
     })
   );
-  const result = await readScenarioResult(response);
+  const result = (await readRunEnvelope(response)).result;
   console.log(`${scenario}:markers`, result.markers.join(","));
   console.log(`${scenario}:events`, result.summary.eventTypes.join(","));
 
@@ -101,17 +102,38 @@ function inputForScenario(scenario: ScenarioId) {
   return `exercise ${scenario}`;
 }
 
-async function readScenarioResult(
-  response: Response
-): Promise<StressScenarioResult> {
+function scenarioRequest(scenario: ScenarioId) {
+  if (scenario === "long-running-pingpong") {
+    return {
+      id: scenario,
+      options: { clock: "compressed", delayMs: 60_000, hops: 6 },
+    };
+  }
+  return scenario;
+}
+
+async function readRunEnvelope(response: Response): Promise<{
+  readonly result: StressScenarioResult;
+}> {
   if (!response.ok) {
     throw new Error(`Worker simulation failed with ${response.status}.`);
   }
   const value = await response.json();
-  if (isStressScenarioResult(value)) {
+  if (isRunEnvelope(value)) {
     return value;
   }
-  throw new Error("Worker response did not include a scenario result.");
+  throw new Error("Worker response did not include a run envelope.");
+}
+
+function isRunEnvelope(value: unknown): value is {
+  readonly result: StressScenarioResult;
+} {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "result" in value &&
+    isStressScenarioResult(value.result)
+  );
 }
 
 function isStressScenarioResult(value: unknown): value is StressScenarioResult {

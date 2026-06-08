@@ -6,6 +6,7 @@ import {
   listScheduledCloudflareRuns,
 } from "@minpeter/pss-runtime/cloudflare";
 import type { RunStressScenarioOptions } from ".";
+import type { LongRunningPingPongBoundaryEvidence } from "./evidence";
 import { type StressScenarioResult, scenarioResult } from "./result";
 
 const fiveMinutesMs = 5 * 60 * 1000;
@@ -21,6 +22,7 @@ export async function runLongRunningPingPongScenario(
     storage: options.storage,
   });
   const events: AgentEvent[] = [];
+  const boundaries: LongRunningPingPongBoundaryEvidence[] = [];
   const markers = [
     "scenario:long-running-pingpong",
     `pingpong:hops:${pingPongHops}`,
@@ -55,14 +57,25 @@ export async function runLongRunningPingPongScenario(
       prefix,
       storage: options.storage,
     });
+    const queuedAfter = await listScheduledCloudflareRuns(options.storage, {
+      prefix,
+    });
+    boundaries.push({
+      index: boundary,
+      queuedAfter: queuedAfter.length,
+      queuedBefore: scheduledRuns.length,
+      resumedRuns: alarm.resumedRuns,
+      scheduledByResume: queuedAfter,
+    });
     events.push(...alarm.events);
     markers.push(...alarm.resumedRuns.map((id) => `pingpong:resumed:${id}`));
   }
 
   const elapsedMs = pingPongHops * pingPongDelayMs;
-  markers.push(
-    `pingpong:remaining:${(await listScheduledCloudflareRuns(options.storage, { prefix })).length}`
-  );
+  const remainingRuns = await listScheduledCloudflareRuns(options.storage, {
+    prefix,
+  });
+  markers.push(`pingpong:remaining:${remainingRuns.length}`);
   markers.push(`pingpong:elapsed-ms:${elapsedMs}`);
   markers.push(
     elapsedMs > fiveMinutesMs ? "long-running:over-5m" : "long-running:under-5m"
@@ -73,7 +86,14 @@ export async function runLongRunningPingPongScenario(
     events,
     markers,
     undefined,
-    summaryEvents
+    summaryEvents,
+    {
+      boundaries,
+      clock: "compressed",
+      remainingRuns: remainingRuns.length,
+      simulatedElapsedMs: elapsedMs,
+      type: "long-running-pingpong",
+    }
   );
 }
 

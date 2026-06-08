@@ -24,6 +24,7 @@ describe("agent worker request schema", () => {
       "resume-retry",
       "cancel-stale-child",
       "long-running-pingpong",
+      "user-sandbox-file-edit",
       "request-rejection",
       "fanout-guard",
       "large-history-guard",
@@ -124,6 +125,28 @@ describe("agent worker request schema", () => {
     expect(parsed.ok ? parsed.value.stress : undefined).toMatchObject({
       pingPongDelayMs: 60_000,
       pingPongHops: 6,
+    });
+  });
+
+  it("accepts agent-friendly scenario objects with bounded options", () => {
+    const parsed = parseTurnBody({
+      conversationId: "ticket-1",
+      input: "hello",
+      scenario: {
+        id: "long-running-pingpong",
+        options: { clock: "compressed", delayMs: 120_000, hops: 4 },
+      },
+      tenantId: "tenant-a",
+      userId: "user-a",
+    });
+
+    expect(parsed.ok).toBe(true);
+    expect(parsed.ok ? parsed.value.scenario : undefined).toBe(
+      "long-running-pingpong"
+    );
+    expect(parsed.ok ? parsed.value.stress : undefined).toMatchObject({
+      pingPongDelayMs: 120_000,
+      pingPongHops: 4,
     });
   });
 

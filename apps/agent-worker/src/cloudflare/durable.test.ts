@@ -10,6 +10,7 @@ import {
 import { describe, expect, it } from "vitest";
 import { createWorkerCoordinator } from "../agent/factory";
 import { routeWorkerRequest } from "../request/route";
+import { alarmDrainBudget } from "../worker/constants";
 
 const prefix = "durable-test";
 
@@ -58,6 +59,15 @@ describe("Cloudflare durable alarm contract", () => {
     await expect(
       listScheduledCloudflareRuns(storage, { prefix })
     ).resolves.toEqual([]);
+  });
+
+  it("documents the Worker alarm drain budget used by the DO entrypoint", () => {
+    expect(alarmDrainBudget).toMatchObject({
+      deadlineMs: 30_000,
+      maxEvents: 64,
+      maxRuns: 6,
+      maxSessionPrompts: 6,
+    });
   });
 
   it("keeps retryable unclaimable work scheduled and reschedules the alarm", async () => {

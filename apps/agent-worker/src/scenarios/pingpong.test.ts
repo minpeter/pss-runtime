@@ -53,6 +53,29 @@ describe("long-running ping-pong scenario", () => {
       ])
     );
     expect(result.summary.counts["assistant-text"]).toBe(6);
+    expect(result.evidence).toMatchObject({
+      clock: "compressed",
+      remainingRuns: 0,
+      simulatedElapsedMs: 360_000,
+      type: "long-running-pingpong",
+    });
+    if (result.evidence?.type !== "long-running-pingpong") {
+      throw new Error("long-running ping-pong evidence was not emitted");
+    }
+    expect(result.evidence.boundaries.at(0)).toEqual({
+      index: 1,
+      queuedAfter: 1,
+      queuedBefore: 1,
+      resumedRuns: ["background:pingpong:1"],
+      scheduledByResume: ["background:pingpong:2"],
+    });
+    expect(result.evidence.boundaries.at(-1)).toEqual({
+      index: 6,
+      queuedAfter: 0,
+      queuedBefore: 1,
+      resumedRuns: ["background:pingpong:6"],
+      scheduledByResume: [],
+    });
     await expect(
       listScheduledCloudflareRuns(storage, { prefix: route.storePrefix })
     ).resolves.toEqual([]);

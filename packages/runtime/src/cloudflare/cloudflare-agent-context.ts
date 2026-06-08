@@ -1,4 +1,5 @@
 import type { ExecutionHost } from "../execution";
+import type { CloudflareAlarmDrainBudget } from "./cloudflare-alarm-budget";
 import type {
   CloudflareAlarmAgent,
   CloudflareAlarmDrainSummary,
@@ -42,7 +43,9 @@ export interface CloudflareAgentContextOptions<
 
 export interface CloudflareAgentContext<Agent extends CloudflareAlarmAgent> {
   agent(prefix?: string): Agent;
-  drainAlarm(): Promise<CloudflareAlarmDrainSummary>;
+  drainAlarm(
+    budget?: CloudflareAlarmDrainBudget
+  ): Promise<CloudflareAlarmDrainSummary>;
   host(prefix?: string): ExecutionHost;
   readonly storage: CloudflareDurableObjectStorage;
 }
@@ -69,10 +72,11 @@ export function createCloudflareAgentContext<
 
   return {
     agent: createContextAgent,
-    drainAlarm: async () => {
+    drainAlarm: async (budget) => {
       const prefix = (await readPrefix?.({ env, storage })) ?? defaultPrefix;
       return await drainCloudflareAlarm({
         agent: createContextAgent(prefix),
+        ...budget,
         prefix,
         storage,
       });

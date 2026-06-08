@@ -22,7 +22,12 @@ export type {
   AgentEventListener,
   AssistantReasoning,
   AssistantText,
+  ControlAgentEvent,
+  LifecycleAgentEvent,
   RuntimeInput,
+  SubagentStatusAgentEvent,
+  TelemetryAgentEvent,
+  ToolAgentEvent,
   ToolCall,
   ToolResult,
   UserInput,
@@ -35,6 +40,15 @@ export type {
   UserMessageTextPart,
   UserText,
   UserTextContent,
+  VisibleAgentEvent,
+} from "./session/events";
+export {
+  isControlAgentEvent,
+  isLifecycleAgentEvent,
+  isSubagentStatusAgentEvent,
+  isTelemetryAgentEvent,
+  isToolAgentEvent,
+  isVisibleAgentEvent,
 } from "./session/events";
 export type { AgentInput, SessionInput } from "./session/input";
 export type { AgentRun } from "./session/run";

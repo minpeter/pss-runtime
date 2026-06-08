@@ -34,6 +34,9 @@ describe("cloudflare edge support subagent example", () => {
     const alarmDrainerSource = readText(
       "packages/runtime/src/cloudflare/cloudflare-alarm-drainer.ts"
     );
+    const alarmWorkSource = readText(
+      "packages/runtime/src/cloudflare/cloudflare-alarm-work.ts"
+    );
     const workerTsconfig = readJson(
       "examples/cloudflare-edge-subagent/tsconfig.worker.json"
     );
@@ -73,8 +76,8 @@ describe("cloudflare edge support subagent example", () => {
     expect(workerRouteSource).toContain("sessionKeyFromRoute");
     expect(workerSource).not.toContain('idFromName("default")');
     expect(workerSource).not.toContain('url.pathname === "/alarm"');
-    expect(alarmDrainerSource).toContain("agent.resume(");
-    expect(alarmDrainerSource).toContain("ackScheduledCloudflareRun");
+    expect(alarmWorkSource).toContain("agent.resume(");
+    expect(alarmWorkSource).toContain("ackScheduledCloudflareRun");
     expect(alarmDrainerSource).toContain("rescheduleCloudflareAlarm");
     expect(hostSource).toContain("setAlarm");
     expect(workerTsconfig.compilerOptions.types).toEqual([

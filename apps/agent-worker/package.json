@@ -13,12 +13,13 @@
     "start:cli": "tsx --conditions=@minpeter/pss-source src/cli/index.ts",
     "start:edge-cases": "tsx --conditions=@minpeter/pss-source src/simulation/edge-cases.ts",
     "start:worker-sim": "tsx --conditions=@minpeter/pss-source src/simulation/index.ts",
-    "test": "vitest run src/request/schema.test.ts src/scenarios/index.test.ts src/scenarios/pingpong.test.ts src/scenarios/guards.test.ts src/cloudflare/durable.test.ts",
+    "test": "vitest run src/request/schema.test.ts src/request/agent-api.test.ts src/scenarios/index.test.ts src/scenarios/pingpong.test.ts src/scenarios/sandbox.test.ts src/scenarios/guards.test.ts src/cloudflare/durable.test.ts src/docs/catalog.test.ts src/runs/store.test.ts src/sandbox/file-edit.test.ts src/worker/runs.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:worker": "tsc -p tsconfig.worker.json --noEmit"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "3.0.0-canary.48",
+    "@cloudflare/sandbox": "0.11.0",
     "@minpeter/pss-runtime": "workspace:*",
     "@t3-oss/env-core": "^0.13.11",
     "ai": "7.0.0-canary.142",

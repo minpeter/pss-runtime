@@ -10,6 +10,13 @@ export type TurnRequestReadResult =
       readonly ok: false;
       readonly status: 400 | 413 | 431;
     };
+export type JsonRequestReadResult =
+  | { readonly ok: true; readonly value: unknown }
+  | {
+      readonly error: string;
+      readonly ok: false;
+      readonly status: 400 | 413 | 431;
+    };
 
 interface BoundedJsonRequest {
   readonly body?: ReadableStream<Uint8Array> | null;
@@ -20,6 +27,17 @@ interface BoundedJsonRequest {
 export async function readTurnRequest(
   request: BoundedJsonRequest
 ): Promise<TurnRequestReadResult> {
+  const parsedJson = await readJsonRequest(request);
+  if (!parsedJson.ok) {
+    return parsedJson;
+  }
+
+  return parseTurnBody(parsedJson.value);
+}
+
+export async function readJsonRequest(
+  request: BoundedJsonRequest
+): Promise<JsonRequestReadResult> {
   const headersBytes = totalHeaderBytes(request.headers);
   if (headersBytes > appBudgets.maxHeaderBytes) {
     return {
@@ -42,11 +60,22 @@ export async function readTurnRequest(
     return parsedJson;
   }
 
-  return parseTurnBody(parsedJson.value);
+  return parsedJson;
 }
 
 export function jsonResponse(body: unknown, status = 200): Response {
   return Response.json(body, { status });
+}
+
+export function textResponse(
+  body: string,
+  contentType = "text/plain; charset=utf-8",
+  status = 200
+): Response {
+  return new Response(body, {
+    headers: { "content-type": contentType },
+    status,
+  });
 }
 
 function declaredBodyExceedsBudget(headers: Headers): boolean {

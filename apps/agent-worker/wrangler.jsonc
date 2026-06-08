@@ -3,6 +3,7 @@
   "name": "pss-agent-worker",
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-06-08",
+  "compatibility_flags": ["nodejs_compat"],
   "durable_objects": {
     "bindings": [
       {

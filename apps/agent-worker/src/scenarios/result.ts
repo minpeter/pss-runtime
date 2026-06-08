@@ -1,10 +1,12 @@
 import type { AgentEvent } from "@minpeter/pss-runtime";
 import { appBudgets, type ScenarioId } from "../request/schema";
+import type { StressScenarioEvidence } from "./evidence";
 import type { EventSummary } from "./metrics";
 import { summarizeEvents } from "./metrics";
 
 export interface StressScenarioResult {
   readonly events: readonly AgentEvent[];
+  readonly evidence?: StressScenarioEvidence;
   readonly markers: readonly string[];
   readonly pluginCounts?: Readonly<Record<string, number>>;
   readonly scenario: ScenarioId;
@@ -16,17 +18,22 @@ export function scenarioResult(
   events: readonly AgentEvent[],
   markers: readonly string[],
   pluginCounts?: Readonly<Record<string, number>>,
-  summaryEvents: number = appBudgets.maxSummaryEvents
+  summaryEvents: number = appBudgets.maxSummaryEvents,
+  evidence?: StressScenarioEvidence
 ): StressScenarioResult {
   const eventLimit = Math.min(summaryEvents, appBudgets.maxSummaryEvents);
   const limitedEvents = limitEventsByBudget(events, eventLimit);
-  return {
+  const result: StressScenarioResult = {
     events: limitedEvents,
     markers,
     pluginCounts,
     scenario,
     summary: summarizeEvents(events, limitedEvents.length),
   };
+  if (evidence) {
+    return { ...result, evidence };
+  }
+  return result;
 }
 
 function limitEventsByBudget(

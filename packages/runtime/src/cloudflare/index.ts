@@ -8,14 +8,20 @@ export type {
 } from "./cloudflare-agent-context";
 export { createCloudflareAgentContext } from "./cloudflare-agent-context";
 export type {
-  CloudflareAgentRunDrainOptions,
+  CloudflareAlarmContinuationReason,
+  CloudflareAlarmDrainBudget,
+  FailedScheduledWork,
+} from "./cloudflare-alarm-budget";
+export type {
   CloudflareAlarmAgent,
   CloudflareAlarmDrainSummary,
 } from "./cloudflare-alarm-drainer";
 export {
-  drainAgentRun,
+  CloudflareAlarmDrainFailureError,
   drainCloudflareAlarm,
 } from "./cloudflare-alarm-drainer";
+export type { CloudflareAgentRunDrainOptions } from "./cloudflare-alarm-run-drain";
+export { drainAgentRun } from "./cloudflare-alarm-run-drain";
 export type {
   CloudflareDurableObjectFetchOptions,
   CloudflareDurableObjectStubOptions,

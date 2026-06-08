@@ -19,6 +19,7 @@ export const scenarioIds = [
   "resume-retry",
   "cancel-stale-child",
   "long-running-pingpong",
+  "user-sandbox-file-edit",
   "request-rejection",
   "fanout-guard",
   "large-history-guard",
@@ -43,6 +44,7 @@ export const appBudgets = {
   maxPingPongHops: 12,
   maxPartChars: 2048,
   maxRouteTokenChars: 80,
+  maxSandboxFileBytes: 8 * 1024,
   maxSummaryBytes: 8 * 1024,
   maxSummaryEvents: 24,
 } as const;
@@ -75,6 +77,25 @@ const routeTokenSchema = z
   .min(1)
   .max(appBudgets.maxRouteTokenChars);
 const scenarioSchema = z.enum(scenarioIds);
+const scenarioOptionsSchema = z
+  .object({
+    clock: z.literal("compressed").optional(),
+    delayMs: z
+      .number()
+      .int()
+      .min(1)
+      .max(appBudgets.maxPingPongDelayMs)
+      .optional(),
+    hops: z.number().int().min(1).max(appBudgets.maxPingPongHops).optional(),
+  })
+  .strict();
+const agentScenarioSchema = z
+  .object({
+    id: scenarioSchema,
+    options: scenarioOptionsSchema.optional(),
+  })
+  .strict();
+const scenarioInputSchema = z.union([scenarioSchema, agentScenarioSchema]);
 const stressSchema = z
   .object({
     checkpointBytes: z
@@ -165,7 +186,7 @@ const turnBodySchema = z
   .object({
     conversationId: routeTokenSchema,
     input: inputSchema,
-    scenario: scenarioSchema,
+    scenario: scenarioInputSchema,
     stress: stressSchema,
     tenantId: routeTokenSchema,
     userId: routeTokenSchema,
@@ -188,17 +209,8 @@ export function parseTurnBody(value: unknown): ParseTurnBodyResult {
     value: {
       conversationId: parsed.data.conversationId,
       input: normalizeRequestInput(parsed.data.input),
-      scenario: parsed.data.scenario,
-      stress: {
-        checkpointBytes:
-          parsed.data.stress?.checkpointBytes ?? appBudgets.maxCheckpointBytes,
-        fanout: parsed.data.stress?.fanout ?? 1,
-        historyItems: parsed.data.stress?.historyItems ?? 1,
-        pingPongDelayMs: parsed.data.stress?.pingPongDelayMs ?? 60_000,
-        pingPongHops: parsed.data.stress?.pingPongHops ?? 6,
-        summaryEvents:
-          parsed.data.stress?.summaryEvents ?? appBudgets.maxSummaryEvents,
-      },
+      scenario: scenarioId(parsed.data.scenario),
+      stress: stressOptions(parsed.data.scenario, parsed.data.stress),
       tenantId: parsed.data.tenantId,
       userId: parsed.data.userId,
     },
@@ -225,4 +237,26 @@ function normalizeRequestInput(
     type: "user-message",
   };
   return message;
+}
+
+type ParsedScenario = z.infer<typeof scenarioInputSchema>;
+type ParsedStress = z.infer<typeof stressSchema>;
+
+function scenarioId(scenario: ParsedScenario): ScenarioId {
+  return typeof scenario === "string" ? scenario : scenario.id;
+}
+
+function stressOptions(
+  scenario: ParsedScenario,
+  stress: ParsedStress
+): StressOptions {
+  const options = typeof scenario === "string" ? undefined : scenario.options;
+  return {
+    checkpointBytes: stress?.checkpointBytes ?? appBudgets.maxCheckpointBytes,
+    fanout: stress?.fanout ?? 1,
+    historyItems: stress?.historyItems ?? 1,
+    pingPongDelayMs: stress?.pingPongDelayMs ?? options?.delayMs ?? 60_000,
+    pingPongHops: stress?.pingPongHops ?? options?.hops ?? 6,
+    summaryEvents: stress?.summaryEvents ?? appBudgets.maxSummaryEvents,
+  };
 }
