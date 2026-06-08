@@ -15,7 +15,7 @@ import type {
 
 type BackgroundChildSession = ReturnType<Subagent["session"]>;
 
-const durableCancelPollMs = 1000;
+const durableCancelPollMs = 250;
 
 export async function runBackgroundJob({
   childSession,

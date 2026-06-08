@@ -101,7 +101,7 @@ describe("durable background cancellation races", () => {
       { ...toolExecutionOptions(), context: {} }
     );
 
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(250);
     await runningJob.promise;
     expect(interrupted).toBe(true);
     expect(runningJob.status).toBe("cancelled");

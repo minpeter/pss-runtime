@@ -327,7 +327,7 @@ describe("examples workspace packages", () => {
     );
 
     expect(storage.transactionCount).toBe(1);
-    expect(runnerSource).toContain("const durableCancelPollMs = 1000;");
+    expect(runnerSource).toContain("const durableCancelPollMs = 250;");
     expect(runnerSource).not.toContain("const durableCancelPollMs = 25;");
     expect(resumeSource).toContain("}).finally(() => {");
     expect(resumeSource).toContain("job.settled = true;");
