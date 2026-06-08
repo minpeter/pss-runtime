@@ -11,8 +11,10 @@ import {
 import { jsonResponse } from "../request/http";
 import { type WorkerRoute, writeWorkerRoute } from "../request/route";
 import {
+  type RunSandboxFileEditDemoOptions,
   runSandboxFileEditDemo,
   type SandboxSdkEnv,
+  sandboxRuntimeUnavailableReason,
 } from "../sandbox/file-edit";
 import { runStressScenario } from "../scenarios";
 import type { StressScenarioResult } from "../scenarios/result";
@@ -31,6 +33,7 @@ export interface DurableAgentApiRouteOptions {
 export interface WorkerAgentApiRouteOptions {
   readonly env: WorkerAgentApiEnv;
   readonly request: Request;
+  readonly sandboxFactory?: RunSandboxFileEditDemoOptions["sandboxFactory"];
 }
 
 export async function durableAgentApiRouteResponse(
@@ -159,13 +162,33 @@ async function runSandboxRoute(
   if (!body.ok) {
     return jsonResponse({ error: body.error }, body.status);
   }
-  return jsonResponse(
-    await runSandboxFileEditDemo({
-      env: options.env,
-      fileEdit: body.value,
-      route,
-    })
-  );
+  try {
+    return jsonResponse(
+      await runSandboxFileEditDemo({
+        env: options.env,
+        fileEdit: body.value,
+        route,
+        sandboxFactory: options.sandboxFactory,
+      })
+    );
+  } catch (error) {
+    const reason = sandboxRuntimeUnavailableReason(error);
+    if (!reason) {
+      throw error;
+    }
+    return jsonResponse(
+      {
+        error: "Cloudflare Sandbox container is unavailable.",
+        reason,
+        retryAfterSeconds: 5,
+        sandboxConfigured: Boolean(options.env.Sandbox),
+        sandboxName: route.sandboxName,
+        tenantId: route.tenantId,
+        userId: route.userId,
+      },
+      503
+    );
+  }
 }
 
 function methodMatchesApiRoute(

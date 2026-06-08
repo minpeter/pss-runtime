@@ -80,10 +80,23 @@ cp apps/agent-worker/.dev.vars.example apps/agent-worker/.dev.vars
 pnpm --filter @minpeter/pss-agent-worker dev:worker
 ```
 
+Run the actual Worker/Durable Object entrypoint with a local Docker-backed
+Cloudflare Sandbox binding:
+
+```sh
+cp apps/agent-worker/.dev.vars.example apps/agent-worker/.dev.vars
+pnpm --filter @minpeter/pss-agent-worker dev:sandbox-worker
+```
+
+The checked-in `.dev.vars.example` sets shorter local Sandbox startup polling
+timeouts. To compare SDK transport paths, set `AGENT_SANDBOX_TRANSPORT` to
+`http`, `websocket`, or `rpc`.
+
 For a fixed port:
 
 ```sh
 pnpm --filter @minpeter/pss-agent-worker exec wrangler dev --ip 127.0.0.1 --port 8791
+pnpm --filter @minpeter/pss-agent-worker exec wrangler dev --config wrangler.sandbox.jsonc --ip 127.0.0.1 --port 8791
 ```
 
 Smoke it with curl:
@@ -136,12 +149,20 @@ Local Wrangler persistence can be reset with:
 rm -rf apps/agent-worker/.wrangler
 ```
 
+If the Sandbox file-edit route returns `503` with `Cloudflare Sandbox container
+is unavailable.`, check the `wrangler dev` log and reset local persistence with
+the command above. Stale local container state can survive Dockerfile changes.
+If logs still show Cloudflare's `proxy-everything` helper exiting with
+`setsockoptint: protocol not available`, retry with a Docker backend that
+supports the helper container's `NET_ADMIN`/proxy path.
+
 ## Dry-Run Bundle
 
 Bundle without deploying or requiring account traffic:
 
 ```sh
 pnpm --filter @minpeter/pss-agent-worker dry-run:worker
+pnpm --filter @minpeter/pss-agent-worker dry-run:sandbox-worker
 ```
 
 Equivalent explicit command:
@@ -154,6 +175,7 @@ Reset dry-run output with:
 
 ```sh
 rm -rf /tmp/pss-agent-worker-dry-run
+rm -rf /tmp/pss-agent-worker-sandbox-dry-run
 ```
 
 ## Real Deploy
@@ -168,11 +190,11 @@ Real deploy is manual and account-owned. Prerequisites:
   `GET /events`, versioned `/v1/...` routes, and `/runs` require
   `Authorization: Bearer <token>`.
 - Optional paid-plan Sandbox SDK support: switch the Worker main module to
-  `src/worker/sandbox-entry.ts`, add the `Sandbox` Containers/Durable Object
-  binding shown below, and keep the bearer auth check enabled. Without
-  `env.Sandbox`, `/v1/tenants/:tenantId/users/:userId/sandbox/file-edit`
-  returns the deterministic `getSandbox`/`mkdir`/`writeFile`/`exec`/`readFile`
-  operation plan instead of spawning a container.
+  `src/worker/sandbox-entry.ts`, use `wrangler.sandbox.jsonc`, and keep the
+  bearer auth check enabled. Without `env.Sandbox`,
+  `/v1/tenants/:tenantId/users/:userId/sandbox/file-edit` returns the
+  deterministic `getSandbox`/`mkdir`/`writeFile`/`exec`/`readFile` operation
+  plan instead of spawning a container.
 - Re-check current Cloudflare limits before raising stress budgets.
 
 Deploy:
@@ -218,6 +240,11 @@ Sandbox SDK opt-in `wrangler.jsonc` additions:
   ]
 }
 ```
+
+The checked-in `wrangler.sandbox.jsonc` already applies that config and uses
+`apps/agent-worker/Dockerfile`, which extends the version-matched
+`docker.io/cloudflare/sandbox:0.11.0-python` base image with Python and
+TypeScript tooling for file-edit exercises.
 
 CI and repository tests do not send real Cloudflare account traffic and do not
 run production deploys.

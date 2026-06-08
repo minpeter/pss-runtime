@@ -1,10 +1,14 @@
-import type { getSandbox } from "@cloudflare/sandbox";
+import type { getSandbox, SandboxOptions } from "@cloudflare/sandbox";
 import type {
   SandboxFileEditRequest,
   SandboxUserRoute,
 } from "../request/agent-api";
 
 export interface SandboxSdkEnv {
+  readonly AGENT_SANDBOX_INSTANCE_TIMEOUT_MS?: string;
+  readonly AGENT_SANDBOX_POLL_INTERVAL_MS?: string;
+  readonly AGENT_SANDBOX_PORT_TIMEOUT_MS?: string;
+  readonly AGENT_SANDBOX_TRANSPORT?: string;
   readonly Sandbox?: Parameters<typeof getSandbox>[0];
 }
 
@@ -58,6 +62,13 @@ export interface RunSandboxFileEditDemoOptions {
   ) => Promise<SandboxRuntime | undefined> | SandboxRuntime | undefined;
 }
 
+const sandboxUnavailableSignals = [
+  "Container is starting",
+  "Container failed to start",
+  "Failed after",
+  "Network connection lost",
+];
+
 export async function runSandboxFileEditDemo(
   options: RunSandboxFileEditDemoOptions
 ): Promise<SandboxFileEditDemoResult> {
@@ -85,6 +96,16 @@ export async function runSandboxFileEditDemo(
       readContent: readBack.content,
     },
   };
+}
+
+export function sandboxRuntimeUnavailableReason(
+  error: unknown
+): string | undefined {
+  const detail = errorDetails(error);
+  if (!sandboxUnavailableSignals.some((signal) => detail.includes(signal))) {
+    return;
+  }
+  return errorMessage(error) || "Cloudflare Sandbox container is unavailable.";
 }
 
 function baseResult(
@@ -117,8 +138,66 @@ async function createSandboxRuntime(
   const sandboxModule = await import("@cloudflare/sandbox");
   return sandboxModule.getSandbox(
     options.env.Sandbox,
-    options.route.sandboxName
+    options.route.sandboxName,
+    sandboxOptionsFromEnv(options.env)
   );
+}
+
+function sandboxOptionsFromEnv(env: SandboxSdkEnv): SandboxOptions | undefined {
+  const instanceGetTimeoutMS = readPositiveInteger(
+    env.AGENT_SANDBOX_INSTANCE_TIMEOUT_MS
+  );
+  const portReadyTimeoutMS = readPositiveInteger(
+    env.AGENT_SANDBOX_PORT_TIMEOUT_MS
+  );
+  const waitIntervalMS = readPositiveInteger(
+    env.AGENT_SANDBOX_POLL_INTERVAL_MS
+  );
+  const transport = readSandboxTransport(env.AGENT_SANDBOX_TRANSPORT);
+  const containerTimeouts =
+    instanceGetTimeoutMS || portReadyTimeoutMS || waitIntervalMS
+      ? { instanceGetTimeoutMS, portReadyTimeoutMS, waitIntervalMS }
+      : undefined;
+  if (!(containerTimeouts || transport)) {
+    return;
+  }
+  return { containerTimeouts, transport };
+}
+
+function errorDetails(error: unknown): string {
+  if (error instanceof Error) {
+    return [error.name, error.message, error.stack ?? ""].join("\n");
+  }
+  return typeof error === "string" ? error : "";
+}
+
+function errorMessage(error: unknown): string | undefined {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return typeof error === "string" ? error : undefined;
+}
+
+function readPositiveInteger(value: string | undefined): number | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return;
+  }
+  const parsed = Number(trimmed);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function readSandboxTransport(
+  value: string | undefined
+): SandboxOptions["transport"] | undefined {
+  switch (value?.trim()) {
+    case "http":
+    case "websocket":
+    case "rpc":
+      return value.trim() as SandboxOptions["transport"];
+    default:
+      return;
+  }
 }
 
 function plannedOperations(
