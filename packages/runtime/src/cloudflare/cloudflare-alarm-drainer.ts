@@ -1,5 +1,5 @@
-import type { AgentEvent, AgentRun } from "@minpeter/pss-runtime";
-import type { RunStatus } from "@minpeter/pss-runtime/execution";
+import type { RunStatus } from "../execution";
+import type { AgentEvent, AgentRun } from "../index";
 import {
   ackScheduledCloudflareRun,
   ackScheduledCloudflareSessionPrompt,

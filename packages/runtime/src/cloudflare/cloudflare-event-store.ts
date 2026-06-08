@@ -1,9 +1,5 @@
-import type { AgentEvent } from "@minpeter/pss-runtime";
-import type {
-  EventCursor,
-  EventStore,
-  StoredAgentEvent,
-} from "@minpeter/pss-runtime/execution";
+import type { EventCursor, EventStore, StoredAgentEvent } from "../execution";
+import type { AgentEvent } from "../index";
 import { readList, storeKey, withTransaction } from "./cloudflare-store-utils";
 import type { CloudflareDurableObjectStorage } from "./durable-object-storage";
 

@@ -2,7 +2,7 @@ import type { AgentEvent } from "@minpeter/pss-runtime";
 import {
   createCloudflareDurableObjectHost,
   InMemoryCloudflareDurableObjectStorage,
-} from "./cloudflare-host";
+} from "@minpeter/pss-runtime/cloudflare";
 import {
   AgentDurableObject,
   type CloudflareDurableObjectState,

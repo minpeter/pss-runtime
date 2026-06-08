@@ -19,6 +19,9 @@ then resumes from a Durable Object alarm when the child result is ready:
   reconstructed agents map back to the same parent and subagent transcripts.
 - Long-running Node.js remains first class in the runtime. It uses the same
   background APIs, but it can keep one process and one host instance alive.
+- Application code imports the packaged adapter from
+  `@minpeter/pss-runtime/cloudflare`; the files in this example show Worker and
+  Durable Object wiring around that package surface.
 
 ## Run
 
@@ -62,7 +65,7 @@ The adapter consumes the same operations exposed by Cloudflare Durable Object
 storage:
 
 ```ts
-import { createCloudflareDurableObjectHost } from "./cloudflare-host";
+import { createCloudflareDurableObjectHost } from "@minpeter/pss-runtime/cloudflare";
 
 const host = createCloudflareDurableObjectHost({
   storage: ctx.storage,
