@@ -171,10 +171,10 @@ describe("examples workspace packages", () => {
     );
     const source = readText("examples/cloudflare-edge-subagent/src/index.ts");
     const hostSource = readText(
-      "examples/cloudflare-edge-subagent/src/cloudflare-host.ts"
+      "packages/runtime/src/cloudflare/cloudflare-host.ts"
     );
     const storeSource = readText(
-      "examples/cloudflare-edge-subagent/src/cloudflare-execution-store.ts"
+      "packages/runtime/src/cloudflare/cloudflare-execution-store.ts"
     );
     const workerSource = readText(
       "examples/cloudflare-edge-subagent/src/worker.ts"
@@ -183,7 +183,7 @@ describe("examples workspace packages", () => {
       "examples/cloudflare-edge-subagent/src/worker-route.ts"
     );
     const alarmDrainerSource = readText(
-      "examples/cloudflare-edge-subagent/src/cloudflare-alarm-drainer.ts"
+      "packages/runtime/src/cloudflare/cloudflare-alarm-drainer.ts"
     );
     const workerTsconfig = readJson(
       "examples/cloudflare-edge-subagent/tsconfig.worker.json"
@@ -210,6 +210,7 @@ describe("examples workspace packages", () => {
     expect(readme).not.toContain("in-memory fake");
     expect(readme).toContain("support-agent");
     expect(readme).toContain("dev:worker");
+    expect(source).toContain("@minpeter/pss-runtime/cloudflare");
     expect(source).toContain(
       'import { workerStorePrefix } from "./worker-constants"'
     );
@@ -231,10 +232,51 @@ describe("examples workspace packages", () => {
       "@cloudflare/workers-types",
     ]);
     const sessionStoreSource = readText(
-      "examples/cloudflare-edge-subagent/src/durable-object-session-store.ts"
+      "packages/runtime/src/cloudflare/durable-object-session-store.ts"
     );
     expect(sessionStoreSource).toContain('storeKey(this.#prefix, "session"');
     expect(sessionStoreSource).not.toMatch(legacyCloudflareSessionKeyPattern);
+  });
+
+  it("keeps the Cloudflare example as a runtime adapter consumer", () => {
+    const source = readText("examples/cloudflare-edge-subagent/src/index.ts");
+    const workerSource = readText(
+      "examples/cloudflare-edge-subagent/src/worker.ts"
+    );
+    const simulationSource = readText(
+      "examples/cloudflare-edge-subagent/src/worker-simulation.ts"
+    );
+    const edgeCasesSource = readText(
+      "examples/cloudflare-edge-subagent/src/worker-edge-cases.ts"
+    );
+    const combinedSource = [
+      source,
+      workerSource,
+      simulationSource,
+      edgeCasesSource,
+    ].join("\n");
+    const movedAdapterFiles = [
+      "cloudflare-alarm-drainer.ts",
+      "cloudflare-checkpoint-store.ts",
+      "cloudflare-event-store.ts",
+      "cloudflare-execution-session-store.ts",
+      "cloudflare-execution-store.ts",
+      "cloudflare-host.ts",
+      "cloudflare-notification-store.ts",
+      "cloudflare-run-store.ts",
+      "cloudflare-store-utils.ts",
+      "durable-object-session-store.ts",
+      "durable-object-storage.ts",
+    ];
+
+    expect(combinedSource).toContain("@minpeter/pss-runtime/cloudflare");
+    expect(combinedSource).not.toContain('from "./cloudflare-host"');
+    expect(combinedSource).not.toContain('from "./cloudflare-alarm-drainer"');
+    for (const fileName of movedAdapterFiles) {
+      expect(
+        existsSync(`examples/cloudflare-edge-subagent/src/${fileName}`)
+      ).toBe(false);
+    }
   });
 
   it("drives Cloudflare scheduled runs and session prompts through stored alarms", async () => {
@@ -245,9 +287,7 @@ describe("examples workspace packages", () => {
       createCloudflareDurableObjectHost,
       listScheduledCloudflareRuns,
       listScheduledCloudflareSessionPrompts,
-    } = await import(
-      "../examples/cloudflare-edge-subagent/src/cloudflare-host.ts"
-    );
+    } = await import("../packages/runtime/src/cloudflare/index.ts");
     const storage = new InMemoryCloudflareDurableObjectStorage();
     const host = createCloudflareDurableObjectHost({ storage });
     const runId = "background:bg_cloudflare_delayed";
@@ -302,10 +342,10 @@ describe("examples workspace packages", () => {
     );
     const resumeSource = readText("packages/runtime/src/agent-resume.ts");
     const { InMemoryCloudflareDurableObjectStorage } = await import(
-      "../examples/cloudflare-edge-subagent/src/cloudflare-host.ts"
+      "../packages/runtime/src/cloudflare/index.ts"
     );
     const { DurableObjectSessionStore } = await import(
-      "../examples/cloudflare-edge-subagent/src/durable-object-session-store.ts"
+      "../packages/runtime/src/cloudflare/durable-object-session-store.ts"
     );
 
     class CountingTransactionStorage extends InMemoryCloudflareDurableObjectStorage {

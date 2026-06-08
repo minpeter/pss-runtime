@@ -1,3 +1,4 @@
+import { durableBackgroundHost } from "./execution/host";
 import type { AgentHost, ExecutionHost } from "./execution/types";
 
 export function supportsBackgroundSubagents(
@@ -6,7 +7,7 @@ export function supportsBackgroundSubagents(
 ): boolean {
   const capability = host.capabilities?.backgroundSubagents;
   return (
-    capability === "in-process" ||
-    (capability === "durable" && executionHost !== undefined)
+    (capability === "in-process" && executionHost !== undefined) ||
+    (capability === "durable" && durableBackgroundHost(host) !== undefined)
   );
 }

@@ -2,7 +2,7 @@ import type {
   CheckpointStore,
   CheckpointWriteResult,
   RunCheckpoint,
-} from "@minpeter/pss-runtime/execution";
+} from "../execution";
 import {
   getRun,
   putRun,

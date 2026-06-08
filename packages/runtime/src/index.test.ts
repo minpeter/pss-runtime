@@ -1,16 +1,26 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type {
   AgentHostCapabilities,
+  BackgroundScheduler,
+  BackgroundSchedulerHost,
+  CheckpointHost,
   CheckpointStore,
+  DurableBackgroundHost,
+  DurableNotificationResumeHost,
+  EventHost,
   EventStore,
   ExecutionHost,
   ExecutionScheduler,
   ExecutionStore,
   ExecutionStoreTransaction,
+  ExecutionTransactionHost,
+  NotificationHost,
   NotificationInbox,
   NotificationRecord,
+  RunHost,
   RunRecord,
   RunStore,
+  SessionHost,
 } from "./execution";
 import type { AgentHost } from "./index";
 import { Agent } from "./index";
@@ -32,6 +42,8 @@ describe("runtime public exports", () => {
 
     expect(runtime).toHaveProperty("Agent", Agent);
     expect(runtime).not.toHaveProperty("createInMemoryExecutionHost");
+    expect(runtime).not.toHaveProperty("createCloudflareDurableObjectHost");
+    expect(runtime).not.toHaveProperty("BackgroundScheduler");
     expect(runtime).not.toHaveProperty("ToolExecutionNeedsRecoveryError");
     expect(runtime).not.toHaveProperty(runStreamExport);
     expect(emptyHostIsAccepted).toBe(true);
@@ -63,5 +75,23 @@ describe("runtime public exports", () => {
     expectTypeOf<
       ExecutionStoreTransaction["notifications"]
     >().toEqualTypeOf<NotificationInbox>();
+    expectTypeOf<SessionHost>().toMatchTypeOf<AgentHost>();
+    expectTypeOf<RunHost["runStore"]>().toEqualTypeOf<RunStore>();
+    expectTypeOf<
+      CheckpointHost["checkpointStore"]
+    >().toEqualTypeOf<CheckpointStore>();
+    expectTypeOf<EventHost["eventStore"]>().toEqualTypeOf<EventStore>();
+    expectTypeOf<
+      NotificationHost["notificationInbox"]
+    >().toEqualTypeOf<NotificationInbox>();
+    expectTypeOf<BackgroundScheduler>().toEqualTypeOf<ExecutionScheduler>();
+    expectTypeOf<
+      BackgroundSchedulerHost["backgroundScheduler"]
+    >().toEqualTypeOf<ExecutionScheduler>();
+    expectTypeOf<ExecutionTransactionHost["transaction"]>().toEqualTypeOf<
+      ExecutionStore["transaction"]
+    >();
+    expectTypeOf<DurableBackgroundHost>().toMatchTypeOf<RunHost>();
+    expectTypeOf<DurableNotificationResumeHost>().toMatchTypeOf<NotificationHost>();
   });
 });

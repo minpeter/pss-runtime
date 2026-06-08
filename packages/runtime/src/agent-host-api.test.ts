@@ -1,7 +1,21 @@
 import type { LanguageModel } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent, type AgentHost, type AgentOptions } from "./agent";
-import type { ExecutionHost } from "./execution/types";
+import {
+  type BackgroundScheduler,
+  type BackgroundSchedulerHost,
+  type CheckpointHost,
+  createInMemoryExecutionHost,
+  type DurableBackgroundHost,
+  type DurableNotificationResumeHost,
+  type EventHost,
+  type ExecutionHost,
+  type ExecutionScheduler,
+  type ExecutionTransactionHost,
+  type NotificationHost,
+  type RunHost,
+  type SessionHost,
+} from "./execution";
 import type { RuntimeLlm } from "./llm";
 import { collect, SpyStore } from "./session/session.test-support";
 import { assistantMessage, eventTypes } from "./test-fixtures";
@@ -19,6 +33,46 @@ const runtimeModel: RuntimeLlm = () =>
 const acceptsRuntimeModelOptions: AgentOptions = {
   model: runtimeModel,
 };
+const aggregateHost = createInMemoryExecutionHost();
+const acceptsSessionHost = {
+  sessionStore: new SpyStore(),
+} satisfies SessionHost;
+const acceptsRunHost = {
+  runStore: aggregateHost.store.runs,
+} satisfies RunHost;
+const acceptsCheckpointHost = {
+  checkpointStore: aggregateHost.store.checkpoints,
+} satisfies CheckpointHost;
+const acceptsEventHost = {
+  eventStore: aggregateHost.store.events,
+} satisfies EventHost;
+const acceptsNotificationHost = {
+  notificationInbox: aggregateHost.store.notifications,
+} satisfies NotificationHost;
+const acceptsSchedulerHost = {
+  backgroundScheduler: aggregateHost.scheduler,
+} satisfies BackgroundSchedulerHost;
+const acceptsTransactionHost = {
+  transaction: aggregateHost.store.transaction.bind(aggregateHost.store),
+} satisfies ExecutionTransactionHost;
+const acceptsDurableBackgroundHost = {
+  backgroundScheduler: aggregateHost.scheduler,
+  capabilities: { backgroundSubagents: "durable" },
+  checkpointStore: aggregateHost.store.checkpoints,
+  eventStore: aggregateHost.store.events,
+  notificationInbox: aggregateHost.store.notifications,
+  runStore: aggregateHost.store.runs,
+  sessionStore: aggregateHost.store.sessions,
+  transaction: aggregateHost.store.transaction.bind(aggregateHost.store),
+} satisfies DurableBackgroundHost;
+const acceptsDurableNotificationResumeHost = {
+  backgroundScheduler: aggregateHost.scheduler,
+  capabilities: { backgroundSubagents: "durable" },
+  checkpointStore: aggregateHost.store.checkpoints,
+  notificationInbox: aggregateHost.store.notifications,
+  runStore: aggregateHost.store.runs,
+  transaction: aggregateHost.store.transaction.bind(aggregateHost.store),
+} satisfies DurableNotificationResumeHost;
 
 type IsAssignable<Source, Target> = Source extends Target ? true : false;
 type AssertFalse<T extends false> = T;
@@ -46,8 +100,35 @@ type RejectsExecutionHostSessionStoreKey = AssertFalse<
 type RejectsHostKindKey = AssertFalse<
   "kind" extends keyof AgentHost ? true : false
 >;
+type AcceptsSessionHostAsAgentHost = IsAssignable<
+  typeof acceptsSessionHost,
+  AgentHost
+>;
+type AcceptsExecutionHostAsAgentHost = IsAssignable<
+  typeof aggregateHost,
+  AgentHost
+>;
+type BackgroundSchedulerMatchesExecutionScheduler = IsAssignable<
+  BackgroundScheduler,
+  ExecutionScheduler
+>;
+type ExecutionSchedulerMatchesBackgroundScheduler = IsAssignable<
+  ExecutionScheduler,
+  BackgroundScheduler
+>;
 
-const typeFixtures = [acceptsHostOptions];
+const typeFixtures = [
+  acceptsCheckpointHost,
+  acceptsDurableBackgroundHost,
+  acceptsDurableNotificationResumeHost,
+  acceptsEventHost,
+  acceptsHostOptions,
+  acceptsNotificationHost,
+  acceptsRunHost,
+  acceptsSchedulerHost,
+  acceptsSessionHost,
+  acceptsTransactionHost,
+];
 const acceptsHostOptionAssertion: AcceptsHostOption = true;
 const acceptsRuntimeModelOptionAssertion: AcceptsRuntimeModelOption = true;
 const llmOptionAssertion: RejectsLlmOptionKey = false;
@@ -56,10 +137,14 @@ const sessionsOptionAssertion: RejectsSessionsOptionKey = false;
 const hostSessionStoreAssertion: AcceptsHostSessionStoreKey = true;
 const executionSessionStoreAssertion: RejectsExecutionHostSessionStoreKey = false;
 const hostKindAssertion: RejectsHostKindKey = false;
+const acceptsSessionHostAssertion: AcceptsSessionHostAsAgentHost = true;
+const acceptsExecutionHostAssertion: AcceptsExecutionHostAsAgentHost = true;
+const backgroundSchedulerAssertion: BackgroundSchedulerMatchesExecutionScheduler = true;
+const executionSchedulerAssertion: ExecutionSchedulerMatchesBackgroundScheduler = true;
 
 describe("Agent host public API", () => {
   it("accepts host option and keeps unsupported option keys out of AgentOptions", () => {
-    expect(typeFixtures).toHaveLength(1);
+    expect(typeFixtures).toHaveLength(10);
     expect(acceptsHostOptionAssertion).toBe(true);
     expect(acceptsRuntimeModelOptionAssertion).toBe(true);
     expect(llmOptionAssertion).toBe(false);
@@ -68,6 +153,10 @@ describe("Agent host public API", () => {
     expect(hostSessionStoreAssertion).toBe(true);
     expect(executionSessionStoreAssertion).toBe(false);
     expect(hostKindAssertion).toBe(false);
+    expect(acceptsSessionHostAssertion).toBe(true);
+    expect(acceptsExecutionHostAssertion).toBe(true);
+    expect(backgroundSchedulerAssertion).toBe(true);
+    expect(executionSchedulerAssertion).toBe(true);
     expect(new Agent({ host: inProcessHost, model: fakeModel })).toBeInstanceOf(
       Agent
     );

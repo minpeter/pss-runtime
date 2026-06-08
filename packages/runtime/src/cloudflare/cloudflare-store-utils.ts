@@ -1,8 +1,5 @@
-import type { StoredSession } from "@minpeter/pss-runtime";
-import type {
-  NotificationRecord,
-  RunRecord,
-} from "@minpeter/pss-runtime/execution";
+import type { NotificationRecord, RunRecord } from "../execution";
+import type { StoredSession } from "../index";
 import type { CloudflareDurableObjectStorage } from "./durable-object-storage";
 
 export async function withTransaction<T>(

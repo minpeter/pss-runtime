@@ -6,6 +6,18 @@ export type {
   RuntimeToolRetryPolicy,
 } from "../llm-tool-execution";
 export { ToolExecutionNeedsRecoveryError } from "../llm-tool-execution";
+export type {
+  BackgroundScheduler,
+  BackgroundSchedulerHost,
+  CheckpointHost,
+  DurableBackgroundHost,
+  DurableNotificationResumeHost,
+  EventHost,
+  ExecutionTransactionHost,
+  NotificationHost,
+  RunHost,
+  SessionHost,
+} from "./capabilities";
 export { createInMemoryExecutionHost } from "./memory";
 export type {
   AgentHostCapabilities,

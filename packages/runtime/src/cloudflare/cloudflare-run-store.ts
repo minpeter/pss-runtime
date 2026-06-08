@@ -4,7 +4,7 @@ import type {
   RunRecord,
   RunStatus,
   RunStore,
-} from "@minpeter/pss-runtime/execution";
+} from "../execution";
 import {
   getRun,
   indexRun,

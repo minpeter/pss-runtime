@@ -24,9 +24,15 @@ const runtimeRootDeclaration = [
 ].join("\n");
 const runtimeExecutionDeclaration = [
   'export { createInMemoryExecutionHost } from "./memory";',
+  'export type { BackgroundScheduler, BackgroundSchedulerHost, CheckpointHost, DurableBackgroundHost, DurableNotificationResumeHost, EventHost, ExecutionTransactionHost, NotificationHost, RunHost, SessionHost } from "./capabilities";',
   'export type { AgentHostCapabilities, CheckpointStore, EventStore, ExecutionHost, ExecutionScheduler, ExecutionStore, ExecutionStoreTransaction, NotificationInbox, NotificationRecord, RunRecord, RunStore } from "./types";',
   'export type { RuntimeToolExecutionCheckpoint, RuntimeToolExecutionContext, RuntimeToolExecutionDecision, RuntimeToolRetryPolicy } from "../llm-tool-execution";',
   'export { ToolExecutionNeedsRecoveryError } from "../llm-tool-execution";',
+  "",
+].join("\n");
+const runtimeCloudflareDeclaration = [
+  'export { ackScheduledCloudflareRun, ackScheduledCloudflareSessionPrompt, createCloudflareAlarmScheduler, createCloudflareDurableObjectHost, drainAgentRun, drainCloudflareAlarm, InMemoryCloudflareDurableObjectStorage, listScheduledCloudflareRuns, listScheduledCloudflareSessionPrompts, rescheduleCloudflareAlarm } from "./index";',
+  'export type { CloudflareAlarmAgent, CloudflareAlarmDrainSummary, CloudflareDurableObjectStorage, CloudflareScheduledSessionPrompt } from "./index";',
   "",
 ].join("\n");
 
@@ -72,6 +78,13 @@ function createFixture() {
       writeFileSync(
         join(cwd, "packages", packageName, "dist", "execution", "index.d.ts"),
         runtimeExecutionDeclaration
+      );
+      mkdirSync(join(cwd, "packages", packageName, "dist", "cloudflare"), {
+        recursive: true,
+      });
+      writeFileSync(
+        join(cwd, "packages", packageName, "dist", "cloudflare", "index.d.ts"),
+        runtimeCloudflareDeclaration
       );
       writeFileSync(
         join(cwd, "packages", packageName, "dist", "llm.d.ts"),
@@ -396,6 +409,17 @@ describe("verifyReleaseArtifacts", () => {
     ]);
   });
 
+  it("requires the runtime cloudflare declaration entrypoint", () => {
+    const cwd = createFixture();
+    rmSync(
+      join(cwd, "packages", "runtime", "dist", "cloudflare", "index.d.ts")
+    );
+
+    expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
+      "packages/runtime/dist/cloudflare/index.d.ts: missing cloudflare runtime declaration",
+    ]);
+  });
+
   it("checks advanced runtime contracts on the execution declaration subpath", () => {
     const cwd = createFixture();
     writeFileSync(
@@ -405,15 +429,24 @@ describe("verifyReleaseArtifacts", () => {
 
     expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export AgentHostCapabilities",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export BackgroundScheduler",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export BackgroundSchedulerHost",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export CheckpointHost",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export CheckpointStore",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export createInMemoryExecutionHost",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export DurableBackgroundHost",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export DurableNotificationResumeHost",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export EventHost",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export EventStore",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ExecutionHost",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ExecutionScheduler",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ExecutionStore",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ExecutionStoreTransaction",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ExecutionTransactionHost",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export NotificationHost",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export NotificationInbox",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export NotificationRecord",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RunHost",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RunRecord",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RunStore",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RuntimeToolExecutionCheckpoint",
