@@ -6,7 +6,10 @@
     "@minpeter/pss-runtime": "0.0.10"
   },
   "changesets": [
+    "background-notify-runs",
+    "order-subagent-events",
     "remove-coding-agent-tools",
+    "runtime-plugin-constructor",
     "runtime-plugin-sessions",
     "runtime-subagents",
     "session-overlays"
