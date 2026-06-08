@@ -144,24 +144,22 @@ export class Agent {
     const publicHandle: SessionHandle = {
       delete: async () => {
         session.kill();
-        await cancelDurableChildRuns(this.#host, parentAgentNamespace);
-        this.#sessions.delete(key);
-        this.#sessionGenerations.set(
+        await this.#cancelDurableChildRunsBeforeLocalCleanup(
           key,
-          (this.#sessionGenerations.get(key) ?? 0) + 1
+          parentAgentNamespace
         );
+        this.#evictSessionHandle(key);
         await session.delete();
         await this.#childSessionCleanups.delete(key);
       },
       interrupt: () => session.interrupt(),
       kill: async () => {
         session.kill();
-        await cancelDurableChildRuns(this.#host, parentAgentNamespace);
-        this.#sessionGenerations.set(
+        await this.#cancelDurableChildRunsBeforeLocalCleanup(
           key,
-          (this.#sessionGenerations.get(key) ?? 0) + 1
+          parentAgentNamespace
         );
-        this.#sessions.delete(key);
+        this.#evictSessionHandle(key);
         await this.#childSessionCleanups.delete(key);
       },
       send: (input) => session.send(input),
@@ -173,6 +171,26 @@ export class Agent {
     };
     this.#sessions.set(key, entry);
     return entry;
+  }
+
+  async #cancelDurableChildRunsBeforeLocalCleanup(
+    key: string,
+    parentAgentNamespace: string
+  ): Promise<void> {
+    try {
+      await cancelDurableChildRuns(this.#host, parentAgentNamespace);
+    } catch (error) {
+      this.#evictSessionHandle(key);
+      throw error;
+    }
+  }
+
+  #evictSessionHandle(key: string): void {
+    this.#sessions.delete(key);
+    this.#sessionGenerations.set(
+      key,
+      (this.#sessionGenerations.get(key) ?? 0) + 1
+    );
   }
 
   #resumeNotification(notification: NotificationRecord): Promise<AgentRun> {
