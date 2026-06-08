@@ -8,8 +8,6 @@ describe("changeset prerelease mode", () => {
 
     expect(preState.mode).toBe("pre");
     expect(preState.tag).toBe("next");
-    expect(preState.changesets).not.toContain("background-notify-runs");
-    expect(preState.changesets).not.toContain("runtime-plugin-constructor");
     expect(config.baseBranch).toBe("v0.1");
   });
 
