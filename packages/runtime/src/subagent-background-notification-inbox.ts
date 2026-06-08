@@ -27,7 +27,7 @@ export async function enqueueDurableBackgroundNotification({
     return "inline";
   }
 
-  if (await hasCancelledChildRun({ host, jobs })) {
+  if (await allChildRunsCancelled({ host, jobs })) {
     return "queued-only";
   }
 
@@ -74,25 +74,27 @@ export async function enqueueDurableBackgroundNotification({
   return "queued-only";
 }
 
-async function hasCancelledChildRun({
+async function allChildRunsCancelled({
   host,
   jobs,
 }: {
   readonly host: ExecutionHost;
   readonly jobs: readonly SubagentJob[];
 }): Promise<boolean> {
+  let childRunCount = 0;
   for (const job of jobs) {
     if (!job.childRunId) {
       continue;
     }
 
+    childRunCount += 1;
     const run = await host.store.runs.get(job.childRunId);
-    if (run?.status === "cancelled") {
-      return true;
+    if (run?.status !== "cancelled") {
+      return false;
     }
   }
 
-  return false;
+  return childRunCount > 0;
 }
 
 function findExecutionHost(

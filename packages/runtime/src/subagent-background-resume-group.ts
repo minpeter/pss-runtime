@@ -93,7 +93,11 @@ async function addSiblingToGroup({
     return;
   }
   group.completedEvents.push(endEvent);
-  if (endEvent.status === "aborted" || endEvent.status === "error") {
+  if (
+    endEvent.status === "aborted" ||
+    endEvent.status === "cancelled" ||
+    endEvent.status === "error"
+  ) {
     group.failedNotifiedJobIds.add(siblingJob.id);
   }
 }

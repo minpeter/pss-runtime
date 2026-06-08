@@ -138,13 +138,13 @@ export class AgentSession {
   }
 
   delete(): Promise<void> {
-    this.#deletePromise ??= this.#state.delete().then(
-      () => this.kill(),
-      (error: unknown) => {
+    if (!this.#deletePromise) {
+      this.kill();
+      this.#deletePromise = this.#state.delete().catch((error: unknown) => {
         this.#deletePromise = undefined;
         throw error;
-      }
-    );
+      });
+    }
     return this.#deletePromise;
   }
 

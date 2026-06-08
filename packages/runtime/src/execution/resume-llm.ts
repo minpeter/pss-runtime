@@ -4,6 +4,7 @@ import type {
   RuntimeLlmOutput,
   RuntimeToolExecutionContext,
 } from "../llm";
+import { persistedToolExecutionCheckpoint } from "../llm-tool-execution";
 import { modelMessageToAgentEvents } from "../session/mapping";
 import { appendCheckpoint } from "./resume-checkpoints";
 import type { ResumeRunState } from "./resume-types";
@@ -48,7 +49,7 @@ export async function createResumeToolExecution({
     afterTool: (checkpoint) =>
       appendCheckpoint({
         host,
-        pendingToolCall: checkpoint,
+        pendingToolCall: persistedToolExecutionCheckpoint(checkpoint),
         phase: "after-tool",
         runId,
         runtimeState: {
@@ -61,7 +62,7 @@ export async function createResumeToolExecution({
     beforeTool: async (checkpoint) => {
       await appendCheckpoint({
         host,
-        pendingToolCall: checkpoint,
+        pendingToolCall: persistedToolExecutionCheckpoint(checkpoint),
         phase: "before-tool",
         runId,
         runtimeState: {

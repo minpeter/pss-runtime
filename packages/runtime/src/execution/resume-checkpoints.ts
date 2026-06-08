@@ -1,4 +1,4 @@
-import type { RuntimeToolExecutionCheckpoint } from "../llm";
+import type { RuntimeToolExecutionCheckpointMetadata } from "../llm";
 import { ToolExecutionNeedsRecoveryError } from "../llm-tool-execution";
 import type { ResumeRunState } from "./resume-types";
 import type { CheckpointPhase, ExecutionHost, RunCheckpoint } from "./types";
@@ -133,7 +133,7 @@ export async function appendCheckpoint({
 
 function runtimeToolCheckpoint(
   value: unknown
-): RuntimeToolExecutionCheckpoint | undefined {
+): RuntimeToolExecutionCheckpointMetadata | undefined {
   if (typeof value !== "object" || value === null) {
     return;
   }
@@ -170,7 +170,6 @@ function runtimeToolCheckpoint(
   return {
     attempt: value.attempt,
     idempotencyKey: value.idempotencyKey,
-    input: "input" in value ? value.input : undefined,
     policy: value.policy,
     toolCallId: value.toolCallId,
     toolName: value.toolName,

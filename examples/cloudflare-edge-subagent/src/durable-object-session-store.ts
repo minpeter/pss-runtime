@@ -5,6 +5,7 @@ import type {
   SessionStoreCommit,
   StoredSession,
 } from "@minpeter/pss-runtime";
+import { storeKey } from "./cloudflare-store-utils";
 import type { CloudflareDurableObjectStorage } from "./durable-object-storage";
 
 export class DurableObjectSessionStore implements SessionStore {
@@ -49,6 +50,6 @@ export class DurableObjectSessionStore implements SessionStore {
   }
 
   #storageKey(key: string): string {
-    return `${this.#prefix}:${encodeURIComponent(key)}`;
+    return storeKey(this.#prefix, "session", key);
   }
 }

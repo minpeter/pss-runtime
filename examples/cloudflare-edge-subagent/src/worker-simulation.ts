@@ -7,10 +7,20 @@ import {
   AgentDurableObject,
   type CloudflareDurableObjectState,
   createWorkerCoordinator,
-  workerStorePrefix,
 } from "./worker";
+import { routeWorkerRequest, sessionKeyFromRoute } from "./worker-route";
 
-const sessionKey = "room:demo:user:edge";
+const route = {
+  conversationId: "edge-task-ids",
+  tenantId: "demo",
+  userId: "edge",
+};
+const sessionKey = sessionKeyFromRoute(route);
+const workerRoute = routeWorkerRequest("https://worker.example/turn", route);
+if (!workerRoute) {
+  throw new Error("Worker simulation route was not valid.");
+}
+const workerRouteStorePrefix = workerRoute.storePrefix;
 
 const storage = new InMemoryCloudflareDurableObjectStorage();
 const state: CloudflareDurableObjectState = {
@@ -26,8 +36,11 @@ const launchObject = new AgentDurableObject(state, {});
 const launchResponse = await launchObject.fetch(
   new Request("https://worker.example/turn", {
     body: JSON.stringify({
+      conversationId: route.conversationId,
       input:
         "Start background research on why stable task ids matter in edge-hosted agent turns.",
+      tenantId: route.tenantId,
+      userId: route.userId,
     }),
     method: "POST",
   })
@@ -46,9 +59,13 @@ console.log("alarm:resume", alarmSummary.resumedRuns);
 console.log("resume:session-prompt", alarmSummary.consumedSessionPrompts);
 console.log("finalAnswer", extractFinalAnswer(alarmSummary.events));
 
-const duplicate = await createWorkerCoordinator(storage).resume(
-  await notificationRunId(backgroundNotificationKey(taskId))
-);
+const duplicate = await createWorkerCoordinator(
+  storage,
+  {},
+  {
+    prefix: workerRouteStorePrefix,
+  }
+).resume(await notificationRunId(backgroundNotificationKey(taskId)));
 console.log({ duplicateSessionPromptIgnored: duplicate === null });
 
 function backgroundTaskIdFromEvents(events: readonly AgentEvent[]): string {
@@ -87,7 +104,7 @@ function backgroundNotificationKey(taskId: string): string {
 
 async function notificationRunId(notificationKey: string): Promise<string> {
   const host = createCloudflareDurableObjectHost({
-    prefix: workerStorePrefix,
+    prefix: workerRouteStorePrefix,
     storage,
   });
   const notification =

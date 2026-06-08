@@ -77,12 +77,19 @@ export async function notifyBackgroundCompletion({
   const groupJobs = [...group.jobIds]
     .map((id) => jobs.get(id))
     .filter(isDefinedJob);
+  const notifyableGroupJobs = groupJobs.filter(
+    (groupJob) => !group.failedNotifiedJobIds.has(groupJob.id)
+  );
+  if (notifyableGroupJobs.length === 0) {
+    groups.delete(group.id);
+    return;
+  }
   const observerEvents = group.completedEvents.filter(
     (event) => !group.failedNotifiedJobIds.has(event.task_id ?? "")
   );
   await notifyParentSession({
-    input: buildBackgroundReminder(groupJobs),
-    jobs: groupJobs,
+    input: buildBackgroundReminder(notifyableGroupJobs),
+    jobs: notifyableGroupJobs,
     observerEvents: [...observerEvents],
     parentSession,
   });

@@ -40,7 +40,10 @@ describe("tool checkpointing through Agent", () => {
         await executableTool(
           options.tools ?? {},
           "checkpointed_tool"
-        ).execute?.({}, toolOptions("call_sdk-tool-call-1", signal));
+        ).execute?.(
+          { secret: "raw input must not persist" },
+          toolOptions("call_sdk-tool-call-1", signal)
+        );
 
         return {
           responseMessages: [
@@ -75,11 +78,13 @@ describe("tool checkpointing through Agent", () => {
       policy: "idempotent",
       toolName: "checkpointed_tool",
     });
+    expect(beforeTool?.pendingToolCall).not.toHaveProperty("input");
     expect(afterTool?.pendingToolCall).toMatchObject({
-      output: { ok: true },
       toolCallId: "call_sdk-tool-call-1",
       toolName: "checkpointed_tool",
     });
+    expect(afterTool?.pendingToolCall).not.toHaveProperty("input");
+    expect(afterTool?.pendingToolCall).not.toHaveProperty("output");
     await expect(
       host.store.runs.get(beforeTool?.runId ?? "")
     ).resolves.toMatchObject({

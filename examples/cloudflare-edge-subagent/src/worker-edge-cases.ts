@@ -8,11 +8,8 @@ import {
   listScheduledCloudflareSessionPrompts,
 } from "./cloudflare-host";
 import { FailingRunLookupStorage } from "./failing-run-lookup-storage";
-import {
-  AgentDurableObject,
-  createWorkerCoordinator,
-  workerStorePrefix,
-} from "./worker";
+import { AgentDurableObject, createWorkerCoordinator } from "./worker";
+import { workerStorePrefix } from "./worker-constants";
 
 const sessionKey = "room:demo:user:edge";
 const noRun = () => Promise.resolve(null);

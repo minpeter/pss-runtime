@@ -8,6 +8,7 @@ import type {
   RuntimeToolExecutionCheckpoint,
   RuntimeToolExecutionContext,
 } from "../llm";
+import { persistedToolExecutionCheckpoint } from "../llm-tool-execution";
 import type { SessionState } from "./session-state";
 
 const maxCheckpointWriteAttempts = 5;
@@ -119,7 +120,7 @@ async function appendToolExecutionCheckpoint({
     const result = await executionHost.store.checkpoints.append(
       {
         checkpointId: crypto.randomUUID(),
-        pendingToolCall: toolCall,
+        pendingToolCall: persistedToolExecutionCheckpoint(toolCall),
         phase,
         runId,
         runtimeState: {

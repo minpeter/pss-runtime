@@ -8,13 +8,16 @@ import {
   type CloudflareDurableObjectStorage,
   createCloudflareDurableObjectHost,
 } from "./cloudflare-host";
+import { workerStorePrefix } from "./worker-constants";
 import {
   createWorkerCoordinatorModel,
   workerResearcherModel,
 } from "./worker-model";
-
-const defaultSessionKey = "room:demo:user:edge";
-export const workerStorePrefix = "cloudflare-edge-subagent-demo";
+import {
+  readWorkerRoute,
+  routeWorkerRequest,
+  writeWorkerRoute,
+} from "./worker-route";
 
 export interface Env {
   readonly AGENT_DURABLE_OBJECT?: AgentDurableObjectNamespace;
@@ -28,7 +31,7 @@ interface AgentDurableObjectNamespace {
 type AgentDurableObjectId = unknown;
 
 interface AgentDurableObjectStub {
-  fetch(request: Request): Promise<Response>;
+  fetch(request: unknown): Promise<Response>;
 }
 
 export interface CloudflareDurableObjectState {
@@ -49,9 +52,23 @@ export class AgentDurableObject {
     const url = new URL(request.url);
     if (request.method === "POST" && url.pathname === "/turn") {
       const body = await readJsonBody(request);
+      const route = routeWorkerRequest(request.url, body);
+      if (!route) {
+        return jsonResponse(
+          {
+            error:
+              "tenantId, userId, and conversationId are required for /turn.",
+          },
+          400
+        );
+      }
+
+      await writeWorkerRoute(this.#state.storage, route);
       const input = readTextInput(body);
       const events = await drainAgentRun(
-        await this.#agent().session(defaultSessionKey).send(input)
+        await this.#agent(route.storePrefix)
+          .session(route.sessionKey)
+          .send(input)
       );
       return jsonResponse({
         events,
@@ -59,30 +76,37 @@ export class AgentDurableObject {
       });
     }
 
-    if (request.method === "POST" && url.pathname === "/alarm") {
-      const summary = await this.alarm();
-      return jsonResponse(summary);
-    }
-
     return jsonResponse({ error: "not found" }, 404);
   }
 
   async alarm(): Promise<AlarmDrainSummary> {
+    const route = await readWorkerRoute(this.#state.storage);
     return await drainCloudflareAlarm({
-      agent: this.#agent(),
-      prefix: workerStorePrefix,
+      agent: this.#agent(route?.storePrefix ?? workerStorePrefix),
+      prefix: route?.storePrefix ?? workerStorePrefix,
       storage: this.#state.storage,
     });
   }
 
-  #agent(): Agent {
-    return createWorkerCoordinator(this.#state.storage, this.#env);
+  #agent(prefix = workerStorePrefix): Agent {
+    return createWorkerCoordinator(this.#state.storage, this.#env, { prefix });
   }
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const id = env.AGENT_DURABLE_OBJECT?.idFromName("default");
+    const route = routeWorkerRequest(
+      request.url,
+      await readJsonBody(request.clone())
+    );
+    if (!route) {
+      return jsonResponse(
+        { error: "tenantId, userId, and conversationId are required." },
+        400
+      );
+    }
+
+    const id = env.AGENT_DURABLE_OBJECT?.idFromName(route.objectName);
     const stub = id ? env.AGENT_DURABLE_OBJECT?.get(id) : undefined;
     if (stub) {
       return await stub.fetch(request);
@@ -100,10 +124,11 @@ export default {
 
 export function createWorkerCoordinator(
   storage: CloudflareDurableObjectStorage,
-  _env: Env = {}
+  _env: Env = {},
+  options: { readonly prefix?: string } = {}
 ): Agent {
   const host = createCloudflareDurableObjectHost({
-    prefix: workerStorePrefix,
+    prefix: options.prefix ?? workerStorePrefix,
     storage,
   });
   const researcher = new Agent({
@@ -130,7 +155,9 @@ export function createWorkerCoordinator(
 
 type AlarmDrainSummary = CloudflareAlarmDrainSummary;
 
-async function readJsonBody(request: Request): Promise<unknown> {
+async function readJsonBody(request: {
+  json(): Promise<unknown>;
+}): Promise<unknown> {
   try {
     return await request.json();
   } catch {

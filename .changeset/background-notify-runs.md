@@ -21,8 +21,16 @@ functions. High-level managed model turns on an execution host now record
 preserves the AI SDK tool-choice shape, including named tool selection for
 providers that support it.
 
+Durable checkpoints store tool execution metadata only; raw tool input/output
+stays in the live execution callback path and is not persisted for resume.
+`delete()` and `kill()` now hard-stop the active session before durable child
+cleanup or store deletion is awaited, so killed work cannot keep running while
+cleanup is blocked. Grouped background notifications filter stale cancelled
+siblings without dropping completed sibling notifications.
+
 Durable adapters own actual scheduling/leases/resume workers; the Cloudflare
 example shows a Worker/Durable Object shaped host adapter with local `ctx.storage`
-simulation, alarm-driven resume, and Wrangler entrypoints. This prerelease branch
-uses a patch changeset by default per repository release policy; no semver-major
-release level was requested for this work.
+simulation, alarm-driven resume, request-derived Durable Object/session/storage
+identity, and Wrangler entrypoints. This prerelease branch uses a patch changeset
+by default per repository release policy; no semver-major release level was
+requested for this work.

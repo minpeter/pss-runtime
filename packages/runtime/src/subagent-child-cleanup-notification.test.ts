@@ -4,8 +4,15 @@ import type { ExecutionHost, RunRecord } from "./execution/types";
 import type { UserInput } from "./session/input";
 import type { AgentRun } from "./session/run";
 import { updateBackgroundRunStatus } from "./subagent-background-child-run";
-import { notifyBackgroundCompletion } from "./subagent-background-notify";
-import type { RuntimeInputSink, SubagentJob } from "./subagent-types";
+import {
+  notifyBackgroundCompletion,
+  registerBackgroundJobGroup,
+} from "./subagent-background-notify";
+import type {
+  RuntimeInputSink,
+  SubagentJob,
+  SubagentJobGroup,
+} from "./subagent-types";
 
 describe("durable subagent child cleanup notification", () => {
   it("stale cancelled child completion cannot notify parent", async () => {
@@ -50,6 +57,78 @@ describe("durable subagent child cleanup notification", () => {
     expect(host.resumedSessionKeys).toEqual([]);
     expect(inlineNotifications).toEqual([]);
   });
+
+  it("notifies completed siblings when a cancelled sibling is stale", async () => {
+    const host = createDurableHost();
+    await host.store.runs.create(
+      createChildRun({
+        kind: "background-subagent",
+        publicTaskId: "bg_cancelled",
+        runId: "background:bg_cancelled",
+        status: "cancelled",
+      })
+    );
+    await host.store.runs.create(
+      createChildRun({
+        kind: "background-subagent",
+        publicTaskId: "bg_done",
+        runId: "background:bg_done",
+        status: "completed",
+      })
+    );
+    const inlineNotifications: UserInput[] = [];
+    const groupId = "group-cleanup";
+    const cancelledJob = createBackgroundJob(host, {
+      childRunId: "background:bg_cancelled",
+      groupId,
+      id: "bg_cancelled",
+      status: "cancelled",
+    });
+    const completedJob = createBackgroundJob(host, {
+      childRunId: "background:bg_done",
+      groupId,
+      id: "bg_done",
+      status: "completed",
+    });
+    const jobs = new Map([
+      [cancelledJob.id, cancelledJob],
+      [completedJob.id, completedJob],
+    ]);
+    const groups = new Map<string, SubagentJobGroup>();
+    registerBackgroundJobGroup({ groupId, groups, job: cancelledJob });
+    registerBackgroundJobGroup({ groupId, groups, job: completedJob });
+
+    groups.get(groupId)?.failedNotifiedJobIds.add(cancelledJob.id);
+    await notifyBackgroundCompletion({
+      endEvent: {
+        eventCount: 1,
+        status: "completed",
+        subagent: "researcher",
+        task_id: completedJob.id,
+        type: "subagent-job-end",
+      },
+      groups,
+      job: completedJob,
+      jobs,
+      parentSession: createParentSession(inlineNotifications),
+    });
+
+    await expect(
+      host.store.notifications.getByIdempotencyKey(
+        "background-complete:default:bg_done"
+      )
+    ).resolves.toMatchObject({
+      sessionKey: "default",
+      status: "pending",
+    });
+    await expect(
+      host.store.notifications.getByIdempotencyKey(
+        "background-complete:default:bg_cancelled,bg_done"
+      )
+    ).resolves.toBeNull();
+    expect(host.resumedSessionKeys).toEqual(["default"]);
+    expect(inlineNotifications).toEqual([]);
+  });
 });
 
 interface DurableTestHost extends ExecutionHost {
@@ -90,18 +169,30 @@ function createChildRun(
   };
 }
 
-function createBackgroundJob(host: ExecutionHost): SubagentJob {
+function createBackgroundJob(
+  host: ExecutionHost,
+  options: {
+    readonly childRunId?: string;
+    readonly groupId?: string;
+    readonly id?: string;
+    readonly status?: SubagentJob["status"];
+  } = {}
+): SubagentJob {
+  const id = options.id ?? "bg_1";
+  const childRunId = options.childRunId ?? "background:bg_1";
   return {
     abort: () => undefined,
-    childRunId: "background:bg_1",
+    childRunId,
     cleanup: () => Promise.resolve(),
     executionHost: host,
-    id: "bg_1",
+    groupId: options.groupId,
+    id,
+    ownerNamespace: "owner",
     parentSessionKey: "default",
     promise: Promise.resolve(),
-    sessionKey: "background:bg_1:session",
+    sessionKey: `${childRunId}:session`,
     settled: true,
-    status: "completed",
+    status: options.status ?? "completed",
     subagent: "researcher",
   };
 }

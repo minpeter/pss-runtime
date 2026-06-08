@@ -128,6 +128,37 @@ describe("Agent session terminal state", () => {
     ]);
   });
 
+  it("closes the active run while session delete is pending", async () => {
+    const llmStarted = createDeferred();
+    const store = new BlockingDeleteStore();
+    const agent = new Agent({
+      host: { sessionStore: store },
+      model: () => {
+        llmStarted.resolve();
+        return new Promise<never>(() => undefined);
+      },
+    });
+    const session = agent.session("delete-pending-active");
+    const collecting = collect(await session.send("hello"));
+
+    await llmStarted.promise;
+    const deletion = session.delete();
+    await store.deleteStarted.promise;
+    const events = await withShortTimeout(collecting);
+    store.allowDelete.resolve();
+    await deletion;
+
+    if (events === timeoutMarker) {
+      throw new Error("session.delete() did not close the active run");
+    }
+    expect(eventTypes(events)).toEqual([
+      "user-text",
+      "turn-start",
+      "step-start",
+      "turn-error",
+    ]);
+  });
+
   it("rejects new input while session delete is pending", async () => {
     const store = new BlockingDeleteStore();
     const session = new Agent({
@@ -138,12 +169,8 @@ describe("Agent session terminal state", () => {
     await collect(await session.send("before"));
     const deletion = session.delete();
     await store.deleteStarted.promise;
-    await expect(session.send("during")).rejects.toThrow(
-      "Session delete in progress"
-    );
-    await expect(session.steer("during")).rejects.toThrow(
-      "Session delete in progress"
-    );
+    await expect(session.send("during")).rejects.toThrow("Session killed");
+    await expect(session.steer("during")).rejects.toThrow("Session killed");
     store.allowDelete.resolve();
     await deletion;
 

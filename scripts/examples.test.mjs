@@ -28,6 +28,8 @@ const examplePackages = [
 ];
 const finalRunEventsLoopPattern =
   /for await \(const event of run\.events\(\)\) \{\s+console\.log\(event\);\s+\}$/;
+const legacyCloudflareSessionKeyPattern =
+  /`\$\{this\.#prefix\}:\$\{encodeURIComponent\(key\)\}`/;
 const removedTurnModeEnvName = ["PSS", "TURN", "MODE"].join("_");
 
 function readJson(path) {
@@ -177,6 +179,9 @@ describe("examples workspace packages", () => {
     const workerSource = readText(
       "examples/cloudflare-edge-subagent/src/worker.ts"
     );
+    const workerRouteSource = readText(
+      "examples/cloudflare-edge-subagent/src/worker-route.ts"
+    );
     const alarmDrainerSource = readText(
       "examples/cloudflare-edge-subagent/src/cloudflare-alarm-drainer.ts"
     );
@@ -210,6 +215,10 @@ describe("examples workspace packages", () => {
     expect(storeSource).toContain("DurableObjectExecutionStore");
     expect(workerSource).toContain("export class AgentDurableObject");
     expect(workerSource).toContain("alarm()");
+    expect(workerSource).toContain("routeWorkerRequest");
+    expect(workerRouteSource).toContain("sessionKeyFromRoute");
+    expect(workerSource).not.toContain('idFromName("default")');
+    expect(workerSource).not.toContain('url.pathname === "/alarm"');
     expect(alarmDrainerSource).toContain("agent.resume(");
     expect(alarmDrainerSource).toContain("ackScheduledCloudflareRun");
     expect(alarmDrainerSource).toContain("rescheduleCloudflareAlarm");
@@ -217,6 +226,11 @@ describe("examples workspace packages", () => {
     expect(workerTsconfig.compilerOptions.types).toEqual([
       "@cloudflare/workers-types",
     ]);
+    const sessionStoreSource = readText(
+      "examples/cloudflare-edge-subagent/src/durable-object-session-store.ts"
+    );
+    expect(sessionStoreSource).toContain('storeKey(this.#prefix, "session"');
+    expect(sessionStoreSource).not.toMatch(legacyCloudflareSessionKeyPattern);
   });
 
   it("drives Cloudflare scheduled runs and session prompts through stored alarms", async () => {

@@ -10,7 +10,7 @@ class RejectingDeleteStore extends SpyStore {
 }
 
 describe("Agent session delete failure", () => {
-  it("keeps the session handle usable when persistence deletion fails", async () => {
+  it("hard-stops the session handle when persistence deletion fails", async () => {
     const store = new RejectingDeleteStore();
     const agent = new Agent({
       host: { sessionStore: store },
@@ -22,8 +22,8 @@ describe("Agent session delete failure", () => {
 
     await expect(session.delete()).rejects.toThrow("delete failed");
 
-    await collect(await session.send("after"));
-    expect(JSON.stringify(store.sessions.get("delete-failure"))).toContain(
+    await expect(session.send("after")).rejects.toThrow("Session killed");
+    expect(JSON.stringify(store.sessions.get("delete-failure"))).not.toContain(
       "after"
     );
   });

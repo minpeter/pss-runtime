@@ -63,10 +63,12 @@ describe("resumeRun checkpoint recovery", () => {
       policy: "idempotent",
       toolName: "checkpointed_tool",
     });
+    expect(checkpoints[1]?.pendingToolCall).not.toHaveProperty("input");
     expect(checkpoints[2]?.pendingToolCall).toMatchObject({
-      output: { ok: true },
       toolCallId: "call-tool-1",
     });
+    expect(checkpoints[2]?.pendingToolCall).not.toHaveProperty("input");
+    expect(checkpoints[2]?.pendingToolCall).not.toHaveProperty("output");
   });
 
   it("stops for manual recovery when resuming from a pending tool checkpoint", async () => {

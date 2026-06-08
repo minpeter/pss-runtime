@@ -8,14 +8,21 @@ type RuntimeLlmMessage = RuntimeLlmOutput[number];
 
 export type RuntimeToolRetryPolicy = "idempotent" | "manual-recovery" | "pure";
 
-export interface RuntimeToolExecutionCheckpoint {
+export interface RuntimeToolExecutionCheckpointMetadata {
   readonly attempt: number;
   readonly idempotencyKey: string;
-  readonly input: unknown;
   readonly policy: RuntimeToolRetryPolicy;
   readonly toolCallId: string;
   readonly toolName: string;
 }
+
+export interface RuntimeToolExecutionCheckpoint
+  extends RuntimeToolExecutionCheckpointMetadata {
+  readonly input: unknown;
+}
+
+export type RuntimePersistedToolExecutionCheckpoint =
+  RuntimeToolExecutionCheckpointMetadata;
 
 export type RuntimeToolExecutionDecision =
   | { readonly status: "needs-recovery" }
@@ -38,7 +45,7 @@ export class ToolExecutionNeedsRecoveryError extends Error {
   readonly toolCallId: string;
   readonly toolName: string;
 
-  constructor(checkpoint: RuntimeToolExecutionCheckpoint) {
+  constructor(checkpoint: RuntimeToolExecutionCheckpointMetadata) {
     super(
       `Tool ${checkpoint.toolName} requires manual recovery for ${checkpoint.idempotencyKey}`
     );
@@ -47,6 +54,18 @@ export class ToolExecutionNeedsRecoveryError extends Error {
     this.toolCallId = checkpoint.toolCallId;
     this.toolName = checkpoint.toolName;
   }
+}
+
+export function persistedToolExecutionCheckpoint(
+  checkpoint: RuntimeToolExecutionCheckpointMetadata
+): RuntimePersistedToolExecutionCheckpoint {
+  return {
+    attempt: checkpoint.attempt,
+    idempotencyKey: checkpoint.idempotencyKey,
+    policy: checkpoint.policy,
+    toolCallId: checkpoint.toolCallId,
+    toolName: checkpoint.toolName,
+  };
 }
 
 export function normalizeToolCallIds(

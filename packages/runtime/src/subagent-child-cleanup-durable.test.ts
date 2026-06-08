@@ -6,7 +6,10 @@ import {
 } from "./agent-namespace";
 import { createInMemoryExecutionHost } from "./execution/memory";
 import type { ExecutionHost, RunRecord, RunStore } from "./execution/types";
-import { createDeferred } from "./test-fixtures";
+import { collect } from "./session/session.test-support";
+import { createDeferred, eventTypes } from "./test-fixtures";
+
+const timeoutMarker = Symbol("timeout");
 
 describe("durable subagent child cleanup", () => {
   it("reconstructed parent delete cancels linked child runs", async () => {
@@ -97,7 +100,59 @@ describe("durable subagent child cleanup", () => {
       status: "cancelled",
     });
   });
+
+  it("kill closes the active parent run before durable child cancellation resolves", async () => {
+    const { host, releaseList } = createListBlockingHost();
+    const namespace = "cleanup-kill-active";
+    await host.store.runs.create(
+      createChildRun({
+        kind: "background-subagent",
+        parentRunId: testParentRunId(namespace),
+        publicTaskId: "bg_kill_active",
+        runId: "background:bg_kill_active",
+        status: "running",
+      })
+    );
+    const llmStarted = createDeferred();
+    const agent = new Agent({
+      host,
+      model: () => {
+        llmStarted.resolve();
+        return new Promise<never>(() => undefined);
+      },
+      namespace,
+    });
+    const session = agent.session("default");
+    const collecting = collect(await session.send("hello"));
+
+    await llmStarted.promise;
+    const killPromise = session.kill();
+    const events = await withShortTimeout(collecting);
+    releaseList.resolve();
+    await killPromise;
+
+    if (events === timeoutMarker) {
+      throw new Error("session.kill() waited for durable child cleanup");
+    }
+    expect(eventTypes(events)).toEqual([
+      "user-text",
+      "turn-start",
+      "step-start",
+      "turn-error",
+    ]);
+  });
 });
+
+function withShortTimeout<T>(
+  promise: Promise<T>
+): Promise<T | typeof timeoutMarker> {
+  return Promise.race([
+    promise,
+    new Promise<typeof timeoutMarker>((resolve) => {
+      setTimeout(() => resolve(timeoutMarker), 100);
+    }),
+  ]);
+}
 
 function createListBlockingHost(): {
   readonly host: ExecutionHost;

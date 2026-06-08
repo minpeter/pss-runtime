@@ -7,7 +7,9 @@ import {
 } from "./llm-tool-execution";
 
 export type {
+  RuntimePersistedToolExecutionCheckpoint,
   RuntimeToolExecutionCheckpoint,
+  RuntimeToolExecutionCheckpointMetadata,
   RuntimeToolExecutionContext,
   RuntimeToolExecutionDecision,
   RuntimeToolRetryPolicy,
