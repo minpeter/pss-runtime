@@ -5,7 +5,12 @@ import type {
   SessionStoreCommit,
   StoredSession,
 } from "@minpeter/pss-runtime";
-import { storeKey } from "./cloudflare-store-utils";
+import {
+  getSession,
+  putSession,
+  storeKey,
+  withTransaction,
+} from "./cloudflare-store-utils";
 import type { CloudflareDurableObjectStorage } from "./durable-object-storage";
 
 export class DurableObjectSessionStore implements SessionStore {
@@ -25,18 +30,21 @@ export class DurableObjectSessionStore implements SessionStore {
     next: SessionStoreCommit,
     options: { readonly expectedVersion: ExpectedSessionVersion }
   ): Promise<CommitResult> {
-    const storageKey = this.#storageKey(key);
-    const current =
-      (await this.#storage.get<StoredSession>(storageKey)) ?? null;
-    const currentVersion = current?.version ?? null;
+    return await withTransaction(this.#storage, async (storage) => {
+      const current = await getSession(storage, this.#prefix, key);
+      const currentVersion = current?.version ?? null;
 
-    if (options.expectedVersion !== currentVersion) {
-      return { ok: false, reason: "conflict" };
-    }
+      if (options.expectedVersion !== currentVersion) {
+        return { ok: false, reason: "conflict" };
+      }
 
-    const version = crypto.randomUUID();
-    await this.#storage.put(storageKey, { state: next.state, version });
-    return { ok: true, version };
+      const version = crypto.randomUUID();
+      await putSession(storage, this.#prefix, key, {
+        state: next.state,
+        version,
+      });
+      return { ok: true, version };
+    });
   }
 
   async delete(key: string): Promise<void> {

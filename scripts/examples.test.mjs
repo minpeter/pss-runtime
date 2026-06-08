@@ -295,4 +295,41 @@ describe("examples workspace packages", () => {
       host.store.notifications.claimByIdempotencyKey(idempotencyKey)
     ).resolves.toMatchObject({ ok: true });
   });
+
+  it("keeps durable runtime review fixes locked", async () => {
+    const runnerSource = readText(
+      "packages/runtime/src/subagent-background-runner.ts"
+    );
+    const resumeSource = readText("packages/runtime/src/agent-resume.ts");
+    const { InMemoryCloudflareDurableObjectStorage } = await import(
+      "../examples/cloudflare-edge-subagent/src/cloudflare-host.ts"
+    );
+    const { DurableObjectSessionStore } = await import(
+      "../examples/cloudflare-edge-subagent/src/durable-object-session-store.ts"
+    );
+
+    class CountingTransactionStorage extends InMemoryCloudflareDurableObjectStorage {
+      transactionCount = 0;
+
+      async transaction(fn) {
+        this.transactionCount += 1;
+        return await super.transaction(fn);
+      }
+    }
+
+    const storage = new CountingTransactionStorage();
+    const sessions = new DurableObjectSessionStore(storage);
+
+    await sessions.commit(
+      "session:review",
+      { state: { persisted: true } },
+      { expectedVersion: null }
+    );
+
+    expect(storage.transactionCount).toBe(1);
+    expect(runnerSource).toContain("const durableCancelPollMs = 1000;");
+    expect(runnerSource).not.toContain("const durableCancelPollMs = 25;");
+    expect(resumeSource).toContain("}).finally(() => {");
+    expect(resumeSource).toContain("job.settled = true;");
+  });
 });

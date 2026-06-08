@@ -1,17 +1,20 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createInMemoryExecutionHost } from "./execution/memory";
 import type { ExecutionHost } from "./execution/types";
 import { toolExecutionOptions } from "./llm-test-utils";
 import type { AgentEvent } from "./session/events";
 import type { AgentRun } from "./session/run";
 import { runBackgroundJob } from "./subagent-background-runner";
-import { settlesWithin } from "./subagent-background-test-support";
 import { createBackgroundCancelTool } from "./subagent-job-cancel";
 import { startBackgroundJob } from "./subagent-jobs";
 import type { RuntimeInputSink, Subagent, SubagentJob } from "./subagent-types";
 import { createDeferred } from "./test-fixtures";
 
 describe("durable background cancellation races", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("interrupts a live child run when another process cancels its durable task", async () => {
     const host = createDurableHost();
     const jobs = new Map<string, SubagentJob>();
@@ -82,6 +85,7 @@ describe("durable background cancellation races", () => {
       subagent: "researcher",
     };
     const runningJobs = new Map([[runningJob.id, runningJob]]);
+    vi.useFakeTimers();
     runningJob.promise = runBackgroundJob({
       childSession,
       groups: new Map(),
@@ -97,7 +101,8 @@ describe("durable background cancellation races", () => {
       { ...toolExecutionOptions(), context: {} }
     );
 
-    await expect(settlesWithin(runningJob.promise, 500)).resolves.toBe(true);
+    await vi.advanceTimersByTimeAsync(1000);
+    await runningJob.promise;
     expect(interrupted).toBe(true);
     expect(runningJob.status).toBe("cancelled");
     expect(notifications).toEqual([]);

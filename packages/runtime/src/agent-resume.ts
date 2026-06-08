@@ -195,6 +195,8 @@ async function resumeBackgroundSubagentRun({
     job,
     parentSession,
     prompt: state.prompt,
+  }).finally(() => {
+    job.settled = true;
   });
   await job.promise;
 
