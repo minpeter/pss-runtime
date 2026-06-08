@@ -144,24 +144,24 @@ export class Agent {
     const publicHandle: SessionHandle = {
       delete: async () => {
         session.kill();
+        await cancelDurableChildRuns(this.#host, parentAgentNamespace);
         this.#sessions.delete(key);
         this.#sessionGenerations.set(
           key,
           (this.#sessionGenerations.get(key) ?? 0) + 1
         );
-        await cancelDurableChildRuns(this.#host, parentAgentNamespace);
         await session.delete();
         await this.#childSessionCleanups.delete(key);
       },
       interrupt: () => session.interrupt(),
       kill: async () => {
         session.kill();
+        await cancelDurableChildRuns(this.#host, parentAgentNamespace);
         this.#sessionGenerations.set(
           key,
           (this.#sessionGenerations.get(key) ?? 0) + 1
         );
         this.#sessions.delete(key);
-        await cancelDurableChildRuns(this.#host, parentAgentNamespace);
         await this.#childSessionCleanups.delete(key);
       },
       send: (input) => session.send(input),

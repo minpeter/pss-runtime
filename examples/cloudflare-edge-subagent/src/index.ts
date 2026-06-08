@@ -18,6 +18,7 @@ import {
   listScheduledCloudflareRuns,
   listScheduledCloudflareSessionPrompts,
 } from "./cloudflare-host";
+import { workerStorePrefix } from "./worker-constants";
 
 loadEnv({ path: ".env", quiet: true, override: true });
 
@@ -38,7 +39,6 @@ const provider = createOpenAICompatible({
 const model = provider(env.AI_MODEL);
 
 const sessionKey = "room:demo:user:edge";
-const cloudflareStorePrefix = "cloudflare-edge-subagent-demo";
 const turns = [
   "Start background research on why stable task ids matter in edge-hosted agent turns. Return after the background task is launched.",
 ] as const;
@@ -75,7 +75,7 @@ async function runEdgeScenario(inputs: readonly string[]): Promise<void> {
 
   for (const [index, input] of inputs.entries()) {
     const host = createCloudflareDurableObjectHost({
-      prefix: cloudflareStorePrefix,
+      prefix: workerStorePrefix,
       storage,
     });
     const coordinator = createCoordinator({ host });
@@ -90,7 +90,7 @@ async function runEdgeScenario(inputs: readonly string[]): Promise<void> {
     const notificationKey = backgroundNotificationKey(taskId);
 
     const resumedHost = createCloudflareDurableObjectHost({
-      prefix: cloudflareStorePrefix,
+      prefix: workerStorePrefix,
       storage,
     });
     const resumedCoordinator = createCoordinator({
@@ -132,7 +132,7 @@ async function drainCloudflareScheduledWork(
   storage: InMemoryCloudflareDurableObjectStorage
 ): Promise<void> {
   const runIds = await listScheduledCloudflareRuns(storage, {
-    prefix: cloudflareStorePrefix,
+    prefix: workerStorePrefix,
   });
   for (const runId of runIds) {
     const run = await agent.resume(runId);
@@ -140,12 +140,12 @@ async function drainCloudflareScheduledWork(
       await drainRun(run);
     }
     await ackScheduledCloudflareRun(storage, runId, {
-      prefix: cloudflareStorePrefix,
+      prefix: workerStorePrefix,
     });
   }
 
   const prompts = await listScheduledCloudflareSessionPrompts(storage, {
-    prefix: cloudflareStorePrefix,
+    prefix: workerStorePrefix,
   });
   for (const prompt of prompts) {
     const runId =
@@ -153,7 +153,7 @@ async function drainCloudflareScheduledWork(
       (prompt.idempotencyKey
         ? await notificationRunId(
             createCloudflareDurableObjectHost({
-              prefix: cloudflareStorePrefix,
+              prefix: workerStorePrefix,
               storage,
             }),
             prompt.idempotencyKey
@@ -168,7 +168,7 @@ async function drainCloudflareScheduledWork(
       await drainRun(run);
     }
     await ackScheduledCloudflareSessionPrompt(storage, prompt, {
-      prefix: cloudflareStorePrefix,
+      prefix: workerStorePrefix,
     });
   }
 }

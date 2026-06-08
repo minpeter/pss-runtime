@@ -101,6 +101,34 @@ describe("durable subagent child cleanup", () => {
     });
   });
 
+  it("keeps the parent handle until durable child cancellation finishes", async () => {
+    const { host, releaseList } = createListBlockingHost();
+    const namespace = "cleanup-handle-order";
+    await host.store.runs.create(
+      createChildRun({
+        kind: "background-subagent",
+        parentRunId: testParentRunId(namespace),
+        publicTaskId: "bg_delete_order",
+        runId: "background:bg_delete_order",
+        status: "running",
+      })
+    );
+    const agent = new Agent({
+      host,
+      model: async () => [],
+      namespace,
+    });
+    const firstSession = agent.session("default");
+
+    const deletion = firstSession.delete();
+    await Promise.resolve();
+
+    expect(agent.session("default")).toBe(firstSession);
+    releaseList.resolve();
+    await deletion;
+    expect(agent.session("default")).not.toBe(firstSession);
+  });
+
   it("kill closes the active parent run before durable child cancellation resolves", async () => {
     const { host, releaseList } = createListBlockingHost();
     const namespace = "cleanup-kill-active";

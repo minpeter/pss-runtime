@@ -210,6 +210,10 @@ describe("examples workspace packages", () => {
     expect(readme).not.toContain("in-memory fake");
     expect(readme).toContain("support-agent");
     expect(readme).toContain("dev:worker");
+    expect(source).toContain(
+      'import { workerStorePrefix } from "./worker-constants"'
+    );
+    expect(source).not.toContain('"cloudflare-edge-subagent-demo"');
     expect(hostSource).toContain("createCloudflareDurableObjectHost");
     expect(hostSource).toContain("createCloudflareAlarmScheduler");
     expect(storeSource).toContain("DurableObjectExecutionStore");
