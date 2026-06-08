@@ -154,6 +154,12 @@ Default app budgets are deliberately below platform limits:
 - history items: 32
 - long-running ping-pong: 6 default one-minute alarm hops, 12 hops max
 
+The `long-running-pingpong` scenario is time-compressed for CI: it drains one
+Durable Object alarm boundary per hop without sleeping in real time. Only the
+first hop is scheduled by the caller; each resumed hop schedules the next one,
+so the queue handoff is exercised while the six-minute elapsed marker remains
+deterministic.
+
 Relevant Cloudflare docs:
 
 - Workers limits: <https://developers.cloudflare.com/workers/platform/limits/>

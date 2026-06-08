@@ -44,6 +44,10 @@ describe("long-running ping-pong scenario", () => {
         "scenario:long-running-pingpong",
         "pingpong:hops:6",
         "pingpong:delay-ms:60000",
+        "pingpong:scheduled-initial:1",
+        "pingpong:alarm-boundary:6",
+        "pingpong:scheduled-by-resume:2",
+        "pingpong:scheduled-by-resume:6",
         "pingpong:elapsed-ms:360000",
         "long-running:over-5m",
       ])
