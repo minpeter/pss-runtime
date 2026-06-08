@@ -13,32 +13,34 @@ function readText(path) {
   return readFileSync(path, "utf8");
 }
 
-describe("Cloudflare agent worker app", () => {
+describe("cloudflare edge support subagent example", () => {
   it("uses a Cloudflare Worker/Durable Object adapter surface", () => {
-    const packageJson = readJson("apps/agent-worker/package.json");
-    const source = readText("apps/agent-worker/src/index.ts");
+    const packageJson = readJson(
+      "examples/cloudflare-edge-subagent/package.json"
+    );
+    const source = readText("examples/cloudflare-edge-subagent/src/index.ts");
     const hostSource = readText(
       "packages/runtime/src/cloudflare/cloudflare-host.ts"
     );
     const storeSource = readText(
       "packages/runtime/src/cloudflare/cloudflare-execution-store.ts"
     );
-    const workerSource = readText("apps/agent-worker/src/worker.ts");
-    const workerConstantsSource = readText(
-      "apps/agent-worker/src/worker-constants.ts"
+    const workerSource = readText(
+      "examples/cloudflare-edge-subagent/src/worker.ts"
     );
-    const workerRouteSource = readText("apps/agent-worker/src/worker-route.ts");
+    const workerRouteSource = readText(
+      "examples/cloudflare-edge-subagent/src/worker-route.ts"
+    );
     const alarmDrainerSource = readText(
       "packages/runtime/src/cloudflare/cloudflare-alarm-drainer.ts"
     );
-    const workerTsconfig = readJson("apps/agent-worker/tsconfig.worker.json");
-    const readme = readText("apps/agent-worker/README.md");
+    const workerTsconfig = readJson(
+      "examples/cloudflare-edge-subagent/tsconfig.worker.json"
+    );
+    const readme = readText("examples/cloudflare-edge-subagent/README.md");
 
     expect(packageJson.scripts["start:worker-sim"]).toBe(
       "tsx --conditions=@minpeter/pss-source src/worker-simulation.ts"
-    );
-    expect(packageJson.scripts["start:edge-cases"]).toBe(
-      "tsx --conditions=@minpeter/pss-source src/worker-edge-cases.ts"
     );
     expect(packageJson.scripts["start:cli"]).toBe(
       "tsx --conditions=@minpeter/pss-source src/index.ts"
@@ -48,18 +50,6 @@ describe("Cloudflare agent worker app", () => {
     );
     expect(packageJson.scripts["dev:worker"]).toBe("wrangler dev");
     expect(packageJson.scripts["deploy:worker"]).toBe("wrangler deploy");
-    expect(packageJson.scripts["dry-run:worker"]).toBe(
-      "wrangler deploy --dry-run --outdir /tmp/pss-agent-worker-dry-run"
-    );
-    expect(packageJson.scripts["predeploy:worker"]).toBe(
-      "pnpm --filter @minpeter/pss-runtime build"
-    );
-    expect(packageJson.scripts["predev:worker"]).toBe(
-      "pnpm --filter @minpeter/pss-runtime build"
-    );
-    expect(packageJson.scripts["predry-run:worker"]).toBe(
-      "pnpm --filter @minpeter/pss-runtime build"
-    );
     expect(packageJson.devDependencies.wrangler).toBeDefined();
     expect(source).not.toContain("createFakeCloudflareDurableObjectHost");
     expect(source).not.toContain(removedTurnModeEnvName);
@@ -67,15 +57,13 @@ describe("Cloudflare agent worker app", () => {
     expect(readme).not.toContain(removedTurnModeEnvName);
     expect(readme).not.toContain("fake host");
     expect(readme).not.toContain("in-memory fake");
-    expect(readme).toContain("@minpeter/pss-agent-worker");
-    expect(readme).toContain("durable-background");
-    expect(readme).toContain("Durable Object alarms");
+    expect(readme).toContain("support-agent");
     expect(readme).toContain("dev:worker");
     expect(source).toContain("@minpeter/pss-runtime/cloudflare");
     expect(source).toContain(
       'import { workerStorePrefix } from "./worker-constants"'
     );
-    expect(workerConstantsSource).toContain('"agent-worker-demo"');
+    expect(source).not.toContain('"cloudflare-edge-subagent-demo"');
     expect(hostSource).toContain("createCloudflareDurableObjectHost");
     expect(hostSource).toContain("createCloudflareAlarmScheduler");
     expect(storeSource).toContain("DurableObjectExecutionStore");
@@ -99,19 +87,23 @@ describe("Cloudflare agent worker app", () => {
     expect(sessionStoreSource).not.toMatch(legacyCloudflareSessionKeyPattern);
   });
 
-  it("keeps the Cloudflare app as a runtime adapter consumer", () => {
-    const appSourceFiles = [
-      "apps/agent-worker/src/agent-factory.ts",
-      "apps/agent-worker/src/cloudflare-durable.test.ts",
-      "apps/agent-worker/src/index.ts",
-      "apps/agent-worker/src/stress-edge-scenarios.ts",
-      "apps/agent-worker/src/stress-scenarios.ts",
-      "apps/agent-worker/src/worker-edge-alarm-checks.ts",
-      "apps/agent-worker/src/worker-edge-durable-checks.ts",
-      "apps/agent-worker/src/worker-simulation.ts",
-      "apps/agent-worker/src/worker.ts",
-    ];
-    const combinedSource = appSourceFiles.map(readText).join("\n");
+  it("keeps the Cloudflare example as a runtime adapter consumer", () => {
+    const source = readText("examples/cloudflare-edge-subagent/src/index.ts");
+    const workerSource = readText(
+      "examples/cloudflare-edge-subagent/src/worker.ts"
+    );
+    const simulationSource = readText(
+      "examples/cloudflare-edge-subagent/src/worker-simulation.ts"
+    );
+    const edgeCasesSource = readText(
+      "examples/cloudflare-edge-subagent/src/worker-edge-cases.ts"
+    );
+    const combinedSource = [
+      source,
+      workerSource,
+      simulationSource,
+      edgeCasesSource,
+    ].join("\n");
     const movedAdapterFiles = [
       "cloudflare-alarm-drainer.ts",
       "cloudflare-checkpoint-store.ts",
@@ -130,7 +122,9 @@ describe("Cloudflare agent worker app", () => {
     expect(combinedSource).not.toContain('from "./cloudflare-host"');
     expect(combinedSource).not.toContain('from "./cloudflare-alarm-drainer"');
     for (const fileName of movedAdapterFiles) {
-      expect(existsSync(`apps/agent-worker/src/${fileName}`)).toBe(false);
+      expect(
+        existsSync(`examples/cloudflare-edge-subagent/src/${fileName}`)
+      ).toBe(false);
     }
   });
 

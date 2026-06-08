@@ -69,14 +69,6 @@ describe("Cloudflare Durable Object host adapter", () => {
     const host = createCloudflareDurableObjectHost({ storage });
     const runId = "background:bg_retry";
 
-    await host.store.runs.create({
-      checkpointVersion: 0,
-      kind: "background-subagent",
-      rootRunId: runId,
-      runId,
-      sessionKey: "child:bg_retry",
-      status: "queued",
-    });
     await host.scheduler.enqueueRun(runId);
 
     const summary = await drainCloudflareAlarm({
@@ -105,14 +97,6 @@ describe("Cloudflare Durable Object host adapter", () => {
       sessionKey: "room:demo:user:edge",
     };
 
-    await host.store.runs.create({
-      checkpointVersion: 0,
-      kind: "notification",
-      rootRunId: runId,
-      runId,
-      sessionKey: prompt.sessionKey,
-      status: "queued",
-    });
     await host.scheduler.resumeSession(prompt.sessionKey, {
       idempotencyKey,
       runId,

@@ -90,7 +90,7 @@ describe("Cloudflare durable alarm contract", () => {
     expect(storage.alarmTime()).toBeDefined();
   });
 
-  it("acks completed or missing non-retryable work", async () => {
+  it("acks completed non-retryable work", async () => {
     const storage = new InMemoryCloudflareDurableObjectStorage();
     const host = createCloudflareDurableObjectHost({ prefix, storage });
     await host.store.runs.create({
@@ -101,10 +101,17 @@ describe("Cloudflare durable alarm contract", () => {
       sessionKey: "child:bg_completed",
       status: "completed",
     });
+    await host.store.runs.create({
+      checkpointVersion: 0,
+      kind: "notification",
+      rootRunId: "notification:bg_completed",
+      runId: "notification:bg_completed",
+      sessionKey: "session",
+      status: "completed",
+    });
     await host.scheduler.enqueueRun("background:bg_completed");
-    await host.scheduler.enqueueRun("background:bg_missing");
     await host.scheduler.resumeSession("session", {
-      runId: "notification:bg_missing",
+      runId: "notification:bg_completed",
     });
 
     const summary = await drainCloudflareAlarm({

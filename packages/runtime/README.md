@@ -343,8 +343,8 @@ This avoids pretending that in-memory background work survived a hibernation,
 isolate restart, or request deadline.
 
 Use `@minpeter/pss-runtime/cloudflare` for the packaged Cloudflare Durable
-Object adapter. See `apps/agent-worker` for an edge-hosted turn loop that
-consumes that adapter, and `examples/subagent` for a long-running
+Object adapter. See `examples/cloudflare-edge-subagent` for an edge-hosted turn
+loop that consumes that adapter, and `examples/subagent` for a long-running
 local background subagent flow.
 
 The same core API supports room/user/session routing through stable session keys.

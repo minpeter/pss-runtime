@@ -189,7 +189,7 @@ async function shouldRetryScheduledRun(
     prefix,
     storage,
   }).store.runs.get(runId);
-  return run ? isRetryableRunStatus(run.status) : false;
+  return run ? isRetryableRunStatus(run.status) : true;
 }
 
 async function shouldRetryScheduledSessionPrompt(
