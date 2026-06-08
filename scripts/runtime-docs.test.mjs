@@ -23,4 +23,11 @@ describe("runtime docs", () => {
     expect(runSource).not.toContain("consumeRunEvents");
     expect(runSource).not.toContain("AgentRunEventListener");
   });
+
+  it("keeps the durable background host snippet assignable", () => {
+    const readme = readRepoFile("packages/runtime/README.md");
+
+    expect(readme).toContain("const durableHost: DurableBackgroundHost = {");
+    expect(readme).toContain("transaction,");
+  });
 });

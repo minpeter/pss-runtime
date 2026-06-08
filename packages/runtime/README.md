@@ -317,6 +317,7 @@ const durableHost: DurableBackgroundHost = {
   notificationInbox,
   runStore,
   sessionStore,
+  transaction,
 };
 ```
 
