@@ -1,5 +1,5 @@
 import type { AgentEvent } from "@minpeter/pss-runtime";
-import { appBudgets } from "./request-schema";
+import { appBudgets } from "../request/schema";
 
 export interface EventSummary {
   readonly assistantText: readonly string[];

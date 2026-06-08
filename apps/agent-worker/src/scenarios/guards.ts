@@ -1,7 +1,7 @@
 import type { AgentEvent } from "@minpeter/pss-runtime";
-import { appBudgets, parseTurnBody } from "./request-schema";
-import { type StressScenarioResult, scenarioResult } from "./stress-result";
-import type { RunStressScenarioOptions } from "./stress-scenarios";
+import { appBudgets, parseTurnBody } from "../request/schema";
+import type { RunStressScenarioOptions } from ".";
+import { type StressScenarioResult, scenarioResult } from "./result";
 
 export function guardScenario(
   options: RunStressScenarioOptions

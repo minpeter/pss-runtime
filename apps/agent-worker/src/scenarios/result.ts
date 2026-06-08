@@ -1,7 +1,7 @@
 import type { AgentEvent } from "@minpeter/pss-runtime";
-import { appBudgets, type ScenarioId } from "./request-schema";
-import type { EventSummary } from "./worker-metrics";
-import { summarizeEvents } from "./worker-metrics";
+import { appBudgets, type ScenarioId } from "../request/schema";
+import type { EventSummary } from "./metrics";
+import { summarizeEvents } from "./metrics";
 
 export interface StressScenarioResult {
   readonly events: readonly AgentEvent[];

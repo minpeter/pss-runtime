@@ -4,22 +4,22 @@ import {
   drainCloudflareAlarm,
   listScheduledCloudflareRuns,
 } from "@minpeter/pss-runtime/cloudflare";
-import { createWorkerCoordinator } from "./agent-factory";
+import { createWorkerCoordinator } from "../agent/factory";
+import type { WorkerRoute } from "../request/route";
 import {
   appBudgets,
   type ScenarioId,
   scenarioIds,
   type TurnRequest,
-} from "./request-schema";
+} from "../request/schema";
 import {
   runCancelStaleChildScenario,
   runDuplicateAlarmScenario,
   runResumeRetryScenario,
-} from "./stress-edge-scenarios";
-import { guardScenario } from "./stress-guard-scenarios";
-import { createStressPluginCounter } from "./stress-plugin";
-import { type StressScenarioResult, scenarioResult } from "./stress-result";
-import type { WorkerRoute } from "./worker-route";
+} from "./edge";
+import { guardScenario } from "./guards";
+import { createStressPluginCounter } from "./plugin";
+import { type StressScenarioResult, scenarioResult } from "./result";
 
 export interface HealthPayload {
   readonly app: "pss-agent-worker";

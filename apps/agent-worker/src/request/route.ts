@@ -1,6 +1,6 @@
 import type { CloudflareDurableObjectStorage } from "@minpeter/pss-runtime/cloudflare";
-import { appBudgets } from "./request-schema";
-import { workerStorePrefix } from "./worker-constants";
+import { workerStorePrefix } from "../worker/constants";
+import { appBudgets } from "./schema";
 
 const workerRouteStorageKey = "__pss_worker_route";
 

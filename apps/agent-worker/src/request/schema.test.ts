@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { readTurnRequest } from "./http";
+import { routeWorkerRequest } from "./route";
 import {
   appBudgets,
   parseTurnBody,
   scenarioIds,
   totalHeaderBytes,
-} from "./request-schema";
-import { routeWorkerRequest } from "./worker-route";
+} from "./schema";
 
 describe("agent worker request schema", () => {
   it("lists every deterministic stress scenario", () => {

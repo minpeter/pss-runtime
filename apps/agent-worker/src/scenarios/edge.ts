@@ -5,10 +5,10 @@ import {
   drainCloudflareAlarm,
   listScheduledCloudflareRuns,
 } from "@minpeter/pss-runtime/cloudflare";
-import { createWorkerCoordinator } from "./agent-factory";
-import { FailingRunLookupStorage } from "./failing-run-lookup-storage";
-import { type StressScenarioResult, scenarioResult } from "./stress-result";
-import type { RunStressScenarioOptions } from "./stress-scenarios";
+import { createWorkerCoordinator } from "../agent/factory";
+import { FailingRunLookupStorage } from "../cloudflare/failing-run-lookup-storage";
+import type { RunStressScenarioOptions } from ".";
+import { type StressScenarioResult, scenarioResult } from "./result";
 
 export async function runDuplicateAlarmScenario(
   options: RunStressScenarioOptions

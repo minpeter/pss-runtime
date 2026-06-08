@@ -1,6 +1,6 @@
 import type { RuntimeLlm } from "@minpeter/pss-runtime";
 import type { AssistantModelMessage, LanguageModel } from "ai";
-import type { ScenarioId } from "./request-schema";
+import type { ScenarioId } from "../request/schema";
 
 const delegateToolCallId = "call_cloudflare_delegate";
 const cancelToolCallId = "call_cloudflare_background_cancel";

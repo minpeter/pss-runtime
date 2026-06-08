@@ -7,8 +7,8 @@ import {
   listScheduledCloudflareSessionPrompts,
 } from "@minpeter/pss-runtime/cloudflare";
 import { describe, expect, it } from "vitest";
-import { createWorkerCoordinator } from "./agent-factory";
-import { routeWorkerRequest } from "./worker-route";
+import { createWorkerCoordinator } from "../agent/factory";
+import { routeWorkerRequest } from "../request/route";
 
 const prefix = "durable-test";
 

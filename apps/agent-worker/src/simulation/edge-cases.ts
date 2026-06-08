@@ -2,13 +2,13 @@ import {
   checkFailedAlarmKeepsRunScheduled,
   checkUnclaimableRunKeepsRunScheduled,
   checkUnclaimableSessionPromptKeepsPromptScheduled,
-} from "./worker-edge-alarm-checks";
+} from "../cloudflare/edge-alarm-checks";
 import {
   checkCancelledRunNotification,
   checkDuplicateAlarmDelivery,
   checkMalformedSessionPrompt,
   checkStaleCheckpoint,
-} from "./worker-edge-durable-checks";
+} from "../cloudflare/edge-durable-checks";
 
 const results = {
   cancelledRunSkippedNotification: await checkCancelledRunNotification(),

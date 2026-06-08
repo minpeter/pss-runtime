@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "pss-agent-worker",
-  "main": "src/worker.ts",
+  "main": "src/worker/index.ts",
   "compatibility_date": "2026-06-08",
   "durable_objects": {
     "bindings": [

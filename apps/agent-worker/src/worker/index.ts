@@ -3,17 +3,17 @@ import {
   type CloudflareDurableObjectStorage,
   drainCloudflareAlarm,
 } from "@minpeter/pss-runtime/cloudflare";
-import { createWorkerCoordinator } from "./agent-factory";
-import { jsonResponse, readTurnRequest } from "./http";
-import { appBudgets, totalHeaderBytes } from "./request-schema";
-import type { StressScenarioResult } from "./stress-result";
-import { createHealthPayload, runStressScenario } from "./stress-scenarios";
-import { workerStorePrefix } from "./worker-constants";
+import { createWorkerCoordinator } from "../agent/factory";
+import { jsonResponse, readTurnRequest } from "../request/http";
 import {
   readWorkerRoute,
   routeWorkerRequest,
   writeWorkerRoute,
-} from "./worker-route";
+} from "../request/route";
+import { appBudgets, totalHeaderBytes } from "../request/schema";
+import { createHealthPayload, runStressScenario } from "../scenarios";
+import type { StressScenarioResult } from "../scenarios/result";
+import { workerStorePrefix } from "./constants";
 
 const lastResultStorageKey = "__pss_worker_last_result";
 

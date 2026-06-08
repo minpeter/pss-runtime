@@ -1,13 +1,13 @@
 import { InMemoryCloudflareDurableObjectStorage } from "@minpeter/pss-runtime/cloudflare";
 import { describe, expect, it } from "vitest";
-import { appBudgets, parseTurnBody, scenarioIds } from "./request-schema";
-import { createHealthPayload, runStressScenario } from "./stress-scenarios";
+import { routeWorkerRequest } from "../request/route";
+import { appBudgets, parseTurnBody, scenarioIds } from "../request/schema";
 import worker, {
   AgentDurableObject,
   type CloudflareDurableObjectState,
   type Env,
-} from "./worker";
-import { routeWorkerRequest } from "./worker-route";
+} from "../worker";
+import { createHealthPayload, runStressScenario } from ".";
 
 const route = routeWorkerRequest("https://worker.example/turn", {
   conversationId: "ticket-1",

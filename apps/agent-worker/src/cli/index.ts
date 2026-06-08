@@ -18,7 +18,7 @@ import type { ExecutionHost } from "@minpeter/pss-runtime/execution";
 import { createEnv } from "@t3-oss/env-core";
 import { config as loadEnv } from "dotenv";
 import { z } from "zod";
-import { workerStorePrefix } from "./worker-constants";
+import { workerStorePrefix } from "../worker/constants";
 
 loadEnv({ path: ".env", quiet: true, override: true });
 

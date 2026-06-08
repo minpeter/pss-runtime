@@ -1,10 +1,10 @@
 import { InMemoryCloudflareDurableObjectStorage } from "@minpeter/pss-runtime/cloudflare";
 import { describe, expect, it } from "vitest";
-import { appBudgets, parseTurnBody } from "./request-schema";
-import { scenarioResult } from "./stress-result";
-import { runStressScenario } from "./stress-scenarios";
-import { summarizeEvents } from "./worker-metrics";
-import { routeWorkerRequest } from "./worker-route";
+import { routeWorkerRequest } from "../request/route";
+import { appBudgets, parseTurnBody } from "../request/schema";
+import { runStressScenario } from ".";
+import { summarizeEvents } from "./metrics";
+import { scenarioResult } from "./result";
 
 const route = routeWorkerRequest("https://worker.example/turn", {
   conversationId: "ticket-1",

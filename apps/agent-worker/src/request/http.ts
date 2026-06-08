@@ -1,5 +1,5 @@
-import type { TurnRequest } from "./request-schema";
-import { appBudgets, parseTurnBody, totalHeaderBytes } from "./request-schema";
+import type { TurnRequest } from "./schema";
+import { appBudgets, parseTurnBody, totalHeaderBytes } from "./schema";
 
 const contentLengthPattern = /^\d+$/;
 

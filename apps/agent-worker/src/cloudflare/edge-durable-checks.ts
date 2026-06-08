@@ -4,14 +4,14 @@ import {
   InMemoryCloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
 } from "@minpeter/pss-runtime/cloudflare";
-import { createWorkerCoordinator } from "./agent-factory";
+import { createWorkerCoordinator } from "../agent/factory";
+import { workerStorePrefix } from "../worker/constants";
 import {
   backgroundNotificationKey,
   backgroundTaskIdFromEvents,
   collectEvents,
   createQueuedRun,
 } from "./edge-case-helpers";
-import { workerStorePrefix } from "./worker-constants";
 
 const sessionKey = "room:demo:user:edge";
 

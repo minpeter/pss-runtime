@@ -3,12 +3,12 @@ import {
   type CloudflareDurableObjectStorage,
   createCloudflareDurableObjectHost,
 } from "@minpeter/pss-runtime/cloudflare";
-import type { ScenarioId } from "./request-schema";
-import type { StressPluginCounter } from "./stress-plugin";
-import { createStressPluginCounter } from "./stress-plugin";
-import { createStressTools } from "./stress-tools";
-import { workerStorePrefix } from "./worker-constants";
-import { createStressModel, workerResearcherModel } from "./worker-model";
+import type { ScenarioId } from "../request/schema";
+import type { StressPluginCounter } from "../scenarios/plugin";
+import { createStressPluginCounter } from "../scenarios/plugin";
+import { createStressTools } from "../scenarios/tools";
+import { workerStorePrefix } from "../worker/constants";
+import { createStressModel, workerResearcherModel } from "./model";
 
 export interface WorkerCoordinatorOptions {
   readonly pluginCounter?: StressPluginCounter;
