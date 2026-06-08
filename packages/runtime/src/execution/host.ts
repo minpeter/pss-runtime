@@ -39,13 +39,13 @@ export function executionHost(host: AgentHost): ExecutionHost | undefined {
 export function durableBackgroundHost(
   host: AgentHost
 ): DurableBackgroundHost | undefined {
+  if (isDurableBackgroundHost(host)) {
+    return host;
+  }
+
   const hostExecution = executionHost(host);
   if (hostExecution) {
     return durableBackgroundHostFromExecutionHost(hostExecution);
-  }
-
-  if (isDurableBackgroundHost(host)) {
-    return host;
   }
 
   return;

@@ -34,12 +34,15 @@ function limitEventsByBudget(
   maxEvents: number
 ): AgentEvent[] {
   const selected: AgentEvent[] = [];
+  let totalBytes = 2;
   for (const event of events.slice(0, maxEvents)) {
-    const next = [...selected, event];
-    if (encodedBytes(JSON.stringify(next)) > appBudgets.maxSummaryBytes) {
+    const eventBytes = encodedBytes(JSON.stringify(event));
+    const separatorBytes = selected.length > 0 ? 1 : 0;
+    if (totalBytes + separatorBytes + eventBytes > appBudgets.maxSummaryBytes) {
       break;
     }
     selected.push(event);
+    totalBytes += separatorBytes + eventBytes;
   }
   return selected;
 }

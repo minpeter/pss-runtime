@@ -114,7 +114,7 @@ export default {
     if (request.method === "GET" && url.pathname === "/health") {
       return jsonResponse(
         createHealthPayload({
-          bindingPresent: Boolean(env.AGENT_DURABLE_OBJECT),
+          bindingPresent: Boolean(env?.AGENT_DURABLE_OBJECT),
         })
       );
     }
@@ -134,8 +134,8 @@ export default {
       return routeError();
     }
 
-    const id = env.AGENT_DURABLE_OBJECT?.idFromName(route.objectName);
-    const stub = id ? env.AGENT_DURABLE_OBJECT?.get(id) : undefined;
+    const id = env?.AGENT_DURABLE_OBJECT?.idFromName(route.objectName);
+    const stub = id ? env?.AGENT_DURABLE_OBJECT?.get(id) : undefined;
     if (stub) {
       return await stub.fetch(request);
     }
@@ -194,7 +194,7 @@ function authorizeProtectedRequest(
   request: Request,
   env: Env
 ): Response | undefined {
-  const token = env.AGENT_WORKER_TOKEN?.trim();
+  const token = env?.AGENT_WORKER_TOKEN?.trim();
   if (!token) {
     return jsonResponse(
       {

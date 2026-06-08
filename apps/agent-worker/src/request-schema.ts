@@ -119,7 +119,7 @@ const fileDataSchema = z.union([
   }),
   z.object({
     type: z.literal("url"),
-    url: z.url().max(appBudgets.maxPartChars),
+    url: z.string().url().max(appBudgets.maxPartChars),
   }),
 ]);
 const filePartSchema = z
@@ -159,7 +159,7 @@ export function parseTurnBody(value: unknown): ParseTurnBodyResult {
   const parsed = turnBodySchema.safeParse(value);
   if (!parsed.success) {
     return {
-      error: z.prettifyError(parsed.error),
+      error: parsed.error.issues.map((issue) => issue.message).join("; "),
       ok: false,
       status: 400,
     };
