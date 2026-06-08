@@ -1,0 +1,209 @@
+import type {
+  AgentInput,
+  UserMessage,
+  UserMessageContentPart,
+} from "@minpeter/pss-runtime";
+import { z } from "zod";
+
+export const scenarioIds = [
+  "foreground-basic",
+  "multipart-input",
+  "plugin-events",
+  "tool-choice",
+  "blocking-subagent",
+  "durable-background",
+  "background-output",
+  "background-cancel",
+  "steer-step-end",
+  "duplicate-alarm",
+  "resume-retry",
+  "cancel-stale-child",
+  "request-rejection",
+  "fanout-guard",
+  "large-history-guard",
+  "checkpoint-size-guard",
+  "budget-guard",
+] as const;
+
+export type ScenarioId = (typeof scenarioIds)[number];
+
+// App guards stay well below current Cloudflare platform ceilings:
+// Workers Free: 10 ms CPU, 128 MB memory, 50 subrequests/request.
+// Durable Object alarms: one scheduled alarm per object and 15 min wall time.
+export const appBudgets = {
+  maxBodyBytes: 32 * 1024,
+  maxCheckpointBytes: 16 * 1024,
+  maxFanout: 6,
+  maxHeaderBytes: 16 * 1024,
+  maxHistoryItems: 32,
+  maxInputChars: 2048,
+  maxMultipartParts: 4,
+  maxPartChars: 2048,
+  maxRouteTokenChars: 80,
+  maxSummaryBytes: 8 * 1024,
+  maxSummaryEvents: 24,
+} as const;
+
+export interface TurnRequest {
+  readonly conversationId: string;
+  readonly input: AgentInput;
+  readonly scenario: ScenarioId;
+  readonly stress: StressOptions;
+  readonly tenantId: string;
+  readonly userId: string;
+}
+
+export interface StressOptions {
+  readonly checkpointBytes: number;
+  readonly fanout: number;
+  readonly historyItems: number;
+  readonly summaryEvents: number;
+}
+
+export type ParseTurnBodyResult =
+  | { readonly ok: true; readonly status: 200; readonly value: TurnRequest }
+  | { readonly error: string; readonly ok: false; readonly status: 400 };
+
+const routeTokenSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(appBudgets.maxRouteTokenChars);
+const scenarioSchema = z.enum(scenarioIds);
+const stressSchema = z
+  .object({
+    checkpointBytes: z
+      .number()
+      .int()
+      .min(0)
+      .max(appBudgets.maxCheckpointBytes)
+      .optional(),
+    fanout: z.number().int().min(1).max(appBudgets.maxFanout).optional(),
+    historyItems: z
+      .number()
+      .int()
+      .min(0)
+      .max(appBudgets.maxHistoryItems)
+      .optional(),
+    summaryEvents: z
+      .number()
+      .int()
+      .min(1)
+      .max(appBudgets.maxSummaryEvents)
+      .optional(),
+  })
+  .strict()
+  .optional();
+const textPartSchema = z
+  .object({
+    text: z.string().min(1).max(appBudgets.maxPartChars),
+    type: z.literal("text"),
+  })
+  .strict();
+const imagePartSchema = z
+  .object({
+    image: z.string().min(1).max(appBudgets.maxPartChars),
+    mediaType: z.string().min(1).max(80).optional(),
+    type: z.literal("image"),
+  })
+  .strict();
+const fileDataSchema = z.union([
+  z.string().min(1).max(appBudgets.maxPartChars),
+  z.object({
+    data: z.string().min(1).max(appBudgets.maxPartChars),
+    type: z.literal("data"),
+  }),
+  z.object({
+    text: z.string().min(1).max(appBudgets.maxPartChars),
+    type: z.literal("text"),
+  }),
+  z.object({
+    type: z.literal("url"),
+    url: z.url().max(appBudgets.maxPartChars),
+  }),
+]);
+const filePartSchema = z
+  .object({
+    data: fileDataSchema,
+    filename: z.string().min(1).max(120).optional(),
+    mediaType: z.string().min(1).max(120),
+    type: z.literal("file"),
+  })
+  .strict();
+const multipartInputSchema = z
+  .array(
+    z.discriminatedUnion("type", [
+      textPartSchema,
+      imagePartSchema,
+      filePartSchema,
+    ])
+  )
+  .min(1)
+  .max(appBudgets.maxMultipartParts);
+const inputSchema = z.union([
+  z.string().trim().min(1).max(appBudgets.maxInputChars),
+  multipartInputSchema,
+]);
+const turnBodySchema = z
+  .object({
+    conversationId: routeTokenSchema,
+    input: inputSchema,
+    scenario: scenarioSchema,
+    stress: stressSchema,
+    tenantId: routeTokenSchema,
+    userId: routeTokenSchema,
+  })
+  .strict();
+
+export function parseTurnBody(value: unknown): ParseTurnBodyResult {
+  const parsed = turnBodySchema.safeParse(value);
+  if (!parsed.success) {
+    return {
+      error: z.prettifyError(parsed.error),
+      ok: false,
+      status: 400,
+    };
+  }
+
+  return {
+    ok: true,
+    status: 200,
+    value: {
+      conversationId: parsed.data.conversationId,
+      input: normalizeRequestInput(parsed.data.input),
+      scenario: parsed.data.scenario,
+      stress: {
+        checkpointBytes:
+          parsed.data.stress?.checkpointBytes ?? appBudgets.maxCheckpointBytes,
+        fanout: parsed.data.stress?.fanout ?? 1,
+        historyItems: parsed.data.stress?.historyItems ?? 1,
+        summaryEvents:
+          parsed.data.stress?.summaryEvents ?? appBudgets.maxSummaryEvents,
+      },
+      tenantId: parsed.data.tenantId,
+      userId: parsed.data.userId,
+    },
+  };
+}
+
+export function totalHeaderBytes(headers: Headers): number {
+  let total = 0;
+  for (const [name, value] of headers) {
+    total += name.length + value.length;
+  }
+  return total;
+}
+
+function normalizeRequestInput(
+  input: string | readonly UserMessageContentPart[]
+): AgentInput {
+  if (typeof input === "string") {
+    return input;
+  }
+
+  const message: UserMessage = {
+    content: input,
+    type: "user-message",
+  };
+  return message;
+}

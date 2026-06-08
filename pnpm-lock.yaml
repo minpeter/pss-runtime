@@ -19,7 +19,7 @@ importers:
         version: 2.31.0(@types/node@25.9.1)
       '@minpeter/pss-coding-agent':
         specifier: workspace:*
-        version: link:packages/coding-agent
+        version: link:apps/coding-agent
       '@minpeter/pss-runtime':
         specifier: workspace:*
         version: link:packages/runtime
@@ -51,32 +51,7 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
-  examples/basic:
-    dependencies:
-      '@ai-sdk/openai-compatible':
-        specifier: 3.0.0-canary.48
-        version: 3.0.0-canary.48(zod@4.4.3)
-      '@minpeter/pss-runtime':
-        specifier: workspace:*
-        version: link:../../packages/runtime
-      '@t3-oss/env-core':
-        specifier: ^0.13.11
-        version: 0.13.11(typescript@6.0.3)(zod@4.4.3)
-      dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-    devDependencies:
-      tsx:
-        specifier: ^4.22.3
-        version: 4.22.3
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  examples/cloudflare-edge-subagent:
+  apps/agent-worker:
     dependencies:
       '@ai-sdk/openai-compatible':
         specifier: 3.0.0-canary.48
@@ -106,9 +81,68 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+      vitest:
+        specifier: ^4.1.7
+        version: 4.1.7(@types/node@25.9.1)(vite@8.0.13(@types/node@25.9.1)(esbuild@0.28.0)(tsx@4.22.3)(yaml@2.9.0))
       wrangler:
         specifier: ^4.98.0
         version: 4.98.0(@cloudflare/workers-types@4.20260608.1)
+
+  apps/coding-agent:
+    dependencies:
+      '@ai-sdk/openai-compatible':
+        specifier: 3.0.0-canary.48
+        version: 3.0.0-canary.48(zod@4.4.3)
+      '@earendil-works/pi-tui':
+        specifier: ^0.76.0
+        version: 0.76.0
+      '@minpeter/pss-runtime':
+        specifier: workspace:^
+        version: link:../../packages/runtime
+      '@t3-oss/env-core':
+        specifier: ^0.13.11
+        version: 0.13.11(typescript@6.0.3)(zod@4.4.3)
+      ai:
+        specifier: 7.0.0-canary.142
+        version: 7.0.0-canary.142(zod@4.4.3)
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.0(tsx@4.22.3)(typescript@6.0.3)
+      vitest:
+        specifier: ^4.1.7
+        version: 4.1.7(@types/node@25.9.1)(vite@8.0.13(@types/node@25.9.1)(esbuild@0.28.0)(tsx@4.22.3)(yaml@2.9.0))
+
+  examples/basic:
+    dependencies:
+      '@ai-sdk/openai-compatible':
+        specifier: 3.0.0-canary.48
+        version: 3.0.0-canary.48(zod@4.4.3)
+      '@minpeter/pss-runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+      '@t3-oss/env-core':
+        specifier: ^0.13.11
+        version: 0.13.11(typescript@6.0.3)(zod@4.4.3)
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      tsx:
+        specifier: ^4.22.3
+        version: 4.22.3
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
 
   examples/plugin:
     dependencies:
@@ -162,37 +196,6 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
-
-  packages/coding-agent:
-    dependencies:
-      '@ai-sdk/openai-compatible':
-        specifier: 3.0.0-canary.48
-        version: 3.0.0-canary.48(zod@4.4.3)
-      '@earendil-works/pi-tui':
-        specifier: ^0.76.0
-        version: 0.76.0
-      '@minpeter/pss-runtime':
-        specifier: workspace:^
-        version: link:../runtime
-      '@t3-oss/env-core':
-        specifier: ^0.13.11
-        version: 0.13.11(typescript@6.0.3)(zod@4.4.3)
-      ai:
-        specifier: 7.0.0-canary.142
-        version: 7.0.0-canary.142(zod@4.4.3)
-      dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-    devDependencies:
-      tsdown:
-        specifier: ^0.22.0
-        version: 0.22.0(tsx@4.22.3)(typescript@6.0.3)
-      vitest:
-        specifier: ^4.1.7
-        version: 4.1.7(@types/node@25.9.1)(vite@8.0.13(@types/node@25.9.1)(esbuild@0.28.0)(tsx@4.22.3)(yaml@2.9.0))
 
   packages/runtime:
     dependencies:

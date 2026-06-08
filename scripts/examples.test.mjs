@@ -9,13 +9,6 @@ const examplePackages = [
     requiredSource: "src/index.ts",
   },
   {
-    name: "@minpeter/pss-example-cloudflare-edge-subagent",
-    path: "examples/cloudflare-edge-subagent",
-    requiredSource: "src/index.ts",
-    startScript:
-      "tsx --conditions=@minpeter/pss-source src/worker-simulation.ts",
-  },
-  {
     name: "@minpeter/pss-example-plugin",
     path: "examples/plugin",
     requiredSource: "src/index.ts",
@@ -24,6 +17,15 @@ const examplePackages = [
     name: "@minpeter/pss-example-subagent",
     path: "examples/subagent",
     requiredSource: "src/index.ts",
+  },
+];
+const appPackages = [
+  {
+    name: "@minpeter/pss-agent-worker",
+    path: "apps/agent-worker",
+    requiredSource: "src/worker.ts",
+    startScript:
+      "tsx --conditions=@minpeter/pss-source src/worker-simulation.ts",
   },
 ];
 const finalRunEventsLoopPattern =
@@ -69,6 +71,36 @@ describe("examples workspace packages", () => {
       expect(packageJson.dependencies["@t3-oss/env-core"]).toBe("^0.13.11");
       expect(packageJson.dependencies.dotenv).toBe("^17.4.2");
       expect(packageJson.dependencies.zod).toBe("^4.4.3");
+      expect(packageJson.dependencies).not.toHaveProperty(
+        "@minpeter/pss-coding-agent"
+      );
+      expect(existsSync(sourcePath)).toBe(true);
+    }
+  });
+
+  it("exposes apps as independent workspace packages", () => {
+    const workspace = readText("pnpm-workspace.yaml");
+    const rootPackageJson = readJson("package.json");
+    const rootTsconfig = readJson("tsconfig.json");
+
+    expect(workspace).toContain('- "apps/*"');
+    expect(rootPackageJson.workspaces).toContain("apps/*");
+    expect(rootPackageJson.scripts["dev:tui"]).toBe(
+      "tsx --conditions=@minpeter/pss-source apps/coding-agent/src/tui.ts"
+    );
+    expect(rootTsconfig.include).toContain("apps/*/src/**/*.ts");
+
+    for (const appPackage of appPackages) {
+      const packageJsonPath = join(appPackage.path, "package.json");
+      const sourcePath = join(appPackage.path, appPackage.requiredSource);
+      const packageJson = readJson(packageJsonPath);
+
+      expect(packageJson.private).toBe(true);
+      expect(packageJson.name).toBe(appPackage.name);
+      expect(packageJson.scripts.start).toBe(appPackage.startScript);
+      expect(packageJson.dependencies["@minpeter/pss-runtime"]).toBe(
+        "workspace:*"
+      );
       expect(packageJson.dependencies).not.toHaveProperty(
         "@minpeter/pss-coding-agent"
       );
@@ -166,32 +198,28 @@ describe("examples workspace packages", () => {
   });
 
   it("uses a Cloudflare Worker/Durable Object adapter surface", () => {
-    const packageJson = readJson(
-      "examples/cloudflare-edge-subagent/package.json"
-    );
-    const source = readText("examples/cloudflare-edge-subagent/src/index.ts");
-    const hostSource = readText(
-      "examples/cloudflare-edge-subagent/src/cloudflare-host.ts"
-    );
+    const packageJson = readJson("apps/agent-worker/package.json");
+    const source = readText("apps/agent-worker/src/index.ts");
+    const hostSource = readText("apps/agent-worker/src/cloudflare-host.ts");
     const storeSource = readText(
-      "examples/cloudflare-edge-subagent/src/cloudflare-execution-store.ts"
+      "apps/agent-worker/src/cloudflare-execution-store.ts"
     );
-    const workerSource = readText(
-      "examples/cloudflare-edge-subagent/src/worker.ts"
+    const workerSource = readText("apps/agent-worker/src/worker.ts");
+    const workerConstantsSource = readText(
+      "apps/agent-worker/src/worker-constants.ts"
     );
-    const workerRouteSource = readText(
-      "examples/cloudflare-edge-subagent/src/worker-route.ts"
-    );
+    const workerRouteSource = readText("apps/agent-worker/src/worker-route.ts");
     const alarmDrainerSource = readText(
-      "examples/cloudflare-edge-subagent/src/cloudflare-alarm-drainer.ts"
+      "apps/agent-worker/src/cloudflare-alarm-drainer.ts"
     );
-    const workerTsconfig = readJson(
-      "examples/cloudflare-edge-subagent/tsconfig.worker.json"
-    );
-    const readme = readText("examples/cloudflare-edge-subagent/README.md");
+    const workerTsconfig = readJson("apps/agent-worker/tsconfig.worker.json");
+    const readme = readText("apps/agent-worker/README.md");
 
     expect(packageJson.scripts["start:worker-sim"]).toBe(
       "tsx --conditions=@minpeter/pss-source src/worker-simulation.ts"
+    );
+    expect(packageJson.scripts["start:edge-cases"]).toBe(
+      "tsx --conditions=@minpeter/pss-source src/worker-edge-cases.ts"
     );
     expect(packageJson.scripts["start:cli"]).toBe(
       "tsx --conditions=@minpeter/pss-source src/index.ts"
@@ -201,6 +229,9 @@ describe("examples workspace packages", () => {
     );
     expect(packageJson.scripts["dev:worker"]).toBe("wrangler dev");
     expect(packageJson.scripts["deploy:worker"]).toBe("wrangler deploy");
+    expect(packageJson.scripts["dry-run:worker"]).toBe(
+      "wrangler deploy --dry-run --outdir /tmp/pss-agent-worker-dry-run"
+    );
     expect(packageJson.devDependencies.wrangler).toBeDefined();
     expect(source).not.toContain("createFakeCloudflareDurableObjectHost");
     expect(source).not.toContain(removedTurnModeEnvName);
@@ -208,12 +239,14 @@ describe("examples workspace packages", () => {
     expect(readme).not.toContain(removedTurnModeEnvName);
     expect(readme).not.toContain("fake host");
     expect(readme).not.toContain("in-memory fake");
-    expect(readme).toContain("support-agent");
+    expect(readme).toContain("@minpeter/pss-agent-worker");
+    expect(readme).toContain("durable-background");
+    expect(readme).toContain("Durable Object alarms");
     expect(readme).toContain("dev:worker");
     expect(source).toContain(
       'import { workerStorePrefix } from "./worker-constants"'
     );
-    expect(source).not.toContain('"cloudflare-edge-subagent-demo"');
+    expect(workerConstantsSource).toContain('"agent-worker-demo"');
     expect(hostSource).toContain("createCloudflareDurableObjectHost");
     expect(hostSource).toContain("createCloudflareAlarmScheduler");
     expect(storeSource).toContain("DurableObjectExecutionStore");
@@ -231,7 +264,7 @@ describe("examples workspace packages", () => {
       "@cloudflare/workers-types",
     ]);
     const sessionStoreSource = readText(
-      "examples/cloudflare-edge-subagent/src/durable-object-session-store.ts"
+      "apps/agent-worker/src/durable-object-session-store.ts"
     );
     expect(sessionStoreSource).toContain('storeKey(this.#prefix, "session"');
     expect(sessionStoreSource).not.toMatch(legacyCloudflareSessionKeyPattern);
@@ -245,9 +278,7 @@ describe("examples workspace packages", () => {
       createCloudflareDurableObjectHost,
       listScheduledCloudflareRuns,
       listScheduledCloudflareSessionPrompts,
-    } = await import(
-      "../examples/cloudflare-edge-subagent/src/cloudflare-host.ts"
-    );
+    } = await import("../apps/agent-worker/src/cloudflare-host.ts");
     const storage = new InMemoryCloudflareDurableObjectStorage();
     const host = createCloudflareDurableObjectHost({ storage });
     const runId = "background:bg_cloudflare_delayed";
@@ -302,10 +333,10 @@ describe("examples workspace packages", () => {
     );
     const resumeSource = readText("packages/runtime/src/agent-resume.ts");
     const { InMemoryCloudflareDurableObjectStorage } = await import(
-      "../examples/cloudflare-edge-subagent/src/cloudflare-host.ts"
+      "../apps/agent-worker/src/cloudflare-host.ts"
     );
     const { DurableObjectSessionStore } = await import(
-      "../examples/cloudflare-edge-subagent/src/durable-object-session-store.ts"
+      "../apps/agent-worker/src/durable-object-session-store.ts"
     );
 
     class CountingTransactionStorage extends InMemoryCloudflareDurableObjectStorage {

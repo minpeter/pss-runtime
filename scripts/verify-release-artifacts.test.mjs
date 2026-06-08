@@ -15,7 +15,7 @@ import {
 } from "./verify-release-artifacts.mjs";
 
 const cliBinReadFailurePattern =
-  /^packages\/coding-agent\/bin\/pss\.js: cannot read CLI bin target /;
+  /^apps\/coding-agent\/bin\/pss\.js: cannot read CLI bin target /;
 const forbiddenModelName = ["Agent", "Model"].join("");
 const runtimeRootDeclaration = [
   'export type { AgentHost } from "./execution/types";',
@@ -37,13 +37,14 @@ function createFixture() {
   tempRoots.push(cwd);
 
   for (const packageName of ["runtime", "coding-agent"]) {
-    mkdirSync(join(cwd, "packages", packageName, "dist"), { recursive: true });
+    const packageRoot = fixturePackageRoot(cwd, packageName);
+    mkdirSync(join(packageRoot, "dist"), { recursive: true });
     writeFileSync(
-      join(cwd, "packages", packageName, "dist", "index.js"),
+      join(packageRoot, "dist", "index.js"),
       "export const ok = true;\n"
     );
     writeFileSync(
-      join(cwd, "packages", packageName, "package.json"),
+      join(packageRoot, "package.json"),
       JSON.stringify(
         packageName === "coding-agent"
           ? {
@@ -61,37 +62,101 @@ function createFixture() {
       packageName === "runtime"
         ? runtimeRootDeclaration
         : "export declare const ok: true;\n";
-    writeFileSync(
-      join(cwd, "packages", packageName, "dist", "index.d.ts"),
-      declaration
-    );
+    writeFileSync(join(packageRoot, "dist", "index.d.ts"), declaration);
     if (packageName === "runtime") {
-      mkdirSync(join(cwd, "packages", packageName, "dist", "execution"), {
-        recursive: true,
-      });
+      mkdirSync(join(packageRoot, "dist", "execution"), { recursive: true });
       writeFileSync(
-        join(cwd, "packages", packageName, "dist", "execution", "index.d.ts"),
+        join(packageRoot, "dist", "execution", "index.d.ts"),
         runtimeExecutionDeclaration
       );
       writeFileSync(
-        join(cwd, "packages", packageName, "dist", "llm.d.ts"),
+        join(packageRoot, "dist", "llm.d.ts"),
         "export declare const ok: true;\n"
       );
     } else {
-      mkdirSync(join(cwd, "packages", packageName, "bin"), {
-        recursive: true,
-      });
+      mkdirSync(join(packageRoot, "bin"), { recursive: true });
       writeFileSync(
-        join(cwd, "packages", packageName, "bin", "pss.js"),
+        join(packageRoot, "bin", "pss.js"),
         "#!/usr/bin/env node\nimport '../dist/tui.js';\n",
         { mode: 0o755 }
       );
       writeFileSync(
-        join(cwd, "packages", packageName, "dist", "tui.js"),
+        join(packageRoot, "dist", "tui.js"),
         "export const ok = true;\n"
       );
     }
   }
+
+  return cwd;
+}
+
+function fixturePackageRoot(cwd, packageName) {
+  return packageName === "coding-agent"
+    ? join(cwd, "apps", "coding-agent")
+    : join(cwd, "packages", packageName);
+}
+
+function createAppsCodingAgentFixture() {
+  const cwd = mkdtempSync(join(tmpdir(), "pss-release-artifacts-apps-"));
+  tempRoots.push(cwd);
+
+  mkdirSync(join(cwd, "packages", "runtime", "dist", "execution"), {
+    recursive: true,
+  });
+  writeFileSync(
+    join(cwd, "packages", "runtime", "dist", "index.js"),
+    "export const ok = true;\n"
+  );
+  writeFileSync(
+    join(cwd, "packages", "runtime", "dist", "index.d.ts"),
+    runtimeRootDeclaration
+  );
+  writeFileSync(
+    join(cwd, "packages", "runtime", "dist", "execution", "index.d.ts"),
+    runtimeExecutionDeclaration
+  );
+  writeFileSync(
+    join(cwd, "packages", "runtime", "dist", "llm.d.ts"),
+    "export declare const ok: true;\n"
+  );
+  writeFileSync(join(cwd, "packages", "runtime", "package.json"), "{}\n");
+
+  mkdirSync(join(cwd, "apps", "coding-agent", "bin"), {
+    recursive: true,
+  });
+  mkdirSync(join(cwd, "apps", "coding-agent", "dist"), {
+    recursive: true,
+  });
+  writeFileSync(
+    join(cwd, "apps", "coding-agent", "package.json"),
+    JSON.stringify(
+      {
+        bin: {
+          pss: "./bin/pss.js",
+          "pss-coding-agent": "./bin/pss.js",
+        },
+      },
+      null,
+      2
+    )
+  );
+  writeFileSync(
+    join(cwd, "apps", "coding-agent", "bin", "pss.js"),
+    "#!/usr/bin/env node\nimport '../dist/tui.js';\n",
+    { mode: 0o755 }
+  );
+  writeFileSync(
+    join(cwd, "apps", "coding-agent", "dist", "index.js"),
+    "export const ok = true;\n"
+  );
+  writeFileSync(
+    join(cwd, "apps", "coding-agent", "dist", "index.d.ts"),
+    "export declare const ok: true;\n"
+  );
+  writeFileSync(
+    join(cwd, "apps", "coding-agent", "dist", "tui.js"),
+    "export const ok = true;\n"
+  );
 
   return cwd;
 }
@@ -110,6 +175,26 @@ describe("verifyReleaseArtifacts", () => {
     expect(
       verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
     ).toEqual([]);
+  });
+
+  it("supports publishable packages that live under apps", () => {
+    const cwd = createAppsCodingAgentFixture();
+
+    expect(
+      verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
+    ).toEqual([]);
+  });
+
+  it("reports apps package root paths for moved package errors", () => {
+    const cwd = createAppsCodingAgentFixture();
+    writeFileSync(
+      join(cwd, "apps", "coding-agent", "bin", "pss.js"),
+      "import '../dist/tui.js';\n"
+    );
+
+    expect(verifyReleaseArtifacts({ cwd, packages: ["coding-agent"] })).toEqual(
+      ["apps/coding-agent/bin/pss.js: CLI bin target must start with a shebang"]
+    );
   });
 
   it("rejects extensionless relative imports that would break Node ESM", () => {
@@ -133,25 +218,25 @@ describe("verifyReleaseArtifacts", () => {
   it("rejects extensionless dynamic imports that would break Node ESM", () => {
     const cwd = createFixture();
     writeFileSync(
-      join(cwd, "packages", "coding-agent", "dist", "chunk.js"),
+      join(cwd, "apps", "coding-agent", "dist", "chunk.js"),
       "export const chunk = true;\n"
     );
     writeFileSync(
-      join(cwd, "packages", "coding-agent", "dist", "index.js"),
+      join(cwd, "apps", "coding-agent", "dist", "index.js"),
       'export async function loadChunk() { return import("./chunk"); }\n'
     );
 
     expect(
       verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
     ).toEqual([
-      "packages/coding-agent/dist/index.js: extensionless relative import ./chunk",
+      "apps/coding-agent/dist/index.js: extensionless relative import ./chunk",
     ]);
   });
 
   it("rejects test and fixture files from package dist outputs", () => {
     const cwd = createFixture();
     writeFileSync(
-      join(cwd, "packages", "coding-agent", "dist", "web-fetch.test.js"),
+      join(cwd, "apps", "coding-agent", "dist", "web-fetch.test.js"),
       "export {};\n"
     );
     writeFileSync(
@@ -163,20 +248,20 @@ describe("verifyReleaseArtifacts", () => {
       verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
     ).toEqual([
       "packages/runtime/dist/test-fixtures.d.ts: test or fixture artifact must not be published",
-      "packages/coding-agent/dist/web-fetch.test.js: test or fixture artifact must not be published",
+      "apps/coding-agent/dist/web-fetch.test.js: test or fixture artifact must not be published",
     ]);
   });
 
   it("rejects missing CLI bin metadata for the coding-agent package", () => {
     const cwd = createFixture();
     writeFileSync(
-      join(cwd, "packages", "coding-agent", "package.json"),
+      join(cwd, "apps", "coding-agent", "package.json"),
       JSON.stringify({ bin: { pss: "./bin/pss.js" } })
     );
 
     expect(verifyReleaseArtifacts({ cwd, packages: ["coding-agent"] })).toEqual(
       [
-        "packages/coding-agent/package.json: bin.pss-coding-agent must target ./bin/pss.js",
+        "apps/coding-agent/package.json: bin.pss-coding-agent must target ./bin/pss.js",
       ]
     );
   });
@@ -184,31 +269,29 @@ describe("verifyReleaseArtifacts", () => {
   it("rejects CLI bin targets without a shebang", () => {
     const cwd = createFixture();
     writeFileSync(
-      join(cwd, "packages", "coding-agent", "bin", "pss.js"),
+      join(cwd, "apps", "coding-agent", "bin", "pss.js"),
       "import '../dist/tui.js';\n"
     );
 
     expect(verifyReleaseArtifacts({ cwd, packages: ["coding-agent"] })).toEqual(
-      [
-        "packages/coding-agent/bin/pss.js: CLI bin target must start with a shebang",
-      ]
+      ["apps/coding-agent/bin/pss.js: CLI bin target must start with a shebang"]
     );
   });
 
   it("rejects CLI bin targets without executable mode", () => {
     const cwd = createFixture();
-    const binPath = join(cwd, "packages", "coding-agent", "bin", "pss.js");
+    const binPath = join(cwd, "apps", "coding-agent", "bin", "pss.js");
     writeFileSync(binPath, "#!/usr/bin/env node\nimport '../dist/tui.js';\n");
     chmodSync(binPath, 0o644);
 
     expect(verifyReleaseArtifacts({ cwd, packages: ["coding-agent"] })).toEqual(
-      ["packages/coding-agent/bin/pss.js: CLI bin target must be executable"]
+      ["apps/coding-agent/bin/pss.js: CLI bin target must be executable"]
     );
   });
 
   it("skips CLI bin executable mode checks on Windows", () => {
     const cwd = createFixture();
-    const binPath = join(cwd, "packages", "coding-agent", "bin", "pss.js");
+    const binPath = join(cwd, "apps", "coding-agent", "bin", "pss.js");
     writeFileSync(binPath, "#!/usr/bin/env node\nimport '../dist/tui.js';\n");
     chmodSync(binPath, 0o644);
 
@@ -223,7 +306,7 @@ describe("verifyReleaseArtifacts", () => {
 
   it("reports CLI bin target read failures instead of throwing", () => {
     const cwd = createFixture();
-    const binPath = join(cwd, "packages", "coding-agent", "bin", "pss.js");
+    const binPath = join(cwd, "apps", "coding-agent", "bin", "pss.js");
     rmSync(binPath);
     mkdirSync(binPath);
 

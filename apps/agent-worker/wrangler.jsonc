@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "pss-cloudflare-edge-subagent",
+  "name": "pss-agent-worker",
   "main": "src/worker.ts",
   "compatibility_date": "2026-06-08",
   "durable_objects": {

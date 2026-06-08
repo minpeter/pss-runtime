@@ -39,7 +39,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/minpeter/pss-next.git",
-    "directory": "packages/coding-agent"
+    "directory": "apps/coding-agent"
   },
   "publishConfig": {
     "access": "public",

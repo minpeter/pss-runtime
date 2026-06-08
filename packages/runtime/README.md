@@ -331,7 +331,7 @@ background tools from the parent model and exposes blocking delegation only.
 This avoids pretending that in-memory background work survived a hibernation,
 isolate restart, or request deadline.
 
-See `examples/cloudflare-edge-subagent` for an edge-hosted turn loop with a
+See `apps/agent-worker` for an edge-hosted turn loop with a
 Worker/Durable Object-shaped host, and `examples/subagent` for a long-running
 local background subagent flow.
 

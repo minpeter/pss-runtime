@@ -1,4 +1,5 @@
 import type { CloudflareDurableObjectStorage } from "./cloudflare-host";
+import { appBudgets } from "./request-schema";
 import { workerStorePrefix } from "./worker-constants";
 
 const workerRouteStorageKey = "__pss_worker_route";
@@ -105,7 +106,10 @@ function readRouteValue(
   const bodyValue = readBodyStringField(body, bodyKey);
   const value = bodyValue ?? url.searchParams.get(queryKey) ?? undefined;
   const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
+  if (!trimmed || trimmed.length > appBudgets.maxRouteTokenChars) {
+    return;
+  }
+  return trimmed;
 }
 
 function readBodyStringField(body: unknown, key: string): string | undefined {

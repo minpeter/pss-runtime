@@ -5,6 +5,10 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 
 const DEFAULT_PACKAGES = ["runtime", "coding-agent"];
+const PACKAGE_ROOTS = {
+  "coding-agent": "apps/coding-agent",
+  runtime: "packages/runtime",
+};
 const REQUIRED_PACKAGE_BINS = {
   "coding-agent": {
     pss: "./bin/pss.js",
@@ -151,7 +155,24 @@ function listFiles(root, predicate = () => true) {
 }
 
 function packageDistPath(cwd, packageName) {
-  return join(cwd, "packages", packageName, "dist");
+  return join(packageRootPath(cwd, packageName), "dist");
+}
+
+function packageRootPath(cwd, packageName) {
+  const preferredRoot = join(
+    cwd,
+    PACKAGE_ROOTS[packageName] ?? join("packages", packageName)
+  );
+  if (existsSync(preferredRoot)) {
+    return preferredRoot;
+  }
+
+  const legacyRoot = join(cwd, "packages", packageName);
+  if (legacyRoot !== preferredRoot && existsSync(legacyRoot)) {
+    return legacyRoot;
+  }
+
+  return preferredRoot;
 }
 
 function requirePackageDists({ cwd, packages }) {
@@ -161,7 +182,7 @@ function requirePackageDists({ cwd, packages }) {
     const distPath = packageDistPath(cwd, packageName);
     if (!(existsSync(distPath) && statSync(distPath).isDirectory())) {
       errors.push(
-        `packages/${packageName}/dist is missing; run the package build first`
+        `${relativeToCwd(cwd, distPath)} is missing; run the package build first`
       );
     }
   }
@@ -235,7 +256,7 @@ function findPackageBinEntrypointErrors({
       continue;
     }
 
-    const packageRoot = join(cwd, "packages", packageName);
+    const packageRoot = packageRootPath(cwd, packageName);
     const packageJsonPath = join(packageRoot, "package.json");
     const packageJson = readJsonForVerification({ cwd, file: packageJsonPath });
 

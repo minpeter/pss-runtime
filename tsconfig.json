@@ -4,5 +4,5 @@
     "noEmit": true,
     "customConditions": ["@minpeter/pss-source"]
   },
-  "include": ["examples/*/src/**/*.ts"]
+  "include": ["apps/*/src/**/*.ts", "examples/*/src/**/*.ts"]
 }
