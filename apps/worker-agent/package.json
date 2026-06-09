@@ -6,10 +6,10 @@
     "dev": "run-p dev:worker dev:relay",
     "dev:worker": "wrangler dev",
     "dev:relay": "tsx scripts/telegram.ts relay",
-    "ship": "run-s deploy:secrets deploy:worker deploy:webhook",
-    "deploy:secrets": "wrangler secret bulk .dev.vars",
-    "deploy:worker": "wrangler deploy",
-    "deploy:webhook": "tsx scripts/telegram.ts webhook",
+    "ship": "run-s ship:secrets ship:worker ship:webhook",
+    "ship:secrets": "wrangler secret bulk .dev.vars",
+    "ship:worker": "wrangler deploy",
+    "ship:webhook": "tsx scripts/telegram.ts webhook",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
