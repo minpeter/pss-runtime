@@ -8,8 +8,8 @@ import {
   MissingTelegramConfigError,
   type TelegramBotEnv,
   type TelegramWebhookBot,
-  telegramWebhookSecretFromBotToken,
 } from "../telegram/bot";
+import { resolveTelegramWebhookSecret } from "../telegram/webhook-secret";
 import {
   isTelegramWebhookPath,
   readTelegramWebhookRoute,
@@ -126,7 +126,10 @@ function rejectInvalidTelegramSecret(
       500
     );
   }
-  const secret = telegramWebhookSecretFromBotToken(botToken);
+  const secret = resolveTelegramWebhookSecret({
+    botToken,
+    webhookSecret: bindings.TELEGRAM_WEBHOOK_SECRET,
+  });
   const header = request.headers.get(telegramSecretHeader);
   if (header && constantTimeEqual(header, secret)) {
     return;

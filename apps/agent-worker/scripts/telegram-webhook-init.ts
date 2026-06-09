@@ -1,19 +1,23 @@
 import { pathToFileURL } from "node:url";
 import { loadDevVars } from "./load-dev-vars";
-import { telegramWebhookSecretFromBotToken } from "../src/telegram/bot";
+import { resolveTelegramWebhookSecret } from "../src/telegram/webhook-secret";
 
 const webhookPath = "/telegram/webhook";
 
 export interface RegisterTelegramWebhookOptions {
   readonly baseUrl: string;
   readonly botToken: string;
+  readonly webhookSecret?: string;
 }
 
 export async function registerTelegramWebhook(
   options: RegisterTelegramWebhookOptions
 ): Promise<string> {
   const webhookUrl = `${normalizeBaseUrl(options.baseUrl)}${webhookPath}`;
-  const secretToken = telegramWebhookSecretFromBotToken(options.botToken);
+  const secretToken = resolveTelegramWebhookSecret({
+    botToken: options.botToken,
+    webhookSecret: options.webhookSecret,
+  });
   const response = await fetch(
     `https://api.telegram.org/bot${options.botToken}/setWebhook`,
     {
@@ -54,7 +58,12 @@ async function main(): Promise<void> {
     throw new Error("WORKER_PUBLIC_URL is required in .dev.vars for webhook init");
   }
 
-  const webhookUrl = await registerTelegramWebhook({ baseUrl, botToken });
+  const webhookSecret = devVars.TELEGRAM_WEBHOOK_SECRET?.trim();
+  const webhookUrl = await registerTelegramWebhook({
+    baseUrl,
+    botToken,
+    webhookSecret,
+  });
   console.log(`telegram webhook -> ${webhookUrl}`);
 }
 

@@ -9,6 +9,8 @@
   "include": [
     "src/worker/**/*.ts",
     "src/telegram/**/*.ts",
+    "src/**/*.test.ts",
+    "scripts/**/*.test.ts",
     "src/agent/config.ts",
     "src/agent/factory.ts",
     "scripts/**/*.ts"

@@ -10,6 +10,7 @@ const bindingsSchema = z.object({
   AI_BASE_URL: z.url().trim().optional(),
   AI_MODEL: z.string().trim().min(1).optional(),
   TELEGRAM_BOT_TOKEN: z.string().trim().min(1).optional(),
+  TELEGRAM_WEBHOOK_SECRET: z.string().trim().min(1).optional(),
 });
 
 export interface AgentWorkerBindings {
@@ -17,6 +18,7 @@ export interface AgentWorkerBindings {
   readonly AI_BASE_URL?: string;
   readonly AI_MODEL?: string;
   readonly TELEGRAM_BOT_TOKEN?: string;
+  readonly TELEGRAM_WEBHOOK_SECRET?: string;
 }
 
 export function parseAgentWorkerBindings(
@@ -28,6 +30,7 @@ export function parseAgentWorkerBindings(
     AI_BASE_URL: parsed.AI_BASE_URL ?? defaultBaseUrl,
     AI_MODEL: parsed.AI_MODEL ?? defaultModel,
     TELEGRAM_BOT_TOKEN: parsed.TELEGRAM_BOT_TOKEN,
+    TELEGRAM_WEBHOOK_SECRET: parsed.TELEGRAM_WEBHOOK_SECRET,
   };
 }
 

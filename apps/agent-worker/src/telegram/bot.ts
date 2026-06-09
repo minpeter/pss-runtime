@@ -10,9 +10,9 @@ import {
 } from "../agent/config";
 import { handleTelegramMessage } from "./handler";
 import { createDurableObjectStateAdapter } from "./state-adapter";
+import { resolveTelegramWebhookSecret } from "./webhook-secret";
 
 const userName = "pss_agent";
-const disallowedTelegramSecretChars = /[^A-Za-z0-9_-]/g;
 
 export interface TelegramBotEnv extends AgentWorkerBindings {}
 
@@ -46,17 +46,16 @@ export function createTelegramWebhookBot(options: {
   const { bot } = createTelegramChat({
     bindings,
     storage: options.storage,
-    secretToken: telegramWebhookSecretFromBotToken(botToken),
+    secretToken: resolveTelegramWebhookSecret({
+      botToken,
+      webhookSecret: bindings.TELEGRAM_WEBHOOK_SECRET,
+    }),
   });
 
   return {
     handleWebhook: async (request, webhookOptions) =>
       await bot.webhooks.telegram(request, webhookOptions),
   };
-}
-
-export function telegramWebhookSecretFromBotToken(botToken: string): string {
-  return botToken.replace(disallowedTelegramSecretChars, "_").slice(0, 256);
 }
 
 function createTelegramChat(options: {

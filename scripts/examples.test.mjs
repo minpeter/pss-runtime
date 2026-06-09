@@ -24,8 +24,8 @@ const appPackages = [
     name: "@minpeter/pss-agent-worker",
     path: "apps/agent-worker",
     requiredSource: "src/worker/index.ts",
-    startScript:
-      "tsx --conditions=@minpeter/pss-source src/simulation/index.ts",
+    devScript:
+      "tsx --conditions=@minpeter/pss-source scripts/dev-local.ts",
   },
 ];
 const finalRunEventsLoopPattern =
@@ -94,7 +94,7 @@ describe("examples workspace packages", () => {
 
       expect(packageJson.private).toBe(true);
       expect(packageJson.name).toBe(appPackage.name);
-      expect(packageJson.scripts.start).toBe(appPackage.startScript);
+      expect(packageJson.scripts.dev).toBe(appPackage.devScript);
       expect(packageJson.dependencies["@minpeter/pss-runtime"]).toBe(
         "workspace:*"
       );
