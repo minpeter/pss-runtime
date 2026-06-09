@@ -141,9 +141,9 @@ const coordinator = new Agent({
 });
 ```
 
-Put child-only options such as `instructions`, `tools`, `wrapDelegatePrompt`,
-`host`, `namespace`, and `plugins` on the nested `agent`. The wrapper `name`
-must match `agent.name`.
+Put child-only options such as `instructions`, `tools`, `host`, `namespace`, and
+`plugins` on the nested `agent`. The wrapper `name` must match `agent.name`.
+Use child `plugins` to transform delegated input (see **Plugins** below).
 
 For each subagent, the parent model receives a generated
 `delegate_to_<name>` tool. The tool accepts `prompt`, optional `description`,
@@ -186,6 +186,112 @@ available through the execution store for reconstructed agents. Background jobs
 launched during the same parent turn share an internal completion barrier:
 successful jobs notify once when the group settles, while failed jobs notify
 immediately.
+
+## Plugins
+
+Pass `plugins: [...]` on `Agent` to observe or intercept runtime events. Each
+plugin exposes one handler:
+
+```ts
+import type { AgentPlugin } from "@minpeter/pss-runtime";
+import { Agent } from "@minpeter/pss-runtime";
+
+const tracePlugin: AgentPlugin = {
+  name: "trace",
+  on: ({ event }) => {
+    if (event.type === "turn-end") {
+      console.log("turn finished");
+    }
+  },
+};
+
+const agent = new Agent({
+  model,
+  plugins: [tracePlugin],
+});
+```
+
+### Observe vs intercept
+
+For most events, `on` is observe-only: return nothing (or `{ action: "continue" }`)
+and the runtime emits the event unchanged.
+
+Three input event types support intercept returns:
+
+- `user-text`
+- `user-message`
+- `runtime-input`
+
+Return one of:
+
+- `{ action: "continue" }` — emit the current event (default when omitted)
+- `{ action: "transform", event }` — emit a replacement input event
+- `{ action: "handled" }` — skip emit; for `session.send`, close the run without
+  starting a turn
+
+Plugins run in registration order. Each `transform` updates the event seen by
+later plugins, so transforms chain sequentially.
+
+### Input `meta.source`
+
+The runtime attaches `meta` on input events at API boundaries. Plugins can route
+on `event.meta?.source`:
+
+| `source` | Boundary |
+|----------|----------|
+| `send` | `session.send()` / `agent.send()` |
+| `steer` | `session.steer()` and drained steering queue |
+| `notify` | `session.notify()` runtime input |
+| `delegate` | parent `delegate_to_*` child `session.send()` |
+
+`meta` appears on `run.events()` for input events but is stripped before session
+history persistence and model mapping. It never reaches the LLM prompt.
+
+### Delegate prompt wrapping
+
+Child agents receive delegated prompts with `meta.source === "delegate"`. Wrap or
+rewrite them with a plugin instead of agent-level prompt shims:
+
+```ts
+import type { AgentPlugin, UserText } from "@minpeter/pss-runtime";
+import { Agent } from "@minpeter/pss-runtime";
+
+const pokeTagsPlugin: AgentPlugin = {
+  name: "poke-tags",
+  on: ({ event }) => {
+    if (event.type !== "user-text" || event.meta?.source !== "delegate") {
+      return;
+    }
+
+    const text =
+      typeof event.text === "string" ? event.text : event.text.join("\n");
+
+    return {
+      action: "transform",
+      event: {
+        ...event,
+        text: `<poke>\n${text}\n</poke>`,
+      } satisfies UserText,
+    };
+  },
+};
+
+const executionAgent = new Agent({
+  name: "execution",
+  plugins: [pokeTagsPlugin],
+  model,
+});
+```
+
+The parent coordinator stays unchanged; only the nested child agent carries the
+plugin.
+
+### Migration
+
+- **`plugins[].events.on`** — deprecated. Use top-level `plugins[].on`. The legacy
+  handler still receives every event but intercept returns are ignored (observe-only).
+- **`wrapDelegatePrompt`** — removed. Use a child `plugins[].on` handler that checks
+  `meta.source === "delegate"` and returns `transform`, as above.
 
 ## Send, Host Resume, and Steer
 

@@ -5,7 +5,6 @@ import type {
   UserMessage,
   UserText,
 } from "./session/events";
-import type { InputEventMeta, InputSource } from "./session/input-meta-types";
 
 export type { InputEventMeta, InputSource } from "./session/input-meta-types";
 
@@ -19,7 +18,7 @@ export type AgentPluginInterceptResult =
   | { readonly action: "handled" }
   | { readonly action: "transform"; readonly event: InterceptableAgentEvent };
 
-export type AgentPluginResult = AgentPluginInterceptResult | void;
+export type AgentPluginResult = AgentPluginInterceptResult | undefined;
 
 export interface AgentEventContext {
   readonly event: AgentEvent;
@@ -69,7 +68,9 @@ function isInterceptableEvent(
 
 function resolvePluginHandler(
   plugin: AgentPlugin
-): ((context: AgentEventContext) => MaybePromise<AgentPluginResult>) | undefined {
+):
+  | ((context: AgentEventContext) => MaybePromise<AgentPluginResult>)
+  | undefined {
   if (plugin.on) {
     return plugin.on;
   }

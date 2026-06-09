@@ -22,6 +22,7 @@ export type {
   PluginPipelineResult,
 } from "./plugins";
 export { runPluginsForEvent } from "./plugins";
+export { delegateUserInput } from "./session/delegate-input";
 export type {
   AgentEvent,
   AgentEventListener,
@@ -49,14 +50,6 @@ export type {
   UserTextContent,
   VisibleAgentEvent,
 } from "./session/events";
-export { delegateUserInput } from "./session/delegate-input";
-export {
-  attachInputMeta,
-  attachRuntimeInputMeta,
-  stripEventMeta,
-  stripInputMeta,
-  userInputFromEvent,
-} from "./session/input-meta";
 export {
   isControlAgentEvent,
   isLifecycleAgentEvent,
@@ -66,7 +59,13 @@ export {
   isVisibleAgentEvent,
 } from "./session/events";
 export type { AgentInput, SessionInput } from "./session/input";
-export type { SubagentDefinition } from "./subagent-definition";
+export {
+  attachInputMeta,
+  attachRuntimeInputMeta,
+  stripEventMeta,
+  stripInputMeta,
+  userInputFromEvent,
+} from "./session/input-meta";
 export type { AgentRun } from "./session/run";
 export type {
   CommitResult,
@@ -75,3 +74,4 @@ export type {
   SessionStoreCommit,
   StoredSession,
 } from "./session/store/types";
+export type { SubagentDefinition } from "./subagent-definition";
