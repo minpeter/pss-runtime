@@ -18,6 +18,7 @@ export type {
   RunHost,
   SessionHost,
 } from "./capabilities";
+export { executionHost, sessionHost } from "./host";
 export { createInMemoryExecutionHost } from "./memory";
 export type {
   AgentHostCapabilities,

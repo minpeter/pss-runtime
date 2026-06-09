@@ -100,6 +100,7 @@ export async function handleTelegramMessage(
     storePrefix,
     options.bindings,
     {
+      sessionKey,
       telegramUx: toTelegramUxContext(options.thread, options.message.id),
     }
   );

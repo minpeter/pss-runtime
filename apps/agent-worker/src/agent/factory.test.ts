@@ -32,6 +32,8 @@ const testBindings = {
   EXA_API_KEY: "test-exa-key",
 } as const;
 
+const testSessionKey = "telegram:thread-1:user-1";
+
 function toolJsonSchema(tool: unknown): unknown {
   return (tool as { readonly inputSchema?: { readonly jsonSchema?: unknown } })
     .inputSchema?.jsonSchema;
@@ -65,9 +67,11 @@ describe("createChatAgent", () => {
   it("exposes sendmessageto_agent instead of delegate_to_execution", async () => {
     const { createChatAgent } = await import("./factory");
     const storage = new InMemoryCloudflareDurableObjectStorage();
-    const agent = createChatAgent(storage, "telegram-chat:test", testBindings);
+    const agent = createChatAgent(storage, "telegram-chat:test", testBindings, {
+      sessionKey: testSessionKey,
+    });
 
-    await drainRun(await agent.send("delegate"));
+    await drainRun(await agent.session(testSessionKey).send("delegate"));
 
     const tools = lastGenerateTextTools();
     expect(Object.keys(tools).sort()).toEqual(["sendmessageto_agent"]);
@@ -77,9 +81,11 @@ describe("createChatAgent", () => {
   it("exposes sendmessageto_agent as a background-only tool schema", async () => {
     const { createChatAgent } = await import("./factory");
     const storage = new InMemoryCloudflareDurableObjectStorage();
-    const agent = createChatAgent(storage, "telegram-chat:test", testBindings);
+    const agent = createChatAgent(storage, "telegram-chat:test", testBindings, {
+      sessionKey: testSessionKey,
+    });
 
-    await drainRun(await agent.send("delegate"));
+    await drainRun(await agent.session(testSessionKey).send("delegate"));
 
     expect(toolJsonSchema(lastGenerateTextTools().sendmessageto_agent)).toEqual(
       expect.objectContaining({
@@ -100,6 +106,7 @@ describe("createChatAgent", () => {
     const { createChatAgent } = await import("./factory");
     const storage = new InMemoryCloudflareDurableObjectStorage();
     const agent = createChatAgent(storage, "telegram-chat:test", testBindings, {
+      sessionKey: testSessionKey,
       telegramUx: {
         messageId: "msg-1",
         thread: {
@@ -111,7 +118,7 @@ describe("createChatAgent", () => {
       },
     });
 
-    await drainRun(await agent.send("hello"));
+    await drainRun(await agent.session(testSessionKey).send("hello"));
 
     const tools = lastGenerateTextTools();
     expect(Object.keys(tools).sort()).toEqual([
@@ -140,12 +147,25 @@ describe("createChatAgent", () => {
   it("omits telegram UX tools when telegramUx context is absent", async () => {
     const { createChatAgent } = await import("./factory");
     const storage = new InMemoryCloudflareDurableObjectStorage();
+    const agent = createChatAgent(storage, "telegram-chat:test", testBindings, {
+      sessionKey: testSessionKey,
+    });
+
+    await drainRun(await agent.session(testSessionKey).send("hello"));
+
+    const tools = lastGenerateTextTools();
+    expect(tools).not.toHaveProperty("display_draft");
+    expect(tools).not.toHaveProperty("reactto_message");
+  });
+
+  it("omits sendmessageto_agent when sessionKey is absent", async () => {
+    const { createChatAgent } = await import("./factory");
+    const storage = new InMemoryCloudflareDurableObjectStorage();
     const agent = createChatAgent(storage, "telegram-chat:test", testBindings);
 
     await drainRun(await agent.send("hello"));
 
     const tools = lastGenerateTextTools();
-    expect(tools).not.toHaveProperty("display_draft");
-    expect(tools).not.toHaveProperty("reactto_message");
+    expect(tools).not.toHaveProperty("sendmessageto_agent");
   });
 });

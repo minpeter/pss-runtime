@@ -18,7 +18,8 @@ describe("changeset prerelease mode", () => {
       "@minpeter/pss-agent-worker",
       "@minpeter/pss-example-basic",
       "@minpeter/pss-example-plugin",
-      "@minpeter/pss-example-subagent",
+      "@minpeter/pss-example-sync-subagent",
+      "@minpeter/pss-example-background-subagent",
     ]);
   });
 });

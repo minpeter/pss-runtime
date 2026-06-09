@@ -1,11 +1,11 @@
-import type { Agent } from "@minpeter/pss-runtime";
 import {
   type CloudflareAlarmDrainSummary,
   type CloudflareDurableObjectState,
   createCloudflareAgentContext,
 } from "@minpeter/pss-runtime/cloudflare";
+import { createAgentWorkerAlarmAgent } from "../agent/alarm-agent";
 import { parseAgentWorkerBindings } from "../agent/config";
-import { createChatAgent } from "../agent/factory";
+import { createChatAgent, createExecutionAgent } from "../agent/factory";
 import { deliverAlarmAssistantText } from "../telegram/alarm-delivery";
 import { readTelegramRoute } from "../telegram/route-store";
 import { jsonResponse } from "./http";
@@ -54,13 +54,17 @@ export class AgentDurableObject {
 
   #context() {
     return createCloudflareAgentContext({
-      createAgent: ({ host, prefix }) =>
-        createChatAgent(
+      createAgent: ({ host, prefix }) => {
+        const bindings = parseAgentWorkerBindings(this.#bindings);
+        const chatAgent = createChatAgent(
           this.#state.storage,
           prefix,
-          parseAgentWorkerBindings(this.#bindings),
+          bindings,
           { host }
-        ) as Agent,
+        );
+        const executionAgent = createExecutionAgent(host, bindings);
+        return createAgentWorkerAlarmAgent({ chatAgent, executionAgent });
+      },
       defaultPrefix: "telegram-chat",
       env: this.#bindings,
       readPrefix: async ({ storage }) =>

@@ -459,8 +459,10 @@ isolate restart, or request deadline.
 
 Use `@minpeter/pss-runtime/cloudflare` for the packaged Cloudflare Durable
 Object adapter. See `examples/cloudflare-edge-subagent` for an edge-hosted turn
-loop that consumes that adapter, and `examples/subagent` for a long-running
-local background subagent flow.
+loop that consumes that adapter, `examples/sync-subagent` for a blocking
+app-owned subagent delegation flow, and `examples/background-subagent` for an
+interactive CLI with durable background delegation while the parent keeps
+chatting.
 
 The same core API supports room/user/session routing through stable session keys.
 

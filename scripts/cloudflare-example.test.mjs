@@ -192,7 +192,9 @@ describe("cloudflare edge support subagent example", () => {
     const runnerSource = readText(
       "packages/runtime/src/subagent-background-runner.ts"
     );
-    const resumeSource = readText("packages/runtime/src/agent-resume.ts");
+    const resumeSource = readText(
+      "packages/runtime/src/background-child-resume.ts"
+    );
     const { InMemoryCloudflareDurableObjectStorage } = await import(
       "../packages/runtime/src/cloudflare/index.ts"
     );

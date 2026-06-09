@@ -1,11 +1,9 @@
 {
-  "name": "@minpeter/pss-example-subagent",
+  "name": "@minpeter/pss-example-background-subagent",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "tsx --conditions=@minpeter/pss-source src/index.ts",
-    "start:background": "tsx --conditions=@minpeter/pss-source src/background.ts",
-    "start:background:wait": "tsx --conditions=@minpeter/pss-source src/background-wait.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
