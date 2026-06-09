@@ -102,6 +102,21 @@ describe("createChatAgent", () => {
     ]);
   });
 
+  it("exposes web tools on the execution agent only", async () => {
+    const { createExecutionAgent } = await import("./factory");
+    const { createInMemoryExecutionHost } = await import(
+      "@minpeter/pss-runtime/execution/memory"
+    );
+    const agent = createExecutionAgent(createInMemoryExecutionHost(), {
+      AI_API_KEY: "test-key",
+    });
+
+    await drainRun(await agent.send("search typescript release notes"));
+
+    const tools = lastGenerateTextTools();
+    expect(Object.keys(tools).sort()).toEqual(["web_fetch", "web_search"]);
+  });
+
   it("omits telegram UX tools when telegramUx context is absent", async () => {
     const { createChatAgent } = await import("./factory");
     const storage = new InMemoryCloudflareDurableObjectStorage();

@@ -2,13 +2,15 @@
 export type { DefaultTools } from "./tools";
 export { tools } from "./tools";
 export type {
-  WebFetchError,
+  WebFetchInput,
   WebFetchOutput,
-  WebFetchResult,
-} from "./tools/web-fetch";
-export { webFetchTool } from "./tools/web-fetch";
-export type {
+  WebSearchInput,
   WebSearchOutput,
-  WebSearchResult,
-} from "./tools/web-search";
-export { webSearchTool } from "./tools/web-search";
+} from "@minpeter/pss-web-tools";
+export {
+  createWebFetchTool,
+  createWebSearchTool,
+  createWebTools,
+  parseWebFetchOutput,
+  parseWebSearchOutput,
+} from "@minpeter/pss-web-tools";

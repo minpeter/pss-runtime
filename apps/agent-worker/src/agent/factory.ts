@@ -1,3 +1,5 @@
+import { createWebTools } from "@minpeter/pss-web-tools";
+import { readWorkerWebToolsEnv } from "@minpeter/pss-web-tools/env";
 import { Agent, type AgentHost } from "@minpeter/pss-runtime";
 import {
   createCloudflareDurableObjectHost,
@@ -27,12 +29,15 @@ export function createExecutionAgent(
   host: AgentHost,
   bindings: AgentWorkerBindings
 ): Agent {
+  const { tools } = createWebTools({ env: readWorkerWebToolsEnv() });
+
   return new Agent({
     host,
     instructions: executionAgentInstructions,
     model: createLanguageModel(bindings),
     namespace: "execution",
     plugins: [createPokeTagsPlugin()],
+    tools,
   });
 }
 
@@ -64,7 +69,7 @@ export function createChatAgent(
       {
         delegateToolName: "sendmessageto_agent",
         description:
-          "Executes tasks for Bori: search, email, calendar, integrations, and browser work.",
+          "Executes delegated tasks for Bori. Currently: web search and page fetch.",
         agent: createExecutionAgent(resolvedHost, bindings),
         name: "execution",
       },

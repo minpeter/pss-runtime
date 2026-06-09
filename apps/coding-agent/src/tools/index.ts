@@ -1,10 +1,11 @@
 import type { ToolSet } from "ai";
-import { webFetchTool as defaultWebFetchTool } from "./web-fetch";
-import { webSearchTool as defaultWebSearchTool } from "./web-search";
+import { createWebTools } from "@minpeter/pss-web-tools";
+import { readNodeWebToolsEnv } from "@minpeter/pss-web-tools/env";
 
-export const tools = {
-  web_fetch: defaultWebFetchTool,
-  web_search: defaultWebSearchTool,
-} satisfies ToolSet;
+const { tools: defaultTools } = createWebTools({
+  env: readNodeWebToolsEnv(),
+});
+
+export const tools = defaultTools satisfies ToolSet;
 
 export type DefaultTools = typeof tools;

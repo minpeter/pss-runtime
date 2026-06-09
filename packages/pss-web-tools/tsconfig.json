@@ -4,5 +4,5 @@
     "customConditions": ["@minpeter/pss-source"],
     "noEmit": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "vitest.config.ts"]
 }

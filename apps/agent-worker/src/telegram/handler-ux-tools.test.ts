@@ -52,7 +52,10 @@ describe("handleTelegramMessage UX tools", () => {
         "execute" in reactTool &&
         typeof reactTool.execute === "function"
       ) {
-        await reactTool.execute({ emoji: "👍" });
+        await reactTool.execute(
+          { emoji: "👍" },
+          { toolCallId: "call-react-test" }
+        );
       }
       return {
         responseMessages: [
@@ -102,7 +105,10 @@ describe("handleTelegramMessage UX tools", () => {
         "execute" in draftTool &&
         typeof draftTool.execute === "function"
       ) {
-        await draftTool.execute({ text: "Draft line one\n\nDraft line two" });
+        await draftTool.execute(
+          { text: "Draft line one\n\nDraft line two" },
+          { toolCallId: "call-draft-test" }
+        );
       }
       return {
         responseMessages: [

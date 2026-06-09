@@ -34,8 +34,9 @@ describe("TUI tool printer", () => {
         output: {
           type: "json",
           value: {
+            count: 1,
+            query: "minpeter",
             results: [{ title: "Woonggi Min minpeter - GitHub" }],
-            total_results: 10,
           },
         },
         toolCallId: "call-aaaaaaaa-bbbb-cccc-dddd-0",
@@ -51,13 +52,13 @@ describe("TUI tool printer", () => {
       formatToolResultForTui({
         output: {
           type: "error-text",
-          value: "Error: TinyFish fetch request failed with HTTP 503.",
+          value: "Error: web_fetch upstream unavailable with HTTP 503.",
         },
         toolCallId: "call-deadbeef-0000-0000-0000-1",
         toolName: "web_fetch",
       })
     ).toBe(
-      `web_fetch${darkGray}#deadbeef${reset} error-text="TinyFish fetch request failed with HTTP 503."`
+      `web_fetch${darkGray}#deadbeef${reset} error-text="web_fetch upstream unavailable with HTTP 503."`
     );
   });
 

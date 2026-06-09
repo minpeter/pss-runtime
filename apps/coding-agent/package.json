@@ -48,6 +48,7 @@
   "scripts": {
     "build": "tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pretest": "pnpm --filter @minpeter/pss-web-tools build",
     "test": "vitest run",
     "lint": "ultracite check ."
   },
@@ -55,6 +56,7 @@
     "@ai-sdk/openai-compatible": "3.0.0-canary.48",
     "@earendil-works/pi-tui": "^0.76.0",
     "@minpeter/pss-runtime": "workspace:^",
+    "@minpeter/pss-web-tools": "workspace:*",
     "@t3-oss/env-core": "^0.13.11",
     "ai": "7.0.0-canary.142",
     "dotenv": "^17.4.2",

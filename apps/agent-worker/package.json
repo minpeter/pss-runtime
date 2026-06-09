@@ -13,13 +13,16 @@
     "dev": "run-p dev:*",
     "predeploy": "run-s build webhook:init",
     "deploy": "wrangler deploy",
+    "pretest": "pnpm --filter @minpeter/pss-web-tools build",
     "test": "vitest run",
+    "test:live:telegram-ux": "AGENT_TELEGRAM_LIVE=1 vitest run src/telegram/ux-tools.live.test.ts",
     "typecheck": "tsc -p tsconfig.worker.json --noEmit"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "3.0.0-canary.48",
     "@chat-adapter/telegram": "4.30.0",
     "@minpeter/pss-runtime": "workspace:*",
+    "@minpeter/pss-web-tools": "workspace:*",
     "ai": "7.0.0-canary.142",
     "chat": "4.30.0",
     "zod": "^4.4.3"

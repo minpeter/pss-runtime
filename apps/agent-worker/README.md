@@ -17,6 +17,9 @@ cp apps/agent-worker/.dev.vars.example apps/agent-worker/.dev.vars
 | `AI_BASE_URL` | no | defaults to `https://apis.opengateway.ai/v1` |
 | `AI_MODEL` | no | defaults to `minimax/MiniMax-M2.7` |
 
+The execution agent uses `@minpeter/pss-web-tools` with keyless opensearch routing.
+`web_search` and `web_fetch` need no extra search provider configuration.
+
 ## Local dev
 
 ```sh

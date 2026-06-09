@@ -2,6 +2,9 @@ import { readFileSync } from "node:fs";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  resolve: {
+    conditions: ["@minpeter/pss-source", "import", "module", "default"],
+  },
   plugins: [
     {
       name: "agent-worker-md-loader",

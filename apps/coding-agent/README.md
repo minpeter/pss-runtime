@@ -68,7 +68,10 @@ turn.
 ## Env
 
 Set `AI_API_KEY`, `AI_BASE_URL`, and `AI_MODEL` for the model.
-Set `TINYFISH_API_KEY` before using `web_search` or `web_fetch`.
+
+`web_search` and `web_fetch` use `@minpeter/opensearch` via `@minpeter/pss-web-tools`
+with keyless public fallbacks and hosted MCP. No search provider API keys are
+configured.
 
 The TUI persists runtime-owned session state to files by default:
 
