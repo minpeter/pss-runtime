@@ -117,12 +117,11 @@ describe("examples workspace packages", () => {
     );
   });
 
-  it("includes plugin and sync-subagent runtime API usage examples", () => {
+  it("includes plugin and basic runtime API usage examples", () => {
     const basicSource = readText("examples/basic/src/index.ts");
     const pluginSource = readText("examples/plugin/src/index.ts");
-    const syncSubagentSource = readText("examples/sync-subagent/src/index.ts");
 
-    for (const source of [basicSource, pluginSource, syncSubagentSource]) {
+    for (const source of [basicSource, pluginSource]) {
       expect(source).toContain("createOpenAICompatible");
       expect(source).toContain('loadEnv({ path: ".env"');
       expect(source).toContain(".send(");
@@ -135,17 +134,12 @@ describe("examples workspace packages", () => {
     expect(pluginSource).toContain("events:");
     expect(pluginSource).toContain("event.type");
     expect(pluginSource).not.toContain("process.argv");
-
-    expect(syncSubagentSource).toContain("createCoordinatorAgent");
-    expect(syncSubagentSource).toContain("createReaderAgent");
-    expect(syncSubagentSource).toContain("coordinator.session(sessionKey).send(");
-    expect(syncSubagentSource).toContain("Pro 플랜 환불");
-    expect(syncSubagentSource).not.toContain("subagents:");
-    expect(syncSubagentSource).not.toContain("session.kill()");
   });
 
   it("keeps the sync-subagent example focused on conversation plugins and file reads", () => {
     const packageJson = readJson("examples/sync-subagent/package.json");
+    const indexSource = readText("examples/sync-subagent/src/index.ts");
+    const setupSource = readText("examples/sync-subagent/src/setup.ts");
     const agentsSource = readText("examples/sync-subagent/src/agents.ts");
     const conversationPluginSource = readText(
       "examples/sync-subagent/src/conversation-plugin.ts"
@@ -158,6 +152,14 @@ describe("examples workspace packages", () => {
     );
     expect(packageJson.scripts).not.toHaveProperty("start:background");
     expect(packageJson.scripts).not.toHaveProperty("start:background:wait");
+
+    expect(setupSource).toContain("createExampleRuntime");
+    expect(setupSource).toContain("createOpenAICompatible");
+    expect(indexSource).toContain("readline");
+    expect(indexSource).toContain("session.send");
+    expect(indexSource).toContain("/quit");
+    expect(indexSource).toContain("kb/");
+    expect(indexSource).not.toContain("subagents:");
 
     expect(agentsSource).toContain('namespace: "reader"');
     expect(agentsSource).toContain("plugins:");
