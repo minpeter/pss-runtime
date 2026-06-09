@@ -1,5 +1,5 @@
 import type { RuntimeLlmContext } from "../llm";
-import { type AgentPlugin, runEventPlugins } from "../plugins";
+import { type AgentPlugin, runPluginsForEvent } from "../plugins";
 import type { AgentEvent } from "./events";
 import type { BufferedAgentRun } from "./run";
 
@@ -66,27 +66,39 @@ export class SessionEventDispatcher {
       return Promise.resolve();
     }
 
-    return this.emitRunEvent(activeRun, event);
+    return this.emitRunEvent(activeRun, event).then(() => undefined);
   }
 
   async emitRunBoundaryEvent(
     run: BufferedAgentRun,
     event: AgentEvent
   ): Promise<void> {
-    await this.#runPlugins(event);
+    await runPluginsForEvent(
+      this.#plugins,
+      {
+        event,
+        history: this.#history(),
+        signal: this.#signal(),
+      },
+      { observeOnly: true }
+    );
     await run.emitBoundary(event);
   }
 
-  async emitRunEvent(run: BufferedAgentRun, event: AgentEvent): Promise<void> {
-    await this.#runPlugins(event);
-    run.emit(event);
-  }
-
-  #runPlugins(event: AgentEvent): Promise<void> {
-    return runEventPlugins(this.#plugins, {
+  async emitRunEvent(
+    run: BufferedAgentRun,
+    event: AgentEvent
+  ): Promise<AgentEvent | "handled"> {
+    const pipeline = await runPluginsForEvent(this.#plugins, {
       event,
       history: this.#history(),
       signal: this.#signal(),
     });
+    if (pipeline.kind === "handled") {
+      return "handled";
+    }
+
+    run.emit(pipeline.event);
+    return pipeline.event;
   }
 }
