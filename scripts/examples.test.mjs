@@ -117,18 +117,25 @@ describe("examples workspace packages", () => {
   });
 
   it("includes plugin and basic runtime API usage examples", () => {
-    const basicSource = readText("examples/basic/src/index.ts");
+    const basicSetupSource = readText("examples/basic/src/setup.ts");
+    const basicIndexSource = readText("examples/basic/src/index.ts");
     const pluginSource = readText("examples/plugin/src/index.ts");
 
-    for (const source of [basicSource, pluginSource]) {
+    for (const source of [basicSetupSource, pluginSource]) {
       expect(source).toContain("createOpenAICompatible");
       expect(source).toContain('loadEnv({ path: ".env"');
-      expect(source).toContain(".send(");
-      expect(source.trim()).toMatch(finalRunEventsLoopPattern);
       expect(source).not.toContain("RuntimeLlm");
       expect(source).not.toContain("@minpeter/pss-coding-agent");
     }
 
+    expect(basicSetupSource).toContain('session("default")');
+    expect(basicIndexSource).toContain("readline");
+    expect(basicIndexSource).toContain("session.send");
+    expect(basicIndexSource).toContain("/quit");
+    expect(basicIndexSource).toContain("drain(");
+
+    expect(pluginSource).toContain(".send(");
+    expect(pluginSource.trim()).toMatch(finalRunEventsLoopPattern);
     expect(pluginSource).toContain("plugins:");
     expect(pluginSource).toContain("events:");
     expect(pluginSource).toContain("event.type");
@@ -143,8 +150,12 @@ describe("examples workspace packages", () => {
     const conversationPluginSource = readText(
       "examples/sync-subagent/src/conversation-plugin.ts"
     );
-    const delegateToolSource = readText("examples/sync-subagent/src/delegate-tool.ts");
-    const readFileToolSource = readText("examples/sync-subagent/src/read-file-tool.ts");
+    const delegateToolSource = readText(
+      "examples/sync-subagent/src/delegate-tool.ts"
+    );
+    const readFileToolSource = readText(
+      "examples/sync-subagent/src/read-file-tool.ts"
+    );
 
     expect(packageJson.scripts.start).toBe(
       "tsx --conditions=@minpeter/pss-source src/index.ts"
@@ -213,9 +224,9 @@ describe("examples workspace packages", () => {
     expect(indexSource).toContain("host.resumeSession");
     expect(indexSource).toContain("/quit");
     expect(indexSource).toContain("kb/");
-    expect(existsSync("examples/background-subagent/fixtures/kb/product.md")).toBe(
-      true
-    );
+    expect(
+      existsSync("examples/background-subagent/fixtures/kb/product.md")
+    ).toBe(true);
     expect(indexSource).not.toContain("subagents:");
     expect(existsSync("examples/background-subagent/src/cli.ts")).toBe(false);
 

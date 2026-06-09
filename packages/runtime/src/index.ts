@@ -3,6 +3,10 @@ export {
   type AgentOptions,
   type SessionHandle,
 } from "./agent";
+export {
+  type BackgroundChildAgent,
+  resumeBackgroundChildRun,
+} from "./background-child-resume";
 export { executionHost } from "./execution/host";
 export type { AgentHost, ExecutionHost } from "./execution/types";
 export type {
@@ -75,8 +79,4 @@ export type {
   SessionStoreCommit,
   StoredSession,
 } from "./session/store/types";
-export {
-  resumeBackgroundChildRun,
-  type BackgroundChildAgent,
-} from "./background-child-resume";
 export type { SubagentDefinition } from "./subagent-definition";

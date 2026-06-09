@@ -1,6 +1,6 @@
-import type { LanguageModel } from "ai";
 import { Agent, type AgentHost } from "@minpeter/pss-runtime";
 import type { ExecutionHost } from "@minpeter/pss-runtime/execution";
+import type { LanguageModel } from "ai";
 import { createBackgroundOutputTool } from "./background-output-tool";
 import { createConversationTagPlugin } from "./conversation-plugin";
 import {
@@ -47,7 +47,8 @@ export function createCoordinatorAgent(
     tools: {
       background_output: createBackgroundOutputTool(options.executionHost),
       delegate_to_reader: createDelegateToReaderTool({
-        description: "지식베이스 문서 읽기를 reader 에이전트에게 백그라운드로 위임한다.",
+        description:
+          "지식베이스 문서 읽기를 reader 에이전트에게 백그라운드로 위임한다.",
         executionHost: options.executionHost,
         parentAgentNamespace: parentSessionNamespace(
           coordinatorNamespace,

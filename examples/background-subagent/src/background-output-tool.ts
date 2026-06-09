@@ -10,7 +10,9 @@ export function createBackgroundOutputTool(executionHost: ExecutionHost) {
   return tool<BackgroundOutputInput, unknown, Record<string, unknown>>({
     description: "백그라운드 reader 작업의 결과를 가져온다.",
     execute: async ({ task_id }) => {
-      const record = await executionHost.store.runs.get(`background:${task_id}`);
+      const record = await executionHost.store.runs.get(
+        `background:${task_id}`
+      );
       if (!record || record.kind !== "background-subagent") {
         throw new Error(`알 수 없는 백그라운드 작업 ${task_id}.`);
       }

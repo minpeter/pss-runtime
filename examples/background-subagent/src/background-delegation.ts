@@ -1,8 +1,5 @@
 import type { AgentInput } from "@minpeter/pss-runtime";
-import type {
-  ExecutionHost,
-  RunRecord,
-} from "@minpeter/pss-runtime/execution";
+import type { ExecutionHost, RunRecord } from "@minpeter/pss-runtime/execution";
 
 const backgroundSubagentKind = "background-subagent" as const;
 

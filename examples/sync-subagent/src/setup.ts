@@ -30,9 +30,7 @@ export interface ExampleRuntime {
   readonly sessionKey: string;
 }
 
-export function createExampleRuntime(
-  sessionKey = "default"
-): ExampleRuntime {
+export function createExampleRuntime(sessionKey = "default"): ExampleRuntime {
   const reader = createReaderAgent(model);
   const coordinator = createCoordinatorAgent(model, {
     readerAgent: reader,

@@ -3,9 +3,9 @@ import type { Agent, SessionHandle } from "@minpeter/pss-runtime";
 import { createEnv } from "@t3-oss/env-core";
 import { config as loadEnv } from "dotenv";
 import { z } from "zod";
-import { createAppAgent } from "./app-agent";
 import { createCoordinatorAgent, createReaderAgent } from "./agents";
-import { localHost, type LocalHost } from "./local-host";
+import { createAppAgent } from "./app-agent";
+import { type LocalHost, localHost } from "./local-host";
 
 loadEnv({ path: ".env", quiet: true, override: true });
 
@@ -33,9 +33,7 @@ export interface ExampleRuntime {
   readonly sessionKey: string;
 }
 
-export function createExampleRuntime(
-  sessionKey = "default"
-): ExampleRuntime {
+export function createExampleRuntime(sessionKey = "default"): ExampleRuntime {
   let coordinator!: Agent;
   let reader!: Agent;
 

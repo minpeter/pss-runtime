@@ -1,7 +1,4 @@
-import {
-  type Agent,
-  resumeBackgroundChildRun,
-} from "@minpeter/pss-runtime";
+import { type Agent, resumeBackgroundChildRun } from "@minpeter/pss-runtime";
 import type { ExecutionHost } from "@minpeter/pss-runtime/execution";
 
 export function createAppAgent(options: {

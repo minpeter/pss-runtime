@@ -5,7 +5,7 @@ import { drainRunForCli } from "./print-run";
 import { createExampleRuntime } from "./setup";
 
 const notificationPollMs = 300;
-const notificationTimeoutMs = 1_000;
+const notificationTimeoutMs = 1000;
 
 const runtime = createExampleRuntime();
 let active = true;
