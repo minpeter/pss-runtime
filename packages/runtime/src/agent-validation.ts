@@ -16,7 +16,6 @@ const forbiddenWrapperFields = [
   "namespace",
   "plugins",
   "tools",
-  "wrapDelegatePrompt",
 ] as const;
 
 export function resolveSubagentDelegateToolName(subagent: {

@@ -16,7 +16,7 @@ interface AgentLanguageModelOptions {
   readonly subagents?: readonly SubagentDefinition[];
   readonly toolChoice?: AgentToolChoice;
   readonly tools?: ToolSet;
-  readonly wrapDelegatePrompt?: (input: AgentInput) => AgentInput;
+
 }
 
 interface AgentRuntimeModelOptions {
@@ -30,7 +30,7 @@ interface AgentRuntimeModelOptions {
   readonly subagents?: never;
   readonly toolChoice?: never;
   readonly tools?: never;
-  readonly wrapDelegatePrompt?: (input: AgentInput) => AgentInput;
+
 }
 
 export type AgentModelOptions = Pick<

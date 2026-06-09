@@ -1,8 +1,7 @@
 import { jsonSchema, type ToolSet, tool } from "ai";
 import { resolveSubagentDelegateToolName } from "./agent-validation";
 import type { ExecutionHost } from "./execution/types";
-import type { AgentInput } from "./session/input";
-import { normalizeAgentInput } from "./session/input-normalization";
+import { delegateUserInput } from "./session/delegate-input";
 import {
   type BlockingSubagentRunCache,
   blockingSubagentDedupeKey,
@@ -106,7 +105,9 @@ function createDelegateTool({
   return tool<DelegateInput, unknown, Record<string, unknown>>({
     description: `Delegate work to ${subagent.name}: ${subagent.description}`,
     execute: async (input: DelegateInput, { abortSignal, toolCallId }) => {
-      const prompt = normalizeDelegatePrompt(subagent, input.prompt);
+      const prompt = delegateUserInput(input.prompt, {
+        delegateToolName: subagent.delegateToolName,
+      });
       const sessionKey = scopedChildSessionKey({
         parentAgentNamespace,
         parentSessionKey,
@@ -185,20 +186,6 @@ function createDelegateTool({
       type: "object",
     }),
   });
-}
-
-function normalizeDelegatePrompt(
-  subagent: Subagent & {
-    readonly wrapDelegatePrompt?: (input: AgentInput) => AgentInput;
-  },
-  prompt: DelegateInput["prompt"]
-): ReturnType<typeof normalizeAgentInput> {
-  const normalized = normalizeAgentInput(prompt);
-  if (!subagent.wrapDelegatePrompt) {
-    return normalized;
-  }
-
-  return normalizeAgentInput(subagent.wrapDelegatePrompt(normalized));
 }
 
 function createDelegateToolProperties(backgroundSubagents: boolean) {

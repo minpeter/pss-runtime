@@ -59,7 +59,7 @@ describe("generated subagent tools", () => {
     expect(tools).not.toHaveProperty("delegate_to_execution");
   });
 
-  it("wraps delegate prompts when wrapDelegatePrompt is configured", async () => {
+  it("wraps delegate prompts when a child plugin intercepts delegate source", async () => {
     const Agent = await loadAgent();
     const childHistories: unknown[] = [];
     const agent = new Agent({
@@ -72,19 +72,23 @@ describe("generated subagent tools", () => {
             return Promise.resolve([assistantMessage("EXEC DONE")]);
           },
           name: "execution",
-          wrapDelegatePrompt: (input) => {
-            if (
-              typeof input === "object" &&
-              input !== null &&
-              "type" in input &&
-              input.type === "user-text" &&
-              "text" in input &&
-              typeof input.text === "string"
-            ) {
-              return { ...input, text: `<poke>${input.text}</poke>` };
-            }
-            return input;
-          },
+          plugins: [
+            {
+              on: ({ event }) => {
+                if (
+                  event.type !== "user-text" ||
+                  event.meta?.source !== "delegate" ||
+                  typeof event.text !== "string"
+                ) {
+                  return;
+                }
+                return {
+                  action: "transform",
+                  event: { ...event, text: `<poke>${event.text}</poke>` },
+                };
+              },
+            },
+          ],
         }),
       ],
     });

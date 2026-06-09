@@ -1,5 +1,4 @@
 import type { Agent } from "./agent";
-import type { AgentInput } from "./session/input";
 import type { AgentRun } from "./session/run";
 import type { SubagentDefinition } from "./subagent-definition";
 import type { Subagent } from "./subagent-types";
@@ -8,7 +7,6 @@ export class RegisteredSubagent implements Subagent {
   readonly delegateToolName?: string;
   readonly description: string;
   readonly name: string;
-  readonly wrapDelegatePrompt?: (input: AgentInput) => AgentInput;
   readonly #agent: Agent;
 
   constructor(definition: SubagentDefinition) {
@@ -16,7 +14,6 @@ export class RegisteredSubagent implements Subagent {
     this.description = definition.description;
     this.name = definition.name;
     this.#agent = definition.agent;
-    this.wrapDelegatePrompt = definition.agent.wrapDelegatePrompt;
   }
 
   session(key: string): {

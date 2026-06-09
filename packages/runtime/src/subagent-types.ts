@@ -5,6 +5,7 @@ import type { AgentRun } from "./session/run";
 import type { NotifyOptions } from "./session/session";
 
 export interface Subagent {
+  readonly delegateToolName?: string;
   readonly description?: string;
   readonly name?: string;
   session(key: string): {

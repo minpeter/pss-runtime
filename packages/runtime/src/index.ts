@@ -49,6 +49,7 @@ export type {
   UserTextContent,
   VisibleAgentEvent,
 } from "./session/events";
+export { delegateUserInput } from "./session/delegate-input";
 export {
   attachInputMeta,
   attachRuntimeInputMeta,

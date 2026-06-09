@@ -54,17 +54,11 @@ export class Agent {
   readonly host: AgentHost;
   readonly name?: string;
   readonly subagentCount: number;
-  readonly wrapDelegatePrompt?: (input: AgentInput) => AgentInput;
-
   constructor(options: AgentConstructionOptions) {
     assertAgentOptions(options);
 
     this.description = options.description;
     this.name = options.name;
-    this.wrapDelegatePrompt =
-      "wrapDelegatePrompt" in options
-        ? options.wrapDelegatePrompt
-        : undefined;
     this.#sessionNamespace = stableAgentNamespace({
       name: options.name,
       namespace: options.namespace,

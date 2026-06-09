@@ -78,9 +78,11 @@ export class AgentSession {
     const runtimeInput = createRuntimeInputState(
       this.#pendingRuntimeInputs.splice(0)
     );
-    const acceptedInput = attachInputMeta(normalizeAgentInput(input), {
-      source: "send",
-    });
+    const normalized = normalizeAgentInput(input);
+    const acceptedInput =
+      normalized.meta === undefined
+        ? attachInputMeta(normalized, { source: "send" })
+        : normalized;
     const run = new BufferedAgentRun();
     const emitted = await this.#events.emitRunEvent(run, acceptedInput);
     if (emitted === "handled") {

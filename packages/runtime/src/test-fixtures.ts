@@ -137,7 +137,6 @@ export type ResearcherSubagentOverrides = {
   readonly namespace?: string;
   readonly plugins?: readonly AgentPlugin[];
   readonly tools?: import("ai").ToolSet;
-  readonly wrapDelegatePrompt?: (input: AgentInput) => AgentInput;
 };
 
 export function researcherSubagent(
@@ -153,7 +152,6 @@ export function researcherSubagent(
     namespace: overrides.namespace,
     plugins: overrides.plugins,
     tools: overrides.tools,
-    wrapDelegatePrompt: overrides.wrapDelegatePrompt,
   };
   const agent =
     overrides.agent ??
