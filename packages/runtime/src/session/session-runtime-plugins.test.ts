@@ -1,7 +1,12 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
-import { assistantMessage, userText } from "../test-fixtures";
+import {
+  assistantMessage,
+  sentUserText,
+  steerRuntimeInput,
+  userText,
+} from "../test-fixtures";
 import { userTextToModelMessage } from "./mapping";
 import { collect } from "./session.test-support";
 
@@ -54,26 +59,18 @@ describe("Agent session runtime input plugins", () => {
 
     const events = await collect(await session.send("original"));
 
-    expect(events).toContainEqual({
-      input: { type: "user-text", text: "turn start steer" },
-      placement: "turn-start",
-      type: "runtime-input",
-    });
-    expect(events).toContainEqual({
-      input: { type: "user-text", text: "step start steer" },
-      placement: "step-start",
-      type: "runtime-input",
-    });
-    expect(events).toContainEqual({
-      input: { type: "user-text", text: "step end steer" },
-      placement: "step-end",
-      type: "runtime-input",
-    });
-    expect(events).not.toContainEqual({
-      input: { type: "user-text", text: "turn end steer" },
-      placement: "step-end",
-      type: "runtime-input",
-    });
+    expect(events).toContainEqual(
+      steerRuntimeInput("turn start steer", "turn-start")
+    );
+    expect(events).toContainEqual(
+      steerRuntimeInput("step start steer", "step-start")
+    );
+    expect(events).toContainEqual(
+      steerRuntimeInput("step end steer", "step-end")
+    );
+    expect(events).not.toContainEqual(
+      steerRuntimeInput("turn end steer", "step-end")
+    );
     expect(seenHistory).toEqual([
       [
         userTextToModelMessage(userText("original")),
@@ -92,9 +89,6 @@ describe("Agent session runtime input plugins", () => {
       throw new Error("expected turn-end steer to start a new run");
     }
     const turnEndEvents = await collect(await turnEndRun);
-    expect(turnEndEvents[0]).toEqual({
-      text: "turn end steer",
-      type: "user-text",
-    });
+    expect(turnEndEvents[0]).toEqual(sentUserText("turn end steer"));
   });
 });

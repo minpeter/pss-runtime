@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 export const cliBinReadFailurePattern =
-  /^packages\/coding-agent\/bin\/pss\.js: cannot read CLI bin target /;
+  /^apps\/coding-agent\/bin\/pss\.js: cannot read CLI bin target /;
 export const forbiddenModelName = ["Agent", "Model"].join("");
 export const runtimeRootDeclaration = [
   'export type { AgentHost } from "./execution/types";',
@@ -19,8 +19,8 @@ export const runtimeExecutionDeclaration = [
   "",
 ].join("\n");
 export const runtimeCloudflareDeclaration = [
-  'export { ackScheduledCloudflareRun, ackScheduledCloudflareSessionPrompt, createCloudflareAlarmScheduler, createCloudflareDurableObjectHost, drainAgentRun, drainCloudflareAlarm, InMemoryCloudflareDurableObjectStorage, listScheduledCloudflareRuns, listScheduledCloudflareSessionPrompts, rescheduleCloudflareAlarm } from "./index";',
-  'export type { CloudflareAlarmAgent, CloudflareAlarmDrainSummary, CloudflareDurableObjectStorage, CloudflareScheduledSessionPrompt } from "./index";',
+  'export { ackScheduledCloudflareRun, ackScheduledCloudflareSessionPrompt, createCloudflareAlarmScheduler, createCloudflareAgentContext, createCloudflareDurableObjectHost, drainAgentRun, drainCloudflareAlarm, fetchCloudflareDurableObject, getCloudflareDurableObjectStub, InMemoryCloudflareDurableObjectStorage, listScheduledCloudflareRuns, listScheduledCloudflareSessionPrompts, rescheduleCloudflareAlarm } from "./index";',
+  'export type { CloudflareAgentContext, CloudflareAgentContextFactoryOptions, CloudflareAgentContextOptions, CloudflareAgentContextPrefixOptions, CloudflareAgentRunDrainOptions, CloudflareAlarmAgent, CloudflareAlarmDrainSummary, CloudflareDurableObjectFetchOptions, CloudflareDurableObjectId, CloudflareDurableObjectNamespace, CloudflareDurableObjectState, CloudflareDurableObjectStorage, CloudflareDurableObjectStub, CloudflareDurableObjectStubOptions, CloudflareScheduledSessionPrompt } from "./index";',
   "",
 ].join("\n");
 
@@ -36,16 +36,17 @@ export function createFixture() {
   const cwd = createTrackedTempRoot("pss-release-artifacts-");
 
   for (const packageName of ["runtime", "coding-agent"]) {
-    mkdirSync(join(cwd, "packages", packageName, "dist"), { recursive: true });
+    const packageRoot = fixturePackageRoot(cwd, packageName);
+    mkdirSync(join(packageRoot, "dist"), { recursive: true });
     writeFileSync(
-      join(cwd, "packages", packageName, "dist", "index.js"),
+      join(packageRoot, "dist", "index.js"),
       "export const ok = true;\n"
     );
     writeFileSync(
-      join(cwd, "packages", packageName, "package.json"),
+      join(packageRoot, "package.json"),
       JSON.stringify(packageMetadata(packageName), null, 2)
     );
-    writePackageDeclarationFixtures(cwd, packageName);
+    writePackageDeclarationFixtures(cwd, packageName, packageRoot);
   }
 
   return cwd;
@@ -69,29 +70,32 @@ function packageMetadata(packageName) {
     : {};
 }
 
-function writePackageDeclarationFixtures(cwd, packageName) {
+function fixturePackageRoot(cwd, packageName) {
+  return packageName === "coding-agent"
+    ? join(cwd, "apps", "coding-agent")
+    : join(cwd, "packages", packageName);
+}
+
+function writePackageDeclarationFixtures(cwd, packageName, packageRoot) {
   const declaration =
     packageName === "runtime"
       ? runtimeRootDeclaration
       : "export declare const ok: true;\n";
-  writeFileSync(
-    join(cwd, "packages", packageName, "dist", "index.d.ts"),
-    declaration
-  );
+  writeFileSync(join(packageRoot, "dist", "index.d.ts"), declaration);
 
   if (packageName === "runtime") {
     writeRuntimeDeclarationFixtures(cwd, packageName);
     return;
   }
 
-  mkdirSync(join(cwd, "packages", packageName, "bin"), { recursive: true });
+  mkdirSync(join(packageRoot, "bin"), { recursive: true });
   writeFileSync(
-    join(cwd, "packages", packageName, "bin", "pss.js"),
+    join(packageRoot, "bin", "pss.js"),
     "#!/usr/bin/env node\nimport '../dist/tui.js';\n",
     { mode: 0o755 }
   );
   writeFileSync(
-    join(cwd, "packages", packageName, "dist", "tui.js"),
+    join(packageRoot, "dist", "tui.js"),
     "export const ok = true;\n"
   );
 }

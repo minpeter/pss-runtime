@@ -18,6 +18,7 @@ import type {
   UserTextContent,
 } from "./events";
 import type { UserInput } from "./input";
+import { stripInputMeta } from "./input-meta";
 
 type AssistantContentPart = Exclude<AssistantContent, string>[number];
 type ToolContentPart = ToolModelMessage["content"][number];
@@ -25,11 +26,12 @@ type ModelEvent = AssistantReasoning | AssistantText | ToolCall | ToolResult;
 
 // UserInput -> AI SDK UserModelMessage
 export function userInputToModelMessage(input: UserInput): UserModelMessage {
-  if (input.type === "user-message") {
-    return userMessageToModelMessage(input);
+  const stripped = stripInputMeta(input);
+  if (stripped.type === "user-message") {
+    return userMessageToModelMessage(stripped);
   }
 
-  return userTextToModelMessage(input);
+  return userTextToModelMessage(stripped);
 }
 
 export function userTextToModelMessage(input: UserText): UserModelMessage {

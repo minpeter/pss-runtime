@@ -1,7 +1,13 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
-import { assistantMessage, userMessage, userText } from "../test-fixtures";
+import {
+  assistantMessage,
+  sentUserMessage,
+  sentUserText,
+  userMessage,
+  userText,
+} from "../test-fixtures";
 import { userTextToModelMessage } from "./mapping";
 import { collect } from "./session.test-support";
 
@@ -19,7 +25,7 @@ describe("Agent session API", () => {
 
     expect(seenHistory).toEqual([[userTextToModelMessage(userText("hello"))]]);
     expect(events).toEqual([
-      { type: "user-text", text: "hello" },
+      sentUserText("hello"),
       { type: "turn-start" },
       { type: "step-start" },
       { type: "assistant-text", text: "DONE" },
@@ -43,10 +49,7 @@ describe("Agent session API", () => {
     expect(seenHistory).toEqual([
       [userTextToModelMessage(userText(["context", "hello"]))],
     ]);
-    expect(events[0]).toEqual({
-      type: "user-text",
-      text: ["context", "hello"],
-    });
+    expect(events[0]).toEqual(sentUserText(["context", "hello"]));
   });
 
   it("agent.send accepts JSON-serializable user content parts", async () => {
@@ -87,10 +90,7 @@ describe("Agent session API", () => {
         },
       ],
     ]);
-    expect(events[0]).toEqual({
-      type: "user-message",
-      content: input,
-    });
+    expect(events[0]).toEqual(sentUserMessage(input));
   });
 
   it("rejects malformed multipart input before queueing", async () => {

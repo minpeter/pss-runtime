@@ -35,14 +35,9 @@ export function ownsAgentNamespace(
 }
 
 export function stableAgentNamespace({
-  name,
   namespace,
 }: {
-  readonly name?: string;
   readonly namespace?: string;
 }): string {
-  const stableNamespace = namespace ?? name;
-  return stableNamespace
-    ? agentNamespace(stableNamespace)
-    : randomAgentNamespace();
+  return namespace ? agentNamespace(namespace) : randomAgentNamespace();
 }

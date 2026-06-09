@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["@cloudflare/workers-types", "node"],
+    "noEmit": true,
+    "paths": {
+      "@minpeter/pss-runtime": ["../../packages/runtime/src/index.ts"],
+      "@minpeter/pss-runtime/cloudflare": [
+        "../../packages/runtime/src/cloudflare/index.ts"
+      ],
+      "chat": ["./node_modules/chat"],
+      "chat/*": ["./node_modules/chat/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "scripts/**/*.ts"]
+}

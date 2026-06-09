@@ -10,9 +10,7 @@ export interface ExecutionHost {
   readonly store: ExecutionStore;
 }
 
-export interface AgentHostCapabilities {
-  readonly backgroundSubagents?: "durable" | "in-process";
-}
+export type AgentHostCapabilities = Record<string, never>;
 
 export interface ExecutionScheduler {
   enqueueRun(
@@ -31,12 +29,7 @@ export interface ResumeSessionOptions {
   readonly runId: string;
 }
 
-export type RunKind =
-  | "background-subagent"
-  | "notification"
-  | "subagent"
-  | "tool-recovery"
-  | "user-turn";
+export type RunKind = "notification" | "tool-recovery" | "user-turn";
 
 export type RunStatus =
   | "cancelled"

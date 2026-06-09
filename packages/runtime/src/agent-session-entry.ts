@@ -3,8 +3,8 @@ import type { AgentInput, NotifyOptions } from "./session/session";
 
 export interface SessionHandle {
   delete(): Promise<void>;
+  dispose(): Promise<void>;
   interrupt(): void;
-  kill(): Promise<void>;
   send(input: AgentInput): Promise<AgentRun>;
   steer(input: AgentInput): Promise<AgentRun>;
 }

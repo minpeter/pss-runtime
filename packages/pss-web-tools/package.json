@@ -1,0 +1,35 @@
+{
+  "name": "@minpeter/pss-web-tools",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Exa-backed web_search and web_fetch tools for pss-next agents.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "@minpeter/pss-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./env": {
+      "@minpeter/pss-source": "./src/env/index.ts",
+      "types": "./dist/env/index.d.ts",
+      "import": "./dist/env/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "ultracite check ."
+  },
+  "dependencies": {
+    "ai": "7.0.0-canary.142",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.0",
+    "vitest": "^4.1.7"
+  }
+}

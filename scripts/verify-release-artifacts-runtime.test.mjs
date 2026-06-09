@@ -187,6 +187,45 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
     ]);
   });
 
+  it("checks Cloudflare Worker helpers on the cloudflare declaration subpath", () => {
+    const cwd = createFixture();
+    writeFileSync(
+      join(cwd, "packages", "runtime", "dist", "cloudflare", "index.d.ts"),
+      "export {};\n"
+    );
+
+    expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentContext",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentContextFactoryOptions",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentContextOptions",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentContextPrefixOptions",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentRunDrainOptions",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAlarmAgent",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAlarmDrainSummary",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectFetchOptions",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectId",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectNamespace",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectState",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectStorage",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectStub",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectStubOptions",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareScheduledSessionPrompt",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export InMemoryCloudflareDurableObjectStorage",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export ackScheduledCloudflareRun",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export ackScheduledCloudflareSessionPrompt",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareAlarmScheduler",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareAgentContext",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareDurableObjectHost",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export drainAgentRun",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export drainCloudflareAlarm",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export fetchCloudflareDurableObject",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export getCloudflareDurableObjectStub",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export listScheduledCloudflareRuns",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export listScheduledCloudflareSessionPrompts",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export rescheduleCloudflareAlarm",
+    ]);
+  });
+
   it("checks advanced runtime contracts on the execution declaration subpath", () => {
     const cwd = createFixture();
     writeFileSync(

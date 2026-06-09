@@ -9,21 +9,27 @@ const examplePackages = [
     requiredSource: "src/index.ts",
   },
   {
-    name: "@minpeter/pss-example-cloudflare-edge-subagent",
-    path: "examples/cloudflare-edge-subagent",
-    requiredSource: "src/index.ts",
-    startScript:
-      "tsx --conditions=@minpeter/pss-source src/worker-simulation.ts",
-  },
-  {
     name: "@minpeter/pss-example-plugin",
     path: "examples/plugin",
     requiredSource: "src/index.ts",
   },
   {
-    name: "@minpeter/pss-example-subagent",
-    path: "examples/subagent",
+    name: "@minpeter/pss-example-sync-subagent",
+    path: "examples/sync-subagent",
     requiredSource: "src/index.ts",
+  },
+  {
+    name: "@minpeter/pss-example-background-subagent",
+    path: "examples/background-subagent",
+    requiredSource: "src/index.ts",
+  },
+];
+const appPackages = [
+  {
+    name: "@minpeter/pss-coding-agent",
+    path: "apps/coding-agent",
+    requiredSource: "src/index.ts",
+    buildScript: "tsdown",
   },
 ];
 const finalRunEventsLoopPattern =
@@ -35,6 +41,14 @@ function readJson(path) {
 
 function readText(path) {
   return readFileSync(path, "utf8");
+}
+
+function expectSourceToOmit(path, forbiddenNames) {
+  const source = readText(path);
+
+  for (const forbiddenName of forbiddenNames) {
+    expect(source).not.toContain(forbiddenName);
+  }
 }
 
 describe("examples workspace packages", () => {
@@ -73,6 +87,35 @@ describe("examples workspace packages", () => {
     }
   });
 
+  it("exposes apps as independent workspace packages", () => {
+    const workspace = readText("pnpm-workspace.yaml");
+    const rootPackageJson = readJson("package.json");
+    const rootTsconfig = readJson("tsconfig.json");
+
+    expect(workspace).toContain('- "apps/*"');
+    expect(rootPackageJson.workspaces).toContain("apps/*");
+    expect(rootPackageJson.scripts["dev:tui"]).toBe(
+      "tsx --conditions=@minpeter/pss-source apps/coding-agent/src/tui.ts"
+    );
+    expect(rootTsconfig.include).toContain("apps/*/src/**/*.ts");
+
+    for (const appPackage of appPackages) {
+      const packageJsonPath = join(appPackage.path, "package.json");
+      const sourcePath = join(appPackage.path, appPackage.requiredSource);
+      const packageJson = readJson(packageJsonPath);
+
+      expect(packageJson.name).toBe(appPackage.name);
+      expect(packageJson.scripts.build).toBe(appPackage.buildScript);
+      expect(packageJson.dependencies["@minpeter/pss-runtime"]).toBe(
+        "workspace:^"
+      );
+      expect(packageJson.dependencies).not.toHaveProperty(
+        "@minpeter/pss-coding-agent"
+      );
+      expect(existsSync(sourcePath)).toBe(true);
+    }
+  });
+
   it("keeps root dev pointed at the basic example package", () => {
     const rootPackageJson = readJson("package.json");
 
@@ -81,84 +124,157 @@ describe("examples workspace packages", () => {
     );
   });
 
-  it("includes plugin and subagent runtime API usage examples", () => {
-    const basicSource = readText("examples/basic/src/index.ts");
+  it("includes plugin and basic runtime API usage examples", () => {
+    const basicSetupSource = readText("examples/basic/src/setup.ts");
+    const basicIndexSource = readText("examples/basic/src/index.ts");
     const pluginSource = readText("examples/plugin/src/index.ts");
-    const subagentSource = readText("examples/subagent/src/index.ts");
 
-    for (const source of [basicSource, pluginSource, subagentSource]) {
+    for (const source of [basicSetupSource, pluginSource]) {
       expect(source).toContain("createOpenAICompatible");
       expect(source).toContain('loadEnv({ path: ".env"');
-      expect(source).toContain(".send(");
-      expect(source.trim()).toMatch(finalRunEventsLoopPattern);
       expect(source).not.toContain("RuntimeLlm");
       expect(source).not.toContain("@minpeter/pss-coding-agent");
     }
 
+    expect(basicSetupSource).toContain('session("default")');
+    expect(basicIndexSource).toContain("readline");
+    expect(basicIndexSource).toContain("session.send");
+    expect(basicIndexSource).toContain("/quit");
+    expect(basicIndexSource).toContain("drain(");
+
+    expect(pluginSource).toContain(".send(");
+    expect(pluginSource.trim()).toMatch(finalRunEventsLoopPattern);
     expect(pluginSource).toContain("plugins:");
     expect(pluginSource).toContain("events:");
     expect(pluginSource).toContain("event.type");
     expect(pluginSource).not.toContain("process.argv");
-
-    expect(subagentSource).toContain("subagents: [researcher]");
-    expect(subagentSource).toContain('name: "researcher"');
-    expect(subagentSource).toContain("coordinator.send(");
-    expect(subagentSource).not.toContain("session.kill()");
   });
 
-  it("includes a background subagent task example", () => {
-    const packageJson = readJson("examples/subagent/package.json");
-    const backgroundSource = readText("examples/subagent/src/background.ts");
-    const backgroundWaitSource = readText(
-      "examples/subagent/src/background-wait.ts"
+  it("keeps the sync-subagent example focused on conversation plugins and file reads", () => {
+    const packageJson = readJson("examples/sync-subagent/package.json");
+    const indexSource = readText("examples/sync-subagent/src/index.ts");
+    const setupSource = readText("examples/sync-subagent/src/setup.ts");
+    const agentsSource = readText("examples/sync-subagent/src/agents.ts");
+    const conversationPluginSource = readText(
+      "examples/sync-subagent/src/conversation-plugin.ts"
     );
-    const localBackgroundModelSource = readText(
-      "examples/subagent/src/local-background-model.ts"
+    const delegateToolSource = readText(
+      "examples/sync-subagent/src/delegate-tool.ts"
+    );
+    const readFileToolSource = readText(
+      "examples/sync-subagent/src/read-file-tool.ts"
     );
 
-    expect(packageJson.scripts["start:background"]).toBe(
-      "tsx --conditions=@minpeter/pss-source src/background.ts"
+    expect(packageJson.scripts.start).toBe(
+      "tsx --conditions=@minpeter/pss-source src/index.ts"
     );
-    expect(packageJson.scripts["start:background:wait"]).toBe(
-      "tsx --conditions=@minpeter/pss-source src/background-wait.ts"
-    );
-    expect(backgroundSource).toContain("subagents: [researcher]");
-    expect(backgroundSource).toContain("run_in_background: true");
-    expect(backgroundSource).toContain("background_output");
-    expect(backgroundSource).toContain("task_id");
-    expect(backgroundSource).toContain("background_cancel");
-    expect(backgroundSource).toContain('coordinator.session("default")');
-    expect(backgroundSource).toContain("session.send(");
-    expect(backgroundSource.trim()).toMatch(finalRunEventsLoopPattern);
-    expect(backgroundSource).not.toContain("@minpeter/pss-coding-agent");
+    expect(packageJson.scripts).not.toHaveProperty("start:background");
+    expect(packageJson.scripts).not.toHaveProperty("start:background:wait");
 
-    expect(backgroundWaitSource).toContain("subagents: [researcher]");
-    expect(backgroundWaitSource).toContain("run_in_background: true");
-    expect(backgroundWaitSource).toContain(
-      'import { localHost } from "./local-host"'
-    );
-    expect(backgroundWaitSource).toContain(
-      "localHost({ agent: createCoordinator })"
-    );
-    expect(backgroundWaitSource).toContain("host.resumeSession()");
-    expect(backgroundWaitSource).toContain("background_output");
-    expect(backgroundWaitSource).toContain("block: true");
-    expect(backgroundWaitSource).not.toContain("@minpeter/pss-coding-agent");
+    expect(setupSource).toContain("createExampleRuntime");
+    expect(setupSource).toContain("createOpenAICompatible");
+    expect(indexSource).toContain("readline");
+    expect(indexSource).toContain("session.send");
+    expect(indexSource).toContain("/quit");
+    expect(indexSource).toContain("kb/");
 
-    expect(existsSync("examples/subagent/src/local-host.ts")).toBe(true);
-    expect(existsSync("examples/subagent/src/local-background-host.ts")).toBe(
-      false
+    expect(agentsSource).toContain('namespace: "reader"');
+    expect(agentsSource).toContain("plugins:");
+    expect(agentsSource).toContain("createConversationTagPlugin");
+    expect(agentsSource).toContain("createDelegateToReaderTool");
+    expect(agentsSource).toContain("read_file: createReadFileTool()");
+
+    expect(conversationPluginSource).toContain('action: "transform"');
+    expect(conversationPluginSource).toContain("user-text");
+
+    expect(delegateToolSource).toContain("delegate_to_reader");
+    expect(delegateToolSource).toContain("delegateUserInput");
+    expect(delegateToolSource).not.toContain('mode: "background"');
+    for (const sourcePath of [
+      "examples/sync-subagent/src/agents.ts",
+      "examples/sync-subagent/src/delegate-tool.ts",
+      "examples/sync-subagent/src/index.ts",
+      "examples/sync-subagent/src/setup.ts",
+    ]) {
+      expectSourceToOmit(sourcePath, [
+        "subagents:",
+        "resumeBackgroundChildRun",
+        "backgroundSubagents",
+        "background-subagent",
+        "subagent-job-",
+      ]);
+    }
+
+    expect(readFileToolSource).toContain("readFile");
+    expect(readFileToolSource).toContain("fixtures");
+    expect(readFileToolSource).toContain("kb");
+    expect(existsSync("examples/sync-subagent/fixtures/kb/pricing.md")).toBe(
+      true
     );
-    const localHostSource = readText("examples/subagent/src/local-host.ts");
+    expect(existsSync("examples/sync-subagent/fixtures/kb/faq.md")).toBe(true);
+    expect(existsSync("examples/sync-subagent/src/background.ts")).toBe(false);
+    expect(existsSync("examples/sync-subagent/src/delegation.ts")).toBe(false);
+  });
 
-    expect(localHostSource).toContain("createInMemoryExecutionHost");
-    expect(localHostSource).toContain('backgroundSubagents: "durable"');
-    expect(localHostSource).toContain("resumeSession");
-    expect(localHostSource).toContain("agent().resume(");
-    expect(localHostSource).toContain("ResumeSessionOptions");
+  it("keeps the background-subagent example focused on durable background delegation", () => {
+    const packageJson = readJson("examples/background-subagent/package.json");
+    const indexSource = readText("examples/background-subagent/src/index.ts");
+    const agentsSource = readText("examples/background-subagent/src/agents.ts");
+    const delegateToolSource = readText(
+      "examples/background-subagent/src/delegate-tool.ts"
+    );
+    const backgroundDelegationSource = readText(
+      "examples/background-subagent/src/background-delegation.ts"
+    );
 
-    expect(localBackgroundModelSource).toContain('"delegate_to_researcher"');
-    expect(localBackgroundModelSource).toContain('"background_output"');
-    expect(localBackgroundModelSource).not.toContain("createOpenAICompatible");
+    expect(packageJson.scripts.start).toBe(
+      "tsx --conditions=@minpeter/pss-source src/index.ts"
+    );
+    expect(packageJson.scripts).not.toHaveProperty("start:cli");
+    const setupSource = readText("examples/background-subagent/src/setup.ts");
+
+    expect(setupSource).toContain("createExampleRuntime");
+    expect(setupSource).toContain("localHost");
+    expect(indexSource).toContain("readline");
+    expect(indexSource).toContain("session.send");
+    expect(indexSource).toContain("host.resumeSession");
+    expect(indexSource).toContain("/quit");
+    expect(indexSource).toContain("kb/");
+    expect(
+      existsSync("examples/background-subagent/fixtures/kb/product.md")
+    ).toBe(true);
+    expect(existsSync("examples/background-subagent/src/cli.ts")).toBe(false);
+
+    expect(agentsSource).toContain("background_output");
+    expect(agentsSource).toContain("createDelegateToReaderTool");
+    expect(agentsSource).toContain("createConversationTagPlugin");
+
+    expect(delegateToolSource).toContain("launchDurableBackgroundDelegation");
+    expect(backgroundDelegationSource).toContain("task_id");
+    expect(backgroundDelegationSource).toContain("<system-reminder>");
+
+    for (const sourcePath of [
+      "examples/background-subagent/src/agents.ts",
+      "examples/background-subagent/src/app-agent.ts",
+      "examples/background-subagent/src/background-delegation.ts",
+      "examples/background-subagent/src/background-output-tool.ts",
+      "examples/background-subagent/src/delegate-tool.ts",
+      "examples/background-subagent/src/index.ts",
+      "examples/background-subagent/src/local-host.ts",
+      "examples/background-subagent/src/setup.ts",
+    ]) {
+      expectSourceToOmit(sourcePath, [
+        "subagents:",
+        "resumeBackgroundChildRun",
+        'run.kind === "background-subagent"',
+        "backgroundSubagents",
+        'kind: "background-subagent"',
+        "background-subagent:",
+        "subagent-job-",
+      ]);
+    }
+    expect(existsSync("examples/background-subagent/src/app-agent.ts")).toBe(
+      true
+    );
   });
 });

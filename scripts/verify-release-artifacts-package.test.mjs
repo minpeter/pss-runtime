@@ -45,25 +45,25 @@ describe("verifyReleaseArtifacts package checks", () => {
   it("rejects extensionless dynamic imports that would break Node ESM", () => {
     const cwd = createFixture();
     writeFileSync(
-      resolve(cwd, "packages/coding-agent/dist/chunk.js"),
+      resolve(cwd, "apps/coding-agent/dist/chunk.js"),
       "export const chunk = true;\n"
     );
     writeFileSync(
-      resolve(cwd, "packages/coding-agent/dist/index.js"),
+      resolve(cwd, "apps/coding-agent/dist/index.js"),
       'export async function loadChunk() { return import("./chunk"); }\n'
     );
 
     expect(
       verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
     ).toEqual([
-      "packages/coding-agent/dist/index.js: extensionless relative import ./chunk",
+      "apps/coding-agent/dist/index.js: extensionless relative import ./chunk",
     ]);
   });
 
   it("rejects test and fixture files from package dist outputs", () => {
     const cwd = createFixture();
     writeFileSync(
-      resolve(cwd, "packages/coding-agent/dist/web-fetch.test.js"),
+      resolve(cwd, "apps/coding-agent/dist/web-fetch.test.js"),
       "export {};\n"
     );
     writeFileSync(
@@ -75,20 +75,20 @@ describe("verifyReleaseArtifacts package checks", () => {
       verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
     ).toEqual([
       "packages/runtime/dist/test-fixtures.d.ts: test or fixture artifact must not be published",
-      "packages/coding-agent/dist/web-fetch.test.js: test or fixture artifact must not be published",
+      "apps/coding-agent/dist/web-fetch.test.js: test or fixture artifact must not be published",
     ]);
   });
 
   it("rejects missing CLI bin metadata for the coding-agent package", () => {
     const cwd = createFixture();
     writeFileSync(
-      resolve(cwd, "packages/coding-agent/package.json"),
+      resolve(cwd, "apps/coding-agent/package.json"),
       JSON.stringify({ bin: { pss: "./bin/pss.js" } })
     );
 
     expect(verifyReleaseArtifacts({ cwd, packages: ["coding-agent"] })).toEqual(
       [
-        "packages/coding-agent/package.json: bin.pss-coding-agent must target ./bin/pss.js",
+        "apps/coding-agent/package.json: bin.pss-coding-agent must target ./bin/pss.js",
       ]
     );
   });
@@ -96,31 +96,29 @@ describe("verifyReleaseArtifacts package checks", () => {
   it("rejects CLI bin targets without a shebang", () => {
     const cwd = createFixture();
     writeFileSync(
-      resolve(cwd, "packages/coding-agent/bin/pss.js"),
+      resolve(cwd, "apps/coding-agent/bin/pss.js"),
       "import '../dist/tui.js';\n"
     );
 
     expect(verifyReleaseArtifacts({ cwd, packages: ["coding-agent"] })).toEqual(
-      [
-        "packages/coding-agent/bin/pss.js: CLI bin target must start with a shebang",
-      ]
+      ["apps/coding-agent/bin/pss.js: CLI bin target must start with a shebang"]
     );
   });
 
   it("rejects CLI bin targets without executable mode", () => {
     const cwd = createFixture();
-    const binPath = resolve(cwd, "packages/coding-agent/bin/pss.js");
+    const binPath = resolve(cwd, "apps/coding-agent/bin/pss.js");
     writeFileSync(binPath, "#!/usr/bin/env node\nimport '../dist/tui.js';\n");
     chmodSync(binPath, 0o644);
 
     expect(verifyReleaseArtifacts({ cwd, packages: ["coding-agent"] })).toEqual(
-      ["packages/coding-agent/bin/pss.js: CLI bin target must be executable"]
+      ["apps/coding-agent/bin/pss.js: CLI bin target must be executable"]
     );
   });
 
   it("skips CLI bin executable mode checks on Windows", () => {
     const cwd = createFixture();
-    const binPath = resolve(cwd, "packages/coding-agent/bin/pss.js");
+    const binPath = resolve(cwd, "apps/coding-agent/bin/pss.js");
     writeFileSync(binPath, "#!/usr/bin/env node\nimport '../dist/tui.js';\n");
     chmodSync(binPath, 0o644);
 
@@ -135,7 +133,7 @@ describe("verifyReleaseArtifacts package checks", () => {
 
   it("reports CLI bin target read failures instead of throwing", () => {
     const cwd = createFixture();
-    const binPath = resolve(cwd, "packages/coding-agent/bin/pss.js");
+    const binPath = resolve(cwd, "apps/coding-agent/bin/pss.js");
     rmSync(binPath);
     mkdirSync(binPath);
 

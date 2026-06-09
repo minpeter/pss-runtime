@@ -21,7 +21,6 @@ const provider = createOpenAICompatible({
   baseURL: env.AI_BASE_URL,
 });
 const tracePlugin: AgentPlugin = {
-  name: "trace-plugin",
   events: {
     on: ({ event }) => {
       if (event.type === "turn-end") {
@@ -31,6 +30,7 @@ const tracePlugin: AgentPlugin = {
       }
     },
   },
+  name: "trace-plugin",
 };
 
 const agent = new Agent({

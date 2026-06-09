@@ -1,4 +1,5 @@
 import type { UserInput, UserMessage, UserText } from "./input";
+import type { InputEventMeta } from "./input-meta-types";
 
 export type {
   UserInput,
@@ -12,6 +13,7 @@ export type {
   UserText,
   UserTextContent,
 } from "./input";
+export type { InputEventMeta, InputSource } from "./input-meta-types";
 
 export interface RuntimeInput {
   /**
@@ -19,6 +21,7 @@ export interface RuntimeInput {
    * This is distinct from human-originated user-text and user-message input.
    */
   input: UserInput;
+  meta?: InputEventMeta;
   placement: "turn-start" | "step-start" | "step-end";
   type: "runtime-input";
 }
@@ -43,14 +46,6 @@ export interface ToolResult {
   toolName: string;
   type: "tool-result";
 }
-
-type SubagentJobStatus =
-  | "aborted"
-  | "cancelled"
-  | "completed"
-  | "error"
-  | "pending"
-  | "running";
 
 export type AgentEvent =
   /** User input was accepted into the session queue. */
@@ -77,32 +72,78 @@ export type AgentEvent =
   | ToolCall
   /** A tool call returned a result. */
   | ToolResult
-  | {
-      description?: string;
-      delegateToolCallId?: string;
-      run_in_background: boolean;
-      subagent: string;
-      task_id?: string;
-      type: "subagent-job-start";
-    }
-  | {
-      eventType?: AgentEvent["type"];
-      delegateToolCallId?: string;
-      status: SubagentJobStatus;
-      subagent: string;
-      task_id: string;
-      type: "subagent-job-update";
-    }
-  | {
-      error?: string;
-      eventCount: number;
-      delegateToolCallId?: string;
-      status: Exclude<SubagentJobStatus, "pending" | "running">;
-      subagent: string;
-      task_id?: string;
-      type: "subagent-job-end";
-    }
   /** One model/tool-loop iteration finished within the active turn. */
   | { type: "step-end" };
 
 export type AgentEventListener = (event: AgentEvent) => void;
+
+const visibleAgentEventTypes = {
+  "assistant-text": true,
+  "user-message": true,
+  "user-text": true,
+} satisfies Partial<Record<AgentEvent["type"], true>>;
+
+const lifecycleAgentEventTypes = {
+  "step-end": true,
+  "step-start": true,
+  "turn-abort": true,
+  "turn-end": true,
+  "turn-error": true,
+  "turn-start": true,
+} satisfies Partial<Record<AgentEvent["type"], true>>;
+
+const toolAgentEventTypes = {
+  "tool-call": true,
+  "tool-result": true,
+} satisfies Partial<Record<AgentEvent["type"], true>>;
+
+const telemetryAgentEventTypes = {
+  "assistant-reasoning": true,
+  "runtime-input": true,
+} satisfies Partial<Record<AgentEvent["type"], true>>;
+
+export type VisibleAgentEvent = Extract<
+  AgentEvent,
+  { type: keyof typeof visibleAgentEventTypes }
+>;
+export type LifecycleAgentEvent = Extract<
+  AgentEvent,
+  { type: keyof typeof lifecycleAgentEventTypes }
+>;
+export type ToolAgentEvent = Extract<
+  AgentEvent,
+  { type: keyof typeof toolAgentEventTypes }
+>;
+export type TelemetryAgentEvent = Extract<
+  AgentEvent,
+  { type: keyof typeof telemetryAgentEventTypes }
+>;
+export type ControlAgentEvent = Exclude<AgentEvent, VisibleAgentEvent>;
+
+export function isVisibleAgentEvent(
+  event: AgentEvent
+): event is VisibleAgentEvent {
+  return event.type in visibleAgentEventTypes;
+}
+
+export function isLifecycleAgentEvent(
+  event: AgentEvent
+): event is LifecycleAgentEvent {
+  return event.type in lifecycleAgentEventTypes;
+}
+
+export function isToolAgentEvent(event: AgentEvent): event is ToolAgentEvent {
+  return event.type in toolAgentEventTypes;
+}
+
+export function isTelemetryAgentEvent(
+  event: AgentEvent
+): event is TelemetryAgentEvent {
+  return event.type in telemetryAgentEventTypes;
+}
+
+export function isControlAgentEvent(
+  event: AgentEvent
+): event is ControlAgentEvent {
+  return !isVisibleAgentEvent(event);
+}

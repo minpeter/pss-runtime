@@ -6,6 +6,7 @@ import {
   isRecord,
   listFiles,
   packageDistPath,
+  packageRootPath,
   readJsonForVerification,
   readModeForVerification,
   readTextForVerification,
@@ -31,7 +32,7 @@ export function requirePackageDists({ cwd, packages }) {
     const distPath = packageDistPath(cwd, packageName);
     if (!(existsSync(distPath) && statSync(distPath).isDirectory())) {
       errors.push(
-        `packages/${packageName}/dist is missing; run the package build first`
+        `${relativeToCwd(cwd, distPath)} is missing; run the package build first`
       );
     }
   }
@@ -105,7 +106,7 @@ export function findPackageBinEntrypointErrors({
       continue;
     }
 
-    const packageRoot = join(cwd, "packages", packageName);
+    const packageRoot = packageRootPath(cwd, packageName);
     const packageJsonPath = join(packageRoot, "package.json");
     const packageJson = readJsonForVerification({ cwd, file: packageJsonPath });
 

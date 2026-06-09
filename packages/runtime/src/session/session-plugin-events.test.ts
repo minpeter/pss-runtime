@@ -1,7 +1,12 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
-import { assistantMessage, eventTypes, userText } from "../test-fixtures";
+import {
+  assistantMessage,
+  eventTypes,
+  sentUserText,
+  userText,
+} from "../test-fixtures";
 import { userTextToModelMessage } from "./mapping";
 import { AgentSession } from "./session";
 import { collect } from "./session.test-support";
@@ -50,7 +55,7 @@ describe("Agent session plugin events", () => {
         {
           events: {
             on: async ({ event }) => {
-              if (event.type === "subagent-job-start") {
+              if (event.type === "assistant-reasoning") {
                 await Promise.resolve();
               }
               pluginEventTypes.push(event.type);
@@ -85,16 +90,12 @@ describe("Agent session plugin events", () => {
     const run = await session.send("hello");
     const iterator = run.events()[Symbol.asyncIterator]();
 
-    expect((await iterator.next()).value).toEqual({
-      type: "user-text",
-      text: "hello",
-    });
+    expect((await iterator.next()).value).toEqual(sentUserText("hello"));
     expect((await iterator.next()).value).toEqual({ type: "turn-start" });
 
     await session.emitObserverEvent({
-      run_in_background: false,
-      subagent: "researcher",
-      type: "subagent-job-start",
+      text: "observer reasoning",
+      type: "assistant-reasoning",
     });
 
     const events = [
@@ -103,8 +104,8 @@ describe("Agent session plugin events", () => {
     ];
     await iterator.return?.();
 
-    expect(eventTypes(events)).toContain("subagent-job-start");
-    expect(pluginEventTypes).toContain("subagent-job-start");
+    expect(eventTypes(events)).toContain("assistant-reasoning");
+    expect(pluginEventTypes).toContain("assistant-reasoning");
   });
 
   it("commits successful output before terminal event plugin failures", async () => {

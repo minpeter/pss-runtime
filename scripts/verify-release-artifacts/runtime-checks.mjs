@@ -41,17 +41,31 @@ const REQUIRED_RUNTIME_EXECUTION_EXPORTS = [
   "ToolExecutionNeedsRecoveryError",
 ];
 const REQUIRED_RUNTIME_CLOUDFLARE_EXPORTS = [
+  "CloudflareAgentContext",
+  "CloudflareAgentContextFactoryOptions",
+  "CloudflareAgentContextOptions",
+  "CloudflareAgentContextPrefixOptions",
+  "CloudflareAgentRunDrainOptions",
   "CloudflareAlarmAgent",
   "CloudflareAlarmDrainSummary",
+  "CloudflareDurableObjectFetchOptions",
+  "CloudflareDurableObjectId",
+  "CloudflareDurableObjectNamespace",
+  "CloudflareDurableObjectState",
   "CloudflareDurableObjectStorage",
+  "CloudflareDurableObjectStub",
+  "CloudflareDurableObjectStubOptions",
   "CloudflareScheduledSessionPrompt",
   "InMemoryCloudflareDurableObjectStorage",
   "ackScheduledCloudflareRun",
   "ackScheduledCloudflareSessionPrompt",
   "createCloudflareAlarmScheduler",
+  "createCloudflareAgentContext",
   "createCloudflareDurableObjectHost",
   "drainAgentRun",
   "drainCloudflareAlarm",
+  "fetchCloudflareDurableObject",
+  "getCloudflareDurableObjectStub",
   "listScheduledCloudflareRuns",
   "listScheduledCloudflareSessionPrompts",
   "rescheduleCloudflareAlarm",
@@ -68,12 +82,24 @@ const FORBIDDEN_RUNTIME_ROOT_NAMES = [
   "BackgroundSchedulerHost",
   "CheckpointHost",
   "CheckpointStore",
+  "CloudflareAgentContext",
+  "CloudflareAgentContextFactoryOptions",
+  "CloudflareAgentContextOptions",
+  "CloudflareAgentContextPrefixOptions",
+  "CloudflareAgentRunDrainOptions",
   "CloudflareAlarmAgent",
   "CloudflareAlarmDrainSummary",
+  "CloudflareDurableObjectFetchOptions",
+  "CloudflareDurableObjectId",
+  "CloudflareDurableObjectNamespace",
+  "CloudflareDurableObjectState",
   "CloudflareDurableObjectStorage",
+  "CloudflareDurableObjectStub",
+  "CloudflareDurableObjectStubOptions",
   "CloudflareScheduledSessionPrompt",
   "createInMemoryExecutionHost",
   "createCloudflareAlarmScheduler",
+  "createCloudflareAgentContext",
   "createCloudflareDurableObjectHost",
   "CreateLlmOptions",
   "DurableBackgroundHost",
@@ -93,6 +119,8 @@ const FORBIDDEN_RUNTIME_ROOT_NAMES = [
   "NotificationHost",
   "NotificationInbox",
   "NotificationRecord",
+  "fetchCloudflareDurableObject",
+  "getCloudflareDurableObjectStub",
   "InMemoryCloudflareDurableObjectStorage",
   "RunHost",
   "RunRecord",
@@ -115,6 +143,20 @@ const FORBIDDEN_RUNTIME_PUBLIC_PATTERNS = [
     description: "AgentRun.stream() member",
     pattern: /(?:\bstream\(\)\s*\{|AgentRun\.stream\(\))/,
   },
+];
+const FORBIDDEN_RUNTIME_SUBAGENT_NAMES = [
+  ["Subagent", "Definition"].join(""),
+  ["resume", "Background", "Child", "Run"].join(""),
+  ["Background", "Child", "Agent"].join(""),
+  ["Subagent", "Status", "Agent", "Event"].join(""),
+  ["is", "Subagent", "Status", "Agent", "Event"].join(""),
+  ["background", "Subagents"].join(""),
+  ["background", "subagent"].join("-"),
+  ["subagent", "job", "start"].join("-"),
+  ["subagent", "job", "update"].join("-"),
+  ["subagent", "job", "end"].join("-"),
+  ["create", "Subagent", "Tools"].join(""),
+  ["register", "Subagents"].join(""),
 ];
 const RUNTIME_PUBLIC_ARTIFACT_RE = /\.(?:d\.ts|[cm]?js)$/;
 
@@ -158,6 +200,13 @@ function findRuntimePublicPatternLeaks({ cwd }) {
     for (const { description, pattern } of FORBIDDEN_RUNTIME_PUBLIC_PATTERNS) {
       if (pattern.test(text)) {
         errors.push(`${relativeToCwd(cwd, file)}: exposes ${description}`);
+      }
+    }
+    for (const name of FORBIDDEN_RUNTIME_SUBAGENT_NAMES) {
+      if (text.includes(name)) {
+        errors.push(
+          `${relativeToCwd(cwd, file)}: exposes runtime-owned subagent name ${name}`
+        );
       }
     }
   }

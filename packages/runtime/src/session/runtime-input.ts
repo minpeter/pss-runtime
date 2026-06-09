@@ -1,5 +1,6 @@
 import type { AgentEvent, RuntimeInput } from "./events";
 import type { AgentInput, UserInput } from "./input";
+import { attachInputMeta } from "./input-meta";
 import { normalizeAgentInput } from "./input-normalization";
 import type { BufferedAgentRun } from "./run";
 
@@ -45,7 +46,10 @@ export function addSteeringInput(
     }
 
     queueRuntimeInput(runtimeInput, {
-      input: normalizeAgentInput(input),
+      input: attachInputMeta(normalizeAgentInput(input), {
+        source: "steer",
+        streaming: "steer",
+      }),
       placement:
         runtimeInput.steerPlacement ?? runtimeInput.placement ?? "step-end",
     });

@@ -4,26 +4,26 @@
 
 ### Patch Changes
 
-- e989f88: Add the `host` execution contract for resumable runs, durable notification
-  resume, and background subagent capability detection. Advanced execution host,
-  store, and scheduler contracts are available from
-  `@minpeter/pss-runtime/execution`, and runtime-originated work can resume through
-  `Agent.resume(runId)`.
+- e989f88: Add the `host` execution contract for resumable runs and durable
+  notification resume. Advanced execution host, store, and scheduler contracts
+  are available from `@minpeter/pss-runtime/execution`, and runtime-originated
+  work can resume through `Agent.resume(runId)`.
 
-  Background subagent handling is now more durable: hosts can advertise background
-  support, child runs are linked for cleanup/cancellation, killed sessions stop
-  before cleanup waits, and stale cancelled sibling notifications are filtered
-  without dropping completed work. The Cloudflare edge example shows one adapter
-  implementation for Worker/Durable Object scheduling and resume.
+  Durable background scheduling is host-owned: apps can persist their own run
+  records and completion notifications while the runtime keeps the generic
+  execution store, scheduler, and notification resume primitives.
 
-- b03d3ac: Order subagent lifecycle events after the parent delegate tool call and before the matching tool result. Normalize AI SDK fallback tool-call ids such as `delegate_to_researcher_0` to `call_*`, and include `delegateToolCallId` on subagent lifecycle events so callers can correlate `delegate_to_*` calls with `bg_*` background jobs.
+- b03d3ac: Normalize AI SDK fallback tool-call ids such as `lookup_0` to
+  `call_*` so app-owned tools can correlate model tool calls with their own
+  durable work records.
 - b03d3ac: Implement constructor-level `plugins: [...]` event observers and lifecycle middleware.
 
 ## 0.1.0-next.1
 
 ### Patch Changes
 
-- ae8de0e: Replace the async Agent factory with direct construction and add array-based subagents with blocking/background delegation tools.
+- ae8de0e: Replace the async Agent factory with direct construction and keep
+  delegation as app-owned tool composition.
 
 ## 0.1.0-next.0
 

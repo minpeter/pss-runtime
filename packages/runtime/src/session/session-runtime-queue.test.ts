@@ -1,7 +1,12 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
-import { assistantMessage, createDeferred, userText } from "../test-fixtures";
+import {
+  assistantMessage,
+  createDeferred,
+  steerRuntimeInput,
+  userText,
+} from "../test-fixtures";
 import type { AgentEvent } from "./events";
 import { userTextToModelMessage } from "./mapping";
 import { collect } from "./session.test-support";
@@ -32,16 +37,8 @@ describe("Agent session runtime input queueing", () => {
     }
 
     expect(runtimeInputs).toEqual([
-      {
-        type: "runtime-input",
-        input: { type: "user-text", text: "first" },
-        placement: "step-start",
-      },
-      {
-        type: "runtime-input",
-        input: { type: "user-text", text: "second" },
-        placement: "step-start",
-      },
+      steerRuntimeInput("first", "step-start"),
+      steerRuntimeInput("second", "step-start"),
     ]);
     expect(seenHistory).toEqual([
       [
@@ -80,21 +77,9 @@ describe("Agent session runtime input queueing", () => {
     }
 
     expect(runtimeInputs).toEqual([
-      {
-        type: "runtime-input",
-        input: { type: "user-text", text: "first" },
-        placement: "step-start",
-      },
-      {
-        type: "runtime-input",
-        input: { type: "user-text", text: "second" },
-        placement: "step-start",
-      },
-      {
-        type: "runtime-input",
-        input: { type: "user-text", text: "third" },
-        placement: "step-start",
-      },
+      steerRuntimeInput("first", "step-start"),
+      steerRuntimeInput("second", "step-start"),
+      steerRuntimeInput("third", "step-start"),
     ]);
     expect(seenHistory).toEqual([
       [
@@ -139,11 +124,9 @@ describe("Agent session runtime input queueing", () => {
 
     await Promise.all([firstCollecting, secondEvents]);
 
-    expect(firstEvents).toContainEqual({
-      type: "runtime-input",
-      input: { type: "user-text", text: "extra" },
-      placement: "step-start",
-    });
+    expect(firstEvents).toContainEqual(
+      steerRuntimeInput("extra", "step-start")
+    );
     expect(seenHistory).toEqual([
       [
         userTextToModelMessage(userText("first")),

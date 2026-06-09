@@ -55,7 +55,7 @@ export function durableNotificationResumeHost(
   host: AgentHost
 ): DurableNotificationResumeHost | undefined {
   const backgroundHost = durableBackgroundHost(host);
-  if (backgroundHost?.capabilities?.backgroundSubagents === "durable") {
+  if (backgroundHost) {
     return backgroundHost;
   }
 

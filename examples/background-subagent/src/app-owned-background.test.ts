@@ -1,0 +1,196 @@
+import type { Agent, AgentInput, AgentRun } from "@minpeter/pss-runtime";
+import {
+  createInMemoryExecutionHost,
+  type ExecutionHost,
+  type ResumeSessionOptions,
+} from "@minpeter/pss-runtime/execution";
+import { describe, expect, it } from "vitest";
+import { createAppAgent } from "./app-agent";
+import {
+  defaultChildSessionKey,
+  launchDurableBackgroundDelegation,
+} from "./background-delegation";
+import { createBackgroundOutputTool } from "./background-output-tool";
+import { parentSessionNamespace, readerChildName } from "./delegate-tool";
+
+const parentSessionKey = "default";
+const ownerNamespace = parentSessionNamespace("coordinator", parentSessionKey);
+
+describe("app-owned background delegation", () => {
+  it("does not resume a background task owned by another app namespace", async () => {
+    const host = createInMemoryExecutionHost();
+    const job = await launchTask(host, {
+      ownerNamespace: "app:other:default",
+    });
+    const appAgent = createTestAppAgent(host);
+
+    await expect(appAgent.resume(`background:${job.id}`)).rejects.toThrow(
+      "is not owned by this app"
+    );
+  });
+
+  it("does not return stored output for another app namespace", async () => {
+    const host = createInMemoryExecutionHost();
+    const job = await launchTask(host, {
+      ownerNamespace: "app:other:default",
+    });
+    const run = await host.store.runs.get(`background:${job.id}`);
+    if (!run) {
+      throw new Error("expected background run to exist");
+    }
+    await host.store.runs.update({
+      ...run,
+      output: { text: "SECRET" },
+      status: "completed",
+    });
+    const backgroundOutput = createBackgroundOutputTool({
+      executionHost: host,
+      ownerNamespace,
+      parentSessionKey,
+    });
+
+    await expect(
+      backgroundOutput.execute?.(
+        { task_id: job.id },
+        {
+          abortSignal: undefined,
+          context: {},
+          messages: [],
+          toolCallId: "call-output",
+        }
+      )
+    ).rejects.toThrow("접근할 수 없다");
+  });
+
+  it("does not create a duplicate notification run after duplicate enqueue", async () => {
+    const { host, resumeCalls } = createCountingHost();
+    const job = await launchTask(host);
+    const idempotencyKey = `background-complete:${parentSessionKey}:${job.id}`;
+    await host.store.notifications.enqueue({
+      idempotencyKey,
+      input: { text: "already queued", type: "user-text" },
+      notificationId: `notification:${job.id}`,
+      ownerNamespace,
+      runId: `notification:${job.id}`,
+      sessionKey: parentSessionKey,
+      status: "pending",
+    });
+    const appAgent = createTestAppAgent(host);
+
+    await appAgent.resume(`background:${job.id}`);
+
+    await expect(
+      host.store.runs.get(`notification:${job.id}`)
+    ).resolves.toBeNull();
+    expect(resumeCalls).toEqual([]);
+  });
+
+  it("resumes an owned completion notification without runtime-owned namespace helpers", async () => {
+    const host = createInMemoryExecutionHost();
+    const job = await launchTask(host);
+    const appAgent = createTestAppAgent(host);
+    await appAgent.resume(`background:${job.id}`);
+
+    const notificationRun = await appAgent.resume(`notification:${job.id}`);
+
+    expect(notificationRun).not.toBeNull();
+    if (!notificationRun) {
+      throw new Error("expected completion notification to resume");
+    }
+    await expect(collectAssistantText(notificationRun)).resolves.toBe(
+      "coordinator saw notification"
+    );
+    await expect(
+      host.store.runs.get(`notification:${job.id}`)
+    ).resolves.toEqual(expect.objectContaining({ status: "completed" }));
+  });
+});
+
+async function launchTask(
+  host: ExecutionHost,
+  overrides: { readonly ownerNamespace?: string } = {}
+) {
+  return await launchDurableBackgroundDelegation({
+    executionHost: host,
+    ownerNamespace: overrides.ownerNamespace ?? ownerNamespace,
+    parentSessionKey,
+    prompt: "read product docs",
+    sessionKey: defaultChildSessionKey(
+      overrides.ownerNamespace ?? ownerNamespace,
+      parentSessionKey,
+      readerChildName
+    ),
+    subagent: readerChildName,
+  });
+}
+
+function createTestAppAgent(host: ExecutionHost): Agent {
+  return createAppAgent({
+    coordinator: {
+      resume: () => Promise.resolve(null),
+      session: () => ({
+        send: async (_input: AgentInput) =>
+          runWithText("coordinator saw notification"),
+      }),
+    } as unknown as Agent,
+    host,
+    ownerNamespace,
+    parentSessionKey,
+    reader: createReaderAgent(),
+  });
+}
+
+async function collectAssistantText(run: AgentRun) {
+  let text = "";
+  for await (const event of run.events()) {
+    if (event.type === "assistant-text") {
+      text += event.text;
+    }
+  }
+  return text;
+}
+
+function createReaderAgent(): Agent {
+  return {
+    session: () =>
+      ({
+        send: async (_input: AgentInput) => runWithText("reader result"),
+      }) as Agent["session"] extends (key: string) => infer Session
+        ? Session
+        : never,
+  } as unknown as Agent;
+}
+
+function runWithText(text: string): AgentRun {
+  return {
+    events: () => eventStream([{ text, type: "assistant-text" }]),
+  };
+}
+
+async function* eventStream(
+  events: readonly { readonly text: string; readonly type: "assistant-text" }[]
+) {
+  for (const event of events) {
+    await Promise.resolve();
+    yield event;
+  }
+}
+
+function createCountingHost() {
+  const baseHost = createInMemoryExecutionHost();
+  const resumeCalls: { options: ResumeSessionOptions; sessionKey: string }[] =
+    [];
+  const host: ExecutionHost = {
+    ...baseHost,
+    scheduler: {
+      enqueueRun: async (runId, options) => {
+        await baseHost.scheduler.enqueueRun(runId, options);
+      },
+      resumeSession: async (sessionKey, options) => {
+        resumeCalls.push({ options, sessionKey });
+        await baseHost.scheduler.resumeSession(sessionKey, options);
+      },
+    },
+  };
+  return { host, resumeCalls };
+}

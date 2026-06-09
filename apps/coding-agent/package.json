@@ -1,0 +1,69 @@
+{
+  "name": "@minpeter/pss-coding-agent",
+  "version": "0.0.11-next.0",
+  "description": "Coding-agent model and TUI wiring for pss-next.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "@minpeter/pss-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./env": {
+      "@minpeter/pss-source": "./src/env.ts",
+      "types": "./dist/env.d.ts",
+      "import": "./dist/env.js"
+    },
+    "./model": {
+      "@minpeter/pss-source": "./src/model.ts",
+      "types": "./dist/model.d.ts",
+      "import": "./dist/model.js"
+    },
+    "./tui": {
+      "@minpeter/pss-source": "./src/tui.ts",
+      "types": "./dist/tui.d.ts",
+      "import": "./dist/tui.js"
+    }
+  },
+  "bin": {
+    "pss": "./bin/pss.js",
+    "pss-coding-agent": "./bin/pss.js"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/minpeter/pss-next.git",
+    "directory": "apps/coding-agent"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pretest": "pnpm --filter @minpeter/pss-web-tools build",
+    "test": "vitest run",
+    "lint": "ultracite check ."
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "3.0.0-canary.48",
+    "@earendil-works/pi-tui": "^0.76.0",
+    "@minpeter/pss-runtime": "workspace:^",
+    "@minpeter/pss-web-tools": "workspace:*",
+    "@t3-oss/env-core": "^0.13.11",
+    "ai": "7.0.0-canary.142",
+    "dotenv": "^17.4.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.0",
+    "vitest": "^4.1.7"
+  }
+}

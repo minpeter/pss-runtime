@@ -2,6 +2,10 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 export const DEFAULT_PACKAGES = ["runtime", "coding-agent"];
+const PACKAGE_ROOTS = {
+  "coding-agent": "apps/coding-agent",
+  runtime: "packages/runtime",
+};
 
 export function listFiles(root, predicate = () => true) {
   if (!existsSync(root)) {
@@ -30,7 +34,24 @@ export function listFiles(root, predicate = () => true) {
 }
 
 export function packageDistPath(cwd, packageName) {
-  return join(cwd, "packages", packageName, "dist");
+  return join(packageRootPath(cwd, packageName), "dist");
+}
+
+export function packageRootPath(cwd, packageName) {
+  const preferredRoot = join(
+    cwd,
+    PACKAGE_ROOTS[packageName] ?? join("packages", packageName)
+  );
+  if (existsSync(preferredRoot)) {
+    return preferredRoot;
+  }
+
+  const legacyRoot = join(cwd, "packages", packageName);
+  if (legacyRoot !== preferredRoot && existsSync(legacyRoot)) {
+    return legacyRoot;
+  }
+
+  return preferredRoot;
 }
 
 export function readJsonForVerification({ cwd, file }) {

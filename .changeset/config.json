@@ -8,9 +8,10 @@
   "baseBranch": "v0.1",
   "updateInternalDependencies": "patch",
   "ignore": [
+    "@minpeter/pss-worker-agent",
     "@minpeter/pss-example-basic",
-    "@minpeter/pss-example-cloudflare-edge-subagent",
     "@minpeter/pss-example-plugin",
-    "@minpeter/pss-example-subagent"
+    "@minpeter/pss-example-sync-subagent",
+    "@minpeter/pss-example-background-subagent"
   ]
 }

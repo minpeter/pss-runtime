@@ -6,6 +6,7 @@ import {
   assistantMessage,
   createDeferred,
   eventTypes,
+  notifyRuntimeInput,
   userText,
 } from "../test-fixtures";
 import type { AgentEvent } from "./events";
@@ -51,11 +52,9 @@ describe("AgentSession.notify", () => {
       "step-end",
       "turn-end",
     ]);
-    expect(events).toContainEqual({
-      input: userText(notification),
-      placement: "turn-start",
-      type: "runtime-input",
-    });
+    expect(events).toContainEqual(
+      notifyRuntimeInput(notification, "turn-start")
+    );
     expect(events).not.toContainEqual(userText(notification));
     expect(seenHistory).toEqual([
       [userTextToModelMessage(userText(notification))],

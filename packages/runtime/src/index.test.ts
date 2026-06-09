@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type {
   AgentHostCapabilities,
@@ -22,12 +23,33 @@ import type {
   RunStore,
   SessionHost,
 } from "./execution";
-import type { AgentHost } from "./index";
-import { Agent } from "./index";
+import type {
+  AgentEvent,
+  AgentHost,
+  ControlAgentEvent,
+  LifecycleAgentEvent,
+  TelemetryAgentEvent,
+  VisibleAgentEvent,
+} from "./index";
+import {
+  Agent,
+  isControlAgentEvent,
+  isLifecycleAgentEvent,
+  isTelemetryAgentEvent,
+  isVisibleAgentEvent,
+} from "./index";
 
 type EmptyHostIsAccepted =
   Record<string, never> extends AgentHost ? true : false;
 const emptyHostIsAccepted: EmptyHostIsAccepted = true;
+const runtimeIndexSourceUrl = new URL("./index.ts", import.meta.url);
+const forbiddenRuntimeSubagentExports = [
+  ["Subagent", "Definition"].join(""),
+  ["resume", "Background", "Child", "Run"].join(""),
+  ["Background", "Child", "Agent"].join(""),
+  ["Subagent", "Status", "Agent", "Event"].join(""),
+  ["is", "Subagent", "Status", "Agent", "Event"].join(""),
+] as const;
 
 describe("runtime public exports", () => {
   it("does not expose internal agent loop runner from package root", async () => {
@@ -47,6 +69,57 @@ describe("runtime public exports", () => {
     expect(runtime).not.toHaveProperty("ToolExecutionNeedsRecoveryError");
     expect(runtime).not.toHaveProperty(runStreamExport);
     expect(emptyHostIsAccepted).toBe(true);
+  });
+
+  it("exports event classifiers from the package root", async () => {
+    const runtime = await import("./index");
+
+    expect(runtime).toHaveProperty("isVisibleAgentEvent", isVisibleAgentEvent);
+    expect(runtime).toHaveProperty(
+      "isLifecycleAgentEvent",
+      isLifecycleAgentEvent
+    );
+    expect(runtime).toHaveProperty(
+      "isTelemetryAgentEvent",
+      isTelemetryAgentEvent
+    );
+    expect(runtime).toHaveProperty("isControlAgentEvent", isControlAgentEvent);
+  });
+
+  it("does not expose runtime-owned subagent helpers from the package root", async () => {
+    const runtime = await import("./index");
+    const source = await readFile(runtimeIndexSourceUrl, "utf8");
+
+    for (const forbiddenName of forbiddenRuntimeSubagentExports) {
+      expect(runtime).not.toHaveProperty(forbiddenName);
+      expect(source).not.toContain(forbiddenName);
+    }
+  });
+
+  it("types event classifier exports from the package root", () => {
+    const visible = {
+      text: "hello",
+      type: "assistant-text",
+    } satisfies VisibleAgentEvent;
+    const lifecycle = { type: "turn-start" } satisfies LifecycleAgentEvent;
+    const telemetry = {
+      text: "thinking",
+      type: "assistant-reasoning",
+    } satisfies TelemetryAgentEvent;
+    const control = lifecycle satisfies ControlAgentEvent;
+    const events = [visible, lifecycle, telemetry, control] satisfies readonly [
+      VisibleAgentEvent,
+      LifecycleAgentEvent,
+      TelemetryAgentEvent,
+      Exclude<AgentEvent, VisibleAgentEvent>,
+    ];
+
+    expect(events.map((event) => event.type)).toEqual([
+      "assistant-text",
+      "turn-start",
+      "assistant-reasoning",
+      "turn-start",
+    ]);
   });
 
   it("types advanced host contracts", () => {
@@ -75,7 +148,8 @@ describe("runtime public exports", () => {
     expectTypeOf<
       ExecutionStoreTransaction["notifications"]
     >().toEqualTypeOf<NotificationInbox>();
-    expectTypeOf<SessionHost>().toMatchTypeOf<AgentHost>();
+    const sessionHost = {} satisfies SessionHost;
+    const agentHost = sessionHost satisfies AgentHost;
     expectTypeOf<RunHost["runStore"]>().toEqualTypeOf<RunStore>();
     expectTypeOf<
       CheckpointHost["checkpointStore"]
@@ -91,7 +165,8 @@ describe("runtime public exports", () => {
     expectTypeOf<ExecutionTransactionHost["transaction"]>().toEqualTypeOf<
       ExecutionStore["transaction"]
     >();
-    expectTypeOf<DurableBackgroundHost>().toMatchTypeOf<RunHost>();
-    expectTypeOf<DurableNotificationResumeHost>().toMatchTypeOf<NotificationHost>();
+    expectTypeOf<DurableBackgroundHost>().toExtend<RunHost>();
+    expectTypeOf<DurableNotificationResumeHost>().toExtend<NotificationHost>();
+    expect(agentHost).toEqual({});
   });
 });

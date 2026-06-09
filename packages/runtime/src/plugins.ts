@@ -1,8 +1,24 @@
 import type { RuntimeLlmContext } from "./llm";
-import type { AgentEvent } from "./session/events";
+import type {
+  AgentEvent,
+  RuntimeInput,
+  UserMessage,
+  UserText,
+} from "./session/events";
+
+export type { InputEventMeta, InputSource } from "./session/input-meta-types";
 
 type MaybePromise<T> = PromiseLike<T> | T;
 type AgentEventHistory = RuntimeLlmContext["history"];
+
+export type InterceptableAgentEvent = RuntimeInput | UserMessage | UserText;
+
+export type AgentPluginInterceptResult =
+  | { readonly action: "continue" }
+  | { readonly action: "handled" }
+  | { readonly action: "transform"; readonly event: InterceptableAgentEvent };
+
+export type AgentPluginResult = AgentPluginInterceptResult | undefined;
 
 export interface AgentEventContext {
   readonly event: AgentEvent;
@@ -12,29 +28,113 @@ export interface AgentEventContext {
 
 export interface AgentPlugin {
   readonly events?: {
+    /** @deprecated Use top-level `on`. */
     readonly on?: (context: AgentEventContext) => MaybePromise<void>;
   };
   readonly name?: string;
+  readonly on?: (context: AgentEventContext) => MaybePromise<AgentPluginResult>;
 }
+
+export type PluginPipelineResult =
+  | { readonly event: AgentEvent; readonly kind: "emit" }
+  | { readonly kind: "handled" };
 
 export function runEventPlugins(
   plugins: readonly AgentPlugin[],
   context: AgentEventContext
 ): Promise<void> {
-  return runPluginHandlers(plugins, (plugin) => plugin.events?.on, context);
+  return runPluginsForEvent(plugins, context, { observeOnly: true }).then(
+    () => undefined
+  );
 }
 
-async function runPluginHandlers<Context>(
+export function runPluginsForEvent(
   plugins: readonly AgentPlugin[],
-  handlerFor: (
-    plugin: AgentPlugin
-  ) => ((context: Context) => MaybePromise<void>) | undefined,
-  context: Context
-): Promise<void> {
-  for (const plugin of plugins) {
-    const handler = handlerFor(plugin);
-    if (handler) {
-      await handler(context);
-    }
+  context: AgentEventContext,
+  options: { readonly observeOnly?: boolean } = {}
+): Promise<PluginPipelineResult> {
+  return runPluginPipeline(plugins, context, options.observeOnly === true);
+}
+
+function isInterceptableEvent(
+  event: AgentEvent
+): event is InterceptableAgentEvent {
+  return (
+    event.type === "user-text" ||
+    event.type === "user-message" ||
+    event.type === "runtime-input"
+  );
+}
+
+function resolvePluginHandler(
+  plugin: AgentPlugin
+):
+  | ((context: AgentEventContext) => MaybePromise<AgentPluginResult>)
+  | undefined {
+  if (plugin.on) {
+    return plugin.on;
   }
+
+  const legacyHandler = plugin.events?.on;
+  if (!legacyHandler) {
+    return;
+  }
+
+  return (legacyContext) =>
+    Promise.resolve(legacyHandler(legacyContext)).then(() => undefined);
+}
+
+function normalizeInterceptResult(
+  result: AgentPluginResult | undefined
+): AgentPluginInterceptResult | undefined {
+  if (result === undefined) {
+    return;
+  }
+
+  if (result.action === "continue") {
+    return result;
+  }
+
+  if (result.action === "handled") {
+    return result;
+  }
+
+  if (result.action === "transform") {
+    return result;
+  }
+
+  return;
+}
+
+async function runPluginPipeline(
+  plugins: readonly AgentPlugin[],
+  context: AgentEventContext,
+  observeOnly: boolean
+): Promise<PluginPipelineResult> {
+  let currentEvent = context.event;
+
+  for (const plugin of plugins) {
+    const handler = resolvePluginHandler(plugin);
+    if (!handler) {
+      continue;
+    }
+
+    const result = await handler({ ...context, event: currentEvent });
+    if (observeOnly || !isInterceptableEvent(currentEvent)) {
+      continue;
+    }
+
+    const intercept = normalizeInterceptResult(result);
+    if (!intercept || intercept.action === "continue") {
+      continue;
+    }
+
+    if (intercept.action === "handled") {
+      return { kind: "handled" };
+    }
+
+    currentEvent = intercept.event;
+  }
+
+  return { kind: "emit", event: currentEvent };
 }
