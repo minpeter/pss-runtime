@@ -1,4 +1,5 @@
 import type { Agent } from "./agent";
+import type { AgentInput } from "./session/input";
 import type { AgentRun } from "./session/run";
 import type { SubagentDefinition } from "./subagent-definition";
 import type { Subagent } from "./subagent-types";
