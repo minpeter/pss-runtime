@@ -49,8 +49,11 @@ export async function parseAgentRequest(
   let payload: unknown;
   try {
     payload = await request.json();
-  } catch {
-    return;
+  } catch (error) {
+    if (error instanceof Error) {
+      return;
+    }
+    throw error;
   }
 
   if (

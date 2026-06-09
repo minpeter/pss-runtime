@@ -18,16 +18,9 @@ const AgentReplySchema = z.object({
   reply: z.string().optional(),
 });
 
-let bot: Chat | undefined;
-let botConfigKey: string | undefined;
-let nextDurableObjectNamespaceId = 0;
-const durableObjectNamespaceIds = new WeakMap<DurableObjectNamespace, number>();
+let cachedBot: CachedBot | undefined;
 
-type ReplyFetcher = (
-  env: ConversationEnv,
-  channelId: string,
-  text: string
-) => Promise<string>;
+type ReplyFetcher = (channelId: string, text: string) => Promise<string>;
 
 interface ConversationEnv {
   readonly ENVIRONMENT: Env["ENVIRONMENT"];
@@ -47,22 +40,32 @@ interface ConversationThread {
   subscribe(): Promise<unknown>;
 }
 
-function createBot(env: Env): Chat {
-  const userName = env.TELEGRAM_BOT_USERNAME?.trim() || "pss_echo_bot";
-  const secretToken = readWebhookSecretToken(env);
+interface BotConfig {
+  readonly agentNamespace: DurableObjectNamespace;
+  readonly botToken: string;
+  readonly environment: Env["ENVIRONMENT"];
+  readonly secretToken: string;
+  readonly userName: string;
+}
 
+interface CachedBot {
+  readonly bot: Chat;
+  readonly config: BotConfig;
+}
+
+function createBot(env: Env, config: BotConfig): Chat {
   const chat = new Chat({
     concurrency: "queue",
     adapters: {
       telegram: createTelegramAdapter({
-        botToken: env.TELEGRAM_BOT_TOKEN,
+        botToken: config.botToken,
         mode: "webhook",
-        secretToken,
-        userName,
+        secretToken: config.secretToken,
+        userName: config.userName,
       }),
     },
     state: createMemoryState(),
-    userName,
+    userName: config.userName,
   });
 
   const handleMessage = async (
@@ -74,8 +77,7 @@ function createBot(env: Env): Chat {
     replyToThread({
       env,
       context,
-      fetchReply: (_env, channelId, text) =>
-        requestAgentReply(env, channelId, text),
+      fetchReply: (channelId, text) => requestAgentReply(env, channelId, text),
       message,
       subscribe: options?.subscribe ?? false,
       thread,
@@ -132,7 +134,7 @@ export async function replyToThread({
       await thread.post(DEV_NOTICE);
     }
 
-    const reply = await fetchReply(env, thread.channelId, text);
+    const reply = await fetchReply(thread.channelId, text);
     await thread.post(reply);
   } catch (error) {
     console.error("telegram handler failed", normalizeError(error));
@@ -177,35 +179,31 @@ export function handleTelegramWebhook(
   env: Env,
   ctx: ExecutionContext
 ): Promise<Response> {
-  const nextConfigKey = telegramBotConfigKey(env);
-  if (!bot || botConfigKey !== nextConfigKey) {
-    bot = createBot(env);
-    botConfigKey = nextConfigKey;
+  const config = readBotConfig(env);
+  if (!(cachedBot && isSameBotConfig(cachedBot.config, config))) {
+    cachedBot = { bot: createBot(env, config), config };
   }
-  return bot.webhooks.telegram(request, {
+  return cachedBot.bot.webhooks.telegram(request, {
     waitUntil: (task) => ctx.waitUntil(task),
   });
 }
 
-function telegramBotConfigKey(env: Env): string {
-  return JSON.stringify({
-    agentNamespace: durableObjectNamespaceConfigId(env.AGENT_DO),
+function readBotConfig(env: Env): BotConfig {
+  return {
+    agentNamespace: env.AGENT_DO,
     botToken: env.TELEGRAM_BOT_TOKEN,
     environment: env.ENVIRONMENT,
     secretToken: readWebhookSecretToken(env),
     userName: env.TELEGRAM_BOT_USERNAME?.trim() || "pss_echo_bot",
-  });
+  };
 }
 
-function durableObjectNamespaceConfigId(
-  namespace: DurableObjectNamespace
-): number {
-  const existing = durableObjectNamespaceIds.get(namespace);
-  if (existing !== undefined) {
-    return existing;
-  }
-
-  nextDurableObjectNamespaceId += 1;
-  durableObjectNamespaceIds.set(namespace, nextDurableObjectNamespaceId);
-  return nextDurableObjectNamespaceId;
+function isSameBotConfig(left: BotConfig, right: BotConfig): boolean {
+  return (
+    left.agentNamespace === right.agentNamespace &&
+    left.botToken === right.botToken &&
+    left.environment === right.environment &&
+    left.secretToken === right.secretToken &&
+    left.userName === right.userName
+  );
 }

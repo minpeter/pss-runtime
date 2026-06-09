@@ -66,8 +66,7 @@ describe("telegram conversation handling", () => {
 
     await replyToThread({
       env,
-      fetchReply: (_env, channelId, text) =>
-        Promise.resolve(`${channelId}:${text}`),
+      fetchReply: (channelId, text) => Promise.resolve(`${channelId}:${text}`),
       message: { text: "hello" },
       subscribe: true,
       thread: {
