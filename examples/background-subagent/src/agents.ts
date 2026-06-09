@@ -45,7 +45,14 @@ export function createCoordinatorAgent(
     namespace: coordinatorNamespace,
     plugins: [createConversationTagPlugin()],
     tools: {
-      background_output: createBackgroundOutputTool(options.executionHost),
+      background_output: createBackgroundOutputTool({
+        executionHost: options.executionHost,
+        ownerNamespace: parentSessionNamespace(
+          coordinatorNamespace,
+          options.sessionKey
+        ),
+        parentSessionKey: options.sessionKey,
+      }),
       delegate_to_reader: createDelegateToReaderTool({
         description:
           "지식베이스 문서 읽기를 reader 에이전트에게 백그라운드로 위임한다.",

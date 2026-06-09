@@ -50,8 +50,8 @@ consume the events for the run to progress. This is what lets code react to
 created.
 
 `model` is the single public constructor key for model execution. Pass an AI SDK
-`LanguageModel` for the managed runtime path with `instructions`, `tools`, and
-`subagents`, or pass a custom `RuntimeLlm` function when you want to own the model
+`LanguageModel` for the managed runtime path with `instructions` and `tools`, or
+pass a custom `RuntimeLlm` function when you want to own the model
 adapter yourself:
 
 ```ts
@@ -116,78 +116,48 @@ The public transcript protocol is `AgentEvent`: live runs emit runtime-defined
 events through `run.events()`. Provider/model message history is internal
 continuation state, not a public history API.
 
-## Subagents
+## Delegation
 
-Compose specialist agents by passing `SubagentDefinition` wrappers on the
-parent `Agent`. Each wrapper carries delegation metadata (`name`,
-`description`, optional `delegateToolName`) and a nested `agent: new Agent(...)`
-with the child instructions, model, tools, namespace, and other runtime config.
+Delegation is app-owned. Build ordinary tools that call another `Agent`,
+`session.send(...)`, `session.notify(...)`, or host-owned background work, then
+return the compact result shape your product wants the model to see.
 
 ```ts
-const coordinator = new Agent({
+const reader = new Agent({
+  instructions: "Read knowledge-base files and cite paths.",
   model,
-  instructions: "Coordinate work and delegate when useful.",
-  subagents: [
-    {
-      name: "researcher",
-      description: "Researches facts and returns concise evidence.",
-      agent: new Agent({
-        namespace: "researcher",
-        instructions: "Research facts and return concise evidence.",
-        model,
-      }),
-    },
-  ],
+  namespace: "reader",
+});
+
+const coordinator = new Agent({
+  instructions: "Coordinate work and delegate knowledge-base reads.",
+  model,
+  namespace: "coordinator",
+  tools: {
+    delegate_to_reader: tool({
+      description: "Ask the reader agent to inspect the knowledge base.",
+      execute: async ({ prompt }) => {
+        const run = await reader.session("kb").send(prompt);
+        const text: string[] = [];
+        for await (const event of run.events()) {
+          if (event.type === "assistant-text") {
+            text.push(event.text);
+          }
+        }
+        return { result: text.join("\n") };
+      },
+      inputSchema,
+    }),
+  },
 });
 ```
 
-Put child-only options such as `instructions`, `tools`, `host`, `namespace`, and
-`plugins` on the nested `agent`. `Agent` has no `name` field; wrapper `name` is
-the delegation identity and `agent.namespace` scopes sessions (required on
-subagent children). Use child `plugins` to transform delegated input (see
-**Plugins** below).
-
-For each subagent, the parent model receives a generated
-`delegate_to_<name>` tool. The tool accepts `prompt`, optional `description`,
-optional `sessionKey` suffix, and `run_in_background`. A provided `sessionKey`
-is always scoped under the parent session and subagent name; the model cannot
-select an arbitrary child session key. Omitting `run_in_background` defaults to
-blocking behavior and returns compact child text, not the full child event
-stream.
-
-```ts
-delegate_to_researcher({
-  prompt: "Find the current release notes and summarize the evidence.",
-});
-```
-
-When the model sets `run_in_background: true`, the parent run can finish while
-the child keeps working. The launch result includes a `bg_...` `task_id` and
-tells the model to wait for a `<system-reminder>` before retrieving output.
-When background work finishes, the session is notified with compact runtime
-input. Hosts that support durable background work should resume the parent session
-through the notification inbox and drain the returned `AgentRun`.
-
-```ts
-delegate_to_researcher({
-  prompt: "Compare the API designs.",
-  run_in_background: true,
-});
-
-// After the completion reminder arrives:
-background_output({ task_id: "bg_...", block: true });
-background_cancel({ task_id: "bg_..." });
-```
-
-The parent model context stays compact by default: completion reminders include
-the task id, subagent name, description, and retrieval instruction. Full child
-traces are not injected into the parent transcript by default. Background jobs
-run in task-scoped child sessions. In-memory job handles are cleaned up after
-completed output retrieval, while durable hosts keep compact completed output
-available through the execution store for reconstructed agents. Background jobs
-launched during the same parent turn share an internal completion barrier:
-successful jobs notify once when the group settles, while failed jobs notify
-immediately.
+For background delegation, let your host own task ids, scheduling, output
+storage, and notification resume. The runtime provides generic execution stores,
+notifications, `Agent.resume(...)`, and `run.events()`; it does not generate
+delegation tools or own child-agent lifecycle semantics. See
+the sync and background example packages for app-owned blocking and background
+delegation patterns.
 
 ## Plugins
 
@@ -383,9 +353,9 @@ const agent = new Agent({
 });
 ```
 
-For durable sessions, use the exported file POC. Set a stable `namespace` when
-subagents also use durable stores, so reconstructed agents map the same parent
-session and child `sessionKey` suffixes back to the same child transcripts:
+For durable sessions, use the exported file POC. Set a stable `namespace` so
+reconstructed agents map the same app-owned session keys back to the same
+transcripts:
 
 ```ts
 import { FileSessionStore } from "@minpeter/pss-runtime/session-store/file";
@@ -425,7 +395,7 @@ const agent = new Agent({
 });
 
 const durableHost: DurableBackgroundHost = {
-  capabilities: { backgroundSubagents: "durable" },
+  capabilities: {},
   backgroundScheduler,
   checkpointStore,
   eventStore,
@@ -440,27 +410,20 @@ const durableHost: DurableBackgroundHost = {
 
 The runtime supports both long-running Node.js processes and edge hosts that
 reconstruct runtime objects between turns. The same public DX stays centered on
-`new Agent({ subagents: [...] })`; host-specific durability and scheduling live
+`new Agent({ model, tools, host })`; host-specific durability and scheduling live
 behind the `host` boundary.
 
 Long-running Node.js can keep an `Agent` and `SessionHandle` alive across turns.
-The default in-memory host advertises in-process background subagent capability,
-so `run_in_background`, `background_output`, and `background_cancel` remain
-available while that process owns the work. `FileSessionStore` persists session
-snapshots only; it does not make background work durable by itself.
+`FileSessionStore` persists session snapshots only; app-owned background work
+needs its own durable task/output storage if it must survive process restarts.
 
 Cloudflare Durable Objects and similar edge hosts should reconstruct `Agent`
 objects per turn and persist opaque session state through a durable
 `sessionStore`.
-When a host does not advertise background subagent capability, the runtime hides
-background tools from the parent model and exposes blocking delegation only.
-This avoids pretending that in-memory background work survived a hibernation,
-isolate restart, or request deadline.
-
 Use `@minpeter/pss-runtime/cloudflare` for the packaged Cloudflare Durable
-Object adapter. See `examples/sync-subagent` for a blocking app-owned subagent
-CLI and `examples/background-subagent` for durable background delegation in a
-local interactive CLI.
+Object adapter. See the sync example package for blocking app-owned delegation
+and the background example package for durable background delegation in a local
+interactive CLI.
 
 The same core API supports room/user/session routing through stable session keys.
 
@@ -475,10 +438,10 @@ storage is durable across hibernation/restores, while in-memory state remains
 request-local. Do not store canonical agent session or run state in memory
 attachments.
 
-Durable background subagents require host capabilities that own task ids,
-attempts, leases, checkpoints, cancellation, scheduling, session snapshots, and
-completion notifications. The Cloudflare adapter persists scheduled runs and
-session prompts, sets alarms, and resumes work through `Agent.resume(...)`.
+Durable background workflows require host-owned task ids, attempts, leases,
+checkpoints, cancellation, scheduling, session snapshots, and completion
+notifications. The Cloudflare adapter persists scheduled runs and session
+prompts, sets alarms, and resumes work through `Agent.resume(...)`.
 
 ## Checkpoints and Cancellation
 
@@ -501,7 +464,6 @@ themselves. Edge hosts still need durable scheduling, leases, resume workers,
 and notification resume handling; externally visible side-effect tools still need
 idempotent execution or a manual recovery flow.
 
-Cancellation is persisted before aborting active work. Parent `delete()` and
-`kill()` mark linked child runs as `cancelled` through the execution store before
-falling back to process-local cleanup, so stale child completions cannot enqueue
-new parent notifications.
+Cancellation is persisted before aborting active work. `delete()` and `dispose()`
+stop the current session's in-process work; durable hosts remain responsible for
+any app-owned background run cancellation, cleanup, and notification policy.

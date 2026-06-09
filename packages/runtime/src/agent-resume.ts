@@ -1,20 +1,16 @@
 import { ownsAgentNamespace } from "./agent-namespace";
-import { resumeBackgroundChildRun } from "./background-child-resume";
 import type {
   ExecutionHost,
   NotificationRecord,
   RunRecord,
 } from "./execution/types";
 import type { AgentRun } from "./session/run";
-import { readDurableBackgroundChildRunState } from "./subagent-background-child-run-state";
-import type { Subagent } from "./subagent-types";
 
 interface ResumeAgentRunInput {
   readonly host: ExecutionHost;
   readonly ownerNamespace: string;
   resumeNotification(notification: NotificationRecord): Promise<AgentRun>;
   readonly runId: string;
-  readonly subagents: readonly Subagent[];
 }
 
 export async function resumeAgentRun({
@@ -22,7 +18,6 @@ export async function resumeAgentRun({
   ownerNamespace,
   resumeNotification,
   runId,
-  subagents,
 }: ResumeAgentRunInput): Promise<AgentRun | null> {
   const run = await host.store.runs.get(runId);
   if (!run) {
@@ -30,30 +25,6 @@ export async function resumeAgentRun({
   }
   if (!canAccessRun(run, ownerNamespace)) {
     return null;
-  }
-
-  if (run.kind === "background-subagent") {
-    const checkpoint = await host.store.checkpoints.latest(run.runId);
-    const state = readDurableBackgroundChildRunState(checkpoint);
-    if (!state) {
-      throw new AgentResumeError(run.runId, "missing background run state");
-    }
-
-    const subagent = subagents.find(
-      (candidate) => candidate.name === state.subagent
-    );
-    if (!subagent) {
-      throw new AgentResumeError(
-        run.runId,
-        `missing subagent ${JSON.stringify(state.subagent)}`
-      );
-    }
-
-    return await resumeBackgroundChildRun({
-      childAgent: subagent,
-      host,
-      run,
-    });
   }
 
   if (run.kind === "notification" && run.dedupeKey) {
@@ -154,11 +125,4 @@ async function claimRun(
     nowMs: Date.now(),
   });
   return claim.ok ? claim.record : null;
-}
-
-class AgentResumeError extends Error {
-  constructor(runId: string, reason: string) {
-    super(`Cannot resume agent run ${runId}: ${reason}`);
-    this.name = "AgentResumeError";
-  }
 }

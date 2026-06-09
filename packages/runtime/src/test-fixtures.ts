@@ -1,13 +1,5 @@
-import type {
-  AssistantModelMessage,
-  LanguageModel,
-  ToolCallPart,
-  ToolModelMessage,
-} from "ai";
-import { Agent, type AgentOptions } from "./agent";
-import type { AgentHost } from "./execution/types";
+import type { AssistantModelMessage, ToolCallPart, ToolModelMessage } from "ai";
 import type { RuntimeLlm, RuntimeLlmOutput } from "./llm";
-import type { AgentPlugin } from "./plugins";
 import type {
   AgentEvent,
   UserMessage,
@@ -15,7 +7,6 @@ import type {
   UserText,
   UserTextContent,
 } from "./session/events";
-import type { SubagentDefinition } from "./subagent-definition";
 
 export const assistantMessage = (
   content: AssistantModelMessage["content"]
@@ -129,50 +120,3 @@ export const steerRuntimeInputMessage = (
   placement,
   type: "runtime-input" as const,
 });
-
-export interface ResearcherSubagentOverrides {
-  readonly agent?: Agent;
-  readonly delegateToolName?: string;
-  readonly delegationMode?: SubagentDefinition["delegationMode"];
-  readonly description?: string;
-  readonly host?: AgentHost;
-  readonly instructions?: string;
-  readonly model?: LanguageModel | RuntimeLlm;
-  readonly name?: string;
-  readonly namespace?: string;
-  readonly plugins?: readonly AgentPlugin[];
-  readonly tools?: import("ai").ToolSet;
-}
-
-export function researcherSubagent(
-  overrides: ResearcherSubagentOverrides = {}
-): SubagentDefinition {
-  const name = overrides.name ?? "researcher";
-  const description = overrides.description ?? "Researches facts.";
-  const model = overrides.model ?? ({} as LanguageModel);
-  const namespace = overrides.namespace ?? name;
-  const sharedOptions = {
-    description,
-    host: overrides.host,
-    namespace,
-    plugins: overrides.plugins,
-    tools: overrides.tools,
-  };
-  const agent =
-    overrides.agent ??
-    (typeof model === "function"
-      ? new Agent({ ...sharedOptions, model } as AgentOptions)
-      : new Agent({
-          ...sharedOptions,
-          instructions: overrides.instructions ?? "Research facts.",
-          model,
-        }));
-
-  return {
-    agent,
-    delegateToolName: overrides.delegateToolName,
-    delegationMode: overrides.delegationMode,
-    description,
-    name,
-  };
-}

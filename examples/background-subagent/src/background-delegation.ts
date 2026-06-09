@@ -1,7 +1,7 @@
 import type { AgentInput } from "@minpeter/pss-runtime";
 import type { ExecutionHost, RunRecord } from "@minpeter/pss-runtime/execution";
 
-const backgroundSubagentKind = "background-subagent" as const;
+const backgroundDelegationStateKind = "background-delegation" as const;
 
 interface BackgroundChildRunInput {
   readonly delegateToolCallId?: string;
@@ -17,7 +17,7 @@ interface BackgroundChildRunInput {
 interface DurableBackgroundChildRunState {
   readonly delegateToolCallId?: string;
   readonly description?: string;
-  readonly kind: typeof backgroundSubagentKind;
+  readonly kind: typeof backgroundDelegationStateKind;
   readonly parentSessionKey?: string;
   readonly prompt: AgentInput;
   readonly subagent: string;
@@ -40,12 +40,6 @@ export function defaultChildSessionKey(
 export async function launchDurableBackgroundDelegation(
   input: BackgroundChildRunInput
 ): Promise<BackgroundJobLaunch> {
-  if (!input.executionHost.capabilities.backgroundSubagents) {
-    throw new Error(
-      "Background subagent delegation is not available for this host."
-    );
-  }
-
   const existingChildRun = await getBackgroundChildRun(input);
   const id =
     existingChildRun?.publicTaskId ??
@@ -131,7 +125,7 @@ async function getOrCreateBackgroundChildRun(
     const run: RunRecord = {
       checkpointVersion: 0,
       dedupeKey,
-      kind: backgroundSubagentKind,
+      kind: "user-turn",
       ...(input.ownerNamespace ? { ownerNamespace: input.ownerNamespace } : {}),
       parentRunId,
       publicTaskId: input.publicTaskId,
@@ -176,7 +170,7 @@ function durableBackgroundChildRunState(
       ? { delegateToolCallId: input.delegateToolCallId }
       : {}),
     ...(input.description ? { description: input.description } : {}),
-    kind: backgroundSubagentKind,
+    kind: backgroundDelegationStateKind,
     ...(input.parentSessionKey
       ? { parentSessionKey: input.parentSessionKey }
       : {}),
@@ -194,5 +188,49 @@ function backgroundSubagentDedupeKey({
   readonly prompt: AgentInput;
   readonly sessionKey: string;
 }): string {
-  return `background-subagent:${sessionKey}:${delegateToolCallId ?? "unknown"}:${JSON.stringify(prompt)}`;
+  return `background-delegation:${sessionKey}:${delegateToolCallId ?? "unknown"}:${JSON.stringify(prompt)}`;
+}
+
+export function readDurableBackgroundDelegationState(
+  checkpoint: { readonly runtimeState: unknown } | null
+): DurableBackgroundChildRunState | null {
+  const state = checkpoint?.runtimeState;
+  if (
+    !isRecord(state) ||
+    state.kind !== backgroundDelegationStateKind ||
+    !isAgentInput(state.prompt) ||
+    typeof state.subagent !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    ...(typeof state.delegateToolCallId === "string"
+      ? { delegateToolCallId: state.delegateToolCallId }
+      : {}),
+    ...(typeof state.description === "string"
+      ? { description: state.description }
+      : {}),
+    kind: backgroundDelegationStateKind,
+    ...(typeof state.parentSessionKey === "string"
+      ? { parentSessionKey: state.parentSessionKey }
+      : {}),
+    prompt: state.prompt,
+    subagent: state.subagent,
+  };
+}
+
+function isAgentInput(value: unknown): value is AgentInput {
+  if (typeof value === "string" || Array.isArray(value)) {
+    return true;
+  }
+
+  return (
+    isRecord(value) &&
+    (value.type === "user-text" || value.type === "user-message")
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

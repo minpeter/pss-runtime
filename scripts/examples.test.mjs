@@ -43,6 +43,14 @@ function readText(path) {
   return readFileSync(path, "utf8");
 }
 
+function expectSourceToOmit(path, forbiddenNames) {
+  const source = readText(path);
+
+  for (const forbiddenName of forbiddenNames) {
+    expect(source).not.toContain(forbiddenName);
+  }
+}
+
 describe("examples workspace packages", () => {
   it("exposes examples as independent package.json workspaces", () => {
     const workspace = readText("pnpm-workspace.yaml");
@@ -169,14 +177,12 @@ describe("examples workspace packages", () => {
     expect(indexSource).toContain("session.send");
     expect(indexSource).toContain("/quit");
     expect(indexSource).toContain("kb/");
-    expect(indexSource).not.toContain("subagents:");
 
     expect(agentsSource).toContain('namespace: "reader"');
     expect(agentsSource).toContain("plugins:");
     expect(agentsSource).toContain("createConversationTagPlugin");
     expect(agentsSource).toContain("createDelegateToReaderTool");
     expect(agentsSource).toContain("read_file: createReadFileTool()");
-    expect(agentsSource).not.toContain("subagents:");
 
     expect(conversationPluginSource).toContain('action: "transform"');
     expect(conversationPluginSource).toContain("user-text");
@@ -184,7 +190,20 @@ describe("examples workspace packages", () => {
     expect(delegateToolSource).toContain("delegate_to_reader");
     expect(delegateToolSource).toContain("delegateUserInput");
     expect(delegateToolSource).not.toContain('mode: "background"');
-    expect(delegateToolSource).not.toContain("resumeBackgroundChildRun");
+    for (const sourcePath of [
+      "examples/sync-subagent/src/agents.ts",
+      "examples/sync-subagent/src/delegate-tool.ts",
+      "examples/sync-subagent/src/index.ts",
+      "examples/sync-subagent/src/setup.ts",
+    ]) {
+      expectSourceToOmit(sourcePath, [
+        "subagents:",
+        "resumeBackgroundChildRun",
+        "backgroundSubagents",
+        "background-subagent",
+        "subagent-job-",
+      ]);
+    }
 
     expect(readFileToolSource).toContain("readFile");
     expect(readFileToolSource).toContain("fixtures");
@@ -207,9 +226,6 @@ describe("examples workspace packages", () => {
     const backgroundDelegationSource = readText(
       "examples/background-subagent/src/background-delegation.ts"
     );
-    const localHostSource = readText(
-      "examples/background-subagent/src/local-host.ts"
-    );
 
     expect(packageJson.scripts.start).toBe(
       "tsx --conditions=@minpeter/pss-source src/index.ts"
@@ -227,20 +243,36 @@ describe("examples workspace packages", () => {
     expect(
       existsSync("examples/background-subagent/fixtures/kb/product.md")
     ).toBe(true);
-    expect(indexSource).not.toContain("subagents:");
     expect(existsSync("examples/background-subagent/src/cli.ts")).toBe(false);
 
     expect(agentsSource).toContain("background_output");
     expect(agentsSource).toContain("createDelegateToReaderTool");
     expect(agentsSource).toContain("createConversationTagPlugin");
-    expect(agentsSource).not.toContain("subagents:");
 
     expect(delegateToolSource).toContain("launchDurableBackgroundDelegation");
     expect(backgroundDelegationSource).toContain("task_id");
     expect(backgroundDelegationSource).toContain("<system-reminder>");
 
-    expect(localHostSource).toContain('backgroundSubagents: "durable"');
-    expect(localHostSource).toContain("resumeSession");
+    for (const sourcePath of [
+      "examples/background-subagent/src/agents.ts",
+      "examples/background-subagent/src/app-agent.ts",
+      "examples/background-subagent/src/background-delegation.ts",
+      "examples/background-subagent/src/background-output-tool.ts",
+      "examples/background-subagent/src/delegate-tool.ts",
+      "examples/background-subagent/src/index.ts",
+      "examples/background-subagent/src/local-host.ts",
+      "examples/background-subagent/src/setup.ts",
+    ]) {
+      expectSourceToOmit(sourcePath, [
+        "subagents:",
+        "resumeBackgroundChildRun",
+        'run.kind === "background-subagent"',
+        "backgroundSubagents",
+        'kind: "background-subagent"',
+        "background-subagent:",
+        "subagent-job-",
+      ]);
+    }
     expect(existsSync("examples/background-subagent/src/app-agent.ts")).toBe(
       true
     );

@@ -47,10 +47,7 @@ export function localHost({
   };
   const host: ExecutionHost = {
     ...baseHost,
-    capabilities: {
-      ...baseHost.capabilities,
-      backgroundSubagents: "durable",
-    },
+    capabilities: {},
     scheduler: {
       enqueueRun: async (runId, options) => {
         await baseHost.scheduler.enqueueRun(runId, options);

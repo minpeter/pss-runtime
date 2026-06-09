@@ -8,7 +8,7 @@ describe("execution host capability normalizers", () => {
     const aggregateHost = createInMemoryExecutionHost();
     const splitHost = {
       backgroundScheduler: aggregateHost.scheduler,
-      capabilities: { backgroundSubagents: "durable" },
+      capabilities: {},
       checkpointStore: aggregateHost.store.checkpoints,
       eventStore: aggregateHost.store.events,
       notificationInbox: aggregateHost.store.notifications,

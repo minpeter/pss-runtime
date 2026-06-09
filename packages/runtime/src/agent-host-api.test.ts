@@ -57,7 +57,7 @@ const acceptsTransactionHost = {
 } satisfies ExecutionTransactionHost;
 const acceptsDurableBackgroundHost = {
   backgroundScheduler: aggregateHost.scheduler,
-  capabilities: { backgroundSubagents: "durable" },
+  capabilities: {},
   checkpointStore: aggregateHost.store.checkpoints,
   eventStore: aggregateHost.store.events,
   notificationInbox: aggregateHost.store.notifications,
@@ -67,7 +67,7 @@ const acceptsDurableBackgroundHost = {
 } satisfies DurableBackgroundHost;
 const acceptsDurableNotificationResumeHost = {
   backgroundScheduler: aggregateHost.scheduler,
-  capabilities: { backgroundSubagents: "durable" },
+  capabilities: {},
   checkpointStore: aggregateHost.store.checkpoints,
   notificationInbox: aggregateHost.store.notifications,
   runStore: aggregateHost.store.runs,
@@ -190,29 +190,27 @@ describe("Agent host public API", () => {
     expect(JSON.stringify(seenHistories)).toContain("hello");
   });
 
-  it("rejects unsupported llm sessions and runtime options at runtime", () => {
+  it("does not implement legacy llm sessions and runtime options", () => {
     expect(
       () =>
         new Agent({
           llm: () => Promise.resolve([assistantMessage("DONE")]),
         } as unknown as AgentOptions)
-    ).toThrow("Agent: unsupported options.llm");
+    ).toThrow("Agent: missing options.model");
 
     expect(
-      () =>
-        new Agent({
-          model: () => Promise.resolve([assistantMessage("DONE")]),
-          sessions: { store: new SpyStore() },
-        } as unknown as AgentOptions)
-    ).toThrow("Agent: unsupported options.sessions");
+      new Agent({
+        model: () => Promise.resolve([assistantMessage("DONE")]),
+        sessions: { store: new SpyStore() },
+      } as unknown as AgentOptions)
+    ).toBeInstanceOf(Agent);
 
     expect(
-      () =>
-        new Agent({
-          model: () => Promise.resolve([assistantMessage("DONE")]),
-          runtime: {},
-        } as unknown as AgentOptions)
-    ).toThrow("Agent: unsupported options.runtime");
+      new Agent({
+        model: () => Promise.resolve([assistantMessage("DONE")]),
+        runtime: {},
+      } as unknown as AgentOptions)
+    ).toBeInstanceOf(Agent);
   });
 
   it("uses host session store for session snapshots", async () => {

@@ -47,14 +47,6 @@ export interface ToolResult {
   type: "tool-result";
 }
 
-type SubagentJobStatus =
-  | "aborted"
-  | "cancelled"
-  | "completed"
-  | "error"
-  | "pending"
-  | "running";
-
 export type AgentEvent =
   /** User input was accepted into the session queue. */
   | UserText
@@ -80,31 +72,6 @@ export type AgentEvent =
   | ToolCall
   /** A tool call returned a result. */
   | ToolResult
-  | {
-      description?: string;
-      delegateToolCallId?: string;
-      run_in_background: boolean;
-      subagent: string;
-      task_id?: string;
-      type: "subagent-job-start";
-    }
-  | {
-      eventType?: AgentEvent["type"];
-      delegateToolCallId?: string;
-      status: SubagentJobStatus;
-      subagent: string;
-      task_id: string;
-      type: "subagent-job-update";
-    }
-  | {
-      error?: string;
-      eventCount: number;
-      delegateToolCallId?: string;
-      status: Exclude<SubagentJobStatus, "pending" | "running">;
-      subagent: string;
-      task_id?: string;
-      type: "subagent-job-end";
-    }
   /** One model/tool-loop iteration finished within the active turn. */
   | { type: "step-end" };
 
@@ -130,12 +97,6 @@ const toolAgentEventTypes = {
   "tool-result": true,
 } satisfies Partial<Record<AgentEvent["type"], true>>;
 
-const subagentStatusAgentEventTypes = {
-  "subagent-job-end": true,
-  "subagent-job-start": true,
-  "subagent-job-update": true,
-} satisfies Partial<Record<AgentEvent["type"], true>>;
-
 const telemetryAgentEventTypes = {
   "assistant-reasoning": true,
   "runtime-input": true,
@@ -152,10 +113,6 @@ export type LifecycleAgentEvent = Extract<
 export type ToolAgentEvent = Extract<
   AgentEvent,
   { type: keyof typeof toolAgentEventTypes }
->;
-export type SubagentStatusAgentEvent = Extract<
-  AgentEvent,
-  { type: keyof typeof subagentStatusAgentEventTypes }
 >;
 export type TelemetryAgentEvent = Extract<
   AgentEvent,
@@ -177,12 +134,6 @@ export function isLifecycleAgentEvent(
 
 export function isToolAgentEvent(event: AgentEvent): event is ToolAgentEvent {
   return event.type in toolAgentEventTypes;
-}
-
-export function isSubagentStatusAgentEvent(
-  event: AgentEvent
-): event is SubagentStatusAgentEvent {
-  return event.type in subagentStatusAgentEventTypes;
 }
 
 export function isTelemetryAgentEvent(

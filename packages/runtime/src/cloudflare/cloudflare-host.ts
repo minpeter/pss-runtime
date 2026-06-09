@@ -50,9 +50,7 @@ export function createCloudflareDurableObjectHost({
 }): ExecutionHost {
   const store = new DurableObjectExecutionStore({ prefix, storage });
   return {
-    capabilities: {
-      backgroundSubagents: "durable",
-    },
+    capabilities: {},
     scheduler,
     store: sessionStore
       ? executionStoreWithSessions(store, sessionStore)

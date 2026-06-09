@@ -1,5 +1,5 @@
 import { stdin as input, stdout as output } from "node:process";
-import * as readline from "node:readline/promises";
+import { createInterface } from "node:readline/promises";
 import type { LocalHost } from "./local-host";
 import { drainRunForCli } from "./print-run";
 import { createExampleRuntime } from "./setup";
@@ -9,6 +9,7 @@ const notificationTimeoutMs = 1000;
 
 const runtime = createExampleRuntime();
 let active = true;
+const backgroundWatchers = new Set<Promise<void>>();
 
 output.write(
   [
@@ -21,7 +22,7 @@ output.write(
 
 startBackgroundWatcher(runtime.host);
 
-const rl = readline.createInterface({ input, output });
+const rl = createInterface({ input, output });
 
 try {
   while (active) {
@@ -43,20 +44,27 @@ try {
 }
 
 function startBackgroundWatcher(host: LocalHost) {
-  void (async () => {
-    while (active) {
-      try {
-        const run = await host.resumeSession({
-          timeoutMs: notificationTimeoutMs,
-        });
-        output.write("\n--- [system] 백그라운드 작업 완료 ---\n");
-        await drainRunForCli(run);
-        output.write("\n");
-      } catch {
-        await sleep(notificationPollMs);
-      }
+  const watcher = watchBackgroundCompletions(host);
+  backgroundWatchers.add(watcher);
+  watcher.then(
+    () => backgroundWatchers.delete(watcher),
+    () => backgroundWatchers.delete(watcher)
+  );
+}
+
+async function watchBackgroundCompletions(host: LocalHost) {
+  while (active) {
+    try {
+      const run = await host.resumeSession({
+        timeoutMs: notificationTimeoutMs,
+      });
+      output.write("\n--- [system] 백그라운드 작업 완료 ---\n");
+      await drainRunForCli(run);
+      output.write("\n");
+    } catch {
+      await sleep(notificationPollMs);
     }
-  })();
+  }
 }
 
 function sleep(ms: number) {

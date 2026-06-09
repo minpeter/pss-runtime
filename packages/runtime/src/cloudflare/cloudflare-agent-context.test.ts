@@ -53,11 +53,9 @@ describe("Cloudflare Worker DX helpers", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage();
     const calls: string[] = [];
     const context = createCloudflareAgentContext({
-      createAgent: ({ env, host, prefix }) => ({
+      createAgent: ({ env, prefix }) => ({
         resume: (runId) => {
-          calls.push(
-            `${env.environment}:${prefix}:${host.capabilities.backgroundSubagents}:${runId}`
-          );
+          calls.push(`${env.environment}:${prefix}:${runId}`);
           return Promise.resolve(runWithText(prefix));
         },
       }),
@@ -74,7 +72,7 @@ describe("Cloudflare Worker DX helpers", () => {
 
     const summary = await context.drainAlarm();
 
-    expect(calls).toEqual(["test:tenant-prefix:durable:background:bg_context"]);
+    expect(calls).toEqual(["test:tenant-prefix:background:bg_context"]);
     expect(summary.resumedRuns).toEqual(["background:bg_context"]);
     expect(summary.events).toEqual([
       { text: "tenant-prefix", type: "assistant-text" },

@@ -268,10 +268,6 @@ async function appendStepOutput({
   return shouldContinue ? "continue" : "completed";
 }
 
-function isLaunchOrBlockingObserverEvent(event: AgentEvent): boolean {
-  if (event.type === "subagent-job-update") {
-    return false;
-  }
-
-  return !(event.type === "subagent-job-end" && event.task_id);
+function isLaunchOrBlockingObserverEvent(_event: AgentEvent): boolean {
+  return true;
 }

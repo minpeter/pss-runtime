@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type {
   AgentHostCapabilities,
@@ -41,6 +42,14 @@ import {
 type EmptyHostIsAccepted =
   Record<string, never> extends AgentHost ? true : false;
 const emptyHostIsAccepted: EmptyHostIsAccepted = true;
+const runtimeIndexSourceUrl = new URL("./index.ts", import.meta.url);
+const forbiddenRuntimeSubagentExports = [
+  ["Subagent", "Definition"].join(""),
+  ["resume", "Background", "Child", "Run"].join(""),
+  ["Background", "Child", "Agent"].join(""),
+  ["Subagent", "Status", "Agent", "Event"].join(""),
+  ["is", "Subagent", "Status", "Agent", "Event"].join(""),
+] as const;
 
 describe("runtime public exports", () => {
   it("does not expose internal agent loop runner from package root", async () => {
@@ -75,6 +84,16 @@ describe("runtime public exports", () => {
       isTelemetryAgentEvent
     );
     expect(runtime).toHaveProperty("isControlAgentEvent", isControlAgentEvent);
+  });
+
+  it("does not expose runtime-owned subagent helpers from the package root", async () => {
+    const runtime = await import("./index");
+    const source = await readFile(runtimeIndexSourceUrl, "utf8");
+
+    for (const forbiddenName of forbiddenRuntimeSubagentExports) {
+      expect(runtime).not.toHaveProperty(forbiddenName);
+      expect(source).not.toContain(forbiddenName);
+    }
   });
 
   it("types event classifier exports from the package root", () => {

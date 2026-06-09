@@ -1,5 +1,5 @@
 import { stdin as input, stdout as output } from "node:process";
-import * as readline from "node:readline/promises";
+import { createInterface } from "node:readline/promises";
 import { drainRunForCli } from "./print-run";
 import { createExampleRuntime } from "./setup";
 
@@ -14,7 +14,7 @@ output.write(
   ].join("\n")
 );
 
-const rl = readline.createInterface({ input, output });
+const rl = createInterface({ input, output });
 
 try {
   while (true) {

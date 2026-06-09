@@ -1,20 +1,40 @@
 import type { ExecutionHost, RunStatus } from "@minpeter/pss-runtime/execution";
 import { jsonSchema, tool } from "ai";
+import { readDurableBackgroundDelegationState } from "./background-delegation";
 import { readerChildName } from "./delegate-tool";
 
 interface BackgroundOutputInput {
   readonly task_id: string;
 }
 
-export function createBackgroundOutputTool(executionHost: ExecutionHost) {
+export function createBackgroundOutputTool({
+  executionHost,
+  ownerNamespace,
+  parentSessionKey,
+}: {
+  readonly executionHost: ExecutionHost;
+  readonly ownerNamespace: string;
+  readonly parentSessionKey: string;
+}) {
   return tool<BackgroundOutputInput, unknown, Record<string, unknown>>({
     description: "백그라운드 reader 작업의 결과를 가져온다.",
     execute: async ({ task_id }) => {
       const record = await executionHost.store.runs.get(
         `background:${task_id}`
       );
-      if (!record || record.kind !== "background-subagent") {
+      if (!record || record.publicTaskId !== task_id) {
         throw new Error(`알 수 없는 백그라운드 작업 ${task_id}.`);
+      }
+      const checkpoint = await executionHost.store.checkpoints.latest(
+        record.runId
+      );
+      const state = readDurableBackgroundDelegationState(checkpoint);
+      if (
+        record.ownerNamespace !== ownerNamespace ||
+        state?.parentSessionKey !== parentSessionKey ||
+        state.subagent !== readerChildName
+      ) {
+        throw new Error(`백그라운드 작업 ${task_id}에 접근할 수 없다.`);
       }
 
       return {

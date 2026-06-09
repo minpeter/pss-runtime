@@ -17,8 +17,7 @@ export function parentSessionNamespace(
   agentNamespace: string,
   sessionKey: string
 ): string {
-  const sessionNamespace = `agent:${encodeURIComponent(agentNamespace)}`;
-  return `${sessionNamespace}:session:${encodeURIComponent(sessionKey)}:generation:0`;
+  return `app:${encodeURIComponent(agentNamespace)}:${encodeURIComponent(sessionKey)}`;
 }
 
 export function defaultChildSessionKey(

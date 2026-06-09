@@ -100,14 +100,13 @@ describe("session plugin intercept integration", () => {
     await iterator.next();
     await iterator.next();
     await session.emitObserverEvent({
-      run_in_background: false,
-      subagent: "researcher",
-      type: "subagent-job-start",
+      text: "observer reasoning",
+      type: "assistant-reasoning",
     });
     await iterator.next();
     await iterator.return?.();
 
-    expect(pluginEventTypes).toContain("subagent-job-start");
+    expect(pluginEventTypes).toContain("assistant-reasoning");
   });
 
   it("matches emitted text to model history after transform", async () => {

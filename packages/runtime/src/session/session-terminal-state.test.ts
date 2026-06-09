@@ -13,7 +13,7 @@ import { collect, SpyStore } from "./session.test-support";
 const timeoutMarker = Symbol("timeout");
 
 describe("Agent session terminal state", () => {
-  it("rejects runtime input after kill and settles queued runs", async () => {
+  it("rejects runtime input after dispose and settles queued runs", async () => {
     const llmStarted = createDeferred();
     const llmGate = createDeferred();
     const session = new Agent({
@@ -29,7 +29,7 @@ describe("Agent session terminal state", () => {
     const secondEvents = collect(secondRun);
 
     await llmStarted.promise;
-    session.kill();
+    session.dispose();
     llmGate.resolve();
 
     expect(eventTypes(await firstEvents)).toContain("turn-error");
@@ -37,7 +37,7 @@ describe("Agent session terminal state", () => {
     await expect(session.steer("late")).rejects.toThrow("Session killed");
   });
 
-  it("closes the active run when a killed session has a pending model call", async () => {
+  it("closes the active run when a disposed session has a pending model call", async () => {
     const llmStarted = createDeferred();
     const agent = new Agent({
       model: () => {
@@ -49,11 +49,11 @@ describe("Agent session terminal state", () => {
     const collecting = collect(await session.send("hello"));
     await llmStarted.promise;
 
-    session.kill();
+    session.dispose();
 
     const events = await withShortTimeout(collecting);
     if (events === timeoutMarker) {
-      throw new Error("session.kill() did not close the active run");
+      throw new Error("session.dispose() did not close the active run");
     }
     expect(eventTypes(events)).toEqual([
       "user-text",
@@ -63,7 +63,7 @@ describe("Agent session terminal state", () => {
     ]);
   });
 
-  it("closes the active run when a killed session has a pending terminal event plugin", async () => {
+  it("closes the active run when a disposed session has a pending terminal event plugin", async () => {
     const terminalPluginStarted = createDeferred();
     const agent = new Agent({
       plugins: [
@@ -84,11 +84,11 @@ describe("Agent session terminal state", () => {
     const collecting = collect(await session.send("hello"));
     await terminalPluginStarted.promise;
 
-    session.kill();
+    session.dispose();
 
     const events = await withShortTimeout(collecting);
     if (events === timeoutMarker) {
-      throw new Error("session.kill() did not close the terminal event run");
+      throw new Error("session.dispose() did not close the terminal event run");
     }
     expect(eventTypes(events)).toEqual([
       "user-text",

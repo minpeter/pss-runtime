@@ -90,12 +90,6 @@ describe("cloudflare durable object adapter", () => {
   });
 
   it("keeps durable runtime review fixes locked", async () => {
-    const runnerSource = readText(
-      "packages/runtime/src/subagent-background-runner.ts"
-    );
-    const resumeSource = readText(
-      "packages/runtime/src/background-child-resume.ts"
-    );
     const { InMemoryCloudflareDurableObjectStorage } = await import(
       "../packages/runtime/src/cloudflare/index.ts"
     );
@@ -122,9 +116,5 @@ describe("cloudflare durable object adapter", () => {
     );
 
     expect(storage.transactionCount).toBe(1);
-    expect(runnerSource).toContain("const durableCancelPollMs = 250;");
-    expect(runnerSource).not.toContain("const durableCancelPollMs = 25;");
-    expect(resumeSource).toContain("}).finally(() => {");
-    expect(resumeSource).toContain("job.settled = true;");
   });
 });

@@ -5,13 +5,12 @@ import type { AgentEvent } from "./session/events";
 import { ModelMessageHistory } from "./session/history";
 import { assistantMessage, eventTypes, toolCallPart } from "./test-fixtures";
 
-describe("runAgentLoop background delegation", () => {
-  it("continues the model loop after a background launch tool result", async () => {
+describe("runAgentLoop tool results", () => {
+  it("continues the model loop after a tool result", async () => {
     const events: AgentEvent[] = [];
     const history = new ModelMessageHistory();
-    const toolCall = toolCallPart("call-bg-1", "delegate_to_researcher", {
-      prompt: "research this",
-      run_in_background: true,
+    const toolCall = toolCallPart("call-tool-1", "lookup", {
+      query: "research this",
     });
     let llmCalls = 0;
     const llm: RuntimeLlm = () => {
@@ -25,11 +24,8 @@ describe("runAgentLoop background delegation", () => {
                 output: {
                   type: "json",
                   value: {
-                    message: "Background job started.",
-                    run_in_background: true,
-                    status: "running",
-                    subagent: "researcher",
-                    task_id: "bg_123",
+                    message: "Lookup completed.",
+                    status: "completed",
                   },
                 },
                 toolCallId: toolCall.toolCallId,
@@ -42,9 +38,7 @@ describe("runAgentLoop background delegation", () => {
         ]);
       }
 
-      return Promise.resolve([
-        assistantMessage("Background task started; waiting for notification."),
-      ]);
+      return Promise.resolve([assistantMessage("Lookup handled.")]);
     };
 
     await expect(
@@ -75,11 +69,8 @@ describe("runAgentLoop background delegation", () => {
             output: {
               type: "json",
               value: {
-                message: "Background job started.",
-                run_in_background: true,
-                status: "running",
-                subagent: "researcher",
-                task_id: "bg_123",
+                message: "Lookup completed.",
+                status: "completed",
               },
             },
             toolCallId: toolCall.toolCallId,
@@ -89,7 +80,7 @@ describe("runAgentLoop background delegation", () => {
         ],
         role: "tool",
       },
-      assistantMessage("Background task started; waiting for notification."),
+      assistantMessage("Lookup handled."),
     ]);
   });
 });

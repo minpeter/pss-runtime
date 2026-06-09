@@ -5,6 +5,7 @@ import { config as loadEnv } from "dotenv";
 import { z } from "zod";
 import { createCoordinatorAgent, createReaderAgent } from "./agents";
 import { createAppAgent } from "./app-agent";
+import { parentSessionNamespace } from "./delegate-tool";
 import { type LocalHost, localHost } from "./local-host";
 
 loadEnv({ path: ".env", quiet: true, override: true });
@@ -36,9 +37,21 @@ export interface ExampleRuntime {
 export function createExampleRuntime(sessionKey = "default"): ExampleRuntime {
   let coordinator!: Agent;
   let reader!: Agent;
+  const coordinatorNamespace = "coordinator";
+  const ownerNamespace = parentSessionNamespace(
+    coordinatorNamespace,
+    sessionKey
+  );
 
   const host = localHost({
-    agent: () => createAppAgent({ coordinator, host, reader }),
+    agent: () =>
+      createAppAgent({
+        coordinator,
+        host,
+        ownerNamespace,
+        parentSessionKey: sessionKey,
+        reader,
+      }),
   });
 
   reader = createReaderAgent(model, host);

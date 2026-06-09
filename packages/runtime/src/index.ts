@@ -3,12 +3,8 @@ export {
   type AgentOptions,
   type SessionHandle,
 } from "./agent";
-export {
-  type BackgroundChildAgent,
-  resumeBackgroundChildRun,
-} from "./background-child-resume";
 export { executionHost } from "./execution/host";
-export type { AgentHost, ExecutionHost } from "./execution/types";
+export type { AgentHost } from "./execution/types";
 export type {
   AgentToolChoice,
   RuntimeCreateLlmOptions,
@@ -38,7 +34,6 @@ export type {
   InputSource,
   LifecycleAgentEvent,
   RuntimeInput,
-  SubagentStatusAgentEvent,
   TelemetryAgentEvent,
   ToolAgentEvent,
   ToolCall,
@@ -58,7 +53,6 @@ export type {
 export {
   isControlAgentEvent,
   isLifecycleAgentEvent,
-  isSubagentStatusAgentEvent,
   isTelemetryAgentEvent,
   isToolAgentEvent,
   isVisibleAgentEvent,
@@ -79,4 +73,3 @@ export type {
   SessionStoreCommit,
   StoredSession,
 } from "./session/store/types";
-export type { SubagentDefinition } from "./subagent-definition";

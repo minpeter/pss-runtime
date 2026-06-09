@@ -5,7 +5,7 @@ import { agentNamespace } from "./agent-namespace";
 import { createInMemoryExecutionHost } from "./execution/memory";
 import type { ExecutionHost, RunRecord } from "./execution/types";
 import type { AgentRun } from "./session/run";
-import { collectAgentRun } from "./subagent-background-test-support";
+import { collect } from "./session/session.test-support";
 import { assistantMessage, eventTypes, userText } from "./test-fixtures";
 
 describe("host notification resume", () => {
@@ -28,11 +28,8 @@ describe("host notification resume", () => {
       notificationId: "notification-1",
       observerEvents: [
         {
-          eventCount: 1,
-          status: "completed",
-          subagent: "researcher",
-          task_id: "bg_1",
-          type: "subagent-job-end",
+          text: "background task bg_1 completed",
+          type: "assistant-reasoning",
         },
       ],
       ownerNamespace: agentNamespace("notify-owner"),
@@ -55,9 +52,9 @@ describe("host notification resume", () => {
       throw new Error("Expected notification resume to return a run.");
     }
 
-    const events = await collectAgentRun(run);
+    const events = await collect(run);
     expect(eventTypes(events)).toEqual([
-      "subagent-job-end",
+      "assistant-reasoning",
       "turn-start",
       "runtime-input",
       "step-start",
@@ -175,7 +172,7 @@ describe("host notification resume", () => {
       throw new Error("Expected notification resume retry to return a run.");
     }
 
-    expect(eventTypes(await collectAgentRun(run))).toContain("assistant-text");
+    expect(eventTypes(await collect(run))).toContain("assistant-text");
     await expect(
       host.store.notifications.getByIdempotencyKey(idempotencyKey)
     ).resolves.toEqual(expect.objectContaining({ status: "acked" }));
