@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+const defaultDevVarsPath = resolve(import.meta.dirname, "../../.dev.vars");
+
 export function loadDevVars(
-  path = resolve(import.meta.dirname, "../.dev.vars")
+  path = defaultDevVarsPath
 ): Record<string, string> {
   const contents = readFileSync(path, "utf8");
   const values: Record<string, string> = {};

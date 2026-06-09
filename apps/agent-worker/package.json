@@ -4,10 +4,10 @@
   "type": "module",
   "scripts": {
     "build": "pnpm --filter @minpeter/pss-runtime build",
-    "webhook:init": "tsx --conditions=@minpeter/pss-source scripts/telegram-webhook-init.ts",
-    "webhook:remove": "tsx --conditions=@minpeter/pss-source scripts/telegram-webhook-remove.ts",
+    "webhook:init": "tsx --conditions=@minpeter/pss-source scripts/webhook/init.ts",
+    "webhook:remove": "tsx --conditions=@minpeter/pss-source scripts/webhook/remove.ts",
     "predev": "run-s build webhook:remove",
-    "dev:poll": "tsx --conditions=@minpeter/pss-source scripts/telegram-poll.ts",
+    "dev:poll": "tsx --conditions=@minpeter/pss-source scripts/dev/poll.ts",
     "dev:worker": "wrangler dev",
     "dev": "run-p dev:*",
     "predeploy": "run-s build webhook:init",

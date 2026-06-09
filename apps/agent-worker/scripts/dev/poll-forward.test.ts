@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { forwardTelegramUpdate } from "./telegram-poll-forward";
+import { forwardTelegramUpdate } from "./poll-forward";
 
 describe("forwardTelegramUpdate", () => {
   afterEach(() => {

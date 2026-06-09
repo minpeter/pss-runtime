@@ -1,25 +1,15 @@
 import { pathToFileURL } from "node:url";
-import { loadDevVars } from "./load-dev-vars";
-import { startTelegramPollForward } from "./telegram-poll-forward";
-import { registerTelegramWebhook } from "./telegram-webhook-init";
-
-const localDevUrl = "http://127.0.0.1:8791";
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
-function readWebhookSecret(): string | undefined {
-  return loadDevVars().TELEGRAM_WEBHOOK_SECRET?.trim();
-}
+import { localDevOrigin } from "../lib/local-dev";
+import { loadDevVars } from "../lib/load-dev-vars";
+import { sleep } from "../lib/sleep";
+import { registerTelegramWebhook } from "../webhook/api";
+import { startTelegramPollForward } from "./poll-forward";
 
 async function waitForLocalDevServer(timeoutMs = 60_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(`${localDevUrl}/`, {
+      const response = await fetch(`${localDevOrigin}/`, {
         method: "GET",
         signal: AbortSignal.timeout(3_000),
       });
@@ -51,22 +41,23 @@ async function restoreProdWebhookIfConfigured(
 }
 
 async function main(): Promise<void> {
-  const botToken = loadDevVars().TELEGRAM_BOT_TOKEN?.trim();
+  const devVars = loadDevVars();
+  const botToken = devVars.TELEGRAM_BOT_TOKEN?.trim();
   if (!botToken) {
     console.log("TELEGRAM_BOT_TOKEN not set; skipping telegram poll");
     return;
   }
 
-  const webhookSecret = readWebhookSecret();
+  const webhookSecret = devVars.TELEGRAM_WEBHOOK_SECRET?.trim();
   const pollAbort = new AbortController();
   let shuttingDown = false;
 
-  const shutdown = async (signal: string, exitCode = 0): Promise<void> => {
+  const shutdown = async (exitCode = 0): Promise<void> => {
     if (shuttingDown) {
       return;
     }
     shuttingDown = true;
-    console.log(`\nReceived ${signal}, stopping telegram poll...`);
+    console.log("\nstopping telegram poll...");
     pollAbort.abort();
     try {
       await restoreProdWebhookIfConfigured(botToken, webhookSecret);
@@ -77,10 +68,10 @@ async function main(): Promise<void> {
   };
 
   process.on("SIGINT", () => {
-    void shutdown("SIGINT");
+    void shutdown();
   });
   process.on("SIGTERM", () => {
-    void shutdown("SIGTERM");
+    void shutdown();
   });
 
   try {
@@ -94,7 +85,7 @@ async function main(): Promise<void> {
   } catch (error) {
     if (!pollAbort.signal.aborted) {
       console.error("telegram polling failed:", error);
-      await shutdown("error", 1);
+      await shutdown(1);
     }
   }
 }

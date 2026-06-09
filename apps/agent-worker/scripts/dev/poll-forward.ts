@@ -1,6 +1,7 @@
-import { resolveTelegramWebhookSecret } from "../src/telegram/webhook-secret";
+import { resolveTelegramWebhookSecret } from "../../src/telegram/webhook-secret";
+import { localWebhookUrl } from "../lib/local-dev";
+import { sleep } from "../lib/sleep";
 
-const localWebhookUrl = "http://127.0.0.1:8791/telegram/webhook";
 const pollRetryMs = 2_000;
 const forwardRetryMs = 1_000;
 const maxForwardAttempts = 5;
@@ -13,12 +14,6 @@ interface TelegramApiResponse<T> {
   readonly description?: string;
   readonly ok: boolean;
   readonly result?: T;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 }
 
 export async function forwardTelegramUpdate(options: {
