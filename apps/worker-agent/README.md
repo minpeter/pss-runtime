@@ -6,7 +6,8 @@ Based on [minpeter-labs/cf-chat-sdk-worker-template](https://github.com/minpeter
 
 ```bash
 cp .dev.vars.example .dev.vars
-# fill in .dev.vars (TELEGRAM_WEBHOOK_SECRET_TOKEN: openssl rand -hex 32)
+# fill in .dev.vars (AI_API_KEY, TELEGRAM_*, WORKER_PUBLIC_URL)
+# TELEGRAM_WEBHOOK_SECRET_TOKEN: openssl rand -hex 32
 pnpm exec wrangler login   # once
 
 pnpm -F "@minpeter/pss-worker-agent" dev    # local

@@ -3,6 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "pnpm -F @minpeter/pss-runtime build",
+    "pretypecheck": "pnpm -F @minpeter/pss-runtime build",
+    "preship:worker": "pnpm -F @minpeter/pss-runtime build",
     "dev": "run-p dev:worker dev:relay",
     "dev:worker": "wrangler dev",
     "dev:relay": "tsx scripts/telegram.ts relay",
@@ -13,8 +16,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "3.0.0-canary.48",
     "@chat-adapter/state-memory": "4.30.0",
     "@chat-adapter/telegram": "4.30.0",
+    "@minpeter/pss-runtime": "workspace:*",
     "ai": "^6.0.198",
     "chat": "4.30.0",
     "zod": "^4.4.3"

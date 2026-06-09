@@ -4,6 +4,20 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-06-08",
   "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "AGENT_DO",
+        "class_name": "AgentDurableObject"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["AgentDurableObject"]
+    }
+  ],
   "dev": {
     "ip": "127.0.0.1",
     "port": 8792
