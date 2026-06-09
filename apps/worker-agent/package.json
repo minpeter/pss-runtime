@@ -6,8 +6,9 @@
     "dev": "run-p dev:worker dev:relay",
     "dev:worker": "wrangler dev",
     "dev:relay": "tsx scripts/telegram.ts relay",
-    "deploy": "wrangler deploy",
-    "webhook:init": "tsx scripts/telegram.ts webhook",
+    "deploy": "run-s deploy:worker deploy:webhook",
+    "deploy:worker": "wrangler deploy",
+    "deploy:webhook": "tsx scripts/telegram.ts webhook",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
