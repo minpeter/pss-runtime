@@ -1,65 +1,28 @@
-import { Agent, type AgentHost } from "@minpeter/pss-runtime";
+import { Agent } from "@minpeter/pss-runtime";
 import {
-  type CloudflareDurableObjectStorage,
   createCloudflareDurableObjectHost,
+  type CloudflareDurableObjectStorage,
 } from "@minpeter/pss-runtime/cloudflare";
-import type { ScenarioId } from "../request/schema";
-import type { StressPluginCounter } from "../scenarios/plugin";
-import { createStressPluginCounter } from "../scenarios/plugin";
-import { createStressTools } from "../scenarios/tools";
-import { workerStorePrefix } from "../worker/constants";
-import { createStressModel, workerResearcherModel } from "./model";
+import {
+  createLanguageModel,
+  type AgentWorkerBindings,
+} from "./config";
 
-export interface WorkerCoordinatorOptions {
-  readonly host?: AgentHost;
-  readonly pluginCounter?: StressPluginCounter;
-  readonly prefix?: string;
-  readonly scenario?: ScenarioId;
-}
-
-export function createWorkerCoordinator(
+export function createChatAgent(
   storage: CloudflareDurableObjectStorage,
-  _env: unknown = {},
-  options: WorkerCoordinatorOptions = {}
+  storePrefix: string,
+  bindings: AgentWorkerBindings
 ): Agent {
-  const scenario = options.scenario ?? "durable-background";
-  const host =
-    options.host ??
-    createCloudflareDurableObjectHost({
-      prefix: options.prefix ?? workerStorePrefix,
-      storage,
-    });
-  const researcher = new Agent({
-    description: "Produces compact research notes for the coordinator.",
-    host,
-    model: workerResearcherModel,
-    name: "researcher",
-    namespace: "cloudflare-worker-researcher",
+  const host = createCloudflareDurableObjectHost({
+    prefix: storePrefix,
+    storage,
   });
-  const pluginCounter =
-    options.pluginCounter ??
-    (scenario === "plugin-events" ? createStressPluginCounter() : undefined);
 
   return new Agent({
     host,
-    instructions: scenarioInstructions(scenario),
-    model: createStressModel(scenario),
-    namespace: "cloudflare-worker-coordinator",
-    plugins: pluginCounter ? [pluginCounter.plugin] : [],
-    subagents: [researcher],
-    toolChoice:
-      scenario === "tool-choice"
-        ? { toolName: "worker_echo", type: "tool" }
-        : undefined,
-    tools: scenario === "tool-choice" ? createStressTools() : undefined,
+    instructions:
+      "You are a helpful assistant in a Telegram chat. Be concise, accurate, and conversational.",
+    model: createLanguageModel(bindings),
+    namespace: "telegram-chat",
   });
-}
-
-function scenarioInstructions(scenario: ScenarioId): string {
-  return [
-    "Coordinate a bounded Cloudflare Worker stress scenario.",
-    `Scenario: ${scenario}.`,
-    "Use deterministic tool calls only.",
-    "For background work, wait for durable reminders before background_output.",
-  ].join(" ");
 }

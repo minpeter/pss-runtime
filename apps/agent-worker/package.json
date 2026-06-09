@@ -3,40 +3,27 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "deploy:worker": "wrangler deploy",
-    "deploy:sandbox-worker": "wrangler deploy --config wrangler.sandbox.jsonc",
-    "dev:worker": "wrangler dev",
-    "dev:sandbox-worker": "wrangler dev --config wrangler.sandbox.jsonc",
-    "dry-run:worker": "wrangler deploy --dry-run --outdir /tmp/pss-agent-worker-dry-run",
-    "dry-run:sandbox-worker": "wrangler deploy --config wrangler.sandbox.jsonc --dry-run --outdir /tmp/pss-agent-worker-sandbox-dry-run",
-    "predeploy:worker": "pnpm --filter @minpeter/pss-runtime build",
-    "predeploy:sandbox-worker": "pnpm --filter @minpeter/pss-runtime build",
-    "predev:worker": "pnpm --filter @minpeter/pss-runtime build",
-    "predev:sandbox-worker": "pnpm --filter @minpeter/pss-runtime build",
-    "predry-run:worker": "pnpm --filter @minpeter/pss-runtime build",
-    "predry-run:sandbox-worker": "pnpm --filter @minpeter/pss-runtime build",
-    "start": "tsx --conditions=@minpeter/pss-source src/simulation/index.ts",
-    "start:cli": "tsx --conditions=@minpeter/pss-source src/cli/index.ts",
-    "start:edge-cases": "tsx --conditions=@minpeter/pss-source src/simulation/edge-cases.ts",
-    "start:worker-sim": "tsx --conditions=@minpeter/pss-source src/simulation/index.ts",
-    "test": "vitest run src/request/schema.test.ts src/request/agent-api.test.ts src/scenarios/index.test.ts src/scenarios/pingpong.test.ts src/scenarios/sandbox.test.ts src/scenarios/guards.test.ts src/cloudflare/durable.test.ts src/docs/catalog.test.ts src/runs/store.test.ts src/sandbox/file-edit.test.ts src/worker/agent-api-routes.test.ts src/worker/runs.test.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "typecheck:worker": "tsc -p tsconfig.worker.json --noEmit"
+    "build": "pnpm --filter @minpeter/pss-runtime build",
+    "init:webhook": "tsx --conditions=@minpeter/pss-source scripts/telegram-webhook-init.ts",
+    "predev": "pnpm run build",
+    "dev": "tsx --conditions=@minpeter/pss-source scripts/dev-local.ts",
+    "predeploy": "run-s build init:webhook",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc -p tsconfig.worker.json --noEmit"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "3.0.0-canary.48",
-    "@cloudflare/sandbox": "0.11.0",
+    "@chat-adapter/telegram": "4.30.0",
     "@minpeter/pss-runtime": "workspace:*",
-    "@t3-oss/env-core": "^0.13.11",
     "ai": "7.0.0-canary.142",
-    "dotenv": "^17.4.2",
+    "chat": "4.30.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260608.1",
+    "npm-run-all": "^4.1.5",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7",
     "wrangler": "^4.98.0"
   }
 }
