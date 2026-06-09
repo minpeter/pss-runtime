@@ -8,10 +8,7 @@ const SESSION_KEY = "default";
 export class AgentDurableObject {
   readonly #context;
 
-  constructor(
-    state: DurableObjectState,
-    env: Env
-  ) {
+  constructor(state: DurableObjectState, env: Env) {
     this.#context = createCloudflareAgentContext({
       createAgent: ({ env: agentEnv, host }) =>
         createConfiguredAgent(agentEnv, host),

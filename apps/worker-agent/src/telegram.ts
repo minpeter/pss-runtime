@@ -1,9 +1,9 @@
-import { createTelegramAdapter } from "@chat-adapter/telegram";
 import { createMemoryState } from "@chat-adapter/state-memory";
+import { createTelegramAdapter } from "@chat-adapter/telegram";
 import { fetchCloudflareDurableObject } from "@minpeter/pss-runtime/cloudflare";
 import { Chat, type Message, type MessageContext, type Thread } from "chat";
 
-import { durableObjectName, isDevelopment, type Env } from "./env";
+import { durableObjectName, type Env, isDevelopment } from "./env";
 
 const DEV_NOTICE = "🧪 DEVELOPMENT ENVIRONMENT";
 
@@ -42,7 +42,11 @@ function createBot(env: Env): Chat {
       await thread.post(DEV_NOTICE);
     }
 
-    const reply = await requestAgentReply(env, thread.channelId, texts.join("\n"));
+    const reply = await requestAgentReply(
+      env,
+      thread.channelId,
+      texts.join("\n")
+    );
     await thread.post(reply);
   };
 
@@ -73,7 +77,9 @@ async function requestAgentReply(
   });
 
   if (!response?.ok) {
-    throw new Error(`agent durable object failed: ${response?.status ?? "missing"}`);
+    throw new Error(
+      `agent durable object failed: ${response?.status ?? "missing"}`
+    );
   }
 
   const payload = (await response.json()) as { readonly reply?: string };

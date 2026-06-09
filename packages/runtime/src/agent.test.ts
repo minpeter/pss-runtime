@@ -40,10 +40,7 @@ type RejectsLlmOptionKey = AssertFalse<
   "llm" extends keyof AgentOptions ? true : false
 >;
 const typeFixtures = [acceptsModelOptions, acceptsRuntimeModelOptions];
-type TypeFixtureAssertions = [
-  RejectsDescriptionOptionKey,
-  RejectsLlmOptionKey,
-];
+type TypeFixtureAssertions = [RejectsDescriptionOptionKey, RejectsLlmOptionKey];
 const typeFixtureAssertions: TypeFixtureAssertions = [false, false];
 
 const collectRun = async (run: Awaited<ReturnType<Agent["send"]>>) => {

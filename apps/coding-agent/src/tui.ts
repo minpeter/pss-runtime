@@ -79,7 +79,7 @@ export async function startTui(): Promise<void> {
     }
 
     removeInputListener();
-    session.kill();
+    session.dispose();
     runner.clearActiveRun();
     tui.stop();
     finish();

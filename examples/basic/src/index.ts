@@ -1,5 +1,5 @@
 import { stdin as input, stdout as output } from "node:process";
-import * as readline from "node:readline/promises";
+import { createInterface } from "node:readline/promises";
 import { drain } from "./drain";
 import { session } from "./setup";
 
@@ -7,7 +7,7 @@ output.write(
   ["basic CLI", "종료: /quit", "메시지를 입력하세요.", ""].join("\n")
 );
 
-const rl = readline.createInterface({ input, output });
+const rl = createInterface({ input, output });
 
 try {
   while (true) {

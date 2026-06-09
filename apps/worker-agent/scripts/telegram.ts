@@ -5,6 +5,7 @@ loadEnvFile(resolve(import.meta.dirname, "../.dev.vars"));
 
 const SECRET_HEADER = "x-telegram-bot-api-secret-token";
 const LOCAL_WEBHOOK = "http://127.0.0.1:8792/";
+const TRAILING_SLASHES_PATTERN = /\/+$/;
 const WEBHOOK_SECRET_PATTERN = /^[A-Za-z0-9_-]{1,256}$/;
 
 function required(key: string): string {
@@ -41,12 +42,15 @@ async function telegramApi(
   body?: Record<string, unknown>,
   signal?: AbortSignal
 ): Promise<unknown> {
-  const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-    body: body ? JSON.stringify(body) : undefined,
-    headers: body ? { "content-type": "application/json" } : undefined,
-    method: "POST",
-    signal,
-  });
+  const response = await fetch(
+    `https://api.telegram.org/bot${token}/${method}`,
+    {
+      body: body ? JSON.stringify(body) : undefined,
+      headers: body ? { "content-type": "application/json" } : undefined,
+      method: "POST",
+      signal,
+    }
+  );
   const payload = (await response.json()) as {
     readonly description?: string;
     readonly ok: boolean;
@@ -103,7 +107,7 @@ async function webhook(): Promise<void> {
   const token = required("TELEGRAM_BOT_TOKEN");
   const secret = required("TELEGRAM_WEBHOOK_SECRET_TOKEN");
   assertWebhookSecretToken(secret);
-  const url = `${required("WORKER_PUBLIC_URL").replace(/\/+$/, "")}/`;
+  const url = `${required("WORKER_PUBLIC_URL").replace(TRAILING_SLASHES_PATTERN, "")}/`;
 
   await telegramApi(token, "setWebhook", {
     secret_token: secret,
