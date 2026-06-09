@@ -20,6 +20,8 @@ const AgentReplySchema = z.object({
 
 let bot: Chat | undefined;
 let botConfigKey: string | undefined;
+let nextDurableObjectNamespaceId = 0;
+const durableObjectNamespaceIds = new WeakMap<DurableObjectNamespace, number>();
 
 type ReplyFetcher = (
   env: ConversationEnv,
@@ -133,13 +135,16 @@ export async function replyToThread({
     const reply = await fetchReply(env, thread.channelId, text);
     await thread.post(reply);
   } catch (error) {
-    console.error("telegram handler failed", describeError(error));
+    console.error("telegram handler failed", normalizeError(error));
     await thread.post(FAILURE_REPLY);
   }
 }
 
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.name : typeof error;
+function normalizeError(error: unknown): Error {
+  if (error instanceof Error) {
+    return error;
+  }
+  return new Error(`Non-Error thrown: ${String(error)}`);
 }
 
 async function requestAgentReply(
@@ -184,9 +189,23 @@ export function handleTelegramWebhook(
 
 function telegramBotConfigKey(env: Env): string {
   return JSON.stringify({
+    agentNamespace: durableObjectNamespaceConfigId(env.AGENT_DO),
     botToken: env.TELEGRAM_BOT_TOKEN,
     environment: env.ENVIRONMENT,
     secretToken: readWebhookSecretToken(env),
     userName: env.TELEGRAM_BOT_USERNAME?.trim() || "pss_echo_bot",
   });
+}
+
+function durableObjectNamespaceConfigId(
+  namespace: DurableObjectNamespace
+): number {
+  const existing = durableObjectNamespaceIds.get(namespace);
+  if (existing !== undefined) {
+    return existing;
+  }
+
+  nextDurableObjectNamespaceId += 1;
+  durableObjectNamespaceIds.set(namespace, nextDurableObjectNamespaceId);
+  return nextDurableObjectNamespaceId;
 }
