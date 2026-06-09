@@ -1,5 +1,13 @@
-import type { CloudflareDurableObjectState } from "@minpeter/pss-runtime/cloudflare";
+import type { Agent } from "@minpeter/pss-runtime";
+import {
+  createCloudflareAgentContext,
+  type CloudflareAlarmDrainSummary,
+  type CloudflareDurableObjectState,
+} from "@minpeter/pss-runtime/cloudflare";
 import { parseAgentWorkerBindings } from "../agent/config";
+import { createChatAgent } from "../agent/factory";
+import { deliverAlarmAssistantText } from "../telegram/alarm-delivery";
+import { readTelegramRoute } from "../telegram/route-store";
 import {
   durableTelegramRouteResponse,
   type WorkerTelegramEnv,
@@ -29,6 +37,36 @@ export class AgentDurableObject {
       return telegramResponse;
     }
     return jsonResponse({ error: "not found" }, 404);
+  }
+
+  async alarm(): Promise<CloudflareAlarmDrainSummary> {
+    const summary = await this.#context().drainAlarm();
+    const route = await readTelegramRoute(this.#state.storage);
+    if (route) {
+      await deliverAlarmAssistantText({
+        bindings: parseAgentWorkerBindings(this.#bindings),
+        route,
+        summary,
+      });
+    }
+    return summary;
+  }
+
+  #context() {
+    return createCloudflareAgentContext({
+      createAgent: ({ host, prefix }) =>
+        createChatAgent(
+          this.#state.storage,
+          prefix,
+          parseAgentWorkerBindings(this.#bindings),
+          { host }
+        ) as Agent,
+      defaultPrefix: "telegram-chat",
+      env: this.#bindings,
+      readPrefix: async ({ storage }) =>
+        (await readTelegramRoute(storage))?.storePrefix,
+      storage: this.#state.storage,
+    });
   }
 }
 

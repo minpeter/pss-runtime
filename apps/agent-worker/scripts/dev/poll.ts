@@ -3,6 +3,7 @@ import { localDevOrigin } from "../lib/local-dev";
 import { loadDevVars } from "../lib/load-dev-vars";
 import { sleep } from "../lib/sleep";
 import { registerTelegramWebhook } from "../webhook/api";
+import { registerTelegramCommandsFromDevVars } from "../webhook/commands";
 import { startTelegramPollForward } from "./poll-forward";
 
 async function waitForLocalDevServer(timeoutMs = 60_000): Promise<void> {
@@ -77,6 +78,9 @@ async function main(): Promise<void> {
   try {
     console.log("waiting for local dev server...");
     await waitForLocalDevServer();
+    if (await registerTelegramCommandsFromDevVars()) {
+      console.log("telegram slash commands registered");
+    }
     await startTelegramPollForward({
       botToken,
       signal: pollAbort.signal,

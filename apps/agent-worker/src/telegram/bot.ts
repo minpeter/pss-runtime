@@ -8,7 +8,7 @@ import {
   parseAgentWorkerBindings,
   type AgentWorkerBindings,
 } from "../agent/config";
-import { handleTelegramMessage } from "./handler";
+import { handleTelegramMessage, type TelegramThreadLike } from "./handler";
 import { createDurableObjectStateAdapter } from "./state-adapter";
 import { resolveTelegramWebhookSecret } from "./webhook-secret";
 
@@ -83,11 +83,23 @@ function createTelegramChat(options: {
   });
   const handler = async (thread: Thread, message: Message): Promise<void> => {
     try {
+      const telegramThread: TelegramThreadLike = {
+        id: thread.id,
+        async addReaction(emoji: string) {
+          await thread.adapter.addReaction(thread.id, message.id, emoji);
+        },
+        post: (content) => thread.post(content),
+        startTyping: (status) => thread.startTyping(status),
+      };
       await handleTelegramMessage({
         bindings: options.bindings,
-        message,
+        message: {
+          author: message.author,
+          id: message.id,
+          text: message.text,
+        },
         storage: options.storage,
-        thread,
+        thread: telegramThread,
       });
     } catch (error) {
       if (error instanceof Error) {

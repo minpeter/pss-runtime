@@ -21,6 +21,7 @@ async function main(): Promise<void> {
     webhookSecret,
   });
   console.log(`telegram webhook -> ${webhookUrl}`);
+  console.log("telegram slash commands registered");
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {

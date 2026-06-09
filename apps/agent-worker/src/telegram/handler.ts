@@ -5,9 +5,20 @@ import {
 } from "@minpeter/pss-runtime/cloudflare";
 import type { AgentWorkerBindings } from "../agent/config";
 import { createChatAgent } from "../agent/factory";
+
 import { assistantTextFromEvents } from "./events";
-import { helpMarkdown } from "./replies";
+import { writeTelegramRoute } from "./route-store";
+import {
+  matchesDebugResetCommand,
+  matchesHelpCommand,
+} from "./commands";
+import {
+  debugResetConfirmation,
+  helpMarkdown,
+} from "./replies";
+import { telegramReplyBubbles } from "./reply-segments";
 import { sessionKeyForThread, storePrefixForThread } from "./session";
+import { toTelegramUxContext } from "./ux-tools";
 
 export interface TelegramMessageLike {
   readonly author: {
@@ -15,11 +26,13 @@ export interface TelegramMessageLike {
     readonly userId: string;
     readonly userName: string;
   };
+  readonly id: string;
   readonly text: string;
 }
 
 export interface TelegramThreadLike {
   readonly id: string;
+  addReaction(emoji: string): Promise<void>;
   post(message: string | { readonly markdown: string }): Promise<unknown>;
   startTyping(status?: string): Promise<unknown>;
 }
@@ -31,8 +44,6 @@ export interface HandleTelegramMessageOptions {
   readonly thread: TelegramThreadLike;
 }
 
-const helpPattern = /^\/(?:start|help)(?:@[A-Za-z0-9_]+)?(?:\s|$)/i;
-
 export async function handleTelegramMessage(
   options: HandleTelegramMessageOptions
 ): Promise<void> {
@@ -41,8 +52,27 @@ export async function handleTelegramMessage(
     return;
   }
 
-  if (helpPattern.test(text)) {
+  if (matchesHelpCommand(text)) {
     await options.thread.post({ markdown: helpMarkdown() });
+    return;
+  }
+
+  if (matchesDebugResetCommand(text)) {
+    const storePrefix = storePrefixForThread(
+      options.thread.id,
+      options.message.author.userId
+    );
+    const sessionKey = sessionKeyForThread(
+      options.thread.id,
+      options.message.author.userId
+    );
+    const agent = createChatAgent(
+      options.storage,
+      storePrefix,
+      options.bindings
+    );
+    await agent.session(sessionKey).delete();
+    await options.thread.post(debugResetConfirmation());
     return;
   }
 
@@ -62,11 +92,15 @@ export async function handleTelegramMessage(
     options.thread.id,
     options.message.author.userId
   );
-  const agent = createChatAgent(
-    options.storage,
+  await writeTelegramRoute(options.storage, {
+    chatId: options.thread.id,
+    sessionKey,
     storePrefix,
-    options.bindings
-  );
+    userId: options.message.author.userId,
+  });
+  const agent = createChatAgent(options.storage, storePrefix, options.bindings, {
+    telegramUx: toTelegramUxContext(options.thread, options.message.id),
+  });
   const events = await drainAgentRun(
     await agent.session(sessionKey).send(text),
     {
@@ -75,6 +109,11 @@ export async function handleTelegramMessage(
       },
     }
   );
-  const reply = assistantTextFromEvents(events) ?? "No response generated.";
-  await options.thread.post(reply);
+  const reply = assistantTextFromEvents(events);
+  if (!reply) {
+    return;
+  }
+  for (const bubble of telegramReplyBubbles(reply)) {
+    await options.thread.post(bubble);
+  }
 }

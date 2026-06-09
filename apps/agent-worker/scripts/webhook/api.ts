@@ -1,3 +1,4 @@
+import { telegramBotCommands } from "../../src/telegram/commands";
 import { resolveTelegramWebhookSecret } from "../../src/telegram/webhook-secret";
 
 const webhookPath = "/telegram/webhook";
@@ -21,32 +22,40 @@ export async function registerTelegramWebhook(
     botToken: options.botToken,
     webhookSecret: options.webhookSecret,
   });
-  const response = await fetch(
-    `https://api.telegram.org/bot${options.botToken}/setWebhook`,
-    {
-      body: JSON.stringify({
-        secret_token: secretToken,
-        url: webhookUrl,
-      }),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-    }
-  );
-  const payload = (await response.json()) as TelegramApiResponse;
-  if (!response.ok || !payload.ok) {
-    throw new Error(
-      payload.description ??
-        `setWebhook failed with status ${response.status}`
-    );
-  }
+  await callTelegramBotApi(options.botToken, "setWebhook", {
+    secret_token: secretToken,
+    url: webhookUrl,
+  });
+  await registerTelegramBotCommands(options.botToken);
   return webhookUrl;
 }
 
+export async function registerTelegramBotCommands(
+  botToken: string
+): Promise<void> {
+  await callTelegramBotApi(botToken, "setMyCommands", {
+    commands: telegramBotCommands.map((command) => ({
+      command: command.command,
+      description: command.description,
+    })),
+  });
+}
+
 export async function removeTelegramWebhook(botToken: string): Promise<void> {
+  await callTelegramBotApi(botToken, "deleteWebhook", {
+    drop_pending_updates: false,
+  });
+}
+
+async function callTelegramBotApi(
+  botToken: string,
+  method: string,
+  body: Record<string, unknown>
+): Promise<void> {
   const response = await fetch(
-    `https://api.telegram.org/bot${botToken}/deleteWebhook`,
+    `https://api.telegram.org/bot${botToken}/${method}`,
     {
-      body: JSON.stringify({ drop_pending_updates: false }),
+      body: JSON.stringify(body),
       headers: { "content-type": "application/json" },
       method: "POST",
     }
@@ -54,8 +63,7 @@ export async function removeTelegramWebhook(botToken: string): Promise<void> {
   const payload = (await response.json()) as TelegramApiResponse;
   if (!response.ok || !payload.ok) {
     throw new Error(
-      payload.description ??
-        `deleteWebhook failed with status ${response.status}`
+      payload.description ?? `${method} failed with status ${response.status}`
     );
   }
 }
