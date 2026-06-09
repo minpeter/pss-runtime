@@ -5,6 +5,10 @@ import type { Env } from "./env";
 
 const SESSION_KEY = "default";
 
+interface AgentRequestPayload {
+  readonly text: string;
+}
+
 export class AgentDurableObject {
   readonly #context;
 
@@ -22,14 +26,13 @@ export class AgentDurableObject {
       return new Response("method not allowed", { status: 405 });
     }
 
-    const payload = (await request.json()) as { readonly text?: string };
-    const text = payload.text?.trim();
-    if (!text) {
+    const payload = await parseAgentRequest(request);
+    if (!payload) {
       return new Response("text required", { status: 400 });
     }
 
     const agent = this.#context.agent();
-    const run = await agent.session(SESSION_KEY).send(text);
+    const run = await agent.session(SESSION_KEY).send(payload.text);
     const reply = await collectAssistantText(run);
 
     return Response.json({ reply: reply || "(no response)" });
@@ -38,4 +41,27 @@ export class AgentDurableObject {
   async alarm(): Promise<void> {
     await this.#context.drainAlarm();
   }
+}
+
+export async function parseAgentRequest(
+  request: Request
+): Promise<AgentRequestPayload | undefined> {
+  let payload: unknown;
+  try {
+    payload = await request.json();
+  } catch {
+    return;
+  }
+
+  if (
+    typeof payload !== "object" ||
+    payload === null ||
+    !("text" in payload) ||
+    typeof payload.text !== "string"
+  ) {
+    return;
+  }
+
+  const text = payload.text.trim();
+  return text ? { text } : undefined;
 }

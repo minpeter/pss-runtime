@@ -10,9 +10,10 @@
     "dev:worker": "wrangler dev -e dev",
     "dev:relay": "tsx scripts/telegram.ts relay",
     "ship": "run-s ship:secrets ship:worker ship:webhook",
-    "ship:secrets": "wrangler secret bulk .dev.vars",
-    "ship:worker": "wrangler deploy",
+    "ship:secrets": "wrangler secret bulk .dev.vars --env=\"\"",
+    "ship:worker": "wrangler deploy --env=\"\"",
     "ship:webhook": "tsx scripts/telegram.ts webhook",
+    "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -20,16 +21,16 @@
     "@chat-adapter/state-memory": "4.30.0",
     "@chat-adapter/telegram": "4.30.0",
     "@minpeter/pss-runtime": "workspace:*",
-    "ai": "^6.0.198",
     "chat": "4.30.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "npm-run-all": "^4.1.5",
     "@cloudflare/workers-types": "^4.20260608.1",
     "@types/node": "^25.9.1",
+    "npm-run-all": "^4.1.5",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3",
+    "vitest": "^4.1.7",
     "wrangler": "^4.98.0"
   }
 }
