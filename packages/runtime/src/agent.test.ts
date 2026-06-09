@@ -20,7 +20,8 @@ const subagentNameLengthPattern = /too long/;
 const subagentsOnRuntimeModelPattern = /subagents require an AI SDK model/;
 const subagentUnwrappedPattern =
   /SubagentDefinition wrappers with an agent field, not raw Agent instances/;
-const subagentNameMismatchPattern = /name must match/;
+const nestedAgentNameForbiddenPattern = /must not set name/;
+const nestedAgentNamespaceRequiredPattern = /agent\.namespace is required/;
 
 const acceptsModelOptions: AgentOptions = {
   instructions: "Use the injected model.",
@@ -146,7 +147,7 @@ describe("Agent", () => {
       description: "Researches facts.",
       instructions: "Research facts.",
       model: fakeModel,
-      name: "researcher",
+      namespace: "researcher",
     });
 
     expect(
@@ -168,7 +169,7 @@ describe("Agent", () => {
               agent: new Agent({
                 instructions: "Research facts.",
                 model: fakeModel,
-                name: "researcher",
+                namespace: "researcher",
               }),
               description: "Researches facts.",
               name: "",
@@ -188,7 +189,7 @@ describe("Agent", () => {
               agent: new Agent({
                 instructions: "Research facts.",
                 model: fakeModel,
-                name: "researcher",
+                namespace: "researcher",
               }),
               description: "Researches facts.",
               instructions: "Research facts.",
@@ -199,7 +200,7 @@ describe("Agent", () => {
     ).toThrow(subagentFlatFieldPattern);
   });
 
-  it("rejects wrapper and nested agent name mismatches", () => {
+  it("rejects nested agent name", () => {
     expect(
       () =>
         new Agent({
@@ -209,14 +210,34 @@ describe("Agent", () => {
               agent: new Agent({
                 instructions: "Research facts.",
                 model: fakeModel,
-                name: "other",
+                name: "researcher",
+                namespace: "researcher",
               }),
               description: "Researches facts.",
               name: "researcher",
             },
           ],
         })
-    ).toThrow(subagentNameMismatchPattern);
+    ).toThrow(nestedAgentNameForbiddenPattern);
+  });
+
+  it("requires nested agent namespace", () => {
+    expect(
+      () =>
+        new Agent({
+          model: fakeModel,
+          subagents: [
+            {
+              agent: new Agent({
+                instructions: "Research facts.",
+                model: fakeModel,
+              }),
+              description: "Researches facts.",
+              name: "researcher",
+            },
+          ],
+        })
+    ).toThrow(nestedAgentNamespaceRequiredPattern);
   });
 
   it("rejects subagent names that exceed generated tool name limits", () => {

@@ -46,27 +46,29 @@ const turns = [
 await runEdgeScenario(turns);
 
 function createCoordinator({ host }: { readonly host: AgentHost }): Agent {
-  const researcher = new Agent({
-    name: "researcher",
-    description: "Produces compact research notes for the coordinator.",
-    host,
-    model,
-    namespace: "edge-demo-researcher",
-    instructions:
-      "Answer delegated prompts in one sentence. Return only the compact result the coordinator needs.",
-  });
-
   return new Agent({
     host,
-    model,
-    namespace: "edge-demo-coordinator",
-    subagents: [researcher],
     instructions: [
       "Coordinate a turn-based support agent.",
       "When the user asks for background research, call delegate_to_researcher once with run_in_background: true.",
       "Do not call background_output until a <system-reminder> says the background task completed.",
       "After the reminder, call background_output with block: true and return a concise final answer.",
     ].join(" "),
+    model,
+    namespace: "edge-demo-coordinator",
+    subagents: [
+      {
+        description: "Produces compact research notes for the coordinator.",
+        agent: new Agent({
+          host,
+          instructions:
+            "Answer delegated prompts in one sentence. Return only the compact result the coordinator needs.",
+          model,
+          namespace: "edge-demo-researcher",
+        }),
+        name: "researcher",
+      },
+    ],
   });
 }
 

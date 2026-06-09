@@ -11,7 +11,7 @@ describe("registerSubagents", () => {
   it("registers wrapped subagents and delegates session send", async () => {
     const child = new Agent({
       model: childRuntimeModel,
-      name: "researcher",
+      namespace: "researcher",
     } as AgentOptions);
     const parent = new Agent({
       model: fakeModel,

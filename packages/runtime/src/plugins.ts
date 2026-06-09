@@ -80,7 +80,8 @@ function resolvePluginHandler(
     return;
   }
 
-  return (legacyContext) => legacyHandler(legacyContext);
+  return (legacyContext) =>
+    Promise.resolve(legacyHandler(legacyContext)).then(() => undefined);
 }
 
 function normalizeInterceptResult(

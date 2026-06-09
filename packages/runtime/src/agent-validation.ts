@@ -84,7 +84,8 @@ function assertSubagentDefinitions({
       index
     );
     const nestedAgent = assertNestedAgent(subagent, index);
-    assertSubagentNameMatch(subagent, nestedAgent, index);
+    assertNestedAgentHasNoName(nestedAgent, index);
+    assertNestedAgentHasNamespace(nestedAgent, index);
     assertNestedAgentHasNoSubagents(nestedAgent, index);
     assertSubagentHostConsistency(
       parentHost,
@@ -153,14 +154,18 @@ function assertNestedAgent(subagent: SubagentDefinition, index: number): Agent {
   return subagent.agent;
 }
 
-function assertSubagentNameMatch(
-  subagent: SubagentDefinition,
-  nestedAgent: Agent,
-  index: number
-): void {
-  if (subagent.name !== nestedAgent.name) {
+function assertNestedAgentHasNoName(nestedAgent: Agent, index: number): void {
+  if (nestedAgent.name !== undefined) {
     throw new TypeError(
-      `Agent: subagents[${index}].name must match subagents[${index}].agent.name.`
+      `Agent: subagents[${index}].agent must not set name. Use subagents[${index}].name for delegation and agent.namespace for session scoping.`
+    );
+  }
+}
+
+function assertNestedAgentHasNamespace(nestedAgent: Agent, index: number): void {
+  if (nestedAgent.namespace === undefined) {
+    throw new TypeError(
+      `Agent: subagents[${index}].agent.namespace is required.`
     );
   }
 }

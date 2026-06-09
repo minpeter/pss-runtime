@@ -125,14 +125,6 @@ export function createWorkerCoordinator(
       prefix: options.prefix ?? workerStorePrefix,
       storage,
     });
-  const researcher = new Agent({
-    description: "Produces compact research notes for the coordinator.",
-    host,
-    model: workerResearcherModel,
-    name: "researcher",
-    namespace: "cloudflare-worker-researcher",
-  });
-
   return new Agent({
     host,
     instructions: [
@@ -143,7 +135,19 @@ export function createWorkerCoordinator(
     ].join(" "),
     model: createWorkerCoordinatorModel(),
     namespace: "cloudflare-worker-coordinator",
-    subagents: [researcher],
+    subagents: [
+      {
+        description: "Produces compact research notes for the coordinator.",
+        agent: new Agent({
+          host,
+          instructions:
+            "Answer delegated prompts in one sentence. Return only the compact result the coordinator needs.",
+          model: workerResearcherModel,
+          namespace: "cloudflare-worker-researcher",
+        }),
+        name: "researcher",
+      },
+    ],
   });
 }
 

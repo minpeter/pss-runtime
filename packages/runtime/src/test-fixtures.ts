@@ -145,11 +145,11 @@ export function researcherSubagent(
   const name = overrides.name ?? "researcher";
   const description = overrides.description ?? "Researches facts.";
   const model = overrides.model ?? ({} as LanguageModel);
+  const namespace = overrides.namespace ?? name;
   const sharedOptions = {
     description,
     host: overrides.host,
-    name,
-    namespace: overrides.namespace,
+    namespace,
     plugins: overrides.plugins,
     tools: overrides.tools,
   };

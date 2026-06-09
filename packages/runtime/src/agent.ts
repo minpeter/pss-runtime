@@ -53,12 +53,14 @@ export class Agent {
   readonly description?: string;
   readonly host: AgentHost;
   readonly name?: string;
+  readonly namespace?: string;
   readonly subagentCount: number;
   constructor(options: AgentConstructionOptions) {
     assertAgentOptions(options);
 
     this.description = options.description;
     this.name = options.name;
+    this.namespace = options.namespace;
     this.#sessionNamespace = stableAgentNamespace({
       name: options.name,
       namespace: options.namespace,

@@ -1,3 +1,5 @@
+import { createWebTools } from "@minpeter/pss-web-tools";
+import { readWorkerWebToolsEnv } from "@minpeter/pss-web-tools/env";
 import { Agent, type AgentHost } from "@minpeter/pss-runtime";
 import {
   createCloudflareDurableObjectHost,
@@ -23,10 +25,18 @@ export interface CreateChatAgentOptions {
   readonly telegramUx?: TelegramUxContext;
 }
 
+function bindingsToWebToolsEnv(
+  bindings: AgentWorkerBindings
+): ReturnType<typeof readWorkerWebToolsEnv> {
+  return readWorkerWebToolsEnv(bindings);
+}
+
 export function createExecutionAgent(
   host: AgentHost,
   bindings: AgentWorkerBindings
 ): Agent {
+  const { tools } = createWebTools({ env: bindingsToWebToolsEnv(bindings) });
+
   return new Agent({
     host,
     instructions: executionAgentInstructions,
@@ -34,6 +44,7 @@ export function createExecutionAgent(
     name: "execution",
     namespace: "execution",
     plugins: [createPokeTagsPlugin()],
+    tools,
   });
 }
 
@@ -65,7 +76,7 @@ export function createChatAgent(
       {
         delegateToolName: "sendmessageto_agent",
         description:
-          "Executes tasks for Bori: search, email, calendar, integrations, and browser work.",
+          "Executes web search and page fetch for Bori.",
         agent: createExecutionAgent(resolvedHost, bindings),
         name: "execution",
       },

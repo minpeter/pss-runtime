@@ -132,7 +132,7 @@ const coordinator = new Agent({
       name: "researcher",
       description: "Researches facts and returns concise evidence.",
       agent: new Agent({
-        name: "researcher",
+        namespace: "researcher",
         instructions: "Research facts and return concise evidence.",
         model,
       }),
@@ -142,7 +142,8 @@ const coordinator = new Agent({
 ```
 
 Put child-only options such as `instructions`, `tools`, `host`, `namespace`, and
-`plugins` on the nested `agent`. The wrapper `name` must match `agent.name`.
+`plugins` on the nested `agent`. Do not set `name` on nested agents; wrapper
+`name` is the delegation identity and `agent.namespace` scopes child sessions.
 Use child `plugins` to transform delegated input (see **Plugins** below).
 
 For each subagent, the parent model receives a generated
@@ -277,7 +278,7 @@ const pokeTagsPlugin: AgentPlugin = {
 };
 
 const executionAgent = new Agent({
-  name: "execution",
+  namespace: "execution",
   plugins: [pokeTagsPlugin],
   model,
 });

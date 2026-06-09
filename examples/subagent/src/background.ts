@@ -21,19 +21,22 @@ const provider = createOpenAICompatible({
 });
 const model = provider(env.AI_MODEL);
 
-const researcher = new Agent({
-  name: "researcher",
-  description: "Runs longer research tasks for the coordinator.",
-  model,
-  instructions:
-    "Research the requested topic. Return one short result with the key evidence.",
-});
-
 const coordinator = new Agent({
-  model,
   instructions:
-    "Coordinate the task. Start researcher work with delegate_to_researcher({ prompt: 'Give one sentence on why task IDs matter for background subagents.', run_in_background: true }) and save the returned task_id. Do not call background_output until a <system-reminder> says the task completed. If no reminder is present, finish after confirming the background task started. Use background_cancel({ task_id }) only when the background task is no longer needed.",
-  subagents: [researcher],
+    "Coordinate the task. Start researcher work with delegate_to_researcher({ prompt: 'Give one sentence on why task IDs matter for background subagents.', run_in_background: true }) and save the returned task_id. Do not call background_output until a <system-reminder> says the background task completed. If no reminder is present, finish after confirming the background task started. Use background_cancel({ task_id }) only when the background task is no longer needed.",
+  model,
+  subagents: [
+    {
+      description: "Runs longer research tasks for the coordinator.",
+      agent: new Agent({
+        instructions:
+          "Research the requested topic. Return one short result with the key evidence.",
+        model,
+        namespace: "researcher",
+      }),
+      name: "researcher",
+    },
+  ],
 });
 
 const session = coordinator.session("default");
