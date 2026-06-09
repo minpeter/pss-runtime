@@ -7,5 +7,14 @@
   "dev": {
     "ip": "127.0.0.1",
     "port": 8792
+  },
+  "observability": {
+    "logs": {
+      "enabled": false,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": false
+    }
   }
 }
