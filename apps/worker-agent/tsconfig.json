@@ -12,5 +12,5 @@
       "chat/*": ["./node_modules/chat/*"]
     }
   },
-  "include": ["src/**/*.ts", "scripts/**/*.ts"]
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "types/**/*.d.ts"]
 }

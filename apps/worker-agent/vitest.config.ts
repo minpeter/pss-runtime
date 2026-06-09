@@ -6,10 +6,10 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: /^@minpeter\/pss-runtime\/execution$/,
+        find: /^@minpeter\/pss-runtime\/cloudflare$/,
         replacement: resolve(
           import.meta.dirname,
-          "../../packages/runtime/src/execution/index.ts"
+          "../../packages/runtime/src/cloudflare/index.ts"
         ),
       },
       {
