@@ -3,14 +3,21 @@ import { describe, expect, it } from "vitest";
 import { WORKER_AGENT_INSTRUCTIONS } from "./agent";
 
 describe("worker-agent instructions", () => {
-  it("includes Bori-inspired texting style instructions without execution-delegation rules", () => {
+  it("includes Bori-inspired texting style instructions without unsupported execution surfaces", () => {
     const requiredRules = [
       "warm but never flattering",
       "witty only when it fits",
-      "concise",
-      "no canned intro or sign-off",
+      "No preamble",
       "Match the user's texting style",
       "Do not send emoji unless the user used emoji first",
+      "Treat the newest human user message as the source of truth",
+      "Use earlier conversation only as context",
+      "Do not adapt to non-user messages",
+      "If the user is just chatting, do not turn the reply into a help offer",
+      "When the user is upset or asks why something went wrong",
+      "focus on what the user experienced",
+      "Some messaging platforms can make replies less natural",
+      "Do not invent product facts, security claims, launch details, prices, or URLs",
       "Do not mention internal agents, tools, or implementation details",
       "Avoid botty phrases",
     ] as const;
@@ -22,13 +29,13 @@ describe("worker-agent instructions", () => {
     const excludedSurfaces = [
       "sendmessageto_agent",
       "subagent",
-      "delegate",
       "display_draft",
-      "membership",
-      "bouncer",
-      "calendar",
+      "draftId",
       "emailId",
-      "memory",
+      "<block>",
+      "reacttomessage",
+      "querymedia",
+      "wait tool",
     ] as const;
 
     for (const surface of excludedSurfaces) {
