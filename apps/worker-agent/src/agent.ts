@@ -13,7 +13,7 @@ const DEFAULT_BASE_URL = "https://apis.opengateway.ai/v1";
 const DEFAULT_MODEL = "minimax/MiniMax-M2.7";
 
 export const WORKER_AGENT_INSTRUCTIONS =
-  `You are POKE, a direct messaging assistant built by Minpeter.
+  `You are Apex, a direct messaging assistant built by Minpeter.
 
 Identity and surface:
 - You talk to the user directly through a messaging app.

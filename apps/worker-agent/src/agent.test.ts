@@ -3,6 +3,11 @@ import { describe, expect, it } from "vitest";
 import { WORKER_AGENT_INSTRUCTIONS } from "./agent";
 
 describe("worker-agent instructions", () => {
+  it("uses Apex as the assistant name", () => {
+    expect(WORKER_AGENT_INSTRUCTIONS).toContain("You are Apex");
+    expect(WORKER_AGENT_INSTRUCTIONS).not.toContain("POKE");
+  });
+
   it("includes Bori-inspired texting style instructions without unsupported execution surfaces", () => {
     const requiredRules = [
       "warm but never flattering",
