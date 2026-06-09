@@ -1,28 +1,14 @@
-import { spawn, type ChildProcess } from "node:child_process";
-import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadDevVars } from "./load-dev-vars";
-import {
-  deleteTelegramWebhook,
-  startTelegramPollForward,
-} from "./telegram-poll-forward";
+import { startTelegramPollForward } from "./telegram-poll-forward";
 import { registerTelegramWebhook } from "./telegram-webhook-init";
 
-const appRoot = resolve(import.meta.dirname, "..");
 const localDevUrl = "http://127.0.0.1:8791";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
-}
-
-function readBotToken(): string {
-  const botToken = loadDevVars().TELEGRAM_BOT_TOKEN?.trim();
-  if (!botToken) {
-    throw new Error("TELEGRAM_BOT_TOKEN is required in .dev.vars");
-  }
-  return botToken;
 }
 
 function readWebhookSecret(): string | undefined {
@@ -64,21 +50,24 @@ async function restoreProdWebhookIfConfigured(
   console.log(`restored prod telegram webhook -> ${webhookUrl}`);
 }
 
-async function runDevWithPolling(): Promise<void> {
-  const botToken = readBotToken();
+async function main(): Promise<void> {
+  const botToken = loadDevVars().TELEGRAM_BOT_TOKEN?.trim();
+  if (!botToken) {
+    console.log("TELEGRAM_BOT_TOKEN not set; skipping telegram poll");
+    return;
+  }
+
   const webhookSecret = readWebhookSecret();
   const pollAbort = new AbortController();
   let shuttingDown = false;
-  let wrangler: ChildProcess | undefined;
 
   const shutdown = async (signal: string, exitCode = 0): Promise<void> => {
     if (shuttingDown) {
       return;
     }
     shuttingDown = true;
-    console.log(`\nReceived ${signal}, stopping dev...`);
+    console.log(`\nReceived ${signal}, stopping telegram poll...`);
     pollAbort.abort();
-    wrangler?.kill("SIGTERM");
     try {
       await restoreProdWebhookIfConfigured(botToken, webhookSecret);
     } catch (error) {
@@ -87,15 +76,6 @@ async function runDevWithPolling(): Promise<void> {
     process.exit(exitCode);
   };
 
-  wrangler = spawn(
-    "pnpm",
-    ["exec", "wrangler", "dev", "--ip", "127.0.0.1", "--port", "8791"],
-    {
-      cwd: appRoot,
-      stdio: "inherit",
-    }
-  );
-
   process.on("SIGINT", () => {
     void shutdown("SIGINT");
   });
@@ -103,39 +83,20 @@ async function runDevWithPolling(): Promise<void> {
     void shutdown("SIGTERM");
   });
 
-  void (async () => {
-    try {
-      console.log("waiting for local dev server...");
-      await waitForLocalDevServer();
-      console.log("clearing telegram webhook for local polling...");
-      await deleteTelegramWebhook(botToken);
-      await startTelegramPollForward({
-        botToken,
-        signal: pollAbort.signal,
-        webhookSecret,
-      });
-    } catch (error) {
-      if (!pollAbort.signal.aborted) {
-        console.error("telegram polling failed:", error);
-        await shutdown("error", 1);
-      }
-    }
-  })();
-
-  await new Promise<void>((resolvePromise, rejectPromise) => {
-    wrangler?.on("exit", (code) => {
-      pollAbort.abort();
-      if (code && code !== 0) {
-        rejectPromise(new Error(`wrangler dev exited with code ${code}`));
-        return;
-      }
-      resolvePromise();
+  try {
+    console.log("waiting for local dev server...");
+    await waitForLocalDevServer();
+    await startTelegramPollForward({
+      botToken,
+      signal: pollAbort.signal,
+      webhookSecret,
     });
-  });
-}
-
-async function main(): Promise<void> {
-  await runDevWithPolling();
+  } catch (error) {
+    if (!pollAbort.signal.aborted) {
+      console.error("telegram polling failed:", error);
+      await shutdown("error", 1);
+    }
+  }
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {

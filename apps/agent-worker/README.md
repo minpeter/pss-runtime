@@ -23,15 +23,25 @@ cp apps/agent-worker/.dev.vars.example apps/agent-worker/.dev.vars
 pnpm --filter @minpeter/pss-agent-worker dev
 ```
 
-`dev` starts `wrangler dev` on `http://127.0.0.1:8791`, clears any Telegram
-webhook, and forwards updates via long polling. No tunnel or manual webhook
-setup is required.
+`predev` builds `@minpeter/pss-runtime` and runs `webhook:remove` when
+`TELEGRAM_BOT_TOKEN` is set. `dev` runs `dev:*` (`dev:worker` + `dev:poll`) in
+parallel on `http://127.0.0.1:8791`.
+
+`dev:poll` long-polls Telegram and forwards updates to the local
+`/telegram/webhook` route. It skips quietly when `TELEGRAM_BOT_TOKEN` is unset.
+No tunnel or manual webhook setup is required.
+
+Worker only (no Telegram poll):
+
+```sh
+pnpm --filter @minpeter/pss-agent-worker dev:worker
+```
 
 If `WORKER_PUBLIC_URL` is set in `.dev.vars`, stopping `dev` restores the prod
 webhook automatically.
 
-Use a dedicated dev bot token when possible. Local `dev` deletes the active
-Telegram webhook while polling.
+Use a dedicated dev bot token when possible. `webhook:remove` deletes the
+active Telegram webhook while you work locally.
 
 ## Deploy
 

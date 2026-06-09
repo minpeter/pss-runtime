@@ -24,8 +24,7 @@ const appPackages = [
     name: "@minpeter/pss-agent-worker",
     path: "apps/agent-worker",
     requiredSource: "src/worker/index.ts",
-    devScript:
-      "tsx --conditions=@minpeter/pss-source scripts/dev-local.ts",
+    devScript: "run-p dev:*",
   },
 ];
 const finalRunEventsLoopPattern =

@@ -15,24 +15,6 @@ interface TelegramApiResponse<T> {
   readonly result?: T;
 }
 
-export async function deleteTelegramWebhook(botToken: string): Promise<void> {
-  const response = await fetch(
-    `https://api.telegram.org/bot${botToken}/deleteWebhook`,
-    {
-      body: JSON.stringify({ drop_pending_updates: false }),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-    }
-  );
-  const payload = (await response.json()) as TelegramApiResponse<true>;
-  if (!response.ok || !payload.ok) {
-    throw new Error(
-      payload.description ??
-        `deleteWebhook failed with status ${response.status}`
-    );
-  }
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
