@@ -8,7 +8,6 @@
   "baseBranch": "v0.1",
   "updateInternalDependencies": "patch",
   "ignore": [
-    "@minpeter/pss-agent-worker",
     "@minpeter/pss-example-basic",
     "@minpeter/pss-example-plugin",
     "@minpeter/pss-example-sync-subagent",

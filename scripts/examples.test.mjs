@@ -26,10 +26,10 @@ const examplePackages = [
 ];
 const appPackages = [
   {
-    name: "@minpeter/pss-agent-worker",
-    path: "apps/agent-worker",
-    requiredSource: "src/worker/index.ts",
-    devScript: "run-p dev:*",
+    name: "@minpeter/pss-coding-agent",
+    path: "apps/coding-agent",
+    requiredSource: "src/index.ts",
+    buildScript: "tsdown",
   },
 ];
 const finalRunEventsLoopPattern =
@@ -96,11 +96,10 @@ describe("examples workspace packages", () => {
       const sourcePath = join(appPackage.path, appPackage.requiredSource);
       const packageJson = readJson(packageJsonPath);
 
-      expect(packageJson.private).toBe(true);
       expect(packageJson.name).toBe(appPackage.name);
-      expect(packageJson.scripts.dev).toBe(appPackage.devScript);
+      expect(packageJson.scripts.build).toBe(appPackage.buildScript);
       expect(packageJson.dependencies["@minpeter/pss-runtime"]).toBe(
-        "workspace:*"
+        "workspace:^"
       );
       expect(packageJson.dependencies).not.toHaveProperty(
         "@minpeter/pss-coding-agent"

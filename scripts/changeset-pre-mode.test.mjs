@@ -15,7 +15,6 @@ describe("changeset prerelease mode", () => {
     const config = JSON.parse(readFileSync(".changeset/config.json", "utf8"));
 
     expect(config.ignore).toEqual([
-      "@minpeter/pss-agent-worker",
       "@minpeter/pss-example-basic",
       "@minpeter/pss-example-plugin",
       "@minpeter/pss-example-sync-subagent",

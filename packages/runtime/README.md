@@ -458,10 +458,9 @@ This avoids pretending that in-memory background work survived a hibernation,
 isolate restart, or request deadline.
 
 Use `@minpeter/pss-runtime/cloudflare` for the packaged Cloudflare Durable
-Object adapter. See `apps/agent-worker` for an edge-hosted durable background
-delegation app, `examples/sync-subagent` for a blocking app-owned subagent CLI,
-and `examples/background-subagent` for the same pattern in a local interactive
-CLI.
+Object adapter. See `examples/sync-subagent` for a blocking app-owned subagent
+CLI and `examples/background-subagent` for durable background delegation in a
+local interactive CLI.
 
 The same core API supports room/user/session routing through stable session keys.
 

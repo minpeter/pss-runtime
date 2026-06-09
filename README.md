@@ -4,7 +4,6 @@ Small agent runtime workspace.
 
 - `@minpeter/pss-runtime`: runtime, sessions, model loop.
 - `@minpeter/pss-coding-agent`: web tools, model wiring, and the `pss` TUI.
-- `apps/agent-worker`: private Cloudflare Worker/Durable Object stress app.
 
 ## Use
 
