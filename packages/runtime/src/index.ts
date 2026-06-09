@@ -18,8 +18,6 @@ export type {
   AgentPlugin,
   AgentPluginInterceptResult,
   AgentPluginResult,
-  InputEventMeta,
-  InputSource,
   InterceptableAgentEvent,
   PluginPipelineResult,
 } from "./plugins";
@@ -30,6 +28,8 @@ export type {
   AssistantReasoning,
   AssistantText,
   ControlAgentEvent,
+  InputEventMeta,
+  InputSource,
   LifecycleAgentEvent,
   RuntimeInput,
   SubagentStatusAgentEvent,
@@ -49,6 +49,13 @@ export type {
   UserTextContent,
   VisibleAgentEvent,
 } from "./session/events";
+export {
+  attachInputMeta,
+  attachRuntimeInputMeta,
+  stripEventMeta,
+  stripInputMeta,
+  userInputFromEvent,
+} from "./session/input-meta";
 export {
   isControlAgentEvent,
   isLifecycleAgentEvent,

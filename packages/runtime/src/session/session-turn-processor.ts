@@ -85,7 +85,8 @@ export async function processQueuedInput({
     });
     await emitPreUserRuntimeInputs(events, run, preUserRuntimeInputs);
     await drainRuntimeInput({
-      emit: (event) => events.emitRunEvent(run, event),
+      emit: (event) =>
+        events.emitRunEvent(run, event).then(() => undefined),
       placement: "turn-start",
       runtimeInput,
       state,
@@ -216,7 +217,8 @@ async function emitTurnEvent({
     await events.emitRunBoundaryEvent(run, event);
   });
   const runtimeInputAdded = await drainRuntimeInput({
-    emit: (runtimeInputEvent) => events.emitRunEvent(run, runtimeInputEvent),
+    emit: (runtimeInputEvent) =>
+      events.emitRunEvent(run, runtimeInputEvent).then(() => undefined),
     placement: event.type,
     runtimeInput,
     state,

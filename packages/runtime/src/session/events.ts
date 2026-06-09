@@ -1,4 +1,7 @@
+import type { InputEventMeta } from "./input-meta-types";
 import type { UserInput, UserMessage, UserText } from "./input";
+
+export type { InputEventMeta, InputSource } from "./input-meta-types";
 
 export type {
   UserInput,
@@ -19,6 +22,7 @@ export interface RuntimeInput {
    * This is distinct from human-originated user-text and user-message input.
    */
   input: UserInput;
+  meta?: InputEventMeta;
   placement: "turn-start" | "step-start" | "step-end";
   type: "runtime-input";
 }

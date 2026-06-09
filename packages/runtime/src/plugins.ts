@@ -5,17 +5,12 @@ import type {
   UserMessage,
   UserText,
 } from "./session/events";
+import type { InputEventMeta, InputSource } from "./session/input-meta-types";
+
+export type { InputEventMeta, InputSource } from "./session/input-meta-types";
 
 type MaybePromise<T> = PromiseLike<T> | T;
 type AgentEventHistory = RuntimeLlmContext["history"];
-
-export type InputSource = "send" | "notify" | "steer" | "delegate";
-
-export interface InputEventMeta {
-  readonly delegateToolName?: string;
-  readonly source: InputSource;
-  readonly streaming?: "follow-up" | "steer";
-}
 
 export type InterceptableAgentEvent = RuntimeInput | UserMessage | UserText;
 

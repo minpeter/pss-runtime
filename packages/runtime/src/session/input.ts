@@ -1,6 +1,9 @@
+import type { InputEventMeta } from "./input-meta-types";
+
 export type UserTextContent = string | readonly string[];
 
 export interface UserText {
+  meta?: InputEventMeta;
   text: UserTextContent;
   type: "user-text";
 }
@@ -39,6 +42,7 @@ export type UserMessageContent = readonly UserMessageContentPart[];
 
 export interface UserMessage {
   content: UserMessageContent;
+  meta?: InputEventMeta;
   type: "user-message";
 }
 
