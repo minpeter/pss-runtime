@@ -6,7 +6,8 @@
     "dev": "run-p dev:worker dev:relay",
     "dev:worker": "wrangler dev",
     "dev:relay": "tsx scripts/telegram.ts relay",
-    "deploy": "run-s deploy:worker deploy:webhook",
+    "deploy": "run-s deploy:secrets deploy:worker deploy:webhook",
+    "deploy:secrets": "wrangler secret bulk .dev.vars",
     "deploy:worker": "wrangler deploy",
     "deploy:webhook": "tsx scripts/telegram.ts webhook",
     "typecheck": "tsc -p tsconfig.json --noEmit"

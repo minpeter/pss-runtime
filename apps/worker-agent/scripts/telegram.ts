@@ -1,27 +1,13 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { loadEnvFile } from "node:process";
 
-const DEV_VARS = resolve(import.meta.dirname, "../.dev.vars");
+loadEnvFile(resolve(import.meta.dirname, "../.dev.vars"));
+
 const SECRET_HEADER = "x-telegram-bot-api-secret-token";
 const LOCAL_WEBHOOK = "http://127.0.0.1:8792/";
 
-function devVars(): Record<string, string> {
-  const values: Record<string, string> = {};
-  for (const line of readFileSync(DEV_VARS, "utf8").split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) {
-      continue;
-    }
-    const index = trimmed.indexOf("=");
-    if (index > 0) {
-      values[trimmed.slice(0, index).trim()] = trimmed.slice(index + 1).trim();
-    }
-  }
-  return values;
-}
-
-function required(vars: Record<string, string>, key: string): string {
-  const value = vars[key]?.trim();
+function required(key: string): string {
+  const value = process.env[key]?.trim();
   if (!value) {
     throw new Error(`${key} is required in .dev.vars`);
   }
@@ -52,10 +38,9 @@ async function telegramApi(
 }
 
 async function relay(): Promise<void> {
-  const vars = devVars();
-  const token = required(vars, "TELEGRAM_BOT_TOKEN");
-  const secret = required(vars, "TELEGRAM_WEBHOOK_SECRET_TOKEN");
-  const webhookUrl = vars.LOCAL_WEBHOOK_URL?.trim() || LOCAL_WEBHOOK;
+  const token = required("TELEGRAM_BOT_TOKEN");
+  const secret = required("TELEGRAM_WEBHOOK_SECRET_TOKEN");
+  const webhookUrl = process.env.LOCAL_WEBHOOK_URL?.trim() || LOCAL_WEBHOOK;
   const abort = new AbortController();
 
   process.once("SIGINT", () => abort.abort());
@@ -93,10 +78,9 @@ async function relay(): Promise<void> {
 }
 
 async function webhook(): Promise<void> {
-  const vars = devVars();
-  const token = required(vars, "TELEGRAM_BOT_TOKEN");
-  const secret = required(vars, "TELEGRAM_WEBHOOK_SECRET_TOKEN");
-  const url = `${required(vars, "WORKER_PUBLIC_URL").replace(/\/+$/, "")}/`;
+  const token = required("TELEGRAM_BOT_TOKEN");
+  const secret = required("TELEGRAM_WEBHOOK_SECRET_TOKEN");
+  const url = `${required("WORKER_PUBLIC_URL").replace(/\/+$/, "")}/`;
 
   await telegramApi(token, "setWebhook", {
     secret_token: secret,

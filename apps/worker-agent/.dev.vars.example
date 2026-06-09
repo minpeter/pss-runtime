@@ -1,6 +1,6 @@
+# pnpm deploy → wrangler secret bulk .dev.vars (whole file)
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_BOT_USERNAME=your_bot
 TELEGRAM_WEBHOOK_SECRET_TOKEN=...
 LOCAL_WEBHOOK_URL=http://127.0.0.1:8792/
-# deploy:webhook (pnpm deploy)
 WORKER_PUBLIC_URL=https://pss-worker-agent.<account>.workers.dev
