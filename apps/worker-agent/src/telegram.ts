@@ -3,7 +3,9 @@ import { createMemoryState } from "@chat-adapter/state-memory";
 import { fetchCloudflareDurableObject } from "@minpeter/pss-runtime/cloudflare";
 import { Chat, type Message, type MessageContext, type Thread } from "chat";
 
-import { durableObjectName, type Env } from "./env";
+import { durableObjectName, isDevelopment, type Env } from "./env";
+
+const DEV_NOTICE = "🧪 DEVELOPMENT ENVIRONMENT";
 
 let bot: Chat | undefined;
 
@@ -34,6 +36,10 @@ function createBot(env: Env): Chat {
       .filter((text): text is string => Boolean(text));
     if (texts.length === 0) {
       return;
+    }
+
+    if (isDevelopment(env)) {
+      await thread.post(DEV_NOTICE);
     }
 
     const reply = await requestAgentReply(env, thread.channelId, texts.join("\n"));

@@ -7,7 +7,7 @@
     "pretypecheck": "pnpm -F @minpeter/pss-runtime build",
     "preship:worker": "pnpm -F @minpeter/pss-runtime build",
     "dev": "run-p dev:worker dev:relay",
-    "dev:worker": "wrangler dev",
+    "dev:worker": "wrangler dev -e dev",
     "dev:relay": "tsx scripts/telegram.ts relay",
     "ship": "run-s ship:secrets ship:worker ship:webhook",
     "ship:secrets": "wrangler secret bulk .dev.vars",
