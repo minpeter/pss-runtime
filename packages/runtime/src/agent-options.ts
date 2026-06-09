@@ -10,7 +10,6 @@ interface AgentLanguageModelOptions {
   readonly host?: AgentHost;
   readonly instructions?: string;
   readonly model: LanguageModel;
-  readonly name?: string;
   readonly namespace?: string;
   readonly plugins?: readonly AgentPlugin[];
   readonly subagents?: readonly SubagentDefinition[];
@@ -24,7 +23,6 @@ interface AgentRuntimeModelOptions {
   readonly host?: AgentHost;
   readonly instructions?: never;
   readonly model: RuntimeLlm;
-  readonly name?: string;
   readonly namespace?: string;
   readonly plugins?: readonly AgentPlugin[];
   readonly subagents?: never;
@@ -61,6 +59,12 @@ export function assertAgentOptions(
   if ("llm" in options) {
     throw new TypeError(
       "Agent: unsupported options.llm. Use model for both AI SDK models and custom RuntimeLlm functions."
+    );
+  }
+
+  if ("name" in options && options.name !== undefined) {
+    throw new TypeError(
+      "Agent: unsupported options.name. Use namespace for session scoping and SubagentDefinition.name for delegation."
     );
   }
 

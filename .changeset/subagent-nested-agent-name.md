@@ -2,4 +2,4 @@
 "@minpeter/pss-runtime": patch
 ---
 
-Nested subagent child agents must not set `name`. Use `SubagentDefinition.name` for delegation identity and `agent.namespace` for child session scoping. Setting `name` on a nested child agent now throws at construction time.
+Remove `name` from `Agent` and `AgentOptions`. Use `namespace` for session scoping on every agent. Use `SubagentDefinition.name` for delegation identity. Passing `options.name` now throws at construction time. Nested subagent children require `agent.namespace`.

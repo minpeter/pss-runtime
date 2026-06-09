@@ -20,7 +20,7 @@ const subagentNameLengthPattern = /too long/;
 const subagentsOnRuntimeModelPattern = /subagents require an AI SDK model/;
 const subagentUnwrappedPattern =
   /SubagentDefinition wrappers with an agent field, not raw Agent instances/;
-const nestedAgentNameForbiddenPattern = /must not set name/;
+const unsupportedAgentNamePattern = /unsupported options\.name/;
 const nestedAgentNamespaceRequiredPattern = /agent\.namespace is required/;
 
 const acceptsModelOptions: AgentOptions = {
@@ -200,25 +200,14 @@ describe("Agent", () => {
     ).toThrow(subagentFlatFieldPattern);
   });
 
-  it("rejects nested agent name", () => {
+  it("rejects options.name", () => {
     expect(
       () =>
         new Agent({
           model: fakeModel,
-          subagents: [
-            {
-              agent: new Agent({
-                instructions: "Research facts.",
-                model: fakeModel,
-                name: "researcher",
-                namespace: "researcher",
-              }),
-              description: "Researches facts.",
-              name: "researcher",
-            },
-          ],
-        })
-    ).toThrow(nestedAgentNameForbiddenPattern);
+          name: "coordinator",
+        } as unknown as AgentOptions)
+    ).toThrow(unsupportedAgentNamePattern);
   });
 
   it("requires nested agent namespace", () => {

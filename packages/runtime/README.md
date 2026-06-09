@@ -142,9 +142,10 @@ const coordinator = new Agent({
 ```
 
 Put child-only options such as `instructions`, `tools`, `host`, `namespace`, and
-`plugins` on the nested `agent`. Do not set `name` on nested agents; wrapper
-`name` is the delegation identity and `agent.namespace` scopes child sessions.
-Use child `plugins` to transform delegated input (see **Plugins** below).
+`plugins` on the nested `agent`. `Agent` has no `name` field; wrapper `name` is
+the delegation identity and `agent.namespace` scopes sessions (required on
+subagent children). Use child `plugins` to transform delegated input (see
+**Plugins** below).
 
 For each subagent, the parent model receives a generated
 `delegate_to_<name>` tool. The tool accepts `prompt`, optional `description`,

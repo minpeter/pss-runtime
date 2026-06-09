@@ -84,7 +84,6 @@ function assertSubagentDefinitions({
       index
     );
     const nestedAgent = assertNestedAgent(subagent, index);
-    assertNestedAgentHasNoName(nestedAgent, index);
     assertNestedAgentHasNamespace(nestedAgent, index);
     assertNestedAgentHasNoSubagents(nestedAgent, index);
     assertSubagentHostConsistency(
@@ -152,14 +151,6 @@ function assertNestedAgent(subagent: SubagentDefinition, index: number): Agent {
   }
 
   return subagent.agent;
-}
-
-function assertNestedAgentHasNoName(nestedAgent: Agent, index: number): void {
-  if (nestedAgent.name !== undefined) {
-    throw new TypeError(
-      `Agent: subagents[${index}].agent must not set name. Use subagents[${index}].name for delegation and agent.namespace for session scoping.`
-    );
-  }
 }
 
 function assertNestedAgentHasNamespace(nestedAgent: Agent, index: number): void {
