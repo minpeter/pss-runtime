@@ -16,7 +16,14 @@ export { createLlm } from "./llm";
 export type {
   AgentEventContext,
   AgentPlugin,
+  AgentPluginInterceptResult,
+  AgentPluginResult,
+  InputEventMeta,
+  InputSource,
+  InterceptableAgentEvent,
+  PluginPipelineResult,
 } from "./plugins";
+export { runPluginsForEvent } from "./plugins";
 export type {
   AgentEvent,
   AgentEventListener,
@@ -51,6 +58,7 @@ export {
   isVisibleAgentEvent,
 } from "./session/events";
 export type { AgentInput, SessionInput } from "./session/input";
+export type { SubagentDefinition } from "./subagent-definition";
 export type { AgentRun } from "./session/run";
 export type {
   CommitResult,
