@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import { createTelegramUxTools } from "./ux-tools";
 import type { TelegramThreadLike } from "./handler";
+import { createTelegramUxTools } from "./ux-tools";
+
+function toolExecutionOptions(toolCallId: string) {
+  return {
+    context: {},
+    messages: [],
+    toolCallId,
+  };
+}
 
 function createMockThread(): TelegramThreadLike & {
   readonly addReaction: ReturnType<typeof vi.fn>;
@@ -22,11 +30,14 @@ describe("createTelegramUxTools", () => {
       thread,
     });
     const reactTool = tools.reactto_message;
-    if (!reactTool || !("execute" in reactTool) || !reactTool.execute) {
+    if (!(reactTool && "execute" in reactTool && reactTool.execute)) {
       throw new Error("expected reactto_message tool");
     }
 
-    await reactTool.execute({ emoji: "👍" });
+    await reactTool.execute(
+      { emoji: "👍" },
+      toolExecutionOptions("call-react-test")
+    );
 
     expect(thread.addReaction).toHaveBeenCalledWith("👍");
   });
@@ -38,14 +49,14 @@ describe("createTelegramUxTools", () => {
       thread,
     });
     const draftTool = tools.display_draft;
-    if (!draftTool || !("execute" in draftTool) || !draftTool.execute) {
+    if (!(draftTool && "execute" in draftTool && draftTool.execute)) {
       throw new Error("expected display_draft tool");
     }
 
     const text = "Line one\n\nLine two";
-    await draftTool.execute({ text });
+    await draftTool.execute({ text }, toolExecutionOptions("call-draft-test"));
 
     expect(thread.post).toHaveBeenCalledTimes(1);
-    expect(thread.post).toHaveBeenCalledWith(text);
+    expect(thread.post).toHaveBeenCalledWith({ markdown: text });
   });
 });

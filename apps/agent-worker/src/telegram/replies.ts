@@ -1,5 +1,11 @@
 import { telegramBotCommands } from "./commands";
 
+export function telegramMarkdownMessage(text: string): {
+  readonly markdown: string;
+} {
+  return { markdown: text };
+}
+
 export function splitReplyBubbles(text: string): readonly string[] {
   const bubbles = text
     .split("\n\n")

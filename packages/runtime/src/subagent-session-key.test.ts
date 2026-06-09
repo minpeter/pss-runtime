@@ -1,10 +1,4 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   drainRun,
   executableTool,
@@ -13,11 +7,12 @@ import {
   lastGenerateTextTools,
   loadAgent,
   toolExecutionOptions,
-  } from "./llm-test-utils";
+} from "./llm-test-utils";
 import { SpyStore } from "./session/session.test-support";
-import { assistantMessage,
-  userText,
+import {
+  assistantMessage,
   researcherSubagent,
+  userText,
 } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
@@ -40,15 +35,12 @@ describe("subagent child session keys", () => {
     const childStore = new SpyStore();
     const childHistories: unknown[] = [];
     const createResearcher = () =>
-
       researcherSubagent({
-
         model: ({ history }) => {
           childHistories.push(history);
           return Promise.resolve([assistantMessage("CHILD DONE")]);
         },
         host: { sessionStore: childStore },
-
       });
     const createParent = () =>
       new Agent({

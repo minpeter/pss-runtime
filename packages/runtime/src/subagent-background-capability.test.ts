@@ -1,10 +1,4 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createInMemoryExecutionHost } from "./execution/memory";
 import {
   drainRun,
@@ -14,7 +8,7 @@ import {
   lastGenerateTextTools,
   loadAgent,
   toolExecutionOptions,
-  } from "./llm-test-utils";
+} from "./llm-test-utils";
 import { MemorySessionStore } from "./session/store/memory";
 import type {
   CommitResult,
@@ -22,10 +16,11 @@ import type {
   SessionStore,
   SessionStoreCommit,
   StoredSession,
-  } from "./session/store/types";
-import { assistantMessage,
-  userText,
+} from "./session/store/types";
+import {
+  assistantMessage,
   researcherSubagent,
+  userText,
 } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
@@ -165,10 +160,8 @@ describe("subagent background capability", () => {
     const baseHost = createInMemoryExecutionHost();
     const scheduledRunIds: string[] = [];
     const researcher = researcherSubagent({
-
       host: baseHost,
       model: async () => [assistantMessage("CHILD DONE")],
-
     });
     const agent = new Agent({
       host: {

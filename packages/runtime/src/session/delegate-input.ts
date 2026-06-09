@@ -1,13 +1,22 @@
-import type { AgentInput, UserInput } from "./input";
+import type { UserInput } from "./input";
 import { attachInputMeta } from "./input-meta";
-import { normalizeAgentInput } from "./input-normalization";
 
 export function delegateUserInput(
-  prompt: AgentInput,
+  prompt: unknown,
   options: { readonly delegateToolName?: string } = {}
 ): UserInput {
-  return attachInputMeta(normalizeAgentInput(prompt), {
-    delegateToolName: options.delegateToolName,
-    source: "delegate",
-  });
+  if (typeof prompt !== "string") {
+    throw new TypeError("Delegate prompt must be a plain string.");
+  }
+
+  return attachInputMeta(
+    {
+      type: "user-text",
+      text: prompt,
+    },
+    {
+      delegateToolName: options.delegateToolName,
+      source: "delegate",
+    }
+  );
 }

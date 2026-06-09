@@ -1,18 +1,33 @@
-export { createWebTools, type CreateWebToolsOptions, type WebToolsBundle } from "./client.js";
+export {
+  type CreateWebToolsOptions,
+  createWebTools,
+  type WebToolsBundle,
+} from "./client.js";
 export {
   defaultFetchMaxCharacters,
-  mapSearchResults,
   resolveFetchMaxCharacters,
-  resolveSearchResultCount,
   type WebFetchInput,
   type WebFetchOutput,
+  webFetchErrorItemSchema,
+  webFetchInputSchema,
+  webFetchOutputSchema,
+  webFetchResultItemSchema,
+} from "./schemas/web-fetch.js";
+export {
+  mapSearchResults,
+  resolveSearchResultCount,
   type WebSearchInput,
   type WebSearchOutput,
-} from "./schemas/index.js";
+  webSearchInputSchema,
+  webSearchOutputSchema,
+  webSearchResultItemSchema,
+} from "./schemas/web-search.js";
+export { createWebToolSet } from "./tools/index.js";
 export {
   createWebFetchTool,
-  createWebSearchTool,
-  createWebToolSet,
   parseWebFetchOutput,
+} from "./tools/web-fetch.js";
+export {
+  createWebSearchTool,
   parseWebSearchOutput,
-} from "./tools/index.js";
+} from "./tools/web-search.js";

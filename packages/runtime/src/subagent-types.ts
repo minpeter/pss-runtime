@@ -6,6 +6,7 @@ import type { NotifyOptions } from "./session/session";
 
 export interface Subagent {
   readonly delegateToolName?: string;
+  readonly delegationMode?: "background-only" | "blocking-and-background";
   readonly description?: string;
   readonly name?: string;
   session(key: string): {
@@ -91,7 +92,7 @@ export interface SubagentJobGroup {
 
 export interface DelegateInput {
   readonly description?: string;
-  readonly prompt: AgentInput;
+  readonly prompt: string;
   readonly run_in_background?: boolean;
   readonly sessionKey?: string;
 }

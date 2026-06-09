@@ -1,15 +1,9 @@
 import type { Tool } from "ai";
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   parentSessionNamespace,
   stableAgentNamespace,
-  } from "./agent-namespace";
+} from "./agent-namespace";
 import { createInMemoryExecutionHost } from "./execution/memory";
 import {
   drainRun,
@@ -19,11 +13,12 @@ import {
   lastGenerateTextTools,
   loadAgent,
   toolExecutionOptions,
-  } from "./llm-test-utils";
-import { assistantMessage,
+} from "./llm-test-utils";
+import {
+  assistantMessage,
   createDeferred,
-  userText,
   researcherSubagent,
+  userText,
 } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
@@ -125,7 +120,8 @@ describe("subagent child runs", () => {
           childCalls += 1;
           return Promise.resolve([assistantMessage(`CHILD DONE ${namespace}`)]);
         },
-      });      return new Agent({
+      });
+      return new Agent({
         host,
         model: fakeModel,
         namespace,

@@ -117,8 +117,12 @@ describe("Agent session runtime input windows", () => {
       "step-end",
       "turn-end",
     ]);
-    expect(events).toContainEqual(steerRuntimeInput("turn runtime", "turn-start"));
-    expect(events).toContainEqual(steerRuntimeInput("step runtime", "step-start"));
+    expect(events).toContainEqual(
+      steerRuntimeInput("turn runtime", "turn-start")
+    );
+    expect(events).toContainEqual(
+      steerRuntimeInput("step runtime", "step-start")
+    );
     expect(events).toContainEqual(
       steerRuntimeInput("step-end runtime", "step-end")
     );

@@ -1,24 +1,21 @@
-import { createWebTools } from "@minpeter/pss-web-tools";
-import { readWorkerWebToolsEnv } from "@minpeter/pss-web-tools/env";
 import { Agent, type AgentHost } from "@minpeter/pss-runtime";
 import {
-  createCloudflareDurableObjectHost,
   type CloudflareDurableObjectStorage,
+  createCloudflareDurableObjectHost,
 } from "@minpeter/pss-runtime/cloudflare";
+import { createWebTools } from "@minpeter/pss-web-tools";
+import { readWorkerWebToolsEnv } from "@minpeter/pss-web-tools/env";
 import {
-  createLanguageModel,
-  type AgentWorkerBindings,
-} from "./config";
+  createTelegramUxTools,
+  type TelegramUxContext,
+} from "../telegram/ux-tools";
+import { type AgentWorkerBindings, createLanguageModel } from "./config";
 import executionAgentInstructions from "./execution_agent_instructions.md";
 import interactionAgentInstructions from "./interaction_agent_instructions.md";
 import {
   createPokeTagsPlugin,
   createUserTagsPlugin,
 } from "./message-tags-plugin";
-import {
-  createTelegramUxTools,
-  type TelegramUxContext,
-} from "../telegram/ux-tools";
 
 export interface CreateChatAgentOptions {
   readonly host?: AgentHost;
@@ -29,7 +26,9 @@ export function createExecutionAgent(
   host: AgentHost,
   bindings: AgentWorkerBindings
 ): Agent {
-  const { tools } = createWebTools({ env: readWorkerWebToolsEnv() });
+  const { tools } = createWebTools({
+    env: readWorkerWebToolsEnv({ EXA_API_KEY: bindings.EXA_API_KEY }),
+  });
 
   return new Agent({
     host,
@@ -68,6 +67,7 @@ export function createChatAgent(
     subagents: [
       {
         delegateToolName: "sendmessageto_agent",
+        delegationMode: "background-only",
         description:
           "Executes delegated tasks for Bori. Currently: web search and page fetch.",
         agent: createExecutionAgent(resolvedHost, bindings),

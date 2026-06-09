@@ -1,15 +1,8 @@
 import type { ToolSet } from "ai";
-import {
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Agent } from "./agent";
-import type { SubagentDefinition } from "./subagent-definition";
 import { createInMemoryExecutionHost } from "./execution/memory";
-import type { ExecutionHost,
-  ResumeSessionOptions } from "./execution/types";
+import type { ExecutionHost, ResumeSessionOptions } from "./execution/types";
 import {
   drainRun,
   executableTool,
@@ -18,11 +11,13 @@ import {
   lastGenerateTextTools,
   loadAgent,
   toolExecutionOptions,
-  } from "./llm-test-utils";
+} from "./llm-test-utils";
 import type { AgentRun } from "./session/run";
-import { assistantMessage,
-  userText,
+import type { SubagentDefinition } from "./subagent-definition";
+import {
+  assistantMessage,
   researcherSubagent,
+  userText,
 } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
@@ -116,7 +111,6 @@ describe("durable background subagent scheduling", () => {
     const host = createDurableSchedulerHost();
     let childCalls = 0;
     const makeResearcher = () =>
-
       researcherSubagent({
         host,
         model: () => {

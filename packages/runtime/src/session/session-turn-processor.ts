@@ -6,10 +6,13 @@ import type { BufferedAgentRun } from "./run";
 import {
   closeRuntimeInput,
   type QueuedInput,
-  type QueuedRuntimeInput,
   type RuntimeInputState,
   withRuntimeInputWindow,
 } from "./runtime-input";
+import {
+  commitPreUserRuntimeInputs,
+  emitCommittedRuntimeInputs,
+} from "./runtime-input-emit";
 import { errorMessage } from "./session-errors";
 import type { SessionEventDispatcher } from "./session-events";
 import {
@@ -18,11 +21,6 @@ import {
   type SessionExecutionTerminalStatus,
   startSessionExecutionRun,
 } from "./session-execution";
-import {
-  commitPreUserRuntimeInputs,
-  emitCommittedRuntimeInputs,
-  emitRuntimeInputEvent,
-} from "./runtime-input-emit";
 import { drainRuntimeInput } from "./session-runtime-drain";
 
 import type { SessionState } from "./session-state";

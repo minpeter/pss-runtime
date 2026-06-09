@@ -3,9 +3,7 @@ import { resolve } from "node:path";
 
 const defaultDevVarsPath = resolve(import.meta.dirname, "../../.dev.vars");
 
-export function loadDevVars(
-  path = defaultDevVarsPath
-): Record<string, string> {
+export function loadDevVars(path = defaultDevVarsPath): Record<string, string> {
   const contents = readFileSync(path, "utf8");
   const values: Record<string, string> = {};
   for (const line of contents.split("\n")) {

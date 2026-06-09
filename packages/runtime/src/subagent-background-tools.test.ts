@@ -1,10 +1,4 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   drainRun,
   executableTool,
@@ -13,11 +7,12 @@ import {
   lastGenerateTextTools,
   loadAgent,
   toolExecutionOptions,
-  } from "./llm-test-utils";
-import { assistantMessage,
+} from "./llm-test-utils";
+import {
+  assistantMessage,
   createDeferred,
-  userText,
   researcherSubagent,
+  userText,
 } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
@@ -41,11 +36,14 @@ describe("subagent background tools", () => {
 
   it("exposes background_output schema", async () => {
     const Agent = await loadAgent();
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: async () => [],
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: async () => [],
+        }),
+      ],
+    });
 
     await drainRun(await agent.send(userText("delegate")));
 
@@ -72,18 +70,21 @@ describe("subagent background tools", () => {
 
   it("background delegation returns a job id before child completion", async () => {
     const Agent = await loadAgent();
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: ({ signal }) =>
-        new Promise((_, reject) => {
-          signal.addEventListener(
-            "abort",
-            () => reject(new Error("child aborted")),
-            { once: true }
-          );
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: ({ signal }) =>
+            new Promise((_, reject) => {
+              signal.addEventListener(
+                "abort",
+                () => reject(new Error("child aborted")),
+                { once: true }
+              );
+            }),
         }),
-
-    })] });
+      ],
+    });
 
     await drainRun(await agent.send(userText("delegate")));
 
@@ -107,11 +108,14 @@ describe("subagent background tools", () => {
 
   it("background_output returns compact completed result", async () => {
     const Agent = await loadAgent();
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: async () => [assistantMessage("CHILD DONE")],
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: async () => [assistantMessage("CHILD DONE")],
+        }),
+      ],
+    });
 
     await drainRun(await agent.send(userText("delegate")));
 
@@ -142,14 +146,17 @@ describe("subagent background tools", () => {
   it("background_output can block until completion", async () => {
     const Agent = await loadAgent();
     const childGate = createDeferred();
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: async () => {
-        await childGate.promise;
-        return [assistantMessage("CHILD DONE")];
-      },
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: async () => {
+            await childGate.promise;
+            return [assistantMessage("CHILD DONE")];
+          },
+        }),
+      ],
+    });
 
     await drainRun(await agent.send(userText("delegate")));
 
@@ -182,11 +189,14 @@ describe("subagent background tools", () => {
 
   it("background_output rejects session keys", async () => {
     const Agent = await loadAgent();
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: async () => [],
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: async () => [],
+        }),
+      ],
+    });
 
     await drainRun(await agent.send(userText("delegate")));
 

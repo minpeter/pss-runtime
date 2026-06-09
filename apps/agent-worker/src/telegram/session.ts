@@ -1,7 +1,4 @@
-export function sessionKeyForThread(
-  threadId: string,
-  userId: string
-): string {
+export function sessionKeyForThread(threadId: string, userId: string): string {
   return [
     "telegram",
     "thread",
@@ -11,10 +8,7 @@ export function sessionKeyForThread(
   ].join(":");
 }
 
-export function storePrefixForThread(
-  threadId: string,
-  userId: string
-): string {
+export function storePrefixForThread(threadId: string, userId: string): string {
   return [
     "telegram-chat",
     "thread",

@@ -1,6 +1,6 @@
 import type { AgentEvent, RuntimeInput } from "./events";
-import type { InputEventMeta } from "./input-meta-types";
 import type { UserInput, UserMessage, UserText } from "./input";
+import type { InputEventMeta } from "./input-meta-types";
 
 export type { InputEventMeta, InputSource } from "./input-meta-types";
 
@@ -54,8 +54,6 @@ export function stripEventMeta(event: AgentEvent): AgentEvent {
   return event;
 }
 
-export function userInputFromEvent(
-  event: UserText | UserMessage
-): UserInput {
+export function userInputFromEvent(event: UserText | UserMessage): UserInput {
   return stripInputMeta(event);
 }

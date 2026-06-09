@@ -6,6 +6,7 @@ describe("parseAgentWorkerBindings", () => {
     const parsed = parseAgentWorkerBindings({
       AGENT_DURABLE_OBJECT: { idFromName: () => ({}) },
       AI_API_KEY: "test-key",
+      EXA_API_KEY: "test-exa-key",
       TELEGRAM_BOT_TOKEN: "123:abc",
       WORKER_PUBLIC_URL: "https://example.workers.dev",
     });
@@ -19,6 +20,7 @@ describe("parseAgentWorkerBindings", () => {
   it("keeps optional telegram webhook secret", () => {
     const parsed = parseAgentWorkerBindings({
       AI_API_KEY: "test-key",
+      EXA_API_KEY: "test-exa-key",
       TELEGRAM_WEBHOOK_SECRET: "random-secret",
     });
 

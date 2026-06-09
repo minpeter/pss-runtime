@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { AgentPlugin } from "../plugins";
-import { SessionEventDispatcher } from "./session-events";
 import { BufferedAgentRun } from "./run";
+import { SessionEventDispatcher } from "./session-events";
 
-function createDispatcher(plugins: readonly AgentPlugin[]): SessionEventDispatcher {
+function createDispatcher(
+  plugins: readonly AgentPlugin[]
+): SessionEventDispatcher {
   return new SessionEventDispatcher({
     history: () => [],
     plugins,

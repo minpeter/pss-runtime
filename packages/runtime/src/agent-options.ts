@@ -2,7 +2,6 @@ import type { LanguageModel, ToolSet } from "ai";
 import type { AgentHost } from "./execution/types";
 import type { AgentToolChoice, RuntimeLlm } from "./llm";
 import type { AgentPlugin } from "./plugins";
-import type { AgentInput } from "./session/input";
 import type { SubagentDefinition } from "./subagent-definition";
 
 interface AgentLanguageModelOptions {
@@ -15,7 +14,6 @@ interface AgentLanguageModelOptions {
   readonly subagents?: readonly SubagentDefinition[];
   readonly toolChoice?: AgentToolChoice;
   readonly tools?: ToolSet;
-
 }
 
 interface AgentRuntimeModelOptions {
@@ -28,7 +26,6 @@ interface AgentRuntimeModelOptions {
   readonly subagents?: never;
   readonly toolChoice?: never;
   readonly tools?: never;
-
 }
 
 export type AgentModelOptions = Pick<

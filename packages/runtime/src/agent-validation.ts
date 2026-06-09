@@ -7,6 +7,10 @@ import type { SubagentDefinition } from "./subagent-definition";
 
 const subagentNamePattern = /^[a-z][a-z0-9_-]{0,51}$/;
 const delegateToolNamePattern = /^[a-z][a-z0-9_]{0,63}$/;
+const subagentDelegationModes = new Set([
+  "background-only",
+  "blocking-and-background",
+]);
 const subagentUnwrappedPattern =
   /SubagentDefinition wrappers with an agent field, not raw Agent instances/;
 const forbiddenWrapperFields = [
@@ -23,7 +27,9 @@ export function resolveSubagentDelegateToolName(subagent: {
   readonly name?: string;
 }): string {
   const name = subagent.name ?? "subagent";
-  return subagent.delegateToolName ?? `delegate_to_${name.replaceAll("-", "_")}`;
+  return (
+    subagent.delegateToolName ?? `delegate_to_${name.replaceAll("-", "_")}`
+  );
 }
 
 export function assertSubagents(
@@ -93,8 +99,9 @@ function assertSubagentDefinitions({
       index
     );
 
-    const name = assertSubagentMetadata(subagent, index);
+    assertSubagentMetadata(subagent, index);
     assertDelegateToolName(subagent, index);
+    assertDelegationMode(subagent, index);
     const toolName = resolveSubagentDelegateToolName(subagent);
     if (toolNames.has(toolName)) {
       throw new TypeError(
@@ -107,7 +114,6 @@ function assertSubagentDefinitions({
     }
 
     generatedToolNames.add(toolName);
-    void name;
   }
 
   for (const reservedToolName of ["background_output", "background_cancel"]) {
@@ -116,6 +122,20 @@ function assertSubagentDefinitions({
         `Agent: ${reservedToolName} collides with a reserved subagent tool.`
       );
     }
+  }
+}
+
+function assertDelegationMode(
+  subagent: SubagentDefinition,
+  index: number
+): void {
+  if (
+    subagent.delegationMode !== undefined &&
+    !subagentDelegationModes.has(subagent.delegationMode)
+  ) {
+    throw new TypeError(
+      `Agent: subagents[${index}].delegationMode must be "background-only" or "blocking-and-background".`
+    );
   }
 }
 
@@ -144,7 +164,7 @@ function isAgentLike(value: unknown): value is Agent {
 }
 
 function assertNestedAgent(subagent: SubagentDefinition, index: number): Agent {
-  if (!("agent" in subagent) || !isAgentLike(subagent.agent)) {
+  if (!("agent" in subagent && isAgentLike(subagent.agent))) {
     throw new TypeError(
       `Agent: subagents[${index}] must include an agent field with an Agent instance.`
     );
@@ -153,7 +173,10 @@ function assertNestedAgent(subagent: SubagentDefinition, index: number): Agent {
   return subagent.agent;
 }
 
-function assertNestedAgentHasNamespace(nestedAgent: Agent, index: number): void {
+function assertNestedAgentHasNamespace(
+  nestedAgent: Agent,
+  index: number
+): void {
   if (nestedAgent.namespace === undefined) {
     throw new TypeError(
       `Agent: subagents[${index}].agent.namespace is required.`
@@ -161,7 +184,10 @@ function assertNestedAgentHasNamespace(nestedAgent: Agent, index: number): void 
   }
 }
 
-function assertNestedAgentHasNoSubagents(nestedAgent: Agent, index: number): void {
+function assertNestedAgentHasNoSubagents(
+  nestedAgent: Agent,
+  index: number
+): void {
   if (nestedAgent.subagentCount > 0) {
     throw new TypeError(
       `Agent: subagents[${index}].agent cannot define nested subagents.`

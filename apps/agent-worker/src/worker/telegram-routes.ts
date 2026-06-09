@@ -1,7 +1,7 @@
 import {
-  fetchCloudflareDurableObject,
   type CloudflareDurableObjectNamespace,
   type CloudflareDurableObjectStorage,
+  fetchCloudflareDurableObject,
 } from "@minpeter/pss-runtime/cloudflare";
 import {
   createTelegramWebhookBot,
@@ -9,11 +9,11 @@ import {
   type TelegramBotEnv,
   type TelegramWebhookBot,
 } from "../telegram/bot";
-import { resolveTelegramWebhookSecret } from "../telegram/webhook-secret";
 import {
   isTelegramWebhookPath,
   readTelegramWebhookRoute,
 } from "../telegram/webhook-route";
+import { resolveTelegramWebhookSecret } from "../telegram/webhook-secret";
 import { jsonResponse } from "./http";
 
 export interface WorkerTelegramEnv extends TelegramBotEnv {

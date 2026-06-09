@@ -1,10 +1,4 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createInMemoryExecutionHost } from "./execution/memory";
 import type { ExecutionHost } from "./execution/types";
 import {
@@ -15,11 +9,12 @@ import {
   lastGenerateTextTools,
   loadAgent,
   toolExecutionOptions,
-  } from "./llm-test-utils";
-import { assistantMessage,
+} from "./llm-test-utils";
+import {
+  assistantMessage,
   createDeferred,
-  userText,
   researcherSubagent,
+  userText,
 } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
@@ -39,11 +34,14 @@ describe("durable subagent background output", () => {
 
   it("retains durable completed output after retrieval", async () => {
     const Agent = await loadAgent();
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: async () => [assistantMessage("CHILD DONE")],
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: async () => [assistantMessage("CHILD DONE")],
+        }),
+      ],
+    });
 
     await drainRun(await agent.send(userText("delegate")));
 

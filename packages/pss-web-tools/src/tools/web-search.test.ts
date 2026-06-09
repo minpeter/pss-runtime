@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { OpenSearchClient } from "@minpeter/opensearch";
+import type { WebToolsClient } from "../client-types.js";
 import { createWebSearchTool } from "./web-search.js";
 
 interface ExecutableTool {
@@ -14,15 +14,15 @@ const executeTool = (tool: unknown, input: unknown) =>
 
 describe("createWebSearchTool", () => {
   it("maps search results to structured output", async () => {
-    const search = vi.fn<OpenSearchClient["search"]>().mockResolvedValue([
+    const search = vi.fn<WebToolsClient["search"]>().mockResolvedValue([
       {
-        engine: "Tavily",
+        engine: "web",
         title: "TypeScript",
         url: "https://example.com/ts",
         snippet: "Typed JavaScript.",
       },
     ]);
-    const client = { search, fetch: vi.fn() } satisfies OpenSearchClient;
+    const client = { search, fetchOne: vi.fn() } satisfies WebToolsClient;
     const tool = createWebSearchTool(client);
 
     await expect(executeTool(tool, { query: "typescript" })).resolves.toEqual({
@@ -34,7 +34,7 @@ describe("createWebSearchTool", () => {
           title: "TypeScript",
           url: "https://example.com/ts",
           snippet: "Typed JavaScript.",
-          source: "Tavily",
+          source: "web",
         },
       ],
     });
@@ -42,8 +42,8 @@ describe("createWebSearchTool", () => {
   });
 
   it("rejects empty query before calling the client", async () => {
-    const search = vi.fn<OpenSearchClient["search"]>();
-    const client = { search, fetch: vi.fn() } satisfies OpenSearchClient;
+    const search = vi.fn<WebToolsClient["search"]>();
+    const client = { search, fetchOne: vi.fn() } satisfies WebToolsClient;
     const tool = createWebSearchTool(client);
 
     await expect(executeTool(tool, { query: "  " })).rejects.toThrow();

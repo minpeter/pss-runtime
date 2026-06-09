@@ -1,15 +1,15 @@
-import type { OpenSearchClient } from "@minpeter/opensearch";
 import { jsonSchema, type Tool, tool } from "ai";
+import type { WebToolsClient } from "../client-types.js";
 import {
   mapSearchResults,
   resolveSearchResultCount,
+  type WebSearchOutput,
   webSearchInputSchema,
   webSearchOutputSchema,
-  type WebSearchOutput,
 } from "../schemas/web-search.js";
 
 export function createWebSearchTool(
-  client: OpenSearchClient
+  client: WebToolsClient
 ): Tool<unknown, WebSearchOutput> {
   return tool({
     description:

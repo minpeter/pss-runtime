@@ -1,15 +1,10 @@
 import type { LanguageModel, Tool, ToolSet } from "ai";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi } from "vitest";
-import { assistantMessage,
+  assistantMessage,
   createDeferred,
-  userText,
   researcherSubagent,
+  userText,
 } from "./test-fixtures";
 
 const { generateTextMock } = vi.hoisted(() => ({
@@ -80,22 +75,25 @@ describe("subagent hardening", () => {
     const Agent = await loadAgent();
     const childStarted = createDeferred();
     const childAborted = createDeferred();
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: ({ signal }) =>
-        new Promise((resolve) => {
-          childStarted.resolve();
-          signal.addEventListener(
-            "abort",
-            () => {
-              childAborted.resolve();
-              resolve([assistantMessage("CHILD ABORTED")]);
-            },
-            { once: true }
-          );
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: ({ signal }) =>
+            new Promise((resolve) => {
+              childStarted.resolve();
+              signal.addEventListener(
+                "abort",
+                () => {
+                  childAborted.resolve();
+                  resolve([assistantMessage("CHILD ABORTED")]);
+                },
+                { once: true }
+              );
+            }),
         }),
-
-    })] });
+      ],
+    });
     const abort = new AbortController();
 
     await drainRun(await agent.send(userText("delegate")));
@@ -120,14 +118,17 @@ describe("subagent hardening", () => {
   it("does not start background child work when the tool signal is already aborted", async () => {
     const Agent = await loadAgent();
     let childStarts = 0;
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: () => {
-        childStarts += 1;
-        return Promise.resolve([assistantMessage("SHOULD NOT START")]);
-      },
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: () => {
+            childStarts += 1;
+            return Promise.resolve([assistantMessage("SHOULD NOT START")]);
+          },
+        }),
+      ],
+    });
     const abort = new AbortController();
     abort.abort();
 
@@ -149,17 +150,51 @@ describe("subagent hardening", () => {
     expect(childStarts).toBe(0);
   });
 
+  it("rejects delegate prompts wrapped in user-text arrays", async () => {
+    const Agent = await loadAgent();
+    let childStarts = 0;
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: () => {
+            childStarts += 1;
+            return Promise.resolve([assistantMessage("SHOULD NOT START")]);
+          },
+        }),
+      ],
+    });
+
+    await drainRun(await agent.send(userText("delegate")));
+
+    await expect(
+      executableTool(
+        lastGenerateTextTools(),
+        "delegate_to_researcher"
+      ).execute?.(
+        {
+          prompt: [{ type: "user-text", text: "Search for hashed vc" }],
+        } as never,
+        toolExecutionOptions()
+      )
+    ).rejects.toThrow("Delegate prompt must be a plain string.");
+    expect(childStarts).toBe(0);
+  });
+
   it("rejects malformed delegate prompts before child sessions receive them", async () => {
     const Agent = await loadAgent();
     let childStarts = 0;
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: () => {
-        childStarts += 1;
-        return Promise.resolve([assistantMessage("SHOULD NOT START")]);
-      },
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: () => {
+            childStarts += 1;
+            return Promise.resolve([assistantMessage("SHOULD NOT START")]);
+          },
+        }),
+      ],
+    });
 
     await drainRun(await agent.send(userText("delegate")));
 
@@ -168,7 +203,7 @@ describe("subagent hardening", () => {
         lastGenerateTextTools(),
         "delegate_to_researcher"
       ).execute?.({ prompt: 123 }, toolExecutionOptions())
-    ).rejects.toThrow("Agent input must be text");
+    ).rejects.toThrow("Delegate prompt must be a plain string.");
     expect(childStarts).toBe(0);
   });
 });

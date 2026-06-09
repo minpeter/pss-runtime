@@ -6,12 +6,14 @@ import type { Subagent } from "./subagent-types";
 
 export class RegisteredSubagent implements Subagent {
   readonly delegateToolName?: string;
+  readonly delegationMode?: SubagentDefinition["delegationMode"];
   readonly description: string;
   readonly name: string;
   readonly #agent: Agent;
 
   constructor(definition: SubagentDefinition) {
     this.delegateToolName = definition.delegateToolName;
+    this.delegationMode = definition.delegationMode;
     this.description = definition.description;
     this.name = definition.name;
     this.#agent = definition.agent;

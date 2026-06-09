@@ -5,7 +5,9 @@ import type { RuntimeLlm } from "./llm";
 import { assistantMessage, userText } from "./test-fixtures";
 
 const fakeModel = {} as LanguageModel;
-const childRuntimeModel: RuntimeLlm = async () => [assistantMessage("CHILD DONE")];
+const childRuntimeModel: RuntimeLlm = async () => [
+  assistantMessage("CHILD DONE"),
+];
 
 describe("registerSubagents", () => {
   it("registers wrapped subagents and delegates session send", async () => {

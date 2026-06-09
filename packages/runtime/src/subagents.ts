@@ -40,7 +40,10 @@ export function createSubagentTools({
   const backgroundToolScope = {
     childSessionKeyPrefix: `parent:${parentAgentNamespace}:${parentSessionKey}:subagent:`,
   };
-  const generatedTools: Record<string, unknown> = backgroundSubagents
+  const exposesBackgroundControlTools =
+    backgroundSubagents &&
+    subagents.some((subagent) => subagent.delegationMode !== "background-only");
+  const generatedTools: Record<string, unknown> = exposesBackgroundControlTools
     ? {
         background_cancel: createBackgroundCancelTool(
           jobs,
@@ -114,7 +117,14 @@ function createDelegateTool({
         sessionKey: input.sessionKey,
         subagent: subagent.name ?? "subagent",
       });
-      if (input.run_in_background === true) {
+      const backgroundOnly = subagent.delegationMode === "background-only";
+      if (backgroundOnly && input.run_in_background === false) {
+        throw new Error(
+          "Blocking subagent delegation is not available for this tool."
+        );
+      }
+
+      if (backgroundOnly || input.run_in_background === true) {
         if (!backgroundSubagents) {
           throw new Error(
             "Background subagent delegation is not available for this host."
@@ -181,21 +191,34 @@ function createDelegateTool({
     },
     inputSchema: jsonSchema<DelegateInput>({
       additionalProperties: false,
-      properties: createDelegateToolProperties(backgroundSubagents),
+      properties: createDelegateToolProperties({
+        backgroundSubagents,
+        backgroundOnly: subagent.delegationMode === "background-only",
+      }),
       required: ["prompt"],
       type: "object",
     }),
   });
 }
 
-function createDelegateToolProperties(backgroundSubagents: boolean) {
+function createDelegateToolProperties({
+  backgroundOnly,
+  backgroundSubagents,
+}: {
+  readonly backgroundOnly: boolean;
+  readonly backgroundSubagents: boolean;
+}) {
   const baseProperties = {
     description: { type: "string" },
-    prompt: delegatePromptSchema,
+    prompt: {
+      ...delegatePromptSchema,
+      description:
+        'Task prompt for the delegated agent. Must be a single plain string, not an object or array. Example: "Search for hashed vc".',
+    },
     sessionKey: { type: "string" },
   };
 
-  if (!backgroundSubagents) {
+  if (!backgroundSubagents || backgroundOnly) {
     return baseProperties;
   }
 

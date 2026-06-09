@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parseReplySegments, telegramReplyBubbles } from "./reply-segments";
 import { splitReplyBubbles } from "./replies";
+import { parseReplySegments, telegramReplyBubbles } from "./reply-segments";
 
 describe("splitReplyBubbles baseline", () => {
   it("splits plain text on double newlines", () => {
@@ -39,7 +39,9 @@ describe("parseReplySegments", () => {
   });
 
   it("does not treat nested block tags as nested blocks", () => {
-    expect(parseReplySegments("<block>outer <block>inner</block> tail</block>")).toEqual([
+    expect(
+      parseReplySegments("<block>outer <block>inner</block> tail</block>")
+    ).toEqual([
       { kind: "block", content: "outer <block>inner" },
       { kind: "plain", content: " tail</block>" },
     ]);
@@ -52,9 +54,9 @@ describe("telegramReplyBubbles", () => {
   });
 
   it("keeps block content in a single bubble", () => {
-    expect(telegramReplyBubbles("<block>line1\nline2\n\nline3</block>")).toEqual([
-      "line1\nline2\n\nline3",
-    ]);
+    expect(
+      telegramReplyBubbles("<block>line1\nline2\n\nline3</block>")
+    ).toEqual(["line1\nline2\n\nline3"]);
   });
 
   it("splits plain segments and preserves block segments", () => {

@@ -1,9 +1,9 @@
-import type { LanguageModel } from "ai";
 import {
   createCloudflareDurableObjectHost,
   drainAgentRun,
   InMemoryCloudflareDurableObjectStorage,
 } from "@minpeter/pss-runtime/cloudflare";
+import type { LanguageModel } from "ai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { generateTextMock } = vi.hoisted(() => ({
@@ -17,9 +17,8 @@ vi.mock("ai", async (importOriginal) => {
     generateText: generateTextMock,
   };
 });
+
 import { createChatAgent } from "../agent/factory";
-import * as factory from "../agent/factory";
-import * as events from "./events";
 import { handleTelegramMessage } from "./handler";
 import { debugResetConfirmation } from "./replies";
 import { sessionKeyForThread, storePrefixForThread } from "./session";
@@ -34,6 +33,7 @@ vi.mock("../agent/config", async (importOriginal) => {
 
 const bindings = {
   AI_API_KEY: "test-key",
+  EXA_API_KEY: "test-exa-key",
 };
 
 function createThread() {
@@ -41,14 +41,20 @@ function createThread() {
   return {
     thread: {
       id: "thread-1",
-      async addReaction() {},
-      async post(message: string | { readonly markdown: string }) {
+      addReaction: vi.fn().mockResolvedValue(undefined),
+      post(message: string | { readonly markdown: string }) {
         posts.push(message);
+        return Promise.resolve();
       },
-      async startTyping() {},
+      startTyping: vi.fn().mockResolvedValue(undefined),
     },
     posts,
   };
+}
+
+async function* emptyEvents() {
+  await Promise.resolve();
+  yield* [];
 }
 
 const testAuthor = {
@@ -126,13 +132,15 @@ describe("handleTelegramMessage", () => {
 
   it("sends plain user text to the agent for plugin-based user tagging", async () => {
     const send = vi.fn().mockResolvedValue({
-      events: async function* () {},
+      events: emptyEvents,
     });
+    const factory = await import("../agent/factory");
     const createChatAgentSpy = vi
       .spyOn(factory, "createChatAgent")
       .mockReturnValue({
         session: () => ({ delete: vi.fn(), send }),
       } as unknown as ReturnType<typeof createChatAgent>);
+    const events = await import("./events");
     vi.spyOn(events, "assistantTextFromEvents").mockReturnValue(undefined);
 
     const { thread } = createThread();
@@ -148,6 +156,7 @@ describe("handleTelegramMessage", () => {
   });
 
   it("posts agent replies as separate bubbles split on blank lines", async () => {
+    const events = await import("./events");
     vi.spyOn(events, "assistantTextFromEvents").mockReturnValue(
       "First part.\n\nSecond part."
     );
@@ -159,10 +168,14 @@ describe("handleTelegramMessage", () => {
       thread,
     });
 
-    expect(posts).toEqual(["First part.", "Second part."]);
+    expect(posts).toEqual([
+      { markdown: "First part." },
+      { markdown: "Second part." },
+    ]);
   });
 
   it("posts block-tagged replies as a single bubble", async () => {
+    const events = await import("./events");
     vi.spyOn(events, "assistantTextFromEvents").mockReturnValue(
       "<block>A\n\nB</block>"
     );
@@ -174,10 +187,11 @@ describe("handleTelegramMessage", () => {
       thread,
     });
 
-    expect(posts).toEqual(["A\n\nB"]);
+    expect(posts).toEqual([{ markdown: "A\n\nB" }]);
   });
 
   it("sends nothing when the agent produces no assistant text", async () => {
+    const events = await import("./events");
     vi.spyOn(events, "assistantTextFromEvents").mockReturnValue(undefined);
     const { thread, posts } = createThread();
     await handleTelegramMessage({

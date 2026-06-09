@@ -2,6 +2,7 @@ import { telegramBotCommands } from "../../src/telegram/commands";
 import { resolveTelegramWebhookSecret } from "../../src/telegram/webhook-secret";
 
 const webhookPath = "/telegram/webhook";
+const trailingSlashPattern = /\/+$/;
 
 interface TelegramApiResponse {
   readonly description?: string;
@@ -61,7 +62,7 @@ async function callTelegramBotApi(
     }
   );
   const payload = (await response.json()) as TelegramApiResponse;
-  if (!response.ok || !payload.ok) {
+  if (!(response.ok && payload.ok)) {
     throw new Error(
       payload.description ?? `${method} failed with status ${response.status}`
     );
@@ -69,5 +70,5 @@ async function callTelegramBotApi(
 }
 
 function normalizeBaseUrl(value: string): string {
-  return value.replace(/\/+$/, "");
+  return value.replace(trailingSlashPattern, "");
 }

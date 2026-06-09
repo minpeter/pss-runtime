@@ -1,10 +1,4 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   drainRun,
   executableTool,
@@ -13,13 +7,16 @@ import {
   lastGenerateTextTools,
   loadAgent,
   toolExecutionOptions,
-  } from "./llm-test-utils";
-import { assistantMessage,
-  userText,
+} from "./llm-test-utils";
+import {
+  assistantMessage,
   researcherSubagent,
+  userText,
 } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
+const backgroundStatusPattern = /^(pending|running|completed)$/;
+const backgroundTaskIdPattern = /^bg_/;
 
 describe("generated subagent tools", () => {
   beforeEach(() => {
@@ -106,11 +103,14 @@ describe("generated subagent tools", () => {
 
   it("passes generated delegate and background tools to model", async () => {
     const Agent = await loadAgent();
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: async () => [],
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: async () => [],
+        }),
+      ],
+    });
 
     await drainRun(await agent.send(userText("delegate")));
 
@@ -129,11 +129,14 @@ describe("generated subagent tools", () => {
 
   it("blocking delegation returns compact child text", async () => {
     const Agent = await loadAgent();
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: async () => [assistantMessage("CHILD DONE")],
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: async () => [assistantMessage("CHILD DONE")],
+        }),
+      ],
+    });
 
     await drainRun(await agent.send(userText("delegate")));
 
@@ -158,11 +161,14 @@ describe("generated subagent tools", () => {
 
   it("defaults omitted run_in_background to blocking", async () => {
     const Agent = await loadAgent();
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: async () => [assistantMessage("CHILD DONE")],
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: async () => [assistantMessage("CHILD DONE")],
+        }),
+      ],
+    });
 
     await drainRun(await agent.send(userText("delegate")));
 
@@ -180,17 +186,137 @@ describe("generated subagent tools", () => {
     );
   });
 
+  it("background delegation launches background work when run_in_background is true", async () => {
+    const Agent = await loadAgent();
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: async () => [assistantMessage("CHILD DONE")],
+        }),
+      ],
+    });
+
+    await drainRun(await agent.send(userText("delegate")));
+
+    const output = await executableTool(
+      lastGenerateTextTools(),
+      "delegate_to_researcher"
+    ).execute?.(
+      { prompt: "research this", run_in_background: true },
+      toolExecutionOptions()
+    );
+
+    expect(output).toEqual(
+      expect.objectContaining({
+        run_in_background: true,
+        status: expect.stringMatching(backgroundStatusPattern),
+        subagent: "researcher",
+        task_id: expect.stringMatching(backgroundTaskIdPattern),
+      })
+    );
+  });
+
+  it("explicit blocking delegation remains available when background tools are available", async () => {
+    const Agent = await loadAgent();
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: async () => [assistantMessage("CHILD DONE")],
+        }),
+      ],
+    });
+
+    await drainRun(await agent.send(userText("delegate")));
+
+    const output = await executableTool(
+      lastGenerateTextTools(),
+      "delegate_to_researcher"
+    ).execute?.(
+      { prompt: "research this", run_in_background: false },
+      toolExecutionOptions()
+    );
+
+    expect(output).toEqual(
+      expect.objectContaining({
+        result: "completed",
+        run_in_background: false,
+        text: "CHILD DONE",
+      })
+    );
+  });
+
+  it("background-only delegation launches background work when run_in_background is omitted", async () => {
+    const Agent = await loadAgent();
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          delegationMode: "background-only",
+          model: async () => [assistantMessage("CHILD DONE")],
+        }),
+      ],
+    });
+
+    await drainRun(await agent.send(userText("delegate")));
+
+    const output = await executableTool(
+      lastGenerateTextTools(),
+      "delegate_to_researcher"
+    ).execute?.({ prompt: "research this" }, toolExecutionOptions());
+
+    expect(output).toEqual(
+      expect.objectContaining({
+        run_in_background: true,
+        status: expect.stringMatching(backgroundStatusPattern),
+        subagent: "researcher",
+        task_id: expect.stringMatching(backgroundTaskIdPattern),
+      })
+    );
+  });
+
+  it("background-only delegation rejects explicit blocking downgrade", async () => {
+    const Agent = await loadAgent();
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          delegationMode: "background-only",
+          model: async () => [assistantMessage("CHILD DONE")],
+        }),
+      ],
+    });
+
+    await drainRun(await agent.send(userText("delegate")));
+
+    await expect(
+      executableTool(
+        lastGenerateTextTools(),
+        "delegate_to_researcher"
+      ).execute?.(
+        { prompt: "research this", run_in_background: false },
+        toolExecutionOptions()
+      )
+    ).rejects.toThrow(
+      "Blocking subagent delegation is not available for this tool."
+    );
+  });
+
   it("blocking delegation uses parent-scoped child session key", async () => {
     const Agent = await loadAgent();
     const childHistories: unknown[] = [];
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: ({ history }) => {
-        childHistories.push(history);
-        return Promise.resolve([assistantMessage("CHILD DONE")]);
-      },
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: ({ history }) => {
+            childHistories.push(history);
+            return Promise.resolve([assistantMessage("CHILD DONE")]);
+          },
+        }),
+      ],
+    });
 
     await drainRun(await agent.session("parent-a").send(userText("delegate")));
     await executableTool(
@@ -237,14 +363,17 @@ describe("generated subagent tools", () => {
   it("blocking delegation uses provided session key suffix", async () => {
     const Agent = await loadAgent();
     const childHistories: unknown[] = [];
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: ({ history }) => {
-        childHistories.push(history);
-        return Promise.resolve([assistantMessage("CHILD DONE")]);
-      },
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: ({ history }) => {
+            childHistories.push(history);
+            return Promise.resolve([assistantMessage("CHILD DONE")]);
+          },
+        }),
+      ],
+    });
 
     await drainRun(await agent.session("parent-a").send(userText("delegate")));
     await executableTool(
@@ -260,14 +389,17 @@ describe("generated subagent tools", () => {
   it("namespaces provided child session keys under the parent session", async () => {
     const Agent = await loadAgent();
     const childHistories: unknown[] = [];
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: ({ history }) => {
-        childHistories.push(history);
-        return Promise.resolve([assistantMessage("CHILD DONE")]);
-      },
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: ({ history }) => {
+            childHistories.push(history);
+            return Promise.resolve([assistantMessage("CHILD DONE")]);
+          },
+        }),
+      ],
+    });
 
     await drainRun(await agent.session("parent-a").send(userText("delegate")));
     await executableTool(
@@ -280,13 +412,16 @@ describe("generated subagent tools", () => {
     expect(JSON.stringify(childHistories.at(-1))).toContain("research scoped");
   });
 
-  it("exposes a delegate prompt schema that rejects malformed content parts", async () => {
+  it("exposes a delegate prompt schema that accepts only plain strings", async () => {
     const Agent = await loadAgent();
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: async () => [assistantMessage("CHILD DONE")],
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: async () => [assistantMessage("CHILD DONE")],
+        }),
+      ],
+    });
 
     await drainRun(await agent.send(userText("delegate")));
 
@@ -301,33 +436,13 @@ describe("generated subagent tools", () => {
       expect.objectContaining({
         properties: expect.objectContaining({
           prompt: expect.objectContaining({
-            anyOf: expect.arrayContaining([
-              expect.objectContaining({
-                properties: expect.objectContaining({
-                  content: expect.objectContaining({
-                    items: expect.any(Object),
-                    type: "array",
-                  }),
-                }),
-              }),
-              expect.objectContaining({
-                items: expect.objectContaining({
-                  anyOf: expect.arrayContaining([
-                    expect.objectContaining({
-                      properties: expect.objectContaining({
-                        data: expect.objectContaining({
-                          anyOf: expect.any(Array),
-                        }),
-                      }),
-                    }),
-                  ]),
-                }),
-              }),
-            ]),
+            type: "string",
+            description: expect.stringContaining("plain string"),
           }),
         }),
       })
     );
-    expect(JSON.stringify(schema)).not.toContain('"data":{}');
+    expect(JSON.stringify(schema)).not.toContain("user-text");
+    expect(JSON.stringify(schema)).not.toContain("user-message");
   });
 });

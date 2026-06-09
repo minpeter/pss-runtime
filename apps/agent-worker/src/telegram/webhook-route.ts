@@ -9,7 +9,11 @@ export interface TelegramWebhookRoute {
 export type ReadTelegramWebhookRouteResult =
   | { readonly ok: true; readonly routed: false }
   | { readonly error: string; readonly ok: false; readonly status: number }
-  | { readonly ok: true; readonly routed: true; readonly route: TelegramWebhookRoute };
+  | {
+      readonly ok: true;
+      readonly routed: true;
+      readonly route: TelegramWebhookRoute;
+    };
 
 export function isTelegramWebhookPath(request: Request): boolean {
   const url = new URL(request.url);
@@ -73,7 +77,7 @@ function readTelegramMessage(update: unknown): unknown {
 }
 
 function readChatId(message: unknown): string | undefined {
-  if (!isRecord(message) || !isRecord(message.chat)) {
+  if (!(isRecord(message) && isRecord(message.chat))) {
     return;
   }
   const chatId = message.chat.id;
@@ -83,7 +87,7 @@ function readChatId(message: unknown): string | undefined {
 }
 
 function readUserId(message: unknown): string | undefined {
-  if (!isRecord(message) || !isRecord(message.from)) {
+  if (!(isRecord(message) && isRecord(message.from))) {
     return;
   }
   const userId = message.from.id;

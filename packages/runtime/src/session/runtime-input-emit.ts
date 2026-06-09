@@ -1,10 +1,10 @@
 import type { AgentEvent, RuntimeInput } from "./events";
 import type { UserInput } from "./input";
 import { stripInputMeta } from "./input-meta";
+import type { BufferedAgentRun } from "./run";
 import type { QueuedRuntimeInput } from "./runtime-input";
 import type { SessionEventDispatcher } from "./session-events";
 import type { SessionState } from "./session-state";
-import type { BufferedAgentRun } from "./run";
 
 export function runtimeInputEventFromQueued(
   queued: QueuedRuntimeInput
@@ -40,11 +40,11 @@ export async function commitPreUserRuntimeInputs(
   return committed;
 }
 
-export async function emitCommittedRuntimeInputs(
+export function emitCommittedRuntimeInputs(
   events: SessionEventDispatcher,
   run: BufferedAgentRun,
   committed: readonly AgentEvent[]
-): Promise<void> {
+): void {
   for (const event of committed) {
     events.emitProcessedEvent(run, event);
   }

@@ -2,7 +2,7 @@
   "name": "@minpeter/pss-web-tools",
   "private": true,
   "version": "0.0.0",
-  "description": "OpenSearch-backed web_search and web_fetch tools for pss-next agents.",
+  "description": "Exa-backed web_search and web_fetch tools for pss-next agents.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -25,7 +25,6 @@
     "lint": "ultracite check ."
   },
   "dependencies": {
-    "@minpeter/opensearch": "0.0.0",
     "ai": "7.0.0-canary.142",
     "zod": "^4.4.3"
   },

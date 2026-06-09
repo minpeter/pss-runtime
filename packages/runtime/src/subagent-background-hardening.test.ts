@@ -1,18 +1,12 @@
 import type { LanguageModel, Tool, ToolSet } from "ai";
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentEvent } from "./session/events";
 import {
   assistantMessage,
   createDeferred,
   notifyRuntimeInput,
-  userText,
   researcherSubagent,
+  userText,
 } from "./test-fixtures";
 
 const { generateTextMock } = vi.hoisted(() => ({
@@ -90,11 +84,14 @@ describe("subagent background hardening", () => {
 
   it("keeps background output compact even when raw event switches are provided", async () => {
     const Agent = await loadAgent();
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: async () => [assistantMessage("CHILD DONE")],
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: async () => [assistantMessage("CHILD DONE")],
+        }),
+      ],
+    });
 
     await drainRun(await agent.send(userText("delegate")));
     const tools = lastGenerateTextTools();
@@ -135,11 +132,14 @@ describe("subagent background hardening", () => {
 
   it("uses background_cancel-specific invalid task id wording", async () => {
     const Agent = await loadAgent();
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: async () => [],
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: async () => [],
+        }),
+      ],
+    });
 
     await drainRun(await agent.send(userText("delegate")));
 

@@ -1,16 +1,12 @@
-import {
-  emitRuntimeInputEvent,
-  runtimeInputEventFromQueued,
-} from "./runtime-input-emit";
+import type { BufferedAgentRun } from "./run";
 import {
   type RuntimeInputPlacement,
   type RuntimeInputState,
-  type QueuedRuntimeInput,
   shiftRuntimeInput,
 } from "./runtime-input";
+import { emitRuntimeInputEvent } from "./runtime-input-emit";
 import type { SessionEventDispatcher } from "./session-events";
 import type { SessionState } from "./session-state";
-import type { BufferedAgentRun } from "./run";
 
 export async function drainRuntimeInput({
   events,
@@ -36,5 +32,3 @@ export async function drainRuntimeInput({
 
   return added;
 }
-
-export { runtimeInputEventFromQueued };

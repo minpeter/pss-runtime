@@ -21,14 +21,16 @@ const provider = createOpenAICompatible({
   baseURL: env.AI_BASE_URL,
 });
 const tracePlugin: AgentPlugin = {
-  name: "trace-plugin",
-  on: ({ event }) => {
-    if (event.type === "turn-end") {
-      console.log("");
-      console.log("// plugin:turn-end //");
-      console.log("");
-    }
+  events: {
+    on: ({ event }) => {
+      if (event.type === "turn-end") {
+        console.log("");
+        console.log("// plugin:turn-end //");
+        console.log("");
+      }
+    },
   },
+  name: "trace-plugin",
 };
 
 const agent = new Agent({

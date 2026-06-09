@@ -36,9 +36,7 @@ export function parseReplySegments(text: string): readonly ReplySegment[] {
     cursor = closeIndex + BLOCK_CLOSE.length;
   }
 
-  return segments.filter(
-    (segment) => segment.content.length > 0
-  );
+  return segments.filter((segment) => segment.content.length > 0);
 }
 
 export function telegramReplyBubbles(text: string): readonly string[] {

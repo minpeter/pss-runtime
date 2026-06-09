@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
-import { localDevOrigin } from "../lib/local-dev";
 import { loadDevVars } from "../lib/load-dev-vars";
+import { localDevOrigin } from "../lib/local-dev";
 import { sleep } from "../lib/sleep";
 import { registerTelegramWebhook } from "../webhook/api";
 import { registerTelegramCommandsFromDevVars } from "../webhook/commands";
@@ -12,7 +12,7 @@ async function waitForLocalDevServer(timeoutMs = 60_000): Promise<void> {
     try {
       const response = await fetch(`${localDevOrigin}/`, {
         method: "GET",
-        signal: AbortSignal.timeout(3_000),
+        signal: AbortSignal.timeout(3000),
       });
       if (response.status < 500) {
         return;
@@ -68,11 +68,18 @@ async function main(): Promise<void> {
     process.exit(exitCode);
   };
 
+  const shutdownFromSignal = (): void => {
+    shutdown().catch((error: unknown) => {
+      console.error("telegram polling shutdown failed:", error);
+      process.exit(1);
+    });
+  };
+
   process.on("SIGINT", () => {
-    void shutdown();
+    shutdownFromSignal();
   });
   process.on("SIGTERM", () => {
-    void shutdown();
+    shutdownFromSignal();
   });
 
   try {

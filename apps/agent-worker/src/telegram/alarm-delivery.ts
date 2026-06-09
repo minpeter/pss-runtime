@@ -1,8 +1,12 @@
+import { createTelegramAdapter } from "@chat-adapter/telegram";
 import type { AgentEvent } from "@minpeter/pss-runtime";
 import type { CloudflareAlarmDrainSummary } from "@minpeter/pss-runtime/cloudflare";
 import { assistantTextFromEvents } from "./events";
+import { telegramMarkdownMessage } from "./replies";
 import { telegramReplyBubbles } from "./reply-segments";
 import type { TelegramConversationRoute } from "./route-store";
+
+const telegramBotUserName = "pss_agent";
 
 export function assistantTextFromAlarmSummary(
   summary: CloudflareAlarmDrainSummary
@@ -25,39 +29,19 @@ export async function deliverAlarmAssistantText(options: {
     return [];
   }
 
+  const telegram = createTelegramAdapter({
+    botToken,
+    userName: telegramBotUserName,
+  });
+  const threadId = telegramThreadId(options.route.chatId);
   const bubbles = telegramReplyBubbles(reply);
   for (const bubble of bubbles) {
-    await postTelegramMessage({
-      botToken,
-      chatId: options.route.chatId,
-      text: bubble,
-    });
+    await telegram.postMessage(threadId, telegramMarkdownMessage(bubble));
   }
 
   return bubbles;
 }
 
-async function postTelegramMessage(options: {
-  readonly botToken: string;
-  readonly chatId: string;
-  readonly text: string;
-}): Promise<void> {
-  const response = await fetch(
-    `https://api.telegram.org/bot${options.botToken}/sendMessage`,
-    {
-      body: JSON.stringify({
-        chat_id: options.chatId,
-        text: options.text,
-      }),
-      headers: {
-        "content-type": "application/json",
-      },
-      method: "POST",
-    }
-  );
-  if (!response.ok) {
-    throw new Error(
-      `Telegram sendMessage failed with status ${response.status}.`
-    );
-  }
+function telegramThreadId(chatId: string): string {
+  return `telegram:${chatId}`;
 }

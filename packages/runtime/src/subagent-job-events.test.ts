@@ -1,25 +1,19 @@
 import type { ToolSet } from "ai";
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   collectRun,
   fakeModel,
   getGenerateTextMock,
   loadAgent,
   toolExecutionOptions,
-  } from "./llm-test-utils";
+} from "./llm-test-utils";
 import {
   assistantMessage,
   eventTypes,
+  researcherSubagent,
   toolCallPart,
   toolResultFor,
   userText,
-  researcherSubagent,
 } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
@@ -41,10 +35,9 @@ describe("subagent job events", () => {
   it("emits subagent job lifecycle events while executing generated tools", async () => {
     const Agent = await loadAgent();
     const researcher = researcherSubagent({
-
       model: async () => [assistantMessage("CHILD DONE")],
-
-    });    generateTextMock.mockImplementationOnce(
+    });
+    generateTextMock.mockImplementationOnce(
       async ({ tools }: { tools?: ToolSet }) => {
         await tools?.delegate_to_researcher?.execute?.(
           { prompt: "research this" },
@@ -99,10 +92,9 @@ describe("subagent job events", () => {
       }
     );
     const researcher = researcherSubagent({
-
       model: async () => [assistantMessage("CHILD DONE")],
-
-    });    generateTextMock.mockImplementationOnce(
+    });
+    generateTextMock.mockImplementationOnce(
       async ({ tools }: { tools?: ToolSet }) => {
         await tools?.delegate_to_researcher?.execute?.(
           { prompt: "research this" },
@@ -141,10 +133,9 @@ describe("subagent job events", () => {
   it("keeps buffered subagent lifecycle events visible when the parent model call fails", async () => {
     const Agent = await loadAgent();
     const researcher = researcherSubagent({
-
       model: async () => [assistantMessage("CHILD DONE")],
-
-    });    generateTextMock.mockImplementationOnce(
+    });
+    generateTextMock.mockImplementationOnce(
       async ({ tools }: { tools?: ToolSet }) => {
         await tools?.delegate_to_researcher?.execute?.(
           { prompt: "research this" },

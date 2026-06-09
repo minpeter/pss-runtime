@@ -1,8 +1,5 @@
 import type { Tool } from "ai";
-import {
-  describe,
-  expect,
-  it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createInMemoryExecutionHost } from "./execution/memory";
 import {
   drainRun,
@@ -11,16 +8,15 @@ import {
   lastGenerateTextTools,
   loadAgent,
   toolExecutionOptions,
-  } from "./llm-test-utils";
+} from "./llm-test-utils";
 import type { AgentEvent } from "./session/events";
 import type { AgentRun } from "./session/run";
 import { startBackgroundJob } from "./subagent-jobs";
-import type { RuntimeInputSink,
-  Subagent,
-  SubagentJob } from "./subagent-types";
-import { assistantMessage,
-  userText,
+import type { RuntimeInputSink, Subagent, SubagentJob } from "./subagent-types";
+import {
+  assistantMessage,
   researcherSubagent,
+  userText,
 } from "./test-fixtures";
 
 describe("durable background subagent child runs", () => {
@@ -39,7 +35,8 @@ describe("durable background subagent child runs", () => {
           return Promise.resolve([assistantMessage("CHILD DONE")]);
         },
         namespace: "qa-active-researcher",
-      });      return new Agent({
+      });
+      return new Agent({
         host,
         model: fakeModel,
         namespace: "qa-active-parent",
@@ -93,7 +90,8 @@ describe("durable background subagent child runs", () => {
           return Promise.resolve([assistantMessage("CHILD DONE")]);
         },
         namespace: "qa-researcher",
-      });      return new Agent({
+      });
+      return new Agent({
         host,
         model: fakeModel,
         namespace: "qa-parent",

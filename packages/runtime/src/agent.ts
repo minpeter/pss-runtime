@@ -9,7 +9,6 @@ import {
 import {
   type AgentConstructionOptions,
   type AgentModelOptions,
-  type AgentOptions,
   assertAgentOptions,
   hasLanguageModel,
   hasRuntimeModel,
@@ -31,7 +30,10 @@ import {
   type NotifyOptions,
 } from "./session/session";
 import type { SessionStore } from "./session/store/types";
-import { type RegisteredSubagent, registerSubagents } from "./subagent-register";
+import {
+  type RegisteredSubagent,
+  registerSubagents,
+} from "./subagent-register";
 import { createSubagentTools } from "./subagents";
 
 export type { AgentOptions } from "./agent-options";
@@ -66,11 +68,11 @@ export class Agent {
     this.host = this.#host;
     this.#store = sessionStoreForHost(this.#host);
     this.#plugins = options.plugins ?? [];
-    if (options.subagents !== undefined) {
+    if (options.subagents === undefined) {
+      this.#subagents = [];
+    } else {
       assertSubagents(options, Agent, hasRuntimeModel(options));
       this.#subagents = registerSubagents(options.subagents);
-    } else {
-      this.#subagents = [];
     }
     this.subagentCount = this.#subagents.length;
     if (hasRuntimeModel(options)) {

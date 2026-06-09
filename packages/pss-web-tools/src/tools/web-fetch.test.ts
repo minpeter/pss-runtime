@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { OpenSearchClient } from "@minpeter/opensearch";
+import type { WebToolsClient } from "../client-types.js";
 import { createWebFetchTool } from "./web-fetch.js";
 
 interface ExecutableTool {
@@ -14,25 +14,21 @@ const executeTool = (tool: unknown, input: unknown) =>
 
 describe("createWebFetchTool", () => {
   it("returns partial success with per-URL errors", async () => {
-    const fetch = vi
-      .fn<OpenSearchClient["fetch"]>()
-      .mockImplementation(async (input) => {
-        if (typeof input !== "string") {
-          throw new Error("expected single-url fetch");
+    const fetchOne = vi
+      .fn<WebToolsClient["fetchOne"]>()
+      .mockImplementation((url) => {
+        if (url === "https://bad.example") {
+          return Promise.reject(new Error("upstream unavailable"));
         }
 
-        if (input === "https://bad.example") {
-          throw new Error("upstream unavailable");
-        }
-
-        return {
-          url: input,
+        return Promise.resolve({
+          url,
           title: "Good page",
           content: "# Hello",
           length: 7,
-        };
+        });
       });
-    const client = { search: vi.fn(), fetch } satisfies OpenSearchClient;
+    const client = { search: vi.fn(), fetchOne } satisfies WebToolsClient;
     const tool = createWebFetchTool(client);
 
     await expect(
@@ -58,13 +54,13 @@ describe("createWebFetchTool", () => {
   });
 
   it("rejects invalid protocols before calling the client", async () => {
-    const fetch = vi.fn<OpenSearchClient["fetch"]>();
-    const client = { search: vi.fn(), fetch } satisfies OpenSearchClient;
+    const fetchOne = vi.fn<WebToolsClient["fetchOne"]>();
+    const client = { search: vi.fn(), fetchOne } satisfies WebToolsClient;
     const tool = createWebFetchTool(client);
 
     await expect(
       executeTool(tool, { urls: ["ftp://example.com/file"] })
     ).rejects.toThrow();
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetchOne).not.toHaveBeenCalled();
   });
 });

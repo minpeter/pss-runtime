@@ -1,5 +1,7 @@
 import type { WebToolsEnvironment } from "./types.js";
 
 export function readNodeWebToolsEnv(): WebToolsEnvironment {
-  return {};
+  return {
+    EXA_API_KEY: process.env.EXA_API_KEY,
+  };
 }

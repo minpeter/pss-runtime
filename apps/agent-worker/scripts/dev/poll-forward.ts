@@ -2,8 +2,8 @@ import { resolveTelegramWebhookSecret } from "../../src/telegram/webhook-secret"
 import { localWebhookUrl } from "../lib/local-dev";
 import { sleep } from "../lib/sleep";
 
-const pollRetryMs = 2_000;
-const forwardRetryMs = 1_000;
+const pollRetryMs = 2000;
+const forwardRetryMs = 1000;
 const maxForwardAttempts = 5;
 
 interface TelegramUpdate {
@@ -93,7 +93,7 @@ export async function startTelegramPollForward(options: {
       const payload = (await response.json()) as TelegramApiResponse<
         readonly TelegramUpdate[]
       >;
-      if (!response.ok || !payload.ok) {
+      if (!(response.ok && payload.ok)) {
         throw new Error(
           payload.description ??
             `getUpdates failed with status ${response.status}`

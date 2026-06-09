@@ -1,10 +1,4 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   drainRun,
   executableTool,
@@ -13,12 +7,13 @@ import {
   lastGenerateTextTools,
   loadAgent,
   toolExecutionOptions,
-  } from "./llm-test-utils";
+} from "./llm-test-utils";
 import { SpyStore } from "./session/session.test-support";
-import { assistantMessage,
+import {
+  assistantMessage,
   createDeferred,
-  userText,
   researcherSubagent,
+  userText,
 } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
@@ -39,14 +34,17 @@ describe("subagent session deletion", () => {
   it("parent session delete cascades to scoped child sessions", async () => {
     const Agent = await loadAgent();
     const childHistories: unknown[] = [];
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: ({ history }) => {
-        childHistories.push(history);
-        return Promise.resolve([assistantMessage("CHILD DONE")]);
-      },
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: ({ history }) => {
+            childHistories.push(history);
+            return Promise.resolve([assistantMessage("CHILD DONE")]);
+          },
+        }),
+      ],
+    });
 
     await drainRun(await agent.send(userText("delegate first")));
     await executableTool(
@@ -71,14 +69,17 @@ describe("subagent session deletion", () => {
   it("parent session delete cascades to background task child sessions", async () => {
     const Agent = await loadAgent();
     const childHistories: unknown[] = [];
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: ({ history }) => {
-        childHistories.push(history);
-        return Promise.resolve([assistantMessage("CHILD DONE")]);
-      },
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: ({ history }) => {
+            childHistories.push(history);
+            return Promise.resolve([assistantMessage("CHILD DONE")]);
+          },
+        }),
+      ],
+    });
 
     await drainRun(await agent.send(userText("delegate first")));
     await executableTool(
@@ -111,14 +112,17 @@ describe("subagent session deletion", () => {
   it("parent session kill cascades to background task child sessions", async () => {
     const Agent = await loadAgent();
     const childHistories: unknown[] = [];
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: ({ history }) => {
-        childHistories.push(history);
-        return Promise.resolve([assistantMessage("CHILD DONE")]);
-      },
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: ({ history }) => {
+            childHistories.push(history);
+            return Promise.resolve([assistantMessage("CHILD DONE")]);
+          },
+        }),
+      ],
+    });
 
     await drainRun(await agent.send(userText("delegate first")));
     await executableTool(
@@ -152,15 +156,18 @@ describe("subagent session deletion", () => {
     const Agent = await loadAgent();
     const childStore = new RejectingDeleteStore();
     const childHistories: unknown[] = [];
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: ({ history }) => {
-        childHistories.push(history);
-        return Promise.resolve([assistantMessage("CHILD DONE")]);
-      },
-      host: { sessionStore: childStore },
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: ({ history }) => {
+            childHistories.push(history);
+            return Promise.resolve([assistantMessage("CHILD DONE")]);
+          },
+          host: { sessionStore: childStore },
+        }),
+      ],
+    });
     const firstSession = agent.session("default");
 
     await drainRun(await agent.send(userText("delegate first")));
@@ -185,12 +192,15 @@ describe("subagent session deletion", () => {
   it("keeps new child cleanup registrations while prior kill cleanup is pending", async () => {
     const Agent = await loadAgent();
     const childStore = new BlockingDeleteStore();
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      host: { sessionStore: childStore },
-      model: () => Promise.resolve([assistantMessage("CHILD DONE")]),
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          host: { sessionStore: childStore },
+          model: () => Promise.resolve([assistantMessage("CHILD DONE")]),
+        }),
+      ],
+    });
 
     await drainRun(await agent.send(userText("delegate first")));
     await executableTool(
@@ -214,12 +224,15 @@ describe("subagent session deletion", () => {
   it("drops parent handles while child cleanup is pending during delete", async () => {
     const Agent = await loadAgent();
     const childStore = new BlockingDeleteStore();
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      host: { sessionStore: childStore },
-      model: () => Promise.resolve([assistantMessage("CHILD DONE")]),
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          host: { sessionStore: childStore },
+          model: () => Promise.resolve([assistantMessage("CHILD DONE")]),
+        }),
+      ],
+    });
     const firstSession = agent.session("default");
 
     await drainRun(await firstSession.send(userText("delegate first")));

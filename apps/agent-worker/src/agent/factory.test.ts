@@ -1,5 +1,5 @@
-import type { LanguageModel, ToolSet } from "ai";
 import { InMemoryCloudflareDurableObjectStorage } from "@minpeter/pss-runtime/cloudflare";
+import type { LanguageModel, ToolSet } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { generateTextMock } = vi.hoisted(() => ({
@@ -26,6 +26,16 @@ const fakeAssistantMessage = {
   content: [{ text: "DONE", type: "text" }],
   role: "assistant" as const,
 };
+
+const testBindings = {
+  AI_API_KEY: "test-key",
+  EXA_API_KEY: "test-exa-key",
+} as const;
+
+function toolJsonSchema(tool: unknown): unknown {
+  return (tool as { readonly inputSchema?: { readonly jsonSchema?: unknown } })
+    .inputSchema?.jsonSchema;
+}
 
 function lastGenerateTextTools(): ToolSet {
   const call = generateTextMock.mock.calls.at(-1)?.[0] as
@@ -55,47 +65,56 @@ describe("createChatAgent", () => {
   it("exposes sendmessageto_agent instead of delegate_to_execution", async () => {
     const { createChatAgent } = await import("./factory");
     const storage = new InMemoryCloudflareDurableObjectStorage();
-    const agent = createChatAgent(storage, "telegram-chat:test", {
-      AI_API_KEY: "test-key",
-    });
+    const agent = createChatAgent(storage, "telegram-chat:test", testBindings);
 
     await drainRun(await agent.send("delegate"));
 
     const tools = lastGenerateTextTools();
-    expect(Object.keys(tools).sort()).toEqual([
-      "background_cancel",
-      "background_output",
-      "sendmessageto_agent",
-    ]);
+    expect(Object.keys(tools).sort()).toEqual(["sendmessageto_agent"]);
     expect(tools).not.toHaveProperty("delegate_to_execution");
+  });
+
+  it("exposes sendmessageto_agent as a background-only tool schema", async () => {
+    const { createChatAgent } = await import("./factory");
+    const storage = new InMemoryCloudflareDurableObjectStorage();
+    const agent = createChatAgent(storage, "telegram-chat:test", testBindings);
+
+    await drainRun(await agent.send("delegate"));
+
+    expect(toolJsonSchema(lastGenerateTextTools().sendmessageto_agent)).toEqual(
+      expect.objectContaining({
+        properties: expect.objectContaining({
+          prompt: expect.any(Object),
+        }),
+        required: ["prompt"],
+      })
+    );
+    expect(
+      JSON.stringify(
+        toolJsonSchema(lastGenerateTextTools().sendmessageto_agent)
+      )
+    ).not.toContain("run_in_background");
   });
 
   it("exposes telegram UX tools when telegramUx context is provided", async () => {
     const { createChatAgent } = await import("./factory");
     const storage = new InMemoryCloudflareDurableObjectStorage();
-    const agent = createChatAgent(
-      storage,
-      "telegram-chat:test",
-      { AI_API_KEY: "test-key" },
-      {
-        telegramUx: {
-          messageId: "msg-1",
-          thread: {
-            id: "thread-1",
-            addReaction: async () => undefined,
-            post: async () => undefined,
-            startTyping: async () => undefined,
-          },
+    const agent = createChatAgent(storage, "telegram-chat:test", testBindings, {
+      telegramUx: {
+        messageId: "msg-1",
+        thread: {
+          id: "thread-1",
+          addReaction: async () => undefined,
+          post: async () => undefined,
+          startTyping: async () => undefined,
         },
-      }
-    );
+      },
+    });
 
     await drainRun(await agent.send("hello"));
 
     const tools = lastGenerateTextTools();
     expect(Object.keys(tools).sort()).toEqual([
-      "background_cancel",
-      "background_output",
       "display_draft",
       "reactto_message",
       "sendmessageto_agent",
@@ -107,9 +126,10 @@ describe("createChatAgent", () => {
     const { createInMemoryExecutionHost } = await import(
       "@minpeter/pss-runtime/execution/memory"
     );
-    const agent = createExecutionAgent(createInMemoryExecutionHost(), {
-      AI_API_KEY: "test-key",
-    });
+    const agent = createExecutionAgent(
+      createInMemoryExecutionHost(),
+      testBindings
+    );
 
     await drainRun(await agent.send("search typescript release notes"));
 
@@ -120,9 +140,7 @@ describe("createChatAgent", () => {
   it("omits telegram UX tools when telegramUx context is absent", async () => {
     const { createChatAgent } = await import("./factory");
     const storage = new InMemoryCloudflareDurableObjectStorage();
-    const agent = createChatAgent(storage, "telegram-chat:test", {
-      AI_API_KEY: "test-key",
-    });
+    const agent = createChatAgent(storage, "telegram-chat:test", testBindings);
 
     await drainRun(await agent.send("hello"));
 

@@ -2,7 +2,9 @@ const disallowedTelegramSecretChars = /[^A-Za-z0-9_-]/g;
 const maxWebhookSecretLength = 256;
 
 export function telegramWebhookSecretFromBotToken(botToken: string): string {
-  return botToken.replace(disallowedTelegramSecretChars, "_").slice(0, maxWebhookSecretLength);
+  return botToken
+    .replace(disallowedTelegramSecretChars, "_")
+    .slice(0, maxWebhookSecretLength);
 }
 
 export function resolveTelegramWebhookSecret(options: {

@@ -1,10 +1,4 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   drainRun,
   executableTool,
@@ -13,13 +7,14 @@ import {
   lastGenerateTextTools,
   loadAgent,
   toolExecutionOptions,
-  } from "./llm-test-utils";
+} from "./llm-test-utils";
 import { SpyStore } from "./session/session.test-support";
 import { createBackgroundOutputTool } from "./subagent-job-output";
 import type { SubagentJob } from "./subagent-types";
-import { assistantMessage,
-  userText,
+import {
+  assistantMessage,
   researcherSubagent,
+  userText,
 } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
@@ -41,15 +36,18 @@ describe("subagent background cleanup", () => {
     const Agent = await loadAgent();
     const childStore = new CountingDeleteStore();
     const childHistories: unknown[] = [];
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: ({ history }) => {
-        childHistories.push(history);
-        return Promise.resolve([assistantMessage("CHILD DONE")]);
-      },
-      host: { sessionStore: childStore },
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: ({ history }) => {
+            childHistories.push(history);
+            return Promise.resolve([assistantMessage("CHILD DONE")]);
+          },
+          host: { sessionStore: childStore },
+        }),
+      ],
+    });
 
     await drainRun(await agent.send(userText("delegate")));
 

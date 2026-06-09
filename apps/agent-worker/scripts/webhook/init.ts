@@ -11,7 +11,9 @@ async function main(): Promise<void> {
 
   const baseUrl = devVars.WORKER_PUBLIC_URL?.trim();
   if (!baseUrl) {
-    throw new Error("WORKER_PUBLIC_URL is required in .dev.vars for webhook init");
+    throw new Error(
+      "WORKER_PUBLIC_URL is required in .dev.vars for webhook init"
+    );
   }
 
   const webhookSecret = devVars.TELEGRAM_WEBHOOK_SECRET?.trim();

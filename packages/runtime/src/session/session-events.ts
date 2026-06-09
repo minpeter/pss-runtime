@@ -1,8 +1,8 @@
 import type { RuntimeLlmContext } from "../llm";
 import {
   type AgentPlugin,
-  runPluginsForEvent,
   type PluginPipelineResult,
+  runPluginsForEvent,
 } from "../plugins";
 import type { AgentEvent } from "./events";
 import type { BufferedAgentRun } from "./run";

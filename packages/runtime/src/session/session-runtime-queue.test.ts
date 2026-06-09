@@ -124,7 +124,9 @@ describe("Agent session runtime input queueing", () => {
 
     await Promise.all([firstCollecting, secondEvents]);
 
-    expect(firstEvents).toContainEqual(steerRuntimeInput("extra", "step-start"));
+    expect(firstEvents).toContainEqual(
+      steerRuntimeInput("extra", "step-start")
+    );
     expect(seenHistory).toEqual([
       [
         userTextToModelMessage(userText("first")),

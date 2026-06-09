@@ -1,8 +1,5 @@
 import type { Tool } from "ai";
-import {
-  describe,
-  expect,
-  it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createInMemoryExecutionHost } from "./execution/memory";
 import {
   drainRun,
@@ -11,18 +8,17 @@ import {
   lastGenerateTextTools,
   loadAgent,
   toolExecutionOptions,
-  } from "./llm-test-utils";
+} from "./llm-test-utils";
 import type { AgentEvent } from "./session/events";
 import type { AgentRun } from "./session/run";
 import { cancelJob } from "./subagent-job-state";
 import { startBackgroundJob } from "./subagent-jobs";
-import type { RuntimeInputSink,
-  Subagent,
-  SubagentJob } from "./subagent-types";
-import { assistantMessage,
+import type { RuntimeInputSink, Subagent, SubagentJob } from "./subagent-types";
+import {
+  assistantMessage,
   createDeferred,
-  userText,
   researcherSubagent,
+  userText,
 } from "./test-fixtures";
 
 describe("background subagent child runs", () => {

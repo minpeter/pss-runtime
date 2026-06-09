@@ -1,32 +1,26 @@
 import type { ToolSet } from "ai";
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   collectRun,
   fakeModel,
   getGenerateTextMock,
   loadAgent,
   toolExecutionOptions,
-  } from "./llm-test-utils";
+} from "./llm-test-utils";
 import {
   backgroundNotificationKey,
   createDurableTestHost,
   resumeBackgroundTask,
   waitForSessionPromptResume,
-  } from "./subagent-background-test-support";
+} from "./subagent-background-test-support";
 import {
   assistantMessage,
   createDeferred,
   eventTypes,
+  researcherSubagent,
   toolCallPart,
   toolResultFor,
   userText,
-  researcherSubagent,
 } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
@@ -208,10 +202,9 @@ describe("background subagent job events", () => {
   it("emits compact background subagent job updates while collecting child events", async () => {
     const Agent = await loadAgent();
     const researcher = researcherSubagent({
-
       model: async () => [assistantMessage("CHILD DONE")],
-
-    });    generateTextMock.mockImplementationOnce(
+    });
+    generateTextMock.mockImplementationOnce(
       async ({ tools }: { tools?: ToolSet }) => {
         const launch = (await tools?.delegate_to_researcher?.execute?.(
           {

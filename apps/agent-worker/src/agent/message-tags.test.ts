@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { wrapPokeMessage, wrapUserMessage } from "./message-tags";
-import { createPokeTagsPlugin, createUserTagsPlugin } from "./message-tags-plugin";
+import {
+  createPokeTagsPlugin,
+  createUserTagsPlugin,
+} from "./message-tags-plugin";
 
 describe("message tags", () => {
   it("wraps user messages", () => {

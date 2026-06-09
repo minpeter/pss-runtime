@@ -1,5 +1,5 @@
-import type { LanguageModel, ToolSet } from "ai";
 import { InMemoryCloudflareDurableObjectStorage } from "@minpeter/pss-runtime/cloudflare";
+import type { LanguageModel, ToolSet } from "ai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { generateTextMock } = vi.hoisted(() => ({
@@ -22,11 +22,11 @@ vi.mock("../agent/config", async (importOriginal) => {
   };
 });
 
-import * as events from "./events";
 import { handleTelegramMessage } from "./handler";
 
 const bindings = {
   AI_API_KEY: "test-key",
+  EXA_API_KEY: "test-exa-key",
 };
 
 function lastGenerateTextTools(): ToolSet {
@@ -37,8 +37,9 @@ function lastGenerateTextTools(): ToolSet {
 }
 
 describe("handleTelegramMessage UX tools", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     generateTextMock.mockReset();
+    const events = await import("./events");
     vi.spyOn(events, "assistantTextFromEvents").mockReturnValue(undefined);
   });
 
@@ -82,10 +83,11 @@ describe("handleTelegramMessage UX tools", () => {
       thread: {
         id: "thread-1",
         addReaction,
-        post: async (message) => {
+        post(message) {
           posts.push(message);
+          return Promise.resolve();
         },
-        startTyping: async () => undefined,
+        startTyping: vi.fn().mockResolvedValue(undefined),
       },
     });
 
@@ -140,6 +142,8 @@ describe("handleTelegramMessage UX tools", () => {
       },
     });
 
-    expect(post).toHaveBeenCalledWith("Draft line one\n\nDraft line two");
+    expect(post).toHaveBeenCalledWith({
+      markdown: "Draft line one\n\nDraft line two",
+    });
   });
 });

@@ -1,22 +1,19 @@
 import type { AgentEvent } from "@minpeter/pss-runtime";
 import {
-  drainAgentRun,
   type CloudflareDurableObjectStorage,
+  drainAgentRun,
 } from "@minpeter/pss-runtime/cloudflare";
 import type { AgentWorkerBindings } from "../agent/config";
 import { createChatAgent } from "../agent/factory";
-
+import { matchesDebugResetCommand, matchesHelpCommand } from "./commands";
 import { assistantTextFromEvents } from "./events";
-import { writeTelegramRoute } from "./route-store";
-import {
-  matchesDebugResetCommand,
-  matchesHelpCommand,
-} from "./commands";
 import {
   debugResetConfirmation,
   helpMarkdown,
+  telegramMarkdownMessage,
 } from "./replies";
 import { telegramReplyBubbles } from "./reply-segments";
+import { writeTelegramRoute } from "./route-store";
 import { sessionKeyForThread, storePrefixForThread } from "./session";
 import { toTelegramUxContext } from "./ux-tools";
 
@@ -31,8 +28,8 @@ export interface TelegramMessageLike {
 }
 
 export interface TelegramThreadLike {
-  readonly id: string;
   addReaction(emoji: string): Promise<void>;
+  readonly id: string;
   post(message: string | { readonly markdown: string }): Promise<unknown>;
   startTyping(status?: string): Promise<unknown>;
 }
@@ -98,9 +95,14 @@ export async function handleTelegramMessage(
     storePrefix,
     userId: options.message.author.userId,
   });
-  const agent = createChatAgent(options.storage, storePrefix, options.bindings, {
-    telegramUx: toTelegramUxContext(options.thread, options.message.id),
-  });
+  const agent = createChatAgent(
+    options.storage,
+    storePrefix,
+    options.bindings,
+    {
+      telegramUx: toTelegramUxContext(options.thread, options.message.id),
+    }
+  );
   const events = await drainAgentRun(
     await agent.session(sessionKey).send(text),
     {
@@ -114,6 +116,6 @@ export async function handleTelegramMessage(
     return;
   }
   for (const bubble of telegramReplyBubbles(reply)) {
-    await options.thread.post(bubble);
+    await options.thread.post(telegramMarkdownMessage(bubble));
   }
 }

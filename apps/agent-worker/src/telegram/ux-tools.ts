@@ -1,10 +1,11 @@
-import { tool, type ToolSet } from "ai";
+import { type ToolSet, tool } from "ai";
 import { z } from "zod";
 import type { TelegramThreadLike } from "./handler";
+import { telegramMarkdownMessage } from "./replies";
 
 export interface TelegramUxContext {
-  readonly thread: TelegramThreadLike;
   readonly messageId: string;
+  readonly thread: TelegramThreadLike;
 }
 
 export function toTelegramUxContext(
@@ -14,15 +15,13 @@ export function toTelegramUxContext(
   return { messageId, thread };
 }
 
-export function createTelegramUxTools(
-  context: TelegramUxContext
-): ToolSet {
+export function createTelegramUxTools(context: TelegramUxContext): ToolSet {
   return {
     display_draft: tool({
       description:
         "Display a long draft reply to the user as a single Telegram message.",
       execute: async ({ text }) => {
-        await context.thread.post(text);
+        await context.thread.post(telegramMarkdownMessage(text));
         return { displayed: true, length: text.length };
       },
       inputSchema: z.object({

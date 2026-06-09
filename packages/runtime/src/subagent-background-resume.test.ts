@@ -1,32 +1,26 @@
 import type { ToolSet } from "ai";
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   fakeModel,
   getGenerateTextMock,
   loadAgent,
   toolExecutionOptions,
-  } from "./llm-test-utils";
+} from "./llm-test-utils";
 import {
   backgroundNotificationKey,
   collectAgentRun,
   createDurableTestHost,
   resumeBackgroundTask,
   waitForSessionPromptResume,
-  } from "./subagent-background-test-support";
+} from "./subagent-background-test-support";
 import {
   assistantMessage,
   createDeferred,
   eventTypes,
   notifyRuntimeInput,
+  researcherSubagent,
   toolCallPart,
   userText,
-  researcherSubagent,
 } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();

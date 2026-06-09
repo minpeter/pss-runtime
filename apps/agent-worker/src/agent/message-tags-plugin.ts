@@ -1,4 +1,8 @@
-import type { AgentPlugin, UserText, UserTextContent } from "@minpeter/pss-runtime";
+import type {
+  AgentPlugin,
+  UserText,
+  UserTextContent,
+} from "@minpeter/pss-runtime";
 import { wrapPokeMessage, wrapUserMessage } from "./message-tags";
 
 function transformUserTextContent(

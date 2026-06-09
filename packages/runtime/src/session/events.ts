@@ -1,7 +1,5 @@
-import type { InputEventMeta } from "./input-meta-types";
 import type { UserInput, UserMessage, UserText } from "./input";
-
-export type { InputEventMeta, InputSource } from "./input-meta-types";
+import type { InputEventMeta } from "./input-meta-types";
 
 export type {
   UserInput,
@@ -15,6 +13,7 @@ export type {
   UserText,
   UserTextContent,
 } from "./input";
+export type { InputEventMeta, InputSource } from "./input-meta-types";
 
 export interface RuntimeInput {
   /**

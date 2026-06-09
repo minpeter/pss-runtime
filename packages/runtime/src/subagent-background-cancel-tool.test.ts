@@ -1,10 +1,4 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createInMemoryExecutionHost } from "./execution/memory";
 import type { ExecutionHost } from "./execution/types";
 import {
@@ -15,12 +9,13 @@ import {
   lastGenerateTextTools,
   loadAgent,
   toolExecutionOptions,
-  } from "./llm-test-utils";
+} from "./llm-test-utils";
 import { resumeBackgroundTask } from "./subagent-background-test-support";
-import { assistantMessage,
+import {
+  assistantMessage,
   createDeferred,
-  userText,
   researcherSubagent,
+  userText,
 } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
@@ -41,14 +36,17 @@ describe("subagent background cancel tool", () => {
   it("background_cancel aborts active job", async () => {
     const Agent = await loadAgent();
     const childGate = new Promise<void>(() => undefined);
-    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
-
-      model: async () => {
-        await childGate;
-        return [assistantMessage("CHILD DONE")];
-      },
-
-    })] });
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          model: async () => {
+            await childGate;
+            return [assistantMessage("CHILD DONE")];
+          },
+        }),
+      ],
+    });
 
     await drainRun(await agent.send(userText("delegate")));
 

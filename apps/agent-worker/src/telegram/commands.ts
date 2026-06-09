@@ -22,10 +22,7 @@ export const telegramBotCommands: readonly TelegramBotCommand[] = [
   },
 ];
 
-export function matchesTelegramCommand(
-  text: string,
-  command: string
-): boolean {
+export function matchesTelegramCommand(text: string, command: string): boolean {
   return commandPattern(command).test(text.trim());
 }
 

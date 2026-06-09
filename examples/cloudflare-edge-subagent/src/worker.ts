@@ -140,8 +140,6 @@ export function createWorkerCoordinator(
         description: "Produces compact research notes for the coordinator.",
         agent: new Agent({
           host,
-          instructions:
-            "Answer delegated prompts in one sentence. Return only the compact result the coordinator needs.",
           model: workerResearcherModel,
           namespace: "cloudflare-worker-researcher",
         }),

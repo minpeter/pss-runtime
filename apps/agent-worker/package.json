@@ -25,6 +25,7 @@
     "@minpeter/pss-web-tools": "workspace:*",
     "ai": "7.0.0-canary.142",
     "chat": "4.30.0",
+    "linkedom": "^0.18.12",
     "zod": "^4.4.3"
   },
   "devDependencies": {

@@ -5,8 +5,8 @@ import {
 import type { CloudflareDurableObjectStorage } from "@minpeter/pss-runtime/cloudflare";
 import { Chat, ConsoleLogger, type Message, type Thread } from "chat";
 import {
-  parseAgentWorkerBindings,
   type AgentWorkerBindings,
+  parseAgentWorkerBindings,
 } from "../agent/config";
 import { handleTelegramMessage, type TelegramThreadLike } from "./handler";
 import { createDurableObjectStateAdapter } from "./state-adapter";
@@ -63,7 +63,9 @@ function createTelegramChat(options: {
   readonly secretToken: string;
   readonly storage: CloudflareDurableObjectStorage;
 }): {
-  readonly bot: Chat<{ readonly telegram: ReturnType<typeof createTelegramAdapter> }>;
+  readonly bot: Chat<{
+    readonly telegram: ReturnType<typeof createTelegramAdapter>;
+  }>;
 } {
   const botToken = readEnv(options.bindings.TELEGRAM_BOT_TOKEN);
   if (!botToken) {

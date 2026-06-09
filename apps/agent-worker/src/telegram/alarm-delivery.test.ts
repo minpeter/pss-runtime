@@ -4,6 +4,27 @@ import {
   deliverAlarmAssistantText,
 } from "./alarm-delivery";
 
+function createTelegramFetchMock(): ReturnType<typeof vi.fn> {
+  return vi.fn().mockResolvedValue({
+    json: async () => ({
+      ok: true,
+      result: {
+        chat: { id: 1, type: "private" },
+        date: 1,
+        from: {
+          first_name: "Bot",
+          id: 2,
+          is_bot: true,
+          username: "pss_agent",
+        },
+        message_id: 1,
+        text: "ok",
+      },
+    }),
+    ok: true,
+  });
+}
+
 describe("alarm delivery", () => {
   it("extracts assistant text from alarm summary events", () => {
     expect(
@@ -24,7 +45,7 @@ describe("alarm delivery", () => {
   });
 
   it("posts telegram follow-up messages for alarm assistant text", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    const fetchMock = createTelegramFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     const bubbles = await deliverAlarmAssistantText({
@@ -56,7 +77,7 @@ describe("alarm delivery", () => {
   });
 
   it("posts block-tagged alarm text as a single telegram message", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    const fetchMock = createTelegramFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     const bubbles = await deliverAlarmAssistantText({

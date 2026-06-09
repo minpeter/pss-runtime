@@ -15,7 +15,7 @@ export async function registerTelegramBotCommandsForToken(
 }
 
 export async function registerTelegramCommandsFromDevVars(): Promise<boolean> {
-  return registerTelegramBotCommandsForToken(
+  return await registerTelegramBotCommandsForToken(
     loadDevVars().TELEGRAM_BOT_TOKEN
   );
 }

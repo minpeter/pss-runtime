@@ -12,13 +12,14 @@ cp apps/agent-worker/.dev.vars.example apps/agent-worker/.dev.vars
 | --- | --- | --- |
 | `TELEGRAM_BOT_TOKEN` | yes | BotFather token |
 | `AI_API_KEY` | yes | LLM API key |
+| `EXA_API_KEY` | yes | Exa API key for `web_search` / `web_fetch` |
 | `WORKER_PUBLIC_URL` | yes for deploy | `https://<worker>.<account>.workers.dev` |
 | `TELEGRAM_WEBHOOK_SECRET` | no | random secret for webhook auth; defaults to bot-token derivation |
 | `AI_BASE_URL` | no | defaults to `https://apis.opengateway.ai/v1` |
 | `AI_MODEL` | no | defaults to `minimax/MiniMax-M2.7` |
 
-The execution agent uses `@minpeter/pss-web-tools` with keyless opensearch routing.
-`web_search` and `web_fetch` need no extra search provider configuration.
+The execution agent uses `@minpeter/pss-web-tools` with Exa search.
+Set `EXA_API_KEY` in `.dev.vars` for local dev and as a Worker secret for deploy.
 
 ## Local dev
 

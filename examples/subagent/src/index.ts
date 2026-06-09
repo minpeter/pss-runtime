@@ -20,22 +20,21 @@ const provider = createOpenAICompatible({
   baseURL: env.AI_BASE_URL,
 });
 const model = provider(env.AI_MODEL);
+const researcher = {
+  description: "Researches facts and returns concise evidence.",
+  agent: new Agent({
+    instructions:
+      "Research facts and return concise evidence. In this example, runtime subagents are specialist agents exposed to the parent model as delegate tools.",
+    model,
+    namespace: "researcher",
+  }),
+  name: "researcher",
+};
 
 const coordinator = new Agent({
   instructions: "Coordinate work and delegate when useful.",
   model,
-  subagents: [
-    {
-      description: "Researches facts and returns concise evidence.",
-      agent: new Agent({
-        instructions:
-          "Research facts and return concise evidence. In this example, runtime subagents are specialist agents exposed to the parent model as delegate tools.",
-        model,
-        namespace: "researcher",
-      }),
-      name: "researcher",
-    },
-  ],
+  subagents: [researcher],
 });
 
 const run = await coordinator.send(

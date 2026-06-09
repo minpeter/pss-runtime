@@ -1,10 +1,10 @@
-import type { OpenSearchClient } from "@minpeter/opensearch";
 import { jsonSchema, type Tool, tool } from "ai";
+import type { WebToolsClient } from "../client-types.js";
 import {
   resolveFetchMaxCharacters,
+  type WebFetchOutput,
   webFetchInputSchema,
   webFetchOutputSchema,
-  type WebFetchOutput,
 } from "../schemas/web-fetch.js";
 
 function readFetchError(error: unknown): string {
@@ -16,7 +16,7 @@ function readFetchError(error: unknown): string {
 }
 
 export function createWebFetchTool(
-  client: OpenSearchClient
+  client: WebToolsClient
 ): Tool<unknown, WebFetchOutput> {
   return tool({
     description:
@@ -33,7 +33,7 @@ export function createWebFetchTool(
       await Promise.all(
         parsed.urls.map(async (url) => {
           try {
-            const result = await client.fetch(url, { maxCharacters });
+            const result = await client.fetchOne(url, { maxCharacters });
             if (Array.isArray(result)) {
               throw new Error("web_fetch expected a single URL result.");
             }

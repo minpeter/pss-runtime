@@ -33,13 +33,10 @@ describe("runPluginsForEvent", () => {
       },
     };
 
-    const result = await runPluginsForEvent(
-      [prefixA, prefixB],
-      {
-        event: { type: "user-text", text: "hello" },
-        history: emptyHistory,
-      }
-    );
+    const result = await runPluginsForEvent([prefixA, prefixB], {
+      event: { type: "user-text", text: "hello" },
+      history: emptyHistory,
+    });
 
     expect(result).toEqual({
       kind: "emit",
