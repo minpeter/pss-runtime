@@ -1,5 +1,11 @@
 import type { ToolSet } from "ai";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi } from "vitest";
 import {
   collectRun,
   drainRun,
@@ -9,8 +15,14 @@ import {
   lastGenerateTextTools,
   loadAgent,
   toolExecutionOptions,
-} from "./llm-test-utils";
-import { assistantMessage, toolCallPart, userText } from "./test-fixtures";
+  } from "./llm-test-utils";
+import {
+  assistantMessage,
+  notifyRuntimeInput,
+  toolCallPart,
+  userText,
+  researcherSubagent,
+} from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
 
@@ -30,15 +42,14 @@ describe("subagent background reminders", () => {
   it("does not expose background child session keys", async () => {
     const Agent = await loadAgent();
     const childGate = new Promise<void>(() => undefined);
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
+
       model: async () => {
         await childGate;
         return [assistantMessage("CHILD DONE")];
       },
-      name: "researcher",
-    });
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    })] });
 
     await drainRun(await agent.send(userText("delegate")));
 
@@ -67,15 +78,14 @@ describe("subagent background reminders", () => {
 
   it("does not enqueue completion reminders when the active job limit is full", async () => {
     const Agent = await loadAgent();
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
+
       model: ({ signal }) =>
         new Promise((resolve) => {
           signal.addEventListener("abort", () => resolve([]), { once: true });
         }),
-      name: "researcher",
-    });
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    })] });
 
     await drainRun(await agent.send(userText("delegate")));
 
@@ -110,12 +120,11 @@ describe("subagent background reminders", () => {
 
   it("injects compact background completion reminder", async () => {
     const Agent = await loadAgent();
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
+
       model: async () => [assistantMessage("CHILD DONE")],
-      name: "researcher",
-    });
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    })] });
 
     await drainRun(await agent.send(userText("delegate")));
 
@@ -142,13 +151,13 @@ describe("subagent background reminders", () => {
 
     expect(reminder).toEqual(
       expect.objectContaining({
+        ...notifyRuntimeInput("", "turn-start"),
         input: {
+          ...notifyRuntimeInput("", "turn-start").input,
           text: expect.stringContaining(
             `Use background_output({ task_id: "${launch.task_id}" })`
           ),
-          type: "user-text",
         },
-        placement: "turn-start",
       })
     );
     expect(reminderText).toEqual(
@@ -168,12 +177,11 @@ describe("subagent background reminders", () => {
 
   it("lets the parent retrieve a ready background result with background_output", async () => {
     const Agent = await loadAgent();
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
+
       model: async () => [assistantMessage("CHILD DONE")],
-      name: "researcher",
-    });
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    })] });
 
     await drainRun(await agent.send(userText("delegate")));
 
@@ -244,12 +252,11 @@ describe("subagent background reminders", () => {
 
   it("does not inject full child trace into parent context", async () => {
     const Agent = await loadAgent();
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
+
       model: async () => [assistantMessage("CHILD TRACE SECRET")],
-      name: "researcher",
-    });
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    })] });
 
     await drainRun(await agent.send(userText("delegate")));
 

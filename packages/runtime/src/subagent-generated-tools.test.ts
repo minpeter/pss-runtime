@@ -1,4 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi } from "vitest";
 import {
   drainRun,
   executableTool,
@@ -7,8 +13,11 @@ import {
   lastGenerateTextTools,
   loadAgent,
   toolExecutionOptions,
-} from "./llm-test-utils";
-import { assistantMessage, userText } from "./test-fixtures";
+  } from "./llm-test-utils";
+import { assistantMessage,
+  userText,
+  researcherSubagent,
+} from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
 
@@ -25,14 +34,79 @@ describe("generated subagent tools", () => {
     vi.restoreAllMocks();
   });
 
+  it("uses custom delegateToolName when provided", async () => {
+    const Agent = await loadAgent();
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          delegateToolName: "sendmessageto_agent",
+          description: "Executes tasks for the parent.",
+          model: async () => [assistantMessage("EXEC DONE")],
+          name: "execution",
+        }),
+      ],
+    });
+
+    await drainRun(await agent.send(userText("delegate")));
+
+    const tools = lastGenerateTextTools();
+    expect(Object.keys(tools).sort()).toEqual([
+      "background_cancel",
+      "background_output",
+      "sendmessageto_agent",
+    ]);
+    expect(tools).not.toHaveProperty("delegate_to_execution");
+  });
+
+  it("wraps delegate prompts when wrapDelegatePrompt is configured", async () => {
+    const Agent = await loadAgent();
+    const childHistories: unknown[] = [];
+    const agent = new Agent({
+      model: fakeModel,
+      subagents: [
+        researcherSubagent({
+          description: "Executes tasks for the parent.",
+          model: ({ history }) => {
+            childHistories.push(history);
+            return Promise.resolve([assistantMessage("EXEC DONE")]);
+          },
+          name: "execution",
+          wrapDelegatePrompt: (input) => {
+            if (
+              typeof input === "object" &&
+              input !== null &&
+              "type" in input &&
+              input.type === "user-text" &&
+              "text" in input &&
+              typeof input.text === "string"
+            ) {
+              return { ...input, text: `<poke>${input.text}</poke>` };
+            }
+            return input;
+          },
+        }),
+      ],
+    });
+
+    await drainRun(await agent.send(userText("delegate")));
+    await executableTool(
+      lastGenerateTextTools(),
+      "delegate_to_execution"
+    ).execute?.({ prompt: "find my todos" }, toolExecutionOptions());
+
+    expect(JSON.stringify(childHistories.at(-1))).toContain(
+      "<poke>find my todos</poke>"
+    );
+  });
+
   it("passes generated delegate and background tools to model", async () => {
     const Agent = await loadAgent();
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
+
       model: async () => [],
-      name: "researcher",
-    });
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    })] });
 
     await drainRun(await agent.send(userText("delegate")));
 
@@ -51,12 +125,11 @@ describe("generated subagent tools", () => {
 
   it("blocking delegation returns compact child text", async () => {
     const Agent = await loadAgent();
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
+
       model: async () => [assistantMessage("CHILD DONE")],
-      name: "researcher",
-    });
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    })] });
 
     await drainRun(await agent.send(userText("delegate")));
 
@@ -81,12 +154,11 @@ describe("generated subagent tools", () => {
 
   it("defaults omitted run_in_background to blocking", async () => {
     const Agent = await loadAgent();
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
+
       model: async () => [assistantMessage("CHILD DONE")],
-      name: "researcher",
-    });
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    })] });
 
     await drainRun(await agent.send(userText("delegate")));
 
@@ -107,15 +179,14 @@ describe("generated subagent tools", () => {
   it("blocking delegation uses parent-scoped child session key", async () => {
     const Agent = await loadAgent();
     const childHistories: unknown[] = [];
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
+
       model: ({ history }) => {
         childHistories.push(history);
         return Promise.resolve([assistantMessage("CHILD DONE")]);
       },
-      name: "researcher",
-    });
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    })] });
 
     await drainRun(await agent.session("parent-a").send(userText("delegate")));
     await executableTool(
@@ -128,13 +199,11 @@ describe("generated subagent tools", () => {
   it("isolates shared subagent sessions between parent agents", async () => {
     const Agent = await loadAgent();
     const childHistories: unknown[] = [];
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const researcher = researcherSubagent({
       model: ({ history }) => {
         childHistories.push(history);
         return Promise.resolve([assistantMessage("CHILD DONE")]);
       },
-      name: "researcher",
     });
     const firstAgent = new Agent({ model: fakeModel, subagents: [researcher] });
     const secondAgent = new Agent({
@@ -164,15 +233,14 @@ describe("generated subagent tools", () => {
   it("blocking delegation uses provided session key suffix", async () => {
     const Agent = await loadAgent();
     const childHistories: unknown[] = [];
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
+
       model: ({ history }) => {
         childHistories.push(history);
         return Promise.resolve([assistantMessage("CHILD DONE")]);
       },
-      name: "researcher",
-    });
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    })] });
 
     await drainRun(await agent.session("parent-a").send(userText("delegate")));
     await executableTool(
@@ -188,15 +256,14 @@ describe("generated subagent tools", () => {
   it("namespaces provided child session keys under the parent session", async () => {
     const Agent = await loadAgent();
     const childHistories: unknown[] = [];
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
+
       model: ({ history }) => {
         childHistories.push(history);
         return Promise.resolve([assistantMessage("CHILD DONE")]);
       },
-      name: "researcher",
-    });
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    })] });
 
     await drainRun(await agent.session("parent-a").send(userText("delegate")));
     await executableTool(
@@ -211,12 +278,11 @@ describe("generated subagent tools", () => {
 
   it("exposes a delegate prompt schema that rejects malformed content parts", async () => {
     const Agent = await loadAgent();
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
+
       model: async () => [assistantMessage("CHILD DONE")],
-      name: "researcher",
-    });
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    })] });
 
     await drainRun(await agent.send(userText("delegate")));
 

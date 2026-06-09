@@ -1,5 +1,10 @@
-import type { AssistantModelMessage, ToolCallPart, ToolModelMessage } from "ai";
+import type { AssistantModelMessage, LanguageModel, ToolCallPart, ToolModelMessage } from "ai";
+import { Agent, type AgentOptions } from "./agent";
+import type { AgentHost } from "./execution/types";
 import type { RuntimeLlm, RuntimeLlmOutput } from "./llm";
+import type { AgentPlugin } from "./plugins";
+import type { AgentInput } from "./session/input";
+import type { SubagentDefinition } from "./subagent-definition";
 import type {
   AgentEvent,
   UserMessage,
@@ -62,7 +67,108 @@ export const userText = (text: UserTextContent): UserText => ({
   text,
 });
 
+export const sentUserText = (text: UserTextContent): UserText => ({
+  meta: { source: "send" },
+  text,
+  type: "user-text",
+});
+
 export const userMessage = (content: UserMessageContent): UserMessage => ({
   type: "user-message",
   content,
 });
+
+export const sentUserMessage = (content: UserMessageContent): UserMessage => ({
+  content,
+  meta: { source: "send" },
+  type: "user-message",
+});
+
+export const steerRuntimeInput = (
+  text: UserTextContent,
+  placement: "step-end" | "step-start" | "turn-start"
+) => ({
+  input: {
+    meta: { source: "steer", streaming: "steer" as const },
+    text,
+    type: "user-text" as const,
+  },
+  meta: { source: "steer" as const, streaming: "steer" as const },
+  placement,
+  type: "runtime-input" as const,
+});
+
+export const notifyRuntimeInput = (
+  text: UserTextContent,
+  placement: "step-end" | "step-start" | "turn-start" = "turn-start"
+) => ({
+  input: {
+    meta: { source: "notify" as const },
+    text,
+    type: "user-text" as const,
+  },
+  meta: { source: "notify" as const },
+  placement,
+  type: "runtime-input" as const,
+});
+
+export const steerRuntimeInputMessage = (
+  content: UserMessageContent,
+  placement: "step-end" | "step-start" | "turn-start"
+) => ({
+  input: {
+    content,
+    meta: { source: "steer" as const, streaming: "steer" as const },
+    type: "user-message" as const,
+  },
+  meta: { source: "steer" as const, streaming: "steer" as const },
+  placement,
+  type: "runtime-input" as const,
+});
+
+export type ResearcherSubagentOverrides = {
+  readonly agent?: Agent;
+  readonly delegateToolName?: string;
+  readonly description?: string;
+  readonly host?: AgentHost;
+  readonly instructions?: string;
+  readonly model?: LanguageModel | RuntimeLlm;
+  readonly name?: string;
+  readonly namespace?: string;
+  readonly plugins?: readonly AgentPlugin[];
+  readonly tools?: import("ai").ToolSet;
+  readonly wrapDelegatePrompt?: (input: AgentInput) => AgentInput;
+};
+
+export function researcherSubagent(
+  overrides: ResearcherSubagentOverrides = {}
+): SubagentDefinition {
+  const name = overrides.name ?? "researcher";
+  const description = overrides.description ?? "Researches facts.";
+  const model = overrides.model ?? ({} as LanguageModel);
+  const sharedOptions = {
+    description,
+    host: overrides.host,
+    name,
+    namespace: overrides.namespace,
+    plugins: overrides.plugins,
+    tools: overrides.tools,
+    wrapDelegatePrompt: overrides.wrapDelegatePrompt,
+  };
+  const agent =
+    overrides.agent ??
+    (typeof model === "function"
+      ? new Agent({ ...sharedOptions, model } as AgentOptions)
+      : new Agent({
+          ...sharedOptions,
+          instructions: overrides.instructions ?? "Research facts.",
+          model,
+        }));
+
+  return {
+    agent,
+    delegateToolName: overrides.delegateToolName,
+    description,
+    name,
+  };
+}

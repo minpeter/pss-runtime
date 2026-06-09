@@ -18,7 +18,13 @@ import {
   type SessionExecutionTerminalStatus,
   startSessionExecutionRun,
 } from "./session-execution";
+import {
+  commitPreUserRuntimeInputs,
+  emitCommittedRuntimeInputs,
+  emitRuntimeInputEvent,
+} from "./runtime-input-emit";
 import { drainRuntimeInput } from "./session-runtime-drain";
+
 import type { SessionState } from "./session-state";
 import { emitTurnErrorAfterRecovery } from "./session-turn-error";
 
@@ -75,7 +81,11 @@ export async function processQueuedInput({
     for (const event of initialEvents) {
       await events.emitRunEvent(run, event);
     }
-    await appendRuntimeInputsToHistory(state, preUserRuntimeInputs);
+    const committedPreUser = await commitPreUserRuntimeInputs(
+      events,
+      state,
+      preUserRuntimeInputs
+    );
     if (input) {
       state.appendUserInput(input);
       await state.commit();
@@ -83,11 +93,11 @@ export async function processQueuedInput({
     await withRuntimeInputWindow(runtimeInput, "turn-start", async () => {
       await events.emitRunBoundaryEvent(run, { type: "turn-start" });
     });
-    await emitPreUserRuntimeInputs(events, run, preUserRuntimeInputs);
+    await emitCommittedRuntimeInputs(events, run, committedPreUser);
     await drainRuntimeInput({
-      emit: (event) =>
-        events.emitRunEvent(run, event).then(() => undefined),
+      events,
       placement: "turn-start",
+      run,
       runtimeInput,
       state,
     });
@@ -147,16 +157,6 @@ function executionStatusForError(error: Error): SessionExecutionTerminalStatus {
     : "error";
 }
 
-async function appendRuntimeInputsToHistory(
-  state: SessionState,
-  runtimeInputs: readonly QueuedRuntimeInput[]
-): Promise<void> {
-  for (const runtimeInput of runtimeInputs) {
-    state.appendUserInput(runtimeInput.input);
-    await state.commit();
-  }
-}
-
 async function closeSuccessfulTurn({
   deactivateRun,
   events,
@@ -178,20 +178,6 @@ async function closeSuccessfulTurn({
   } catch (terminalError) {
     run.emit({ type: "turn-error", message: errorMessage(terminalError) });
     closeRuntimeInput(runtimeInput, "turn-error");
-  }
-}
-
-async function emitPreUserRuntimeInputs(
-  events: SessionEventDispatcher,
-  run: BufferedAgentRun,
-  runtimeInputs: readonly QueuedRuntimeInput[]
-): Promise<void> {
-  for (const runtimeInput of runtimeInputs) {
-    await events.emitRunEvent(run, {
-      input: runtimeInput.input,
-      placement: runtimeInput.placement,
-      type: "runtime-input",
-    });
   }
 }
 
@@ -217,9 +203,9 @@ async function emitTurnEvent({
     await events.emitRunBoundaryEvent(run, event);
   });
   const runtimeInputAdded = await drainRuntimeInput({
-    emit: (runtimeInputEvent) =>
-      events.emitRunEvent(run, runtimeInputEvent).then(() => undefined),
+    events,
     placement: event.type,
+    run,
     runtimeInput,
     state,
   });

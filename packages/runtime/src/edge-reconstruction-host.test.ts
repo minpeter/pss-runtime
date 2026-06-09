@@ -1,9 +1,15 @@
 import type { ToolSet } from "ai";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi } from "vitest";
 import {
   parentSessionNamespace,
   stableAgentNamespace,
-} from "./agent-namespace";
+  } from "./agent-namespace";
 import { createInMemoryExecutionHost } from "./execution/memory";
 import type { ExecutionHost } from "./execution/types";
 import {
@@ -12,13 +18,14 @@ import {
   getGenerateTextMock,
   loadAgent,
   toolExecutionOptions,
-} from "./llm-test-utils";
+  } from "./llm-test-utils";
 import { resumeBackgroundTask } from "./subagent-background-test-support";
 import {
   assistantMessage,
   eventTypes,
   toolCallPart,
   userText,
+  researcherSubagent,
 } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
@@ -48,7 +55,7 @@ describe("edge reconstruction host", () => {
             prompt: "research edge resume",
             run_in_background: true,
           });
-          const launch = (await tools?.delegate_to_researcher?.execute?.(
+    const launch = (await tools?.delegate_to_researcher?.execute?.(
             {
               prompt: "research edge resume",
               run_in_background: true,
@@ -197,18 +204,18 @@ function createCoordinator(
   Agent: typeof import("./agent").Agent,
   host: ExecutionHost
 ): import("./agent").Agent {
-  const researcher = new Agent({
-    description: "Researches one sentence.",
-    model: async () => [assistantMessage("CHILD DONE")],
-    name: "researcher",
-    namespace: "edge-researcher",
-  });
-
   return new Agent({
     host,
     model: fakeModel,
     namespace: "edge-coordinator",
-    subagents: [researcher],
+    subagents: [
+      researcherSubagent({
+        description: "Researches one sentence.",
+        host,
+        model: async () => [assistantMessage("CHILD DONE")],
+        namespace: "edge-researcher",
+      }),
+    ],
   });
 }
 

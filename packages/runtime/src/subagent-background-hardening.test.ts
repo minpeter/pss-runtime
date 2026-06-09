@@ -1,7 +1,19 @@
 import type { LanguageModel, Tool, ToolSet } from "ai";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi } from "vitest";
 import type { AgentEvent } from "./session/events";
-import { assistantMessage, createDeferred, userText } from "./test-fixtures";
+import {
+  assistantMessage,
+  createDeferred,
+  notifyRuntimeInput,
+  userText,
+  researcherSubagent,
+} from "./test-fixtures";
 
 const { generateTextMock } = vi.hoisted(() => ({
   generateTextMock: vi.fn(),
@@ -78,12 +90,11 @@ describe("subagent background hardening", () => {
 
   it("keeps background output compact even when raw event switches are provided", async () => {
     const Agent = await loadAgent();
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
+
       model: async () => [assistantMessage("CHILD DONE")],
-      name: "researcher",
-    });
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    })] });
 
     await drainRun(await agent.send(userText("delegate")));
     const tools = lastGenerateTextTools();
@@ -124,12 +135,11 @@ describe("subagent background hardening", () => {
 
   it("uses background_cancel-specific invalid task id wording", async () => {
     const Agent = await loadAgent();
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
+
       model: async () => [],
-      name: "researcher",
-    });
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    })] });
 
     await drainRun(await agent.send(userText("delegate")));
 
@@ -147,13 +157,11 @@ describe("subagent background hardening", () => {
     const releaseParent = createDeferred();
     const childCanFinish = createDeferred();
     let launchedTaskId = "";
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const researcher = researcherSubagent({
       model: async () => {
         await childCanFinish.promise;
         return [assistantMessage("CHILD DONE")];
       },
-      name: "researcher",
     });
     generateTextMock.mockImplementationOnce(
       async ({ tools }: { readonly tools?: ToolSet }) => {
@@ -175,7 +183,6 @@ describe("subagent background hardening", () => {
       responseMessages: [assistantMessage("SECOND DONE")],
     });
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });
-
     const firstRun = await agent.send(userText("first"));
     const firstEvents = collectRun(firstRun);
     await firstParentStep.promise;
@@ -194,13 +201,13 @@ describe("subagent background hardening", () => {
 
     expect(reminder).toEqual(
       expect.objectContaining({
+        ...notifyRuntimeInput("", "turn-start"),
         input: {
+          ...notifyRuntimeInput("", "turn-start").input,
           text: expect.stringContaining(
             `Use background_output({ task_id: "${launchedTaskId}" })`
           ),
-          type: "user-text",
         },
-        placement: "turn-start",
       })
     );
   });

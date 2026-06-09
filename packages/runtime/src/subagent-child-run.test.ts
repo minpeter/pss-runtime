@@ -1,9 +1,15 @@
 import type { Tool } from "ai";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi } from "vitest";
 import {
   parentSessionNamespace,
   stableAgentNamespace,
-} from "./agent-namespace";
+  } from "./agent-namespace";
 import { createInMemoryExecutionHost } from "./execution/memory";
 import {
   drainRun,
@@ -13,8 +19,12 @@ import {
   lastGenerateTextTools,
   loadAgent,
   toolExecutionOptions,
-} from "./llm-test-utils";
-import { assistantMessage, createDeferred, userText } from "./test-fixtures";
+  } from "./llm-test-utils";
+import { assistantMessage,
+  createDeferred,
+  userText,
+  researcherSubagent,
+} from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
 
@@ -36,22 +46,21 @@ describe("subagent child runs", () => {
     const childGate = createDeferred();
     const host = createInMemoryExecutionHost();
     let childCalls = 0;
-    const researcher = new Agent({
-      description: "Researches facts.",
-      model: async () => {
-        childCalls += 1;
-        await childGate.promise;
-        return [assistantMessage("CHILD DONE")];
-      },
-      name: "researcher",
-    });
     const agent = new Agent({
       host,
       model: fakeModel,
       namespace: "dedupe-parent",
-      subagents: [researcher],
+      subagents: [
+        researcherSubagent({
+          host,
+          model: async () => {
+            childCalls += 1;
+            await childGate.promise;
+            return [assistantMessage("CHILD DONE")];
+          },
+        }),
+      ],
     });
-
     const parentRunId = testParentRunId("dedupe-parent", "parent");
     await drainRun(await agent.session("parent").send(userText("delegate")));
     const delegate = executableTool(
@@ -110,15 +119,13 @@ describe("subagent child runs", () => {
     const host = createInMemoryExecutionHost();
     let childCalls = 0;
     const makeAgent = (namespace: string) => {
-      const researcher = new Agent({
-        description: "Researches facts.",
+      const researcher = researcherSubagent({
+        host,
         model: () => {
           childCalls += 1;
           return Promise.resolve([assistantMessage(`CHILD DONE ${namespace}`)]);
         },
-        name: "researcher",
-      });
-      return new Agent({
+      });      return new Agent({
         host,
         model: fakeModel,
         namespace,

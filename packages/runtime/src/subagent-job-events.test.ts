@@ -1,18 +1,25 @@
 import type { ToolSet } from "ai";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi } from "vitest";
 import {
   collectRun,
   fakeModel,
   getGenerateTextMock,
   loadAgent,
   toolExecutionOptions,
-} from "./llm-test-utils";
+  } from "./llm-test-utils";
 import {
   assistantMessage,
   eventTypes,
   toolCallPart,
   toolResultFor,
   userText,
+  researcherSubagent,
 } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
@@ -33,12 +40,11 @@ describe("subagent job events", () => {
 
   it("emits subagent job lifecycle events while executing generated tools", async () => {
     const Agent = await loadAgent();
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const researcher = researcherSubagent({
+
       model: async () => [assistantMessage("CHILD DONE")],
-      name: "researcher",
-    });
-    generateTextMock.mockImplementationOnce(
+
+    });    generateTextMock.mockImplementationOnce(
       async ({ tools }: { tools?: ToolSet }) => {
         await tools?.delegate_to_researcher?.execute?.(
           { prompt: "research this" },
@@ -51,7 +57,6 @@ describe("subagent job events", () => {
       }
     );
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });
-
     const events = await collectRun(await agent.send(userText("delegate")));
     const start = events.find((event) => event.type === "subagent-job-start");
     const end = events.find((event) => event.type === "subagent-job-end");
@@ -93,12 +98,11 @@ describe("subagent job events", () => {
         prompt: "research this",
       }
     );
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const researcher = researcherSubagent({
+
       model: async () => [assistantMessage("CHILD DONE")],
-      name: "researcher",
-    });
-    generateTextMock.mockImplementationOnce(
+
+    });    generateTextMock.mockImplementationOnce(
       async ({ tools }: { tools?: ToolSet }) => {
         await tools?.delegate_to_researcher?.execute?.(
           { prompt: "research this" },
@@ -116,7 +120,6 @@ describe("subagent job events", () => {
       }
     );
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });
-
     const events = await collectRun(await agent.send(userText("delegate")));
 
     expect(eventTypes(events)).toEqual([
@@ -137,12 +140,11 @@ describe("subagent job events", () => {
 
   it("keeps buffered subagent lifecycle events visible when the parent model call fails", async () => {
     const Agent = await loadAgent();
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const researcher = researcherSubagent({
+
       model: async () => [assistantMessage("CHILD DONE")],
-      name: "researcher",
-    });
-    generateTextMock.mockImplementationOnce(
+
+    });    generateTextMock.mockImplementationOnce(
       async ({ tools }: { tools?: ToolSet }) => {
         await tools?.delegate_to_researcher?.execute?.(
           { prompt: "research this" },
@@ -152,7 +154,6 @@ describe("subagent job events", () => {
       }
     );
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });
-
     const events = await collectRun(await agent.send(userText("delegate")));
 
     expect(eventTypes(events)).toEqual([

@@ -1,5 +1,8 @@
 import type { Tool } from "ai";
-import { describe, expect, it } from "vitest";
+import {
+  describe,
+  expect,
+  it } from "vitest";
 import { createInMemoryExecutionHost } from "./execution/memory";
 import {
   drainRun,
@@ -8,12 +11,17 @@ import {
   lastGenerateTextTools,
   loadAgent,
   toolExecutionOptions,
-} from "./llm-test-utils";
+  } from "./llm-test-utils";
 import type { AgentEvent } from "./session/events";
 import type { AgentRun } from "./session/run";
 import { startBackgroundJob } from "./subagent-jobs";
-import type { RuntimeInputSink, Subagent, SubagentJob } from "./subagent-types";
-import { assistantMessage, userText } from "./test-fixtures";
+import type { RuntimeInputSink,
+  Subagent,
+  SubagentJob } from "./subagent-types";
+import { assistantMessage,
+  userText,
+  researcherSubagent,
+} from "./test-fixtures";
 
 describe("durable background subagent child runs", () => {
   it("queued durable background launches replay without rerunning child work", async () => {
@@ -24,16 +32,14 @@ describe("durable background subagent child runs", () => {
     };
     let childCalls = 0;
     const makeAgent = () => {
-      const researcher = new Agent({
-        description: "Researches facts.",
+      const researcher = researcherSubagent({
+        host,
         model: () => {
           childCalls += 1;
           return Promise.resolve([assistantMessage("CHILD DONE")]);
         },
-        name: "researcher",
         namespace: "qa-active-researcher",
-      });
-      return new Agent({
+      });      return new Agent({
         host,
         model: fakeModel,
         namespace: "qa-active-parent",
@@ -80,16 +86,14 @@ describe("durable background subagent child runs", () => {
     };
     let childCalls = 0;
     const makeAgent = () => {
-      const researcher = new Agent({
-        description: "Researches facts.",
+      const researcher = researcherSubagent({
+        host,
         model: () => {
           childCalls += 1;
           return Promise.resolve([assistantMessage("CHILD DONE")]);
         },
-        name: "researcher",
         namespace: "qa-researcher",
-      });
-      return new Agent({
+      });      return new Agent({
         host,
         model: fakeModel,
         namespace: "qa-parent",

@@ -2,6 +2,7 @@ import type { RuntimeLlm } from "../llm";
 import type { AgentPlugin } from "../plugins";
 import type { AgentEvent } from "./events";
 import type { AgentInput, UserInput } from "./input";
+import { attachInputMeta, userInputFromEvent } from "./input-meta";
 import { normalizeAgentInput } from "./input-normalization";
 import { type AgentRun, BufferedAgentRun } from "./run";
 import {
@@ -77,12 +78,24 @@ export class AgentSession {
     const runtimeInput = createRuntimeInputState(
       this.#pendingRuntimeInputs.splice(0)
     );
-    const acceptedInput = normalizeAgentInput(input);
+    const acceptedInput = attachInputMeta(normalizeAgentInput(input), {
+      source: "send",
+    });
     const run = new BufferedAgentRun();
-    await this.#events.emitRunEvent(run, acceptedInput);
+    const emitted = await this.#events.emitRunEvent(run, acceptedInput);
+    if (emitted === "handled") {
+      run.close();
+      return run;
+    }
+
+    const queuedInput = userInputFromEvent(
+      emitted.type === "user-text" || emitted.type === "user-message"
+        ? emitted
+        : acceptedInput
+    );
     this.#inputQueue.push({
       initialEvents: [],
-      input: structuredClone(acceptedInput),
+      input: structuredClone(queuedInput),
       preUserRuntimeInputs: [],
       run,
       runtimeInput,

@@ -118,25 +118,32 @@ continuation state, not a public history API.
 
 ## Subagents
 
-Compose specialist agents by constructing them first and passing them as an
-array. Top-level agents may omit metadata, but agents used as subagents need a
-stable `name` and `description` so the runtime can expose clear model-facing
-delegate tools.
+Compose specialist agents by passing `SubagentDefinition` wrappers on the
+parent `Agent`. Each wrapper carries delegation metadata (`name`,
+`description`, optional `delegateToolName`) and a nested `agent: new Agent(...)`
+with the child instructions, model, tools, namespace, and other runtime config.
 
 ```ts
-const researcher = new Agent({
-  name: "researcher",
-  description: "Researches facts and returns concise evidence.",
-  model,
-  instructions: "Research facts and return concise evidence.",
-});
-
 const coordinator = new Agent({
   model,
   instructions: "Coordinate work and delegate when useful.",
-  subagents: [researcher],
+  subagents: [
+    {
+      name: "researcher",
+      description: "Researches facts and returns concise evidence.",
+      agent: new Agent({
+        name: "researcher",
+        instructions: "Research facts and return concise evidence.",
+        model,
+      }),
+    },
+  ],
 });
 ```
+
+Put child-only options such as `instructions`, `tools`, `wrapDelegatePrompt`,
+`host`, `namespace`, and `plugins` on the nested `agent`. The wrapper `name`
+must match `agent.name`.
 
 For each subagent, the parent model receives a generated
 `delegate_to_<name>` tool. The tool accepts `prompt`, optional `description`,

@@ -5,6 +5,7 @@ import {
   assistantMessage,
   createDeferred,
   eventTypes,
+  sentUserText,
   userText,
 } from "../test-fixtures";
 import { userTextToModelMessage } from "./mapping";
@@ -79,7 +80,7 @@ describe("Agent session lifecycle", () => {
 
     await expect(iterator.next()).resolves.toEqual({
       done: false,
-      value: { type: "user-text", text: "initial" },
+      value: sentUserText("initial"),
     });
     await expect(iterator.return?.()).resolves.toEqual({
       done: true,
@@ -99,7 +100,7 @@ describe("Agent session lifecycle", () => {
     const events = await collect(await agent.send("fail"));
 
     expect(events).toEqual([
-      { type: "user-text", text: "fail" },
+      sentUserText("fail"),
       { type: "turn-start" },
       { type: "step-start" },
       { type: "turn-error", message: "model unavailable" },

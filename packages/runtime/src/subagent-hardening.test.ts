@@ -1,6 +1,16 @@
 import type { LanguageModel, Tool, ToolSet } from "ai";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { assistantMessage, createDeferred, userText } from "./test-fixtures";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi } from "vitest";
+import { assistantMessage,
+  createDeferred,
+  userText,
+  researcherSubagent,
+} from "./test-fixtures";
 
 const { generateTextMock } = vi.hoisted(() => ({
   generateTextMock: vi.fn(),
@@ -70,8 +80,8 @@ describe("subagent hardening", () => {
     const Agent = await loadAgent();
     const childStarted = createDeferred();
     const childAborted = createDeferred();
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
+
       model: ({ signal }) =>
         new Promise((resolve) => {
           childStarted.resolve();
@@ -84,9 +94,8 @@ describe("subagent hardening", () => {
             { once: true }
           );
         }),
-      name: "researcher",
-    });
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    })] });
     const abort = new AbortController();
 
     await drainRun(await agent.send(userText("delegate")));
@@ -111,15 +120,14 @@ describe("subagent hardening", () => {
   it("does not start background child work when the tool signal is already aborted", async () => {
     const Agent = await loadAgent();
     let childStarts = 0;
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
+
       model: () => {
         childStarts += 1;
         return Promise.resolve([assistantMessage("SHOULD NOT START")]);
       },
-      name: "researcher",
-    });
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    })] });
     const abort = new AbortController();
     abort.abort();
 
@@ -144,15 +152,14 @@ describe("subagent hardening", () => {
   it("rejects malformed delegate prompts before child sessions receive them", async () => {
     const Agent = await loadAgent();
     let childStarts = 0;
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
+
       model: () => {
         childStarts += 1;
         return Promise.resolve([assistantMessage("SHOULD NOT START")]);
       },
-      name: "researcher",
-    });
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    })] });
 
     await drainRun(await agent.send(userText("delegate")));
 

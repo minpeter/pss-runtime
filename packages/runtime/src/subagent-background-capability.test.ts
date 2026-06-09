@@ -1,4 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi } from "vitest";
 import { createInMemoryExecutionHost } from "./execution/memory";
 import {
   drainRun,
@@ -8,7 +14,7 @@ import {
   lastGenerateTextTools,
   loadAgent,
   toolExecutionOptions,
-} from "./llm-test-utils";
+  } from "./llm-test-utils";
 import { MemorySessionStore } from "./session/store/memory";
 import type {
   CommitResult,
@@ -16,8 +22,11 @@ import type {
   SessionStore,
   SessionStoreCommit,
   StoredSession,
-} from "./session/store/types";
-import { assistantMessage, userText } from "./test-fixtures";
+  } from "./session/store/types";
+import { assistantMessage,
+  userText,
+  researcherSubagent,
+} from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
 
@@ -56,13 +65,13 @@ describe("subagent background capability", () => {
 
   it("hides background tools when the host has no background capability", async () => {
     const Agent = await loadAgent();
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const host = { sessionStore: new SessionOnlyStore() };
+    const researcher = researcherSubagent({
+      host,
       model: async () => [assistantMessage("CHILD DONE")],
-      name: "researcher",
     });
     const agent = new Agent({
-      host: { sessionStore: new SessionOnlyStore() },
+      host,
       model: fakeModel,
       subagents: [researcher],
     });
@@ -85,16 +94,16 @@ describe("subagent background capability", () => {
 
   it("hides background tools when a durable host lacks execution storage", async () => {
     const Agent = await loadAgent();
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const host = {
+      capabilities: { backgroundSubagents: "durable" as const },
+      sessionStore: new SessionOnlyStore(),
+    };
+    const researcher = researcherSubagent({
+      host,
       model: async () => [assistantMessage("CHILD DONE")],
-      name: "researcher",
     });
     const agent = new Agent({
-      host: {
-        capabilities: { backgroundSubagents: "durable" },
-        sessionStore: new SessionOnlyStore(),
-      },
+      host,
       model: fakeModel,
       subagents: [researcher],
     });
@@ -117,20 +126,20 @@ describe("subagent background capability", () => {
 
   it("hides background tools when a durable host has only session storage and a scheduler", async () => {
     const Agent = await loadAgent();
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const host = {
+      backgroundScheduler: {
+        enqueueRun: async () => undefined,
+        resumeSession: async () => undefined,
+      },
+      capabilities: { backgroundSubagents: "durable" as const },
+      sessionStore: new SessionOnlyStore(),
+    };
+    const researcher = researcherSubagent({
+      host,
       model: async () => [assistantMessage("CHILD DONE")],
-      name: "researcher",
     });
     const agent = new Agent({
-      host: {
-        backgroundScheduler: {
-          enqueueRun: async () => undefined,
-          resumeSession: async () => undefined,
-        },
-        capabilities: { backgroundSubagents: "durable" },
-        sessionStore: new SessionOnlyStore(),
-      },
+      host,
       model: fakeModel,
       subagents: [researcher],
     });
@@ -155,11 +164,11 @@ describe("subagent background capability", () => {
     const Agent = await loadAgent();
     const baseHost = createInMemoryExecutionHost();
     const scheduledRunIds: string[] = [];
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const researcher = researcherSubagent({
+
       host: baseHost,
       model: async () => [assistantMessage("CHILD DONE")],
-      name: "researcher",
+
     });
     const agent = new Agent({
       host: {

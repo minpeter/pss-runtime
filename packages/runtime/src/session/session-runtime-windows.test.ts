@@ -1,7 +1,13 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
-import { assistantMessage, eventTypes, userText } from "../test-fixtures";
+import {
+  assistantMessage,
+  eventTypes,
+  sentUserText,
+  steerRuntimeInput,
+  userText,
+} from "../test-fixtures";
 import type { AgentEvent } from "./events";
 import { userTextToModelMessage } from "./mapping";
 import { collect } from "./session.test-support";
@@ -111,21 +117,11 @@ describe("Agent session runtime input windows", () => {
       "step-end",
       "turn-end",
     ]);
-    expect(events).toContainEqual({
-      type: "runtime-input",
-      input: { type: "user-text", text: "turn runtime" },
-      placement: "turn-start",
-    });
-    expect(events).toContainEqual({
-      type: "runtime-input",
-      input: { type: "user-text", text: "step runtime" },
-      placement: "step-start",
-    });
-    expect(events).toContainEqual({
-      type: "runtime-input",
-      input: { type: "user-text", text: "step-end runtime" },
-      placement: "step-end",
-    });
+    expect(events).toContainEqual(steerRuntimeInput("turn runtime", "turn-start"));
+    expect(events).toContainEqual(steerRuntimeInput("step runtime", "step-start"));
+    expect(events).toContainEqual(
+      steerRuntimeInput("step-end runtime", "step-end")
+    );
     expect(seenHistory).toEqual([firstStepHistory, secondStepHistory]);
     expect(trace).toEqual([
       "plugin:user-text",
@@ -200,19 +196,11 @@ describe("Agent session runtime input windows", () => {
       ],
     ]);
     expect(events).toEqual([
-      { type: "user-text", text: "original" },
+      sentUserText("original"),
       { type: "turn-start" },
-      {
-        type: "runtime-input",
-        input: { type: "user-text", text: "turn runtime" },
-        placement: "turn-start",
-      },
+      steerRuntimeInput("turn runtime", "turn-start"),
       { type: "step-start" },
-      {
-        type: "runtime-input",
-        input: { type: "user-text", text: "step runtime" },
-        placement: "step-start",
-      },
+      steerRuntimeInput("step runtime", "step-start"),
       { type: "assistant-text", text: "DONE" },
       { type: "step-end" },
       { type: "turn-end" },

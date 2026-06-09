@@ -1,5 +1,6 @@
 import type { AgentEvent } from "./events";
 import type { AgentInput } from "./input";
+import { attachInputMeta } from "./input-meta";
 import { normalizeAgentInput } from "./input-normalization";
 import { type AgentRun, BufferedAgentRun } from "./run";
 import {
@@ -30,7 +31,7 @@ export function queueSessionNotification(
   state: QueueSessionNotificationOptions
 ): AgentRun {
   const queuedRuntimeInput: QueuedRuntimeInput = {
-    input: normalizeAgentInput(input),
+    input: attachInputMeta(normalizeAgentInput(input), { source: "notify" }),
     placement: "turn-start",
   };
   const observerEvents = cloneObserverEvents(options.observerEvents ?? []);

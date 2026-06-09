@@ -1,8 +1,15 @@
 import type { ToolSet } from "ai";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi } from "vitest";
 import type { Agent } from "./agent";
+import type { SubagentDefinition } from "./subagent-definition";
 import { createInMemoryExecutionHost } from "./execution/memory";
-import type { ExecutionHost, ResumeSessionOptions } from "./execution/types";
+import type { ExecutionHost,
+  ResumeSessionOptions } from "./execution/types";
 import {
   drainRun,
   executableTool,
@@ -11,9 +18,12 @@ import {
   lastGenerateTextTools,
   loadAgent,
   toolExecutionOptions,
-} from "./llm-test-utils";
+  } from "./llm-test-utils";
 import type { AgentRun } from "./session/run";
-import { assistantMessage, userText } from "./test-fixtures";
+import { assistantMessage,
+  userText,
+  researcherSubagent,
+} from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
 const notificationRunPattern = /^notification:/;
@@ -44,13 +54,12 @@ describe("durable background subagent scheduling", () => {
     const AgentClass = await loadAgent();
     const host = createDurableSchedulerHost();
     let childCalls = 0;
-    const researcher = new AgentClass({
-      description: "Researches facts.",
+    const researcher = researcherSubagent({
+      host,
       model: () => {
         childCalls += 1;
         return Promise.resolve([assistantMessage("CHILD DONE")]);
       },
-      name: "researcher",
       namespace: "durable-scheduled-researcher",
     });
     const parent = createParentAgent(AgentClass, host, researcher);
@@ -78,10 +87,9 @@ describe("durable background subagent scheduling", () => {
   it("parent delete cancels live-path queued durable background child runs", async () => {
     const AgentClass = await loadAgent();
     const host = createDurableSchedulerHost();
-    const researcher = new AgentClass({
-      description: "Researches facts.",
+    const researcher = researcherSubagent({
+      host,
       model: async () => [assistantMessage("CHILD DONE")],
-      name: "researcher",
       namespace: "durable-delete-researcher",
     });
     const parent = createParentAgent(AgentClass, host, researcher);
@@ -108,13 +116,13 @@ describe("durable background subagent scheduling", () => {
     const host = createDurableSchedulerHost();
     let childCalls = 0;
     const makeResearcher = () =>
-      new AgentClass({
-        description: "Researches facts.",
+
+      researcherSubagent({
+        host,
         model: () => {
           childCalls += 1;
           return Promise.resolve([assistantMessage("CHILD DONE")]);
         },
-        name: "researcher",
         namespace: "durable-resume-researcher",
       });
     const parent = createParentAgent(AgentClass, host, makeResearcher());
@@ -197,7 +205,7 @@ function assertBackgroundLaunch(value: unknown): { readonly task_id: string } {
 function createParentAgent(
   AgentClass: typeof Agent,
   host: ExecutionHost,
-  researcher: Agent
+  researcher: SubagentDefinition
 ): Agent {
   return new AgentClass({
     host,

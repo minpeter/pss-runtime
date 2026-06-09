@@ -1,7 +1,13 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
-import { assistantMessage, userText } from "../test-fixtures";
+import {
+  assistantMessage,
+  sentUserText,
+  steerRuntimeInput,
+  steerRuntimeInputMessage,
+  userText,
+} from "../test-fixtures";
 import type { AgentEvent } from "./events";
 import { userTextToModelMessage } from "./mapping";
 
@@ -40,16 +46,12 @@ describe("Agent session runtime input continuation", () => {
       ],
     ]);
     expect(events).toEqual([
-      { type: "user-text", text: "initial user" },
+      sentUserText("initial user"),
       { type: "turn-start" },
       { type: "step-start" },
       { type: "assistant-text", text: "This could be final." },
       { type: "step-end" },
-      {
-        type: "runtime-input",
-        input: { type: "user-text", text: "extra" },
-        placement: "step-end",
-      },
+      steerRuntimeInput("extra", "step-end"),
       { type: "step-start" },
       { type: "assistant-text", text: "DONE" },
       { type: "step-end" },
@@ -91,11 +93,7 @@ describe("Agent session runtime input continuation", () => {
     }
 
     expect(runtimeInputs).toEqual([
-      {
-        type: "runtime-input",
-        input: { type: "user-message", content: input },
-        placement: "step-start",
-      },
+      steerRuntimeInputMessage(input, "step-start"),
     ]);
     expect(seenHistory).toEqual([
       [

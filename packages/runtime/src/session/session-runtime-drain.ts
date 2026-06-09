@@ -1,31 +1,40 @@
-import type { RuntimeInput } from "./events";
+import {
+  emitRuntimeInputEvent,
+  runtimeInputEventFromQueued,
+} from "./runtime-input-emit";
 import {
   type RuntimeInputPlacement,
   type RuntimeInputState,
+  type QueuedRuntimeInput,
   shiftRuntimeInput,
 } from "./runtime-input";
+import type { SessionEventDispatcher } from "./session-events";
 import type { SessionState } from "./session-state";
+import type { BufferedAgentRun } from "./run";
 
 export async function drainRuntimeInput({
-  emit,
+  events,
   placement,
+  run,
   runtimeInput,
   state,
 }: {
-  readonly emit: (event: RuntimeInput) => Promise<void>;
+  readonly events: SessionEventDispatcher;
   readonly placement: RuntimeInputPlacement;
+  readonly run: BufferedAgentRun;
   readonly runtimeInput: RuntimeInputState;
   readonly state: SessionState;
 }): Promise<boolean> {
   let added = false;
   let next = shiftRuntimeInput(runtimeInput, placement);
   while (next) {
-    added = true;
-    await emit({ type: "runtime-input", input: next.input, placement });
-    state.appendUserInput(next.input);
-    await state.commit();
+    if (await emitRuntimeInputEvent(events, run, state, next)) {
+      added = true;
+    }
     next = shiftRuntimeInput(runtimeInput, placement);
   }
 
   return added;
 }
+
+export { runtimeInputEventFromQueued };

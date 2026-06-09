@@ -7,9 +7,11 @@ import {
   stableAgentNamespace,
 } from "./agent-namespace";
 import {
+  type AgentConstructionOptions,
   type AgentModelOptions,
   type AgentOptions,
   assertAgentOptions,
+  hasLanguageModel,
   hasRuntimeModel,
 } from "./agent-options";
 import { resumeAgentRun } from "./agent-resume";
@@ -29,6 +31,7 @@ import {
   type NotifyOptions,
 } from "./session/session";
 import type { SessionStore } from "./session/store/types";
+import { type RegisteredSubagent, registerSubagents } from "./subagent-register";
 import { createSubagentTools } from "./subagents";
 
 export type { AgentOptions } from "./agent-options";
@@ -46,27 +49,40 @@ export class Agent {
   readonly #store: SessionStore;
   readonly #host: AgentHost;
   readonly #plugins: readonly AgentPlugin[];
-  readonly #subagents: readonly Agent[];
+  readonly #subagents: readonly RegisteredSubagent[];
   readonly description?: string;
+  readonly host: AgentHost;
   readonly name?: string;
+  readonly subagentCount: number;
+  readonly wrapDelegatePrompt?: (input: AgentInput) => AgentInput;
 
-  constructor(options: AgentOptions) {
+  constructor(options: AgentConstructionOptions) {
     assertAgentOptions(options);
 
     this.description = options.description;
     this.name = options.name;
+    this.wrapDelegatePrompt =
+      "wrapDelegatePrompt" in options
+        ? options.wrapDelegatePrompt
+        : undefined;
     this.#sessionNamespace = stableAgentNamespace({
       name: options.name,
       namespace: options.namespace,
     });
     this.#host = options.host ?? createInMemoryExecutionHost();
+    this.host = this.#host;
     this.#store = sessionStoreForHost(this.#host);
     this.#plugins = options.plugins ?? [];
-    assertSubagents(options, Agent, hasRuntimeModel(options));
-    this.#subagents = hasRuntimeModel(options) ? [] : (options.subagents ?? []);
+    if (options.subagents !== undefined) {
+      assertSubagents(options, Agent, hasRuntimeModel(options));
+      this.#subagents = registerSubagents(options.subagents);
+    } else {
+      this.#subagents = [];
+    }
+    this.subagentCount = this.#subagents.length;
     if (hasRuntimeModel(options)) {
       this.#llm = options.model;
-    } else {
+    } else if (hasLanguageModel(options)) {
       this.#baseTools = options.tools;
       this.#modelOptions = {
         instructions: options.instructions,

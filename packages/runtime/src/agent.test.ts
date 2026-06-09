@@ -2,6 +2,7 @@ import type { LanguageModel } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent, type AgentOptions } from "./agent";
 import type { RuntimeLlm } from "./llm";
+import { researcherSubagent } from "./test-fixtures";
 
 const fakeModel = {} as LanguageModel;
 const fakeRuntimeModel: RuntimeLlm = () => Promise.resolve([]);
@@ -14,8 +15,12 @@ const existingToolCollisionPattern = /collides with an existing tool/;
 const objectMapSubagentsPattern = /subagents must be an array/;
 const reservedToolCollisionPattern = /collides with a reserved subagent tool/;
 const subagentMetadataPattern = /subagents\[0\].name/;
+const subagentFlatFieldPattern = /must be set on the nested agent/;
 const subagentNameLengthPattern = /too long/;
 const subagentsOnRuntimeModelPattern = /subagents require an AI SDK model/;
+const subagentUnwrappedPattern =
+  /SubagentDefinition wrappers with an agent field, not raw Agent instances/;
+const subagentNameMismatchPattern = /name must match/;
 
 const acceptsModelOptions: AgentOptions = {
   instructions: "Use the injected model.",
@@ -30,13 +35,7 @@ const acceptsRuntimeModelOptions: AgentOptions = {
 };
 const acceptsModelSubagentsOptions: AgentOptions = {
   model: fakeModel,
-  subagents: [
-    new Agent({
-      description: "Researches facts.",
-      model: fakeRuntimeModel,
-      name: "researcher",
-    }),
-  ],
+  subagents: [researcherSubagent({ model: fakeRuntimeModel })],
 };
 
 type AssertFalse<T extends false> = T;
@@ -124,24 +123,29 @@ describe("Agent", () => {
   });
 
   it("accepts array subagents with child metadata while main metadata is omitted", () => {
-    const researcher = new Agent({
-      description: "Researches facts.",
-      model: fakeRuntimeModel,
-      name: "researcher",
-    });
-
     expect(
       new Agent({
         model: fakeModel,
-        subagents: [researcher],
+        subagents: [researcherSubagent({ model: fakeRuntimeModel })],
       })
     ).toBeInstanceOf(Agent);
   });
 
   it("rejects object-map subagents", () => {
-    const researcher = new Agent({
+    expect(
+      () =>
+        new Agent({
+          model: fakeModel,
+          subagents: { researcher: researcherSubagent() },
+        } as unknown as AgentOptions)
+    ).toThrow(objectMapSubagentsPattern);
+  });
+
+  it("rejects unwrapped Agent instances in subagents", () => {
+    const child = new Agent({
       description: "Researches facts.",
-      model: fakeRuntimeModel,
+      instructions: "Research facts.",
+      model: fakeModel,
       name: "researcher",
     });
 
@@ -149,106 +153,127 @@ describe("Agent", () => {
       () =>
         new Agent({
           model: fakeModel,
-          subagents: { researcher },
+          subagents: [child],
         } as unknown as AgentOptions)
-    ).toThrow(objectMapSubagentsPattern);
+    ).toThrow(subagentUnwrappedPattern);
   });
 
   it("requires child subagent metadata", () => {
-    const unnamed = new Agent({ model: fakeRuntimeModel });
-
     expect(
       () =>
         new Agent({
           model: fakeModel,
-          subagents: [unnamed],
+          subagents: [
+            {
+              agent: new Agent({
+                instructions: "Research facts.",
+                model: fakeModel,
+                name: "researcher",
+              }),
+              description: "Researches facts.",
+              name: "",
+            },
+          ],
         })
     ).toThrow(subagentMetadataPattern);
   });
 
+  it("rejects flat instructions on the wrapper", () => {
+    expect(
+      () =>
+        new Agent({
+          model: fakeModel,
+          subagents: [
+            {
+              agent: new Agent({
+                instructions: "Research facts.",
+                model: fakeModel,
+                name: "researcher",
+              }),
+              description: "Researches facts.",
+              instructions: "Research facts.",
+              name: "researcher",
+            },
+          ],
+        } as unknown as AgentOptions)
+    ).toThrow(subagentFlatFieldPattern);
+  });
+
+  it("rejects wrapper and nested agent name mismatches", () => {
+    expect(
+      () =>
+        new Agent({
+          model: fakeModel,
+          subagents: [
+            {
+              agent: new Agent({
+                instructions: "Research facts.",
+                model: fakeModel,
+                name: "other",
+              }),
+              description: "Researches facts.",
+              name: "researcher",
+            },
+          ],
+        })
+    ).toThrow(subagentNameMismatchPattern);
+  });
+
   it("rejects subagent names that exceed generated tool name limits", () => {
     const longName = `a${"b".repeat(52)}`;
-    const researcher = new Agent({
-      description: "Researches facts.",
-      model: fakeRuntimeModel,
-      name: longName,
-    });
 
     expect(
       () =>
         new Agent({
           model: fakeModel,
-          subagents: [researcher],
+          subagents: [researcherSubagent({ name: longName })],
         })
     ).toThrow(subagentNameLengthPattern);
   });
 
   it("rejects subagents on runtime model parents", () => {
-    const researcher = new Agent({
-      description: "Researches facts.",
-      model: fakeRuntimeModel,
-      name: "researcher",
-    });
-
     expect(
       () =>
         new Agent({
           model: fakeRuntimeModel,
-          subagents: [researcher],
+          subagents: [researcherSubagent()],
         } as unknown as AgentOptions)
     ).toThrow(subagentsOnRuntimeModelPattern);
   });
 
   it("rejects duplicate normalized subagent names", () => {
-    const one = new Agent({
-      description: "Researches facts.",
-      model: fakeRuntimeModel,
-      name: "research-agent",
-    });
-    const two = new Agent({
-      description: "Researches facts again.",
-      model: fakeRuntimeModel,
-      name: "research_agent",
-    });
-
     expect(
       () =>
         new Agent({
           model: fakeModel,
-          subagents: [one, two],
+          subagents: [
+            researcherSubagent({ name: "research-agent" }),
+            researcherSubagent({
+              description: "Researches facts again.",
+              name: "research_agent",
+            }),
+          ],
         })
     ).toThrow(duplicateSubagentToolNamePattern);
   });
 
   it("rejects generated tool collisions", () => {
-    const researcher = new Agent({
-      description: "Researches facts.",
-      model: fakeRuntimeModel,
-      name: "researcher",
-    });
-
     expect(
       () =>
         new Agent({
           model: fakeModel,
-          subagents: [researcher],
+          subagents: [researcherSubagent()],
           tools: { delegate_to_researcher: {} },
         } as unknown as AgentOptions)
     ).toThrow(existingToolCollisionPattern);
   });
 
   it("rejects reserved background tool collisions", () => {
-    const researcher = new Agent({
-      description: "Researches facts.",
-      model: fakeRuntimeModel,
-      name: "researcher",
-    });
-
     expect(
       () =>
         new Agent({
           model: fakeModel,
-          subagents: [researcher],
+          subagents: [researcherSubagent()],
           tools: { background_output: {} },
         } as unknown as AgentOptions)
     ).toThrow(reservedToolCollisionPattern);

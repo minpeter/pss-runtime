@@ -1,8 +1,9 @@
 import type { LanguageModel, ToolSet } from "ai";
-import type { Agent } from "./agent";
 import type { AgentHost } from "./execution/types";
 import type { AgentToolChoice, RuntimeLlm } from "./llm";
 import type { AgentPlugin } from "./plugins";
+import type { AgentInput } from "./session/input";
+import type { SubagentDefinition } from "./subagent-definition";
 
 interface AgentLanguageModelOptions {
   readonly description?: string;
@@ -12,9 +13,10 @@ interface AgentLanguageModelOptions {
   readonly name?: string;
   readonly namespace?: string;
   readonly plugins?: readonly AgentPlugin[];
-  readonly subagents?: readonly Agent[];
+  readonly subagents?: readonly SubagentDefinition[];
   readonly toolChoice?: AgentToolChoice;
   readonly tools?: ToolSet;
+  readonly wrapDelegatePrompt?: (input: AgentInput) => AgentInput;
 }
 
 interface AgentRuntimeModelOptions {
@@ -28,6 +30,7 @@ interface AgentRuntimeModelOptions {
   readonly subagents?: never;
   readonly toolChoice?: never;
   readonly tools?: never;
+  readonly wrapDelegatePrompt?: (input: AgentInput) => AgentInput;
 }
 
 export type AgentModelOptions = Pick<
@@ -36,9 +39,11 @@ export type AgentModelOptions = Pick<
 >;
 export type AgentOptions = AgentLanguageModelOptions | AgentRuntimeModelOptions;
 
+export type AgentConstructionOptions = AgentOptions;
+
 export function assertAgentOptions(
   options: unknown
-): asserts options is AgentOptions {
+): asserts options is AgentConstructionOptions {
   if (options === null || typeof options !== "object") {
     throw new TypeError("Agent options are required. Provide { model }.");
   }
@@ -74,7 +79,13 @@ export function assertAgentOptions(
 }
 
 export function hasRuntimeModel(
-  options: AgentOptions
+  options: AgentConstructionOptions
 ): options is AgentRuntimeModelOptions {
   return typeof options.model === "function";
+}
+
+export function hasLanguageModel(
+  options: AgentConstructionOptions
+): options is AgentLanguageModelOptions {
+  return typeof options.model !== "function";
 }

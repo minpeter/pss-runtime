@@ -1,5 +1,8 @@
 import type { Tool } from "ai";
-import { describe, expect, it } from "vitest";
+import {
+  describe,
+  expect,
+  it } from "vitest";
 import { createInMemoryExecutionHost } from "./execution/memory";
 import {
   drainRun,
@@ -8,13 +11,19 @@ import {
   lastGenerateTextTools,
   loadAgent,
   toolExecutionOptions,
-} from "./llm-test-utils";
+  } from "./llm-test-utils";
 import type { AgentEvent } from "./session/events";
 import type { AgentRun } from "./session/run";
 import { cancelJob } from "./subagent-job-state";
 import { startBackgroundJob } from "./subagent-jobs";
-import type { RuntimeInputSink, Subagent, SubagentJob } from "./subagent-types";
-import { assistantMessage, createDeferred, userText } from "./test-fixtures";
+import type { RuntimeInputSink,
+  Subagent,
+  SubagentJob } from "./subagent-types";
+import { assistantMessage,
+  createDeferred,
+  userText,
+  researcherSubagent,
+} from "./test-fixtures";
 
 describe("background subagent child runs", () => {
   it("background launch can be replayed without duplicate child run", async () => {
@@ -22,19 +31,19 @@ describe("background subagent child runs", () => {
     const childGate = createDeferred();
     const host = createInMemoryExecutionHost();
     let childCalls = 0;
-    const researcher = new Agent({
-      description: "Researches facts.",
-      model: async () => {
-        childCalls += 1;
-        await childGate.promise;
-        return [assistantMessage("CHILD DONE")];
-      },
-      name: "researcher",
-    });
     const agent = new Agent({
       host,
       model: fakeModel,
-      subagents: [researcher],
+      subagents: [
+        researcherSubagent({
+          host,
+          model: async () => {
+            childCalls += 1;
+            await childGate.promise;
+            return [assistantMessage("CHILD DONE")];
+          },
+        }),
+      ],
     });
 
     await drainRun(await agent.session("parent").send(userText("delegate")));

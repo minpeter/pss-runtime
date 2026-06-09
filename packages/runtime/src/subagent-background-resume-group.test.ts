@@ -1,11 +1,17 @@
 import type { ToolSet } from "ai";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi } from "vitest";
 import {
   fakeModel,
   getGenerateTextMock,
   loadAgent,
   toolExecutionOptions,
-} from "./llm-test-utils";
+  } from "./llm-test-utils";
 import {
   backgroundNotificationKey,
   collectAgentRun,
@@ -13,13 +19,14 @@ import {
   resumeBackgroundTask,
   settlesWithin,
   waitForSessionPromptResume,
-} from "./subagent-background-test-support";
+  } from "./subagent-background-test-support";
 import {
   assistantMessage,
   createDeferred,
   eventTypes,
   toolCallPart,
   userText,
+  researcherSubagent,
 } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
@@ -41,8 +48,9 @@ describe("subagent background group resume", () => {
     const firstFinished = createDeferred();
     let launchedTaskIds: readonly string[] = [];
     let parentCalls = 0;
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const host = createDurableTestHost();
+    const researcher = researcherSubagent({
+      host,
       model: async ({ history }) => {
         const serializedHistory = JSON.stringify(history);
         if (serializedHistory.includes("research first")) {
@@ -54,9 +62,7 @@ describe("subagent background group resume", () => {
         await secondCanFinish.promise;
         return [assistantMessage("SECOND CHILD DONE")];
       },
-      name: "researcher",
     });
-
     generateTextMock.mockImplementation(
       async ({
         messages,
@@ -141,7 +147,6 @@ describe("subagent background group resume", () => {
         };
       }
     );
-    const host = createDurableTestHost();
     const agent = new Agent({
       host,
       model: fakeModel,

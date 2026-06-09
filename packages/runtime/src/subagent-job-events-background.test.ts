@@ -1,18 +1,24 @@
 import type { ToolSet } from "ai";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi } from "vitest";
 import {
   collectRun,
   fakeModel,
   getGenerateTextMock,
   loadAgent,
   toolExecutionOptions,
-} from "./llm-test-utils";
+  } from "./llm-test-utils";
 import {
   backgroundNotificationKey,
   createDurableTestHost,
   resumeBackgroundTask,
   waitForSessionPromptResume,
-} from "./subagent-background-test-support";
+  } from "./subagent-background-test-support";
 import {
   assistantMessage,
   createDeferred,
@@ -20,6 +26,7 @@ import {
   toolCallPart,
   toolResultFor,
   userText,
+  researcherSubagent,
 } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
@@ -49,13 +56,13 @@ describe("background subagent job events", () => {
         run_in_background: true,
       }
     );
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const host = createDurableTestHost();
+    const researcher = researcherSubagent({
+      host,
       model: async () => {
         await childGate.promise;
         return [assistantMessage("CHILD DONE")];
       },
-      name: "researcher",
     });
     let launchedTaskId = "";
     generateTextMock.mockImplementationOnce(
@@ -79,7 +86,6 @@ describe("background subagent job events", () => {
         };
       }
     );
-    const host = createDurableTestHost();
     const agent = new Agent({
       host,
       model: fakeModel,
@@ -131,10 +137,10 @@ describe("background subagent job events", () => {
 
   it("correlates background subagent lifecycle events to the parent tool call", async () => {
     const Agent = await loadAgent();
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const host = createDurableTestHost();
+    const researcher = researcherSubagent({
+      host,
       model: async () => [assistantMessage("CHILD DONE")],
-      name: "researcher",
     });
     let launchedTaskId = "";
     generateTextMock.mockImplementationOnce(
@@ -153,7 +159,6 @@ describe("background subagent job events", () => {
         return { responseMessages: [assistantMessage("PARENT DONE")] };
       }
     );
-    const host = createDurableTestHost();
     const agent = new Agent({
       host,
       model: fakeModel,
@@ -202,12 +207,11 @@ describe("background subagent job events", () => {
 
   it("emits compact background subagent job updates while collecting child events", async () => {
     const Agent = await loadAgent();
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const researcher = researcherSubagent({
+
       model: async () => [assistantMessage("CHILD DONE")],
-      name: "researcher",
-    });
-    generateTextMock.mockImplementationOnce(
+
+    });    generateTextMock.mockImplementationOnce(
       async ({ tools }: { tools?: ToolSet }) => {
         const launch = (await tools?.delegate_to_researcher?.execute?.(
           {
@@ -224,7 +228,6 @@ describe("background subagent job events", () => {
       }
     );
     const agent = new Agent({ model: fakeModel, subagents: [researcher] });
-
     const events = await collectRun(await agent.send(userText("delegate")));
     const update = events.find(
       (event) =>

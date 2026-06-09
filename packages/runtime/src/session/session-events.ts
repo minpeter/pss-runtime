@@ -1,5 +1,9 @@
 import type { RuntimeLlmContext } from "../llm";
-import { type AgentPlugin, runPluginsForEvent } from "../plugins";
+import {
+  type AgentPlugin,
+  runPluginsForEvent,
+  type PluginPipelineResult,
+} from "../plugins";
 import type { AgentEvent } from "./events";
 import type { BufferedAgentRun } from "./run";
 
@@ -89,16 +93,33 @@ export class SessionEventDispatcher {
     run: BufferedAgentRun,
     event: AgentEvent
   ): Promise<AgentEvent | "handled"> {
-    const pipeline = await runPluginsForEvent(this.#plugins, {
-      event,
-      history: this.#history(),
-      signal: this.#signal(),
-    });
+    const processed = await this.interceptEvent(event);
+    if (processed === "handled") {
+      return "handled";
+    }
+
+    run.emit(processed);
+    return processed;
+  }
+
+  async interceptEvent(event: AgentEvent): Promise<AgentEvent | "handled"> {
+    const pipeline = await this.#runInterceptPipeline(event);
     if (pipeline.kind === "handled") {
       return "handled";
     }
 
-    run.emit(pipeline.event);
     return pipeline.event;
+  }
+
+  emitProcessedEvent(run: BufferedAgentRun, event: AgentEvent): void {
+    run.emit(event);
+  }
+
+  #runInterceptPipeline(event: AgentEvent): Promise<PluginPipelineResult> {
+    return runPluginsForEvent(this.#plugins, {
+      event,
+      history: this.#history(),
+      signal: this.#signal(),
+    });
   }
 }

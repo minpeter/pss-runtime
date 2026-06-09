@@ -1,7 +1,12 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
-import { assistantMessage, eventTypes, userText } from "../test-fixtures";
+import {
+  assistantMessage,
+  eventTypes,
+  sentUserText,
+  userText,
+} from "../test-fixtures";
 import { userTextToModelMessage } from "./mapping";
 import { AgentSession } from "./session";
 import { collect } from "./session.test-support";
@@ -85,10 +90,7 @@ describe("Agent session plugin events", () => {
     const run = await session.send("hello");
     const iterator = run.events()[Symbol.asyncIterator]();
 
-    expect((await iterator.next()).value).toEqual({
-      type: "user-text",
-      text: "hello",
-    });
+    expect((await iterator.next()).value).toEqual(sentUserText("hello"));
     expect((await iterator.next()).value).toEqual({ type: "turn-start" });
 
     await session.emitObserverEvent({

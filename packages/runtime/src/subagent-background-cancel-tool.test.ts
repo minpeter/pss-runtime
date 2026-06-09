@@ -1,4 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi } from "vitest";
 import { createInMemoryExecutionHost } from "./execution/memory";
 import type { ExecutionHost } from "./execution/types";
 import {
@@ -9,9 +15,13 @@ import {
   lastGenerateTextTools,
   loadAgent,
   toolExecutionOptions,
-} from "./llm-test-utils";
+  } from "./llm-test-utils";
 import { resumeBackgroundTask } from "./subagent-background-test-support";
-import { assistantMessage, createDeferred, userText } from "./test-fixtures";
+import { assistantMessage,
+  createDeferred,
+  userText,
+  researcherSubagent,
+} from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
 
@@ -31,15 +41,14 @@ describe("subagent background cancel tool", () => {
   it("background_cancel aborts active job", async () => {
     const Agent = await loadAgent();
     const childGate = new Promise<void>(() => undefined);
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const agent = new Agent({ model: fakeModel, subagents: [researcherSubagent({
+
       model: async () => {
         await childGate;
         return [assistantMessage("CHILD DONE")];
       },
-      name: "researcher",
-    });
-    const agent = new Agent({ model: fakeModel, subagents: [researcher] });
+
+    })] });
 
     await drainRun(await agent.send(userText("delegate")));
 
@@ -95,16 +104,16 @@ describe("subagent background cancel tool", () => {
         "parent:agent:cancel-parent:session:default:generation:0:default:subagent:researcher",
       status: "running",
     });
-    const researcher = new Agent({
-      description: "Researches facts.",
-      model: () => Promise.resolve([assistantMessage("CHILD DONE")]),
-      name: "researcher",
-    });
     const agent = new Agent({
       host,
       model: fakeModel,
       namespace: "cancel-parent",
-      subagents: [researcher],
+      subagents: [
+        researcherSubagent({
+          host,
+          model: () => Promise.resolve([assistantMessage("CHILD DONE")]),
+        }),
+      ],
     });
 
     await drainRun(await agent.send(userText("delegate")));
@@ -132,19 +141,19 @@ describe("subagent background cancel tool", () => {
       capabilities: { backgroundSubagents: "durable" as const },
     } satisfies ExecutionHost;
     const childGate = createDeferred();
-    const researcher = new Agent({
-      description: "Researches facts.",
-      model: async () => {
-        await childGate.promise;
-        return [assistantMessage("STALE CHILD")];
-      },
-      name: "researcher",
-    });
     const agent = new Agent({
       host,
       model: fakeModel,
       namespace: "cancel-stale-parent",
-      subagents: [researcher],
+      subagents: [
+        researcherSubagent({
+          host,
+          model: async () => {
+            await childGate.promise;
+            return [assistantMessage("STALE CHILD")];
+          },
+        }),
+      ],
     });
 
     await drainRun(await agent.send(userText("delegate")));
@@ -195,13 +204,12 @@ describe("subagent background cancel tool", () => {
       capabilities: { backgroundSubagents: "durable" as const },
     } satisfies ExecutionHost;
     const childGate = createDeferred();
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const researcher = researcherSubagent({
+      host,
       model: async () => {
         await childGate.promise;
         return [assistantMessage("CHILD DONE")];
       },
-      name: "researcher",
       namespace: "owner-researcher",
     });
     const owner = new Agent({

@@ -1,24 +1,32 @@
 import type { ToolSet } from "ai";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi } from "vitest";
 import {
   fakeModel,
   getGenerateTextMock,
   loadAgent,
   toolExecutionOptions,
-} from "./llm-test-utils";
+  } from "./llm-test-utils";
 import {
   backgroundNotificationKey,
   collectAgentRun,
   createDurableTestHost,
   resumeBackgroundTask,
   waitForSessionPromptResume,
-} from "./subagent-background-test-support";
+  } from "./subagent-background-test-support";
 import {
   assistantMessage,
   createDeferred,
   eventTypes,
+  notifyRuntimeInput,
   toolCallPart,
   userText,
+  researcherSubagent,
 } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
@@ -39,16 +47,15 @@ describe("subagent background resume", () => {
     let childFinished = false;
     let launchedTaskId = "";
     let parentCalls = 0;
-    const researcher = new Agent({
-      description: "Researches facts.",
+    const host = createDurableTestHost();
+    const researcher = researcherSubagent({
+      host,
       model: async () => {
         await childCanFinish.promise;
         childFinished = true;
         return [assistantMessage("CHILD DONE")];
       },
-      name: "researcher",
     });
-
     generateTextMock.mockImplementation(
       async ({
         messages,
@@ -118,7 +125,6 @@ describe("subagent background resume", () => {
         };
       }
     );
-    const host = createDurableTestHost();
     const agent = new Agent({
       host,
       model: fakeModel,
@@ -147,7 +153,6 @@ describe("subagent background resume", () => {
         backgroundNotificationKey(launchedTaskId)
       )
     ).resolves.toMatchObject({ status: "pending" });
-
     const notifyRun = await waitForSessionPromptResume(
       agent,
       host,
@@ -166,14 +171,13 @@ describe("subagent background resume", () => {
     ]);
     expect(notifyEvents).toContainEqual(
       expect.objectContaining({
+        ...notifyRuntimeInput("", "turn-start"),
         input: {
+          ...notifyRuntimeInput("", "turn-start").input,
           text: expect.stringContaining(
             `Use background_output({ task_id: "${launchedTaskId}" })`
           ),
-          type: "user-text",
         },
-        placement: "turn-start",
-        type: "runtime-input",
       })
     );
   });
