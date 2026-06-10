@@ -1,5 +1,12 @@
 # @minpeter/pss-runtime
 
+## 0.1.0-next.3
+
+### Patch Changes
+
+- fc024ec: Remove the unreleased runtime-owned subagent API and implementation. Delegation now stays app-owned through ordinary tools, sessions, and host-owned background runs; see the sync and background examples for those patterns.
+- b21c318: Split durable/background host capabilities into smaller execution subpath contracts and publish a Cloudflare Durable Object adapter from `@minpeter/pss-runtime/cloudflare`.
+
 ## 0.1.0-next.2
 
 ### Patch Changes

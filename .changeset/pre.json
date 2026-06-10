@@ -3,12 +3,15 @@
   "tag": "next",
   "initialVersions": {
     "@minpeter/pss-coding-agent": "0.0.10",
-    "@minpeter/pss-runtime": "0.0.10"
+    "@minpeter/pss-runtime": "0.0.10",
+    "@minpeter/pss-web-tools": "0.0.0"
   },
   "changesets": [
     "background-notify-runs",
     "order-subagent-events",
     "remove-coding-agent-tools",
+    "remove-runtime-subagents",
+    "runtime-cloudflare-adapter",
     "runtime-plugin-constructor",
     "runtime-plugin-sessions",
     "runtime-subagents",
