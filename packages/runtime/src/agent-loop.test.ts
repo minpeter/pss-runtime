@@ -1,24 +1,30 @@
 import { describe, expect, it } from "vitest";
 import { runAgentLoop } from "./agent-loop";
-import type { RuntimeLlm } from "./llm";
+import {
+  createMockLanguageModelV4,
+  mockLanguageModelV4Empty,
+  mockLanguageModelV4Text,
+} from "./mock-language-model-v4-test-utils";
 import type { AgentEvent } from "./session/events";
 import { ModelMessageHistory } from "./session/history";
+import { userTextToModelMessage } from "./session/mapping";
 import {
   assistantMessage,
   createDeferred,
-  createScriptedLlm,
+  createScriptedModelOptions,
   eventTypes,
   toolCallPart,
   toolResultFor,
+  userText,
 } from "./test-fixtures";
 
 const noBoundaryDecision = undefined;
 
 const nextMicrotask = () =>
-  new Promise<void>((resolve) => queueMicrotask(() => resolve()));
+  new Promise<void>((resolve) => setTimeout(resolve, 1));
 
 const waitFor = async (condition: () => boolean) => {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
     if (condition()) {
       return;
     }
@@ -26,12 +32,19 @@ const waitFor = async (condition: () => boolean) => {
   }
 };
 
+const seedUserTurn = (history: ModelMessageHistory) => {
+  const message = userTextToModelMessage(userText("start"));
+  history.appendModelMessage(message);
+  return message;
+};
+
 describe("runAgentLoop", () => {
   it("continues after assistant messages request any tool", async () => {
     const events: AgentEvent[] = [];
     const history = new ModelMessageHistory();
+    const userMessage = seedUserTurn(history);
     const toolCall = toolCallPart("call-tool-1");
-    const llm = createScriptedLlm([
+    const model = createScriptedModelOptions([
       [
         assistantMessage([
           { type: "text", text: "I should keep going." },
@@ -48,7 +61,7 @@ describe("runAgentLoop", () => {
           events.push(event);
         },
         history,
-        llm,
+        model,
       })
     ).resolves.toBe("completed");
 
@@ -72,24 +85,34 @@ describe("runAgentLoop", () => {
       { type: "assistant-text", text: "DONE" },
       { type: "step-end" },
     ]);
-    expect(history.modelSnapshot()).toEqual([
-      assistantMessage([
-        { type: "text", text: "I should keep going." },
-        toolCall,
-      ]),
+    expect(history.modelSnapshot()).toMatchObject([
+      userMessage,
+      {
+        content: [
+          { text: "I should keep going.", type: "text" },
+          {
+            input: {},
+            toolCallId: toolCall.toolCallId,
+            toolName: toolCall.toolName,
+            type: "tool-call",
+          },
+        ],
+        role: "assistant",
+      },
       toolResultFor(toolCall),
-      assistantMessage("DONE"),
+      { content: [{ text: "DONE", type: "text" }], role: "assistant" },
     ]);
   });
 
   it("returns aborted when the LLM rejects after the signal is aborted", async () => {
     const events: AgentEvent[] = [];
     const history = new ModelMessageHistory();
+    const userMessage = seedUserTurn(history);
     const controller = new AbortController();
-    const abortingLlm: RuntimeLlm = () => {
+    const model = createMockLanguageModelV4(() => {
       controller.abort();
-      return Promise.reject(new Error("model request aborted"));
-    };
+      throw new Error("model request aborted");
+    });
 
     await expect(
       runAgentLoop({
@@ -97,23 +120,24 @@ describe("runAgentLoop", () => {
           events.push(event);
         },
         history,
-        llm: abortingLlm,
+        model: { model },
         signal: controller.signal,
       })
     ).resolves.toBe("aborted");
 
     expect(eventTypes(events)).toEqual(["step-start"]);
-    expect(history.modelSnapshot()).toEqual([]);
+    expect(history.modelSnapshot()).toEqual([userMessage]);
   });
 
   it("returns aborted when the LLM resolves empty output after the signal is aborted", async () => {
     const events: AgentEvent[] = [];
     const history = new ModelMessageHistory();
+    const userMessage = seedUserTurn(history);
     const controller = new AbortController();
-    const emptyAbortingLlm: RuntimeLlm = () => {
+    const model = createMockLanguageModelV4(() => {
       controller.abort();
-      return Promise.resolve([]);
-    };
+      return Promise.resolve(mockLanguageModelV4Empty());
+    });
 
     await expect(
       runAgentLoop({
@@ -121,24 +145,21 @@ describe("runAgentLoop", () => {
           events.push(event);
         },
         history,
-        llm: emptyAbortingLlm,
+        model: { model },
         signal: controller.signal,
       })
     ).resolves.toBe("aborted");
 
     expect(eventTypes(events)).toEqual(["step-start"]);
-    expect(history.modelSnapshot()).toEqual([]);
+    expect(history.modelSnapshot()).toEqual([userMessage]);
   });
 
   it("does not call the LLM until the awaited step-start boundary resolves", async () => {
     const events: AgentEvent[] = [];
     const history = new ModelMessageHistory();
+    seedUserTurn(history);
     const stepStart = createDeferred();
-    let llmCalls = 0;
-    const llm: RuntimeLlm = () => {
-      llmCalls += 1;
-      return Promise.resolve([assistantMessage("DONE")]);
-    };
+    const model = createMockLanguageModelV4([mockLanguageModelV4Text("DONE")]);
 
     const result = runAgentLoop({
       emit: (event) => {
@@ -149,18 +170,18 @@ describe("runAgentLoop", () => {
         return noBoundaryDecision;
       },
       history,
-      llm,
+      model: { model },
     });
 
     await nextMicrotask();
 
     expect(eventTypes(events)).toEqual(["step-start"]);
-    expect(llmCalls).toBe(0);
+    expect(model.doGenerateCalls).toHaveLength(0);
 
     stepStart.resolve();
 
     await expect(result).resolves.toBe("completed");
-    expect(llmCalls).toBe(1);
+    expect(model.doGenerateCalls).toHaveLength(1);
     expect(eventTypes(events)).toEqual([
       "step-start",
       "assistant-text",
@@ -171,18 +192,14 @@ describe("runAgentLoop", () => {
   it("does not start the next LLM call until the awaited step-end boundary resolves", async () => {
     const events: AgentEvent[] = [];
     const history = new ModelMessageHistory();
+    seedUserTurn(history);
     const firstStepEnd = createDeferred();
     const toolCall = toolCallPart("call-tool-1");
-    let llmCalls = 0;
     let stepEndCount = 0;
-    const llm = createScriptedLlm([
+    const model = createScriptedModelOptions([
       [assistantMessage([toolCall]), toolResultFor(toolCall)],
       [assistantMessage("DONE")],
     ]);
-    const countingLlm: RuntimeLlm = (context) => {
-      llmCalls += 1;
-      return llm(context);
-    };
 
     const result = runAgentLoop({
       emit: (event) => {
@@ -196,12 +213,12 @@ describe("runAgentLoop", () => {
         return noBoundaryDecision;
       },
       history,
-      llm: countingLlm,
+      model,
     });
 
     await waitFor(() => eventTypes(events).includes("step-end"));
 
-    expect(llmCalls).toBe(1);
+    expect(model.model.doGenerateCalls).toHaveLength(1);
     expect(eventTypes(events)).toEqual([
       "step-start",
       "tool-call",
@@ -212,7 +229,7 @@ describe("runAgentLoop", () => {
     firstStepEnd.resolve();
 
     await expect(result).resolves.toBe("completed");
-    expect(llmCalls).toBe(2);
+    expect(model.model.doGenerateCalls).toHaveLength(2);
     expect(eventTypes(events)).toEqual([
       "step-start",
       "tool-call",
@@ -227,8 +244,9 @@ describe("runAgentLoop", () => {
   it("does not complete until the awaited final step-end boundary resolves", async () => {
     const events: AgentEvent[] = [];
     const history = new ModelMessageHistory();
+    seedUserTurn(history);
     const stepEnd = createDeferred();
-    const llm = createScriptedLlm([[assistantMessage("DONE")]]);
+    const model = createScriptedModelOptions([[assistantMessage("DONE")]]);
     let settled = false;
 
     const result = runAgentLoop({
@@ -240,7 +258,7 @@ describe("runAgentLoop", () => {
         return noBoundaryDecision;
       },
       history,
-      llm,
+      model,
     }).then((value) => {
       settled = true;
       return value;
@@ -264,16 +282,12 @@ describe("runAgentLoop", () => {
   it("continues after step-end boundary input even without a tool call", async () => {
     const events: AgentEvent[] = [];
     const history = new ModelMessageHistory();
-    let llmCalls = 0;
+    const userMessage = seedUserTurn(history);
     let stepEndCount = 0;
-    const llm = createScriptedLlm([
+    const model = createScriptedModelOptions([
       [assistantMessage("This could be final.")],
       [assistantMessage("DONE")],
     ]);
-    const countingLlm: RuntimeLlm = (context) => {
-      llmCalls += 1;
-      return llm(context);
-    };
 
     await expect(
       runAgentLoop({
@@ -285,11 +299,11 @@ describe("runAgentLoop", () => {
           }
         },
         history,
-        llm: countingLlm,
+        model,
       })
     ).resolves.toBe("completed");
 
-    expect(llmCalls).toBe(2);
+    expect(model.model.doGenerateCalls).toHaveLength(2);
     expect(eventTypes(events)).toEqual([
       "step-start",
       "assistant-text",
@@ -298,22 +312,23 @@ describe("runAgentLoop", () => {
       "assistant-text",
       "step-end",
     ]);
-    expect(history.modelSnapshot()).toEqual([
-      assistantMessage("This could be final."),
-      assistantMessage("DONE"),
+    expect(history.modelSnapshot()).toMatchObject([
+      userMessage,
+      {
+        content: [{ text: "This could be final.", type: "text" }],
+        role: "assistant",
+      },
+      { content: [{ text: "DONE", type: "text" }], role: "assistant" },
     ]);
   });
 
   it("returns aborted when aborted while waiting for a boundary", async () => {
     const events: AgentEvent[] = [];
     const history = new ModelMessageHistory();
+    seedUserTurn(history);
     const controller = new AbortController();
     const stepStart = createDeferred();
-    let llmCalls = 0;
-    const llm: RuntimeLlm = () => {
-      llmCalls += 1;
-      return Promise.resolve([assistantMessage("DONE")]);
-    };
+    const model = createMockLanguageModelV4([mockLanguageModelV4Text("DONE")]);
 
     const result = runAgentLoop({
       emit: (event) => {
@@ -324,7 +339,7 @@ describe("runAgentLoop", () => {
         return noBoundaryDecision;
       },
       history,
-      llm,
+      model: { model },
       signal: controller.signal,
     });
 
@@ -333,6 +348,6 @@ describe("runAgentLoop", () => {
 
     await expect(result).resolves.toBe("aborted");
     expect(eventTypes(events)).toEqual(["step-start"]);
-    expect(llmCalls).toBe(0);
+    expect(model.doGenerateCalls).toHaveLength(0);
   });
 });

@@ -7,7 +7,7 @@ import {
   appendModelOutput,
   createResumeToolExecution,
   emitModelOutputEvents,
-  readLlmOutput,
+  readModelOutput,
 } from "./resume-llm";
 import type { ResumeRunOptions, ResumeRunResult } from "./resume-types";
 
@@ -60,9 +60,9 @@ export async function resumeRun(
       sessionSnapshot: stateBeforeModel,
       stepNumber: nextStep.stepNumber,
     });
-    const output = await readLlmOutput({
+    const output = await readModelOutput({
       history: stateBeforeModel.history,
-      llm: options.llm,
+      model: options.model,
       signal,
       toolExecution,
     });

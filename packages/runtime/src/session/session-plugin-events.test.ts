@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
 import {
   assistantMessage,
+  createCallbackModel,
   eventTypes,
   sentUserText,
   userText,
@@ -25,7 +26,9 @@ describe("Agent session plugin events", () => {
           },
         },
       ],
-      model: () => Promise.resolve([assistantMessage("DONE")]),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
     });
 
     const events = await collect(await agent.send("hello"));
@@ -63,7 +66,9 @@ describe("Agent session plugin events", () => {
           },
         },
       ],
-      model: () => Promise.resolve([assistantMessage("DONE")]),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
     });
 
     const events = await collect(await agent.send("hello"));
@@ -74,7 +79,11 @@ describe("Agent session plugin events", () => {
   it("routes observer events through event plugins", async () => {
     const pluginEventTypes: string[] = [];
     const session = new AgentSession(
-      () => Promise.resolve([assistantMessage("DONE")]),
+      {
+        model: createCallbackModel(() =>
+          Promise.resolve([assistantMessage("DONE")])
+        ),
+      },
       { key: "observer-events", store: new MemorySessionStore() },
       [
         {
@@ -123,11 +132,11 @@ describe("Agent session plugin events", () => {
           },
         },
       ],
-      model: ({ history }) => {
+      model: createCallbackModel(({ history }) => {
         calls += 1;
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage(`DONE ${calls}`)]);
-      },
+      }),
     });
 
     const firstEvents = await collect(

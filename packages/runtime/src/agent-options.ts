@@ -1,9 +1,9 @@
 import type { LanguageModel, ToolSet } from "ai";
 import type { AgentHost } from "./execution/types";
-import type { AgentToolChoice, RuntimeLlm } from "./llm";
+import type { AgentToolChoice } from "./llm";
 import type { AgentPlugin } from "./plugins";
 
-interface AgentLanguageModelOptions {
+export interface AgentLanguageModelOptions {
   readonly host?: AgentHost;
   readonly instructions?: string;
   readonly model: LanguageModel;
@@ -13,21 +13,11 @@ interface AgentLanguageModelOptions {
   readonly tools?: ToolSet;
 }
 
-interface AgentRuntimeModelOptions {
-  readonly host?: AgentHost;
-  readonly instructions?: never;
-  readonly model: RuntimeLlm;
-  readonly namespace?: string;
-  readonly plugins?: readonly AgentPlugin[];
-  readonly toolChoice?: never;
-  readonly tools?: never;
-}
-
 export type AgentModelOptions = Pick<
   AgentLanguageModelOptions,
-  "instructions" | "model" | "toolChoice"
+  "instructions" | "model" | "toolChoice" | "tools"
 >;
-export type AgentOptions = AgentLanguageModelOptions | AgentRuntimeModelOptions;
+export type AgentOptions = AgentLanguageModelOptions;
 
 export type AgentConstructionOptions = AgentOptions;
 
@@ -44,22 +34,7 @@ export function assertAgentOptions(
     throw new TypeError("Agent: missing options.model.");
   }
 
-  if (
-    typeof options.model !== "function" &&
-    (typeof options.model !== "object" || options.model === null)
-  ) {
+  if (typeof options.model !== "object" || options.model === null) {
     throw new TypeError("Agent: invalid options.model.");
   }
-}
-
-export function hasRuntimeModel(
-  options: AgentConstructionOptions
-): options is AgentRuntimeModelOptions {
-  return typeof options.model === "function";
-}
-
-export function hasLanguageModel(
-  options: AgentConstructionOptions
-): options is AgentLanguageModelOptions {
-  return typeof options.model !== "function";
 }

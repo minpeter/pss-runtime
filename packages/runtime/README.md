@@ -50,19 +50,18 @@ consume the events for the run to progress. This is what lets code react to
 created.
 
 `model` is the single public constructor key for model execution. Pass an AI SDK
-`LanguageModel` for the managed runtime path with `instructions` and `tools`, or
-pass a custom `RuntimeLlm` function when you want to own the model
-adapter yourself:
+`LanguageModel` object and configure runtime-owned prompting through
+`instructions`, `tools`, and `toolChoice`:
 
 ```ts
-import { Agent, type RuntimeLlm } from "@minpeter/pss-runtime";
+import { openai } from "@ai-sdk/openai";
+import { Agent } from "@minpeter/pss-runtime";
 
-const runtimeModel: RuntimeLlm = async ({ history }) => [
-  { role: "assistant", content: `Seen ${history.length} messages.` },
-];
+const model = openai("gpt-4.1-mini");
 
 const agent = new Agent({
-  model: runtimeModel,
+  instructions: "Answer with concise operational notes.",
+  model,
 });
 ```
 
@@ -457,7 +456,7 @@ calls. Tools are checkpointed before and after execution and receive stable
 `attempt`, `idempotencyKey`, `retryPolicy`, `signal`, and public `toolCallId`
 values. The `@minpeter/pss-runtime/execution` entrypoint also exposes the same
 low-level tool execution checkpoint types for custom resume runners built
-directly on `createLlm`.
+directly on AI SDK `LanguageModel` objects.
 
 These checkpoints are rollback boundaries, not a complete host adapter by
 themselves. Edge hosts still need durable scheduling, leases, resume workers,

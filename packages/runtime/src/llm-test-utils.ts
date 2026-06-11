@@ -1,6 +1,11 @@
-import type { LanguageModel, Tool, ToolSet } from "ai";
+import type { Tool, ToolSet } from "ai";
 import { jsonSchema, tool } from "ai";
 import { expect, vi } from "vitest";
+import type { ModelGenerationOptions, ModelStepOptions } from "./llm";
+import {
+  createMockLanguageModelV4,
+  mockLanguageModelV4Empty,
+} from "./mock-language-model-v4-test-utils";
 import type { AgentEvent } from "./session/events";
 
 const { generateTextMock } = vi.hoisted(() => ({
@@ -16,7 +21,9 @@ vi.mock("ai", async (importOriginal) => {
   };
 });
 
-export const fakeModel = {} as LanguageModel;
+export const fakeModel = createMockLanguageModelV4([
+  mockLanguageModelV4Empty(),
+]);
 
 export function getGenerateTextMock() {
   return generateTextMock;
@@ -38,9 +45,12 @@ export const createNoopTool = () =>
     }),
   });
 
-export async function loadCreateLlm() {
-  const { createLlm } = await import("./llm");
-  return createLlm;
+export async function loadModelStepRunner() {
+  const { generateModelStep } = await import("./llm");
+  return (
+    options: ModelGenerationOptions,
+    context: Pick<ModelStepOptions, "history" | "signal" | "toolExecution">
+  ) => generateModelStep({ ...options, ...context });
 }
 
 export async function loadAgent() {

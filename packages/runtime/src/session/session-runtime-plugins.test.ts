@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
 import {
   assistantMessage,
+  createCallbackModel,
   sentUserText,
   steerRuntimeInput,
   userText,
@@ -47,13 +48,13 @@ describe("Agent session runtime input plugins", () => {
           },
         },
       ],
-      model: ({ history }) => {
+      model: createCallbackModel(({ history }) => {
         step += 1;
         seenHistory.push([...history]);
         return Promise.resolve([
           assistantMessage(step === 1 ? "This could be final." : "DONE"),
         ]);
-      },
+      }),
     });
     session = agent.session("plugin-steer");
 

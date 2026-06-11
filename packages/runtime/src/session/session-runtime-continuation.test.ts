@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
 import {
   assistantMessage,
+  createCallbackModel,
   sentUserText,
   steerRuntimeInput,
   steerRuntimeInputMessage,
@@ -16,13 +17,13 @@ describe("Agent session runtime input continuation", () => {
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
     const agent = new Agent({
-      model: ({ history }) => {
+      model: createCallbackModel(({ history }) => {
         calls += 1;
         seenHistory.push([...history]);
         return Promise.resolve([
           assistantMessage(calls === 1 ? "This could be final." : "DONE"),
         ]);
-      },
+      }),
     });
     const session = agent.session("step-end-steer");
     const run = await session.send("initial user");
@@ -62,10 +63,10 @@ describe("Agent session runtime input continuation", () => {
   it("normalizes multipart image and file session.steer input like session.send", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
-      model: ({ history }) => {
+      model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
-      },
+      }),
     });
     const input = [
       { type: "text", text: "describe this" },

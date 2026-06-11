@@ -4,13 +4,19 @@ import { createInMemoryExecutionHost } from "./execution/memory";
 import { resumeRun } from "./execution/resume";
 import type { ExecutionHost } from "./execution/types";
 import { createQueuedUserTurnRun } from "./execution-checkpoint-test-support";
-import type { RuntimeLlm } from "./llm";
+import {
+  createMockLanguageModelV4,
+  mockLanguageModelV4Text,
+} from "./mock-language-model-v4-test-utils";
 import type { AgentEvent } from "./session/events";
+import { userTextToModelMessage } from "./session/mapping";
 import {
   assistantMessage,
+  createScriptedModelOptions,
   eventTypes,
   toolCallPart,
   toolResultFor,
+  userText,
 } from "./test-fixtures";
 
 const collectEvents = async (
@@ -23,29 +29,26 @@ const collectEvents = async (
   }
   return events;
 };
+const queuedUserMessage = () => userTextToModelMessage(userText("queued"));
 
 describe("resumeRun", () => {
   it("suspends without calling the model when maxSteps is zero", async () => {
     const host = createInMemoryExecutionHost();
-    let llmCalls = 0;
-    const llm: RuntimeLlm = () => {
-      llmCalls += 1;
-      return Promise.resolve([assistantMessage("DONE")]);
-    };
+    const model = createScriptedModelOptions([[assistantMessage("DONE")]]);
     await host.store.runs.create(createQueuedUserTurnRun());
 
     await expect(
       resumeRun({
         budget: { maxSteps: 0 },
         host,
-        llm,
+        model,
         loadState: () => Promise.resolve({ history: [] }),
         runId: "run-1",
         saveState: () => Promise.resolve(),
       })
     ).resolves.toEqual({ status: "suspended", steps: 0 });
 
-    expect(llmCalls).toBe(0);
+    expect(model.model.doGenerateCalls).toHaveLength(0);
     await expect(host.store.checkpoints.latest("run-1")).resolves.toBeNull();
   });
 
@@ -53,18 +56,14 @@ describe("resumeRun", () => {
     const host = createInMemoryExecutionHost();
     const controller = new AbortController();
     controller.abort();
-    let llmCalls = 0;
-    const llm: RuntimeLlm = () => {
-      llmCalls += 1;
-      return Promise.resolve([assistantMessage("DONE")]);
-    };
+    const model = createScriptedModelOptions([[assistantMessage("DONE")]]);
     await host.store.runs.create(createQueuedUserTurnRun());
 
     await expect(
       resumeRun({
         budget: { maxSteps: 1 },
         host,
-        llm,
+        model,
         loadState: () => Promise.resolve({ history: [] }),
         runId: "run-1",
         saveState: () => Promise.resolve(),
@@ -72,34 +71,31 @@ describe("resumeRun", () => {
       })
     ).resolves.toEqual({ status: "aborted", steps: 0 });
 
-    expect(llmCalls).toBe(0);
+    expect(model.model.doGenerateCalls).toHaveLength(0);
     expect(await collectEvents(host)).toEqual([]);
   });
 
   it("suspends after maxSteps and resumes to completion", async () => {
     const host = createInMemoryExecutionHost();
     const toolCall = toolCallPart("call-tool-1");
-    const history: ModelMessage[] = [];
-    let llmCalls = 0;
-    const llm: RuntimeLlm = () => {
-      llmCalls += 1;
-      if (llmCalls === 1) {
-        return Promise.resolve([
-          assistantMessage([
-            { text: "I need the tool.", type: "text" },
-            toolCall,
-          ]),
-          toolResultFor(toolCall),
-        ]);
-      }
-      return Promise.resolve([assistantMessage("DONE")]);
-    };
+    const initialUserMessage = queuedUserMessage();
+    const history: ModelMessage[] = [initialUserMessage];
+    const model = createScriptedModelOptions([
+      [
+        assistantMessage([
+          { text: "I need the tool.", type: "text" },
+          toolCall,
+        ]),
+        toolResultFor(toolCall),
+      ],
+      [assistantMessage("DONE")],
+    ]);
     await host.store.runs.create(createQueuedUserTurnRun());
 
     const first = await resumeRun({
       budget: { maxSteps: 1 },
       host,
-      llm,
+      model,
       loadState: () => Promise.resolve({ history }),
       runId: "run-1",
       saveState: (state) => {
@@ -119,7 +115,7 @@ describe("resumeRun", () => {
     const second = await resumeRun({
       budget: { maxSteps: 2 },
       host,
-      llm,
+      model,
       loadState: () => Promise.resolve({ history }),
       runId: "run-1",
       saveState: (state) => {
@@ -130,7 +126,7 @@ describe("resumeRun", () => {
     });
 
     expect(second).toEqual({ status: "completed", steps: 1 });
-    expect(llmCalls).toBe(2);
+    expect(model.model.doGenerateCalls).toHaveLength(2);
     expect(eventTypes(await collectEvents(host))).toEqual([
       "step-start",
       "assistant-text",
@@ -145,20 +141,21 @@ describe("resumeRun", () => {
 
   it("rolls back to before model when model output was not committed", async () => {
     const host = createInMemoryExecutionHost();
-    const history: ModelMessage[] = [];
-    let llmCalls = 0;
+    const initialUserMessage = queuedUserMessage();
+    const history: ModelMessage[] = [initialUserMessage];
+    let modelCalls = 0;
     let failCommit = true;
-    const llm: RuntimeLlm = () => {
-      llmCalls += 1;
-      return Promise.resolve([assistantMessage(`attempt ${llmCalls}`)]);
-    };
+    const model = createMockLanguageModelV4(() => {
+      modelCalls += 1;
+      return Promise.resolve(mockLanguageModelV4Text(`attempt ${modelCalls}`));
+    });
     await host.store.runs.create(createQueuedUserTurnRun());
 
     await expect(
       resumeRun({
         budget: { maxSteps: 1 },
         host,
-        llm,
+        model: { model },
         loadState: () => Promise.resolve({ history }),
         runId: "run-1",
         saveState: (state) => {
@@ -178,13 +175,13 @@ describe("resumeRun", () => {
         phase: "before-model",
       }
     );
-    expect(history).toEqual([]);
+    expect(history).toEqual([initialUserMessage]);
 
     await expect(
       resumeRun({
         budget: { maxSteps: 1 },
         host,
-        llm,
+        model: { model },
         loadState: () => Promise.resolve({ history }),
         runId: "run-1",
         saveState: (state) => {
@@ -195,12 +192,18 @@ describe("resumeRun", () => {
       })
     ).resolves.toEqual({ status: "completed", steps: 1 });
 
-    expect(llmCalls).toBe(2);
+    expect(model.doGenerateCalls).toHaveLength(2);
     expect(eventTypes(await collectEvents(host))).toEqual([
       "step-start",
       "assistant-text",
       "step-end",
     ]);
-    expect(history).toEqual([assistantMessage("attempt 2")]);
+    expect(history).toMatchObject([
+      initialUserMessage,
+      {
+        content: [{ text: "attempt 2", type: "text" }],
+        role: "assistant",
+      },
+    ]);
   });
 });

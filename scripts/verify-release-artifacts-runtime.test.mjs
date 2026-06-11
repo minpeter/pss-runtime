@@ -11,6 +11,15 @@ import {
 
 afterEach(cleanupFixtures);
 
+const removedRuntimeModelNames = [
+  ["Runtime", "Create", "Llm", "Options"].join(""),
+  ["Runtime", "Llm"].join(""),
+  ["Runtime", "Llm", "Context"].join(""),
+  ["Runtime", "Llm", "Output"].join(""),
+  ["Runtime", "Llm", "Output", "Part"].join(""),
+];
+const removedRuntimeModelValueName = ["create", "Llm"].join("");
+
 describe("verifyReleaseArtifacts runtime declaration checks", () => {
   it("allows direct AI SDK types in runtime public declarations", () => {
     const cwd = createFixture();
@@ -28,7 +37,7 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "plugins.d.ts"),
-      'import type { RuntimeLlmContext } from "./llm";\nexport interface AgentEventContext { readonly history: RuntimeLlmContext["history"]; }\n'
+      'import type { ModelMessage } from "ai";\nexport interface AgentEventContext { readonly history: readonly ModelMessage[]; }\n'
     );
 
     expect(
@@ -40,7 +49,7 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      `export type { AgentMessage, ${forbiddenModelName}, AgentRun, AgentTool, AgentTools, CreateLlmOptions, Llm, LlmContext, LlmOutput, LlmOutputPart, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput, RuntimeLlmOutputPart } from "./llm";\nexport type { AgentHost } from "./execution/types";\n`
+      `export type { AgentMessage, ${forbiddenModelName}, AgentRun, AgentTool, AgentTools, CreateLlmOptions, Llm, LlmContext, LlmOutput, LlmOutputPart, ${removedRuntimeModelNames.join(", ")}, RuntimeInput } from "./llm";\nexport type { AgentHost } from "./execution/types";\n`
     );
 
     expect(
@@ -55,6 +64,10 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name LlmContext",
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name LlmOutput",
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name LlmOutputPart",
+      ...removedRuntimeModelNames.map(
+        (name) =>
+          `packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ${name}`
+      ),
     ]);
   });
 
@@ -129,20 +142,24 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
     ]);
   });
 
-  it("allows direct AI SDK types inside internal runtime declarations", () => {
+  it("rejects runtime LLM adapter contracts inside internal runtime declarations", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      runtimeRootDeclaration
+      `${runtimeRootDeclaration}export { ${removedRuntimeModelValueName} } from "./llm";\n`
     );
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "llm.d.ts"),
-      'import type { LanguageModel, ToolSet } from "ai";\nexport interface RuntimeCreateLlmOptions { model: LanguageModel; tools?: ToolSet; }\n'
+      `import type { LanguageModel, ToolSet } from "ai";\nexport declare function ${removedRuntimeModelValueName}(): void;\nexport interface ${removedRuntimeModelNames[0]} { model: LanguageModel; tools?: ToolSet; }\n`
     );
 
     expect(
       verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
-    ).toEqual([]);
+    ).toEqual([
+      `packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ${removedRuntimeModelValueName}`,
+      `packages/runtime/dist/llm.d.ts: exposes removed runtime LLM adapter name ${removedRuntimeModelValueName}`,
+      `packages/runtime/dist/llm.d.ts: exposes removed runtime LLM adapter name ${removedRuntimeModelNames[0]}`,
+    ]);
   });
 
   it("honors package filtering for runtime-only declaration checks", () => {
@@ -158,12 +175,7 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
     expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
       "packages/runtime/dist/index.d.ts: missing explicit root runtime export AgentHost",
       "packages/runtime/dist/index.d.ts: missing explicit root runtime export AgentRun",
-      "packages/runtime/dist/index.d.ts: missing explicit root runtime export RuntimeCreateLlmOptions",
       "packages/runtime/dist/index.d.ts: missing explicit root runtime export RuntimeInput",
-      "packages/runtime/dist/index.d.ts: missing explicit root runtime export RuntimeLlm",
-      "packages/runtime/dist/index.d.ts: missing explicit root runtime export RuntimeLlmContext",
-      "packages/runtime/dist/index.d.ts: missing explicit root runtime export RuntimeLlmOutput",
-      "packages/runtime/dist/index.d.ts: missing explicit root runtime export RuntimeLlmOutputPart",
     ]);
   });
 

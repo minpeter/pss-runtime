@@ -1,4 +1,4 @@
-import type { RuntimeLlmContext } from "../llm";
+import type { ModelMessage } from "ai";
 import {
   type AgentPlugin,
   type PluginPipelineResult,
@@ -8,13 +8,13 @@ import type { AgentEvent } from "./events";
 import type { BufferedAgentRun } from "./run";
 
 interface SessionEventDispatcherOptions {
-  readonly history: () => RuntimeLlmContext["history"];
+  readonly history: () => readonly ModelMessage[];
   readonly plugins: readonly AgentPlugin[];
   readonly signal: () => AbortSignal | undefined;
 }
 
 export class SessionEventDispatcher {
-  readonly #history: () => RuntimeLlmContext["history"];
+  readonly #history: () => readonly ModelMessage[];
   #observerEventBuffer?: AgentEvent[];
   readonly #plugins: readonly AgentPlugin[];
   readonly #signal: () => AbortSignal | undefined;

@@ -2,7 +2,12 @@ import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
 import type { AgentPlugin } from "../plugins";
-import { assistantMessage, eventTypes, userText } from "../test-fixtures";
+import {
+  assistantMessage,
+  createCallbackModel,
+  eventTypes,
+  userText,
+} from "../test-fixtures";
 import { userTextToModelMessage } from "./mapping";
 import { collect } from "./session.test-support";
 
@@ -21,10 +26,10 @@ describe("session.send intercept", () => {
       },
     };
     const agent = new Agent({
-      model: ({ history }) => {
+      model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
-      },
+      }),
       plugins: [transformPlugin],
     });
 
@@ -40,7 +45,9 @@ describe("session.send intercept", () => {
       on: () => ({ action: "handled" }),
     };
     const agent = new Agent({
-      model: () => Promise.resolve([assistantMessage("DONE")]),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
       plugins: [handledPlugin],
     });
 

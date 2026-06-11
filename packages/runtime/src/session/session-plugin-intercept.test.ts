@@ -4,6 +4,7 @@ import { Agent } from "../agent";
 import type { AgentPlugin } from "../plugins";
 import {
   assistantMessage,
+  createCallbackModel,
   eventTypes,
   sentUserText,
   userText,
@@ -30,7 +31,9 @@ describe("session plugin intercept integration", () => {
       },
     };
     const agent = new Agent({
-      model: () => Promise.resolve([assistantMessage("DONE")]),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
       plugins: [tagPlugin],
     });
 
@@ -42,7 +45,9 @@ describe("session plugin intercept integration", () => {
   it("keeps deprecated events.on observe-only", async () => {
     const seen: string[] = [];
     const agent = new Agent({
-      model: () => Promise.resolve([assistantMessage("DONE")]),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
       plugins: [
         {
           events: {
@@ -71,7 +76,9 @@ describe("session plugin intercept integration", () => {
           },
         },
       ],
-      model: () => Promise.resolve([assistantMessage("DONE")]),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
     });
 
     const events = await collect(
@@ -84,7 +91,11 @@ describe("session plugin intercept integration", () => {
   it("observer events still reach plugins", async () => {
     const pluginEventTypes: string[] = [];
     const session = new AgentSession(
-      () => Promise.resolve([assistantMessage("DONE")]),
+      {
+        model: createCallbackModel(() =>
+          Promise.resolve([assistantMessage("DONE")])
+        ),
+      },
       { key: "observer-intercept", store: new MemorySessionStore() },
       [
         {
@@ -112,10 +123,10 @@ describe("session plugin intercept integration", () => {
   it("matches emitted text to model history after transform", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
-      model: ({ history }) => {
+      model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
-      },
+      }),
       plugins: [
         {
           on: ({ event }) => {

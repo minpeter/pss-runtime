@@ -6,13 +6,13 @@ import {
   fakeModel,
   getGenerateTextMock,
   loadAgent,
-  loadCreateLlm,
+  loadModelStepRunner,
 } from "./llm-test-utils";
 import { assistantMessage, userText } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
 
-describe("createLlm", () => {
+describe("generateModelStep", () => {
   beforeEach(() => {
     vi.resetModules();
     generateTextMock.mockReset();
@@ -26,19 +26,21 @@ describe("createLlm", () => {
   });
 
   it("passes injected tools to generateText", async () => {
-    const createLlm = await loadCreateLlm();
+    const runModelStep = await loadModelStepRunner();
     const injectedTools = { injected: createNoopTool() } satisfies ToolSet;
     const signal = new AbortController().signal;
     const history = [{ role: "user" as const, content: "hello" }];
-    const llm = createLlm({
-      instructions: "test instructions",
-      model: fakeModel,
-      tools: injectedTools,
-    });
 
-    await expect(llm({ history, signal })).resolves.toEqual([
-      assistantMessage("DONE"),
-    ]);
+    await expect(
+      runModelStep(
+        {
+          instructions: "test instructions",
+          model: fakeModel,
+          tools: injectedTools,
+        },
+        { history, signal }
+      )
+    ).resolves.toEqual([assistantMessage("DONE")]);
 
     expect(generateTextMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -54,17 +56,19 @@ describe("createLlm", () => {
   });
 
   it("passes configured toolChoice to generateText", async () => {
-    const createLlm = await loadCreateLlm();
+    const runModelStep = await loadModelStepRunner();
     const signal = new AbortController().signal;
     const history = [{ role: "user" as const, content: "hello" }];
-    const llm = createLlm({
-      model: fakeModel,
-      toolChoice: "required",
-    });
 
-    await expect(llm({ history, signal })).resolves.toEqual([
-      assistantMessage("DONE"),
-    ]);
+    await expect(
+      runModelStep(
+        {
+          model: fakeModel,
+          toolChoice: "required",
+        },
+        { history, signal }
+      )
+    ).resolves.toEqual([assistantMessage("DONE")]);
 
     expect(generateTextMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -74,20 +78,22 @@ describe("createLlm", () => {
   });
 
   it("passes a configured named toolChoice to generateText", async () => {
-    const createLlm = await loadCreateLlm();
+    const runModelStep = await loadModelStepRunner();
     const signal = new AbortController().signal;
     const history = [{ role: "user" as const, content: "hello" }];
     const tools = { injected: createNoopTool() } satisfies ToolSet;
     const toolChoice = { type: "tool", toolName: "injected" } as const;
-    const llm = createLlm({
-      model: fakeModel,
-      toolChoice,
-      tools,
-    });
 
-    await expect(llm({ history, signal })).resolves.toEqual([
-      assistantMessage("DONE"),
-    ]);
+    await expect(
+      runModelStep(
+        {
+          model: fakeModel,
+          toolChoice,
+          tools,
+        },
+        { history, signal }
+      )
+    ).resolves.toEqual([assistantMessage("DONE")]);
 
     expect(generateTextMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -110,7 +116,7 @@ describe("Agent tool wiring", () => {
     vi.restoreAllMocks();
   });
 
-  it("passes injected AgentOptions tools into createLlm/generateText", async () => {
+  it("passes injected AgentOptions tools into generateText", async () => {
     const Agent = await loadAgent();
     const injectedTools = { injected: createNoopTool() } satisfies ToolSet;
     const agent = new Agent({
@@ -130,7 +136,7 @@ describe("Agent tool wiring", () => {
     );
   });
 
-  it("passes AgentOptions toolChoice into createLlm/generateText", async () => {
+  it("passes AgentOptions toolChoice into generateText", async () => {
     const Agent = await loadAgent();
     const agent = new Agent({
       model: fakeModel,

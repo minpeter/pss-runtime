@@ -7,7 +7,7 @@ import {
   fakeModel,
   getGenerateTextMock,
   loadAgent,
-  loadCreateLlm,
+  loadModelStepRunner,
 } from "./llm-test-utils";
 import {
   assistantMessage,
@@ -34,7 +34,7 @@ describe("runtime tool call ids", () => {
   });
 
   it("uses call-prefixed AI SDK fallback ids for tool calls", async () => {
-    const createLlm = await loadCreateLlm();
+    const runModelStep = await loadModelStepRunner();
     const signal = new AbortController().signal;
     const executeOptionsSeen: string[] = [];
 
@@ -65,14 +65,15 @@ describe("runtime tool call ids", () => {
       };
     });
 
-    const llm = createLlm({
-      model: fakeModel,
-      tools: {
-        delegate_to_researcher: createRecordingTool(executeOptionsSeen),
+    const output = await runModelStep(
+      {
+        model: fakeModel,
+        tools: {
+          delegate_to_researcher: createRecordingTool(executeOptionsSeen),
+        },
       },
-    });
-
-    const output = await llm({ history: [], signal });
+      { history: [], signal }
+    );
     const assistant = output[0];
     const toolResult = output[1];
     if (

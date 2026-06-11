@@ -1,9 +1,10 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
-import type { RuntimeLlm } from "../llm";
+import type { ModelStepOutput } from "../llm";
 import {
   assistantMessage,
+  createCallbackModel,
   createDeferred,
   eventTypes,
   notifyRuntimeInput,
@@ -122,7 +123,9 @@ describe("AgentSession.notify", () => {
 
   it("does not expose notify on public Agent session handles", () => {
     const session = new Agent({
-      model: () => Promise.resolve([assistantMessage("DONE")]),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
     }).session("public-notify-hidden");
 
     expect(
@@ -132,8 +135,16 @@ describe("AgentSession.notify", () => {
   });
 });
 
-function createSession(key: string, llm: RuntimeLlm): AgentSession {
-  return new AgentSession(llm, { key, store: new MemorySessionStore() });
+function createSession(
+  key: string,
+  callback: (context: {
+    readonly history: readonly ModelMessage[];
+  }) => ModelStepOutput | Promise<ModelStepOutput>
+): AgentSession {
+  return new AgentSession(
+    { model: createCallbackModel(callback) },
+    { key, store: new MemorySessionStore() }
+  );
 }
 
 function getProperty(value: unknown, property: "notify"): unknown {

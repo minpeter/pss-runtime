@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
 import {
   assistantMessage,
+  createCallbackModel,
   sentUserMessage,
   sentUserText,
   userMessage,
@@ -15,10 +16,10 @@ describe("Agent session API", () => {
   it("agent.send accepts string input and streams one run", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
-      model: ({ history }) => {
+      model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
-      },
+      }),
     });
 
     const events = await collect(await agent.send("hello"));
@@ -36,10 +37,10 @@ describe("Agent session API", () => {
   it("agent.send accepts multipart string input without lossy joining", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
-      model: ({ history }) => {
+      model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
-      },
+      }),
     });
 
     const events = await collect(
@@ -55,10 +56,10 @@ describe("Agent session API", () => {
   it("agent.send accepts JSON-serializable user content parts", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
-      model: ({ history }) => {
+      model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
-      },
+      }),
     });
 
     const input = [
@@ -95,7 +96,9 @@ describe("Agent session API", () => {
 
   it("rejects malformed multipart input before queueing", async () => {
     const agent = new Agent({
-      model: () => Promise.resolve([assistantMessage("DONE")]),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
     });
 
     await expect(
@@ -108,7 +111,9 @@ describe("Agent session API", () => {
   it("rejects sparse text arrays before queueing", async () => {
     const sparseInput = new Array<string>(1);
     const agent = new Agent({
-      model: () => Promise.resolve([assistantMessage("DONE")]),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
     });
 
     await expect(agent.send(sparseInput)).rejects.toThrow(
@@ -118,7 +123,9 @@ describe("Agent session API", () => {
 
   it("rejects malformed explicit user-message input before queueing", async () => {
     const agent = new Agent({
-      model: () => Promise.resolve([assistantMessage("DONE")]),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
     });
 
     await expect(
@@ -133,7 +140,9 @@ describe("Agent session API", () => {
 
   it("rejects explicit user-message content that is not an array", async () => {
     const agent = new Agent({
-      model: () => Promise.resolve([assistantMessage("DONE")]),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
     });
 
     await expect(
@@ -149,10 +158,10 @@ describe("Agent session API", () => {
   it("session.send accepts user-message events", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
-      model: ({ history }) => {
+      model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([]);
-      },
+      }),
     });
 
     await collect(
@@ -170,7 +179,13 @@ describe("Agent session API", () => {
           role: "user",
           content: [
             { type: "text", text: "summarize" },
-            { type: "file", data: "iVBORw0KGgo=", mediaType: "image" },
+            {
+              type: "file",
+              data: "iVBORw0KGgo=",
+              filename: undefined,
+              mediaType: "image/png",
+              providerOptions: undefined,
+            },
           ],
         },
       ],
@@ -180,10 +195,10 @@ describe("Agent session API", () => {
   it("session.send accepts user-text events", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
-      model: ({ history }) => {
+      model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([]);
-      },
+      }),
     });
 
     await collect(

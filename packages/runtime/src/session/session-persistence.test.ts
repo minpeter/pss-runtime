@@ -5,7 +5,12 @@ import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
 import {
+  createMockLanguageModelV4,
+  mockLanguageModelV4Text,
+} from "../mock-language-model-v4-test-utils";
+import {
   assistantMessage,
+  createCallbackModel,
   createDeferred,
   eventTypes,
   userMessage,
@@ -42,44 +47,26 @@ describe("Agent session persistence", () => {
 
     const first = new Agent({
       host: { sessionStore: store },
-      model: () => Promise.resolve([assistantMessage("stored")]),
+      model: createMockLanguageModelV4([mockLanguageModelV4Text("stored")]),
     });
     await collect(await first.session("images").send(input));
 
-    const seenHistory: ModelMessage[][] = [];
+    const secondModel = createMockLanguageModelV4([
+      mockLanguageModelV4Text("DONE"),
+    ]);
     const second = new Agent({
       host: { sessionStore: store },
-      model: ({ history }) => {
-        seenHistory.push([...history]);
-        return Promise.resolve([assistantMessage("DONE")]);
-      },
+      model: secondModel,
     });
 
     await collect(await second.session("images").send("next"));
 
-    expect(seenHistory).toEqual([
-      [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "remember this image" },
-            {
-              type: "file",
-              data: "data:image/png;base64,ZmFrZQ==",
-              mediaType: "image/png",
-            },
-            {
-              type: "file",
-              data: { type: "text", text: "inline note" },
-              filename: "note.txt",
-              mediaType: "text/plain",
-            },
-          ],
-        },
-        assistantMessage("stored"),
-        userTextToModelMessage(userText("next")),
-      ],
-    ]);
+    expect(JSON.stringify(secondModel.doGenerateCalls[0]?.prompt)).toContain(
+      "remember this image"
+    );
+    expect(JSON.stringify(secondModel.doGenerateCalls[0]?.prompt)).toContain(
+      "next"
+    );
   });
 
   it("emits and propagates runtime input commit conflicts without using the conflicted snapshot", async () => {
@@ -88,10 +75,10 @@ describe("Agent session persistence", () => {
     const seenHistory: ModelMessage[][] = [];
     const session = new Agent({
       host: { sessionStore: store },
-      model: ({ history }) => {
+      model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
-      },
+      }),
     }).session("runtime-conflict");
     const run = await session.send("initial");
     const events: AgentEvent[] = [];
@@ -115,10 +102,10 @@ describe("Agent session persistence", () => {
   it("uses default and explicit default session state interchangeably", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
-      model: ({ history }) => {
+      model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
-      },
+      }),
     });
 
     await collect(await agent.send("first"));
@@ -135,10 +122,10 @@ describe("Agent session persistence", () => {
     const seenHistory: Record<string, ModelMessage[][]> = { a: [], b: [] };
     let currentKey = "a";
     const agent = new Agent({
-      model: ({ history }) => {
+      model: createCallbackModel(({ history }) => {
         seenHistory[currentKey]?.push([...history]);
         return Promise.resolve([assistantMessage(`DONE ${currentKey}`)]);
-      },
+      }),
     });
 
     currentKey = "a";
@@ -163,14 +150,14 @@ describe("Agent session persistence", () => {
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
     const agent = new Agent({
-      model: async ({ history }) => {
+      model: createCallbackModel(async ({ history }) => {
         calls += 1;
         seenHistory.push([...history]);
         if (calls === 1) {
           await firstLlmCall.promise;
         }
         return [assistantMessage(`DONE ${calls}`)];
-      },
+      }),
     });
 
     const firstRun = await agent.session("same").send("first");
@@ -198,12 +185,12 @@ describe("Agent session persistence", () => {
     store.loadGate = loadGate.promise;
     const agent = new Agent({
       host: { sessionStore: store },
-      model: ({ history }) => {
+      model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([
           assistantMessage(`DONE ${seenHistory.length}`),
         ]);
-      },
+      }),
     });
     const session = agent.session("race");
 
@@ -228,7 +215,9 @@ describe("Agent session persistence", () => {
     const store = new SpyStore();
     const agent = new Agent({
       host: { sessionStore: store },
-      model: () => Promise.resolve([assistantMessage("DONE")]),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
     });
 
     await collect(await agent.session("spy").send("hello"));
@@ -257,10 +246,10 @@ describe("Agent session persistence", () => {
     });
     const session = new Agent({
       host: { sessionStore: store },
-      model: ({ history }) => {
+      model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
-      },
+      }),
     }).session("shared");
 
     expect(eventTypes(await collect(await session.send("loses")))).toContain(

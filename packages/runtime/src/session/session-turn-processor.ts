@@ -1,5 +1,5 @@
 import { runAgentLoop } from "../agent-loop";
-import type { RuntimeLlm } from "../llm";
+import type { ModelGenerationOptions } from "../llm";
 import { ToolExecutionNeedsRecoveryError } from "../llm-tool-execution";
 import type { AgentEvent } from "./events";
 import type { BufferedAgentRun } from "./run";
@@ -39,7 +39,7 @@ interface ProcessQueuedInputOptions {
   readonly events: SessionEventDispatcher;
   readonly execution: SessionExecutionOptions;
   readonly item: QueuedInput;
-  readonly llm: RuntimeLlm;
+  readonly model: ModelGenerationOptions;
   readonly release: () => void;
   readonly sessionKey: string;
   readonly state: SessionState;
@@ -51,7 +51,7 @@ export async function processQueuedInput({
   events,
   execution,
   item,
-  llm,
+  model,
   release,
   sessionKey,
   state,
@@ -110,7 +110,7 @@ export async function processQueuedInput({
           state,
         }),
       history: state.history,
-      llm,
+      model,
       captureObserverEvents: (callback) =>
         events.captureObserverEvents(run, callback),
       signal: activeAbort.signal,

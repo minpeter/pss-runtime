@@ -6,7 +6,12 @@ import { createInMemoryExecutionHost } from "./execution/memory";
 import type { ExecutionHost, RunRecord } from "./execution/types";
 import type { AgentRun } from "./session/run";
 import { collect } from "./session/session.test-support";
-import { assistantMessage, eventTypes, userText } from "./test-fixtures";
+import {
+  assistantMessage,
+  createCallbackModel,
+  eventTypes,
+  userText,
+} from "./test-fixtures";
 
 describe("host notification resume", () => {
   it("host resumes parent notification run once without direct prompt resume surface", async () => {
@@ -15,11 +20,11 @@ describe("host notification resume", () => {
     let calls = 0;
     const agent = new Agent({
       host,
-      model: ({ history }) => {
+      model: createCallbackModel(({ history }) => {
         calls += 1;
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("NOTIFIED")]);
-      },
+      }),
       namespace: "notify-owner",
     });
     const notification = {
@@ -74,12 +79,16 @@ describe("host notification resume", () => {
     const host = createInMemoryExecutionHost();
     const owner = new Agent({
       host,
-      model: () => Promise.resolve([assistantMessage("OWNER NOTIFIED")]),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("OWNER NOTIFIED")])
+      ),
       namespace: "owner",
     });
     const attacker = new Agent({
       host,
-      model: () => Promise.resolve([assistantMessage("ATTACKER NOTIFIED")]),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("ATTACKER NOTIFIED")])
+      ),
       namespace: "attacker",
     });
     const notification = {
@@ -112,7 +121,9 @@ describe("host notification resume", () => {
     const host = createSessionLoadFailingHost();
     const agent = new Agent({
       host,
-      model: () => Promise.resolve([assistantMessage("NOTIFIED")]),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("NOTIFIED")])
+      ),
       namespace: "notify-owner",
     });
     const notification = {
@@ -145,10 +156,10 @@ describe("host notification resume", () => {
     let calls = 0;
     const agent = new Agent({
       host,
-      model: () => {
+      model: createCallbackModel(() => {
         calls += 1;
         return Promise.resolve([assistantMessage("RECOVERED")]);
-      },
+      }),
       namespace: "notify-owner",
     });
     const idempotencyKey = "background-complete:bg_recover";
@@ -186,7 +197,9 @@ describe("host notification resume", () => {
     const host = createInMemoryExecutionHost();
     const agent = new Agent({
       host,
-      model: () => Promise.resolve([assistantMessage("UNREACHABLE")]),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("UNREACHABLE")])
+      ),
       namespace: "notify-owner",
     });
     const idempotencyKey = "background-complete:bg_missing";

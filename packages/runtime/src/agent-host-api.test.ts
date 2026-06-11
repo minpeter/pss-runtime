@@ -1,4 +1,3 @@
-import type { LanguageModel } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent, type AgentHost, type AgentOptions } from "./agent";
 import {
@@ -16,11 +15,14 @@ import {
   type RunHost,
   type SessionHost,
 } from "./execution";
-import type { RuntimeLlm } from "./llm";
+import {
+  createMockLanguageModelV4,
+  mockLanguageModelV4Text,
+} from "./mock-language-model-v4-test-utils";
 import { collect, SpyStore } from "./session/session.test-support";
-import { assistantMessage, eventTypes } from "./test-fixtures";
+import { assistantMessage, createCallbackModel } from "./test-fixtures";
 
-const fakeModel = {} as LanguageModel;
+const fakeModel = createMockLanguageModelV4([mockLanguageModelV4Text("DONE")]);
 
 const inProcessHost = {} satisfies AgentHost;
 
@@ -28,11 +30,10 @@ const acceptsHostOptions: AgentOptions = {
   host: inProcessHost,
   model: fakeModel,
 };
-const runtimeModel: RuntimeLlm = () =>
-  Promise.resolve([assistantMessage("RUNTIME MODEL")]);
-const acceptsRuntimeModelOptions: AgentOptions = {
+const runtimeModel = () => Promise.resolve([assistantMessage("RUNTIME MODEL")]);
+const functionModelOptions = {
   model: runtimeModel,
-};
+} as const;
 const aggregateHost = createInMemoryExecutionHost();
 const acceptsSessionHost = {
   sessionStore: new SpyStore(),
@@ -78,7 +79,7 @@ type IsAssignable<Source, Target> = Source extends Target ? true : false;
 type AssertFalse<T extends false> = T;
 type AcceptsHostOption = IsAssignable<typeof acceptsHostOptions, AgentOptions>;
 type AcceptsRuntimeModelOption = IsAssignable<
-  typeof acceptsRuntimeModelOptions,
+  typeof functionModelOptions,
   AgentOptions
 >;
 type RejectsLlmOptionKey = AssertFalse<
@@ -130,7 +131,7 @@ const typeFixtures = [
   acceptsTransactionHost,
 ];
 const acceptsHostOptionAssertion: AcceptsHostOption = true;
-const acceptsRuntimeModelOptionAssertion: AcceptsRuntimeModelOption = true;
+const rejectsRuntimeModelOptionAssertion: AssertFalse<AcceptsRuntimeModelOption> = false;
 const llmOptionAssertion: RejectsLlmOptionKey = false;
 const runtimeOptionAssertion: RejectsRuntimeOptionKey = false;
 const sessionsOptionAssertion: RejectsSessionsOptionKey = false;
@@ -146,7 +147,7 @@ describe("Agent host public API", () => {
   it("accepts host option and keeps unsupported option keys out of AgentOptions", () => {
     expect(typeFixtures).toHaveLength(10);
     expect(acceptsHostOptionAssertion).toBe(true);
-    expect(acceptsRuntimeModelOptionAssertion).toBe(true);
+    expect(rejectsRuntimeModelOptionAssertion).toBe(false);
     expect(llmOptionAssertion).toBe(false);
     expect(runtimeOptionAssertion).toBe(false);
     expect(sessionsOptionAssertion).toBe(false);
@@ -162,62 +163,47 @@ describe("Agent host public API", () => {
     );
   });
 
-  it("accepts custom runtime model functions through model", async () => {
-    const seenHistories: unknown[] = [];
-    const agent = new Agent({
-      model: ({ history }) => {
-        seenHistories.push(history);
-        return Promise.resolve([assistantMessage("CUSTOM MODEL DONE")]);
-      },
-    });
-
-    const events = await collect(
-      await agent.session("runtime-model").send("hello")
+  it("rejects custom runtime model functions through model", () => {
+    expect(() => Reflect.construct(Agent, [functionModelOptions])).toThrow(
+      "Agent: invalid options.model"
     );
-
-    expect(eventTypes(events)).toEqual([
-      "user-text",
-      "turn-start",
-      "step-start",
-      "assistant-text",
-      "step-end",
-      "turn-end",
-    ]);
-    expect(events).toContainEqual({
-      text: "CUSTOM MODEL DONE",
-      type: "assistant-text",
-    });
-    expect(JSON.stringify(seenHistories)).toContain("hello");
   });
 
   it("does not implement legacy llm sessions and runtime options", () => {
-    expect(
-      () =>
-        new Agent({
+    expect(() =>
+      Reflect.construct(Agent, [
+        {
           llm: () => Promise.resolve([assistantMessage("DONE")]),
-        } as unknown as AgentOptions)
+        },
+      ])
     ).toThrow("Agent: missing options.model");
 
-    expect(
-      new Agent({
-        model: () => Promise.resolve([assistantMessage("DONE")]),
-        sessions: { store: new SpyStore() },
-      } as unknown as AgentOptions)
-    ).toBeInstanceOf(Agent);
+    expect(() =>
+      Reflect.construct(Agent, [
+        {
+          model: runtimeModel,
+          sessions: { store: new SpyStore() },
+        },
+      ])
+    ).toThrow("Agent: invalid options.model");
 
-    expect(
-      new Agent({
-        model: () => Promise.resolve([assistantMessage("DONE")]),
-        runtime: {},
-      } as unknown as AgentOptions)
-    ).toBeInstanceOf(Agent);
+    expect(() =>
+      Reflect.construct(Agent, [
+        {
+          model: runtimeModel,
+          runtime: {},
+        },
+      ])
+    ).toThrow("Agent: invalid options.model");
   });
 
   it("uses host session store for session snapshots", async () => {
     const sessionStore = new SpyStore();
     const agent = new Agent({
       host: { sessionStore },
-      model: () => Promise.resolve([assistantMessage("DONE")]),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
     });
 
     await collect(await agent.session("host-owned").send("hello"));
