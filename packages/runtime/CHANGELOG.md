@@ -1,5 +1,11 @@
 # @minpeter/pss-runtime
 
+## 0.1.0-next.4
+
+### Patch Changes
+
+- 1f3a46c: Remove the public runtime LLM function adapter surface. Agent model execution now accepts AI SDK LanguageModel objects directly, and runtime tests use AI SDK MockLanguageModelV4 fixtures.
+
 ## 0.1.0-next.3
 
 ### Patch Changes
