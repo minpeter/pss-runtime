@@ -10,6 +10,7 @@
     "background-notify-runs",
     "order-subagent-events",
     "remove-coding-agent-tools",
+    "remove-runtime-llm",
     "remove-runtime-subagents",
     "runtime-cloudflare-adapter",
     "runtime-plugin-constructor",
