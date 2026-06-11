@@ -18,6 +18,7 @@ const removedRuntimeModelNames = [
   ["Runtime", "Llm", "Output"].join(""),
   ["Runtime", "Llm", "Output", "Part"].join(""),
 ];
+const removedRuntimeModelValueName = ["create", "Llm"].join("");
 
 describe("verifyReleaseArtifacts runtime declaration checks", () => {
   it("allows direct AI SDK types in runtime public declarations", () => {
@@ -145,16 +146,18 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      runtimeRootDeclaration
+      `${runtimeRootDeclaration}export { ${removedRuntimeModelValueName} } from "./llm";\n`
     );
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "llm.d.ts"),
-      `import type { LanguageModel, ToolSet } from "ai";\nexport interface ${removedRuntimeModelNames[0]} { model: LanguageModel; tools?: ToolSet; }\n`
+      `import type { LanguageModel, ToolSet } from "ai";\nexport declare function ${removedRuntimeModelValueName}(): void;\nexport interface ${removedRuntimeModelNames[0]} { model: LanguageModel; tools?: ToolSet; }\n`
     );
 
     expect(
       verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
     ).toEqual([
+      `packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ${removedRuntimeModelValueName}`,
+      `packages/runtime/dist/llm.d.ts: exposes removed runtime LLM adapter name ${removedRuntimeModelValueName}`,
       `packages/runtime/dist/llm.d.ts: exposes removed runtime LLM adapter name ${removedRuntimeModelNames[0]}`,
     ]);
   });

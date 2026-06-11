@@ -103,6 +103,14 @@ export const createScriptedModelOptions = (
 
 type MockLanguageModelV4ContentPart =
   MockLanguageModelV4GenerateResult["content"][number];
+type ToolResultContent = Extract<
+  ToolModelMessage["content"][number],
+  { readonly type: "tool-result" }
+>;
+type JsonToolResultOutput = Extract<
+  ToolResultContent["output"],
+  { readonly type: "json" }
+>;
 
 export const eventTypes = (events: AgentEvent[]) =>
   events.map((event) => event.type);
@@ -163,14 +171,14 @@ function toolsForModelOutputs(outputs: readonly ModelStepOutput[]): ToolSet {
       output.flatMap((message) =>
         message.role === "tool"
           ? message.content
-              .filter((result) => result.type === "tool-result")
+              .filter(
+                (result): result is ToolResultContent =>
+                  result.type === "tool-result"
+              )
               .map((result) => [
                 result.toolName,
                 tool({
-                  execute: () =>
-                    result.output.type === "json"
-                      ? result.output.value
-                      : result.output,
+                  execute: () => toolResultOutputValue(result.output),
                   inputSchema: jsonSchema({
                     additionalProperties: true,
                     properties: {},
@@ -181,6 +189,22 @@ function toolsForModelOutputs(outputs: readonly ModelStepOutput[]): ToolSet {
           : []
       )
     )
+  );
+}
+
+function toolResultOutputValue(output: ToolResultContent["output"]) {
+  return isJsonToolOutput(output) ? output.value : output;
+}
+
+function isJsonToolOutput(
+  output: ToolResultContent["output"]
+): output is JsonToolResultOutput {
+  return (
+    typeof output === "object" &&
+    output !== null &&
+    "type" in output &&
+    output.type === "json" &&
+    "value" in output
   );
 }
 
