@@ -1,46 +1,27 @@
-import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
 import {
   assistantMessage,
+  createScriptedModelOptions,
   toolCallPart,
   toolResultFor,
-  userText,
 } from "../test-fixtures";
-import { userTextToModelMessage } from "./mapping";
 import { collect } from "./session.test-support";
 
 describe("Agent session tool loop", () => {
   it("continues the model loop after a tool call result", async () => {
-    const seenHistory: ModelMessage[][] = [];
-    let calls = 0;
-    const agent = new Agent({
-      model: ({ history }) => {
-        calls += 1;
-        seenHistory.push([...history]);
-
-        if (calls === 1) {
-          const toolCall = toolCallPart("call-tool-loop-1");
-          return Promise.resolve([
-            assistantMessage([toolCall]),
-            toolResultFor(toolCall),
-          ]);
-        }
-
-        return Promise.resolve([assistantMessage("DONE")]);
-      },
-    });
+    const toolCall = toolCallPart("call-tool-loop-1");
+    const modelOptions = createScriptedModelOptions([
+      [assistantMessage([toolCall]), toolResultFor(toolCall)],
+      [assistantMessage("DONE")],
+    ]);
+    const agent = new Agent(modelOptions);
 
     await collect(await agent.send("remember me"));
 
-    const toolCall = toolCallPart("call-tool-loop-1");
-    expect(seenHistory).toEqual([
-      [userTextToModelMessage(userText("remember me"))],
-      [
-        userTextToModelMessage(userText("remember me")),
-        assistantMessage([toolCall]),
-        toolResultFor(toolCall),
-      ],
-    ]);
+    expect(modelOptions.model.doGenerateCalls).toHaveLength(2);
+    expect(
+      JSON.stringify(modelOptions.model.doGenerateCalls[1]?.prompt)
+    ).toContain("call-tool-loop-1");
   });
 });

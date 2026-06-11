@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
 import {
   assistantMessage,
+  createCallbackModel,
   createDeferred,
   eventTypes,
   userText,
@@ -17,11 +18,11 @@ describe("Agent session terminal state", () => {
     const llmStarted = createDeferred();
     const llmGate = createDeferred();
     const session = new Agent({
-      model: async () => {
+      model: createCallbackModel(async () => {
         llmStarted.resolve();
         await llmGate.promise;
         return [assistantMessage("DONE")];
-      },
+      }),
     }).session("kill-terminal");
     const firstRun = await session.send("first");
     const secondRun = await session.send("second");
@@ -40,10 +41,10 @@ describe("Agent session terminal state", () => {
   it("closes the active run when a disposed session has a pending model call", async () => {
     const llmStarted = createDeferred();
     const agent = new Agent({
-      model: () => {
+      model: createCallbackModel(() => {
         llmStarted.resolve();
         return new Promise<never>(() => undefined);
-      },
+      }),
     });
     const session = agent.session("kill-pending-model");
     const collecting = collect(await session.send("hello"));
@@ -78,7 +79,9 @@ describe("Agent session terminal state", () => {
           },
         },
       ],
-      model: () => Promise.resolve([assistantMessage("DONE")]),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
     });
     const session = agent.session("kill-pending-terminal-event");
     const collecting = collect(await session.send("hello"));
@@ -105,14 +108,14 @@ describe("Agent session terminal state", () => {
     const llmGate = createDeferred();
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
-      model: async ({ history }) => {
+      model: createCallbackModel(async ({ history }) => {
         seenHistory.push([...history]);
         if (seenHistory.length === 1) {
           llmStarted.resolve();
           await llmGate.promise;
         }
         return [assistantMessage("DONE")];
-      },
+      }),
     });
     const session = agent.session("delete-active");
     const deletedRun = collect(await session.send("first"));
@@ -133,10 +136,10 @@ describe("Agent session terminal state", () => {
     const store = new BlockingDeleteStore();
     const agent = new Agent({
       host: { sessionStore: store },
-      model: () => {
+      model: createCallbackModel(() => {
         llmStarted.resolve();
         return new Promise<never>(() => undefined);
-      },
+      }),
     });
     const session = agent.session("delete-pending-active");
     const collecting = collect(await session.send("hello"));
@@ -163,7 +166,9 @@ describe("Agent session terminal state", () => {
     const store = new BlockingDeleteStore();
     const session = new Agent({
       host: { sessionStore: store },
-      model: () => Promise.resolve([assistantMessage("DONE")]),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
     }).session("delete-pending");
 
     await collect(await session.send("before"));

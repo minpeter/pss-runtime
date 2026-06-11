@@ -1,5 +1,9 @@
 import type { ModelMessage } from "ai";
-import type { RuntimeLlm, RuntimeLlmOutput } from "./llm";
+import {
+  generateModelStep,
+  type ModelGenerationOptions,
+  type ModelStepOutput,
+} from "./llm";
 import type { RuntimeToolExecutionContext } from "./llm-tool-execution";
 import type { AgentEvent } from "./session/events";
 import { modelMessageToAgentEvents } from "./session/mapping";
@@ -13,7 +17,7 @@ interface RunAgentLoopOptions {
   captureObserverEvents?: ObserverEventCapture;
   emit: AgentLoopEventListener;
   history: ModelHistory;
-  llm: RuntimeLlm;
+  model: ModelGenerationOptions;
   signal?: AbortSignal;
   toolExecution?: RuntimeToolExecutionContext;
 }
@@ -46,7 +50,7 @@ export async function runAgentLoop({
   captureObserverEvents = captureNoObserverEvents,
   emit,
   history,
-  llm,
+  model,
   signal = new AbortController().signal,
   toolExecution,
 }: RunAgentLoopOptions): Promise<AgentLoopResult> {
@@ -66,7 +70,7 @@ export async function runAgentLoop({
     }
 
     const capturedOutput = await captureObserverEvents(() =>
-      readLlmOutput({ history, llm, signal, toolExecution })
+      readModelOutput({ history, model, signal, toolExecution })
     );
     const output = capturedOutput.value;
 
@@ -162,18 +166,19 @@ function releaseNoObserverEvents(): void {
   return;
 }
 
-async function readLlmOutput({
+async function readModelOutput({
   history,
-  llm,
+  model,
   signal,
   toolExecution,
-}: Pick<RunAgentLoopOptions, "history" | "llm"> & {
+}: Pick<RunAgentLoopOptions, "history" | "model"> & {
   signal: AbortSignal;
   toolExecution?: RuntimeToolExecutionContext;
-}): Promise<RuntimeLlmOutput | "aborted"> {
+}): Promise<ModelStepOutput | "aborted"> {
   try {
-    return await llm({
+    return await generateModelStep({
       history: history.modelSnapshot(),
+      ...model,
       signal,
       toolExecution,
     });
@@ -193,8 +198,8 @@ async function appendCapturedStepOutput({
   output,
   signal,
 }: Pick<RunAgentLoopOptions, "emit"> & { history: ModelHistory } & {
-  capturedOutput: ObserverEventCaptureResult<RuntimeLlmOutput | "aborted">;
-  output: RuntimeLlmOutput;
+  capturedOutput: ObserverEventCaptureResult<ModelStepOutput | "aborted">;
+  output: ModelStepOutput;
   signal: AbortSignal;
 }): Promise<StepOutputResult> {
   try {
@@ -218,7 +223,7 @@ async function appendStepOutput({
   signal,
 }: Pick<RunAgentLoopOptions, "emit"> & { history: ModelHistory } & {
   observerEvents: AgentEvent[];
-  output: RuntimeLlmOutput;
+  output: ModelStepOutput;
   signal: AbortSignal;
 }): Promise<StepOutputResult> {
   if (signal.aborted) {

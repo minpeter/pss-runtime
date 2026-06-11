@@ -5,15 +5,7 @@ export {
 } from "./agent";
 export { executionHost } from "./execution/host";
 export type { AgentHost } from "./execution/types";
-export type {
-  AgentToolChoice,
-  RuntimeCreateLlmOptions,
-  RuntimeLlm,
-  RuntimeLlmContext,
-  RuntimeLlmOutput,
-  RuntimeLlmOutputPart,
-} from "./llm";
-export { createLlm } from "./llm";
+export type { AgentToolChoice } from "./llm";
 export type {
   AgentEventContext,
   AgentPlugin,

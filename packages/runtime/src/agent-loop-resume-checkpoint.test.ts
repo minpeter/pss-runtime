@@ -1,4 +1,5 @@
 import type { ModelMessage } from "ai";
+import { jsonSchema, tool } from "ai";
 import { describe, expect, it } from "vitest";
 import { createInMemoryExecutionHost } from "./execution/memory";
 import { resumeRun } from "./execution/resume";
@@ -6,42 +7,54 @@ import {
   createCheckpointSpyHost,
   createQueuedUserTurnRun,
 } from "./execution-checkpoint-test-support";
-import type { RuntimeLlm, RuntimeToolExecutionCheckpoint } from "./llm";
+import type { RuntimeToolExecutionCheckpoint } from "./llm";
 import { ToolExecutionNeedsRecoveryError } from "./llm-tool-execution";
-import { assistantMessage } from "./test-fixtures";
+import {
+  createMockLanguageModelV4,
+  mockLanguageModelV4ToolCall,
+} from "./mock-language-model-v4-test-utils";
+import { userTextToModelMessage } from "./session/mapping";
+import {
+  assistantMessage,
+  createScriptedModelOptions,
+  userText,
+} from "./test-fixtures";
 
 describe("resumeRun checkpoint recovery", () => {
   it("passes tool execution checkpoints to resumed model calls", async () => {
     const { checkpoints, host } = createCheckpointSpyHost();
-    const history: ModelMessage[] = [];
+    const history: ModelMessage[] = [
+      userTextToModelMessage(userText("queued")),
+    ];
     await host.store.runs.create(createQueuedUserTurnRun());
 
-    const llm: RuntimeLlm = async ({ toolExecution }) => {
-      if (!toolExecution) {
-        return [assistantMessage("NO TOOL EXECUTION")];
-      }
-
-      const checkpoint: RuntimeToolExecutionCheckpoint = {
-        attempt: toolExecution.attempt,
-        idempotencyKey: `${toolExecution.runId}:call-tool-1`,
+    const model = createMockLanguageModelV4([
+      mockLanguageModelV4ToolCall({
         input: {},
-        policy: "idempotent",
         toolCallId: "call-tool-1",
         toolName: "checkpointed_tool",
-      };
-      await toolExecution.beforeTool?.(checkpoint);
-      await toolExecution.afterTool?.({
-        ...checkpoint,
-        output: { ok: true },
-      });
-      return [assistantMessage("DONE")];
+      }),
+    ]);
+    const checkpointedTool = {
+      ...tool({
+        execute: () => ({ ok: true }),
+        inputSchema: jsonSchema({
+          additionalProperties: true,
+          properties: {},
+          type: "object",
+        }),
+      }),
+      retryPolicy: "idempotent" as const,
     };
 
     await expect(
       resumeRun({
         budget: { maxSteps: 1 },
         host,
-        llm,
+        model: {
+          model,
+          tools: { checkpointed_tool: checkpointedTool },
+        },
         loadState: () => Promise.resolve({ history }),
         runId: "run-1",
         saveState: (state) => {
@@ -50,13 +63,14 @@ describe("resumeRun checkpoint recovery", () => {
           return Promise.resolve();
         },
       })
-    ).resolves.toEqual({ status: "completed", steps: 1 });
+    ).resolves.toEqual({ status: "suspended", steps: 1 });
 
     expect(checkpoints.map((checkpoint) => checkpoint.phase)).toEqual([
       "before-model",
       "before-tool",
       "after-tool",
       "after-model",
+      "suspended",
     ]);
     expect(checkpoints[1]?.pendingToolCall).toMatchObject({
       idempotencyKey: "run-1:call-tool-1",
@@ -73,7 +87,6 @@ describe("resumeRun checkpoint recovery", () => {
 
   it("stops for manual recovery when resuming from a pending tool checkpoint", async () => {
     const host = createInMemoryExecutionHost();
-    let llmCalls = 0;
     const pendingToolCall: RuntimeToolExecutionCheckpoint = {
       attempt: 1,
       idempotencyKey: "run-1:call-tool-1",
@@ -82,10 +95,9 @@ describe("resumeRun checkpoint recovery", () => {
       toolCallId: "call-tool-1",
       toolName: "dangerous_tool",
     };
-    const llm: RuntimeLlm = () => {
-      llmCalls += 1;
-      return Promise.resolve([assistantMessage("SHOULD NOT RUN")]);
-    };
+    const model = createScriptedModelOptions([
+      [assistantMessage("SHOULD NOT RUN")],
+    ]);
     await host.store.runs.create(createQueuedUserTurnRun());
     await host.store.checkpoints.append(
       {
@@ -104,12 +116,12 @@ describe("resumeRun checkpoint recovery", () => {
       resumeRun({
         budget: { maxSteps: 1 },
         host,
-        llm,
+        model,
         loadState: () => Promise.resolve({ history: [] }),
         runId: "run-1",
         saveState: () => Promise.resolve(),
       })
     ).rejects.toBeInstanceOf(ToolExecutionNeedsRecoveryError);
-    expect(llmCalls).toBe(0);
+    expect(model.model.doGenerateCalls).toHaveLength(0);
   });
 });

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
 import {
   assistantMessage,
+  createCallbackModel,
   eventTypes,
   sentUserText,
   steerRuntimeInput,
@@ -29,14 +30,14 @@ describe("Agent session runtime input windows", () => {
           },
         },
       ],
-      model: ({ history }) => {
+      model: createCallbackModel(({ history }) => {
         trace.push(`llm:${calls}`);
         seenHistory.push([...history]);
         calls += 1;
         return Promise.resolve([
           assistantMessage(["SEED", "FIRST", "DONE"][calls - 1] ?? "DONE"),
         ]);
-      },
+      }),
     });
     const session = agent.session("plugin-runtime-ordering");
 
@@ -169,10 +170,10 @@ describe("Agent session runtime input windows", () => {
   it("active session.steer at turn-start and step-start is visible before the first LLM snapshot", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
-      model: ({ history }) => {
+      model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
-      },
+      }),
     });
     const session = agent.session("early-steer");
     const run = await session.send("original");

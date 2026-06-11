@@ -1,10 +1,10 @@
 import type { AssistantModelMessage, ToolModelMessage, ToolSet } from "ai";
-import type { RuntimeLlmOutput } from "./llm";
+import type { ModelStepOutput } from "./llm";
 
 const toolCallIdPrefix = "call_";
 const publicToolCallIdPattern = /^call[-_]/;
 
-type RuntimeLlmMessage = RuntimeLlmOutput[number];
+type ModelStepMessage = ModelStepOutput[number];
 
 export type RuntimeToolRetryPolicy = "idempotent" | "manual-recovery" | "pure";
 
@@ -86,9 +86,9 @@ export function normalizeToolCallIds(
 }
 
 export function rewriteMessageToolCallIds(
-  message: RuntimeLlmMessage,
+  message: ModelStepMessage,
   toolCallIds: Map<string, string>
-): RuntimeLlmMessage {
+): ModelStepMessage {
   if (message.role === "assistant") {
     return rewriteAssistantToolCallIds(message, toolCallIds);
   }

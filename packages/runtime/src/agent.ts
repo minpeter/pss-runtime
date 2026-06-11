@@ -1,19 +1,15 @@
-import type { ToolSet } from "ai";
 import { sessionStoreForHost } from "./agent-host-session-store";
 import { stableAgentNamespace } from "./agent-namespace";
 import {
   type AgentConstructionOptions,
   type AgentModelOptions,
   assertAgentOptions,
-  hasLanguageModel,
-  hasRuntimeModel,
 } from "./agent-options";
 import { resumeAgentRun } from "./agent-resume";
 import type { AgentSessionEntry, SessionHandle } from "./agent-session-entry";
 import { executionHost } from "./execution/host";
 import { createInMemoryExecutionHost } from "./execution/memory";
 import type { AgentHost, NotificationRecord } from "./execution/types";
-import { createLlm, type RuntimeLlm } from "./llm";
 import type { AgentPlugin } from "./plugins";
 import type { AgentRun } from "./session/run";
 import { type AgentInput, AgentSession } from "./session/session";
@@ -24,9 +20,7 @@ export type { SessionHandle } from "./agent-session-entry";
 export type { AgentHost } from "./execution/types";
 
 export class Agent {
-  readonly #baseTools?: ToolSet;
-  readonly #llm?: RuntimeLlm;
-  readonly #modelOptions?: AgentModelOptions;
+  readonly #modelOptions: AgentModelOptions;
   readonly #sessions = new Map<string, AgentSessionEntry>();
   readonly #sessionNamespace: string;
   readonly #store: SessionStore;
@@ -45,16 +39,12 @@ export class Agent {
     this.host = this.#host;
     this.#store = sessionStoreForHost(this.#host);
     this.#plugins = options.plugins ?? [];
-    if (hasRuntimeModel(options)) {
-      this.#llm = options.model;
-    } else if (hasLanguageModel(options)) {
-      this.#baseTools = options.tools;
-      this.#modelOptions = {
-        instructions: options.instructions,
-        model: options.model,
-        toolChoice: options.toolChoice,
-      };
-    }
+    this.#modelOptions = {
+      instructions: options.instructions,
+      model: options.model,
+      toolChoice: options.toolChoice,
+      tools: options.tools,
+    };
   }
 
   send(input: AgentInput): Promise<AgentRun> {
@@ -87,9 +77,8 @@ export class Agent {
     }
 
     let session: AgentSession | undefined;
-    const llm = this.#llm ?? createLlm(this.#createLlmOptionsForSession());
     session = new AgentSession(
-      llm,
+      this.#modelOptions,
       { key, store: this.#store },
       this.#plugins,
       {
@@ -128,19 +117,5 @@ export class Agent {
       notification.input,
       { observerEvents: notification.observerEvents }
     );
-  }
-
-  #createLlmOptionsForSession(): Parameters<typeof createLlm>[0] {
-    const modelOptions = this.#modelOptions;
-    if (!modelOptions) {
-      throw new Error("Agent: missing model options.");
-    }
-
-    return {
-      instructions: modelOptions.instructions,
-      model: modelOptions.model,
-      toolChoice: modelOptions.toolChoice,
-      tools: this.#baseTools,
-    };
   }
 }

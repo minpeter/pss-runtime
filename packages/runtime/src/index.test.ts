@@ -50,6 +50,14 @@ const forbiddenRuntimeSubagentExports = [
   ["Subagent", "Status", "Agent", "Event"].join(""),
   ["is", "Subagent", "Status", "Agent", "Event"].join(""),
 ] as const;
+const forbiddenModelAdapterRootExports = [
+  ["Runtime", "Create", "Llm", "Options"].join(""),
+  ["Runtime", "Llm"].join(""),
+  ["Runtime", "Llm", "Context"].join(""),
+  ["Runtime", "Llm", "Output"].join(""),
+  ["Runtime", "Llm", "Output", "Part"].join(""),
+  ["create", "Llm"].join(""),
+] as const;
 
 describe("runtime public exports", () => {
   it("does not expose internal agent loop runner from package root", async () => {
@@ -91,6 +99,16 @@ describe("runtime public exports", () => {
     const source = await readFile(runtimeIndexSourceUrl, "utf8");
 
     for (const forbiddenName of forbiddenRuntimeSubagentExports) {
+      expect(runtime).not.toHaveProperty(forbiddenName);
+      expect(source).not.toContain(forbiddenName);
+    }
+  });
+
+  it("does not expose runtime LLM adapter names from the package root", async () => {
+    const runtime = await import("./index");
+    const source = await readFile(runtimeIndexSourceUrl, "utf8");
+
+    for (const forbiddenName of forbiddenModelAdapterRootExports) {
       expect(runtime).not.toHaveProperty(forbiddenName);
       expect(source).not.toContain(forbiddenName);
     }

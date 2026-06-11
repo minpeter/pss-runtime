@@ -2,16 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { listFiles, packageDistPath, relativeToCwd } from "./shared.mjs";
 
-const REQUIRED_RUNTIME_ROOT_EXPORTS = [
-  "AgentHost",
-  "AgentRun",
-  "RuntimeCreateLlmOptions",
-  "RuntimeInput",
-  "RuntimeLlm",
-  "RuntimeLlmContext",
-  "RuntimeLlmOutput",
-  "RuntimeLlmOutputPart",
-];
+const REQUIRED_RUNTIME_ROOT_EXPORTS = ["AgentHost", "AgentRun", "RuntimeInput"];
 const REQUIRED_RUNTIME_EXECUTION_EXPORTS = [
   "AgentHostCapabilities",
   "BackgroundScheduler",
@@ -130,6 +121,11 @@ const FORBIDDEN_RUNTIME_ROOT_NAMES = [
   "RuntimeToolExecutionContext",
   "RuntimeToolExecutionDecision",
   "RuntimeToolRetryPolicy",
+  ["Runtime", "Create", "Llm", "Options"].join(""),
+  ["Runtime", "Llm"].join(""),
+  ["Runtime", "Llm", "Context"].join(""),
+  ["Runtime", "Llm", "Output"].join(""),
+  ["Runtime", "Llm", "Output", "Part"].join(""),
   "runAgentLoop",
   "ToolExecutionNeedsRecoveryError",
   "SessionHost",
@@ -143,6 +139,13 @@ const FORBIDDEN_RUNTIME_PUBLIC_PATTERNS = [
     description: "AgentRun.stream() member",
     pattern: /(?:\bstream\(\)\s*\{|AgentRun\.stream\(\))/,
   },
+];
+const FORBIDDEN_RUNTIME_MODEL_ADAPTER_NAMES = [
+  ["Runtime", "Create", "Llm", "Options"].join(""),
+  ["Runtime", "Llm"].join(""),
+  ["Runtime", "Llm", "Context"].join(""),
+  ["Runtime", "Llm", "Output"].join(""),
+  ["Runtime", "Llm", "Output", "Part"].join(""),
 ];
 const FORBIDDEN_RUNTIME_SUBAGENT_NAMES = [
   ["Subagent", "Definition"].join(""),
@@ -207,6 +210,15 @@ function findRuntimePublicPatternLeaks({ cwd }) {
         errors.push(
           `${relativeToCwd(cwd, file)}: exposes runtime-owned subagent name ${name}`
         );
+      }
+    }
+    if (file.endsWith(`${join("runtime", "dist", "llm.d.ts")}`)) {
+      for (const name of FORBIDDEN_RUNTIME_MODEL_ADAPTER_NAMES) {
+        if (text.includes(name)) {
+          errors.push(
+            `${relativeToCwd(cwd, file)}: exposes removed runtime LLM adapter name ${name}`
+          );
+        }
       }
     }
   }

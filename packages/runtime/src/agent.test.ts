@@ -1,11 +1,13 @@
 import { readFile } from "node:fs/promises";
-import type { LanguageModel } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent, type AgentOptions } from "./agent";
-import type { RuntimeLlm } from "./llm";
+import {
+  createMockLanguageModelV4,
+  mockLanguageModelV4Text,
+} from "./mock-language-model-v4-test-utils";
 
-const fakeModel = {} as LanguageModel;
-const fakeRuntimeModel: RuntimeLlm = () => Promise.resolve([]);
+const fakeModel = createMockLanguageModelV4([mockLanguageModelV4Text("DONE")]);
+const functionModel = () => Promise.resolve([]);
 const invalidModelPattern = /invalid options\.model/;
 const missingModelPattern = /missing options\.model/;
 const missingOptionsPattern = /Agent options are required/;
@@ -27,21 +29,29 @@ const acceptsModelOptions: AgentOptions = {
   toolChoice: "auto",
   tools: {},
 };
-const acceptsRuntimeModelOptions: AgentOptions = {
-  model: fakeRuntimeModel,
+const functionModelOptions = {
+  model: functionModel,
   plugins: [],
-};
+} as const;
 
 type AssertFalse<T extends false> = T;
+type IsAssignable<Source, Target> = Source extends Target ? true : false;
 type RejectsDescriptionOptionKey = AssertFalse<
   "description" extends keyof AgentOptions ? true : false
 >;
 type RejectsLlmOptionKey = AssertFalse<
   "llm" extends keyof AgentOptions ? true : false
 >;
-const typeFixtures = [acceptsModelOptions, acceptsRuntimeModelOptions];
-type TypeFixtureAssertions = [RejectsDescriptionOptionKey, RejectsLlmOptionKey];
-const typeFixtureAssertions: TypeFixtureAssertions = [false, false];
+type RejectsFunctionModel = AssertFalse<
+  IsAssignable<typeof functionModelOptions, AgentOptions>
+>;
+const typeFixtures = [acceptsModelOptions, functionModelOptions];
+type TypeFixtureAssertions = [
+  RejectsDescriptionOptionKey,
+  RejectsLlmOptionKey,
+  RejectsFunctionModel,
+];
+const typeFixtureAssertions: TypeFixtureAssertions = [false, false, false];
 
 const collectRun = async (run: Awaited<ReturnType<Agent["send"]>>) => {
   for await (const _event of run.events()) {
@@ -52,7 +62,7 @@ const collectRun = async (run: Awaited<ReturnType<Agent["send"]>>) => {
 describe("Agent", () => {
   it("keeps AgentOptions type fixtures reachable", () => {
     expect(typeFixtures).toHaveLength(2);
-    expect(typeFixtureAssertions).toHaveLength(2);
+    expect(typeFixtureAssertions).toHaveLength(3);
   });
 
   it("constructs agents with new Agent", () => {
@@ -64,16 +74,20 @@ describe("Agent", () => {
   });
 
   it("does not expose legacy agent description metadata", () => {
-    const agent = new Agent({
-      description: "reader",
-      model: fakeRuntimeModel,
-    } as unknown as AgentOptions);
+    const agent = Reflect.construct(Agent, [
+      {
+        description: "reader",
+        model: fakeModel,
+      },
+    ]);
 
     expect("description" in agent).toBe(false);
   });
 
-  it("creates agents from a caller-owned runtime model", () => {
-    expect(new Agent({ model: fakeRuntimeModel })).toBeInstanceOf(Agent);
+  it("rejects caller-owned runtime model functions", () => {
+    expect(() => Reflect.construct(Agent, [functionModelOptions])).toThrow(
+      invalidModelPattern
+    );
   });
 
   it("omits runtime-owned subagent options and generated tool injection", async () => {
@@ -88,18 +102,18 @@ describe("Agent", () => {
   });
 
   it("uses the default session for agent.send", async () => {
-    const agent = new Agent({ model: fakeRuntimeModel });
+    const agent = new Agent({ model: fakeModel });
     await expect(agent.send("hello")).resolves.toBeDefined();
   });
 
   it("reuses handles for named sessions", () => {
-    const agent = new Agent({ model: fakeRuntimeModel });
+    const agent = new Agent({ model: fakeModel });
     expect(agent.session("a")).toBe(agent.session("a"));
     expect(agent.session("a")).not.toBe(agent.session("b"));
   });
 
   it("drops disposed session handles so keys can be reused", async () => {
-    const agent = new Agent({ model: fakeRuntimeModel });
+    const agent = new Agent({ model: fakeModel });
     const first = agent.session("reuse");
 
     await first.dispose();
@@ -110,7 +124,7 @@ describe("Agent", () => {
   });
 
   it("rejects missing constructor options with an actionable error", () => {
-    expect(() => new Agent(undefined as unknown as AgentOptions)).toThrow(
+    expect(() => Reflect.construct(Agent, [undefined])).toThrow(
       missingOptionsPattern
     );
   });
@@ -120,28 +134,31 @@ describe("Agent", () => {
   });
 
   it("rejects invalid model configuration with an actionable error", () => {
-    expect(
-      () => new Agent({ model: "not-a-model" } as unknown as AgentOptions)
-    ).toThrow(invalidModelPattern);
+    expect(() => Reflect.construct(Agent, [{ model: "not-a-model" }])).toThrow(
+      invalidModelPattern
+    );
   });
 
   it("does not implement legacy llm configuration", () => {
-    expect(
-      () =>
-        new Agent({
-          llm: fakeRuntimeModel,
-        } as unknown as AgentOptions)
+    expect(() =>
+      Reflect.construct(Agent, [
+        {
+          llm: functionModel,
+        },
+      ])
     ).toThrow(missingModelPattern);
   });
 
-  it("ignores unimplemented legacy option fields when model is present", () => {
-    const agent = new Agent({
-      model: fakeRuntimeModel,
-      name: "coordinator",
-      runtime: {},
-      sessions: {},
-    } as unknown as AgentOptions);
-
-    expect(agent.namespace).toBeUndefined();
+  it("does not accept legacy option fields by relying on runtime model functions", () => {
+    expect(() =>
+      Reflect.construct(Agent, [
+        {
+          model: functionModel,
+          name: "coordinator",
+          runtime: {},
+          sessions: {},
+        },
+      ])
+    ).toThrow(invalidModelPattern);
   });
 });

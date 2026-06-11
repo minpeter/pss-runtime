@@ -6,11 +6,12 @@ import {
   type GenerateTextToolOptions,
   toolOptions,
 } from "./execution-checkpoint-test-support";
+import type { RuntimeToolExecutionCheckpoint } from "./llm";
 import {
   executableTool,
   fakeModel,
   getGenerateTextMock,
-  loadCreateLlm,
+  loadModelStepRunner,
 } from "./llm-test-utils";
 import { assistantMessage, toolCallPart, toolResultFor } from "./test-fixtures";
 
@@ -27,7 +28,7 @@ describe("tool checkpointing", () => {
   });
 
   it("persists before-tool before executing idempotent tool", async () => {
-    const createLlm = await loadCreateLlm();
+    const runModelStep = await loadModelStepRunner();
     const host = createInMemoryExecutionHost();
     const order: string[] = [];
     const signal = new AbortController().signal;
@@ -53,57 +54,58 @@ describe("tool checkpointing", () => {
       }
     );
 
-    const llm = createLlm({
-      model: fakeModel,
-      tools: {
-        checkpointed_tool: checkpointedTool("idempotent", async () => {
-          order.push("execute");
-          await expect(
-            host.store.checkpoints.latest("run-1")
-          ).resolves.toMatchObject({
-            phase: "before-tool",
-            pendingToolCall: expect.objectContaining({
-              idempotencyKey: "run-1:call_sdk-tool-call-1",
-              policy: "idempotent",
-              toolName: "checkpointed_tool",
-            }),
-          });
-          return {};
-        }),
-      },
-    });
-
     await expect(
-      llm({
-        history: [],
-        signal,
-        toolExecution: {
-          attempt: 2,
-          beforeTool: async (checkpoint) => {
-            order.push("before-tool");
-            await host.store.checkpoints.append(
-              {
-                checkpointId: "checkpoint-before-tool",
-                pendingToolCall: checkpoint,
+      runModelStep(
+        {
+          model: fakeModel,
+          tools: {
+            checkpointed_tool: checkpointedTool("idempotent", async () => {
+              order.push("execute");
+              await expect(
+                host.store.checkpoints.latest("run-1")
+              ).resolves.toMatchObject({
                 phase: "before-tool",
-                runId: "run-1",
-                runtimeState: {},
-                sessionSnapshot: {},
-                version: 1,
-              },
-              { expectedVersion: 0 }
-            );
+                pendingToolCall: expect.objectContaining({
+                  idempotencyKey: "run-1:call_sdk-tool-call-1",
+                  policy: "idempotent",
+                  toolName: "checkpointed_tool",
+                }),
+              });
+              return {};
+            }),
           },
-          runId: "run-1",
         },
-      })
+        {
+          history: [],
+          signal,
+          toolExecution: {
+            attempt: 2,
+            beforeTool: async (checkpoint: RuntimeToolExecutionCheckpoint) => {
+              order.push("before-tool");
+              await host.store.checkpoints.append(
+                {
+                  checkpointId: "checkpoint-before-tool",
+                  pendingToolCall: checkpoint,
+                  phase: "before-tool",
+                  runId: "run-1",
+                  runtimeState: {},
+                  sessionSnapshot: {},
+                  version: 1,
+                },
+                { expectedVersion: 0 }
+              );
+            },
+            runId: "run-1",
+          },
+        }
+      )
     ).resolves.toHaveLength(2);
 
     expect(order).toEqual(["before-tool", "execute"]);
   });
 
   it("manual recovery tool is not retried after rollback", async () => {
-    const createLlm = await loadCreateLlm();
+    const runModelStep = await loadModelStepRunner();
     const host = createInMemoryExecutionHost();
     const signal = new AbortController().signal;
     let executions = 0;
@@ -142,26 +144,27 @@ describe("tool checkpointing", () => {
       }
     );
 
-    const llm = createLlm({
-      model: fakeModel,
-      tools: {
-        dangerous_tool: checkpointedTool("manual-recovery", () => {
-          executions += 1;
-          return {};
-        }),
-      },
-    });
-
     await expect(
-      llm({
-        history: [],
-        signal,
-        toolExecution: {
-          attempt: 2,
-          beforeTool: async () => ({ status: "needs-recovery" }),
-          runId: "run-1",
+      runModelStep(
+        {
+          model: fakeModel,
+          tools: {
+            dangerous_tool: checkpointedTool("manual-recovery", () => {
+              executions += 1;
+              return {};
+            }),
+          },
         },
-      })
+        {
+          history: [],
+          signal,
+          toolExecution: {
+            attempt: 2,
+            beforeTool: async () => ({ status: "needs-recovery" }),
+            runId: "run-1",
+          },
+        }
+      )
     ).rejects.toMatchObject({
       status: "needs-recovery",
       toolName: "dangerous_tool",

@@ -1,4 +1,4 @@
-import type { RuntimeLlmContext } from "./llm";
+import type { ModelMessage } from "ai";
 import type {
   AgentEvent,
   RuntimeInput,
@@ -9,7 +9,7 @@ import type {
 export type { InputEventMeta, InputSource } from "./session/input-meta-types";
 
 type MaybePromise<T> = PromiseLike<T> | T;
-type AgentEventHistory = RuntimeLlmContext["history"];
+type AgentEventHistory = readonly ModelMessage[];
 
 export type InterceptableAgentEvent = RuntimeInput | UserMessage | UserText;
 

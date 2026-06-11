@@ -1,5 +1,5 @@
 import type { ModelMessage } from "ai";
-import type { RuntimeLlm } from "../llm";
+import type { ModelGenerationOptions } from "../llm";
 import type { ExecutionHost } from "./types";
 
 export interface ResumeRunState {
@@ -20,8 +20,8 @@ export interface ResumeRunResult {
 export interface ResumeRunOptions {
   readonly budget: ResumeRunBudget;
   readonly host: ExecutionHost;
-  readonly llm: RuntimeLlm;
   readonly loadState: () => Promise<ResumeRunState>;
+  readonly model: ModelGenerationOptions;
   readonly runId: string;
   readonly saveState: (state: ResumeRunState) => Promise<void>;
   readonly signal?: AbortSignal;

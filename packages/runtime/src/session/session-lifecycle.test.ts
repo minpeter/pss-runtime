@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
 import {
   assistantMessage,
+  createCallbackModel,
   createDeferred,
   eventTypes,
   sentUserText,
@@ -15,10 +16,10 @@ describe("Agent session lifecycle", () => {
   it("idle session.steer starts a new run after turn-end", async () => {
     let calls = 0;
     const agent = new Agent({
-      model: () => {
+      model: createCallbackModel(() => {
         calls += 1;
         return Promise.resolve([assistantMessage("DONE")]);
-      },
+      }),
     });
     const session = agent.session("idle-steer-after-turn-end");
     const run = await session.send("initial");
@@ -32,10 +33,10 @@ describe("Agent session lifecycle", () => {
   it("idle session.steer starts a new run after model turn-error", async () => {
     let calls = 0;
     const agent = new Agent({
-      model: () => {
+      model: createCallbackModel(() => {
         calls += 1;
         return Promise.reject(new Error("model unavailable"));
-      },
+      }),
     });
     const session = agent.session("idle-steer-after-turn-error");
     const run = await session.send("initial");
@@ -52,11 +53,11 @@ describe("Agent session lifecycle", () => {
     const llmStarted = createDeferred();
     const llmGate = createDeferred();
     const session = new Agent({
-      model: async () => {
+      model: createCallbackModel(async () => {
         llmStarted.resolve();
         await llmGate.promise;
         return [assistantMessage("DONE")];
-      },
+      }),
     }).session("interrupt-terminal");
     const run = await session.send("initial");
     const events = collect(run);
@@ -73,7 +74,9 @@ describe("Agent session lifecycle", () => {
 
   it("rejects runtime input after events return", async () => {
     const agent = new Agent({
-      model: () => Promise.resolve([assistantMessage("DONE")]),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
     });
     const run = await agent.send("initial");
     const iterator = run.events()[Symbol.asyncIterator]();
@@ -94,7 +97,9 @@ describe("Agent session lifecycle", () => {
 
   it("emits turn-error in the run when the LLM fails", async () => {
     const agent = new Agent({
-      model: () => Promise.reject(new Error("model unavailable")),
+      model: createCallbackModel(() =>
+        Promise.reject(new Error("model unavailable"))
+      ),
     });
 
     const events = await collect(await agent.send("fail"));
@@ -113,7 +118,7 @@ describe("Agent session lifecycle", () => {
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
     const session = new Agent({
-      model: async ({ history }) => {
+      model: createCallbackModel(async ({ history }) => {
         calls += 1;
         seenHistory.push([...history]);
         if (calls === 1) {
@@ -121,7 +126,7 @@ describe("Agent session lifecycle", () => {
           await firstLlmCall.promise;
         }
         return [assistantMessage("DONE")];
-      },
+      }),
     }).session("interrupt");
 
     const firstRun = await session.send("first");

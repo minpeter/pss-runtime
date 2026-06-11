@@ -16,47 +16,44 @@ export type {
 } from "./llm-tool-execution";
 
 export type AgentToolChoice = ToolChoice<ToolSet>;
-export type RuntimeLlmOutput = Awaited<
+export type ModelStepOutput = Awaited<
   ReturnType<typeof generateText>
 >["responseMessages"];
-export type RuntimeLlmOutputPart = RuntimeLlmOutput[number];
+export type ModelStepOutputPart = ModelStepOutput[number];
 
-export interface RuntimeLlmContext {
-  history: readonly ModelMessage[];
-  signal: AbortSignal;
-  toolExecution?: RuntimeToolExecutionContext;
-}
-
-export type RuntimeLlm = (
-  context: RuntimeLlmContext
-) => Promise<RuntimeLlmOutput>;
-
-export interface RuntimeCreateLlmOptions {
+export interface ModelGenerationOptions {
   instructions?: string;
   model: LanguageModel;
   toolChoice?: AgentToolChoice;
   tools?: ToolSet;
 }
 
-export function createLlm({
+export interface ModelStepOptions extends ModelGenerationOptions {
+  history: readonly ModelMessage[];
+  signal: AbortSignal;
+  toolExecution?: RuntimeToolExecutionContext;
+}
+
+export async function generateModelStep({
+  history,
   model,
   instructions,
+  signal,
   toolChoice,
+  toolExecution,
   tools,
-}: RuntimeCreateLlmOptions): RuntimeLlm {
-  return async ({ history, signal, toolExecution }) => {
-    const toolCallIds = new Map<string, string>();
-    const { responseMessages } = await generateText({
-      abortSignal: signal,
-      instructions,
-      messages: [...history],
-      model,
-      toolChoice,
-      tools: normalizeToolCallIds(tools, toolCallIds, toolExecution),
-    });
+}: ModelStepOptions): Promise<ModelStepOutput> {
+  const toolCallIds = new Map<string, string>();
+  const { responseMessages } = await generateText({
+    abortSignal: signal,
+    instructions,
+    messages: [...history],
+    model,
+    toolChoice,
+    tools: normalizeToolCallIds(tools, toolCallIds, toolExecution),
+  });
 
-    return responseMessages.map((message) =>
-      rewriteMessageToolCallIds(message, toolCallIds)
-    );
-  };
+  return responseMessages.map((message) =>
+    rewriteMessageToolCallIds(message, toolCallIds)
+  );
 }

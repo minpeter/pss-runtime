@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
-import { assistantMessage } from "../test-fixtures";
+import { assistantMessage, createCallbackModel } from "../test-fixtures";
 import { collect, SpyStore } from "./session.test-support";
 
 class RejectingDeleteStore extends SpyStore {
@@ -14,7 +14,9 @@ describe("Agent session delete failure", () => {
     const store = new RejectingDeleteStore();
     const agent = new Agent({
       host: { sessionStore: store },
-      model: () => Promise.resolve([assistantMessage("DONE")]),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
     });
     const session = agent.session("delete-failure");
 

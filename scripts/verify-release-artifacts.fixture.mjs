@@ -7,7 +7,7 @@ export const cliBinReadFailurePattern =
 export const forbiddenModelName = ["Agent", "Model"].join("");
 export const runtimeRootDeclaration = [
   'export type { AgentHost } from "./execution/types";',
-  'export type { AgentRun, RuntimeCreateLlmOptions, RuntimeInput, RuntimeLlm, RuntimeLlmContext, RuntimeLlmOutput, RuntimeLlmOutputPart } from "./llm";',
+  'export type { AgentRun, RuntimeInput } from "./session/events";',
   "",
 ].join("\n");
 export const runtimeExecutionDeclaration = [

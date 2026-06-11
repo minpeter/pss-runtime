@@ -1,8 +1,9 @@
 import type { ModelMessage } from "ai";
-import type {
-  RuntimeLlm,
-  RuntimeLlmOutput,
-  RuntimeToolExecutionContext,
+import {
+  generateModelStep,
+  type ModelGenerationOptions,
+  type ModelStepOutput,
+  type RuntimeToolExecutionContext,
 } from "../llm";
 import { persistedToolExecutionCheckpoint } from "../llm-tool-execution";
 import { modelMessageToAgentEvents } from "../session/mapping";
@@ -10,19 +11,24 @@ import { appendCheckpoint } from "./resume-checkpoints";
 import type { ResumeRunState } from "./resume-types";
 import type { ExecutionHost } from "./types";
 
-export async function readLlmOutput({
+export async function readModelOutput({
   history,
-  llm,
+  model,
   signal,
   toolExecution,
 }: {
   readonly history: readonly ModelMessage[];
-  readonly llm: RuntimeLlm;
+  readonly model: ModelGenerationOptions;
   readonly signal: AbortSignal;
   readonly toolExecution: RuntimeToolExecutionContext;
-}): Promise<RuntimeLlmOutput | "aborted"> {
+}): Promise<ModelStepOutput | "aborted"> {
   try {
-    return await llm({ history, signal, toolExecution });
+    return await generateModelStep({
+      history,
+      ...model,
+      signal,
+      toolExecution,
+    });
   } catch (error) {
     if (signal.aborted) {
       return "aborted";
@@ -79,7 +85,7 @@ export async function createResumeToolExecution({
 
 export function appendModelOutput(
   state: ResumeRunState,
-  output: RuntimeLlmOutput
+  output: ModelStepOutput
 ): ResumeRunState {
   return {
     history: [
@@ -95,7 +101,7 @@ export async function emitModelOutputEvents({
   runId,
 }: {
   readonly host: ExecutionHost;
-  readonly output: RuntimeLlmOutput;
+  readonly output: ModelStepOutput;
   readonly runId: string;
 }): Promise<boolean> {
   let shouldContinue = false;

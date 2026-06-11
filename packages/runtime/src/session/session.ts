@@ -1,4 +1,4 @@
-import type { RuntimeLlm } from "../llm";
+import type { ModelGenerationOptions } from "../llm";
 import type { AgentPlugin } from "../plugins";
 import type { AgentEvent } from "./events";
 import type { AgentInput, UserInput } from "./input";
@@ -34,7 +34,7 @@ export class AgentSession {
   readonly #events: SessionEventDispatcher;
   readonly #execution: SessionExecutionOptions;
   readonly #inputQueue: QueuedInput[] = [];
-  readonly #llm: RuntimeLlm;
+  readonly #model: ModelGenerationOptions;
   readonly #pendingRuntimeInputs: QueuedRuntimeInput[] = [];
   readonly #sessionKey: string;
   readonly #state: SessionState;
@@ -48,12 +48,12 @@ export class AgentSession {
   #runToCloseOnKill?: BufferedAgentRun;
 
   constructor(
-    llm: RuntimeLlm,
+    model: ModelGenerationOptions,
     persistence: SessionPersistenceOptions,
     plugins: readonly AgentPlugin[] = [],
     execution: SessionExecutionOptions = {}
   ) {
-    this.#llm = llm;
+    this.#model = model;
     this.#execution = execution;
     this.#sessionKey = persistence.key;
     this.#state = new SessionState(persistence);
@@ -241,7 +241,7 @@ export class AgentSession {
             events: this.#events,
             execution: this.#execution,
             item,
-            llm: this.#llm,
+            model: this.#model,
             release: () => {
               this.#activeAbort = undefined;
               this.#activeRun = undefined;

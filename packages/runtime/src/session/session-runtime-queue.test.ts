@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { Agent } from "../agent";
 import {
   assistantMessage,
+  createCallbackModel,
   createDeferred,
   steerRuntimeInput,
   userText,
@@ -15,10 +16,10 @@ describe("Agent session runtime input queueing", () => {
   it("active session.steer preserves FIFO order for multiple additions in one window", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
-      model: ({ history }) => {
+      model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
-      },
+      }),
     });
     const session = agent.session("steer-fifo");
     const run = await session.send("initial");
@@ -52,10 +53,10 @@ describe("Agent session runtime input queueing", () => {
   it("active session.steer preserves FIFO order for concurrent additions in one window", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
-      model: ({ history }) => {
+      model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
-      },
+      }),
     });
     const session = agent.session("steer-concurrent-fifo");
     const run = await session.send("initial");
@@ -96,7 +97,7 @@ describe("Agent session runtime input queueing", () => {
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
     const session = new Agent({
-      model: async ({ history }) => {
+      model: createCallbackModel(async ({ history }) => {
         calls += 1;
         seenHistory.push([...history]);
         if (calls === 1) {
@@ -104,7 +105,7 @@ describe("Agent session runtime input queueing", () => {
           return [assistantMessage("ACTIVE")];
         }
         return [assistantMessage("QUEUED")];
-      },
+      }),
     }).session("queue-separation");
     const firstRun = await session.send("first");
     const secondRun = await session.send("second");
