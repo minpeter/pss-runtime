@@ -16,6 +16,7 @@
     "runtime-plugin-constructor",
     "runtime-plugin-sessions",
     "runtime-subagents",
-    "session-overlays"
+    "session-overlays",
+    "sqlite-session-store"
   ]
 }
