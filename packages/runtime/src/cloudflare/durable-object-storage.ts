@@ -1,8 +1,11 @@
+import type { SqlStorage } from "./sql-storage";
+
 export interface CloudflareDurableObjectStorage {
   delete(key: string): Promise<unknown>;
   get<T>(key: string): Promise<T | undefined>;
   put<T>(key: string, value: T): Promise<void>;
   setAlarm?(scheduledTime: Date | number): Promise<void>;
+  sql?: SqlStorage;
   transaction?<T>(
     fn: (storage: CloudflareDurableObjectStorage) => Promise<T>
   ): Promise<T>;
@@ -11,9 +14,16 @@ export interface CloudflareDurableObjectStorage {
 export class InMemoryCloudflareDurableObjectStorage
   implements CloudflareDurableObjectStorage
 {
+  readonly sql?: SqlStorage;
   #alarmTime: Date | number | undefined;
   #transactionChain: Promise<void> = Promise.resolve();
   #values = new Map<string, unknown>();
+
+  constructor(options?: { readonly sql?: SqlStorage }) {
+    if (options?.sql) {
+      this.sql = options.sql;
+    }
+  }
 
   alarmTime(): Date | number | undefined {
     return this.#alarmTime;
