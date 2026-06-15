@@ -173,12 +173,25 @@ export class DurableObjectSqliteSessionStore implements SessionStore {
 
   #readMeta(key: string): MetaRow | null {
     const rows = this.#sql
-      .exec<MetaRow>(
+      .exec<{
+        message_count: number;
+        next_seq: number;
+        state_blob: string | null;
+        version: number | string;
+      }>(
         "SELECT version, message_count, next_seq, state_blob FROM pss_session_meta WHERE session_key = ?",
         key
       )
       .toArray();
-    return rows[0] ?? null;
+    const row = rows[0];
+    if (!row) {
+      return null;
+    }
+    // Normalize the version to a string before the optimistic compare. A meta
+    // row written under an INTEGER-affinity column (older schema or schema
+    // drift — CREATE TABLE IF NOT EXISTS never alters an existing table) would
+    // otherwise read back as a number and spuriously reject a valid commit.
+    return { ...row, version: String(row.version) };
   }
 
   #readActiveMessages(key: string): MessageRow[] {

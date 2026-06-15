@@ -328,6 +328,42 @@ describe("DurableObjectSqliteSessionStore", () => {
     ).resolves.toEqual({ ok: true, version: "1" });
   });
 
+  it("normalizes a numeric meta version (INTEGER-affinity / schema drift) for the optimistic compare", async () => {
+    const sql = new InMemorySqlStorage();
+    const storage = new InMemoryCloudflareDurableObjectStorage({ sql });
+    const key = storeKey(PREFIX, "session", "num");
+    // Simulate an older meta table whose `version` column has INTEGER affinity,
+    // so it stores and returns a number rather than a string.
+    sql.exec(
+      "CREATE TABLE pss_session_meta (session_key TEXT PRIMARY KEY, version INTEGER NOT NULL, message_count INTEGER NOT NULL, next_seq INTEGER NOT NULL, state_blob TEXT)"
+    );
+    sql.exec(
+      "CREATE TABLE pss_session_message (session_key TEXT NOT NULL, seq INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, message TEXT NOT NULL, PRIMARY KEY (session_key, seq))"
+    );
+    sql.exec(
+      "INSERT INTO pss_session_message (session_key, seq, active, message) VALUES (?, 0, 1, ?)",
+      key,
+      JSON.stringify({ i: 0 })
+    );
+    sql.exec(
+      "INSERT INTO pss_session_meta (session_key, version, message_count, next_seq, state_blob) VALUES (?, 1, 1, 1, NULL)",
+      key
+    );
+
+    const store = new DurableObjectSqliteSessionStore(storage, PREFIX);
+    await expect(store.load("num")).resolves.toEqual({
+      state: { history: [{ i: 0 }], schemaVersion: 1 },
+      version: "1",
+    });
+    // The string expectedVersion must match the numeric stored value — no
+    // spurious conflict.
+    await expect(
+      store.commit("num", snapshot([{ i: 0 }, { i: 1 }]), {
+        expectedVersion: "1",
+      })
+    ).resolves.toEqual({ ok: true, version: "2" });
+  });
+
   it("re-checks legacy storage after a deleted session key is re-created", async () => {
     const { store } = createStore();
     await store.commit("key", snapshot([{ i: 0 }]), { expectedVersion: null });
