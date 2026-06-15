@@ -13,7 +13,7 @@ interface MetaRow {
   readonly message_count: number;
   readonly next_seq: number;
   readonly state_blob: string | null;
-  readonly version: number;
+  readonly version: string;
 }
 
 interface MessageRow {
@@ -80,12 +80,12 @@ export class DurableObjectSqliteSessionStore implements SessionStore {
 
     // --- begin synchronous read-modify-write critical section (no await) ---
     const meta = this.#readMeta(key);
-    const currentVersion = meta ? String(meta.version) : null;
+    const currentVersion = meta ? meta.version : null;
     if (options.expectedVersion !== currentVersion) {
       return { ok: false, reason: "conflict" };
     }
 
-    const version = (meta?.version ?? 0) + 1;
+    const version = String(versionCounter(meta?.version) + 1);
     const nextSeqStart = meta?.next_seq ?? 0;
 
     if (isSnapshotV1(next.state)) {
@@ -111,7 +111,7 @@ export class DurableObjectSqliteSessionStore implements SessionStore {
     }
     // --- end critical section ---
 
-    return { ok: true, version: String(version) };
+    return { ok: true, version };
   }
 
   async delete(sessionKey: string): Promise<void> {
@@ -122,6 +122,9 @@ export class DurableObjectSqliteSessionStore implements SessionStore {
       key
     );
     this.#sql.exec("DELETE FROM pss_session_meta WHERE session_key = ?", key);
+    // Evict from the migration cache so the key does not accumulate over the
+    // Durable Object's lifetime (a re-created session re-checks on next access).
+    this.#migrated.delete(key);
     await this.#storage.delete(key);
     await this.#storage.delete(
       storeKey(this.#prefix, "session-version", sessionKey)
@@ -137,7 +140,7 @@ export class DurableObjectSqliteSessionStore implements SessionStore {
     if (!meta) {
       return null;
     }
-    const version = String(meta.version);
+    const version = meta.version;
     if (meta.state_blob !== null) {
       const state: unknown = JSON.parse(meta.state_blob);
       return { state, version };
@@ -163,7 +166,7 @@ export class DurableObjectSqliteSessionStore implements SessionStore {
       "CREATE INDEX IF NOT EXISTS pss_session_message_active ON pss_session_message (session_key, active, seq)"
     );
     this.#sql.exec(
-      "CREATE TABLE IF NOT EXISTS pss_session_meta (session_key TEXT PRIMARY KEY, version INTEGER NOT NULL, message_count INTEGER NOT NULL, next_seq INTEGER NOT NULL, state_blob TEXT)"
+      "CREATE TABLE IF NOT EXISTS pss_session_meta (session_key TEXT PRIMARY KEY, version TEXT NOT NULL, message_count INTEGER NOT NULL, next_seq INTEGER NOT NULL, state_blob TEXT)"
     );
     this.#schemaReady = true;
   }
@@ -255,8 +258,11 @@ export class DurableObjectSqliteSessionStore implements SessionStore {
       return;
     }
     if (legacy) {
-      const seedVersionRaw = Number(legacy.version);
-      const version = Number.isFinite(seedVersionRaw) ? seedVersionRaw : 0;
+      // Preserve the legacy version string verbatim so optimistic-version
+      // continuity holds for both numeric (execution store) and UUID-based
+      // (DurableObjectSessionStore) legacy sessions; the next commit derives its
+      // counter from it via versionCounter().
+      const version = legacy.version;
       if (isSnapshotV1(legacy.state)) {
         const nextSeq = this.#writeHistoryRows(key, legacy.state.history, 0);
         this.#writeMeta(key, {
@@ -282,6 +288,11 @@ export class DurableObjectSqliteSessionStore implements SessionStore {
     }
     this.#migrated.add(key);
   }
+}
+
+function versionCounter(version: string | undefined): number {
+  const parsed = Number(version);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function isSnapshotV1(value: unknown): value is SessionSnapshotV1 {

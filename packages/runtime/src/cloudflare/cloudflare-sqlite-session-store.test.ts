@@ -304,4 +304,38 @@ describe("DurableObjectSqliteSessionStore", () => {
       })
     ).resolves.toEqual({ ok: true, version: "4" });
   });
+
+  it("preserves a non-numeric (UUID) legacy version through migration", async () => {
+    const { storage, store } = createStore();
+    const sessionKey = "uuid-legacy";
+    await storage.put(storeKey(PREFIX, "session", sessionKey), {
+      state: { history: [{ a: 1 }], schemaVersion: 1 },
+      version: "9b1c-uuid-xyz",
+    });
+
+    // Migration preserves the version verbatim — no silent reset to "0".
+    await expect(store.load(sessionKey)).resolves.toEqual({
+      state: { history: [{ a: 1 }], schemaVersion: 1 },
+      version: "9b1c-uuid-xyz",
+    });
+
+    // Continuity: a commit using the preserved version succeeds; the numeric
+    // counter then starts at 1.
+    await expect(
+      store.commit(sessionKey, snapshot([{ a: 1 }, { b: 2 }]), {
+        expectedVersion: "9b1c-uuid-xyz",
+      })
+    ).resolves.toEqual({ ok: true, version: "1" });
+  });
+
+  it("re-checks legacy storage after a deleted session key is re-created", async () => {
+    const { store } = createStore();
+    await store.commit("key", snapshot([{ i: 0 }]), { expectedVersion: null });
+    await store.delete("key");
+    // After delete the key is evicted from the migration cache, so a fresh
+    // commit is treated as a brand-new session (version resets to "1").
+    await expect(
+      store.commit("key", snapshot([{ i: 1 }]), { expectedVersion: null })
+    ).resolves.toEqual({ ok: true, version: "1" });
+  });
 });
