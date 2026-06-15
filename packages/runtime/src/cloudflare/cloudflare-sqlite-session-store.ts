@@ -54,13 +54,18 @@ export class DurableObjectSqliteSessionStore implements SessionStore {
   #schemaReady = false;
 
   constructor(storage: CloudflareDurableObjectStorage, prefix: string) {
-    if (!storage.sql) {
+    // `sql` is read structurally so the shared CloudflareDurableObjectStorage
+    // port stays free of a `sql` member — otherwise a real `DurableObjectStorage`
+    // would stop being assignable to it. SQLite-backed Durable Objects expose
+    // `storage.sql` at runtime; a non-SQLite DO yields undefined and throws here.
+    const sql = (storage as { sql?: SqlStorage }).sql;
+    if (!sql) {
       throw new Error(
         "DurableObjectSqliteSessionStore requires a SQLite-backed Durable Object (storage.sql is unavailable)"
       );
     }
     this.#prefix = prefix;
-    this.#sql = storage.sql;
+    this.#sql = sql;
     this.#storage = storage;
   }
 

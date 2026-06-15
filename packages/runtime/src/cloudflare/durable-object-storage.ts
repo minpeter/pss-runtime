@@ -5,7 +5,6 @@ export interface CloudflareDurableObjectStorage {
   get<T>(key: string): Promise<T | undefined>;
   put<T>(key: string, value: T): Promise<void>;
   setAlarm?(scheduledTime: Date | number): Promise<void>;
-  sql?: SqlStorage;
   transaction?<T>(
     fn: (storage: CloudflareDurableObjectStorage) => Promise<T>
   ): Promise<T>;
