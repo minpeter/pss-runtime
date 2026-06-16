@@ -45,7 +45,7 @@
     "ai": "7.0.0-canary.142"
   },
   "devDependencies": {
-    "tsdown": "^0.22.0",
+    "tsdown": "^0.22.2",
     "vitest": "^4.1.7"
   }
 }
