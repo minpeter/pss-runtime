@@ -31,7 +31,7 @@
     "@minpeter/pss-coding-agent": "workspace:*",
     "@minpeter/pss-runtime": "workspace:*",
     "@t3-oss/env-core": "^0.13.11",
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.3",
     "dotenv": "^17.4.2",
     "tsx": "^4.22.4",
     "turbo": "^2.9.15",
