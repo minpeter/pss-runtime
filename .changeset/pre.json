@@ -17,6 +17,7 @@
     "runtime-plugin-sessions",
     "runtime-subagents",
     "session-overlays",
-    "sqlite-session-store"
+    "sqlite-session-store",
+    "sync-main-dependencies"
   ]
 }

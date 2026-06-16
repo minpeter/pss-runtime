@@ -1,5 +1,11 @@
 # @minpeter/pss-runtime
 
+## 0.1.0-next.6
+
+### Patch Changes
+
+- Sync dependency updates from main into the v0.1 prerelease line.
+
 ## 0.1.0-next.5
 
 ### Patch Changes

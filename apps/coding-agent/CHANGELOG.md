@@ -1,5 +1,13 @@
 # @minpeter/pss-coding-agent
 
+## 0.0.11-next.1
+
+### Patch Changes
+
+- Sync dependency updates from main into the v0.1 prerelease line.
+- Updated dependencies
+  - @minpeter/pss-runtime@0.1.0-next.6
+
 ## 0.0.11-next.0
 
 ### Patch Changes
