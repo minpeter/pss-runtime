@@ -25,11 +25,11 @@
     "lint": "ultracite check ."
   },
   "dependencies": {
-    "ai": "7.0.0-canary.142",
+    "ai": "7.0.0-canary.176",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "tsdown": "^0.22.0",
-    "vitest": "^4.1.7"
+    "tsdown": "^0.22.2",
+    "vitest": "^4.1.9"
   }
 }

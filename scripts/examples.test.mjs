@@ -75,7 +75,7 @@ describe("examples workspace packages", () => {
         "workspace:*"
       );
       expect(packageJson.dependencies["@ai-sdk/openai-compatible"]).toBe(
-        "3.0.0-canary.48"
+        "3.0.0-canary.56"
       );
       expect(packageJson.dependencies["@t3-oss/env-core"]).toBe("^0.13.11");
       expect(packageJson.dependencies.dotenv).toBe("^17.4.2");

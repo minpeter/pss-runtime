@@ -53,17 +53,17 @@
     "lint": "ultracite check ."
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "3.0.0-canary.48",
-    "@earendil-works/pi-tui": "^0.76.0",
+    "@ai-sdk/openai-compatible": "3.0.0-canary.56",
+    "@earendil-works/pi-tui": "^0.79.4",
     "@minpeter/pss-runtime": "workspace:^",
     "@minpeter/pss-web-tools": "workspace:*",
     "@t3-oss/env-core": "^0.13.11",
-    "ai": "7.0.0-canary.142",
+    "ai": "7.0.0-canary.176",
     "dotenv": "^17.4.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "tsdown": "^0.22.0",
-    "vitest": "^4.1.7"
+    "tsdown": "^0.22.2",
+    "vitest": "^4.1.9"
   }
 }
