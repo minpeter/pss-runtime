@@ -57,8 +57,8 @@ importers:
         specifier: 3.0.0-canary.48
         version: 3.0.0-canary.48(zod@4.4.3)
       '@earendil-works/pi-tui':
-        specifier: ^0.76.0
-        version: 0.76.0
+        specifier: ^0.79.4
+        version: 0.79.4
       '@minpeter/pss-runtime':
         specifier: workspace:^
         version: link:../runtime
@@ -269,8 +269,8 @@ packages:
     resolution: {integrity: sha512-S0My7XPGIgpRWMDG8uRqalbgT+a6FmCUdOW+HaIOVVpUPHOb7RrpvjTjiODadKp06fsrVDJZlIzc6yCTp4AnxA==}
     engines: {node: '>= 20.12.0'}
 
-  '@earendil-works/pi-tui@0.76.0':
-    resolution: {integrity: sha512-TWQEWqc38gVRYr/VTrlfePQPpJk938gNNLL1xuv0M+9cTkVr880/Q3baZQrxKoLrmN/MmVx7TyR8knYZGxTqqg==}
+  '@earendil-works/pi-tui@0.79.4':
+    resolution: {integrity: sha512-/ZhfFiHSBMH7AbDrBQIN+UWlJnl9tSEpLYICRGGMzmNfyCqX+30NYacIhyOEaD8R5rS6wJZysAOPU0yNwigbXw==}
     engines: {node: '>=22.19.0'}
 
   '@emnapi/core@1.10.0':
@@ -1821,7 +1821,7 @@ snapshots:
       fast-wrap-ansi: 0.2.2
       sisteransi: 1.0.5
 
-  '@earendil-works/pi-tui@0.76.0':
+  '@earendil-works/pi-tui@0.79.4':
     dependencies:
       get-east-asian-width: 1.6.0
       marked: 15.0.12
