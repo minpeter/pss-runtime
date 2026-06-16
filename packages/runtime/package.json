@@ -42,7 +42,7 @@
     "lint": "ultracite check ."
   },
   "dependencies": {
-    "ai": "7.0.0-canary.142"
+    "ai": "7.0.0-canary.176"
   },
   "devDependencies": {
     "tsdown": "^0.22.0",
