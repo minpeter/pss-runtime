@@ -52,7 +52,7 @@
     "lint": "ultracite check ."
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "3.0.0-canary.48",
+    "@ai-sdk/openai-compatible": "3.0.0-canary.56",
     "@earendil-works/pi-tui": "^0.79.4",
     "@minpeter/pss-runtime": "workspace:^",
     "@t3-oss/env-core": "^0.13.11",
