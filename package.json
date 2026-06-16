@@ -33,7 +33,7 @@
     "@t3-oss/env-core": "^0.13.11",
     "@types/node": "^25.9.1",
     "dotenv": "^17.4.2",
-    "tsx": "^4.22.3",
+    "tsx": "^4.22.4",
     "turbo": "^2.9.15",
     "typescript": "^6.0.3",
     "ultracite": "7.8.0",
