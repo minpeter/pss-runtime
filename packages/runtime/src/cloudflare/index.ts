@@ -48,5 +48,7 @@ export {
   listScheduledCloudflareSessionPrompts,
   rescheduleCloudflareAlarm,
 } from "./cloudflare-host";
+export { DurableObjectSqliteCheckpointStore } from "./cloudflare-sqlite-checkpoint-store";
+export { DurableObjectSqliteEventStore } from "./cloudflare-sqlite-event-store";
 export { DurableObjectSqliteSessionStore } from "./cloudflare-sqlite-session-store";
 export type { SqlStorage, SqlStorageCursorLike } from "./sql-storage";
