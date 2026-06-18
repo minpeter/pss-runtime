@@ -19,8 +19,14 @@ export {
 } from "./alarm/drainer";
 export type { CloudflareAgentRunDrainOptions } from "./alarm/run-drain";
 export { drainAgentRun } from "./alarm/run-drain";
-export type { DispatchCloudflareAgentNotificationInput } from "./dispatch/notification-dispatch";
-export { dispatchCloudflareAgentNotification } from "./dispatch/notification-dispatch";
+export type {
+  DispatchCloudflareAgentNotificationInput,
+  SourceCloudflareAgentNotificationIdempotencyKeyInput,
+} from "./dispatch/notification-dispatch";
+export {
+  dispatchCloudflareAgentNotification,
+  sourceCloudflareAgentNotificationIdempotencyKey,
+} from "./dispatch/notification-dispatch";
 export type {
   CloudflareAgentContext,
   CloudflareAgentContextFactoryOptions,

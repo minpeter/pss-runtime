@@ -1,3 +1,4 @@
+import { agentNamespace } from "../../agent/identity/namespace";
 import {
   type DispatchedAgentNotification,
   dispatchAgentNotification,
@@ -50,4 +51,75 @@ export function dispatchCloudflareAgentNotification({
     observerEvents,
     sessionKey,
   });
+}
+
+export interface SourceCloudflareAgentNotificationIdempotencyKeyInput {
+  readonly idempotencyKey: string | undefined;
+  readonly namespace?: string;
+  readonly sessionKey: string;
+}
+
+interface ScopedCloudflareAgentNotificationIdempotencyKey {
+  readonly ownerNamespace: string;
+  readonly sessionKey: string;
+  readonly sourceIdempotencyKey: string;
+}
+
+export function sourceCloudflareAgentNotificationIdempotencyKey(
+  input: SourceCloudflareAgentNotificationIdempotencyKeyInput
+): string | undefined {
+  if (!input.idempotencyKey) {
+    return;
+  }
+
+  const scoped = decodeScopedCloudflareAgentNotificationIdempotencyKey(
+    input.idempotencyKey
+  );
+  if (!scoped) {
+    return input.idempotencyKey;
+  }
+
+  if (scoped.sessionKey !== input.sessionKey) {
+    return input.idempotencyKey;
+  }
+
+  if (input.namespace) {
+    return scoped.ownerNamespace === agentNamespace(input.namespace)
+      ? scoped.sourceIdempotencyKey
+      : input.idempotencyKey;
+  }
+
+  return scoped.ownerNamespace.startsWith("agent:")
+    ? scoped.sourceIdempotencyKey
+    : input.idempotencyKey;
+}
+
+function decodeScopedCloudflareAgentNotificationIdempotencyKey(
+  idempotencyKey: string
+): ScopedCloudflareAgentNotificationIdempotencyKey | undefined {
+  const parts = idempotencyKey.split(":");
+  if (parts.length !== 3) {
+    return;
+  }
+
+  try {
+    const ownerNamespace = decodeURIComponent(parts[0] ?? "");
+    const sessionKey = decodeURIComponent(parts[1] ?? "");
+    const sourceIdempotencyKey = decodeURIComponent(parts[2] ?? "");
+    if (!ownerNamespace) {
+      return;
+    }
+    if (!sessionKey) {
+      return;
+    }
+    if (!sourceIdempotencyKey) {
+      return;
+    }
+    return { ownerNamespace, sessionKey, sourceIdempotencyKey };
+  } catch (error) {
+    if (error instanceof URIError) {
+      return;
+    }
+    throw error;
+  }
 }
