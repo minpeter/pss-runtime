@@ -8,19 +8,19 @@ function readText(path) {
 describe("cloudflare durable object adapter", () => {
   it("exposes the packaged Worker/Durable Object adapter surface", () => {
     const hostSource = readText(
-      "packages/runtime/src/cloudflare/cloudflare-host.ts"
+      "packages/runtime/src/cloudflare/host/durable-object-host.ts"
     );
     const storeSource = readText(
-      "packages/runtime/src/cloudflare/cloudflare-execution-store.ts"
+      "packages/runtime/src/cloudflare/storage/execution/store.ts"
     );
     const alarmDrainerSource = readText(
-      "packages/runtime/src/cloudflare/cloudflare-alarm-drainer.ts"
+      "packages/runtime/src/cloudflare/alarm/drainer.ts"
     );
     const alarmWorkSource = readText(
-      "packages/runtime/src/cloudflare/cloudflare-alarm-work.ts"
+      "packages/runtime/src/cloudflare/alarm/scheduled-work.ts"
     );
     const sessionStoreSource = readText(
-      "packages/runtime/src/cloudflare/cloudflare-sqlite-session-store.ts"
+      "packages/runtime/src/cloudflare/storage/sqlite/session-store.ts"
     );
 
     expect(hostSource).not.toContain("createFakeCloudflareDurableObjectHost");
@@ -37,7 +37,7 @@ describe("cloudflare durable object adapter", () => {
 
   it("drives Cloudflare scheduled runs and session prompts through stored alarms", async () => {
     const { InMemorySqlStorage } = await import(
-      "../packages/runtime/src/cloudflare/in-memory-sql-storage.ts"
+      "../packages/runtime/src/cloudflare/sql/node-test/node-sqlite-storage.ts"
     );
     const {
       InMemoryCloudflareDurableObjectStorage,
@@ -93,10 +93,10 @@ describe("cloudflare durable object adapter", () => {
 
   it("stores Durable Object sessions in SQLite rows", async () => {
     const { InMemorySqlStorage } = await import(
-      "../packages/runtime/src/cloudflare/in-memory-sql-storage.ts"
+      "../packages/runtime/src/cloudflare/sql/node-test/node-sqlite-storage.ts"
     );
     const { DurableObjectSqliteSessionStore } = await import(
-      "../packages/runtime/src/cloudflare/cloudflare-sqlite-session-store.ts"
+      "../packages/runtime/src/cloudflare/storage/sqlite/session-store.ts"
     );
     const { InMemoryCloudflareDurableObjectStorage } = await import(
       "../packages/runtime/src/cloudflare/index.ts"

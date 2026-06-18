@@ -378,13 +378,11 @@ when you need durable runs, tool checkpoints, and resume alongside your
 `sessionStore`.
 
 Hosts that need durable runs pass `host:` into `Agent`. The execution subpath
-keeps the durable surface split by responsibility, so hosts can implement the
-contracts they need: `SessionHost`, `RunHost`, `CheckpointHost`, `EventHost`,
-`NotificationHost`, `BackgroundSchedulerHost`, and `ExecutionTransactionHost`.
-`ExecutionHost` remains the aggregate contract for
-in-process or full-store hosts, while `DurableBackgroundHost` and
-`DurableNotificationResumeHost` describe the smaller durable surfaces required
-for background scheduling and notification resume.
+keeps the durable surface split by responsibility. `SessionHost` is the small
+session-only contract, `ExecutionHost` is the aggregate contract for in-process
+or full-store hosts, and `DurableBackgroundHost` is the split durable contract
+for background scheduling, run records, checkpoints, events, notifications, and
+session persistence.
 
 ```ts
 import { Agent } from "@minpeter/pss-runtime";
@@ -450,6 +448,40 @@ Durable background workflows require host-owned task ids, attempts, leases,
 checkpoints, cancellation, scheduling, session snapshots, and completion
 notifications. The Cloudflare adapter persists scheduled runs and session
 prompts, sets alarms, and resumes work through `Agent.resume(...)`.
+
+Use `dispatchCloudflareAgentNotification` for later events such as reminders,
+connector callbacks, and button actions. It creates the durable notification run,
+deduplicates by `idempotencyKey`, and schedules the Durable Object alarm:
+
+```ts
+import {
+  dispatchCloudflareAgentNotification,
+  drainCloudflareAlarm,
+} from "@minpeter/pss-runtime/cloudflare";
+
+await dispatchCloudflareAgentNotification({
+  idempotencyKey: `reminder:${reminderId}`,
+  input: { type: "user-text", text: reminderText },
+  namespace: "support-agent",
+  prefix: "agent",
+  sessionKey: `room:${roomId}:user:${userId}`,
+  storage: ctx.storage,
+});
+```
+
+Alarm drain can use a single agent, or resolve one per scheduled run when the
+Durable Object owns multiple rooms/users:
+
+```ts
+await drainCloudflareAlarm({
+  agentForRun: ({ sessionKey }) =>
+    createAgentForSession({ env, host, sessionKey }),
+  failOnTurnError: true,
+  onEvent: ({ runId }, event) => streamEventToDelivery(runId, event),
+  prefix: "agent",
+  storage: ctx.storage,
+});
+```
 
 ## Checkpoints and Cancellation
 

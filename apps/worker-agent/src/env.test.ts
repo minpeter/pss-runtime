@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   assertWebhookSecretToken,
+  durableObjectName,
   readWebhookSecretToken,
   WorkerAgentConfigError,
 } from "./env";
+
+const DURABLE_OBJECT_NAME_PATTERN = /^tg-v1-[A-Za-z0-9_-]*$/u;
 
 describe("worker-agent env helpers", () => {
   it("accepts Telegram-compatible webhook secrets", () => {
@@ -19,5 +22,24 @@ describe("worker-agent env helpers", () => {
     expect(() =>
       readWebhookSecretToken({ TELEGRAM_WEBHOOK_SECRET_TOKEN: "123:token" })
     ).toThrow("TELEGRAM_WEBHOOK_SECRET_TOKEN");
+  });
+
+  it("encodes durable object names without replacing channel separators", () => {
+    expect(durableObjectName("a:b")).toBe("tg-v1-YTpi");
+    expect(durableObjectName("a/b")).toBe("tg-v1-YS9i");
+    expect(durableObjectName("a:b")).not.toBe(durableObjectName("a/b"));
+  });
+
+  it("keeps durable object names URL-safe while preserving distinct channel IDs", () => {
+    const names = [
+      durableObjectName("chat:123/thread/456"),
+      durableObjectName("chat/123:thread:456"),
+      durableObjectName("chat_123-thread_456"),
+    ];
+
+    expect(new Set(names).size).toBe(names.length);
+    for (const name of names) {
+      expect(name).toMatch(DURABLE_OBJECT_NAME_PATTERN);
+    }
   });
 });

@@ -1,35 +1,3 @@
-import { InMemoryExecutionStore } from "./memory-store";
-import type {
-  ExecutionHost,
-  ExecutionScheduler,
-  ResumeSessionOptions,
-} from "./types";
+// biome-ignore-all lint/performance/noBarrelFile: Public package subpath entrypoint required by package exports.
 
-export function createInMemoryExecutionHost(): ExecutionHost {
-  return {
-    kind: "execution",
-    store: new InMemoryExecutionStore(),
-    scheduler: new InMemoryExecutionScheduler(),
-  };
-}
-
-class InMemoryExecutionScheduler implements ExecutionScheduler {
-  readonly #queuedRunIds: string[] = [];
-  readonly #resumedSessions: {
-    readonly options: ResumeSessionOptions;
-    readonly sessionKey: string;
-  }[] = [];
-
-  enqueueRun(runId: string): Promise<void> {
-    this.#queuedRunIds.push(runId);
-    return Promise.resolve();
-  }
-
-  resumeSession(
-    sessionKey: string,
-    options: ResumeSessionOptions
-  ): Promise<void> {
-    this.#resumedSessions.push({ options, sessionKey });
-    return Promise.resolve();
-  }
-}
+export { createInMemoryExecutionHost } from "./memory/memory-host";

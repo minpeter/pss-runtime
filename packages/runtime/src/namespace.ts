@@ -5,4 +5,4 @@ export {
   namespacePart,
   parentSessionNamespace,
   randomAgentNamespace,
-} from "./agent-namespace";
+} from "./agent/identity/namespace";

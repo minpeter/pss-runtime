@@ -4,22 +4,18 @@ export type {
   RuntimeToolExecutionContext,
   RuntimeToolExecutionDecision,
   RuntimeToolRetryPolicy,
-} from "../llm-tool-execution";
-export { ToolExecutionNeedsRecoveryError } from "../llm-tool-execution";
+} from "../llm/tool-execution";
+export { ToolExecutionNeedsRecoveryError } from "../llm/tool-execution";
 export type {
-  BackgroundScheduler,
-  BackgroundSchedulerHost,
-  CheckpointHost,
+  DispatchAgentNotificationInput,
+  DispatchedAgentNotification,
+} from "./dispatch/notification-dispatch";
+export { dispatchAgentNotification } from "./dispatch/notification-dispatch";
+export type {
   DurableBackgroundHost,
-  DurableNotificationResumeHost,
-  EventHost,
-  ExecutionTransactionHost,
-  NotificationHost,
-  RunHost,
   SessionHost,
-} from "./capabilities";
-export { executionHost, sessionHost } from "./host";
-export { createInMemoryExecutionHost } from "./memory";
+} from "./host/capabilities";
+export { executionHost, sessionHost } from "./host/host";
 export type {
   CheckpointPhase,
   CheckpointStore,
@@ -45,4 +41,5 @@ export type {
   RunStatus,
   RunStore,
   StoredAgentEvent,
-} from "./types";
+} from "./host/types";
+export { createInMemoryExecutionHost } from "./memory";

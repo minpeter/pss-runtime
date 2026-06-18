@@ -2,10 +2,16 @@ export {
   Agent,
   type AgentOptions,
   type SessionHandle,
-} from "./agent";
-export { executionHost } from "./execution/host";
-export type { AgentHost } from "./execution/types";
-export type { AgentToolChoice } from "./llm";
+} from "./agent/core/agent";
+export type { AgentHost } from "./execution/host/types";
+export type { AgentToolChoice } from "./llm/llm";
+export { delegateUserInput } from "./session/input/delegate-input";
+export type { AgentInput, SessionInput } from "./session/input/input";
+export {
+  attachInputMeta,
+  stripInputMeta,
+  userInputFromEvent,
+} from "./session/input/input-meta";
 export type {
   AgentEventContext,
   AgentPlugin,
@@ -13,9 +19,8 @@ export type {
   AgentPluginResult,
   InterceptableAgentEvent,
   PluginPipelineResult,
-} from "./plugins";
-export { runPluginsForEvent } from "./plugins";
-export { delegateUserInput } from "./session/delegate-input";
+} from "./session/plugins/pipeline";
+export { runPluginsForEvent } from "./session/plugins/pipeline";
 export type {
   AgentEvent,
   AgentEventListener,
@@ -41,21 +46,15 @@ export type {
   UserText,
   UserTextContent,
   VisibleAgentEvent,
-} from "./session/events";
+} from "./session/protocol/events";
 export {
   isControlAgentEvent,
   isLifecycleAgentEvent,
   isTelemetryAgentEvent,
   isToolAgentEvent,
   isVisibleAgentEvent,
-} from "./session/events";
-export type { AgentInput, SessionInput } from "./session/input";
-export {
-  attachInputMeta,
-  stripInputMeta,
-  userInputFromEvent,
-} from "./session/input-meta";
-export type { AgentRun } from "./session/run";
+} from "./session/protocol/events";
+export type { AgentRun } from "./session/protocol/run";
 export type {
   CommitResult,
   ExpectedSessionVersion,

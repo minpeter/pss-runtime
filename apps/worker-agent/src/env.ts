@@ -1,6 +1,8 @@
 export type EnvironmentName = "development" | "production";
 
 const WEBHOOK_SECRET_PATTERN = /^[A-Za-z0-9_-]{1,256}$/;
+const DURABLE_OBJECT_NAME_PREFIX = "tg-v1-";
+const BASE64_PADDING_PATTERN = /=+$/u;
 
 export class WorkerAgentConfigError extends Error {
   constructor(message: string) {
@@ -27,7 +29,21 @@ export function isDevelopment(env: {
 }
 
 export function durableObjectName(channelId: string): string {
-  return `tg-${channelId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+  return `${DURABLE_OBJECT_NAME_PREFIX}${base64UrlEncode(channelId)}`;
+}
+
+function base64UrlEncode(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return btoa(binary)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(BASE64_PADDING_PATTERN, "");
 }
 
 export function assertWebhookSecretToken(secret: string): void {

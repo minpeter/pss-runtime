@@ -12,7 +12,7 @@ export const runtimeRootDeclaration = [
 ].join("\n");
 export const runtimeExecutionDeclaration = [
   'export { createInMemoryExecutionHost } from "./memory";',
-  'export type { BackgroundScheduler, BackgroundSchedulerHost, CheckpointHost, DurableBackgroundHost, DurableNotificationResumeHost, EventHost, ExecutionTransactionHost, NotificationHost, RunHost, SessionHost } from "./capabilities";',
+  'export type { DurableBackgroundHost, SessionHost } from "./capabilities";',
   'export type { CheckpointStore, EventStore, ExecutionHost, ExecutionScheduler, ExecutionStore, ExecutionStoreTransaction, NotificationInbox, NotificationRecord, RunRecord, RunStore } from "./types";',
   'export type { RuntimeToolExecutionCheckpoint, RuntimeToolExecutionContext, RuntimeToolExecutionDecision, RuntimeToolRetryPolicy } from "../llm-tool-execution";',
   'export { ToolExecutionNeedsRecoveryError } from "../llm-tool-execution";',
