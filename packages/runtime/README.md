@@ -451,6 +451,40 @@ checkpoints, cancellation, scheduling, session snapshots, and completion
 notifications. The Cloudflare adapter persists scheduled runs and session
 prompts, sets alarms, and resumes work through `Agent.resume(...)`.
 
+Use `dispatchCloudflareAgentNotification` for later events such as reminders,
+connector callbacks, and button actions. It creates the durable notification run,
+deduplicates by `idempotencyKey`, and schedules the Durable Object alarm:
+
+```ts
+import {
+  dispatchCloudflareAgentNotification,
+  drainCloudflareAlarm,
+} from "@minpeter/pss-runtime/cloudflare";
+
+await dispatchCloudflareAgentNotification({
+  idempotencyKey: `reminder:${reminderId}`,
+  input: { type: "user-text", text: reminderText },
+  namespace: "support-agent",
+  prefix: "agent",
+  sessionKey: `room:${roomId}:user:${userId}`,
+  storage: ctx.storage,
+});
+```
+
+Alarm drain can use a single agent, or resolve one per scheduled run when the
+Durable Object owns multiple rooms/users:
+
+```ts
+await drainCloudflareAlarm({
+  agentForRun: ({ sessionKey }) =>
+    createAgentForSession({ env, host, sessionKey }),
+  failOnTurnError: true,
+  onEvent: ({ runId }, event) => streamEventToDelivery(runId, event),
+  prefix: "agent",
+  storage: ctx.storage,
+});
+```
+
 ## Checkpoints and Cancellation
 
 Resume is safe only at committed boundaries. Durable hosts can checkpoint before

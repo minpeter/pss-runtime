@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createInMemoryExecutionHost } from "./execution/memory";
-import { StoredAgentRun } from "./execution/run";
-import type { AgentEvent } from "./session/events";
+import { StoredAgentRun } from "./execution/run/stored-agent-run";
+import type { AgentEvent } from "./session/protocol/events";
 
 async function collectRunEvents(run: StoredAgentRun): Promise<AgentEvent[]> {
   const events: AgentEvent[] = [];

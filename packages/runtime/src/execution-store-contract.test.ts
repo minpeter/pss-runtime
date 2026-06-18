@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { createInMemoryExecutionHost } from "./execution/memory";
 import type {
   CheckpointWriteResult,
   ExecutionStore,
   RunRecord,
   StoredAgentEvent,
-} from "./execution/types";
+} from "./execution/host/types";
+import { createInMemoryExecutionHost } from "./execution/memory";
 
 const createQueuedRun = (runId = "run-1"): RunRecord => ({
   checkpointVersion: 0,

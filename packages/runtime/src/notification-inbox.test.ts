@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { agentNamespace } from "./agent-namespace";
+import { agentNamespace } from "./agent/identity/namespace";
+import type { NotificationRecord } from "./execution/host/types";
 import { createInMemoryExecutionHost } from "./execution/memory";
-import type { NotificationRecord } from "./execution/types";
-import { userText } from "./test-fixtures";
+import { userText } from "./testing/test-fixtures";
 
 describe("NotificationInbox", () => {
   it("dedupes duplicate completion notification claims by key", async () => {
