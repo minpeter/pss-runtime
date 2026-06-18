@@ -67,7 +67,7 @@ async function runBlockingDelegation({
   readonly readerAgent: Agent;
   readonly sessionKey: string;
 }) {
-  const childSession = readerAgent.session(sessionKey);
+  const childThread = readerAgent.thread(sessionKey);
   if (abortSignal?.aborted) {
     return {
       result: "aborted" as const,
@@ -76,10 +76,10 @@ async function runBlockingDelegation({
     };
   }
 
-  const abort = () => childSession.interrupt();
+  const abort = () => childThread.interrupt();
   abortSignal?.addEventListener("abort", abort, { once: true });
   try {
-    const text = await collectAssistantText(await childSession.send(prompt));
+    const text = await collectAssistantText(await childThread.send(prompt));
     return {
       result: "completed" as const,
       subagent: readerChildName,

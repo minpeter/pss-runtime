@@ -1,7 +1,7 @@
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { drain } from "./drain";
-import { session } from "./setup";
+import { thread } from "./setup";
 
 output.write(
   ["basic CLI", "종료: /quit", "메시지를 입력하세요.", ""].join("\n")
@@ -20,7 +20,7 @@ try {
       break;
     }
 
-    await drain(await session.send(text));
+    await drain(await thread.send(text));
     output.write("\n");
   }
 } finally {

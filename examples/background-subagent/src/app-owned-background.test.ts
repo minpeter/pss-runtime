@@ -129,7 +129,7 @@ function createTestAppAgent(host: ExecutionHost): Agent {
   return createAppAgent({
     coordinator: {
       resume: () => Promise.resolve(null),
-      session: () => ({
+      thread: () => ({
         send: async (_input: AgentInput) =>
           runWithText("coordinator saw notification"),
       }),
@@ -153,11 +153,11 @@ async function collectAssistantText(run: AgentRun) {
 
 function createReaderAgent(): Agent {
   return {
-    session: () =>
+    thread: () =>
       ({
         send: async (_input: AgentInput) => runWithText("reader result"),
-      }) as Agent["session"] extends (key: string) => infer Session
-        ? Session
+      }) as Agent["thread"] extends (key: string) => infer Thread
+        ? Thread
         : never,
   } as unknown as Agent;
 }

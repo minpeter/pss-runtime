@@ -1,5 +1,5 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import type { Agent, SessionHandle } from "@minpeter/pss-runtime";
+import type { Agent, ThreadHandle } from "@minpeter/pss-runtime";
 import { parentSessionNamespace } from "@minpeter/pss-runtime/namespace";
 import { createEnv } from "@t3-oss/env-core";
 import { config as loadEnv } from "dotenv";
@@ -30,8 +30,8 @@ export interface ExampleRuntime {
   readonly coordinator: Agent;
   readonly host: LocalHost;
   readonly reader: Agent;
-  readonly session: SessionHandle;
   readonly sessionKey: string;
+  readonly thread: ThreadHandle;
 }
 
 export function createExampleRuntime(sessionKey = "default"): ExampleRuntime {
@@ -65,7 +65,7 @@ export function createExampleRuntime(sessionKey = "default"): ExampleRuntime {
     coordinator,
     host,
     reader,
-    session: coordinator.session(sessionKey),
     sessionKey,
+    thread: coordinator.thread(sessionKey),
   };
 }

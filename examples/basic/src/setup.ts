@@ -21,7 +21,7 @@ const provider = createOpenAICompatible({
   baseURL: env.AI_BASE_URL,
 });
 
-export const session = new Agent({
+export const thread = new Agent({
   instructions: "Answer briefly.",
   model: provider(env.AI_MODEL),
-}).session("default");
+}).thread("default");

@@ -68,7 +68,7 @@ async function resumeBackgroundDelegation({
   assertOwnedBackgroundRun({ ownerNamespace, parentSessionKey, run, state });
 
   await host.store.runs.update({ ...run, status: "running" });
-  const childRun = await reader.session(run.sessionKey).send(state.prompt);
+  const childRun = await reader.thread(run.sessionKey).send(state.prompt);
   const events = await collectRunEvents(childRun);
   const output = {
     result: "completed",
@@ -196,7 +196,7 @@ async function resumeCompletionNotification({
   }
 
   const notificationRun = await coordinator
-    .session(notification.sessionKey)
+    .thread(notification.sessionKey)
     .send(notification.input);
   await host.store.runs.update({ ...run, status: "completed" });
   return notificationRun;
