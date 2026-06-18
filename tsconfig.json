@@ -8,5 +8,8 @@
     "apps/*/src/**/*.ts",
     "apps/*/types/**/*.d.ts",
     "examples/*/src/**/*.ts"
+  ],
+  "exclude": [
+    "apps/bori-agent-backend/**"
   ]
 }
