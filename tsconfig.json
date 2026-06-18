@@ -9,7 +9,5 @@
     "apps/*/types/**/*.d.ts",
     "examples/*/src/**/*.ts"
   ],
-  "exclude": [
-    "apps/bori-agent-backend/**"
-  ]
+  "exclude": ["apps/bori-agent-backend/**"]
 }
