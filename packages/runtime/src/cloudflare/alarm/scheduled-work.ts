@@ -1,8 +1,8 @@
 import {
   ackScheduledCloudflareRun,
-  ackScheduledCloudflareSessionPrompt,
+  ackScheduledCloudflareThreadPrompt,
   type CloudflareDurableObjectStorage,
-  type CloudflareScheduledSessionPrompt,
+  type CloudflareScheduledThreadPrompt,
 } from "../host/durable-object-host";
 import {
   type AlarmDrainState,
@@ -17,10 +17,10 @@ import { type AgentRunDrainResult, drainAgentRunWithBudget } from "./run-drain";
 import {
   prepareScheduledNotificationRetry,
   scheduledRunContext,
-  scheduledSessionPromptContext,
-  sessionPromptId,
+  scheduledThreadPromptContext,
   shouldRetryScheduledRun,
-  shouldRetryScheduledSessionPrompt,
+  shouldRetryScheduledThreadPrompt,
+  threadPromptId,
 } from "./scheduled-work-context";
 
 export async function resumeScheduledRun({
@@ -44,7 +44,7 @@ export async function resumeScheduledRun({
 }): Promise<void> {
   try {
     const context = await scheduledRunContext(storage, prefix, runId);
-    if (!context.sessionKey) {
+    if (!context.threadKey) {
       await ackScheduledCloudflareRun(storage, runId, { prefix });
       return;
     }
@@ -86,7 +86,7 @@ export async function resumeScheduledRun({
   }
 }
 
-export async function resumeScheduledSessionPrompt({
+export async function resumeScheduledThreadPrompt({
   agentForRun,
   budget,
   failOnTurnError,
@@ -101,36 +101,32 @@ export async function resumeScheduledSessionPrompt({
   readonly failOnTurnError: boolean;
   readonly onEvent?: CloudflareAlarmEventHandler;
   readonly prefix: string;
-  readonly prompt: CloudflareScheduledSessionPrompt;
+  readonly prompt: CloudflareScheduledThreadPrompt;
   readonly state: AlarmDrainState;
   readonly storage: CloudflareDurableObjectStorage;
 }): Promise<void> {
   try {
-    const context = await scheduledSessionPromptContext(
-      storage,
-      prefix,
-      prompt
-    );
+    const context = await scheduledThreadPromptContext(storage, prefix, prompt);
     if (!context) {
-      state.failedSessionPrompts.push({
-        error: "Session prompt did not include or resolve to a run id.",
-        id: sessionPromptId(prompt),
+      state.failedThreadPrompts.push({
+        error: "Thread prompt did not include or resolve to a run id.",
+        id: threadPromptId(prompt),
       });
-      await ackScheduledCloudflareSessionPrompt(storage, prompt, { prefix });
+      await ackScheduledCloudflareThreadPrompt(storage, prompt, { prefix });
       return;
     }
 
     const agent = await agentForRun(context);
     const run = await agent.resume(context.runId);
     if (!run) {
-      if (await shouldRetryScheduledSessionPrompt(storage, prefix, prompt)) {
-        state.failedSessionPrompts.push({
-          error: "Session prompt was not claimable during this alarm.",
-          id: sessionPromptId(prompt),
+      if (await shouldRetryScheduledThreadPrompt(storage, prefix, prompt)) {
+        state.failedThreadPrompts.push({
+          error: "Thread prompt was not claimable during this alarm.",
+          id: threadPromptId(prompt),
         });
         return;
       }
-      await ackScheduledCloudflareSessionPrompt(storage, prompt, { prefix });
+      await ackScheduledCloudflareThreadPrompt(storage, prompt, { prefix });
       return;
     }
     const drainResult = await drainAgentRunWithBudget(run, {
@@ -143,8 +139,8 @@ export async function resumeScheduledSessionPrompt({
     if (
       failOnTurnError &&
       appendTurnErrorFailure(
-        state.failedSessionPrompts,
-        sessionPromptId(prompt),
+        state.failedThreadPrompts,
+        threadPromptId(prompt),
         drainResult
       )
     ) {
@@ -155,7 +151,7 @@ export async function resumeScheduledSessionPrompt({
           context.runId
         ))
       ) {
-        await ackScheduledCloudflareSessionPrompt(storage, prompt, { prefix });
+        await ackScheduledCloudflareThreadPrompt(storage, prompt, { prefix });
       }
       return;
     }
@@ -167,16 +163,16 @@ export async function resumeScheduledSessionPrompt({
           context.runId
         ))
       ) {
-        await ackScheduledCloudflareSessionPrompt(storage, prompt, { prefix });
+        await ackScheduledCloudflareThreadPrompt(storage, prompt, { prefix });
       }
       return;
     }
-    state.consumedSessionPrompts.push(sessionPromptId(prompt));
-    await ackScheduledCloudflareSessionPrompt(storage, prompt, { prefix });
+    state.consumedThreadPrompts.push(threadPromptId(prompt));
+    await ackScheduledCloudflareThreadPrompt(storage, prompt, { prefix });
   } catch (error) {
-    state.failedSessionPrompts.push({
+    state.failedThreadPrompts.push({
       error: describeError(error),
-      id: sessionPromptId(prompt),
+      id: threadPromptId(prompt),
     });
   }
 }

@@ -33,7 +33,7 @@ export type {
   NotificationRecord,
   NotificationStatus,
   NotificationWriteResult,
-  ResumeSessionOptions,
+  ResumeThreadOptions,
   RunCheckpoint,
   RunKind,
   RunLease,

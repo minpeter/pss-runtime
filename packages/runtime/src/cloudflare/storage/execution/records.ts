@@ -77,11 +77,11 @@ export async function putNotification(
 export async function getSession(
   storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
-  sessionKey: string
+  threadKey: string
 ): Promise<StoredSession | null> {
   return (
     (await storage.get<StoredSession>(
-      storeKey(prefix, "session", sessionKey)
+      storeKey(prefix, "session", threadKey)
     )) ?? null
   );
 }
@@ -89,10 +89,10 @@ export async function getSession(
 export async function putSession(
   storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
-  sessionKey: string,
+  threadKey: string,
   session: StoredSession
 ): Promise<void> {
-  await storage.put(storeKey(prefix, "session", sessionKey), session);
+  await storage.put(storeKey(prefix, "session", threadKey), session);
 }
 
 export async function readList<T>(

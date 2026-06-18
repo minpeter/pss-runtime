@@ -15,13 +15,10 @@ export interface ExecutionScheduler {
     runId: string,
     options?: { readonly runAfterMs?: number }
   ): Promise<void>;
-  resumeSession(
-    sessionKey: string,
-    options: ResumeSessionOptions
-  ): Promise<void>;
+  resumeThread(threadKey: string, options: ResumeThreadOptions): Promise<void>;
 }
 
-export interface ResumeSessionOptions {
+export interface ResumeThreadOptions {
   readonly idempotencyKey?: string;
   readonly notificationId?: string;
   readonly runId: string;
@@ -56,8 +53,8 @@ export interface RunRecord {
   readonly publicTaskId?: string;
   readonly rootRunId: string;
   readonly runId: string;
-  readonly sessionKey: string;
   readonly status: RunStatus;
+  readonly threadKey: string;
 }
 
 export type ClaimRunResult =
@@ -123,8 +120,8 @@ export interface NotificationRecord {
   readonly observerEvents?: readonly AgentEvent[];
   readonly ownerNamespace?: string;
   readonly runId: string;
-  readonly sessionKey: string;
   readonly status: NotificationStatus;
+  readonly threadKey: string;
 }
 
 export type NotificationWriteResult =

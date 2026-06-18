@@ -15,9 +15,9 @@ import {
 } from "./options";
 import {
   type AgentThreadEntry,
+  normalizeThreadKey,
   type ThreadHandle,
   type ThreadKey,
-  threadSessionKey,
 } from "./thread-entry";
 
 export type { AgentHost } from "../../execution/host/types";
@@ -32,7 +32,7 @@ export type {
 export class Agent {
   readonly #modelOptions: AgentModelOptions;
   readonly #threads = new Map<string, AgentThreadEntry>();
-  readonly #sessionNamespace: string;
+  readonly #ownerNamespace: string;
   readonly #store: SessionStore;
   readonly #host: AgentHost;
   readonly #plugins: readonly AgentPlugin[];
@@ -42,7 +42,7 @@ export class Agent {
     assertAgentOptions(options);
 
     this.namespace = options.namespace;
-    this.#sessionNamespace = stableAgentNamespace({
+    this.#ownerNamespace = stableAgentNamespace({
       namespace: options.namespace,
     });
     this.#host = options.host ?? createInMemoryExecutionHost();
@@ -89,7 +89,7 @@ export class Agent {
 
     return await resumeAgentRun({
       host,
-      ownerNamespace: this.#sessionNamespace,
+      ownerNamespace: this.#ownerNamespace,
       resumeNotification: (notification) =>
         this.#resumeNotification(notification),
       runId,
@@ -97,7 +97,7 @@ export class Agent {
   }
 
   thread(thread: ThreadKey): ThreadHandle {
-    return this.#threadEntry(threadSessionKey(thread)).publicHandle;
+    return this.#threadEntry(normalizeThreadKey(thread)).publicHandle;
   }
 
   #threadEntry(key: string): AgentThreadEntry {
@@ -143,7 +143,7 @@ export class Agent {
   }
 
   #resumeNotification(notification: NotificationRecord): Promise<AgentRun> {
-    return this.#threadEntry(notification.sessionKey).notify(
+    return this.#threadEntry(notification.threadKey).notify(
       notification.input,
       { observerEvents: notification.observerEvents }
     );

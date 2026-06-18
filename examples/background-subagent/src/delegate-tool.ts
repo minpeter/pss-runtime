@@ -1,6 +1,6 @@
 import { delegateUserInput } from "@minpeter/pss-runtime";
 import type { ExecutionHost } from "@minpeter/pss-runtime/execution";
-import { defaultChildSessionKey } from "@minpeter/pss-runtime/namespace";
+import { defaultChildThreadKey } from "@minpeter/pss-runtime/namespace";
 import { jsonSchema, tool } from "ai";
 import {
   backgroundLaunchOutput,
@@ -19,7 +19,7 @@ export function createDelegateToReaderTool(options: {
   readonly description: string;
   readonly executionHost: ExecutionHost;
   readonly parentAgentNamespace: string;
-  readonly parentSessionKey: string;
+  readonly parentThreadKey: string;
 }) {
   return tool<DelegateInput, unknown, Record<string, unknown>>({
     description: options.description,
@@ -29,9 +29,9 @@ export function createDelegateToReaderTool(options: {
       }
 
       const prompt = delegateUserInput(input.prompt, { delegateToolName });
-      const childSessionKey = defaultChildSessionKey(
+      const childThreadKey = defaultChildThreadKey(
         options.parentAgentNamespace,
-        options.parentSessionKey,
+        options.parentThreadKey,
         readerChildName
       );
 
@@ -40,9 +40,9 @@ export function createDelegateToReaderTool(options: {
         description: input.description,
         executionHost: options.executionHost,
         ownerNamespace: options.parentAgentNamespace,
-        parentSessionKey: options.parentSessionKey,
+        parentThreadKey: options.parentThreadKey,
         prompt,
-        sessionKey: childSessionKey,
+        threadKey: childThreadKey,
         subagent: readerChildName,
       });
 

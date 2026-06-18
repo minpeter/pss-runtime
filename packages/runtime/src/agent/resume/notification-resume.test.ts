@@ -42,7 +42,7 @@ describe("host notification resume", () => {
       ],
       ownerNamespace: agentNamespace("notify-owner"),
       runId: "notification-run-1",
-      sessionKey: "default",
+      threadKey: "default",
       status: "pending",
     } as const;
     await host.store.notifications.enqueue(notification);
@@ -100,7 +100,7 @@ describe("host notification resume", () => {
       notificationId: "notification-foreign",
       ownerNamespace: agentNamespace("owner"),
       runId: "notification-run-foreign",
-      sessionKey: "default",
+      threadKey: "default",
       status: "pending",
     } as const;
     await host.store.notifications.enqueue(notification);
@@ -135,7 +135,7 @@ describe("host notification resume", () => {
       notificationId: "notification-retry",
       ownerNamespace: agentNamespace("notify-owner"),
       runId: "notification-run-retry",
-      sessionKey: "default",
+      threadKey: "default",
       status: "pending",
     } as const;
     await host.store.notifications.enqueue(notification);
@@ -173,7 +173,7 @@ describe("host notification resume", () => {
       notificationId: "notification-recover",
       ownerNamespace: agentNamespace("notify-owner"),
       runId,
-      sessionKey: "default",
+      threadKey: "default",
       status: "acked",
     });
     await host.store.runs.create(

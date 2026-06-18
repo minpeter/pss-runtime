@@ -39,7 +39,7 @@ export class AgentSession {
   readonly #inputQueue: QueuedInput[] = [];
   readonly #model: ModelGenerationOptions;
   readonly #pendingRuntimeInputs: QueuedRuntimeInput[] = [];
-  readonly #sessionKey: string;
+  readonly #threadKey: string;
   readonly #state: SessionState;
   #activeAbort?: AbortController;
   #activeRun?: BufferedAgentRun;
@@ -57,7 +57,7 @@ export class AgentSession {
   ) {
     this.#model = model;
     this.#execution = execution;
-    this.#sessionKey = persistence.key;
+    this.#threadKey = persistence.key;
     this.#state = new SessionState(persistence);
     this.#events = new SessionEventDispatcher({
       history: () => this.#state.modelSnapshot(),
@@ -211,7 +211,7 @@ export class AgentSession {
               this.#activeRuntimeInput = undefined;
               this.#runToCloseOnKill = undefined;
             },
-            sessionKey: this.#sessionKey,
+            threadKey: this.#threadKey,
             state: this.#state,
           });
         }

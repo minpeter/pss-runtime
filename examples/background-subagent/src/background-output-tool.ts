@@ -10,11 +10,11 @@ interface BackgroundOutputInput {
 export function createBackgroundOutputTool({
   executionHost,
   ownerNamespace,
-  parentSessionKey,
+  parentThreadKey,
 }: {
   readonly executionHost: ExecutionHost;
   readonly ownerNamespace: string;
-  readonly parentSessionKey: string;
+  readonly parentThreadKey: string;
 }) {
   return tool<BackgroundOutputInput, unknown, Record<string, unknown>>({
     description: "백그라운드 reader 작업의 결과를 가져온다.",
@@ -31,7 +31,7 @@ export function createBackgroundOutputTool({
       const state = readDurableBackgroundDelegationState(checkpoint);
       if (
         record.ownerNamespace !== ownerNamespace ||
-        state?.parentSessionKey !== parentSessionKey ||
+        state?.parentThreadKey !== parentThreadKey ||
         state.subagent !== readerChildName
       ) {
         throw new Error(`백그라운드 작업 ${task_id}에 접근할 수 없다.`);

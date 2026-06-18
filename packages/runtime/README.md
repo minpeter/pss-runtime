@@ -352,7 +352,7 @@ const agent = new Agent({
 ```
 
 For durable sessions, use the exported file POC. Set a stable `namespace` so
-reconstructed agents map the same app-owned session keys back to the same
+reconstructed agents map the same app-owned thread keys back to the same
 transcripts:
 
 ```ts
@@ -431,7 +431,7 @@ Object adapter. See the sync example package for blocking app-owned delegation
 and the background example package for durable background delegation in a local
 interactive CLI.
 
-The same core API supports room/user/session routing through stable session keys.
+The same core API supports room/user/thread routing through stable thread keys.
 
 Recommended key patterns:
 
@@ -464,7 +464,7 @@ await dispatchCloudflareAgentNotification({
   input: { type: "user-text", text: reminderText },
   namespace: "support-agent",
   prefix: "agent",
-  sessionKey: `room:${roomId}:user:${userId}`,
+  threadKey: `room:${roomId}:user:${userId}`,
   storage: ctx.storage,
 });
 ```
@@ -474,8 +474,8 @@ Durable Object owns multiple rooms/users:
 
 ```ts
 await drainCloudflareAlarm({
-  agentForRun: ({ sessionKey }) =>
-    createAgentForSession({ env, host, sessionKey }),
+  agentForRun: ({ threadKey }) =>
+    createAgentForSession({ env, host, threadKey }),
   failOnTurnError: true,
   onEvent: ({ runId }, event) => streamEventToDelivery(runId, event),
   prefix: "agent",

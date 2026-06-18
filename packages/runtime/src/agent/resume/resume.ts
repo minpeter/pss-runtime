@@ -97,7 +97,7 @@ function canAccessRun(run: RunRecord, ownerNamespace: string): boolean {
   }
 
   return (
-    run.sessionKey.startsWith(`parent:${ownerNamespace}:`) ||
+    run.threadKey.startsWith(`parent:${ownerNamespace}:`) ||
     run.parentRunId?.startsWith(`${ownerNamespace}:session:`) === true
   );
 }

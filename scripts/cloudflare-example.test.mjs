@@ -35,17 +35,17 @@ describe("cloudflare durable object adapter", () => {
     expect(sessionStoreSource).toContain("pss_session_meta");
   });
 
-  it("drives Cloudflare scheduled runs and session prompts through stored alarms", async () => {
+  it("drives Cloudflare scheduled runs and thread prompts through stored alarms", async () => {
     const { InMemorySqlStorage } = await import(
       "../packages/runtime/src/cloudflare/sql/node-test/node-sqlite-storage.ts"
     );
     const {
       InMemoryCloudflareDurableObjectStorage,
       ackScheduledCloudflareRun,
-      ackScheduledCloudflareSessionPrompt,
+      ackScheduledCloudflareThreadPrompt,
       createCloudflareDurableObjectHost,
       listScheduledCloudflareRuns,
-      listScheduledCloudflareSessionPrompts,
+      listScheduledCloudflareThreadPrompts,
     } = await import("../packages/runtime/src/cloudflare/index.ts");
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
@@ -56,7 +56,7 @@ describe("cloudflare durable object adapter", () => {
     const notificationRunId = "notification-run-delayed";
 
     await host.scheduler.enqueueRun(runId);
-    await host.scheduler.resumeSession("example", {
+    await host.scheduler.resumeThread("example", {
       idempotencyKey,
       runId: notificationRunId,
     });
@@ -65,8 +65,8 @@ describe("cloudflare durable object adapter", () => {
       input: { text: "ready", type: "user-text" },
       notificationId: "notification-delayed",
       runId: notificationRunId,
-      sessionKey: "example",
       status: "pending",
+      threadKey: "example",
     });
 
     await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([
@@ -77,14 +77,14 @@ describe("cloudflare durable object adapter", () => {
     const prompt = {
       idempotencyKey,
       runId: notificationRunId,
-      sessionKey: "example",
+      threadKey: "example",
     };
     await expect(
-      listScheduledCloudflareSessionPrompts(storage)
+      listScheduledCloudflareThreadPrompts(storage)
     ).resolves.toEqual([prompt]);
-    await ackScheduledCloudflareSessionPrompt(storage, prompt);
+    await ackScheduledCloudflareThreadPrompt(storage, prompt);
     await expect(
-      listScheduledCloudflareSessionPrompts(storage)
+      listScheduledCloudflareThreadPrompts(storage)
     ).resolves.toEqual([]);
     await expect(
       host.store.notifications.claimByIdempotencyKey(idempotencyKey)

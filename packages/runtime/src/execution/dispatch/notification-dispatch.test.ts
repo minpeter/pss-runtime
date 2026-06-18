@@ -12,14 +12,14 @@ describe("dispatchAgentNotification", () => {
       idempotencyKey: "reminder:1",
       input: { text: "Reminder fired", type: "user-text" },
       namespace: "agent-a",
-      sessionKey: "room:1:user:2",
+      threadKey: "room:1:user:2",
     });
     const second = await dispatchAgentNotification({
       host,
       idempotencyKey: "reminder:1",
       input: { text: "Reminder fired again", type: "user-text" },
       namespace: "agent-a",
-      sessionKey: "room:1:user:2",
+      threadKey: "room:1:user:2",
     });
 
     expect(first).toMatchObject({
@@ -31,7 +31,7 @@ describe("dispatchAgentNotification", () => {
     expect(run).toMatchObject({
       kind: "notification",
       ownerNamespace: agentNamespace("agent-a"),
-      sessionKey: "room:1:user:2",
+      threadKey: "room:1:user:2",
       status: "queued",
     });
     expect(run?.dedupeKey).toEqual(expect.any(String));
@@ -43,7 +43,7 @@ describe("dispatchAgentNotification", () => {
       input: { text: "Reminder fired", type: "user-text" },
       ownerNamespace: agentNamespace("agent-a"),
       runId: first.runId,
-      sessionKey: "room:1:user:2",
+      threadKey: "room:1:user:2",
       status: "pending",
     });
   });
@@ -56,21 +56,21 @@ describe("dispatchAgentNotification", () => {
       idempotencyKey: "reminder:shared",
       input: { text: "Agent A reminder", type: "user-text" },
       namespace: "agent-a",
-      sessionKey: "room:1:user:1",
+      threadKey: "room:1:user:1",
     });
     const second = await dispatchAgentNotification({
       host,
       idempotencyKey: "reminder:shared",
       input: { text: "Agent B reminder", type: "user-text" },
       namespace: "agent-b",
-      sessionKey: "room:1:user:2",
+      threadKey: "room:1:user:2",
     });
     const duplicateFirst = await dispatchAgentNotification({
       host,
       idempotencyKey: "reminder:shared",
       input: { text: "ignored duplicate", type: "user-text" },
       namespace: "agent-a",
-      sessionKey: "room:1:user:1",
+      threadKey: "room:1:user:1",
     });
 
     expect(second.deduplicated).toBe(false);
@@ -78,11 +78,11 @@ describe("dispatchAgentNotification", () => {
     expect(duplicateFirst).toEqual({ ...first, deduplicated: true });
     await expect(host.store.runs.get(first.runId)).resolves.toMatchObject({
       ownerNamespace: agentNamespace("agent-a"),
-      sessionKey: "room:1:user:1",
+      threadKey: "room:1:user:1",
     });
     await expect(host.store.runs.get(second.runId)).resolves.toMatchObject({
       ownerNamespace: agentNamespace("agent-b"),
-      sessionKey: "room:1:user:2",
+      threadKey: "room:1:user:2",
     });
   });
 });

@@ -3,7 +3,7 @@ import { createInMemoryExecutionHost } from "../../execution";
 import {
   dispatchCloudflareAgentNotification,
   InMemoryCloudflareDurableObjectStorage,
-  listScheduledCloudflareSessionPrompts,
+  listScheduledCloudflareThreadPrompts,
   sourceCloudflareAgentNotificationIdempotencyKey,
 } from "../index";
 import { InMemorySqlStorage } from "../sql/node-test/node-sqlite-storage";
@@ -17,13 +17,13 @@ describe("dispatchCloudflareAgentNotification", () => {
       idempotencyKey: "background:ready",
       input: { text: "Background signal", type: "user-text" },
       namespace: "agent-a",
-      sessionKey: "room:1:user:2",
+      threadKey: "room:1:user:2",
     });
 
     await expect(host.store.runs.get(dispatched.runId)).resolves.toMatchObject({
       kind: "notification",
       runId: dispatched.runId,
-      sessionKey: "room:1:user:2",
+      threadKey: "room:1:user:2",
       status: "queued",
     });
     const run = await host.store.runs.get(dispatched.runId);
@@ -45,7 +45,7 @@ describe("dispatchCloudflareAgentNotification", () => {
       input: { text: "Connector OAuth completed", type: "user-text" },
       namespace: "agent-a",
       prefix: "bori-agent",
-      sessionKey: "room:1:user:2",
+      threadKey: "room:1:user:2",
       storage,
     });
     const second = await dispatchCloudflareAgentNotification({
@@ -53,18 +53,18 @@ describe("dispatchCloudflareAgentNotification", () => {
       input: { text: "ignored duplicate", type: "user-text" },
       namespace: "agent-a",
       prefix: "bori-agent",
-      sessionKey: "room:1:user:2",
+      threadKey: "room:1:user:2",
       storage,
     });
 
     expect(second).toEqual({ ...first, deduplicated: true });
-    const [prompt] = await listScheduledCloudflareSessionPrompts(storage, {
+    const [prompt] = await listScheduledCloudflareThreadPrompts(storage, {
       prefix: "bori-agent",
     });
     expect(prompt).toMatchObject({
       notificationId: first.notificationId,
       runId: first.runId,
-      sessionKey: "room:1:user:2",
+      threadKey: "room:1:user:2",
     });
     expect(prompt?.idempotencyKey).toEqual(expect.any(String));
     expect(prompt?.idempotencyKey).not.toBe("connector:oauth:done");
@@ -72,7 +72,7 @@ describe("dispatchCloudflareAgentNotification", () => {
       sourceCloudflareAgentNotificationIdempotencyKey({
         idempotencyKey: prompt?.idempotencyKey,
         namespace: "agent-a",
-        sessionKey: "room:1:user:2",
+        threadKey: "room:1:user:2",
       })
     ).toBe("connector:oauth:done");
     expect(storage.alarmTime()).toEqual(expect.any(Number));
@@ -83,14 +83,14 @@ describe("dispatchCloudflareAgentNotification", () => {
       sourceCloudflareAgentNotificationIdempotencyKey({
         idempotencyKey: "reminder:run:1",
         namespace: "agent-a",
-        sessionKey: "room:1:user:2",
+        threadKey: "room:1:user:2",
       })
     ).toBe("reminder:run:1");
     expect(
       sourceCloudflareAgentNotificationIdempotencyKey({
         idempotencyKey: "agent%3Aagent-a:%E0%A4%A:connector%3Abad",
         namespace: "agent-a",
-        sessionKey: "room:1:user:2",
+        threadKey: "room:1:user:2",
       })
     ).toBe("agent%3Aagent-a:%E0%A4%A:connector%3Abad");
   });
@@ -105,11 +105,11 @@ describe("dispatchCloudflareAgentNotification", () => {
       input: { text: "Connector OAuth completed", type: "user-text" },
       namespace: "agent-a",
       prefix: "bori-agent",
-      sessionKey: "room:1:user:2",
+      threadKey: "room:1:user:2",
       storage,
     });
 
-    const [prompt] = await listScheduledCloudflareSessionPrompts(storage, {
+    const [prompt] = await listScheduledCloudflareThreadPrompts(storage, {
       prefix: "bori-agent",
     });
 
@@ -117,7 +117,7 @@ describe("dispatchCloudflareAgentNotification", () => {
       sourceCloudflareAgentNotificationIdempotencyKey({
         idempotencyKey: prompt?.idempotencyKey,
         namespace: "agent-a",
-        sessionKey: "room:2:user:2",
+        threadKey: "room:2:user:2",
       })
     ).toBe(prompt?.idempotencyKey);
   });

@@ -237,7 +237,7 @@ describe("examples workspace packages", () => {
     expect(setupSource).toContain("localHost");
     expect(indexSource).toContain("readline");
     expect(indexSource).toContain("thread.send");
-    expect(indexSource).toContain("host.resumeSession");
+    expect(indexSource).toContain("host.resumeThread");
     expect(indexSource).toContain("/quit");
     expect(indexSource).toContain("kb/");
     expect(

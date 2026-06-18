@@ -1,7 +1,7 @@
 import type { RunRecord, RunStatus } from "../../execution";
 import {
   type CloudflareDurableObjectStorage,
-  type CloudflareScheduledSessionPrompt,
+  type CloudflareScheduledThreadPrompt,
   createCloudflareDurableObjectHost,
 } from "../host/durable-object-host";
 import type { CloudflareAlarmRunContext } from "./drainer";
@@ -17,17 +17,17 @@ export async function scheduledRunContext(
   }).store.runs.get(runId);
   return {
     runId,
-    sessionKey: run?.sessionKey ?? "",
+    threadKey: run?.threadKey ?? "",
     source: "scheduled-run",
   };
 }
 
-export async function scheduledSessionPromptContext(
+export async function scheduledThreadPromptContext(
   storage: CloudflareDurableObjectStorage,
   prefix: string,
-  prompt: CloudflareScheduledSessionPrompt
+  prompt: CloudflareScheduledThreadPrompt
 ): Promise<CloudflareAlarmRunContext | undefined> {
-  const runId = await scheduledSessionPromptRunId(storage, prefix, prompt);
+  const runId = await scheduledThreadPromptRunId(storage, prefix, prompt);
   if (!runId) {
     return;
   }
@@ -36,8 +36,8 @@ export async function scheduledSessionPromptContext(
     idempotencyKey: prompt.idempotencyKey,
     notificationId: prompt.notificationId,
     runId,
-    sessionKey: prompt.sessionKey,
-    source: "session-prompt",
+    threadKey: prompt.threadKey,
+    source: "thread-prompt",
   };
 }
 
@@ -53,17 +53,17 @@ export async function shouldRetryScheduledRun(
   return run ? isRetryableRunStatus(run.status) : false;
 }
 
-export async function shouldRetryScheduledSessionPrompt(
+export async function shouldRetryScheduledThreadPrompt(
   storage: CloudflareDurableObjectStorage,
   prefix: string,
-  prompt: CloudflareScheduledSessionPrompt
+  prompt: CloudflareScheduledThreadPrompt
 ): Promise<boolean> {
-  const runId = await scheduledSessionPromptRunId(storage, prefix, prompt);
+  const runId = await scheduledThreadPromptRunId(storage, prefix, prompt);
   return runId ? await shouldRetryScheduledRun(storage, prefix, runId) : false;
 }
 
-export function sessionPromptId(
-  prompt: CloudflareScheduledSessionPrompt
+export function threadPromptId(
+  prompt: CloudflareScheduledThreadPrompt
 ): string {
   return prompt.idempotencyKey ?? prompt.runId ?? "<missing-run-id>";
 }
@@ -88,10 +88,10 @@ export async function prepareScheduledNotificationRetry(
   return prepared;
 }
 
-async function scheduledSessionPromptRunId(
+async function scheduledThreadPromptRunId(
   storage: CloudflareDurableObjectStorage,
   prefix: string,
-  prompt: CloudflareScheduledSessionPrompt
+  prompt: CloudflareScheduledThreadPrompt
 ): Promise<string | undefined> {
   if (prompt.runId) {
     return prompt.runId;

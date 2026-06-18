@@ -27,7 +27,7 @@ export interface AgentThreadEntry {
   readonly publicHandle: ThreadHandle;
 }
 
-export function threadSessionKey(thread: ThreadKey): string {
+export function normalizeThreadKey(thread: ThreadKey): string {
   if (typeof thread === "string") {
     return thread;
   }

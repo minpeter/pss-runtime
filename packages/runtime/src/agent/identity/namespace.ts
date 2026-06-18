@@ -16,56 +16,57 @@ export function namespacePart(value: string): string {
  * Apps that delegate to child agents (sync or background) need a stable string
  * to tag the parent run so child background runs can be owned by, and resumed
  * back into, the right parent namespace. Build it once per (agent namespace,
- * session key) pair and reuse it when constructing delegation tools.
+ * thread key) pair and reuse it when constructing delegation tools.
  *
  * The result is URL-safe (each part is percent-encoded) and has no relationship
  * to the runtime-internal `agent:` namespace format used by `Agent`.
  */
-export function parentSessionNamespace(
+export function parentThreadNamespace(
   agentNamespace: string,
-  sessionKey: string
+  threadKey: string
 ): string {
-  return `app:${namespacePart(agentNamespace)}:${namespacePart(sessionKey)}`;
+  return `app:${namespacePart(agentNamespace)}:${namespacePart(threadKey)}`;
 }
 
 /**
- * Deterministic child session key for a delegated child agent.
+ * Deterministic child thread key for a delegated child agent.
  *
- * Combine the parent's owner namespace (`parentSessionNamespace`), the parent
- * session key, and the child agent name so the same delegation always maps to
- * the same child session transcript.
+ * Combine the parent's owner namespace (`parentThreadNamespace`), the parent
+ * thread key, and the child agent name so the same delegation always maps to
+ * the same child thread transcript.
  */
-export function defaultChildSessionKey(
+export function defaultChildThreadKey(
   parentAgentNamespace: string,
-  parentSessionKey: string,
+  parentThreadKey: string,
   childName: string
 ): string {
   return `parent:${namespacePart(parentAgentNamespace)}:${namespacePart(
-    parentSessionKey
+    parentThreadKey
   )}:subagent:${namespacePart(childName)}`;
 }
 
-export function durableParentSessionNamespace({
+export function durableParentThreadNamespace({
+  agentOwnerNamespace,
   generation,
-  sessionKey,
-  sessionNamespace,
+  threadKey,
 }: {
+  readonly agentOwnerNamespace: string;
   readonly generation: number;
-  readonly sessionKey: string;
-  readonly sessionNamespace: string;
+  readonly threadKey: string;
 }): string {
-  return `${sessionNamespace}:session:${namespacePart(
-    sessionKey
+  return `${agentOwnerNamespace}:thread:${namespacePart(
+    threadKey
   )}:generation:${generation}`;
 }
 
 export function ownsAgentNamespace(
   ownerNamespace: string | undefined,
-  sessionNamespace: string
+  agentOwnerNamespace: string
 ): boolean {
   return (
-    ownerNamespace === sessionNamespace ||
-    ownerNamespace?.startsWith(`${sessionNamespace}:session:`) === true
+    ownerNamespace === agentOwnerNamespace ||
+    ownerNamespace?.startsWith(`${agentOwnerNamespace}:thread:`) === true ||
+    ownerNamespace?.startsWith(`${agentOwnerNamespace}:session:`) === true
   );
 }
 

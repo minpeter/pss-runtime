@@ -8,17 +8,17 @@ interface BackgroundChildRunInput {
   readonly description?: string;
   readonly executionHost: ExecutionHost;
   readonly ownerNamespace?: string;
-  readonly parentSessionKey?: string;
+  readonly parentThreadKey?: string;
   readonly prompt: AgentInput;
-  readonly sessionKey: string;
   readonly subagent: string;
+  readonly threadKey: string;
 }
 
 interface DurableBackgroundChildRunState {
   readonly delegateToolCallId?: string;
   readonly description?: string;
   readonly kind: typeof backgroundDelegationStateKind;
-  readonly parentSessionKey?: string;
+  readonly parentThreadKey?: string;
   readonly prompt: AgentInput;
   readonly subagent: string;
 }
@@ -38,7 +38,7 @@ export async function launchDurableBackgroundDelegation(
     (await createDurableBackgroundTaskId({
       delegateToolCallId: input.delegateToolCallId,
       prompt: input.prompt,
-      sessionKey: input.sessionKey,
+      threadKey: input.threadKey,
     }));
 
   const childRun =
@@ -76,15 +76,15 @@ export function backgroundLaunchOutput(job: BackgroundJobLaunch) {
 async function createDurableBackgroundTaskId({
   delegateToolCallId,
   prompt,
-  sessionKey,
+  threadKey,
 }: Pick<
   BackgroundChildRunInput,
-  "delegateToolCallId" | "prompt" | "sessionKey"
+  "delegateToolCallId" | "prompt" | "threadKey"
 >): Promise<string> {
   const digest = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(
-      backgroundSubagentDedupeKey({ delegateToolCallId, prompt, sessionKey })
+      backgroundSubagentDedupeKey({ delegateToolCallId, prompt, threadKey })
     )
   );
   const bytes = [...new Uint8Array(digest.slice(0, 16))];
@@ -112,7 +112,7 @@ async function getOrCreateBackgroundChildRun(
       return existing;
     }
 
-    const parentRunId = input.parentSessionKey ?? input.sessionKey;
+    const parentRunId = input.parentThreadKey ?? input.threadKey;
     const runtimeState = durableBackgroundChildRunState(input);
     const run: RunRecord = {
       checkpointVersion: 0,
@@ -123,7 +123,7 @@ async function getOrCreateBackgroundChildRun(
       publicTaskId: input.publicTaskId,
       rootRunId: parentRunId,
       runId: `background:${input.publicTaskId}`,
-      sessionKey: `${input.sessionKey}:task:${input.publicTaskId}`,
+      threadKey: `${input.threadKey}:task:${input.publicTaskId}`,
       status: "queued",
     };
     await tx.runs.create(run);
@@ -163,8 +163,8 @@ function durableBackgroundChildRunState(
       : {}),
     ...(input.description ? { description: input.description } : {}),
     kind: backgroundDelegationStateKind,
-    ...(input.parentSessionKey
-      ? { parentSessionKey: input.parentSessionKey }
+    ...(input.parentThreadKey
+      ? { parentThreadKey: input.parentThreadKey }
       : {}),
     prompt: structuredClone(input.prompt),
     subagent: input.subagent,
@@ -174,13 +174,13 @@ function durableBackgroundChildRunState(
 function backgroundSubagentDedupeKey({
   delegateToolCallId,
   prompt,
-  sessionKey,
+  threadKey,
 }: {
   readonly delegateToolCallId?: string;
   readonly prompt: AgentInput;
-  readonly sessionKey: string;
+  readonly threadKey: string;
 }): string {
-  return `background-delegation:${sessionKey}:${delegateToolCallId ?? "unknown"}:${JSON.stringify(prompt)}`;
+  return `background-delegation:${threadKey}:${delegateToolCallId ?? "unknown"}:${JSON.stringify(prompt)}`;
 }
 
 export function readDurableBackgroundDelegationState(
@@ -204,8 +204,8 @@ export function readDurableBackgroundDelegationState(
       ? { description: state.description }
       : {}),
     kind: backgroundDelegationStateKind,
-    ...(typeof state.parentSessionKey === "string"
-      ? { parentSessionKey: state.parentSessionKey }
+    ...(typeof state.parentThreadKey === "string"
+      ? { parentThreadKey: state.parentThreadKey }
       : {}),
     prompt: state.prompt,
     subagent: state.subagent,

@@ -1,7 +1,7 @@
 import type {
   ExecutionHost,
   ExecutionScheduler,
-  ResumeSessionOptions,
+  ResumeThreadOptions,
 } from "../host/types";
 import { InMemoryExecutionStore } from "./store";
 
@@ -15,9 +15,9 @@ export function createInMemoryExecutionHost(): ExecutionHost {
 
 class InMemoryExecutionScheduler implements ExecutionScheduler {
   readonly #queuedRunIds: string[] = [];
-  readonly #resumedSessions: {
-    readonly options: ResumeSessionOptions;
-    readonly sessionKey: string;
+  readonly #resumedThreads: {
+    readonly options: ResumeThreadOptions;
+    readonly threadKey: string;
   }[] = [];
 
   enqueueRun(runId: string): Promise<void> {
@@ -25,11 +25,8 @@ class InMemoryExecutionScheduler implements ExecutionScheduler {
     return Promise.resolve();
   }
 
-  resumeSession(
-    sessionKey: string,
-    options: ResumeSessionOptions
-  ): Promise<void> {
-    this.#resumedSessions.push({ options, sessionKey });
+  resumeThread(threadKey: string, options: ResumeThreadOptions): Promise<void> {
+    this.#resumedThreads.push({ options, threadKey });
     return Promise.resolve();
   }
 }

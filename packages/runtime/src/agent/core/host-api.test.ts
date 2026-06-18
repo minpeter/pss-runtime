@@ -165,7 +165,7 @@ describe("Agent host public API", () => {
     expect(sessionStore.commits.at(-1)?.key).toBe("host-owned");
   });
 
-  it("includes scoped thread addresses in the stored session key", async () => {
+  it("includes scoped thread addresses in the stored thread key", async () => {
     const sessionStore = new SpyStore();
     const agent = new Agent({
       host: { kind: "session", sessionStore },

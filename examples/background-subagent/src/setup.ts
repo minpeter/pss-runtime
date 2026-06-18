@@ -1,6 +1,6 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { Agent, ThreadHandle } from "@minpeter/pss-runtime";
-import { parentSessionNamespace } from "@minpeter/pss-runtime/namespace";
+import { parentThreadNamespace } from "@minpeter/pss-runtime/namespace";
 import { createEnv } from "@t3-oss/env-core";
 import { config as loadEnv } from "dotenv";
 import { z } from "zod";
@@ -30,18 +30,15 @@ export interface ExampleRuntime {
   readonly coordinator: Agent;
   readonly host: LocalHost;
   readonly reader: Agent;
-  readonly sessionKey: string;
   readonly thread: ThreadHandle;
+  readonly threadKey: string;
 }
 
-export function createExampleRuntime(sessionKey = "default"): ExampleRuntime {
+export function createExampleRuntime(threadKey = "default"): ExampleRuntime {
   let coordinator!: Agent;
   let reader!: Agent;
   const coordinatorNamespace = "coordinator";
-  const ownerNamespace = parentSessionNamespace(
-    coordinatorNamespace,
-    sessionKey
-  );
+  const ownerNamespace = parentThreadNamespace(coordinatorNamespace, threadKey);
 
   const host = localHost({
     agent: () =>
@@ -49,7 +46,7 @@ export function createExampleRuntime(sessionKey = "default"): ExampleRuntime {
         coordinator,
         host,
         ownerNamespace,
-        parentSessionKey: sessionKey,
+        parentThreadKey: threadKey,
         reader,
       }),
   });
@@ -58,14 +55,14 @@ export function createExampleRuntime(sessionKey = "default"): ExampleRuntime {
   coordinator = createCoordinatorAgent(model, {
     executionHost: host,
     host,
-    sessionKey,
+    threadKey,
   });
 
   return {
     coordinator,
     host,
     reader,
-    sessionKey,
-    thread: coordinator.thread(sessionKey),
+    threadKey,
+    thread: coordinator.thread(threadKey),
   };
 }

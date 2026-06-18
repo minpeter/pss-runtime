@@ -19,7 +19,7 @@ describe("stored AgentRun events", () => {
       kind: "user-turn",
       rootRunId: "run-1",
       runId: "run-1",
-      sessionKey: "session-1",
+      threadKey: "session-1",
       status: "queued",
     });
     const cursor = await host.store.events.append("run-1", {

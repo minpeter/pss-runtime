@@ -55,7 +55,7 @@ function startBackgroundWatcher(host: LocalHost) {
 async function watchBackgroundCompletions(host: LocalHost) {
   while (active) {
     try {
-      const run = await host.resumeSession({
+      const run = await host.resumeThread({
         timeoutMs: notificationTimeoutMs,
       });
       output.write("\n--- [system] 백그라운드 작업 완료 ---\n");

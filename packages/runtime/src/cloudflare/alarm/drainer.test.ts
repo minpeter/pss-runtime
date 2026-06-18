@@ -7,7 +7,7 @@ import {
   drainCloudflareAlarm,
   InMemoryCloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
-  listScheduledCloudflareSessionPrompts,
+  listScheduledCloudflareThreadPrompts,
 } from "../index";
 import { InMemorySqlStorage } from "../sql/node-test/node-sqlite-storage";
 
@@ -63,29 +63,29 @@ describe("Cloudflare alarm drain budgets", () => {
     expect(storage.alarmTime()).not.toBeUndefined();
   });
 
-  it("re-arms continuation when the session prompt budget leaves backlog", async () => {
+  it("re-arms continuation when the thread prompt budget leaves backlog", async () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
     const host = createCloudflareDurableObjectHost({ storage });
 
-    await host.scheduler.resumeSession("session-a", { runId: "run-a" });
-    await host.scheduler.resumeSession("session-b", { runId: "run-b" });
+    await host.scheduler.resumeThread("session-a", { runId: "run-a" });
+    await host.scheduler.resumeThread("session-b", { runId: "run-b" });
 
     const summary = await drainCloudflareAlarm({
       agent: agentWithEvents([{ text: "done", type: "assistant-text" }]),
-      maxSessionPrompts: 1,
+      maxThreadPrompts: 1,
       prefix: "pss-runtime",
       storage,
     });
 
-    expect(summary.consumedSessionPrompts).toEqual(["run-a"]);
-    expect(summary.remainingSessionPrompts).toBe(1);
+    expect(summary.consumedThreadPrompts).toEqual(["run-a"]);
+    expect(summary.remainingThreadPrompts).toBe(1);
     expect(summary.continuationScheduled).toBe(true);
-    expect(summary.continuationReasons).toContain("session-prompt-budget");
+    expect(summary.continuationReasons).toContain("thread-prompt-budget");
     await expect(
-      listScheduledCloudflareSessionPrompts(storage)
-    ).resolves.toEqual([{ runId: "run-b", sessionKey: "session-b" }]);
+      listScheduledCloudflareThreadPrompts(storage)
+    ).resolves.toEqual([{ runId: "run-b", threadKey: "session-b" }]);
   });
 
   it("caps retained events without buffering the full run stream", async () => {
@@ -195,7 +195,7 @@ async function enqueueStoredRun(
     kind: "notification",
     rootRunId: runId,
     runId,
-    sessionKey: "session:test",
+    threadKey: "session:test",
     status: "queued",
   });
   await host.scheduler.enqueueRun(runId);

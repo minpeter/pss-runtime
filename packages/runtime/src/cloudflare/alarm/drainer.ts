@@ -2,7 +2,7 @@ import type { AgentEvent, AgentRun } from "../../index";
 import {
   type CloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
-  listScheduledCloudflareSessionPrompts,
+  listScheduledCloudflareThreadPrompts,
   rescheduleCloudflareAlarm,
 } from "../host/durable-object-host";
 import {
@@ -14,11 +14,11 @@ import {
   type NormalizedAlarmDrainBudget,
   normalizeAlarmDrainBudget,
   shouldStopRuns,
-  shouldStopSessionPrompts,
+  shouldStopThreadPrompts,
 } from "./budget";
 import {
   resumeScheduledRun,
-  resumeScheduledSessionPrompt,
+  resumeScheduledThreadPrompt,
 } from "./scheduled-work";
 
 export type {
@@ -28,16 +28,16 @@ export type {
 } from "./budget";
 
 export interface CloudflareAlarmDrainSummary {
-  readonly consumedSessionPrompts: readonly string[];
+  readonly consumedThreadPrompts: readonly string[];
   readonly continuationReasons: readonly CloudflareAlarmContinuationReason[];
   readonly continuationScheduled: boolean;
   readonly droppedEvents: number;
   readonly events: readonly AgentEvent[];
   readonly failedRuns: readonly FailedScheduledWork[];
-  readonly failedSessionPrompts: readonly FailedScheduledWork[];
+  readonly failedThreadPrompts: readonly FailedScheduledWork[];
   readonly markers: readonly string[];
   readonly remainingRuns: number;
-  readonly remainingSessionPrompts: number;
+  readonly remainingThreadPrompts: number;
   readonly resumedRuns: readonly string[];
 }
 
@@ -45,14 +45,14 @@ export interface CloudflareAlarmAgent {
   resume(runId: string): Promise<AgentRun | null>;
 }
 
-export type CloudflareAlarmRunSource = "scheduled-run" | "session-prompt";
+export type CloudflareAlarmRunSource = "scheduled-run" | "thread-prompt";
 
 export interface CloudflareAlarmRunContext {
   readonly idempotencyKey?: string;
   readonly notificationId?: string;
   readonly runId: string;
-  readonly sessionKey: string;
   readonly source: CloudflareAlarmRunSource;
+  readonly threadKey: string;
 }
 
 export type CloudflareAlarmAgentForRun = (
@@ -91,7 +91,7 @@ export async function drainCloudflareAlarm({
   failureRunAfterMs,
   maxEvents,
   maxRuns,
-  maxSessionPrompts,
+  maxThreadPrompts,
   onEvent,
   prefix,
   storage,
@@ -109,7 +109,7 @@ export async function drainCloudflareAlarm({
     failureRunAfterMs,
     maxEvents,
     maxRuns,
-    maxSessionPrompts,
+    maxThreadPrompts,
     throwOnFailure,
   });
   const state = createAlarmDrainState();
@@ -124,7 +124,7 @@ export async function drainCloudflareAlarm({
     state,
     storage,
   });
-  await drainSessionPrompts({
+  await drainThreadPrompts({
     agentForRun,
     budget,
     failOnTurnError: failOnTurnError ?? false,
@@ -153,16 +153,16 @@ async function drainRuns(options: DrainLoopOptions): Promise<void> {
   }
 }
 
-async function drainSessionPrompts(options: DrainLoopOptions): Promise<void> {
-  const prompts = await listScheduledCloudflareSessionPrompts(options.storage, {
+async function drainThreadPrompts(options: DrainLoopOptions): Promise<void> {
+  const prompts = await listScheduledCloudflareThreadPrompts(options.storage, {
     prefix: options.prefix,
   });
   for (const prompt of prompts) {
-    if (shouldStopSessionPrompts(options.state, options.budget)) {
+    if (shouldStopThreadPrompts(options.state, options.budget)) {
       break;
     }
-    options.state.sessionPromptAttempts += 1;
-    await resumeScheduledSessionPrompt({ ...options, prompt });
+    options.state.threadPromptAttempts += 1;
+    await resumeScheduledThreadPrompt({ ...options, prompt });
   }
 }
 
@@ -178,13 +178,10 @@ async function summarizeDrain({
   readonly storage: CloudflareDurableObjectStorage;
 }): Promise<CloudflareAlarmDrainSummary> {
   const remainingRuns = await listScheduledCloudflareRuns(storage, { prefix });
-  const remainingPrompts = await listScheduledCloudflareSessionPrompts(
-    storage,
-    {
-      prefix,
-    }
-  );
-  if (state.failedRuns.length > 0 || state.failedSessionPrompts.length > 0) {
+  const remainingPrompts = await listScheduledCloudflareThreadPrompts(storage, {
+    prefix,
+  });
+  if (state.failedRuns.length > 0 || state.failedThreadPrompts.length > 0) {
     state.reasons.add("failure");
   }
   const continuationScheduled = shouldRearm(
@@ -200,16 +197,16 @@ async function summarizeDrain({
     });
   }
   return {
-    consumedSessionPrompts: state.consumedSessionPrompts,
+    consumedThreadPrompts: state.consumedThreadPrompts,
     continuationReasons: [...state.reasons],
     continuationScheduled,
     droppedEvents: state.droppedEvents,
     events: state.events,
     failedRuns: state.failedRuns,
-    failedSessionPrompts: state.failedSessionPrompts,
+    failedThreadPrompts: state.failedThreadPrompts,
     markers: markersFor(state.reasons),
     remainingRuns: remainingRuns.length,
-    remainingSessionPrompts: remainingPrompts.length,
+    remainingThreadPrompts: remainingPrompts.length,
     resumedRuns: state.resumedRuns,
   };
 }
@@ -244,14 +241,14 @@ function shouldRearm(
 
 function hasFailures(summary: CloudflareAlarmDrainSummary): boolean {
   return (
-    summary.failedRuns.length > 0 || summary.failedSessionPrompts.length > 0
+    summary.failedRuns.length > 0 || summary.failedThreadPrompts.length > 0
   );
 }
 
 function markersFor(
   reasons: ReadonlySet<CloudflareAlarmContinuationReason>
 ): readonly string[] {
-  const markers = ["alarm:resume", "resume:session-prompt"];
+  const markers = ["alarm:resume", "resume:thread-prompt"];
   if (reasons.size > 0) {
     markers.push("alarm:continuation-rearm");
   }

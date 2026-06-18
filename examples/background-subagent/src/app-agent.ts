@@ -11,7 +11,7 @@ export function createAppAgent(options: {
   readonly coordinator: Agent;
   readonly host: ExecutionHost;
   readonly ownerNamespace: string;
-  readonly parentSessionKey: string;
+  readonly parentThreadKey: string;
   readonly reader: Agent;
 }): Agent {
   return {
@@ -21,7 +21,7 @@ export function createAppAgent(options: {
         return await resumeBackgroundDelegation({
           host: options.host,
           ownerNamespace: options.ownerNamespace,
-          parentSessionKey: options.parentSessionKey,
+          parentThreadKey: options.parentThreadKey,
           reader: options.reader,
           run,
         });
@@ -33,7 +33,7 @@ export function createAppAgent(options: {
           dedupeKey: run.dedupeKey,
           host: options.host,
           ownerNamespace: options.ownerNamespace,
-          parentSessionKey: options.parentSessionKey,
+          parentThreadKey: options.parentThreadKey,
           run,
         });
       }
@@ -46,13 +46,13 @@ export function createAppAgent(options: {
 async function resumeBackgroundDelegation({
   host,
   ownerNamespace,
-  parentSessionKey,
+  parentThreadKey,
   reader,
   run,
 }: {
   readonly host: ExecutionHost;
   readonly ownerNamespace: string;
-  readonly parentSessionKey: string;
+  readonly parentThreadKey: string;
   readonly reader: Agent;
   readonly run: RunRecord;
 }): Promise<AgentRun | null> {
@@ -65,10 +65,10 @@ async function resumeBackgroundDelegation({
   if (!state) {
     throw new Error(`Background task ${run.runId} is missing app state.`);
   }
-  assertOwnedBackgroundRun({ ownerNamespace, parentSessionKey, run, state });
+  assertOwnedBackgroundRun({ ownerNamespace, parentThreadKey, run, state });
 
   await host.store.runs.update({ ...run, status: "running" });
-  const childRun = await reader.thread(run.sessionKey).send(state.prompt);
+  const childRun = await reader.thread(run.threadKey).send(state.prompt);
   const events = await collectRunEvents(childRun);
   const output = {
     result: "completed",
@@ -122,9 +122,9 @@ async function enqueueCompletionNotification({
     ReturnType<typeof readDurableBackgroundDelegationState>
   >;
 }): Promise<void> {
-  const parentSessionKey = state.parentSessionKey ?? "default";
+  const parentThreadKey = state.parentThreadKey ?? "default";
   const taskId = run.publicTaskId ?? run.runId;
-  const idempotencyKey = `background-complete:${parentSessionKey}:${taskId}`;
+  const idempotencyKey = `background-complete:${parentThreadKey}:${taskId}`;
   const notificationId = `notification:${taskId}`;
   const notificationRunId = `notification:${taskId}`;
   const notificationResult = await host.store.notifications.enqueue({
@@ -139,7 +139,7 @@ async function enqueueCompletionNotification({
     notificationId,
     ownerNamespace: run.ownerNamespace,
     runId: notificationRunId,
-    sessionKey: parentSessionKey,
+    threadKey: parentThreadKey,
     status: "pending",
   });
   if (!notificationResult.ok) {
@@ -153,10 +153,10 @@ async function enqueueCompletionNotification({
     ownerNamespace: run.ownerNamespace,
     rootRunId: notificationRunId,
     runId: notificationRunId,
-    sessionKey: parentSessionKey,
+    threadKey: parentThreadKey,
     status: "queued",
   });
-  await host.scheduler.resumeSession(parentSessionKey, {
+  await host.scheduler.resumeThread(parentThreadKey, {
     idempotencyKey,
     notificationId,
     runId: notificationRunId,
@@ -168,19 +168,19 @@ async function resumeCompletionNotification({
   dedupeKey,
   host,
   ownerNamespace,
-  parentSessionKey,
+  parentThreadKey,
   run,
 }: {
   readonly coordinator: Agent;
   readonly dedupeKey: string;
   readonly host: ExecutionHost;
   readonly ownerNamespace: string;
-  readonly parentSessionKey: string;
+  readonly parentThreadKey: string;
   readonly run: RunRecord;
 }): Promise<AgentRun | null> {
   if (
     run.ownerNamespace !== ownerNamespace ||
-    run.sessionKey !== parentSessionKey
+    run.threadKey !== parentThreadKey
   ) {
     return null;
   }
@@ -189,14 +189,14 @@ async function resumeCompletionNotification({
     host,
     idempotencyKey: dedupeKey,
     ownerNamespace,
-    parentSessionKey,
+    parentThreadKey,
   });
   if (!notification) {
     return null;
   }
 
   const notificationRun = await coordinator
-    .thread(notification.sessionKey)
+    .thread(notification.threadKey)
     .send(notification.input);
   await host.store.runs.update({ ...run, status: "completed" });
   return notificationRun;
@@ -206,18 +206,18 @@ async function claimOwnedNotification({
   host,
   idempotencyKey,
   ownerNamespace,
-  parentSessionKey,
+  parentThreadKey,
 }: {
   readonly host: ExecutionHost;
   readonly idempotencyKey: string;
   readonly ownerNamespace: string;
-  readonly parentSessionKey: string;
+  readonly parentThreadKey: string;
 }): Promise<NotificationRecord | null> {
   const current =
     await host.store.notifications.getByIdempotencyKey(idempotencyKey);
   if (
     current?.ownerNamespace !== ownerNamespace ||
-    current.sessionKey !== parentSessionKey
+    current.threadKey !== parentThreadKey
   ) {
     return null;
   }
@@ -227,7 +227,7 @@ async function claimOwnedNotification({
   if (claimed.ok) {
     if (
       claimed.record.ownerNamespace === ownerNamespace &&
-      claimed.record.sessionKey === parentSessionKey
+      claimed.record.threadKey === parentThreadKey
     ) {
       return claimed.record;
     }
@@ -238,7 +238,7 @@ async function claimOwnedNotification({
   if (
     claimed.reason === "already-claimed" &&
     claimed.record?.ownerNamespace === ownerNamespace &&
-    claimed.record.sessionKey === parentSessionKey
+    claimed.record.threadKey === parentThreadKey
   ) {
     return claimed.record;
   }
@@ -248,12 +248,12 @@ async function claimOwnedNotification({
 
 function assertOwnedBackgroundRun({
   ownerNamespace,
-  parentSessionKey,
+  parentThreadKey,
   run,
   state,
 }: {
   readonly ownerNamespace: string;
-  readonly parentSessionKey: string;
+  readonly parentThreadKey: string;
   readonly run: RunRecord;
   readonly state: NonNullable<
     ReturnType<typeof readDurableBackgroundDelegationState>
@@ -263,7 +263,7 @@ function assertOwnedBackgroundRun({
     throw new Error(`Background task ${run.runId} is not owned by this app.`);
   }
 
-  if (state.parentSessionKey !== parentSessionKey) {
+  if (state.parentThreadKey !== parentThreadKey) {
     throw new Error(
       `Background task ${run.runId} is not linked to this session.`
     );

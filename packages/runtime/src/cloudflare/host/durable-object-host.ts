@@ -9,11 +9,11 @@ import { DurableObjectExecutionStore } from "../storage/execution/store";
 
 const defaultPrefix = "pss-runtime";
 
-export interface CloudflareScheduledSessionPrompt {
+export interface CloudflareScheduledThreadPrompt {
   readonly idempotencyKey?: string;
   readonly notificationId?: string;
   readonly runId?: string;
-  readonly sessionKey: string;
+  readonly threadKey: string;
 }
 
 export type CloudflareDurableObjectStorage = DurableObjectStoragePort;
@@ -71,12 +71,12 @@ export function createCloudflareAlarmScheduler({
       await appendUnique(storage, scheduledRunsKey(prefix), runId);
       await setAlarm(storage, options?.runAfterMs ?? 0);
     },
-    resumeSession: async (sessionKey, options) => {
-      await appendSessionPrompt(storage, scheduledSessionPromptsKey(prefix), {
+    resumeThread: async (threadKey, options) => {
+      await appendThreadPrompt(storage, scheduledThreadPromptsKey(prefix), {
         idempotencyKey: options?.idempotencyKey,
         notificationId: options?.notificationId,
         runId: options?.runId,
-        sessionKey,
+        threadKey,
       });
       await setAlarm(storage, 0);
     },
@@ -105,25 +105,25 @@ export async function ackScheduledCloudflareRun(
   );
 }
 
-export async function listScheduledCloudflareSessionPrompts(
+export async function listScheduledCloudflareThreadPrompts(
   storage: CloudflareDurableObjectStorage,
   options: { readonly prefix?: string } = {}
-): Promise<readonly CloudflareScheduledSessionPrompt[]> {
-  return await readList<CloudflareScheduledSessionPrompt>(
+): Promise<readonly CloudflareScheduledThreadPrompt[]> {
+  return await readList<CloudflareScheduledThreadPrompt>(
     storage,
-    scheduledSessionPromptsKey(options.prefix ?? defaultPrefix)
+    scheduledThreadPromptsKey(options.prefix ?? defaultPrefix)
   );
 }
 
-export async function ackScheduledCloudflareSessionPrompt(
+export async function ackScheduledCloudflareThreadPrompt(
   storage: CloudflareDurableObjectStorage,
-  prompt: CloudflareScheduledSessionPrompt,
+  prompt: CloudflareScheduledThreadPrompt,
   options: { readonly prefix?: string } = {}
 ): Promise<void> {
-  await removeFromList<CloudflareScheduledSessionPrompt>(
+  await removeFromList<CloudflareScheduledThreadPrompt>(
     storage,
-    scheduledSessionPromptsKey(options.prefix ?? defaultPrefix),
-    (scheduledPrompt) => sessionPromptsMatch(scheduledPrompt, prompt)
+    scheduledThreadPromptsKey(options.prefix ?? defaultPrefix),
+    (scheduledPrompt) => threadPromptsMatch(scheduledPrompt, prompt)
   );
 }
 
@@ -148,16 +148,16 @@ async function appendUnique(
   });
 }
 
-async function appendSessionPrompt(
+async function appendThreadPrompt(
   storage: CloudflareDurableObjectStorage,
   key: string,
-  prompt: CloudflareScheduledSessionPrompt
+  prompt: CloudflareScheduledThreadPrompt
 ): Promise<void> {
   await withTransaction(storage, async (tx) => {
-    const values = await readList<CloudflareScheduledSessionPrompt>(tx, key);
+    const values = await readList<CloudflareScheduledThreadPrompt>(tx, key);
     const isDuplicate = values.some(
       (existing) =>
-        existing.sessionKey === prompt.sessionKey &&
+        existing.threadKey === prompt.threadKey &&
         existing.idempotencyKey === prompt.idempotencyKey &&
         existing.runId === prompt.runId
     );
@@ -210,19 +210,19 @@ function scheduledRunsKey(prefix: string): string {
   return `${prefix}:scheduled-runs`;
 }
 
-function scheduledSessionPromptsKey(prefix: string): string {
+function scheduledThreadPromptsKey(prefix: string): string {
   return `${prefix}:scheduled-session-prompts`;
 }
 
-function sessionPromptsMatch(
-  left: CloudflareScheduledSessionPrompt,
-  right: CloudflareScheduledSessionPrompt
+function threadPromptsMatch(
+  left: CloudflareScheduledThreadPrompt,
+  right: CloudflareScheduledThreadPrompt
 ): boolean {
   return (
     left.idempotencyKey === right.idempotencyKey &&
     left.notificationId === right.notificationId &&
     left.runId === right.runId &&
-    left.sessionKey === right.sessionKey
+    left.threadKey === right.threadKey
   );
 }
 

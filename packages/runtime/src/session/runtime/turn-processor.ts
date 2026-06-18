@@ -40,8 +40,8 @@ interface ProcessQueuedInputOptions {
   readonly item: QueuedInput;
   readonly model: ModelGenerationOptions;
   readonly release: () => void;
-  readonly sessionKey: string;
   readonly state: SessionState;
+  readonly threadKey: string;
 }
 
 export async function processQueuedInput({
@@ -52,7 +52,7 @@ export async function processQueuedInput({
   item,
   model,
   release,
-  sessionKey,
+  threadKey,
   state,
 }: ProcessQueuedInputOptions): Promise<void> {
   const activeAbort = new AbortController();
@@ -71,7 +71,7 @@ export async function processQueuedInput({
   try {
     executionRun = await startSessionExecutionRun({
       executionHost: execution.executionHost,
-      sessionKey,
+      threadKey,
       state,
       turnId,
     });

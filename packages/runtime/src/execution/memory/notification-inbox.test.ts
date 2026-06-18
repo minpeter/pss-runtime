@@ -59,7 +59,7 @@ function createNotificationRecord(): NotificationRecord {
     notificationId: "notification-1",
     ownerNamespace: agentNamespace("notify-owner"),
     runId: "notification-run-1",
-    sessionKey: "default",
+    threadKey: "default",
     status: "pending",
   };
 }

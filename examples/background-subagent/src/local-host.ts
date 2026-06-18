@@ -2,29 +2,29 @@ import type { Agent, AgentRun } from "@minpeter/pss-runtime";
 import {
   createInMemoryExecutionHost,
   type ExecutionHost,
-  type ResumeSessionOptions,
+  type ResumeThreadOptions,
 } from "@minpeter/pss-runtime/execution";
 
 const defaultResumeTimeoutMs = 60_000;
 
-interface LocalSessionPrompt {
-  readonly options: ResumeSessionOptions;
-  readonly sessionKey: string;
+interface LocalThreadPrompt {
+  readonly options: ResumeThreadOptions;
+  readonly threadKey: string;
 }
 
-interface LocalSessionPromptState {
+interface LocalThreadPromptState {
   readonly pendingErrors: Error[];
-  readonly pendingPrompts: LocalSessionPrompt[];
-  readonly waiters: SessionPromptWaiter[];
+  readonly pendingPrompts: LocalThreadPrompt[];
+  readonly waiters: ThreadPromptWaiter[];
 }
 
-interface SessionPromptWaiter {
+interface ThreadPromptWaiter {
   reject(error: Error): void;
-  resolve(prompt: LocalSessionPrompt): void;
+  resolve(prompt: LocalThreadPrompt): void;
 }
 
 export interface LocalHost extends ExecutionHost {
-  resumeSession(options?: { readonly timeoutMs?: number }): Promise<AgentRun>;
+  resumeThread(options?: { readonly timeoutMs?: number }): Promise<AgentRun>;
 }
 
 class LocalHostError extends Error {
@@ -40,7 +40,7 @@ export function localHost({
   readonly agent: () => Agent;
 }): LocalHost {
   const baseHost = createInMemoryExecutionHost();
-  const promptState: LocalSessionPromptState = {
+  const promptState: LocalThreadPromptState = {
     pendingErrors: [],
     pendingPrompts: [],
     waiters: [],
@@ -52,23 +52,23 @@ export function localHost({
         await baseHost.scheduler.enqueueRun(runId, options);
         resumeQueuedRun(agent, runId, promptState);
       },
-      resumeSession: async (sessionKey, options) => {
-        await baseHost.scheduler.resumeSession(sessionKey, options);
-        publishPrompt(promptState, { options, sessionKey });
+      resumeThread: async (threadKey, options) => {
+        await baseHost.scheduler.resumeThread(threadKey, options);
+        publishPrompt(promptState, { options, threadKey });
       },
     },
   };
 
   return {
     ...host,
-    resumeSession: async (options) => {
+    resumeThread: async (options) => {
       const prompt = await waitForPrompt(
         promptState,
         options?.timeoutMs ?? defaultResumeTimeoutMs
       );
       if (!prompt.options.runId) {
         throw new LocalHostError(
-          `Session ${prompt.sessionKey} resumed without a run id.`
+          `Thread ${prompt.threadKey} resumed without a run id.`
         );
       }
 
@@ -84,8 +84,8 @@ export function localHost({
 }
 
 function publishPrompt(
-  state: LocalSessionPromptState,
-  prompt: LocalSessionPrompt
+  state: LocalThreadPromptState,
+  prompt: LocalThreadPrompt
 ): void {
   const waiter = state.waiters.shift();
   if (waiter) {
@@ -96,7 +96,7 @@ function publishPrompt(
   state.pendingPrompts.push(prompt);
 }
 
-function publishError(state: LocalSessionPromptState, error: Error): void {
+function publishError(state: LocalThreadPromptState, error: Error): void {
   const waiter = state.waiters.shift();
   if (waiter) {
     waiter.reject(error);
@@ -109,7 +109,7 @@ function publishError(state: LocalSessionPromptState, error: Error): void {
 function resumeQueuedRun(
   agent: () => Agent,
   runId: string,
-  state: LocalSessionPromptState
+  state: LocalThreadPromptState
 ): void {
   queueMicrotask(() => {
     agent()
@@ -129,9 +129,9 @@ function resumeQueuedRun(
 }
 
 function waitForPrompt(
-  state: LocalSessionPromptState,
+  state: LocalThreadPromptState,
   timeoutMs: number
-): Promise<LocalSessionPrompt> {
+): Promise<LocalThreadPrompt> {
   const pendingError = state.pendingErrors.shift();
   if (pendingError) {
     return Promise.reject(pendingError);
@@ -142,7 +142,7 @@ function waitForPrompt(
     return Promise.resolve(pendingPrompt);
   }
 
-  let waiter: SessionPromptWaiter | undefined;
+  let waiter: ThreadPromptWaiter | undefined;
   let settled = false;
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const cleanup = () => {
@@ -163,7 +163,7 @@ function waitForPrompt(
     action();
   };
 
-  return new Promise<LocalSessionPrompt>((resolve, reject) => {
+  return new Promise<LocalThreadPrompt>((resolve, reject) => {
     waiter = {
       reject: (error) => complete(() => reject(error)),
       resolve: (prompt) => complete(() => resolve(prompt)),
@@ -173,7 +173,7 @@ function waitForPrompt(
         complete(() =>
           reject(
             new LocalHostError(
-              `No session prompt resume arrived within ${timeoutMs}ms.`
+              `No thread prompt resume arrived within ${timeoutMs}ms.`
             )
           )
         ),
