@@ -1,17 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  type BackgroundScheduler,
-  type BackgroundSchedulerHost,
-  type CheckpointHost,
   createInMemoryExecutionHost,
   type DurableBackgroundHost,
-  type DurableNotificationResumeHost,
-  type EventHost,
   type ExecutionHost,
   type ExecutionScheduler,
-  type ExecutionTransactionHost,
-  type NotificationHost,
-  type RunHost,
   type SessionHost,
 } from "../../execution";
 import { collect, SpyStore } from "../../session/handle/test-support";
@@ -42,24 +34,6 @@ const acceptsSessionHost = {
   kind: "session",
   sessionStore: new SpyStore(),
 } satisfies SessionHost;
-const acceptsRunHost = {
-  runStore: aggregateHost.store.runs,
-} satisfies RunHost;
-const acceptsCheckpointHost = {
-  checkpointStore: aggregateHost.store.checkpoints,
-} satisfies CheckpointHost;
-const acceptsEventHost = {
-  eventStore: aggregateHost.store.events,
-} satisfies EventHost;
-const acceptsNotificationHost = {
-  notificationInbox: aggregateHost.store.notifications,
-} satisfies NotificationHost;
-const acceptsSchedulerHost = {
-  backgroundScheduler: aggregateHost.scheduler,
-} satisfies BackgroundSchedulerHost;
-const acceptsTransactionHost = {
-  transaction: aggregateHost.store.transaction.bind(aggregateHost.store),
-} satisfies ExecutionTransactionHost;
 const acceptsDurableBackgroundHost = {
   backgroundScheduler: aggregateHost.scheduler,
   checkpointStore: aggregateHost.store.checkpoints,
@@ -70,14 +44,6 @@ const acceptsDurableBackgroundHost = {
   sessionStore: aggregateHost.store.sessions,
   transaction: aggregateHost.store.transaction.bind(aggregateHost.store),
 } satisfies DurableBackgroundHost;
-const acceptsDurableNotificationResumeHost = {
-  backgroundScheduler: aggregateHost.scheduler,
-  checkpointStore: aggregateHost.store.checkpoints,
-  kind: "durable-notification-resume",
-  notificationInbox: aggregateHost.store.notifications,
-  runStore: aggregateHost.store.runs,
-  transaction: aggregateHost.store.transaction.bind(aggregateHost.store),
-} satisfies DurableNotificationResumeHost;
 
 type IsAssignable<Source, Target> = Source extends Target ? true : false;
 type AssertFalse<T extends false> = T;
@@ -110,26 +76,15 @@ type AcceptsExecutionHostAsAgentHost = IsAssignable<
   typeof aggregateHost,
   AgentHost
 >;
-type BackgroundSchedulerMatchesExecutionScheduler = IsAssignable<
-  BackgroundScheduler,
+type DurableSchedulerMatchesExecutionScheduler = IsAssignable<
+  DurableBackgroundHost["backgroundScheduler"],
   ExecutionScheduler
->;
-type ExecutionSchedulerMatchesBackgroundScheduler = IsAssignable<
-  ExecutionScheduler,
-  BackgroundScheduler
 >;
 
 const typeFixtures = [
-  acceptsCheckpointHost,
   acceptsDurableBackgroundHost,
-  acceptsDurableNotificationResumeHost,
-  acceptsEventHost,
   acceptsHostOptions,
-  acceptsNotificationHost,
-  acceptsRunHost,
-  acceptsSchedulerHost,
   acceptsSessionHost,
-  acceptsTransactionHost,
 ];
 const acceptsHostOptionAssertion: AcceptsHostOption = true;
 const rejectsRuntimeModelOptionAssertion: AssertFalse<AcceptsRuntimeModelOption> = false;
@@ -141,12 +96,11 @@ const executionSessionStoreAssertion: RejectsExecutionHostSessionStoreKey = fals
 const hostKindAssertion: RequiresHostKindKey = true;
 const acceptsSessionHostAssertion: AcceptsSessionHostAsAgentHost = true;
 const acceptsExecutionHostAssertion: AcceptsExecutionHostAsAgentHost = true;
-const backgroundSchedulerAssertion: BackgroundSchedulerMatchesExecutionScheduler = true;
-const executionSchedulerAssertion: ExecutionSchedulerMatchesBackgroundScheduler = true;
+const durableSchedulerAssertion: DurableSchedulerMatchesExecutionScheduler = true;
 
 describe("Agent host public API", () => {
   it("accepts host option and keeps unsupported option keys out of AgentOptions", () => {
-    expect(typeFixtures).toHaveLength(10);
+    expect(typeFixtures).toHaveLength(3);
     expect(acceptsHostOptionAssertion).toBe(true);
     expect(rejectsRuntimeModelOptionAssertion).toBe(false);
     expect(llmOptionAssertion).toBe(false);
@@ -157,8 +111,7 @@ describe("Agent host public API", () => {
     expect(hostKindAssertion).toBe(true);
     expect(acceptsSessionHostAssertion).toBe(true);
     expect(acceptsExecutionHostAssertion).toBe(true);
-    expect(backgroundSchedulerAssertion).toBe(true);
-    expect(executionSchedulerAssertion).toBe(true);
+    expect(durableSchedulerAssertion).toBe(true);
     expect(new Agent({ host: inProcessHost, model: fakeModel })).toBeInstanceOf(
       Agent
     );

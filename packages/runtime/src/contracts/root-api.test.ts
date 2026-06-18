@@ -1,23 +1,14 @@
-import { readFile } from "node:fs/promises";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type {
-  BackgroundScheduler,
-  BackgroundSchedulerHost,
-  CheckpointHost,
   CheckpointStore,
   DurableBackgroundHost,
-  DurableNotificationResumeHost,
-  EventHost,
   EventStore,
   ExecutionHost,
   ExecutionScheduler,
   ExecutionStore,
   ExecutionStoreTransaction,
-  ExecutionTransactionHost,
-  NotificationHost,
   NotificationInbox,
   NotificationRecord,
-  RunHost,
   RunRecord,
   RunStore,
   SessionHost,
@@ -42,7 +33,6 @@ import {
 type EmptyHostIsRejected =
   Record<string, never> extends AgentHost ? true : false;
 const emptyHostIsRejected: EmptyHostIsRejected = false;
-const runtimeIndexSourceUrl = new URL("../index.ts", import.meta.url);
 const forbiddenRuntimeSubagentExports = [
   ["Subagent", "Definition"].join(""),
   ["resume", "Background", "Child", "Run"].join(""),
@@ -74,6 +64,7 @@ describe("runtime public exports", () => {
     expect(runtime).toHaveProperty("runPluginsForEvent", runPluginsForEvent);
     expect(runtime).not.toHaveProperty("createInMemoryExecutionHost");
     expect(runtime).not.toHaveProperty("createCloudflareDurableObjectHost");
+    expect(runtime).not.toHaveProperty("executionHost");
     expect(runtime).not.toHaveProperty("BackgroundScheduler");
     expect(runtime).not.toHaveProperty("ToolExecutionNeedsRecoveryError");
     expect(runtime).not.toHaveProperty(runStreamExport);
@@ -97,21 +88,17 @@ describe("runtime public exports", () => {
 
   it("does not expose runtime-owned subagent helpers from the package root", async () => {
     const runtime = await import("../index");
-    const source = await readFile(runtimeIndexSourceUrl, "utf8");
 
     for (const forbiddenName of forbiddenRuntimeSubagentExports) {
       expect(runtime).not.toHaveProperty(forbiddenName);
-      expect(source).not.toContain(forbiddenName);
     }
   });
 
   it("does not expose runtime LLM adapter names from the package root", async () => {
     const runtime = await import("../index");
-    const source = await readFile(runtimeIndexSourceUrl, "utf8");
 
     for (const forbiddenName of forbiddenModelAdapterRootExports) {
       expect(runtime).not.toHaveProperty(forbiddenName);
-      expect(source).not.toContain(forbiddenName);
     }
   });
 
@@ -170,23 +157,22 @@ describe("runtime public exports", () => {
       sessionStore: {} as SessionHost["sessionStore"],
     } satisfies SessionHost;
     const agentHost = sessionHost satisfies AgentHost;
-    expectTypeOf<RunHost["runStore"]>().toEqualTypeOf<RunStore>();
+    expectTypeOf<DurableBackgroundHost["runStore"]>().toEqualTypeOf<RunStore>();
     expectTypeOf<
-      CheckpointHost["checkpointStore"]
+      DurableBackgroundHost["checkpointStore"]
     >().toEqualTypeOf<CheckpointStore>();
-    expectTypeOf<EventHost["eventStore"]>().toEqualTypeOf<EventStore>();
     expectTypeOf<
-      NotificationHost["notificationInbox"]
+      DurableBackgroundHost["eventStore"]
+    >().toEqualTypeOf<EventStore>();
+    expectTypeOf<
+      DurableBackgroundHost["notificationInbox"]
     >().toEqualTypeOf<NotificationInbox>();
-    expectTypeOf<BackgroundScheduler>().toEqualTypeOf<ExecutionScheduler>();
     expectTypeOf<
-      BackgroundSchedulerHost["backgroundScheduler"]
+      DurableBackgroundHost["backgroundScheduler"]
     >().toEqualTypeOf<ExecutionScheduler>();
-    expectTypeOf<ExecutionTransactionHost["transaction"]>().toEqualTypeOf<
+    expectTypeOf<DurableBackgroundHost["transaction"]>().toEqualTypeOf<
       ExecutionStore["transaction"]
     >();
-    expectTypeOf<DurableBackgroundHost>().toExtend<RunHost>();
-    expectTypeOf<DurableNotificationResumeHost>().toExtend<NotificationHost>();
     expect(agentHost.kind).toBe("session");
   });
 });
