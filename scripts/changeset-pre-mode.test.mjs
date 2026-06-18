@@ -11,7 +11,7 @@ describe("changeset prerelease mode", () => {
     expect(config.baseBranch).toBe("v0.1");
   });
 
-  it("ignores private example packages for release status", () => {
+  it("ignores private and external packages for release status", () => {
     const config = JSON.parse(readFileSync(".changeset/config.json", "utf8"));
 
     expect(config.ignore).toEqual([
@@ -20,6 +20,7 @@ describe("changeset prerelease mode", () => {
       "@minpeter/pss-example-plugin",
       "@minpeter/pss-example-sync-subagent",
       "@minpeter/pss-example-background-subagent",
+      "@bori/agent-backend",
     ]);
   });
 });
