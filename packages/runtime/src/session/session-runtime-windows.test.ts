@@ -22,11 +22,9 @@ describe("Agent session runtime input windows", () => {
     const agent = new Agent({
       plugins: [
         {
-          events: {
-            on: ({ event, history }) => {
-              pluginCalls.push(`${event.type}:${history.length}`);
-              trace.push(`plugin:${event.type}`);
-            },
+          on: ({ event, history }) => {
+            pluginCalls.push(`${event.type}:${history.length}`);
+            trace.push(`plugin:${event.type}`);
           },
         },
       ],

@@ -1,12 +1,12 @@
 ---
-"@minpeter/pss-runtime": minor
+"@minpeter/pss-runtime": patch
 ---
 
-Add plugin-first session persistence, memory, and compaction APIs, plus event-first runtime control.
+Add plugin-first session persistence, memory, and event-first runtime control.
 
 - Keep `run.events()` as the app-owned runtime control loop for synchronized rendering, tracing, and continuation policy.
-- Add constructor-level `plugins: [...]` lifecycle middleware support.
-- Expand plugin lifecycle middleware with `turn.before`, `step.before`, `step.after`, and `turn.after` handlers that can call scoped `steer(...)`.
-- Route plugin lifecycle handler failures through the returned run so callers own observability.
-- Add runtime-owned tool policy middleware with `tool.call` and `tool.result` for allow, modify, reject-and-continue, synthesize, error, and result replacement flows.
-- Use `host: { sessionStore }` for persistence, `run.events()` plus `session.steer()` for app control, or plugin lifecycle handlers for reusable middleware.
+- Add constructor-level `plugins: [...]` support with a single `on(context)` handler per plugin.
+- `on` is observe-only for most events. Three input event types (`user-text`, `user-message`, `runtime-input`) support intercept returns: `{ action: "continue" }`, `{ action: "transform", event }`, or `{ action: "handled" }`.
+- Plugins run in registration order; transforms chain so each plugin sees the previous plugin's event.
+- Route plugin logic on `event.meta?.source` (`send`, `steer`, `notify`, `delegate`). Meta is stripped before session history persistence and model mapping, so it never reaches the LLM prompt.
+- Use `host: { sessionStore }` for persistence, `run.events()` plus `session.steer()` for app control, or constructor `plugins: [...]` for reusable middleware.

@@ -50,10 +50,8 @@ describe("session plugin intercept integration", () => {
       ),
       plugins: [
         {
-          events: {
-            on: ({ event }) => {
-              seen.push(event.type);
-            },
+          on: ({ event }) => {
+            seen.push(event.type);
           },
         },
       ],

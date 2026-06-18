@@ -69,13 +69,11 @@ describe("Agent session terminal state", () => {
     const agent = new Agent({
       plugins: [
         {
-          events: {
-            on: ({ event }) => {
-              if (event.type === "turn-end") {
-                terminalPluginStarted.resolve();
-                return new Promise<never>(() => undefined);
-              }
-            },
+          on: ({ event }) => {
+            if (event.type === "turn-end") {
+              terminalPluginStarted.resolve();
+              return new Promise<never>(() => undefined);
+            }
           },
         },
       ],

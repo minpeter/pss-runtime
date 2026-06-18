@@ -3,7 +3,7 @@ import type { AgentHost } from "./execution/types";
 import type { AgentToolChoice } from "./llm";
 import type { AgentPlugin } from "./plugins";
 
-export interface AgentLanguageModelOptions {
+export interface AgentOptions {
   readonly host?: AgentHost;
   readonly instructions?: string;
   readonly model: LanguageModel;
@@ -14,16 +14,13 @@ export interface AgentLanguageModelOptions {
 }
 
 export type AgentModelOptions = Pick<
-  AgentLanguageModelOptions,
+  AgentOptions,
   "instructions" | "model" | "toolChoice" | "tools"
 >;
-export type AgentOptions = AgentLanguageModelOptions;
-
-export type AgentConstructionOptions = AgentOptions;
 
 export function assertAgentOptions(
   options: unknown
-): asserts options is AgentConstructionOptions {
+): asserts options is AgentOptions {
   if (options === null || typeof options !== "object") {
     throw new TypeError("Agent options are required. Provide { model }.");
   }

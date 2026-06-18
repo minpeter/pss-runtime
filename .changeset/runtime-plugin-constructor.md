@@ -2,4 +2,5 @@
 "@minpeter/pss-runtime": patch
 ---
 
-Implement constructor-level `plugins: [...]` event observers and lifecycle middleware.
+Implement constructor-level `plugins: [...]` event observers and input intercept
+middleware.

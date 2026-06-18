@@ -8,25 +8,35 @@ import {
   Text,
   TUI,
 } from "@earendil-works/pi-tui";
-import { Agent } from "@minpeter/pss-runtime";
+import { Agent, type AgentOptions } from "@minpeter/pss-runtime";
 import { FileSessionStore } from "@minpeter/pss-runtime/session-store/file";
+import type { ToolSet } from "ai";
 import { createCodingLanguageModel } from "./model";
 import { resolveCodingAgentSessionConfig } from "./session-config";
-import { tools } from "./tools";
 import { createTuiRunner } from "./tui-runner";
 import { safeInlineText } from "./tui-tool-printer";
 
-export async function startTui(): Promise<void> {
+export interface StartTuiOptions {
+  /**
+   * Optional tool set passed straight to the `Agent`. The `pss` TUI ships no
+   * built-in tools; pass your own (for example `@minpeter/pss-web-tools`) when
+   * you want the model to call them.
+   */
+  readonly tools?: ToolSet;
+}
+
+export async function startTui(options: StartTuiOptions = {}): Promise<void> {
   const sessionConfig = resolveCodingAgentSessionConfig();
-  const agent = new Agent({
+  const agentOptions: AgentOptions = {
     host: {
       sessionStore: new FileSessionStore(sessionConfig.directory),
     },
     instructions:
       "Answer in 2 short sentences and 280 characters or fewer unless the user explicitly asks for detail. Avoid headings.",
     model: createCodingLanguageModel(),
-    tools,
-  });
+    tools: options.tools,
+  };
+  const agent = new Agent(agentOptions);
   const session = agent.session(sessionConfig.key);
 
   const terminal = new ProcessTerminal();

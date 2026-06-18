@@ -257,13 +257,6 @@ const executionAgent = new Agent({
 The parent coordinator stays unchanged; only the nested child agent carries the
 plugin.
 
-### Migration
-
-- **`plugins[].events.on`** — deprecated. Use top-level `plugins[].on`. The legacy
-  handler still receives every event but intercept returns are ignored (observe-only).
-- **`wrapDelegatePrompt`** — removed. Use a child `plugins[].on` handler that checks
-  `meta.source === "delegate"` and returns `transform`, as above.
-
 ## Send, Host Resume, and Steer
 
 Use `session.send(input)` for a new user turn. If a run is already active, the
@@ -275,6 +268,11 @@ Durable hosts resume completed background work by writing a notification record
 and calling `agent.resume(notificationRunId)`. The resume call claims the
 notification idempotently through its durable run id and returns one `AgentRun`,
 or `null` when a duplicate queue/alarm delivery already claimed it.
+
+`agent.resume(runId)` also returns `null` when the host does not support durable
+resume (`agent.supportsResume === false`); it never throws for an unsupported
+host. Check `supportsResume` first when you need to distinguish an unsupported
+host from a missing or already-claimed run.
 
 Runtime-originated input is delivered through the host notification inbox and
 internal plugin paths. App code should use `session.send()`, `session.steer()`,
@@ -367,6 +365,14 @@ const agent = new Agent({
   namespace: "support-agent",
 });
 ```
+
+A `host: { sessionStore }` object is a `SessionHost`-only host. That keeps session
+persistence on your store but disables the in-memory `ExecutionHost`, so the
+agent runs without durable run records, tool-execution checkpoints, or
+`Agent.resume(...)`. `agent.supportsResume` is `false`. When omitted, `Agent`
+defaults to an in-memory `ExecutionHost` (and its `MemorySessionStore`). Pass a
+full `ExecutionHost` (or `DurableBackgroundHost`) when you need durable runs,
+tool checkpoints, and resume alongside your `sessionStore`.
 
 Hosts that need durable runs pass `host:` into `Agent`. The execution subpath
 keeps the durable surface split by responsibility, so hosts can implement only

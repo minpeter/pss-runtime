@@ -19,10 +19,8 @@ describe("Agent session plugin events", () => {
     const agent = new Agent({
       plugins: [
         {
-          events: {
-            on: ({ event, history }) => {
-              pluginCalls.push(`${event.type}:${history.length}`);
-            },
+          on: ({ event, history }) => {
+            pluginCalls.push(`${event.type}:${history.length}`);
           },
         },
       ],
@@ -56,13 +54,11 @@ describe("Agent session plugin events", () => {
     const agent = new Agent({
       plugins: [
         {
-          events: {
-            on: async ({ event }) => {
-              if (event.type === "assistant-reasoning") {
-                await Promise.resolve();
-              }
-              pluginEventTypes.push(event.type);
-            },
+          on: async ({ event }) => {
+            if (event.type === "assistant-reasoning") {
+              await Promise.resolve();
+            }
+            pluginEventTypes.push(event.type);
           },
         },
       ],
@@ -87,10 +83,8 @@ describe("Agent session plugin events", () => {
       { key: "observer-events", store: new MemorySessionStore() },
       [
         {
-          events: {
-            on: ({ event }) => {
-              pluginEventTypes.push(event.type);
-            },
+          on: ({ event }) => {
+            pluginEventTypes.push(event.type);
           },
         },
       ]
@@ -123,12 +117,10 @@ describe("Agent session plugin events", () => {
     const agent = new Agent({
       plugins: [
         {
-          events: {
-            on: ({ event }) => {
-              if (event.type === "turn-end") {
-                throw new Error("turn-end plugin failed");
-              }
-            },
+          on: ({ event }) => {
+            if (event.type === "turn-end") {
+              throw new Error("turn-end plugin failed");
+            }
           },
         },
       ],

@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentEventContext } from "./plugins";
-import {
-  type AgentPlugin,
-  runEventPlugins,
-  runPluginsForEvent,
-} from "./plugins";
+import { type AgentPlugin, runPluginsForEvent } from "./plugins";
 
 const emptyHistory: AgentEventContext["history"] = [];
 
@@ -71,25 +67,5 @@ describe("runPluginsForEvent", () => {
     });
 
     expect(result).toEqual({ kind: "emit", event: { type: "turn-start" } });
-  });
-});
-
-describe("runEventPlugins", () => {
-  it("calls deprecated events.on handlers in observe-only mode", async () => {
-    const calls: string[] = [];
-    const legacyPlugin: AgentPlugin = {
-      events: {
-        on: ({ event }) => {
-          calls.push(event.type);
-        },
-      },
-    };
-
-    await runEventPlugins([legacyPlugin], {
-      event: { type: "turn-end" },
-      history: emptyHistory,
-    });
-
-    expect(calls).toEqual(["turn-end"]);
   });
 });

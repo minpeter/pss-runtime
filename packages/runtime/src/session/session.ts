@@ -1,7 +1,7 @@
 import type { ModelGenerationOptions } from "../llm";
 import type { AgentPlugin } from "../plugins";
 import type { AgentEvent } from "./events";
-import type { AgentInput, UserInput } from "./input";
+import type { AgentInput } from "./input";
 import { attachInputMeta, userInputFromEvent } from "./input-meta";
 import { normalizeAgentInput } from "./input-normalization";
 import { type AgentRun, BufferedAgentRun } from "./run";
@@ -10,8 +10,6 @@ import {
   createRuntimeInputState,
   type QueuedInput,
   type QueuedRuntimeInput,
-  queueRuntimeInput,
-  type RuntimeInputPlacement,
   type RuntimeInputState,
 } from "./runtime-input";
 import { sessionKilledError, sessionTerminalError } from "./session-errors";
@@ -41,7 +39,6 @@ export class AgentSession {
   #activeAbort?: AbortController;
   #activeRun?: BufferedAgentRun;
   #activeRuntimeInput?: RuntimeInputState;
-  #activeTurnId?: string;
   #deletePromise?: Promise<void>;
   #killed = false;
   #running = false;
@@ -148,10 +145,6 @@ export class AgentSession {
     this.#activeAbort?.abort();
   }
 
-  currentTurnId(): string | undefined {
-    return this.#activeTurnId;
-  }
-
   delete(): Promise<void> {
     if (!this.#deletePromise) {
       this.kill();
@@ -163,40 +156,8 @@ export class AgentSession {
     return this.#deletePromise;
   }
 
-  enqueueRuntimeInput(
-    input: UserInput,
-    placement: RuntimeInputPlacement = "turn-start"
-  ): void {
-    if (this.#killed) {
-      return;
-    }
-
-    const runtimeInput = this.#activeRuntimeInput;
-    if (runtimeInput && !runtimeInput.closedReason) {
-      if (placement === "turn-start" && runtimeInput.placement !== placement) {
-        this.#enqueuePendingRuntimeInput({ input, placement });
-        return;
-      }
-
-      queueRuntimeInput(runtimeInput, { input, placement });
-      return;
-    }
-
-    this.#enqueuePendingRuntimeInput({ input, placement });
-  }
-
   emitObserverEvent(event: AgentEvent): Promise<void> {
     return this.#events.emitObserverEvent(this.#activeRun, event);
-  }
-
-  #enqueuePendingRuntimeInput(input: QueuedRuntimeInput): void {
-    const queuedTurn = this.#inputQueue[0];
-    if (input.placement === "turn-start" && queuedTurn) {
-      queueRuntimeInput(queuedTurn.runtimeInput, input);
-      return;
-    }
-
-    this.#pendingRuntimeInputs.push(input);
   }
 
   kill(): void {
@@ -227,11 +188,10 @@ export class AgentSession {
         const item = this.#inputQueue.shift();
         if (item) {
           await processQueuedInput({
-            activate: ({ abort, run, runtimeInput, turnId }) => {
+            activate: ({ abort, run, runtimeInput }) => {
               this.#activeAbort = abort;
               this.#activeRun = run;
               this.#activeRuntimeInput = runtimeInput;
-              this.#activeTurnId = turnId;
               this.#runToCloseOnKill = run;
             },
             deactivateRun: () => {
@@ -246,7 +206,6 @@ export class AgentSession {
               this.#activeAbort = undefined;
               this.#activeRun = undefined;
               this.#activeRuntimeInput = undefined;
-              this.#activeTurnId = undefined;
               this.#runToCloseOnKill = undefined;
             },
             sessionKey: this.#sessionKey,
