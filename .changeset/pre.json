@@ -19,6 +19,7 @@
     "runtime-plugin-constructor",
     "runtime-plugin-sessions",
     "runtime-subagents",
+    "runtime-thread-key-surface",
     "sqlite-event-checkpoint-stores",
     "sqlite-session-store",
     "sync-main-dependencies",
