@@ -35,6 +35,11 @@
       "@minpeter/pss-source": "./src/execution/memory.ts",
       "types": "./dist/execution/memory.d.ts",
       "import": "./dist/execution/memory.js"
+    },
+    "./namespace": {
+      "@minpeter/pss-source": "./src/namespace.ts",
+      "types": "./dist/namespace.d.ts",
+      "import": "./dist/namespace.js"
     }
   },
   "files": [

@@ -18,3 +18,9 @@ Clean up the runtime public surface and tighten host/resume contracts.
   before calling. Document that a `host: { sessionStore }` (SessionHost-only)
   object disables the in-memory `ExecutionHost`, so run records, tool
   checkpoints, and `resume()` are unavailable.
+- Add a `@minpeter/pss-runtime/namespace` subpath with stable namespace helpers
+  (`parentSessionNamespace`, `defaultChildSessionKey`, `agentNamespace`,
+  `namespacePart`, `randomAgentNamespace`) so app-owned delegation examples no
+  longer copy local namespace formatting helpers.
+- Remove no-op internal plumbing: the always-true observer-event filter in the
+  agent loop and the unused `BufferedAgentRun.close()` reason parameter.

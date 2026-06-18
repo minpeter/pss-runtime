@@ -1,10 +1,8 @@
 import { Agent } from "@minpeter/pss-runtime";
+import { parentSessionNamespace } from "@minpeter/pss-runtime/namespace";
 import type { LanguageModel } from "ai";
 import { createConversationTagPlugin } from "./conversation-plugin";
-import {
-  createDelegateToReaderTool,
-  parentSessionNamespace,
-} from "./delegate-tool";
+import { createDelegateToReaderTool } from "./delegate-tool";
 import { createReadFileTool } from "./read-file-tool";
 
 export function createReaderAgent(model: LanguageModel) {

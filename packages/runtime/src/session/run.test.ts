@@ -153,7 +153,7 @@ describe("AgentRun", () => {
     const boundary = run.emitBoundary({ type: "step-start" });
     await expectPending(boundary);
 
-    run.close(undefined, "Session killed");
+    run.close();
 
     await expect(boundary).resolves.toBeUndefined();
   });

@@ -232,17 +232,15 @@ async function appendStepOutput({
 
   let shouldContinue = false;
   const pendingObserverEvents = observerEvents;
-  const flushObserverEvents = async (
-    shouldFlush: (event: AgentEvent) => boolean = () => true
-  ) => {
+  const flushObserverEvents = async () => {
     for (let index = 0; index < pendingObserverEvents.length; ) {
       const event = pendingObserverEvents[index];
-      if (!(event && shouldFlush(event))) {
+      if (event) {
+        pendingObserverEvents.splice(index, 1);
+        await emit(event);
+      } else {
         index += 1;
-        continue;
       }
-      pendingObserverEvents.splice(index, 1);
-      await emit(event);
     }
   };
 
@@ -259,7 +257,7 @@ async function appendStepOutput({
       await emit(event);
       if (event.type === "tool-call") {
         shouldContinue = true;
-        await flushObserverEvents(isLaunchOrBlockingObserverEvent);
+        await flushObserverEvents();
       }
     }
 
@@ -271,8 +269,4 @@ async function appendStepOutput({
   await flushObserverEvents();
 
   return shouldContinue ? "continue" : "completed";
-}
-
-function isLaunchOrBlockingObserverEvent(_event: AgentEvent): boolean {
-  return true;
 }

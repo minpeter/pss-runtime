@@ -41,7 +41,7 @@ export class BufferedAgentRun implements AgentRun {
     });
   }
 
-  close(error?: unknown, _reason = "the run is closed"): void {
+  close(error?: unknown): void {
     if (this.#closed) {
       return;
     }
@@ -84,7 +84,7 @@ export class BufferedAgentRun implements AgentRun {
   #cancel(): void {
     this.#settleQueuedAcks();
     this.#events.length = 0;
-    this.close(undefined, "events return");
+    this.close();
   }
 
   #enqueue(event: QueuedEvent): void {

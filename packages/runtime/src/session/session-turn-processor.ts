@@ -139,7 +139,7 @@ export async function processQueuedInput({
   } finally {
     closeRuntimeInput(runtimeInput);
     release();
-    run.close(undefined, runtimeInput.closedReason);
+    run.close();
   }
 }
 
