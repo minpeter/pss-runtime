@@ -126,6 +126,8 @@ export class AgentSession {
       activeRun: this.#activeRun,
       activeRuntimeInput: this.#activeRuntimeInput,
       drain: () => this.#drainInputQueue(),
+      emitObserverEvent: (run, event) =>
+        this.#events.emitObserverEvent(run, event),
       inputQueue: this.#inputQueue,
       pendingRuntimeInputs: this.#pendingRuntimeInputs,
     });

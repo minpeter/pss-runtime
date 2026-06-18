@@ -224,6 +224,69 @@ describe("Cloudflare alarm run contexts", () => {
       listScheduledCloudflareSessionPrompts(storage)
     ).resolves.toEqual([{ idempotencyKey, runId, sessionKey }]);
   });
+
+  it("makes notification runs retryable when a session prompt drain hits the event budget", async () => {
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
+    const host = createCloudflareDurableObjectHost({ storage });
+    const idempotencyKey = "notification:budget";
+    const runId = "notification-run-budget";
+    const sessionKey = "room:1:user:2";
+
+    await host.store.notifications.enqueue({
+      idempotencyKey,
+      input: { text: "Reminder fired", type: "user-text" },
+      notificationId: "notification-budget",
+      runId,
+      sessionKey,
+      status: "pending",
+    });
+    await host.store.runs.create(notificationRunRecord(runId, idempotencyKey));
+    await host.scheduler.resumeSession(sessionKey, { idempotencyKey, runId });
+
+    const summary = await drainCloudflareAlarm({
+      agent: {
+        resume: async () => {
+          const run = await host.store.runs.get(runId);
+          if (!run) {
+            throw new Error("expected stored notification run");
+          }
+          await host.store.runs.update({
+            ...run,
+            lease: {
+              attempt: 1,
+              leaseId: "lease-before-budget-stop",
+              leaseUntilMs: Date.now() + 300_000,
+            },
+            status: "completed",
+          });
+          await host.store.notifications.claimByIdempotencyKey(idempotencyKey);
+          return runWithEvents([
+            { text: "first", type: "assistant-text" },
+            { text: "second", type: "assistant-text" },
+          ]);
+        },
+      },
+      maxEvents: 1,
+      prefix: "pss-runtime",
+      storage,
+    });
+
+    expect(summary.events).toEqual([{ text: "first", type: "assistant-text" }]);
+    expect(summary.continuationReasons).toContain("event-budget");
+    expect(summary.continuationScheduled).toBe(true);
+    await expect(host.store.runs.get(runId)).resolves.toEqual(
+      expect.objectContaining({ status: "queued" })
+    );
+    expect((await host.store.runs.get(runId))?.lease).toBeUndefined();
+    await expect(
+      host.store.notifications.getByIdempotencyKey(idempotencyKey)
+    ).resolves.toEqual(expect.objectContaining({ status: "pending" }));
+    await expect(
+      listScheduledCloudflareSessionPrompts(storage)
+    ).resolves.toEqual([{ idempotencyKey, runId, sessionKey }]);
+  });
 });
 
 function notificationRunRecord(runId: string, idempotencyKey = runId) {

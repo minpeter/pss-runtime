@@ -121,6 +121,40 @@ describe("AgentSession.notify", () => {
     ]);
   });
 
+  it("preserves observer events when notifying an active run", async () => {
+    const firstCanFinish = createDeferred();
+    const session = createSession(
+      "notify-active-run-observer-events",
+      async () => {
+        await firstCanFinish.promise;
+        return [assistantMessage("DONE")];
+      }
+    );
+    const firstRun = await session.send("first");
+    const firstIterator = firstRun.events()[Symbol.asyncIterator]();
+    await readUntil(firstIterator, "step-start");
+
+    const notifiedRun = await session.notify("background done", {
+      observerEvents: [
+        { text: "background observed", type: "assistant-reasoning" },
+      ],
+    });
+    firstCanFinish.resolve();
+    const events = await drainIterator(firstIterator);
+
+    expect(notifiedRun).toBe(firstRun);
+    expect(events).toContainEqual({
+      text: "background observed",
+      type: "assistant-reasoning",
+    });
+    expect(events).toContainEqual(
+      notifyRuntimeInput("background done", "step-end")
+    );
+    expect(eventTypes(events).indexOf("assistant-reasoning")).toBeLessThan(
+      eventTypes(events).indexOf("runtime-input")
+    );
+  });
+
   it("does not expose notify on public Agent session handles", () => {
     const session = new Agent({
       model: createCallbackModel(() =>
@@ -178,11 +212,13 @@ async function readUntil(
 
 async function drainIterator(
   iterator: AsyncIterator<AgentEvent>
-): Promise<void> {
+): Promise<AgentEvent[]> {
+  const events: AgentEvent[] = [];
   while (true) {
     const next = await iterator.next();
     if (next.done) {
-      return;
+      return events;
     }
+    events.push(next.value);
   }
 }

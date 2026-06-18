@@ -1,6 +1,7 @@
+import type { AgentEvent, AgentRun } from "@minpeter/pss-runtime";
 import { describe, expect, it } from "vitest";
 
-import { WORKER_AGENT_INSTRUCTIONS } from "./agent";
+import { collectAssistantText, WORKER_AGENT_INSTRUCTIONS } from "./agent";
 
 describe("worker-agent instructions", () => {
   it("uses Apex as the assistant name", () => {
@@ -50,3 +51,47 @@ describe("worker-agent instructions", () => {
     }
   });
 });
+
+describe("collectAssistantText", () => {
+  it("joins assistant text events", async () => {
+    await expect(
+      collectAssistantText(
+        runWithEvents([
+          { type: "assistant-text", text: "first" },
+          { type: "assistant-text", text: "second" },
+        ])
+      )
+    ).resolves.toBe("first\nsecond");
+  });
+
+  it("rejects when the run contains a turn-error without assistant text", async () => {
+    await expect(
+      collectAssistantText(
+        runWithEvents([{ type: "turn-error", message: "model unavailable" }])
+      )
+    ).rejects.toThrow("model unavailable");
+  });
+
+  it("rejects when a turn-error follows assistant text", async () => {
+    await expect(
+      collectAssistantText(
+        runWithEvents([
+          { type: "assistant-text", text: "partial" },
+          { type: "turn-error", message: "tool failed" },
+        ])
+      )
+    ).rejects.toThrow("tool failed");
+  });
+});
+
+function runWithEvents(events: readonly AgentEvent[]): AgentRun {
+  return {
+    events: () => eventStream(events),
+  };
+}
+
+async function* eventStream(
+  events: readonly AgentEvent[]
+): AsyncIterable<AgentEvent> {
+  yield* events;
+}

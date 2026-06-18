@@ -77,6 +77,7 @@ export async function resumeScheduledRun({
       return;
     }
     if (shouldContinueRunDrain(state)) {
+      await prepareScheduledNotificationRetry(storage, prefix, runId);
       return;
     }
     await ackScheduledCloudflareRun(storage, runId, { prefix });
@@ -159,6 +160,15 @@ export async function resumeScheduledSessionPrompt({
       return;
     }
     if (shouldContinueRunDrain(state)) {
+      if (
+        !(await prepareScheduledNotificationRetry(
+          storage,
+          prefix,
+          context.runId
+        ))
+      ) {
+        await ackScheduledCloudflareSessionPrompt(storage, prompt, { prefix });
+      }
       return;
     }
     state.consumedSessionPrompts.push(sessionPromptId(prompt));

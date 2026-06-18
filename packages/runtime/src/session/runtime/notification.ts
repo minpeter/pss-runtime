@@ -21,15 +21,19 @@ interface QueueSessionNotificationOptions {
   readonly activeRun: BufferedAgentRun | undefined;
   readonly activeRuntimeInput: RuntimeInputState | undefined;
   readonly drain: () => Promise<void>;
+  emitObserverEvent(
+    run: BufferedAgentRun | undefined,
+    event: AgentEvent
+  ): Promise<void>;
   readonly inputQueue: QueuedInput[];
   readonly pendingRuntimeInputs: QueuedRuntimeInput[];
 }
 
-export function queueSessionNotification(
+export async function queueSessionNotification(
   input: AgentInput,
   options: NotifyOptions,
   state: QueueSessionNotificationOptions
-): AgentRun {
+): Promise<AgentRun> {
   const queuedRuntimeInput: QueuedRuntimeInput = {
     input: attachInputMeta(normalizeAgentInput(input), { source: "notify" }),
     placement: "turn-start",
@@ -45,6 +49,9 @@ export function queueSessionNotification(
   const activeRun = state.activeRun;
   const runtimeInput = state.activeRuntimeInput;
   if (runtimeInput && activeRun && !runtimeInput.closedReason) {
+    for (const event of observerEvents) {
+      await state.emitObserverEvent(activeRun, event);
+    }
     queueRuntimeInput(runtimeInput, {
       input: structuredClone(queuedRuntimeInput.input),
       placement: "step-end",

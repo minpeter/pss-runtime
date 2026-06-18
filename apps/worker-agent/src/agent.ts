@@ -76,6 +76,15 @@ export function createConfiguredAgent(env: Env, host: AgentHost): Agent {
 
 export async function collectAssistantText(run: AgentRun): Promise<string> {
   const events = await drainAgentRun(run);
+  const turnError = events.find(
+    (event): event is Extract<AgentEvent, { type: "turn-error" }> =>
+      event.type === "turn-error"
+  );
+
+  if (turnError) {
+    throw new Error(turnError.message);
+  }
+
   return events
     .filter(
       (event): event is Extract<AgentEvent, { type: "assistant-text" }> =>
