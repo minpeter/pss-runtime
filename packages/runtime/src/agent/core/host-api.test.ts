@@ -151,7 +151,7 @@ describe("Agent host public API", () => {
     ).toThrow("Agent: invalid options.model");
   });
 
-  it("uses host session store for session snapshots", async () => {
+  it("uses host session store for thread snapshots", async () => {
     const sessionStore = new SpyStore();
     const agent = new Agent({
       host: { kind: "session", sessionStore },
@@ -160,8 +160,26 @@ describe("Agent host public API", () => {
       ),
     });
 
-    await collect(await agent.session("host-owned").send("hello"));
+    await collect(await agent.thread("host-owned").send("hello"));
 
     expect(sessionStore.commits.at(-1)?.key).toBe("host-owned");
+  });
+
+  it("includes scoped thread addresses in the stored session key", async () => {
+    const sessionStore = new SpyStore();
+    const agent = new Agent({
+      host: { kind: "session", sessionStore },
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
+    });
+
+    await collect(
+      await agent.thread({ key: "room/1", scope: "user:1" }).send("hello")
+    );
+
+    expect(sessionStore.commits.at(-1)?.key).toBe(
+      "scope:user%3A1:thread:room%2F1"
+    );
   });
 });

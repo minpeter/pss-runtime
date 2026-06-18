@@ -16,12 +16,12 @@ describe("TUI runner", () => {
     ).toBe("\x1b[2mruntime: extra\x1b[0m");
   });
 
-  it("starts idle submissions with session.send and consumes the run", async () => {
+  it("starts idle submissions with thread.send and consumes the run", async () => {
     const run = createRun([
       { text: "hello", type: "user-text" },
       { type: "turn-end" },
     ]);
-    const session = {
+    const thread = {
       send: vi.fn().mockResolvedValue(run),
       steer: vi.fn().mockResolvedValue(run),
     };
@@ -29,13 +29,13 @@ describe("TUI runner", () => {
     const runner = createTuiRunner({
       addLine: (line) => lines.push(line),
       requestRender: vi.fn(),
-      session,
+      thread,
     });
 
     runner.submit(" hello ");
     await run.done;
 
-    expect(session.send).toHaveBeenCalledWith("hello");
+    expect(thread.send).toHaveBeenCalledWith("hello");
     expect(lines).toContain("\x1b[36myou\x1b[0m: hello");
     expect(runner.activeRun).toBeUndefined();
   });
@@ -48,14 +48,14 @@ describe("TUI runner", () => {
         releaseEvent = () => resolve({ type: "turn-end" });
       }),
     ]);
-    const session = {
+    const thread = {
       send: vi.fn().mockResolvedValue(run),
       steer: vi.fn().mockResolvedValue(run),
     };
     const runner = createTuiRunner({
       addLine: vi.fn(),
       requestRender: vi.fn(),
-      session,
+      thread,
     });
 
     runner.submit("initial");
@@ -64,8 +64,8 @@ describe("TUI runner", () => {
     releaseEvent?.();
     await run.done;
 
-    expect(session.send).toHaveBeenCalledTimes(1);
-    expect(session.steer).toHaveBeenCalledWith("extra");
+    expect(thread.send).toHaveBeenCalledTimes(1);
+    expect(thread.steer).toHaveBeenCalledWith("extra");
     expect(runner.activeRun).toBeUndefined();
   });
 
@@ -82,14 +82,14 @@ describe("TUI runner", () => {
       { type: "turn-end" },
     ]);
     const lines: string[] = [];
-    const session = {
+    const thread = {
       send: vi.fn().mockResolvedValue(activeRun),
       steer: vi.fn().mockResolvedValue(fallbackRun),
     };
     const runner = createTuiRunner({
       addLine: (line) => lines.push(line),
       requestRender: vi.fn(),
-      session,
+      thread,
     });
 
     runner.submit("initial");
@@ -99,7 +99,7 @@ describe("TUI runner", () => {
     releaseActive?.();
     await activeRun.done;
 
-    expect(session.steer).toHaveBeenCalledWith("fallback");
+    expect(thread.steer).toHaveBeenCalledWith("fallback");
     expect(lines).toContain("\x1b[36myou\x1b[0m: fallback");
     expect(runner.activeRun).toBeUndefined();
   });
@@ -110,14 +110,14 @@ describe("TUI runner", () => {
       new Promise<AgentEvent>(() => undefined),
     ]);
     const lines: string[] = [];
-    const session = {
+    const thread = {
       send: vi.fn().mockResolvedValue(run),
       steer: vi.fn().mockRejectedValue(new Error("cannot steer")),
     };
     const runner = createTuiRunner({
       addLine: (line) => lines.push(line),
       requestRender: vi.fn(),
-      session,
+      thread,
     });
 
     runner.submit("initial");
@@ -126,7 +126,7 @@ describe("TUI runner", () => {
     await waitUntil(() => lines.includes("\x1b[31merror\x1b[0m: cannot steer"));
     run.stop();
 
-    expect(session.steer).toHaveBeenCalledWith("extra");
+    expect(thread.steer).toHaveBeenCalledWith("extra");
   });
 
   it("clears stale active runs when events consumption throws", async () => {
@@ -134,7 +134,7 @@ describe("TUI runner", () => {
     const runner = createTuiRunner({
       addLine: vi.fn(),
       requestRender: vi.fn(),
-      session: {
+      thread: {
         send: vi.fn().mockResolvedValue(run),
         steer: vi.fn().mockResolvedValue(run),
       },
@@ -162,7 +162,7 @@ describe("TUI runner", () => {
     const runner = createTuiRunner({
       addLine: vi.fn(),
       requestRender: vi.fn(),
-      session: {
+      thread: {
         send: vi.fn().mockResolvedValue(run),
         steer: vi.fn().mockResolvedValue(run),
       },

@@ -25,7 +25,7 @@ describe("Agent session runtime input continuation", () => {
         ]);
       }),
     });
-    const session = agent.session("step-end-steer");
+    const session = agent.thread("step-end-steer");
     const run = await session.send("initial user");
     const events: AgentEvent[] = [];
     let injected = false;
@@ -78,7 +78,7 @@ describe("Agent session runtime input continuation", () => {
         mediaType: "text/plain",
       },
     ] as const;
-    const session = agent.session("multipart-steer");
+    const session = agent.thread("multipart-steer");
     const run = await session.send("initial");
     const runtimeInputs: AgentEvent[] = [];
     let added = false;

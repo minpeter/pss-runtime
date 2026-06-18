@@ -36,7 +36,7 @@ export class AgentDurableObject {
     }
 
     const agent = this.#context.agent();
-    const run = await agent.session(SESSION_KEY).send(payload.text);
+    const run = await agent.thread(SESSION_KEY).send(payload.text);
     const reply = await collectAssistantText(run);
 
     return Response.json({ reply: reply || "(no response)" });

@@ -21,7 +21,7 @@ describe("Agent session runtime input queueing", () => {
         return Promise.resolve([assistantMessage("DONE")]);
       }),
     });
-    const session = agent.session("steer-fifo");
+    const session = agent.thread("steer-fifo");
     const run = await session.send("initial");
     const runtimeInputs: AgentEvent[] = [];
     let added = false;
@@ -58,7 +58,7 @@ describe("Agent session runtime input queueing", () => {
         return Promise.resolve([assistantMessage("DONE")]);
       }),
     });
-    const session = agent.session("steer-concurrent-fifo");
+    const session = agent.thread("steer-concurrent-fifo");
     const run = await session.send("initial");
     const runtimeInputs: AgentEvent[] = [];
     let added = false;
@@ -106,7 +106,7 @@ describe("Agent session runtime input queueing", () => {
         }
         return [assistantMessage("QUEUED")];
       }),
-    }).session("queue-separation");
+    }).thread("queue-separation");
     const firstRun = await session.send("first");
     const secondRun = await session.send("second");
     const firstEvents: AgentEvent[] = [];

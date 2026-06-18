@@ -90,10 +90,10 @@ describe("Agent session plugin events", () => {
     });
 
     const firstEvents = await collect(
-      await agent.session("terminal-event").send("first")
+      await agent.thread("terminal-event").send("first")
     );
     const secondEvents = await collect(
-      await agent.session("terminal-event").send("second")
+      await agent.thread("terminal-event").send("second")
     );
 
     expect(eventTypes(firstEvents)).toEqual([

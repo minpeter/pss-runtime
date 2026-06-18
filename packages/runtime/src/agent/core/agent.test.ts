@@ -45,13 +45,22 @@ type RejectsLlmOptionKey = AssertFalse<
 type RejectsFunctionModel = AssertFalse<
   IsAssignable<typeof functionModelOptions, AgentOptions>
 >;
+type RejectsSessionMethod = AssertFalse<
+  "session" extends keyof Agent ? true : false
+>;
 const typeFixtures = [acceptsModelOptions, functionModelOptions];
 type TypeFixtureAssertions = [
   RejectsDescriptionOptionKey,
   RejectsLlmOptionKey,
   RejectsFunctionModel,
+  RejectsSessionMethod,
 ];
-const typeFixtureAssertions: TypeFixtureAssertions = [false, false, false];
+const typeFixtureAssertions: TypeFixtureAssertions = [
+  false,
+  false,
+  false,
+  false,
+];
 
 const collectRun = async (run: Awaited<ReturnType<Agent["send"]>>) => {
   for await (const _event of run.events()) {
@@ -62,7 +71,7 @@ const collectRun = async (run: Awaited<ReturnType<Agent["send"]>>) => {
 describe("Agent", () => {
   it("keeps AgentOptions type fixtures reachable", () => {
     expect(typeFixtures).toHaveLength(2);
-    expect(typeFixtureAssertions).toHaveLength(3);
+    expect(typeFixtureAssertions).toHaveLength(4);
   });
 
   it("constructs agents with new Agent", () => {
@@ -101,23 +110,34 @@ describe("Agent", () => {
     }
   });
 
-  it("uses the default session for agent.send", async () => {
+  it("uses the default thread for agent.send", async () => {
     const agent = new Agent({ model: fakeModel });
     await expect(agent.send("hello")).resolves.toBeDefined();
   });
 
-  it("reuses handles for named sessions", () => {
+  it("reuses handles for named threads", () => {
     const agent = new Agent({ model: fakeModel });
-    expect(agent.session("a")).toBe(agent.session("a"));
-    expect(agent.session("a")).not.toBe(agent.session("b"));
+    expect(agent.thread("a")).toBe(agent.thread("a"));
+    expect(agent.thread("a")).not.toBe(agent.thread("b"));
   });
 
-  it("drops disposed session handles so keys can be reused", async () => {
+  it("reuses scoped thread handles by their canonical address", () => {
     const agent = new Agent({ model: fakeModel });
-    const first = agent.session("reuse");
+
+    expect(agent.thread({ key: "a", scope: "user:1" })).toBe(
+      agent.thread({ key: "a", scope: "user:1" })
+    );
+    expect(agent.thread({ key: "a", scope: "user:1" })).not.toBe(
+      agent.thread({ key: "a", scope: "user:2" })
+    );
+  });
+
+  it("drops disposed thread handles so keys can be reused", async () => {
+    const agent = new Agent({ model: fakeModel });
+    const first = agent.thread("reuse");
 
     await first.dispose();
-    const second = agent.session("reuse");
+    const second = agent.thread("reuse");
     await collectRun(await second.send("hello"));
 
     expect(second).not.toBe(first);

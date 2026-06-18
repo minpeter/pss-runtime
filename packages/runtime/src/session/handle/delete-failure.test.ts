@@ -21,7 +21,7 @@ describe("Agent session delete failure", () => {
         Promise.resolve([assistantMessage("DONE")])
       ),
     });
-    const session = agent.session("delete-failure");
+    const session = agent.thread("delete-failure");
 
     await collect(await session.send("before"));
 

@@ -12,11 +12,11 @@ const testFixturesSourceUrl = new URL(
   import.meta.url
 );
 
-describe("SessionHandle public API", () => {
+describe("ThreadHandle public API", () => {
   it("does not expose session runs", () => {
     const session = new Agent({
       model: createMockLanguageModelV4([mockLanguageModelV4Text("done")]),
-    }).session("default");
+    }).thread("default");
 
     expect(getProperty(session, "runs")).toBeUndefined();
   });
@@ -24,7 +24,7 @@ describe("SessionHandle public API", () => {
   it("exposes dispose instead of kill", () => {
     const session = new Agent({
       model: createMockLanguageModelV4([mockLanguageModelV4Text("done")]),
-    }).session("default");
+    }).thread("default");
 
     expect(getProperty(session, "dispose")).toBeTypeOf("function");
     expect(getProperty(session, "kill")).toBeUndefined();
@@ -36,7 +36,7 @@ describe("SessionHandle public API", () => {
     ]);
     const agent = new Agent({ model });
 
-    const events = await collect(await agent.session("mock-v4").send("hello"));
+    const events = await collect(await agent.thread("mock-v4").send("hello"));
 
     expect(events).toContainEqual({
       text: "mocked reply",

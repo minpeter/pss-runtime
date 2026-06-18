@@ -19,19 +19,19 @@ for await (const event of run.events()) {
 
 `run.events()` is synchronized and drives the run. The runtime waits at
 `turn-start`, `step-start`, and `step-end` until the events consumer continues,
-so consume the events to let the run progress. Use `session.send(input)` for a
-new user turn and `session.steer(input)` to steer the active run. If no run is
-active, `session.steer(input)` starts a normal run.
+so consume the events to let the run progress. Use `thread.send(input)` for a
+new user turn and `thread.steer(input)` to steer the active run. If no run is
+active, `thread.steer(input)` starts a normal run.
 
 ```ts
-const session = agent.session("default");
-const run = await session.send("Explain the latest result.");
+const thread = agent.thread("default");
+const run = await thread.send("Explain the latest result.");
 let askedForExample = false;
 
 for await (const event of run.events()) {
   if (event.type === "step-end" && !askedForExample) {
     askedForExample = true;
-    await session.steer("Add one concrete example.");
+    await thread.steer("Add one concrete example.");
   }
 }
 ```
@@ -43,8 +43,8 @@ the turn running indefinitely.
 
 Runtime additions emit `runtime-input`: runtime/API-originated input mapped
 internally to the model's user role, separate from human `user-text` and
-`user-message` events. `session.send(input)` starts or enqueues a new turn;
-`session.steer(input)` steers the active run or starts a normal run when idle.
+`user-message` events. `thread.send(input)` starts or enqueues a new turn;
+`thread.steer(input)` steers the active run or starts a normal run when idle.
 
 ## CLI
 
@@ -69,8 +69,8 @@ import { startTui } from "@minpeter/pss-coding-agent";
 await startTui({ tools });
 ```
 
-When the TUI is idle, submitting text starts a normal `session.send()` turn. When
-a run is active, submitting text calls `session.steer(trimmed)` so the text lands
+When the TUI is idle, submitting text starts a normal `thread.send()` turn. When
+a run is active, submitting text calls `thread.steer(trimmed)` so the text lands
 in the current run and renders as dim `runtime: ...` input instead of a new human
 turn.
 

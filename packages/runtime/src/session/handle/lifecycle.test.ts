@@ -21,7 +21,7 @@ describe("Agent session lifecycle", () => {
         return Promise.resolve([assistantMessage("DONE")]);
       }),
     });
-    const session = agent.session("idle-steer-after-turn-end");
+    const session = agent.thread("idle-steer-after-turn-end");
     const run = await session.send("initial");
 
     await collect(run);
@@ -38,7 +38,7 @@ describe("Agent session lifecycle", () => {
         return Promise.reject(new Error("model unavailable"));
       }),
     });
-    const session = agent.session("idle-steer-after-turn-error");
+    const session = agent.thread("idle-steer-after-turn-error");
     const run = await session.send("initial");
 
     expect(eventTypes(await collect(run))).toContain("turn-error");
@@ -58,7 +58,7 @@ describe("Agent session lifecycle", () => {
         await llmGate.promise;
         return [assistantMessage("DONE")];
       }),
-    }).session("interrupt-terminal");
+    }).thread("interrupt-terminal");
     const run = await session.send("initial");
     const events = collect(run);
 
@@ -127,7 +127,7 @@ describe("Agent session lifecycle", () => {
         }
         return [assistantMessage("DONE")];
       }),
-    }).session("interrupt");
+    }).thread("interrupt");
 
     const firstRun = await session.send("first");
     const secondRun = await session.send("second");
