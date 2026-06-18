@@ -51,7 +51,8 @@ export class Agent {
    * Whether this agent's host can resume durable runs through `resume()`.
    *
    * `false` when the host is a `SessionHost`-only object (for example
-   * `{ sessionStore }`). In that case the in-memory `ExecutionHost` is not wired
+   * `{ kind: "session", sessionStore }`). In that case the in-memory
+   * `ExecutionHost` is not wired
    * up, so `resume(runId)` always returns `null` instead of throwing.
    */
   get supportsResume(): boolean {

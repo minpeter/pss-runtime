@@ -133,7 +133,7 @@ describe("Agent session terminal state", () => {
     const llmStarted = createDeferred();
     const store = new BlockingDeleteStore();
     const agent = new Agent({
-      host: { sessionStore: store },
+      host: { kind: "session", sessionStore: store },
       model: createCallbackModel(() => {
         llmStarted.resolve();
         return new Promise<never>(() => undefined);
@@ -163,7 +163,7 @@ describe("Agent session terminal state", () => {
   it("rejects new input while session delete is pending", async () => {
     const store = new BlockingDeleteStore();
     const session = new Agent({
-      host: { sessionStore: store },
+      host: { kind: "session", sessionStore: store },
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
       ),

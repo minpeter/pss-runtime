@@ -1,4 +1,8 @@
-import { createCloudflareAgentContext } from "@minpeter/pss-runtime/cloudflare";
+import type { Agent } from "@minpeter/pss-runtime";
+import {
+  type CloudflareAgentContext,
+  createCloudflareAgentContext,
+} from "@minpeter/pss-runtime/cloudflare";
 
 import { collectAssistantText, createConfiguredAgent } from "./agent";
 import type { Env } from "./env";
@@ -10,7 +14,7 @@ interface AgentRequestPayload {
 }
 
 export class AgentDurableObject {
-  readonly #context;
+  readonly #context: CloudflareAgentContext<Agent>;
 
   constructor(state: DurableObjectState, env: Env) {
     this.#context = createCloudflareAgentContext({

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RunRecord } from "../execution";
 import { storeKey } from "./cloudflare-store-utils";
+import type { CloudflareDurableObjectStorage } from "./durable-object-storage";
 import { InMemorySqlStorage } from "./in-memory-sql-storage";
 import {
   createCloudflareDurableObjectHost,
@@ -8,6 +9,7 @@ import {
 } from "./index";
 
 const PREFIX = "pss-runtime";
+const requiresSqlitePattern = /SQLite-backed/;
 
 const createRun = (runId = "run-1"): RunRecord => ({
   checkpointVersion: 0,
@@ -28,8 +30,8 @@ describe("createCloudflareDurableObjectHost store selection", () => {
     await host.store.runs.create(createRun());
 
     const big = "x".repeat(120_000);
-    // 20 events * ~120KB ~= ~2.4MB — past the 2MB per-value limit the legacy
-    // single-value KV store hit with SQLITE_TOOBIG.
+    // 20 events * ~120KB ~= ~2.4MB — past the Durable Object per-value limit
+    // that append-only SQLite rows avoid.
     for (let index = 0; index < 20; index += 1) {
       await host.store.events.append("run-1", {
         output: big,
@@ -63,7 +65,7 @@ describe("createCloudflareDurableObjectHost store selection", () => {
       { checkpointId: "cp-20", version: 20 }
     );
 
-    // The SQLite-backed stores left no legacy single-value KV list behind.
+    // The SQLite-backed stores do not write per-run list blobs.
     expect(
       await storage.get(storeKey(PREFIX, "events", "run-1"))
     ).toBeUndefined();
@@ -72,17 +74,11 @@ describe("createCloudflareDurableObjectHost store selection", () => {
     ).toBeUndefined();
   });
 
-  it("keeps the legacy KV stores on a non-SQLite Durable Object", async () => {
-    const storage = new InMemoryCloudflareDurableObjectStorage();
-    const host = createCloudflareDurableObjectHost({ storage });
-
-    await host.store.runs.create(createRun());
-
-    await host.store.events.append("run-1", { type: "turn-start" });
-
-    // The legacy store persists the whole run's events as one KV list value.
-    expect(
-      await storage.get(storeKey(PREFIX, "events", "run-1"))
-    ).toBeDefined();
+  it("rejects non-SQLite Durable Object storage", () => {
+    expect(() =>
+      createCloudflareDurableObjectHost({
+        storage: {} as CloudflareDurableObjectStorage,
+      })
+    ).toThrow(requiresSqlitePattern);
   });
 });

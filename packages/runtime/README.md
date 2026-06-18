@@ -343,7 +343,8 @@ import { MemorySessionStore } from "@minpeter/pss-runtime/session-store/memory";
 
 const agent = new Agent({
   host: {
-    sessionStore: new MemorySessionStore(), // default when omitted
+    kind: "session",
+    sessionStore: new MemorySessionStore(), // default when host is omitted
   },
   model,
   namespace: "support-agent",
@@ -359,6 +360,7 @@ import { FileSessionStore } from "@minpeter/pss-runtime/session-store/file";
 
 const agent = new Agent({
   host: {
+    kind: "session",
     sessionStore: new FileSessionStore(".pss/sessions"),
   },
   model,
@@ -366,19 +368,20 @@ const agent = new Agent({
 });
 ```
 
-A `host: { sessionStore }` object is a `SessionHost`-only host. That keeps session
-persistence on your store but disables the in-memory `ExecutionHost`, so the
-agent runs without durable run records, tool-execution checkpoints, or
-`Agent.resume(...)`. `agent.supportsResume` is `false`. When omitted, `Agent`
-defaults to an in-memory `ExecutionHost` (and its `MemorySessionStore`). Pass a
-full `ExecutionHost` (or `DurableBackgroundHost`) when you need durable runs,
-tool checkpoints, and resume alongside your `sessionStore`.
+A `host: { kind: "session", sessionStore }` object is a `SessionHost`-only host.
+That keeps session persistence on your store but disables the in-memory
+`ExecutionHost`, so the agent runs without durable run records, tool-execution
+checkpoints, or `Agent.resume(...)`. `agent.supportsResume` is `false`. When
+omitted, `Agent` defaults to an in-memory `ExecutionHost` (and its
+`MemorySessionStore`). Pass a full `ExecutionHost` (or `DurableBackgroundHost`)
+when you need durable runs, tool checkpoints, and resume alongside your
+`sessionStore`.
 
 Hosts that need durable runs pass `host:` into `Agent`. The execution subpath
-keeps the durable surface split by responsibility, so hosts can implement only
-the capabilities they need: `SessionHost`, `RunHost`, `CheckpointHost`,
-`EventHost`, `NotificationHost`, `BackgroundSchedulerHost`, and
-`ExecutionTransactionHost`. `ExecutionHost` remains the aggregate contract for
+keeps the durable surface split by responsibility, so hosts can implement the
+contracts they need: `SessionHost`, `RunHost`, `CheckpointHost`, `EventHost`,
+`NotificationHost`, `BackgroundSchedulerHost`, and `ExecutionTransactionHost`.
+`ExecutionHost` remains the aggregate contract for
 in-process or full-store hosts, while `DurableBackgroundHost` and
 `DurableNotificationResumeHost` describe the smaller durable surfaces required
 for background scheduling and notification resume.
@@ -400,7 +403,7 @@ const agent = new Agent({
 });
 
 const durableHost: DurableBackgroundHost = {
-  capabilities: {},
+  kind: "durable-background",
   backgroundScheduler,
   checkpointStore,
   eventStore,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentEvent, AgentRun } from "../index";
+import { InMemorySqlStorage } from "./in-memory-sql-storage";
 import {
   type CloudflareDurableObjectNamespace,
   createCloudflareAgentContext,
@@ -50,7 +51,9 @@ describe("Cloudflare Worker DX helpers", () => {
   });
 
   it("creates prefixed agents and drains scheduled Durable Object alarms", async () => {
-    const storage = new InMemoryCloudflareDurableObjectStorage();
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
     const calls: string[] = [];
     const context = createCloudflareAgentContext({
       createAgent: ({ env, prefix }) => ({

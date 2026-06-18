@@ -1,10 +1,13 @@
 import type { NotificationRecord, RunRecord } from "../execution";
 import type { StoredSession } from "../index";
-import type { CloudflareDurableObjectStorage } from "./durable-object-storage";
+import type {
+  CloudflareDurableObjectStorage,
+  CloudflareDurableObjectTransactionStorage,
+} from "./durable-object-storage";
 
 export async function withTransaction<T>(
   storage: CloudflareDurableObjectStorage,
-  fn: (storage: CloudflareDurableObjectStorage) => Promise<T>
+  fn: (storage: CloudflareDurableObjectTransactionStorage) => Promise<T>
 ): Promise<T> {
   return storage.transaction
     ? await storage.transaction(fn)
@@ -12,7 +15,7 @@ export async function withTransaction<T>(
 }
 
 export async function getRun(
-  storage: CloudflareDurableObjectStorage,
+  storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
   runId: string
 ): Promise<RunRecord | null> {
@@ -20,7 +23,7 @@ export async function getRun(
 }
 
 export async function putRun(
-  storage: CloudflareDurableObjectStorage,
+  storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
   record: RunRecord
 ): Promise<void> {
@@ -28,7 +31,7 @@ export async function putRun(
 }
 
 export async function indexRun(
-  storage: CloudflareDurableObjectStorage,
+  storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
   record: RunRecord
 ): Promise<void> {
@@ -49,7 +52,7 @@ export async function indexRun(
 }
 
 export async function getNotification(
-  storage: CloudflareDurableObjectStorage,
+  storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
   idempotencyKey: string
 ): Promise<NotificationRecord | null> {
@@ -61,7 +64,7 @@ export async function getNotification(
 }
 
 export async function putNotification(
-  storage: CloudflareDurableObjectStorage,
+  storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
   record: NotificationRecord
 ): Promise<void> {
@@ -72,7 +75,7 @@ export async function putNotification(
 }
 
 export async function getSession(
-  storage: CloudflareDurableObjectStorage,
+  storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
   sessionKey: string
 ): Promise<StoredSession | null> {
@@ -84,7 +87,7 @@ export async function getSession(
 }
 
 export async function putSession(
-  storage: CloudflareDurableObjectStorage,
+  storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
   sessionKey: string,
   session: StoredSession
@@ -93,7 +96,7 @@ export async function putSession(
 }
 
 export async function readList<T>(
-  storage: CloudflareDurableObjectStorage,
+  storage: CloudflareDurableObjectTransactionStorage,
   storageKey: string
 ): Promise<T[]> {
   return ((await storage.get<readonly T[]>(storageKey)) ?? []).map((item) =>
@@ -101,6 +104,6 @@ export async function readList<T>(
   );
 }
 
-export function storeKey(prefix: string, scope: string, id: string): string {
-  return `${prefix}:${scope}:${encodeURIComponent(id)}`;
+export function storeKey(prefix: string, kind: string, id: string): string {
+  return `${prefix}:${kind}:${id}`;
 }

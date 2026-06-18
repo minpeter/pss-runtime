@@ -4,7 +4,10 @@ import {
   type DurableObjectSqliteEventStore as EventStoreType,
 } from "./cloudflare-sqlite-event-store";
 import { storeKey } from "./cloudflare-store-utils";
-import { InMemoryCloudflareDurableObjectStorage } from "./durable-object-storage";
+import {
+  type CloudflareDurableObjectStorage,
+  InMemoryCloudflareDurableObjectStorage,
+} from "./durable-object-storage";
 import { InMemorySqlStorage } from "./in-memory-sql-storage";
 
 const PREFIX = "pss-runtime";
@@ -57,7 +60,7 @@ describe("DurableObjectSqliteEventStore", () => {
     expect(
       () =>
         new DurableObjectSqliteEventStore(
-          new InMemoryCloudflareDurableObjectStorage(),
+          {} as CloudflareDurableObjectStorage,
           PREFIX
         )
     ).toThrow(REQUIRES_SQLITE);
@@ -136,7 +139,7 @@ describe("DurableObjectSqliteEventStore", () => {
   });
 
   it("round-trips a run whose total event payload exceeds the 2MB blob limit", async () => {
-    // Reproduces the SQLITE_TOOBIG failure the legacy single-value KV store hit:
+    // Guards against SQLITE_TOOBIG-style accumulation failures:
     // many ~120KB tool/result events past the ~2.2MB threshold.
     const { store } = createStore();
     const big = "x".repeat(120_000);

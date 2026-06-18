@@ -21,16 +21,13 @@ interface CheckpointRow {
  * Append-only SQLite-backed {@link CheckpointStore} for SQLite-backed Durable
  * Objects.
  *
- * Unlike {@link DurableObjectCheckpointStore}, which accumulates every
- * checkpoint for a run (each embedding a full session snapshot) into a single
- * `storage.put` value and re-writes the whole list on every append, this store
- * persists one small SQLite row per checkpoint. A run with many tool-call
+ * Persists one small SQLite row per checkpoint. A run with many tool-call
  * checkpoints can no longer reach the Durable Object ~2MB per-value limit
  * (`SQLITE_TOOBIG`) by accumulation.
  *
- * The optimistic version check still reads the run record (`RunStore`) as the
- * version authority, exactly like the legacy store. The check, the row
- * `INSERT`, and the `RunStore` bump run inside a single `storage.transaction`
+ * The optimistic version check reads the run record (`RunStore`) as the
+ * version authority. The check, the row `INSERT`, and the `RunStore` bump run
+ * inside a single `storage.transaction`
  * so concurrent writes to the same run serialize — exactly one wins, the rest
  * get `stale-version`. (`ctx.storage.sql.exec` issued inside a Durable Object
  * transaction is part of that transaction, per the Cloudflare SQLite storage
@@ -43,7 +40,7 @@ export class DurableObjectSqliteCheckpointStore implements CheckpointStore {
   #schemaReady = false;
 
   constructor(storage: CloudflareDurableObjectStorage, prefix: string) {
-    const sql = (storage as { sql?: SqlStorage }).sql;
+    const sql = storage.sql as SqlStorage | undefined;
     if (!sql) {
       throw new Error(
         "DurableObjectSqliteCheckpointStore requires a SQLite-backed Durable Object (storage.sql is unavailable)"

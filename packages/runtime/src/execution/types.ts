@@ -5,12 +5,10 @@ import type { DurableBackgroundHost, SessionHost } from "./capabilities";
 export type AgentHost = DurableBackgroundHost | ExecutionHost | SessionHost;
 
 export interface ExecutionHost {
-  readonly capabilities: AgentHostCapabilities;
+  readonly kind: "execution";
   readonly scheduler: ExecutionScheduler;
   readonly store: ExecutionStore;
 }
-
-export type AgentHostCapabilities = Record<string, never>;
 
 export interface ExecutionScheduler {
   enqueueRun(

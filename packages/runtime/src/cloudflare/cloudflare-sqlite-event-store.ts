@@ -16,12 +16,8 @@ interface EventMetaRow {
 /**
  * Append-only SQLite-backed {@link EventStore} for SQLite-backed Durable Objects.
  *
- * Unlike {@link DurableObjectEventStore}, which re-writes the entire event list
- * for a run into a single `storage.put` value on every append (and eventually
- * crosses the Durable Object ~2MB per-value limit — `SQLITE_TOOBIG` — on runs
- * with many large tool/tool-result events), this store persists one small
- * SQLite row per event. Each `append` only `INSERT`s the new event, so no single
- * stored value grows with the run length.
+ * Each `append` only `INSERT`s the new event as one small SQLite row, so no
+ * single stored value grows with the run length.
  *
  * Mirrors the design of {@link DurableObjectSqliteSessionStore}: the per-run
  * `next_seq` counter and the row `INSERT` form a single synchronous
@@ -29,8 +25,7 @@ interface EventMetaRow {
  * serialize on the JS event loop inside the single-threaded Durable Object and
  * no `seq` collision can occur.
  *
- * Event cursors are 1-based skip counts (`offset = seq + 1`), matching the
- * legacy list implementation so callers and replays are unaffected.
+ * Event cursors are 1-based skip counts (`offset = seq + 1`).
  */
 export class DurableObjectSqliteEventStore implements EventStore {
   readonly #prefix: string;
@@ -38,9 +33,7 @@ export class DurableObjectSqliteEventStore implements EventStore {
   #schemaReady = false;
 
   constructor(storage: CloudflareDurableObjectStorage, prefix: string) {
-    // `sql` is read structurally so the shared CloudflareDurableObjectStorage
-    // port stays free of a `sql` member (see DurableObjectSqliteSessionStore).
-    const sql = (storage as { sql?: SqlStorage }).sql;
+    const sql = storage.sql as SqlStorage | undefined;
     if (!sql) {
       throw new Error(
         "DurableObjectSqliteEventStore requires a SQLite-backed Durable Object (storage.sql is unavailable)"

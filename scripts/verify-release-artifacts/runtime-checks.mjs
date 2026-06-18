@@ -4,7 +4,6 @@ import { listFiles, packageDistPath, relativeToCwd } from "./shared.mjs";
 
 const REQUIRED_RUNTIME_ROOT_EXPORTS = ["AgentHost", "AgentRun", "RuntimeInput"];
 const REQUIRED_RUNTIME_EXECUTION_EXPORTS = [
-  "AgentHostCapabilities",
   "BackgroundScheduler",
   "BackgroundSchedulerHost",
   "CheckpointHost",
@@ -64,7 +63,7 @@ const REQUIRED_RUNTIME_CLOUDFLARE_EXPORTS = [
 const FORBIDDEN_RUNTIME_ROOT_NAMES = [
   ...[
     "AgentMessage AgentModel AgentLoopResult AgentRunInput AgentTool AgentTools",
-    "AgentHostCapabilities BackgroundScheduler BackgroundSchedulerHost CheckpointHost CheckpointStore",
+    "BackgroundScheduler BackgroundSchedulerHost CheckpointHost CheckpointStore",
     "CloudflareAgentContext CloudflareAgentContextFactoryOptions CloudflareAgentContextOptions",
     "CloudflareAgentContextPrefixOptions CloudflareAgentRunDrainOptions CloudflareAlarmAgent",
     "CloudflareAlarmDrainSummary CloudflareDurableObjectFetchOptions CloudflareDurableObjectId",

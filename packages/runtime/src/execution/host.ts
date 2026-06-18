@@ -8,28 +8,24 @@ import type { AgentHost, ExecutionHost } from "./types";
 type Transaction = ExecutionHost["store"]["transaction"];
 
 export function sessionHost(host: AgentHost): SessionHost {
-  const durableHost = durableBackgroundHost(host);
-  if (durableHost?.sessionStore) {
-    return durableHost;
+  switch (host.kind) {
+    case "session":
+      return host;
+    case "durable-background":
+      return { kind: "session", sessionStore: host.sessionStore };
+    case "execution":
+      return { kind: "session", sessionStore: host.store.sessions };
+    default:
+      return assertNeverHost(host);
   }
-
-  const hostExecution = executionHost(host);
-  if (hostExecution) {
-    return {
-      capabilities: hostExecution.capabilities,
-      sessionStore: hostExecution.store.sessions,
-    };
-  }
-
-  return host;
 }
 
 export function executionHost(host: AgentHost): ExecutionHost | undefined {
-  if (isExecutionHost(host)) {
+  if (host.kind === "execution") {
     return host;
   }
 
-  if (isDurableBackgroundHost(host)) {
+  if (host.kind === "durable-background") {
     return executionHostFromDurableBackgroundHost(host);
   }
 
@@ -39,13 +35,12 @@ export function executionHost(host: AgentHost): ExecutionHost | undefined {
 export function durableBackgroundHost(
   host: AgentHost
 ): DurableBackgroundHost | undefined {
-  if (isDurableBackgroundHost(host)) {
+  if (host.kind === "durable-background") {
     return host;
   }
 
-  const hostExecution = executionHost(host);
-  if (hostExecution) {
-    return durableBackgroundHostFromExecutionHost(hostExecution);
+  if (host.kind === "execution") {
+    return durableBackgroundHostFromExecutionHost(host);
   }
 
   return;
@@ -56,26 +51,17 @@ export function durableNotificationResumeHost(
 ): DurableNotificationResumeHost | undefined {
   const backgroundHost = durableBackgroundHost(host);
   if (backgroundHost) {
-    return backgroundHost;
+    return {
+      backgroundScheduler: backgroundHost.backgroundScheduler,
+      checkpointStore: backgroundHost.checkpointStore,
+      kind: "durable-notification-resume",
+      notificationInbox: backgroundHost.notificationInbox,
+      runStore: backgroundHost.runStore,
+      transaction: backgroundHost.transaction,
+    };
   }
 
   return;
-}
-
-function isExecutionHost(host: AgentHost): host is ExecutionHost {
-  return "scheduler" in host && "store" in host && isExecutionStore(host.store);
-}
-
-function isExecutionStore(store: unknown): store is ExecutionHost["store"] {
-  return (
-    typeof store === "object" &&
-    store !== null &&
-    "checkpoints" in store &&
-    "events" in store &&
-    "notifications" in store &&
-    "runs" in store &&
-    "sessions" in store
-  );
 }
 
 function durableBackgroundHostFromExecutionHost(
@@ -83,9 +69,9 @@ function durableBackgroundHostFromExecutionHost(
 ): DurableBackgroundHost {
   return {
     backgroundScheduler: host.scheduler,
-    capabilities: host.capabilities,
     checkpointStore: host.store.checkpoints,
     eventStore: host.store.events,
+    kind: "durable-background",
     notificationInbox: host.store.notifications,
     runStore: host.store.runs,
     sessionStore: host.store.sessions,
@@ -97,7 +83,7 @@ function executionHostFromDurableBackgroundHost(
   host: DurableBackgroundHost
 ): ExecutionHost {
   return {
-    capabilities: host.capabilities ?? {},
+    kind: "execution",
     scheduler: host.backgroundScheduler,
     store: {
       checkpoints: host.checkpointStore,
@@ -110,20 +96,10 @@ function executionHostFromDurableBackgroundHost(
   };
 }
 
-function isDurableBackgroundHost(
-  host: AgentHost
-): host is DurableBackgroundHost {
-  return (
-    "backgroundScheduler" in host &&
-    "checkpointStore" in host &&
-    "eventStore" in host &&
-    "notificationInbox" in host &&
-    "runStore" in host &&
-    "sessionStore" in host &&
-    "transaction" in host
-  );
-}
-
 function transactionForStore(store: ExecutionHost["store"]): Transaction {
   return (fn) => store.transaction(fn);
+}
+
+function assertNeverHost(host: never): never {
+  throw new Error(`Unsupported agent host: ${JSON.stringify(host)}`);
 }

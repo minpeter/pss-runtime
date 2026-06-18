@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { decodeStoredSessionSnapshot } from "../session/snapshot";
 import { DurableObjectSqliteSessionStore } from "./cloudflare-sqlite-session-store";
 import { storeKey } from "./cloudflare-store-utils";
-import { InMemoryCloudflareDurableObjectStorage } from "./durable-object-storage";
+import {
+  type CloudflareDurableObjectStorage,
+  InMemoryCloudflareDurableObjectStorage,
+} from "./durable-object-storage";
 import { InMemorySqlStorage } from "./in-memory-sql-storage";
 
 const PREFIX = "pss-runtime";
@@ -43,7 +46,7 @@ describe("DurableObjectSqliteSessionStore", () => {
     expect(
       () =>
         new DurableObjectSqliteSessionStore(
-          new InMemoryCloudflareDurableObjectStorage(),
+          {} as CloudflareDurableObjectStorage,
           PREFIX
         )
     ).toThrow(REQUIRES_SQLITE);
@@ -274,60 +277,6 @@ describe("DurableObjectSqliteSessionStore", () => {
     ]);
   });
 
-  it("lazily migrates a legacy KV snapshot into rows on first load", async () => {
-    const { storage, store } = createStore();
-    const sessionKey = "legacy";
-    await storage.put(storeKey(PREFIX, "session", sessionKey), {
-      state: { history: [{ a: 1 }, { b: 2 }], schemaVersion: 1 },
-      version: "3",
-    });
-    await storage.put(storeKey(PREFIX, "session-version", sessionKey), 3);
-
-    await expect(store.load(sessionKey)).resolves.toEqual({
-      state: { history: [{ a: 1 }, { b: 2 }], schemaVersion: 1 },
-      version: "3",
-    });
-
-    // Legacy KV keys are removed; rows now exist.
-    await expect(
-      storage.get(storeKey(PREFIX, "session", sessionKey))
-    ).resolves.toBeUndefined();
-    await expect(
-      storage.get(storeKey(PREFIX, "session-version", sessionKey))
-    ).resolves.toBeUndefined();
-    expect(readRows(storage, sessionKey)).toHaveLength(2);
-
-    // Version continuity: the next commit builds on the migrated version.
-    await expect(
-      store.commit(sessionKey, snapshot([{ a: 1 }, { b: 2 }, { c: 3 }]), {
-        expectedVersion: "3",
-      })
-    ).resolves.toEqual({ ok: true, version: "4" });
-  });
-
-  it("preserves a non-numeric (UUID) legacy version through migration", async () => {
-    const { storage, store } = createStore();
-    const sessionKey = "uuid-legacy";
-    await storage.put(storeKey(PREFIX, "session", sessionKey), {
-      state: { history: [{ a: 1 }], schemaVersion: 1 },
-      version: "9b1c-uuid-xyz",
-    });
-
-    // Migration preserves the version verbatim — no silent reset to "0".
-    await expect(store.load(sessionKey)).resolves.toEqual({
-      state: { history: [{ a: 1 }], schemaVersion: 1 },
-      version: "9b1c-uuid-xyz",
-    });
-
-    // Continuity: a commit using the preserved version succeeds; the numeric
-    // counter then starts at 1.
-    await expect(
-      store.commit(sessionKey, snapshot([{ a: 1 }, { b: 2 }]), {
-        expectedVersion: "9b1c-uuid-xyz",
-      })
-    ).resolves.toEqual({ ok: true, version: "1" });
-  });
-
   it("normalizes a numeric meta version (INTEGER-affinity / schema drift) for the optimistic compare", async () => {
     const sql = new InMemorySqlStorage();
     const storage = new InMemoryCloudflareDurableObjectStorage({ sql });
@@ -364,12 +313,10 @@ describe("DurableObjectSqliteSessionStore", () => {
     ).resolves.toEqual({ ok: true, version: "2" });
   });
 
-  it("re-checks legacy storage after a deleted session key is re-created", async () => {
+  it("treats a deleted and re-created session as a brand-new session", async () => {
     const { store } = createStore();
     await store.commit("key", snapshot([{ i: 0 }]), { expectedVersion: null });
     await store.delete("key");
-    // After delete the key is evicted from the migration cache, so a fresh
-    // commit is treated as a brand-new session (version resets to "1").
     await expect(
       store.commit("key", snapshot([{ i: 1 }]), { expectedVersion: null })
     ).resolves.toEqual({ ok: true, version: "1" });

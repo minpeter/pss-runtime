@@ -29,6 +29,7 @@ export async function startTui(options: StartTuiOptions = {}): Promise<void> {
   const sessionConfig = resolveCodingAgentSessionConfig();
   const agentOptions: AgentOptions = {
     host: {
+      kind: "session",
       sessionStore: new FileSessionStore(sessionConfig.directory),
     },
     instructions:

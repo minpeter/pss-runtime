@@ -13,7 +13,7 @@ describe("Agent session delete failure", () => {
   it("hard-stops the session handle when persistence deletion fails", async () => {
     const store = new RejectingDeleteStore();
     const agent = new Agent({
-      host: { sessionStore: store },
+      host: { kind: "session", sessionStore: store },
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
       ),
