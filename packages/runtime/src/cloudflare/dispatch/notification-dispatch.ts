@@ -13,7 +13,7 @@ interface DispatchCloudflareAgentNotificationBase {
   readonly input: UserInput;
   readonly namespace: string;
   readonly observerEvents?: readonly AgentEvent[];
-  readonly sessionKey: string;
+  readonly threadKey: string;
 }
 
 export type DispatchCloudflareAgentNotificationInput =
@@ -35,7 +35,7 @@ export function dispatchCloudflareAgentNotification({
   namespace,
   observerEvents,
   prefix,
-  sessionKey,
+  threadKey,
   storage,
 }: DispatchCloudflareAgentNotificationInput): Promise<DispatchedAgentNotification> {
   return dispatchAgentNotification({
@@ -49,20 +49,20 @@ export function dispatchCloudflareAgentNotification({
     input,
     namespace,
     observerEvents,
-    sessionKey,
+    threadKey,
   });
 }
 
 export interface SourceCloudflareAgentNotificationIdempotencyKeyInput {
   readonly idempotencyKey: string | undefined;
   readonly namespace?: string;
-  readonly sessionKey: string;
+  readonly threadKey: string;
 }
 
 interface ScopedCloudflareAgentNotificationIdempotencyKey {
   readonly ownerNamespace: string;
-  readonly sessionKey: string;
   readonly sourceIdempotencyKey: string;
+  readonly threadKey: string;
 }
 
 export function sourceCloudflareAgentNotificationIdempotencyKey(
@@ -79,7 +79,7 @@ export function sourceCloudflareAgentNotificationIdempotencyKey(
     return input.idempotencyKey;
   }
 
-  if (scoped.sessionKey !== input.sessionKey) {
+  if (scoped.threadKey !== input.threadKey) {
     return input.idempotencyKey;
   }
 
@@ -104,18 +104,18 @@ function decodeScopedCloudflareAgentNotificationIdempotencyKey(
 
   try {
     const ownerNamespace = decodeURIComponent(parts[0] ?? "");
-    const sessionKey = decodeURIComponent(parts[1] ?? "");
+    const threadKey = decodeURIComponent(parts[1] ?? "");
     const sourceIdempotencyKey = decodeURIComponent(parts[2] ?? "");
     if (!ownerNamespace) {
       return;
     }
-    if (!sessionKey) {
+    if (!threadKey) {
       return;
     }
     if (!sourceIdempotencyKey) {
       return;
     }
-    return { ownerNamespace, sessionKey, sourceIdempotencyKey };
+    return { ownerNamespace, threadKey, sourceIdempotencyKey };
   } catch (error) {
     if (error instanceof URIError) {
       return;

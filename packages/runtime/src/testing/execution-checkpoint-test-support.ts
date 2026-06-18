@@ -16,7 +16,7 @@ export const createQueuedUserTurnRun = (runId = "run-1"): RunRecord => ({
   kind: "user-turn",
   rootRunId: runId,
   runId,
-  sessionKey: "session-1",
+  threadKey: "session-1",
   status: "queued",
 });
 

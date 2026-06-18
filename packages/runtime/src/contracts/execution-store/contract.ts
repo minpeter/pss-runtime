@@ -39,7 +39,7 @@ export function describeExecutionStoreContract({
           input: { text: "ready", type: "user-text" },
           notificationId: "notification-1",
           runId: "run-1",
-          sessionKey: "session-1",
+          threadKey: "session-1",
           status: "pending",
         });
         await tx.sessions.commit(
@@ -204,7 +204,7 @@ export function describeExecutionStoreContract({
           input,
           notificationId: "notification-1",
           runId: "run-1",
-          sessionKey: "session-1",
+          threadKey: "session-1",
           status: "pending",
         })
       ).resolves.toEqual({ ok: true });
@@ -214,7 +214,7 @@ export function describeExecutionStoreContract({
           input,
           notificationId: "notification-2",
           runId: "run-1",
-          sessionKey: "session-1",
+          threadKey: "session-1",
           status: "pending",
         })
       ).resolves.toEqual({

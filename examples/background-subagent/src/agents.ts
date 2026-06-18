@@ -1,6 +1,6 @@
 import { Agent, type AgentHost } from "@minpeter/pss-runtime";
 import type { ExecutionHost } from "@minpeter/pss-runtime/execution";
-import { parentSessionNamespace } from "@minpeter/pss-runtime/namespace";
+import { parentThreadNamespace } from "@minpeter/pss-runtime/namespace";
 import type { LanguageModel } from "ai";
 import { createBackgroundOutputTool } from "./background-output-tool";
 import { createConversationTagPlugin } from "./conversation-plugin";
@@ -25,7 +25,7 @@ export function createCoordinatorAgent(
   options: {
     readonly executionHost: ExecutionHost;
     readonly host: AgentHost;
-    readonly sessionKey: string;
+    readonly threadKey: string;
   }
 ) {
   const coordinatorNamespace = "coordinator";
@@ -45,21 +45,21 @@ export function createCoordinatorAgent(
     tools: {
       background_output: createBackgroundOutputTool({
         executionHost: options.executionHost,
-        ownerNamespace: parentSessionNamespace(
+        ownerNamespace: parentThreadNamespace(
           coordinatorNamespace,
-          options.sessionKey
+          options.threadKey
         ),
-        parentSessionKey: options.sessionKey,
+        parentThreadKey: options.threadKey,
       }),
       delegate_to_reader: createDelegateToReaderTool({
         description:
           "지식베이스 문서 읽기를 reader 에이전트에게 백그라운드로 위임한다.",
         executionHost: options.executionHost,
-        parentAgentNamespace: parentSessionNamespace(
+        parentAgentNamespace: parentThreadNamespace(
           coordinatorNamespace,
-          options.sessionKey
+          options.threadKey
         ),
-        parentSessionKey: options.sessionKey,
+        parentThreadKey: options.threadKey,
       }),
     },
   });

@@ -1,5 +1,5 @@
 import { Agent } from "@minpeter/pss-runtime";
-import { parentSessionNamespace } from "@minpeter/pss-runtime/namespace";
+import { parentThreadNamespace } from "@minpeter/pss-runtime/namespace";
 import type { LanguageModel } from "ai";
 import { createConversationTagPlugin } from "./conversation-plugin";
 import { createDelegateToReaderTool } from "./delegate-tool";
@@ -21,7 +21,7 @@ export function createCoordinatorAgent(
   model: LanguageModel,
   options: {
     readonly readerAgent: Agent;
-    readonly sessionKey: string;
+    readonly threadKey: string;
   }
 ) {
   const coordinatorNamespace = "coordinator";
@@ -35,11 +35,11 @@ export function createCoordinatorAgent(
     tools: {
       delegate_to_reader: createDelegateToReaderTool({
         description: "지식베이스 문서 읽기를 reader 에이전트에게 위임한다.",
-        parentAgentNamespace: parentSessionNamespace(
+        parentAgentNamespace: parentThreadNamespace(
           coordinatorNamespace,
-          options.sessionKey
+          options.threadKey
         ),
-        parentSessionKey: options.sessionKey,
+        parentThreadKey: options.threadKey,
         readerAgent: options.readerAgent,
       }),
     },

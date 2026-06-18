@@ -26,21 +26,21 @@ const model = provider(env.AI_MODEL);
 export interface ExampleRuntime {
   readonly coordinator: Agent;
   readonly reader: Agent;
-  readonly sessionKey: string;
   readonly thread: ThreadHandle;
+  readonly threadKey: string;
 }
 
-export function createExampleRuntime(sessionKey = "default"): ExampleRuntime {
+export function createExampleRuntime(threadKey = "default"): ExampleRuntime {
   const reader = createReaderAgent(model);
   const coordinator = createCoordinatorAgent(model, {
     readerAgent: reader,
-    sessionKey,
+    threadKey,
   });
 
   return {
     coordinator,
     reader,
-    sessionKey,
-    thread: coordinator.thread(sessionKey),
+    threadKey,
+    thread: coordinator.thread(threadKey),
   };
 }

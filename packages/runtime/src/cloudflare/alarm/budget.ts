@@ -5,7 +5,7 @@ export type CloudflareAlarmContinuationReason =
   | "event-budget"
   | "failure"
   | "run-budget"
-  | "session-prompt-budget";
+  | "thread-prompt-budget";
 
 export interface CloudflareAlarmDrainBudget {
   readonly continuationRunAfterMs?: number;
@@ -13,7 +13,7 @@ export interface CloudflareAlarmDrainBudget {
   readonly failureRunAfterMs?: number;
   readonly maxEvents?: number;
   readonly maxRuns?: number;
-  readonly maxSessionPrompts?: number;
+  readonly maxThreadPrompts?: number;
   readonly throwOnFailure?: boolean;
 }
 
@@ -23,15 +23,15 @@ export interface FailedScheduledWork {
 }
 
 export interface AlarmDrainState {
-  readonly consumedSessionPrompts: string[];
+  readonly consumedThreadPrompts: string[];
   droppedEvents: number;
   readonly events: AgentEvent[];
   readonly failedRuns: FailedScheduledWork[];
-  readonly failedSessionPrompts: FailedScheduledWork[];
+  readonly failedThreadPrompts: FailedScheduledWork[];
   readonly reasons: Set<CloudflareAlarmContinuationReason>;
   readonly resumedRuns: string[];
   runAttempts: number;
-  sessionPromptAttempts: number;
+  threadPromptAttempts: number;
 }
 
 export interface NormalizedAlarmDrainBudget {
@@ -40,7 +40,7 @@ export interface NormalizedAlarmDrainBudget {
   readonly failureRunAfterMs: number;
   readonly maxEvents: number;
   readonly maxRuns: number;
-  readonly maxSessionPrompts: number;
+  readonly maxThreadPrompts: number;
   readonly startedAt: number;
   readonly throwOnFailure: boolean;
 }
@@ -51,21 +51,21 @@ const defaultAlarmDrainBudget = {
   failureRunAfterMs: 1000,
   maxEvents: 1000,
   maxRuns: 25,
-  maxSessionPrompts: 25,
+  maxThreadPrompts: 25,
   throwOnFailure: false,
 } satisfies Required<CloudflareAlarmDrainBudget>;
 
 export function createAlarmDrainState(): AlarmDrainState {
   return {
-    consumedSessionPrompts: [],
+    consumedThreadPrompts: [],
     droppedEvents: 0,
     events: [],
     failedRuns: [],
-    failedSessionPrompts: [],
+    failedThreadPrompts: [],
     reasons: new Set<CloudflareAlarmContinuationReason>(),
     resumedRuns: [],
     runAttempts: 0,
-    sessionPromptAttempts: 0,
+    threadPromptAttempts: 0,
   };
 }
 
@@ -89,8 +89,8 @@ export function normalizeAlarmDrainBudget(
     maxRuns: nonNegativeInteger(
       budget.maxRuns ?? defaultAlarmDrainBudget.maxRuns
     ),
-    maxSessionPrompts: nonNegativeInteger(
-      budget.maxSessionPrompts ?? defaultAlarmDrainBudget.maxSessionPrompts
+    maxThreadPrompts: nonNegativeInteger(
+      budget.maxThreadPrompts ?? defaultAlarmDrainBudget.maxThreadPrompts
     ),
     startedAt: Date.now(),
     throwOnFailure:
@@ -129,7 +129,7 @@ export function shouldStopRuns(
   return false;
 }
 
-export function shouldStopSessionPrompts(
+export function shouldStopThreadPrompts(
   state: AlarmDrainState,
   budget: NormalizedAlarmDrainBudget
 ): boolean {
@@ -140,8 +140,8 @@ export function shouldStopSessionPrompts(
   if (shouldStopForEventBudget(state, budget)) {
     return true;
   }
-  if (state.sessionPromptAttempts >= budget.maxSessionPrompts) {
-    state.reasons.add("session-prompt-budget");
+  if (state.threadPromptAttempts >= budget.maxThreadPrompts) {
+    state.reasons.add("thread-prompt-budget");
     return true;
   }
   return false;

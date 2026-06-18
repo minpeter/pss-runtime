@@ -75,7 +75,7 @@ describe("Cloudflare Worker DX helpers", () => {
       kind: "notification",
       rootRunId: "background:bg_context",
       runId: "background:bg_context",
-      sessionKey: "context-session",
+      threadKey: "context-session",
       status: "queued",
     });
     await host.scheduler.enqueueRun("background:bg_context");

@@ -221,10 +221,10 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
       "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectStorage",
       "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectStub",
       "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectStubOptions",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareScheduledSessionPrompt",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareScheduledThreadPrompt",
       "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export InMemoryCloudflareDurableObjectStorage",
       "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export ackScheduledCloudflareRun",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export ackScheduledCloudflareSessionPrompt",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export ackScheduledCloudflareThreadPrompt",
       "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareAlarmScheduler",
       "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareAgentContext",
       "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareDurableObjectHost",
@@ -233,7 +233,7 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
       "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export fetchCloudflareDurableObject",
       "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export getCloudflareDurableObjectStub",
       "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export listScheduledCloudflareRuns",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export listScheduledCloudflareSessionPrompts",
+      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export listScheduledCloudflareThreadPrompts",
       "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export rescheduleCloudflareAlarm",
     ]);
   });

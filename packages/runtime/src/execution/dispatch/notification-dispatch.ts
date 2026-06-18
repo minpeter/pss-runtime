@@ -12,7 +12,7 @@ export interface DispatchAgentNotificationInput {
   readonly input: UserInput;
   readonly namespace: string;
   readonly observerEvents?: readonly AgentEvent[];
-  readonly sessionKey: string;
+  readonly threadKey: string;
 }
 
 export interface DispatchedAgentNotification {
@@ -23,8 +23,8 @@ export interface DispatchedAgentNotification {
 }
 
 interface SchedulableAgentNotification extends DispatchedAgentNotification {
-  readonly sessionKey: string;
   readonly storageIdempotencyKey: string;
+  readonly threadKey: string;
 }
 
 class DuplicateNotificationError extends Error {
@@ -41,13 +41,13 @@ export async function dispatchAgentNotification(
   const storageIdempotencyKey = scopedNotificationIdempotencyKey({
     idempotencyKey: input.idempotencyKey,
     ownerNamespace,
-    sessionKey: input.sessionKey,
+    threadKey: input.threadKey,
   });
   const existing = await queuedNotificationRun({
     host: input.host,
     idempotencyKey: input.idempotencyKey,
     ownerNamespace,
-    sessionKey: input.sessionKey,
+    threadKey: input.threadKey,
     storageIdempotencyKey,
   });
   if (existing) {
@@ -64,7 +64,7 @@ export async function dispatchAgentNotification(
     ownerNamespace,
     rootRunId: runId,
     runId,
-    sessionKey: input.sessionKey,
+    threadKey: input.threadKey,
     status: "queued",
   } satisfies RunRecord;
   const notificationRecord = {
@@ -74,7 +74,7 @@ export async function dispatchAgentNotification(
     observerEvents: input.observerEvents,
     ownerNamespace,
     runId,
-    sessionKey: input.sessionKey,
+    threadKey: input.threadKey,
     status: "pending",
   } satisfies NotificationRecord;
 
@@ -92,7 +92,7 @@ export async function dispatchAgentNotification(
         host: input.host,
         idempotencyKey: input.idempotencyKey,
         ownerNamespace,
-        sessionKey: input.sessionKey,
+        threadKey: input.threadKey,
         storageIdempotencyKey,
       });
       if (deduplicated) {
@@ -108,7 +108,7 @@ export async function dispatchAgentNotification(
     idempotencyKey: input.idempotencyKey,
     notificationId,
     runId,
-    sessionKey: input.sessionKey,
+    threadKey: input.threadKey,
     storageIdempotencyKey,
   } satisfies SchedulableAgentNotification;
   await scheduleAgentNotification(input.host, created);
@@ -119,13 +119,13 @@ async function queuedNotificationRun({
   host,
   idempotencyKey,
   ownerNamespace,
-  sessionKey,
+  threadKey,
   storageIdempotencyKey,
 }: {
   readonly host: ExecutionHost;
   readonly idempotencyKey: string;
   readonly ownerNamespace: string;
-  readonly sessionKey: string;
+  readonly threadKey: string;
   readonly storageIdempotencyKey: string;
 }): Promise<SchedulableAgentNotification | null> {
   const existingRun = await host.store.runs.getByDedupeKey(
@@ -134,7 +134,7 @@ async function queuedNotificationRun({
   if (
     existingRun?.kind !== "notification" ||
     existingRun.ownerNamespace !== ownerNamespace ||
-    existingRun.sessionKey !== sessionKey
+    existingRun.threadKey !== threadKey
   ) {
     return null;
   }
@@ -146,7 +146,7 @@ async function queuedNotificationRun({
     idempotencyKey,
     notificationId: existingNotification?.notificationId ?? existingRun.runId,
     runId: existingRun.runId,
-    sessionKey: existingRun.sessionKey,
+    threadKey: existingRun.threadKey,
     storageIdempotencyKey,
   };
 }
@@ -155,7 +155,7 @@ function scheduleAgentNotification(
   host: ExecutionHost,
   notification: SchedulableAgentNotification
 ): Promise<void> {
-  return host.scheduler.resumeSession(notification.sessionKey, {
+  return host.scheduler.resumeThread(notification.threadKey, {
     idempotencyKey: notification.storageIdempotencyKey,
     notificationId: notification.notificationId,
     runId: notification.runId,
@@ -176,13 +176,13 @@ function dispatchedAgentNotification(
 function scopedNotificationIdempotencyKey({
   idempotencyKey,
   ownerNamespace,
-  sessionKey,
+  threadKey,
 }: {
   readonly idempotencyKey: string;
   readonly ownerNamespace: string;
-  readonly sessionKey: string;
+  readonly threadKey: string;
 }): string {
-  return [ownerNamespace, sessionKey, idempotencyKey]
+  return [ownerNamespace, threadKey, idempotencyKey]
     .map((part) => encodeURIComponent(part))
     .join(":");
 }

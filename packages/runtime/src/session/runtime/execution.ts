@@ -39,12 +39,12 @@ export class SessionExecutionCheckpointError extends Error {
 
 export async function startSessionExecutionRun({
   executionHost,
-  sessionKey,
+  threadKey,
   state,
   turnId,
 }: {
   readonly executionHost?: ExecutionHost;
-  readonly sessionKey: string;
+  readonly threadKey: string;
   readonly state: SessionState;
   readonly turnId: string;
 }): Promise<SessionExecutionRun | undefined> {
@@ -52,14 +52,14 @@ export async function startSessionExecutionRun({
     return;
   }
 
-  const runId = `turn:${sessionKey}:${turnId}`;
+  const runId = `turn:${threadKey}:${turnId}`;
   const run: RunRecord = {
     checkpointVersion: 0,
     dedupeKey: runId,
     kind: "user-turn",
     rootRunId: runId,
     runId,
-    sessionKey,
+    threadKey,
     status: "running",
   };
   await executionHost.store.runs.create(run);

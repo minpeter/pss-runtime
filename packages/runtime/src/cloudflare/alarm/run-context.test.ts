@@ -6,7 +6,7 @@ import {
   drainCloudflareAlarm,
   InMemoryCloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
-  listScheduledCloudflareSessionPrompts,
+  listScheduledCloudflareThreadPrompts,
 } from "../index";
 import { InMemorySqlStorage } from "../sql/node-test/node-sqlite-storage";
 
@@ -23,7 +23,7 @@ describe("Cloudflare alarm run contexts", () => {
       kind: "notification",
       rootRunId: "run-context",
       runId: "run-context",
-      sessionKey: "room:1:user:2",
+      threadKey: "room:1:user:2",
       status: "queued",
     });
     await host.scheduler.enqueueRun("run-context");
@@ -31,10 +31,10 @@ describe("Cloudflare alarm run contexts", () => {
     const summary = await drainCloudflareAlarm({
       agentForRun: (context) => {
         contexts.push(
-          `${context.source}:${context.runId}:${context.sessionKey}`
+          `${context.source}:${context.runId}:${context.threadKey}`
         );
         return agentWithEvents([
-          { text: context.sessionKey, type: "assistant-text" },
+          { text: context.threadKey, type: "assistant-text" },
         ]);
       },
       prefix: "pss-runtime",
@@ -47,7 +47,7 @@ describe("Cloudflare alarm run contexts", () => {
     ]);
   });
 
-  it("passes session prompt context and event callbacks to the alarm drain", async () => {
+  it("passes thread prompt context and event callbacks to the alarm drain", async () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
@@ -55,7 +55,7 @@ describe("Cloudflare alarm run contexts", () => {
     const contexts: string[] = [];
     const observedEvents: string[] = [];
 
-    await host.scheduler.resumeSession("room:1:user:2", {
+    await host.scheduler.resumeThread("room:1:user:2", {
       idempotencyKey: "reminder:1",
       notificationId: "notification-1",
       runId: "run-reminder",
@@ -64,7 +64,7 @@ describe("Cloudflare alarm run contexts", () => {
     await drainCloudflareAlarm({
       agentForRun: (context) => {
         contexts.push(
-          `${context.source}:${context.idempotencyKey}:${context.notificationId}:${context.runId}:${context.sessionKey}`
+          `${context.source}:${context.idempotencyKey}:${context.notificationId}:${context.runId}:${context.threadKey}`
         );
         return agentWithEvents([{ text: "done", type: "assistant-text" }]);
       },
@@ -78,7 +78,7 @@ describe("Cloudflare alarm run contexts", () => {
     });
 
     expect(contexts).toEqual([
-      "session-prompt:reminder:1:notification-1:run-reminder:room:1:user:2",
+      "thread-prompt:reminder:1:notification-1:run-reminder:room:1:user:2",
     ]);
     expect(observedEvents).toEqual(["run-reminder:done"]);
   });
@@ -131,13 +131,13 @@ describe("Cloudflare alarm run contexts", () => {
     await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([]);
   });
 
-  it("acknowledges orphaned session prompts that cannot resolve a run", async () => {
+  it("acknowledges orphaned thread prompts that cannot resolve a run", async () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
     const host = createCloudflareDurableObjectHost({ storage });
 
-    await host.scheduler.resumeSession("room:1:user:2", {
+    await host.scheduler.resumeThread("room:1:user:2", {
       idempotencyKey: "missing-notification",
       runId: "",
     });
@@ -150,15 +150,15 @@ describe("Cloudflare alarm run contexts", () => {
       storage,
     });
 
-    expect(summary.failedSessionPrompts).toEqual([
+    expect(summary.failedThreadPrompts).toEqual([
       {
-        error: "Session prompt did not include or resolve to a run id.",
+        error: "Thread prompt did not include or resolve to a run id.",
         id: "missing-notification",
       },
     ]);
     expect(summary.continuationScheduled).toBe(false);
     await expect(
-      listScheduledCloudflareSessionPrompts(storage)
+      listScheduledCloudflareThreadPrompts(storage)
     ).resolves.toEqual([]);
   });
 });
@@ -170,7 +170,7 @@ function notificationRunRecord(runId: string, idempotencyKey = runId) {
     kind: "notification",
     rootRunId: runId,
     runId,
-    sessionKey: "room:1:user:2",
+    threadKey: "room:1:user:2",
     status: "queued",
   } as const;
 }

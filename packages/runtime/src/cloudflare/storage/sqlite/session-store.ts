@@ -55,12 +55,12 @@ export class DurableObjectSqliteSessionStore implements SessionStore {
   }
 
   commit(
-    sessionKey: string,
+    threadKey: string,
     next: SessionStoreCommit,
     options: { readonly expectedVersion: ExpectedSessionVersion }
   ): Promise<CommitResult> {
     this.#ensureSchema();
-    const key = this.#rowKey(sessionKey);
+    const key = this.#rowKey(threadKey);
 
     // --- begin synchronous read-modify-write critical section (no await) ---
     const meta = this.#readMeta(key);
@@ -98,9 +98,9 @@ export class DurableObjectSqliteSessionStore implements SessionStore {
     return Promise.resolve({ ok: true, version });
   }
 
-  delete(sessionKey: string): Promise<void> {
+  delete(threadKey: string): Promise<void> {
     this.#ensureSchema();
-    const key = this.#rowKey(sessionKey);
+    const key = this.#rowKey(threadKey);
     this.#sql.exec(
       "DELETE FROM pss_session_message WHERE session_key = ?",
       key
@@ -109,9 +109,9 @@ export class DurableObjectSqliteSessionStore implements SessionStore {
     return Promise.resolve();
   }
 
-  load(sessionKey: string): Promise<StoredSession | null> {
+  load(threadKey: string): Promise<StoredSession | null> {
     this.#ensureSchema();
-    const key = this.#rowKey(sessionKey);
+    const key = this.#rowKey(threadKey);
 
     const meta = this.#readMeta(key);
     if (!meta) {
@@ -128,8 +128,8 @@ export class DurableObjectSqliteSessionStore implements SessionStore {
     return Promise.resolve({ state: { history, schemaVersion: 1 }, version });
   }
 
-  #rowKey(sessionKey: string): string {
-    return storeKey(this.#prefix, "session", sessionKey);
+  #rowKey(threadKey: string): string {
+    return storeKey(this.#prefix, "session", threadKey);
   }
 
   #ensureSchema(): void {

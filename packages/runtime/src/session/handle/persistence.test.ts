@@ -118,7 +118,7 @@ describe("Agent session persistence", () => {
     ]);
   });
 
-  it("isolates named session keys and resumes same-key state", async () => {
+  it("isolates named thread keys and resumes same-key state", async () => {
     const seenHistory: Record<string, ModelMessage[][]> = { a: [], b: [] };
     let currentKey = "a";
     const agent = new Agent({

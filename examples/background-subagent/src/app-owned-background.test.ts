@@ -2,11 +2,11 @@ import type { Agent, AgentInput, AgentRun } from "@minpeter/pss-runtime";
 import {
   createInMemoryExecutionHost,
   type ExecutionHost,
-  type ResumeSessionOptions,
+  type ResumeThreadOptions,
 } from "@minpeter/pss-runtime/execution";
 import {
-  defaultChildSessionKey,
-  parentSessionNamespace,
+  defaultChildThreadKey,
+  parentThreadNamespace,
 } from "@minpeter/pss-runtime/namespace";
 import { describe, expect, it } from "vitest";
 import { createAppAgent } from "./app-agent";
@@ -14,8 +14,8 @@ import { launchDurableBackgroundDelegation } from "./background-delegation";
 import { createBackgroundOutputTool } from "./background-output-tool";
 import { readerChildName } from "./delegate-tool";
 
-const parentSessionKey = "default";
-const ownerNamespace = parentSessionNamespace("coordinator", parentSessionKey);
+const parentThreadKey = "default";
+const ownerNamespace = parentThreadNamespace("coordinator", parentThreadKey);
 
 describe("app-owned background delegation", () => {
   it("does not resume a background task owned by another app namespace", async () => {
@@ -47,7 +47,7 @@ describe("app-owned background delegation", () => {
     const backgroundOutput = createBackgroundOutputTool({
       executionHost: host,
       ownerNamespace,
-      parentSessionKey,
+      parentThreadKey,
     });
 
     await expect(
@@ -66,14 +66,14 @@ describe("app-owned background delegation", () => {
   it("does not create a duplicate notification run after duplicate enqueue", async () => {
     const { host, resumeCalls } = createCountingHost();
     const job = await launchTask(host);
-    const idempotencyKey = `background-complete:${parentSessionKey}:${job.id}`;
+    const idempotencyKey = `background-complete:${parentThreadKey}:${job.id}`;
     await host.store.notifications.enqueue({
       idempotencyKey,
       input: { text: "already queued", type: "user-text" },
       notificationId: `notification:${job.id}`,
       ownerNamespace,
       runId: `notification:${job.id}`,
-      sessionKey: parentSessionKey,
+      threadKey: parentThreadKey,
       status: "pending",
     });
     const appAgent = createTestAppAgent(host);
@@ -114,11 +114,11 @@ async function launchTask(
   return await launchDurableBackgroundDelegation({
     executionHost: host,
     ownerNamespace: overrides.ownerNamespace ?? ownerNamespace,
-    parentSessionKey,
+    parentThreadKey,
     prompt: "read product docs",
-    sessionKey: defaultChildSessionKey(
+    threadKey: defaultChildThreadKey(
       overrides.ownerNamespace ?? ownerNamespace,
-      parentSessionKey,
+      parentThreadKey,
       readerChildName
     ),
     subagent: readerChildName,
@@ -136,7 +136,7 @@ function createTestAppAgent(host: ExecutionHost): Agent {
     } as unknown as Agent,
     host,
     ownerNamespace,
-    parentSessionKey,
+    parentThreadKey,
     reader: createReaderAgent(),
   });
 }
@@ -179,17 +179,16 @@ async function* eventStream(
 
 function createCountingHost() {
   const baseHost = createInMemoryExecutionHost();
-  const resumeCalls: { options: ResumeSessionOptions; sessionKey: string }[] =
-    [];
+  const resumeCalls: { options: ResumeThreadOptions; threadKey: string }[] = [];
   const host: ExecutionHost = {
     ...baseHost,
     scheduler: {
       enqueueRun: async (runId, options) => {
         await baseHost.scheduler.enqueueRun(runId, options);
       },
-      resumeSession: async (sessionKey, options) => {
-        resumeCalls.push({ options, sessionKey });
-        await baseHost.scheduler.resumeSession(sessionKey, options);
+      resumeThread: async (threadKey, options) => {
+        resumeCalls.push({ options, threadKey });
+        await baseHost.scheduler.resumeThread(threadKey, options);
       },
     },
   };

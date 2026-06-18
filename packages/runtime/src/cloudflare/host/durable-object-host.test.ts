@@ -2,7 +2,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import type { AgentEvent, AgentRun } from "../../index";
 import {
   ackScheduledCloudflareRun,
-  ackScheduledCloudflareSessionPrompt,
+  ackScheduledCloudflareThreadPrompt,
   type CloudflareAlarmAgent,
   type CloudflareDurableObjectId,
   type CloudflareDurableObjectNamespace,
@@ -14,7 +14,7 @@ import {
   drainCloudflareAlarm,
   InMemoryCloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
-  listScheduledCloudflareSessionPrompts,
+  listScheduledCloudflareThreadPrompts,
 } from "../index";
 import { InMemorySqlStorage } from "../sql/node-test/node-sqlite-storage";
 
@@ -23,7 +23,7 @@ const unclaimableAgent = {
 } satisfies CloudflareAlarmAgent;
 
 describe("Cloudflare Durable Object host adapter", () => {
-  it("stores scheduled runs and session prompts until they are acked", async () => {
+  it("stores scheduled runs and thread prompts until they are acked", async () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
@@ -34,16 +34,16 @@ describe("Cloudflare Durable Object host adapter", () => {
     const prompt = {
       idempotencyKey,
       runId: notificationRunId,
-      sessionKey: "example",
+      threadKey: "example",
     };
 
     await host.scheduler.enqueueRun(runId);
     await host.scheduler.enqueueRun(runId);
-    await host.scheduler.resumeSession("example", {
+    await host.scheduler.resumeThread("example", {
       idempotencyKey,
       runId: notificationRunId,
     });
-    await host.scheduler.resumeSession("example", {
+    await host.scheduler.resumeThread("example", {
       idempotencyKey,
       runId: notificationRunId,
     });
@@ -52,7 +52,7 @@ describe("Cloudflare Durable Object host adapter", () => {
       input: { text: "ready", type: "user-text" },
       notificationId: "notification-delayed",
       runId: notificationRunId,
-      sessionKey: "example",
+      threadKey: "example",
       status: "pending",
     });
 
@@ -60,14 +60,14 @@ describe("Cloudflare Durable Object host adapter", () => {
       runId,
     ]);
     await expect(
-      listScheduledCloudflareSessionPrompts(storage)
+      listScheduledCloudflareThreadPrompts(storage)
     ).resolves.toEqual([prompt]);
     await ackScheduledCloudflareRun(storage, runId);
-    await ackScheduledCloudflareSessionPrompt(storage, prompt);
+    await ackScheduledCloudflareThreadPrompt(storage, prompt);
 
     await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([]);
     await expect(
-      listScheduledCloudflareSessionPrompts(storage)
+      listScheduledCloudflareThreadPrompts(storage)
     ).resolves.toEqual([]);
     await expect(
       host.store.notifications.claimByIdempotencyKey(idempotencyKey)
@@ -99,7 +99,7 @@ describe("Cloudflare Durable Object host adapter", () => {
     expect(storage.alarmTime()).not.toBeUndefined();
   });
 
-  it("keeps unclaimable scheduled session prompts pending and reschedules the alarm", async () => {
+  it("keeps unclaimable scheduled thread prompts pending and reschedules the alarm", async () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
@@ -109,10 +109,10 @@ describe("Cloudflare Durable Object host adapter", () => {
     const prompt = {
       idempotencyKey,
       runId,
-      sessionKey: "room:demo:user:edge",
+      threadKey: "room:demo:user:edge",
     };
 
-    await host.scheduler.resumeSession(prompt.sessionKey, {
+    await host.scheduler.resumeThread(prompt.threadKey, {
       idempotencyKey,
       runId,
     });
@@ -125,11 +125,11 @@ describe("Cloudflare Durable Object host adapter", () => {
     });
 
     await expect(
-      listScheduledCloudflareSessionPrompts(storage)
+      listScheduledCloudflareThreadPrompts(storage)
     ).resolves.toEqual([prompt]);
-    expect(summary.failedSessionPrompts).toEqual([
+    expect(summary.failedThreadPrompts).toEqual([
       {
-        error: "Session prompt was not claimable during this alarm.",
+        error: "Thread prompt was not claimable during this alarm.",
         id: idempotencyKey,
       },
     ]);
@@ -180,7 +180,7 @@ function notificationRunRecord(runId: string, idempotencyKey = runId) {
     kind: "notification",
     rootRunId: runId,
     runId,
-    sessionKey: "room:demo:user:edge",
+    threadKey: "room:demo:user:edge",
     status: "queued",
   } as const;
 }

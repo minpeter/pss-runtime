@@ -4,7 +4,7 @@ import {
   type AgentRun,
   delegateUserInput,
 } from "@minpeter/pss-runtime";
-import { defaultChildSessionKey } from "@minpeter/pss-runtime/namespace";
+import { defaultChildThreadKey } from "@minpeter/pss-runtime/namespace";
 import { jsonSchema, tool } from "ai";
 
 export const delegateToolName = "delegate_to_reader";
@@ -17,7 +17,7 @@ interface DelegateInput {
 export function createDelegateToReaderTool(options: {
   readonly description: string;
   readonly parentAgentNamespace: string;
-  readonly parentSessionKey: string;
+  readonly parentThreadKey: string;
   readonly readerAgent: Agent;
 }) {
   return tool<DelegateInput, unknown, Record<string, unknown>>({
@@ -28,9 +28,9 @@ export function createDelegateToReaderTool(options: {
       }
 
       const prompt = delegateUserInput(input.prompt, { delegateToolName });
-      const childSessionKey = defaultChildSessionKey(
+      const childThreadKey = defaultChildThreadKey(
         options.parentAgentNamespace,
-        options.parentSessionKey,
+        options.parentThreadKey,
         readerChildName
       );
 
@@ -38,7 +38,7 @@ export function createDelegateToReaderTool(options: {
         abortSignal,
         prompt,
         readerAgent: options.readerAgent,
-        sessionKey: childSessionKey,
+        threadKey: childThreadKey,
       });
     },
     inputSchema: jsonSchema<DelegateInput>({
@@ -60,14 +60,14 @@ async function runBlockingDelegation({
   abortSignal,
   prompt,
   readerAgent,
-  sessionKey,
+  threadKey,
 }: {
   readonly abortSignal?: AbortSignal;
   readonly prompt: AgentInput;
   readonly readerAgent: Agent;
-  readonly sessionKey: string;
+  readonly threadKey: string;
 }) {
-  const childThread = readerAgent.thread(sessionKey);
+  const childThread = readerAgent.thread(threadKey);
   if (abortSignal?.aborted) {
     return {
       result: "aborted" as const,

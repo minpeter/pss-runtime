@@ -4,13 +4,13 @@ import {
   createCloudflareDurableObjectHost,
   drainCloudflareAlarm,
   InMemoryCloudflareDurableObjectStorage,
-  listScheduledCloudflareSessionPrompts,
+  listScheduledCloudflareThreadPrompts,
 } from "../index";
 import { InMemorySqlStorage } from "../sql/node-test/node-sqlite-storage";
 
-describe("Cloudflare alarm session prompt retries", () => {
-  it("makes notification runs retryable after a session prompt turn error", async () => {
-    const { host, idempotencyKey, runId, sessionKey, storage } =
+describe("Cloudflare alarm thread prompt retries", () => {
+  it("makes notification runs retryable after a thread prompt turn error", async () => {
+    const { host, idempotencyKey, runId, threadKey, storage } =
       await createScheduledNotification("notification:error");
 
     const summary = await drainCloudflareAlarm({
@@ -27,7 +27,7 @@ describe("Cloudflare alarm session prompt retries", () => {
       storage,
     });
 
-    expect(summary.failedSessionPrompts).toEqual([
+    expect(summary.failedThreadPrompts).toEqual([
       { error: "model unavailable", id: idempotencyKey },
     ]);
     expect(summary.continuationScheduled).toBe(true);
@@ -39,12 +39,12 @@ describe("Cloudflare alarm session prompt retries", () => {
       host.store.notifications.getByIdempotencyKey(idempotencyKey)
     ).resolves.toEqual(expect.objectContaining({ status: "pending" }));
     await expect(
-      listScheduledCloudflareSessionPrompts(storage)
-    ).resolves.toEqual([{ idempotencyKey, runId, sessionKey }]);
+      listScheduledCloudflareThreadPrompts(storage)
+    ).resolves.toEqual([{ idempotencyKey, runId, threadKey }]);
   });
 
-  it("makes notification runs retryable when a session prompt drain hits the event budget", async () => {
-    const { host, idempotencyKey, runId, sessionKey, storage } =
+  it("makes notification runs retryable when a thread prompt drain hits the event budget", async () => {
+    const { host, idempotencyKey, runId, threadKey, storage } =
       await createScheduledNotification("notification:budget");
 
     const summary = await drainCloudflareAlarm({
@@ -73,8 +73,8 @@ describe("Cloudflare alarm session prompt retries", () => {
       host.store.notifications.getByIdempotencyKey(idempotencyKey)
     ).resolves.toEqual(expect.objectContaining({ status: "pending" }));
     await expect(
-      listScheduledCloudflareSessionPrompts(storage)
-    ).resolves.toEqual([{ idempotencyKey, runId, sessionKey }]);
+      listScheduledCloudflareThreadPrompts(storage)
+    ).resolves.toEqual([{ idempotencyKey, runId, threadKey }]);
   });
 });
 
@@ -107,7 +107,7 @@ async function createScheduledNotification(idempotencyKey: string): Promise<{
   readonly host: ReturnType<typeof createCloudflareDurableObjectHost>;
   readonly idempotencyKey: string;
   readonly runId: string;
-  readonly sessionKey: string;
+  readonly threadKey: string;
   readonly storage: InMemoryCloudflareDurableObjectStorage;
 }> {
   const storage = new InMemoryCloudflareDurableObjectStorage({
@@ -115,14 +115,14 @@ async function createScheduledNotification(idempotencyKey: string): Promise<{
   });
   const host = createCloudflareDurableObjectHost({ storage });
   const runId = `${idempotencyKey}:run`;
-  const sessionKey = "room:1:user:2";
+  const threadKey = "room:1:user:2";
 
   await host.store.notifications.enqueue({
     idempotencyKey,
     input: { text: "Reminder fired", type: "user-text" },
     notificationId: `${idempotencyKey}:notification`,
     runId,
-    sessionKey,
+    threadKey,
     status: "pending",
   });
   await host.store.runs.create({
@@ -131,12 +131,12 @@ async function createScheduledNotification(idempotencyKey: string): Promise<{
     kind: "notification",
     rootRunId: runId,
     runId,
-    sessionKey,
+    threadKey,
     status: "queued",
   });
-  await host.scheduler.resumeSession(sessionKey, { idempotencyKey, runId });
+  await host.scheduler.resumeThread(threadKey, { idempotencyKey, runId });
 
-  return { host, idempotencyKey, runId, sessionKey, storage };
+  return { host, idempotencyKey, runId, threadKey, storage };
 }
 
 function runWithEvents(events: readonly AgentEvent[]): AgentRun {

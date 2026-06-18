@@ -48,7 +48,7 @@ export function notificationRunRecord({
     ownerNamespace,
     rootRunId: runId,
     runId,
-    sessionKey: "default",
+    threadKey: "default",
     status: "queued",
   };
 }

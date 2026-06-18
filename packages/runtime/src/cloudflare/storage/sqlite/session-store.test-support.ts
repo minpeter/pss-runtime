@@ -34,12 +34,12 @@ export function snapshot(history: unknown[]): {
 
 export function readRows(
   storage: InMemoryCloudflareDurableObjectStorage,
-  sessionKey: string
+  threadKey: string
 ): MessageRowProbe[] {
   return (storage.sql as InMemorySqlStorage)
     .exec<MessageRowProbe>(
       "SELECT seq, active, message FROM pss_session_message WHERE session_key = ? ORDER BY seq",
-      storeKey(PREFIX, "session", sessionKey)
+      storeKey(PREFIX, "session", threadKey)
     )
     .toArray();
 }

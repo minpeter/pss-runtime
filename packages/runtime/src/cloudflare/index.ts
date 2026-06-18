@@ -48,16 +48,16 @@ export type {
   CloudflareDurableObjectState,
   CloudflareDurableObjectStorage,
   CloudflareDurableObjectStub,
-  CloudflareScheduledSessionPrompt,
+  CloudflareScheduledThreadPrompt,
 } from "./host/durable-object-host";
 export {
   ackScheduledCloudflareRun,
-  ackScheduledCloudflareSessionPrompt,
+  ackScheduledCloudflareThreadPrompt,
   createCloudflareAlarmScheduler,
   createCloudflareDurableObjectHost,
   InMemoryCloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
-  listScheduledCloudflareSessionPrompts,
+  listScheduledCloudflareThreadPrompts,
   rescheduleCloudflareAlarm,
 } from "./host/durable-object-host";
 export type {
