@@ -13,6 +13,8 @@ describe("changeset prerelease mode", () => {
 
   it("ignores private and external packages for release status", () => {
     const config = JSON.parse(readFileSync(".changeset/config.json", "utf8"));
+    const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
+    const workspace = readFileSync("pnpm-workspace.yaml", "utf8");
 
     expect(config.ignore).toEqual([
       "@minpeter/pss-worker-agent",
@@ -20,7 +22,8 @@ describe("changeset prerelease mode", () => {
       "@minpeter/pss-example-plugin",
       "@minpeter/pss-example-sync-subagent",
       "@minpeter/pss-example-background-subagent",
-      "@bori/agent-backend",
     ]);
+    expect(packageJson.workspaces).toContain("!apps/bori-agent-backend");
+    expect(workspace).toContain('- "!apps/bori-agent-backend"');
   });
 });
