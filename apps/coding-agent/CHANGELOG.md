@@ -1,5 +1,18 @@
 # @minpeter/pss-coding-agent
 
+## 0.0.11-next.2
+
+### Patch Changes
+
+- 1dd09de: Replace the public `agent.session(key)` entrypoint with `agent.thread(key)`.
+  Threads are the app-facing conversation unit; runtime session state remains an
+  internal storage concern behind the thread handle. `agent.thread({ key, scope })`
+  now provides an optional scoped address for multi-user integrations while
+  preserving opaque session storage under the host boundary.
+- Updated dependencies [4a2ab2b]
+- Updated dependencies [1dd09de]
+  - @minpeter/pss-runtime@0.1.0-next.9
+
 ## 0.0.11-next.1
 
 ### Patch Changes

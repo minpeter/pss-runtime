@@ -9,6 +9,7 @@
   "changesets": [
     "background-notify-runs",
     "cleanup-runtime-public-surface",
+    "cloudflare-notification-source-keys",
     "edge-dispatch-alarm-context",
     "fix-cloudflare-notification-retries",
     "order-subagent-events",
@@ -20,6 +21,7 @@
     "runtime-subagents",
     "sqlite-event-checkpoint-stores",
     "sqlite-session-store",
-    "sync-main-dependencies"
+    "sync-main-dependencies",
+    "thread-api-replaces-session"
   ]
 }
