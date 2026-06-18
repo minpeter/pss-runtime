@@ -1,7 +1,6 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../../agent/core/agent";
-import type { AgentPlugin } from "../../plugins";
 import {
   assistantMessage,
   createCallbackModel,
@@ -10,6 +9,7 @@ import {
   userText,
 } from "../../testing/test-fixtures";
 import { collect } from "../handle/test-support";
+import type { AgentPlugin } from "../plugins/pipeline";
 import { userTextToModelMessage } from "../protocol/mapping";
 
 describe("session plugin intercept integration", () => {

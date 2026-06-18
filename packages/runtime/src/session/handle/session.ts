@@ -1,5 +1,4 @@
 import type { ModelGenerationOptions } from "../../llm/llm";
-import type { AgentPlugin } from "../../plugins";
 import type { AgentInput } from "../input/input";
 import { attachInputMeta, userInputFromEvent } from "../input/input-meta";
 import { normalizeAgentInput } from "../input/input-normalization";
@@ -10,6 +9,7 @@ import {
   type QueuedRuntimeInput,
   type RuntimeInputState,
 } from "../input/runtime-input";
+import type { AgentPlugin } from "../plugins/pipeline";
 import { type AgentRun, BufferedAgentRun } from "../protocol/run";
 import { SessionEventDispatcher } from "../runtime/events";
 import type { SessionExecutionOptions } from "../runtime/execution";

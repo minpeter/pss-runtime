@@ -4,8 +4,8 @@ import type {
   ExecutionStore,
   RunRecord,
   StoredAgentEvent,
-} from "./execution/host/types";
-import { createInMemoryExecutionHost } from "./execution/memory";
+} from "../host/types";
+import { createInMemoryExecutionHost } from "./memory-host";
 
 const createQueuedRun = (runId = "run-1"): RunRecord => ({
   checkpointVersion: 0,

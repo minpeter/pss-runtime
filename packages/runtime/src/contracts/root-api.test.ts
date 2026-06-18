@@ -21,7 +21,7 @@ import type {
   RunRecord,
   RunStore,
   SessionHost,
-} from "./execution";
+} from "../execution";
 import type {
   AgentEvent,
   AgentHost,
@@ -29,7 +29,7 @@ import type {
   LifecycleAgentEvent,
   TelemetryAgentEvent,
   VisibleAgentEvent,
-} from "./index";
+} from "../index";
 import {
   Agent,
   isControlAgentEvent,
@@ -37,12 +37,12 @@ import {
   isTelemetryAgentEvent,
   isVisibleAgentEvent,
   runPluginsForEvent,
-} from "./index";
+} from "../index";
 
 type EmptyHostIsRejected =
   Record<string, never> extends AgentHost ? true : false;
 const emptyHostIsRejected: EmptyHostIsRejected = false;
-const runtimeIndexSourceUrl = new URL("./index.ts", import.meta.url);
+const runtimeIndexSourceUrl = new URL("../index.ts", import.meta.url);
 const forbiddenRuntimeSubagentExports = [
   ["Subagent", "Definition"].join(""),
   ["resume", "Background", "Child", "Run"].join(""),
@@ -61,13 +61,13 @@ const forbiddenModelAdapterRootExports = [
 
 describe("runtime public exports", () => {
   it("does not expose internal agent loop runner from package root", async () => {
-    const runtime = await import("./index");
+    const runtime = await import("../index");
 
     expect(runtime).not.toHaveProperty("runAgentLoop");
   });
 
   it("keeps package root app-facing and omits run stream helpers", async () => {
-    const runtime = await import("./index");
+    const runtime = await import("../index");
     const runStreamExport = ["Agent", "Run", "Stream"].join("");
 
     expect(runtime).toHaveProperty("Agent", Agent);
@@ -81,7 +81,7 @@ describe("runtime public exports", () => {
   });
 
   it("exports event classifiers from the package root", async () => {
-    const runtime = await import("./index");
+    const runtime = await import("../index");
 
     expect(runtime).toHaveProperty("isVisibleAgentEvent", isVisibleAgentEvent);
     expect(runtime).toHaveProperty(
@@ -96,7 +96,7 @@ describe("runtime public exports", () => {
   });
 
   it("does not expose runtime-owned subagent helpers from the package root", async () => {
-    const runtime = await import("./index");
+    const runtime = await import("../index");
     const source = await readFile(runtimeIndexSourceUrl, "utf8");
 
     for (const forbiddenName of forbiddenRuntimeSubagentExports) {
@@ -106,7 +106,7 @@ describe("runtime public exports", () => {
   });
 
   it("does not expose runtime LLM adapter names from the package root", async () => {
-    const runtime = await import("./index");
+    const runtime = await import("../index");
     const source = await readFile(runtimeIndexSourceUrl, "utf8");
 
     for (const forbiddenName of forbiddenModelAdapterRootExports) {

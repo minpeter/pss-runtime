@@ -1,8 +1,8 @@
 import { executionHost } from "../../execution/host/host";
 import type { AgentHost, NotificationRecord } from "../../execution/host/types";
 import { createInMemoryExecutionHost } from "../../execution/memory";
-import type { AgentPlugin } from "../../plugins";
 import { type AgentInput, AgentSession } from "../../session/handle/session";
+import type { AgentPlugin } from "../../session/plugins/pipeline";
 import type { AgentRun } from "../../session/protocol/run";
 import type { SessionStore } from "../../session/store/types";
 import { stableAgentNamespace } from "../identity/namespace";

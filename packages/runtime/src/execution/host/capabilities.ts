@@ -13,29 +13,27 @@ export interface SessionHost {
   readonly sessionStore: SessionStore;
 }
 
-export interface RunHost {
+interface RunHost {
   readonly runStore: RunStore;
 }
 
-export interface CheckpointHost {
+interface CheckpointHost {
   readonly checkpointStore: CheckpointStore;
 }
 
-export interface EventHost {
+interface EventHost {
   readonly eventStore: EventStore;
 }
 
-export interface NotificationHost {
+interface NotificationHost {
   readonly notificationInbox: NotificationInbox;
 }
 
-export type BackgroundScheduler = ExecutionScheduler;
-
-export interface BackgroundSchedulerHost {
-  readonly backgroundScheduler: BackgroundScheduler;
+interface BackgroundSchedulerHost {
+  readonly backgroundScheduler: ExecutionScheduler;
 }
 
-export interface ExecutionTransactionHost {
+interface ExecutionTransactionHost {
   readonly transaction: ExecutionStore["transaction"];
 }
 
@@ -48,13 +46,4 @@ export interface DurableBackgroundHost
     RunHost {
   readonly kind: "durable-background";
   readonly sessionStore: SessionStore;
-}
-
-export interface DurableNotificationResumeHost
-  extends BackgroundSchedulerHost,
-    CheckpointHost,
-    ExecutionTransactionHost,
-    NotificationHost,
-    RunHost {
-  readonly kind: "durable-notification-resume";
 }

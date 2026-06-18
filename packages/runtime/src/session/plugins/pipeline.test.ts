@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { AgentEventContext } from "./plugins";
-import { type AgentPlugin, runPluginsForEvent } from "./plugins";
+import type { AgentEventContext } from "./pipeline";
+import { type AgentPlugin, runPluginsForEvent } from "./pipeline";
 
 const emptyHistory: AgentEventContext["history"] = [];
 

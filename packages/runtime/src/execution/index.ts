@@ -12,15 +12,7 @@ export type {
 } from "./dispatch/notification-dispatch";
 export { dispatchAgentNotification } from "./dispatch/notification-dispatch";
 export type {
-  BackgroundScheduler,
-  BackgroundSchedulerHost,
-  CheckpointHost,
   DurableBackgroundHost,
-  DurableNotificationResumeHost,
-  EventHost,
-  ExecutionTransactionHost,
-  NotificationHost,
-  RunHost,
   SessionHost,
 } from "./host/capabilities";
 export { executionHost, sessionHost } from "./host/host";

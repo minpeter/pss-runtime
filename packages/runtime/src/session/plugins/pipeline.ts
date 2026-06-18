@@ -4,12 +4,12 @@ import type {
   RuntimeInput,
   UserMessage,
   UserText,
-} from "./session/protocol/events";
+} from "../protocol/events";
 
 export type {
   InputEventMeta,
   InputSource,
-} from "./session/input/input-meta-types";
+} from "../input/input-meta-types";
 
 type MaybePromise<T> = PromiseLike<T> | T;
 type AgentEventHistory = readonly ModelMessage[];

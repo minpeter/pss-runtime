@@ -3,18 +3,8 @@ export {
   type AgentOptions,
   type SessionHandle,
 } from "./agent/core/agent";
-export { executionHost } from "./execution/host/host";
 export type { AgentHost } from "./execution/host/types";
 export type { AgentToolChoice } from "./llm/llm";
-export type {
-  AgentEventContext,
-  AgentPlugin,
-  AgentPluginInterceptResult,
-  AgentPluginResult,
-  InterceptableAgentEvent,
-  PluginPipelineResult,
-} from "./plugins";
-export { runPluginsForEvent } from "./plugins";
 export { delegateUserInput } from "./session/input/delegate-input";
 export type { AgentInput, SessionInput } from "./session/input/input";
 export {
@@ -22,6 +12,15 @@ export {
   stripInputMeta,
   userInputFromEvent,
 } from "./session/input/input-meta";
+export type {
+  AgentEventContext,
+  AgentPlugin,
+  AgentPluginInterceptResult,
+  AgentPluginResult,
+  InterceptableAgentEvent,
+  PluginPipelineResult,
+} from "./session/plugins/pipeline";
+export { runPluginsForEvent } from "./session/plugins/pipeline";
 export type {
   AgentEvent,
   AgentEventListener,

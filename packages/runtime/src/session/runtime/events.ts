@@ -3,7 +3,7 @@ import {
   type AgentPlugin,
   type PluginPipelineResult,
   runPluginsForEvent,
-} from "../../plugins";
+} from "../plugins/pipeline";
 import type { AgentEvent } from "../protocol/events";
 import type { BufferedAgentRun } from "../protocol/run";
 

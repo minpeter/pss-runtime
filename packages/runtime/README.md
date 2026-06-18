@@ -378,13 +378,11 @@ when you need durable runs, tool checkpoints, and resume alongside your
 `sessionStore`.
 
 Hosts that need durable runs pass `host:` into `Agent`. The execution subpath
-keeps the durable surface split by responsibility, so hosts can implement the
-contracts they need: `SessionHost`, `RunHost`, `CheckpointHost`, `EventHost`,
-`NotificationHost`, `BackgroundSchedulerHost`, and `ExecutionTransactionHost`.
-`ExecutionHost` remains the aggregate contract for
-in-process or full-store hosts, while `DurableBackgroundHost` and
-`DurableNotificationResumeHost` describe the smaller durable surfaces required
-for background scheduling and notification resume.
+keeps the durable surface split by responsibility. `SessionHost` is the small
+session-only contract, `ExecutionHost` is the aggregate contract for in-process
+or full-store hosts, and `DurableBackgroundHost` is the split durable contract
+for background scheduling, run records, checkpoints, events, notifications, and
+session persistence.
 
 ```ts
 import { Agent } from "@minpeter/pss-runtime";

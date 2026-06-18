@@ -1,8 +1,4 @@
-import type {
-  DurableBackgroundHost,
-  DurableNotificationResumeHost,
-  SessionHost,
-} from "./capabilities";
+import type { DurableBackgroundHost, SessionHost } from "./capabilities";
 import type { AgentHost, ExecutionHost } from "./types";
 
 type Transaction = ExecutionHost["store"]["transaction"];
@@ -41,24 +37,6 @@ export function durableBackgroundHost(
 
   if (host.kind === "execution") {
     return durableBackgroundHostFromExecutionHost(host);
-  }
-
-  return;
-}
-
-export function durableNotificationResumeHost(
-  host: AgentHost
-): DurableNotificationResumeHost | undefined {
-  const backgroundHost = durableBackgroundHost(host);
-  if (backgroundHost) {
-    return {
-      backgroundScheduler: backgroundHost.backgroundScheduler,
-      checkpointStore: backgroundHost.checkpointStore,
-      kind: "durable-notification-resume",
-      notificationInbox: backgroundHost.notificationInbox,
-      runStore: backgroundHost.runStore,
-      transaction: backgroundHost.transaction,
-    };
   }
 
   return;

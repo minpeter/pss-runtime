@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentPlugin } from "../../plugins";
+import type { AgentPlugin } from "../plugins/pipeline";
 import { BufferedAgentRun } from "../protocol/run";
 import { SessionEventDispatcher } from "./events";
 
