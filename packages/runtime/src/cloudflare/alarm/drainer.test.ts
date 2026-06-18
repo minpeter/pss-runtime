@@ -18,9 +18,9 @@ describe("Cloudflare alarm drain budgets", () => {
     });
     const host = createCloudflareDurableObjectHost({ storage });
 
-    await host.scheduler.enqueueRun("run-a");
-    await host.scheduler.enqueueRun("run-b");
-    await host.scheduler.enqueueRun("run-c");
+    await enqueueStoredRun(host, "run-a");
+    await enqueueStoredRun(host, "run-b");
+    await enqueueStoredRun(host, "run-c");
 
     const summary = await drainCloudflareAlarm({
       agent: agentWithEvents([{ text: "a", type: "assistant-text" }]),
@@ -95,7 +95,7 @@ describe("Cloudflare alarm drain budgets", () => {
     const host = createCloudflareDurableObjectHost({ storage });
     let yieldedEvents = 0;
 
-    await host.scheduler.enqueueRun("run-events");
+    await enqueueStoredRun(host, "run-events");
 
     const summary = await drainCloudflareAlarm({
       agent: agentWithStream(async function* () {
@@ -132,7 +132,7 @@ describe("Cloudflare alarm drain budgets", () => {
     });
     const host = createCloudflareDurableObjectHost({ storage });
 
-    await host.scheduler.enqueueRun("run-deadline");
+    await enqueueStoredRun(host, "run-deadline");
 
     const summary = await drainCloudflareAlarm({
       agent: agentWithStream(async function* () {
@@ -163,7 +163,7 @@ describe("Cloudflare alarm drain budgets", () => {
     });
     const host = createCloudflareDurableObjectHost({ storage });
 
-    await host.scheduler.enqueueRun("run-unclaimable");
+    await enqueueStoredRun(host, "run-unclaimable");
 
     await expect(
       drainCloudflareAlarm({
@@ -184,6 +184,21 @@ function agentWithEvents(events: readonly AgentEvent[]): CloudflareAlarmAgent {
   return {
     resume: () => Promise.resolve(runWithEvents(events)),
   };
+}
+
+async function enqueueStoredRun(
+  host: ReturnType<typeof createCloudflareDurableObjectHost>,
+  runId: string
+): Promise<void> {
+  await host.store.runs.create({
+    checkpointVersion: 0,
+    kind: "notification",
+    rootRunId: runId,
+    runId,
+    sessionKey: "session:test",
+    status: "queued",
+  });
+  await host.scheduler.enqueueRun(runId);
 }
 
 function agentWithStream(

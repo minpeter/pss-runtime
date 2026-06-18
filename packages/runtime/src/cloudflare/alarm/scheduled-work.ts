@@ -15,6 +15,7 @@ import type {
 } from "./drainer";
 import { type AgentRunDrainResult, drainAgentRunWithBudget } from "./run-drain";
 import {
+  prepareScheduledNotificationRetry,
   scheduledRunContext,
   scheduledSessionPromptContext,
   sessionPromptId,
@@ -43,6 +44,10 @@ export async function resumeScheduledRun({
 }): Promise<void> {
   try {
     const context = await scheduledRunContext(storage, prefix, runId);
+    if (!context.sessionKey) {
+      await ackScheduledCloudflareRun(storage, runId, { prefix });
+      return;
+    }
     const agent = await agentForRun(context);
     const run = await agent.resume(runId);
     if (!run) {
@@ -68,6 +73,7 @@ export async function resumeScheduledRun({
       failOnTurnError &&
       appendTurnErrorFailure(state.failedRuns, runId, drainResult)
     ) {
+      await prepareScheduledNotificationRetry(storage, prefix, runId);
       return;
     }
     if (shouldContinueRunDrain(state)) {
@@ -109,6 +115,7 @@ export async function resumeScheduledSessionPrompt({
         error: "Session prompt did not include or resolve to a run id.",
         id: sessionPromptId(prompt),
       });
+      await ackScheduledCloudflareSessionPrompt(storage, prompt, { prefix });
       return;
     }
 
@@ -140,6 +147,15 @@ export async function resumeScheduledSessionPrompt({
         drainResult
       )
     ) {
+      if (
+        !(await prepareScheduledNotificationRetry(
+          storage,
+          prefix,
+          context.runId
+        ))
+      ) {
+        await ackScheduledCloudflareSessionPrompt(storage, prompt, { prefix });
+      }
       return;
     }
     if (shouldContinueRunDrain(state)) {

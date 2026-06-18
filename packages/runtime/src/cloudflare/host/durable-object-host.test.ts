@@ -81,6 +81,7 @@ describe("Cloudflare Durable Object host adapter", () => {
     const host = createCloudflareDurableObjectHost({ storage });
     const runId = "background:bg_retry";
 
+    await host.store.runs.create(notificationRunRecord(runId));
     await host.scheduler.enqueueRun(runId);
 
     const summary = await drainCloudflareAlarm({
@@ -115,6 +116,7 @@ describe("Cloudflare Durable Object host adapter", () => {
       idempotencyKey,
       runId,
     });
+    await host.store.runs.create(notificationRunRecord(runId, idempotencyKey));
 
     const summary = await drainCloudflareAlarm({
       agent: unclaimableAgent,
@@ -170,6 +172,18 @@ describe("Cloudflare Durable Object host adapter", () => {
     >().toEqualTypeOf<ExtraStub>();
   });
 });
+
+function notificationRunRecord(runId: string, idempotencyKey = runId) {
+  return {
+    checkpointVersion: 0,
+    dedupeKey: idempotencyKey,
+    kind: "notification",
+    rootRunId: runId,
+    runId,
+    sessionKey: "room:demo:user:edge",
+    status: "queued",
+  } as const;
+}
 
 function runWithEvents(events: readonly AgentEvent[]): AgentRun {
   return {

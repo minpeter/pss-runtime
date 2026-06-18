@@ -24,6 +24,7 @@ export interface DispatchedAgentNotification {
 
 interface SchedulableAgentNotification extends DispatchedAgentNotification {
   readonly sessionKey: string;
+  readonly storageIdempotencyKey: string;
 }
 
 class DuplicateNotificationError extends Error {
@@ -36,10 +37,19 @@ class DuplicateNotificationError extends Error {
 export async function dispatchAgentNotification(
   input: DispatchAgentNotificationInput
 ): Promise<DispatchedAgentNotification> {
-  const existing = await queuedNotificationRun(
-    input.host,
-    input.idempotencyKey
-  );
+  const ownerNamespace = agentNamespace(input.namespace);
+  const storageIdempotencyKey = scopedNotificationIdempotencyKey({
+    idempotencyKey: input.idempotencyKey,
+    ownerNamespace,
+    sessionKey: input.sessionKey,
+  });
+  const existing = await queuedNotificationRun({
+    host: input.host,
+    idempotencyKey: input.idempotencyKey,
+    ownerNamespace,
+    sessionKey: input.sessionKey,
+    storageIdempotencyKey,
+  });
   if (existing) {
     await scheduleAgentNotification(input.host, existing);
     return dispatchedAgentNotification(existing);
@@ -47,10 +57,9 @@ export async function dispatchAgentNotification(
 
   const runId = crypto.randomUUID();
   const notificationId = crypto.randomUUID();
-  const ownerNamespace = agentNamespace(input.namespace);
   const runRecord = {
     checkpointVersion: 0,
-    dedupeKey: input.idempotencyKey,
+    dedupeKey: storageIdempotencyKey,
     kind: "notification",
     ownerNamespace,
     rootRunId: runId,
@@ -59,7 +68,7 @@ export async function dispatchAgentNotification(
     status: "queued",
   } satisfies RunRecord;
   const notificationRecord = {
-    idempotencyKey: input.idempotencyKey,
+    idempotencyKey: storageIdempotencyKey,
     input: input.input,
     notificationId,
     observerEvents: input.observerEvents,
@@ -79,10 +88,13 @@ export async function dispatchAgentNotification(
     });
   } catch (error) {
     if (error instanceof DuplicateNotificationError) {
-      const deduplicated = await queuedNotificationRun(
-        input.host,
-        input.idempotencyKey
-      );
+      const deduplicated = await queuedNotificationRun({
+        host: input.host,
+        idempotencyKey: input.idempotencyKey,
+        ownerNamespace,
+        sessionKey: input.sessionKey,
+        storageIdempotencyKey,
+      });
       if (deduplicated) {
         await scheduleAgentNotification(input.host, deduplicated);
         return dispatchedAgentNotification(deduplicated);
@@ -97,28 +109,45 @@ export async function dispatchAgentNotification(
     notificationId,
     runId,
     sessionKey: input.sessionKey,
+    storageIdempotencyKey,
   } satisfies SchedulableAgentNotification;
   await scheduleAgentNotification(input.host, created);
   return dispatchedAgentNotification(created);
 }
 
-async function queuedNotificationRun(
-  host: ExecutionHost,
-  idempotencyKey: string
-): Promise<SchedulableAgentNotification | null> {
-  const existingRun = await host.store.runs.getByDedupeKey(idempotencyKey);
-  if (existingRun?.kind !== "notification") {
+async function queuedNotificationRun({
+  host,
+  idempotencyKey,
+  ownerNamespace,
+  sessionKey,
+  storageIdempotencyKey,
+}: {
+  readonly host: ExecutionHost;
+  readonly idempotencyKey: string;
+  readonly ownerNamespace: string;
+  readonly sessionKey: string;
+  readonly storageIdempotencyKey: string;
+}): Promise<SchedulableAgentNotification | null> {
+  const existingRun = await host.store.runs.getByDedupeKey(
+    storageIdempotencyKey
+  );
+  if (
+    existingRun?.kind !== "notification" ||
+    existingRun.ownerNamespace !== ownerNamespace ||
+    existingRun.sessionKey !== sessionKey
+  ) {
     return null;
   }
 
   const existingNotification =
-    await host.store.notifications.getByIdempotencyKey(idempotencyKey);
+    await host.store.notifications.getByIdempotencyKey(storageIdempotencyKey);
   return {
     deduplicated: true,
     idempotencyKey,
     notificationId: existingNotification?.notificationId ?? existingRun.runId,
     runId: existingRun.runId,
     sessionKey: existingRun.sessionKey,
+    storageIdempotencyKey,
   };
 }
 
@@ -127,7 +156,7 @@ function scheduleAgentNotification(
   notification: SchedulableAgentNotification
 ): Promise<void> {
   return host.scheduler.resumeSession(notification.sessionKey, {
-    idempotencyKey: notification.idempotencyKey,
+    idempotencyKey: notification.storageIdempotencyKey,
     notificationId: notification.notificationId,
     runId: notification.runId,
   });
@@ -142,4 +171,18 @@ function dispatchedAgentNotification(
     notificationId: notification.notificationId,
     runId: notification.runId,
   };
+}
+
+function scopedNotificationIdempotencyKey({
+  idempotencyKey,
+  ownerNamespace,
+  sessionKey,
+}: {
+  readonly idempotencyKey: string;
+  readonly ownerNamespace: string;
+  readonly sessionKey: string;
+}): string {
+  return [ownerNamespace, sessionKey, idempotencyKey]
+    .map((part) => encodeURIComponent(part))
+    .join(":");
 }

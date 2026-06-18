@@ -239,10 +239,7 @@ function shouldRearm(
   remainingRuns: number,
   remainingPrompts: number
 ): boolean {
-  return (
-    state.reasons.size > 0 &&
-    (remainingRuns > 0 || remainingPrompts > 0 || state.reasons.has("failure"))
-  );
+  return state.reasons.size > 0 && (remainingRuns > 0 || remainingPrompts > 0);
 }
 
 function hasFailures(summary: CloudflareAlarmDrainSummary): boolean {

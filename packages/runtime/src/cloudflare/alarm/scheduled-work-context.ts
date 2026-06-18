@@ -1,4 +1,4 @@
-import type { RunStatus } from "../../execution";
+import type { RunRecord, RunStatus } from "../../execution";
 import {
   type CloudflareDurableObjectStorage,
   type CloudflareScheduledSessionPrompt,
@@ -50,7 +50,7 @@ export async function shouldRetryScheduledRun(
     prefix,
     storage,
   }).store.runs.get(runId);
-  return run ? isRetryableRunStatus(run.status) : true;
+  return run ? isRetryableRunStatus(run.status) : false;
 }
 
 export async function shouldRetryScheduledSessionPrompt(
@@ -59,15 +59,33 @@ export async function shouldRetryScheduledSessionPrompt(
   prompt: CloudflareScheduledSessionPrompt
 ): Promise<boolean> {
   const runId = await scheduledSessionPromptRunId(storage, prefix, prompt);
-  return runId
-    ? await shouldRetryScheduledRun(storage, prefix, runId)
-    : prompt.idempotencyKey !== undefined;
+  return runId ? await shouldRetryScheduledRun(storage, prefix, runId) : false;
 }
 
 export function sessionPromptId(
   prompt: CloudflareScheduledSessionPrompt
 ): string {
   return prompt.idempotencyKey ?? prompt.runId ?? "<missing-run-id>";
+}
+
+export async function prepareScheduledNotificationRetry(
+  storage: CloudflareDurableObjectStorage,
+  prefix: string,
+  runId: string
+): Promise<boolean> {
+  const host = createCloudflareDurableObjectHost({ prefix, storage });
+  let prepared = false;
+  await host.store.transaction(async (tx) => {
+    const run = await tx.runs.get(runId);
+    if (run?.kind !== "notification" || !run.dedupeKey) {
+      return;
+    }
+
+    await tx.runs.update(retryableNotificationRun(run));
+    await tx.notifications.releaseByIdempotencyKey(run.dedupeKey);
+    prepared = true;
+  });
+  return prepared;
 }
 
 async function scheduledSessionPromptRunId(
@@ -96,4 +114,9 @@ function isRetryableRunStatus(status: RunStatus | undefined): boolean {
     status === "running" ||
     status === "suspended"
   );
+}
+
+function retryableNotificationRun(run: RunRecord): RunRecord {
+  const { lease: _lease, ...runWithoutLease } = run;
+  return { ...runWithoutLease, status: "queued" };
 }

@@ -69,9 +69,16 @@ describe("Cloudflare Worker DX helpers", () => {
     });
 
     await storage.put("prefix", "tenant-prefix");
-    await context
-      .host("tenant-prefix")
-      .scheduler.enqueueRun("background:bg_context");
+    const host = context.host("tenant-prefix");
+    await host.store.runs.create({
+      checkpointVersion: 0,
+      kind: "notification",
+      rootRunId: "background:bg_context",
+      runId: "background:bg_context",
+      sessionKey: "context-session",
+      status: "queued",
+    });
+    await host.scheduler.enqueueRun("background:bg_context");
 
     const summary = await context.drainAlarm();
 

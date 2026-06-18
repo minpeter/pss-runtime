@@ -25,8 +25,9 @@ describe("dispatchCloudflareAgentNotification", () => {
       sessionKey: "room:1:user:2",
       status: "queued",
     });
+    const run = await host.store.runs.get(dispatched.runId);
     await expect(
-      host.store.notifications.getByIdempotencyKey("background:ready")
+      host.store.notifications.getByIdempotencyKey(run?.dedupeKey ?? "")
     ).resolves.toMatchObject({
       notificationId: dispatched.notificationId,
       runId: dispatched.runId,
@@ -56,16 +57,16 @@ describe("dispatchCloudflareAgentNotification", () => {
     });
 
     expect(second).toEqual({ ...first, deduplicated: true });
-    await expect(
-      listScheduledCloudflareSessionPrompts(storage, { prefix: "bori-agent" })
-    ).resolves.toEqual([
-      {
-        idempotencyKey: "connector:oauth:done",
-        notificationId: first.notificationId,
-        runId: first.runId,
-        sessionKey: "room:1:user:2",
-      },
-    ]);
+    const [prompt] = await listScheduledCloudflareSessionPrompts(storage, {
+      prefix: "bori-agent",
+    });
+    expect(prompt).toMatchObject({
+      notificationId: first.notificationId,
+      runId: first.runId,
+      sessionKey: "room:1:user:2",
+    });
+    expect(prompt?.idempotencyKey).toEqual(expect.any(String));
+    expect(prompt?.idempotencyKey).not.toBe("connector:oauth:done");
     expect(storage.alarmTime()).toEqual(expect.any(Number));
   });
 });
