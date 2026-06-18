@@ -1,7 +1,7 @@
 import type {
   AgentEvent,
   AgentRun,
-  SessionHandle,
+  ThreadHandle,
   UserInput,
   UserMessage,
   UserMessageContentPart,
@@ -18,7 +18,7 @@ import {
 export interface TuiRunnerOptions {
   readonly addLine: (text: string) => void;
   readonly requestRender: () => void;
-  readonly session: Pick<SessionHandle, "send" | "steer">;
+  readonly thread: Pick<ThreadHandle, "send" | "steer">;
 }
 
 export interface TuiRunner {
@@ -69,7 +69,7 @@ export const formatEvent = (event: AgentEvent): string | undefined => {
 export function createTuiRunner({
   addLine,
   requestRender,
-  session,
+  thread,
 }: TuiRunnerOptions): TuiRunner {
   let activeRun: AgentRun | undefined;
 
@@ -107,7 +107,7 @@ export function createTuiRunner({
 
     const run = activeRun;
     if (run) {
-      session
+      thread
         .steer(trimmed)
         .then((nextRun) => {
           if (nextRun !== run) {
@@ -120,7 +120,7 @@ export function createTuiRunner({
       return;
     }
 
-    session
+    thread
       .send(trimmed)
       .then((nextRun) => consumeRun(nextRun))
       .catch((error: unknown) => {

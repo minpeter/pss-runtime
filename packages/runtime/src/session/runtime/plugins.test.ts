@@ -11,7 +11,7 @@ import {
 import { collect } from "../handle/test-support";
 import { userTextToModelMessage } from "../protocol/mapping";
 
-describe("Agent session runtime input plugins", () => {
+describe("Agent thread runtime input plugins", () => {
   it("drains event-plugin steering at turn-start, step-start, and step-end but starts a new run after turn-end", async () => {
     const seenHistory: ModelMessage[][] = [];
     let turnEndRun:
@@ -19,7 +19,7 @@ describe("Agent session runtime input plugins", () => {
       | undefined;
     let turnEndSteered = false;
     let step = 0;
-    let session: ReturnType<Agent["session"]>;
+    let session: ReturnType<Agent["thread"]>;
     const agent = new Agent({
       plugins: [
         {
@@ -54,7 +54,7 @@ describe("Agent session runtime input plugins", () => {
         ]);
       }),
     });
-    session = agent.session("plugin-steer");
+    session = agent.thread("plugin-steer");
 
     const events = await collect(await session.send("original"));
 

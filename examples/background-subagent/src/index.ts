@@ -35,7 +35,7 @@ try {
       break;
     }
 
-    await drainRunForCli(await runtime.session.send(text));
+    await drainRunForCli(await runtime.thread.send(text));
     output.write("\n");
   }
 } finally {

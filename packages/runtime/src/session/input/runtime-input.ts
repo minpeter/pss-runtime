@@ -106,5 +106,5 @@ export function queueRuntimeInput(
 }
 
 function runtimeInputClosedError(reason: string): Error {
-  return new Error(`session.steer() cannot be used after ${reason}`);
+  return new Error(`thread.steer() cannot be used after ${reason}`);
 }

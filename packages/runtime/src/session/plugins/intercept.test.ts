@@ -78,7 +78,7 @@ describe("session plugin intercept integration", () => {
     });
 
     const events = await collect(
-      await agent.session("terminal-plugin").send("first")
+      await agent.thread("terminal-plugin").send("first")
     );
 
     expect(eventTypes(events)).toContain("turn-error");

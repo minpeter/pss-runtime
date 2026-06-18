@@ -38,7 +38,7 @@ export async function startTui(options: StartTuiOptions = {}): Promise<void> {
     tools: options.tools,
   };
   const agent = new Agent(agentOptions);
-  const session = agent.session(sessionConfig.key);
+  const thread = agent.thread(sessionConfig.key);
 
   const terminal = new ProcessTerminal();
   const tui = new TUI(terminal);
@@ -48,7 +48,7 @@ export async function startTui(options: StartTuiOptions = {}): Promise<void> {
 
   tui.addChild(
     new Text(
-      `\x1b[1mpss-next\x1b[0m \x1b[2m(session ${safeInlineText(sessionConfig.key)} · Esc to interrupt · Ctrl-C to quit)\x1b[0m`,
+      `\x1b[1mpss-next\x1b[0m \x1b[2m(thread ${safeInlineText(sessionConfig.key)} · Esc to interrupt · Ctrl-C to quit)\x1b[0m`,
       1,
       0
     )
@@ -70,7 +70,7 @@ export async function startTui(options: StartTuiOptions = {}): Promise<void> {
   const runner = createTuiRunner({
     addLine,
     requestRender: () => tui.requestRender(),
-    session,
+    thread,
   });
 
   input.onSubmit = (text) => {
@@ -81,7 +81,7 @@ export async function startTui(options: StartTuiOptions = {}): Promise<void> {
   const removeInputListener = tui.addInputListener((data) => {
     // Avoid input.onEscape because pi-tui maps both Escape and Ctrl-C to it.
     if (matchesKey(data, "escape")) {
-      session.interrupt();
+      thread.interrupt();
       return { consume: true };
     }
 
@@ -90,7 +90,7 @@ export async function startTui(options: StartTuiOptions = {}): Promise<void> {
     }
 
     removeInputListener();
-    session.dispose();
+    thread.dispose();
     runner.clearActiveRun();
     tui.stop();
     finish();

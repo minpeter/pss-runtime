@@ -165,7 +165,7 @@ describe("Agent session API", () => {
     });
 
     await collect(
-      await agent.session("custom").send(
+      await agent.thread("custom").send(
         userMessage([
           { type: "text", text: "summarize" },
           { type: "image", image: "iVBORw0KGgo=" },
@@ -202,7 +202,7 @@ describe("Agent session API", () => {
     });
 
     await collect(
-      await agent.session("custom").send({ type: "user-text", text: "hello" })
+      await agent.thread("custom").send({ type: "user-text", text: "hello" })
     );
 
     expect(seenHistory).toEqual([[userTextToModelMessage(userText("hello"))]]);

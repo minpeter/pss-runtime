@@ -160,7 +160,7 @@ describe("AgentSession.notify", () => {
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
       ),
-    }).session("public-notify-hidden");
+    }).thread("public-notify-hidden");
 
     expect(
       getProperty(session, "notify"),

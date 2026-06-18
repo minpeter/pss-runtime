@@ -13,15 +13,25 @@ import {
   type AgentOptions,
   assertAgentOptions,
 } from "./options";
-import type { AgentSessionEntry, SessionHandle } from "./session-entry";
+import {
+  type AgentThreadEntry,
+  type ThreadHandle,
+  type ThreadKey,
+  threadSessionKey,
+} from "./thread-entry";
 
 export type { AgentHost } from "../../execution/host/types";
 export type { AgentOptions } from "./options";
-export type { SessionHandle } from "./session-entry";
+export type {
+  ThreadAddress,
+  ThreadHandle,
+  ThreadKey,
+  ThreadMetadata,
+} from "./thread-entry";
 
 export class Agent {
   readonly #modelOptions: AgentModelOptions;
-  readonly #sessions = new Map<string, AgentSessionEntry>();
+  readonly #threads = new Map<string, AgentThreadEntry>();
   readonly #sessionNamespace: string;
   readonly #store: SessionStore;
   readonly #host: AgentHost;
@@ -60,7 +70,7 @@ export class Agent {
   }
 
   send(input: AgentInput): Promise<AgentRun> {
-    return this.session("default").send(input);
+    return this.thread("default").send(input);
   }
 
   /**
@@ -86,12 +96,12 @@ export class Agent {
     });
   }
 
-  session(key: string): SessionHandle {
-    return this.#sessionEntry(key).publicHandle;
+  thread(thread: ThreadKey): ThreadHandle {
+    return this.#threadEntry(threadSessionKey(thread)).publicHandle;
   }
 
-  #sessionEntry(key: string): AgentSessionEntry {
-    const existing = this.#sessions.get(key);
+  #threadEntry(key: string): AgentThreadEntry {
+    const existing = this.#threads.get(key);
     if (existing) {
       return existing;
     }
@@ -105,35 +115,35 @@ export class Agent {
         executionHost: executionHost(this.#host),
       }
     );
-    const publicHandle: SessionHandle = {
+    const publicHandle: ThreadHandle = {
       delete: async () => {
         session.kill();
-        this.#evictSessionHandle(key);
+        this.#evictThreadHandle(key);
         await session.delete();
       },
       dispose: () => {
         session.kill();
-        this.#evictSessionHandle(key);
+        this.#evictThreadHandle(key);
         return Promise.resolve();
       },
       interrupt: () => session.interrupt(),
       send: (input) => session.send(input),
       steer: (input) => session.steer(input),
     };
-    const entry: AgentSessionEntry = {
+    const entry: AgentThreadEntry = {
       notify: (input, options) => session.notify(input, options),
       publicHandle,
     };
-    this.#sessions.set(key, entry);
+    this.#threads.set(key, entry);
     return entry;
   }
 
-  #evictSessionHandle(key: string): void {
-    this.#sessions.delete(key);
+  #evictThreadHandle(key: string): void {
+    this.#threads.delete(key);
   }
 
   #resumeNotification(notification: NotificationRecord): Promise<AgentRun> {
-    return this.#sessionEntry(notification.sessionKey).notify(
+    return this.#threadEntry(notification.sessionKey).notify(
       notification.input,
       { observerEvents: notification.observerEvents }
     );

@@ -1,7 +1,10 @@
 export {
   Agent,
   type AgentOptions,
-  type SessionHandle,
+  type ThreadAddress,
+  type ThreadHandle,
+  type ThreadKey,
+  type ThreadMetadata,
 } from "./agent/core/agent";
 export type { AgentHost } from "./execution/host/types";
 export type { AgentToolChoice } from "./llm/llm";

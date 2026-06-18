@@ -65,17 +65,17 @@ const agent = new Agent({
 });
 ```
 
-Per-key conversations use `session(key)`:
+Per-key conversations use `thread(key)`:
 
 ```ts
-const roomSession = agent.session("room:123:user:456");
-const run = await roomSession.send(["Context: user prefers short answers", "Hi"]);
+const roomThread = agent.thread("room:123:user:456");
+const run = await roomThread.send(["Context: user prefers short answers", "Hi"]);
 for await (const event of run.events()) {
   // events for this single turn
 }
 ```
 
-`agent.send(...)` is shorthand for `agent.session("default").send(...)`.
+`agent.send(...)` is shorthand for `agent.thread("default").send(...)`.
 
 For model providers that support multimodal input, send JSON-serializable content
 parts through the same API. String input and `readonly string[]` remain supported
@@ -118,7 +118,7 @@ continuation state, not a public history API.
 ## Delegation
 
 Delegation is app-owned. Build ordinary tools that call another `Agent`,
-`session.send(...)`, `session.notify(...)`, or host-owned background work, then
+`thread.send(...)`, notification resume, or host-owned background work, then
 return the compact result shape your product wants the model to see.
 
 ```ts
@@ -136,7 +136,7 @@ const coordinator = new Agent({
     delegate_to_reader: tool({
       description: "Ask the reader agent to inspect the knowledge base.",
       execute: async ({ prompt }) => {
-        const run = await reader.session("kb").send(prompt);
+        const run = await reader.thread("kb").send(prompt);
         const text: string[] = [];
         for await (const event of run.events()) {
           if (event.type === "assistant-text") {
@@ -197,7 +197,7 @@ Return one of:
 
 - `{ action: "continue" }` — emit the current event (default when omitted)
 - `{ action: "transform", event }` — emit a replacement input event
-- `{ action: "handled" }` — skip emit; for `session.send`, close the run without
+- `{ action: "handled" }` — skip emit; for `thread.send`, close the run without
   starting a turn
 
 Plugins run in registration order. Each `transform` updates the event seen by
@@ -210,10 +210,10 @@ on `event.meta?.source`:
 
 | `source` | Boundary |
 |----------|----------|
-| `send` | `session.send()` / `agent.send()` |
-| `steer` | `session.steer()` and drained steering queue |
+| `send` | `thread.send()` / `agent.send()` |
+| `steer` | `thread.steer()` and drained steering queue |
 | `notify` | `session.notify()` runtime input |
-| `delegate` | parent `delegate_to_*` child `session.send()` |
+| `delegate` | parent `delegate_to_*` child `thread.send()` |
 
 `meta` appears on `run.events()` for input events but is stripped before session
 history persistence and model mapping. It never reaches the LLM prompt.
@@ -259,8 +259,8 @@ plugin.
 
 ## Send, Host Resume, and Steer
 
-Use `session.send(input)` for a new user turn. If a run is already active, the
-turn is queued until the active run finishes. Use `session.steer(input)` when
+Use `thread.send(input)` for a new user turn. If a run is already active, the
+turn is queued until the active run finishes. Use `thread.steer(input)` when
 the input should steer the active run; if no run is active, it starts a normal
 run.
 
@@ -275,7 +275,7 @@ host. Check `supportsResume` first when you need to distinguish an unsupported
 host from a missing or already-claimed run.
 
 Runtime-originated input is delivered through the host notification inbox and
-internal plugin paths. App code should use `session.send()`, `session.steer()`,
+internal plugin paths. App code should use `thread.send()`, `thread.steer()`,
 or `agent.resume(runId)` for host-scheduled durable work.
 
 Each accepted call returns one `AgentRun`. Drain that run's `events()` stream to
@@ -298,8 +298,8 @@ Guard `step-end` insertion with a one-shot flag or a real condition. Adding inpu
 on every `step-end` can keep the turn running indefinitely.
 
 ```ts
-const session = agent.session("room:123:user:456");
-const run = await session.send("Draft a short answer.");
+const thread = agent.thread("room:123:user:456");
+const run = await thread.send("Draft a short answer.");
 let addedSteer = false;
 
 for await (const event of run.events()) {
@@ -309,12 +309,12 @@ for await (const event of run.events()) {
 
   if (event.type === "step-end" && !addedSteer) {
     addedSteer = true;
-    await session.steer("Also mention the main tradeoff.");
+    await thread.steer("Also mention the main tradeoff.");
   }
 }
 ```
 
-`session.steer()` resolves when the input is accepted into the active run's
+`thread.steer()` resolves when the input is accepted into the active run's
 pending steering path or, when idle, when a new run is scheduled. It does not wait
 for a later model snapshot.
 
@@ -419,7 +419,7 @@ reconstruct runtime objects between turns. The same public DX stays centered on
 `new Agent({ model, tools, host })`; host-specific durability and scheduling live
 behind the `host` boundary.
 
-Long-running Node.js can keep an `Agent` and `SessionHandle` alive across turns.
+Long-running Node.js can keep an `Agent` and `ThreadHandle` alive across turns.
 `FileSessionStore` persists session snapshots only; app-owned background work
 needs its own durable task/output storage if it must survive process restarts.
 

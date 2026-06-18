@@ -23,7 +23,7 @@ describe("Agent session terminal state", () => {
         await llmGate.promise;
         return [assistantMessage("DONE")];
       }),
-    }).session("kill-terminal");
+    }).thread("kill-terminal");
     const firstRun = await session.send("first");
     const secondRun = await session.send("second");
     const firstEvents = collect(firstRun);
@@ -46,7 +46,7 @@ describe("Agent session terminal state", () => {
         return new Promise<never>(() => undefined);
       }),
     });
-    const session = agent.session("kill-pending-model");
+    const session = agent.thread("kill-pending-model");
     const collecting = collect(await session.send("hello"));
     await llmStarted.promise;
 
@@ -81,7 +81,7 @@ describe("Agent session terminal state", () => {
         Promise.resolve([assistantMessage("DONE")])
       ),
     });
-    const session = agent.session("kill-pending-terminal-event");
+    const session = agent.thread("kill-pending-terminal-event");
     const collecting = collect(await session.send("hello"));
     await terminalPluginStarted.promise;
 
@@ -115,14 +115,14 @@ describe("Agent session terminal state", () => {
         return [assistantMessage("DONE")];
       }),
     });
-    const session = agent.session("delete-active");
+    const session = agent.thread("delete-active");
     const deletedRun = collect(await session.send("first"));
 
     await llmStarted.promise;
     await session.delete();
     llmGate.resolve();
     await deletedRun;
-    await collect(await agent.session("delete-active").send("fresh"));
+    await collect(await agent.thread("delete-active").send("fresh"));
 
     expect(seenHistory.at(-1)).toEqual([
       userTextToModelMessage(userText("fresh")),
@@ -139,7 +139,7 @@ describe("Agent session terminal state", () => {
         return new Promise<never>(() => undefined);
       }),
     });
-    const session = agent.session("delete-pending-active");
+    const session = agent.thread("delete-pending-active");
     const collecting = collect(await session.send("hello"));
 
     await llmStarted.promise;
@@ -167,7 +167,7 @@ describe("Agent session terminal state", () => {
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
       ),
-    }).session("delete-pending");
+    }).thread("delete-pending");
 
     await collect(await session.send("before"));
     const deletion = session.delete();

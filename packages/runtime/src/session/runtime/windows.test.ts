@@ -37,7 +37,7 @@ describe("Agent session runtime input windows", () => {
         ]);
       }),
     });
-    const session = agent.session("plugin-runtime-ordering");
+    const session = agent.thread("plugin-runtime-ordering");
 
     await collect(await session.send("prior"));
 
@@ -173,7 +173,7 @@ describe("Agent session runtime input windows", () => {
         return Promise.resolve([assistantMessage("DONE")]);
       }),
     });
-    const session = agent.session("early-steer");
+    const session = agent.thread("early-steer");
     const run = await session.send("original");
     const events: AgentEvent[] = [];
     let addedTurnStart = false;

@@ -136,9 +136,9 @@ describe("examples workspace packages", () => {
       expect(source).not.toContain("@minpeter/pss-coding-agent");
     }
 
-    expect(basicSetupSource).toContain('session("default")');
+    expect(basicSetupSource).toContain('thread("default")');
     expect(basicIndexSource).toContain("readline");
-    expect(basicIndexSource).toContain("session.send");
+    expect(basicIndexSource).toContain("thread.send");
     expect(basicIndexSource).toContain("/quit");
     expect(basicIndexSource).toContain("drain(");
 
@@ -174,7 +174,7 @@ describe("examples workspace packages", () => {
     expect(setupSource).toContain("createExampleRuntime");
     expect(setupSource).toContain("createOpenAICompatible");
     expect(indexSource).toContain("readline");
-    expect(indexSource).toContain("session.send");
+    expect(indexSource).toContain("thread.send");
     expect(indexSource).toContain("/quit");
     expect(indexSource).toContain("kb/");
 
@@ -236,7 +236,7 @@ describe("examples workspace packages", () => {
     expect(setupSource).toContain("createExampleRuntime");
     expect(setupSource).toContain("localHost");
     expect(indexSource).toContain("readline");
-    expect(indexSource).toContain("session.send");
+    expect(indexSource).toContain("thread.send");
     expect(indexSource).toContain("host.resumeSession");
     expect(indexSource).toContain("/quit");
     expect(indexSource).toContain("kb/");

@@ -49,7 +49,7 @@ describe("Agent session persistence", () => {
       host: { kind: "session", sessionStore: store },
       model: createMockLanguageModelV4([mockLanguageModelV4Text("stored")]),
     });
-    await collect(await first.session("images").send(input));
+    await collect(await first.thread("images").send(input));
 
     const secondModel = createMockLanguageModelV4([
       mockLanguageModelV4Text("DONE"),
@@ -59,7 +59,7 @@ describe("Agent session persistence", () => {
       model: secondModel,
     });
 
-    await collect(await second.session("images").send("next"));
+    await collect(await second.thread("images").send("next"));
 
     expect(JSON.stringify(secondModel.doGenerateCalls[0]?.prompt)).toContain(
       "remember this image"
@@ -79,7 +79,7 @@ describe("Agent session persistence", () => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
       }),
-    }).session("runtime-conflict");
+    }).thread("runtime-conflict");
     const run = await session.send("initial");
     const events: AgentEvent[] = [];
     let runtimeAdd: Promise<void> | undefined;
@@ -109,7 +109,7 @@ describe("Agent session persistence", () => {
     });
 
     await collect(await agent.send("first"));
-    await collect(await agent.session("default").send("second"));
+    await collect(await agent.thread("default").send("second"));
 
     expect(seenHistory[1]).toEqual([
       userTextToModelMessage(userText("first")),
@@ -129,11 +129,11 @@ describe("Agent session persistence", () => {
     });
 
     currentKey = "a";
-    await collect(await agent.session("a").send("first a"));
+    await collect(await agent.thread("a").send("first a"));
     currentKey = "b";
-    await collect(await agent.session("b").send("first b"));
+    await collect(await agent.thread("b").send("first b"));
     currentKey = "a";
-    await collect(await agent.session("a").send("second a"));
+    await collect(await agent.thread("a").send("second a"));
 
     expect(seenHistory.a[1]).toEqual([
       userTextToModelMessage(userText("first a")),
@@ -160,8 +160,8 @@ describe("Agent session persistence", () => {
       }),
     });
 
-    const firstRun = await agent.session("same").send("first");
-    const secondRun = await agent.session("same").send("second");
+    const firstRun = await agent.thread("same").send("first");
+    const secondRun = await agent.thread("same").send("second");
     const firstEvents = collect(firstRun);
     const secondEvents = collect(secondRun);
     firstLlmCall.resolve();
@@ -192,7 +192,7 @@ describe("Agent session persistence", () => {
         ]);
       }),
     });
-    const session = agent.session("race");
+    const session = agent.thread("race");
 
     const firstRun = session.send("first");
     const secondRun = session.send("second");
@@ -220,7 +220,7 @@ describe("Agent session persistence", () => {
       ),
     });
 
-    await collect(await agent.session("spy").send("hello"));
+    await collect(await agent.thread("spy").send("hello"));
 
     expect(store.commits.length).toBeGreaterThanOrEqual(1);
     const finalCommit = store.commits.at(-1);
@@ -250,7 +250,7 @@ describe("Agent session persistence", () => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
       }),
-    }).session("shared");
+    }).thread("shared");
 
     expect(eventTypes(await collect(await session.send("loses")))).toContain(
       "turn-error"
