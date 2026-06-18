@@ -46,7 +46,7 @@ describe("Agent session persistence", () => {
     const store = new FileSessionStore(directory);
 
     const first = new Agent({
-      host: { sessionStore: store },
+      host: { kind: "session", sessionStore: store },
       model: createMockLanguageModelV4([mockLanguageModelV4Text("stored")]),
     });
     await collect(await first.session("images").send(input));
@@ -55,7 +55,7 @@ describe("Agent session persistence", () => {
       mockLanguageModelV4Text("DONE"),
     ]);
     const second = new Agent({
-      host: { sessionStore: store },
+      host: { kind: "session", sessionStore: store },
       model: secondModel,
     });
 
@@ -74,7 +74,7 @@ describe("Agent session persistence", () => {
     store.conflictOnCommit = 2;
     const seenHistory: ModelMessage[][] = [];
     const session = new Agent({
-      host: { sessionStore: store },
+      host: { kind: "session", sessionStore: store },
       model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
@@ -184,7 +184,7 @@ describe("Agent session persistence", () => {
     const store = new SpyStore();
     store.loadGate = loadGate.promise;
     const agent = new Agent({
-      host: { sessionStore: store },
+      host: { kind: "session", sessionStore: store },
       model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([
@@ -214,7 +214,7 @@ describe("Agent session persistence", () => {
   it("persists versioned runtime-owned session snapshots through SessionStore", async () => {
     const store = new SpyStore();
     const agent = new Agent({
-      host: { sessionStore: store },
+      host: { kind: "session", sessionStore: store },
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
       ),
@@ -245,7 +245,7 @@ describe("Agent session persistence", () => {
       version: "1",
     });
     const session = new Agent({
-      host: { sessionStore: store },
+      host: { kind: "session", sessionStore: store },
       model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);

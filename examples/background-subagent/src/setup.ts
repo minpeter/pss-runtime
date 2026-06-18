@@ -1,11 +1,11 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { Agent, SessionHandle } from "@minpeter/pss-runtime";
+import { parentSessionNamespace } from "@minpeter/pss-runtime/namespace";
 import { createEnv } from "@t3-oss/env-core";
 import { config as loadEnv } from "dotenv";
 import { z } from "zod";
 import { createCoordinatorAgent, createReaderAgent } from "./agents";
 import { createAppAgent } from "./app-agent";
-import { parentSessionNamespace } from "./delegate-tool";
 import { type LocalHost, localHost } from "./local-host";
 
 loadEnv({ path: ".env", quiet: true, override: true });

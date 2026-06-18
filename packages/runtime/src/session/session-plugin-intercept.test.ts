@@ -10,9 +10,7 @@ import {
   userText,
 } from "../test-fixtures";
 import { userTextToModelMessage } from "./mapping";
-import { AgentSession } from "./session";
 import { collect } from "./session.test-support";
-import { MemorySessionStore } from "./store/memory";
 
 describe("session plugin intercept integration", () => {
   it("routes by meta.source=send in a unified on handler", async () => {
@@ -42,7 +40,7 @@ describe("session plugin intercept integration", () => {
     expect(events[0]).toEqual(sentUserText("<user>\nhello\n</user>"));
   });
 
-  it("keeps deprecated events.on observe-only", async () => {
+  it("observes non-intercepting plugin events", async () => {
     const seen: string[] = [];
     const agent = new Agent({
       model: createCallbackModel(() =>
@@ -50,10 +48,8 @@ describe("session plugin intercept integration", () => {
       ),
       plugins: [
         {
-          events: {
-            on: ({ event }) => {
-              seen.push(event.type);
-            },
+          on: ({ event }) => {
+            seen.push(event.type);
           },
         },
       ],
@@ -86,38 +82,6 @@ describe("session plugin intercept integration", () => {
     );
 
     expect(eventTypes(events)).toContain("turn-error");
-  });
-
-  it("observer events still reach plugins", async () => {
-    const pluginEventTypes: string[] = [];
-    const session = new AgentSession(
-      {
-        model: createCallbackModel(() =>
-          Promise.resolve([assistantMessage("DONE")])
-        ),
-      },
-      { key: "observer-intercept", store: new MemorySessionStore() },
-      [
-        {
-          on: ({ event }) => {
-            pluginEventTypes.push(event.type);
-          },
-        },
-      ]
-    );
-
-    const run = await session.send("hello");
-    const iterator = run.events()[Symbol.asyncIterator]();
-    await iterator.next();
-    await iterator.next();
-    await session.emitObserverEvent({
-      text: "observer reasoning",
-      type: "assistant-reasoning",
-    });
-    await iterator.next();
-    await iterator.return?.();
-
-    expect(pluginEventTypes).toContain("assistant-reasoning");
   });
 
   it("matches emitted text to model history after transform", async () => {

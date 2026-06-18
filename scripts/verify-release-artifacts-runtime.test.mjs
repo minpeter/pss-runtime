@@ -246,7 +246,6 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
     );
 
     expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export AgentHostCapabilities",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export BackgroundScheduler",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export BackgroundSchedulerHost",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export CheckpointHost",

@@ -21,7 +21,6 @@ export type {
 export { executionHost, sessionHost } from "./host";
 export { createInMemoryExecutionHost } from "./memory";
 export type {
-  AgentHostCapabilities,
   CheckpointPhase,
   CheckpointStore,
   CheckpointWriteResult,

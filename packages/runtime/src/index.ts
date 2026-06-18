@@ -52,8 +52,6 @@ export {
 export type { AgentInput, SessionInput } from "./session/input";
 export {
   attachInputMeta,
-  attachRuntimeInputMeta,
-  stripEventMeta,
   stripInputMeta,
   userInputFromEvent,
 } from "./session/input-meta";

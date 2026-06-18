@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type { AgentEvent, AgentRun } from "../index";
+import { InMemorySqlStorage } from "./in-memory-sql-storage";
 import {
   ackScheduledCloudflareRun,
   ackScheduledCloudflareSessionPrompt,
@@ -23,7 +24,9 @@ const unclaimableAgent = {
 
 describe("Cloudflare Durable Object host adapter", () => {
   it("stores scheduled runs and session prompts until they are acked", async () => {
-    const storage = new InMemoryCloudflareDurableObjectStorage();
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
     const host = createCloudflareDurableObjectHost({ storage });
     const runId = "background:bg_cloudflare_delayed";
     const idempotencyKey = "background-complete:example:bg_delayed";
@@ -72,7 +75,9 @@ describe("Cloudflare Durable Object host adapter", () => {
   });
 
   it("keeps unclaimable scheduled runs pending and reschedules the alarm", async () => {
-    const storage = new InMemoryCloudflareDurableObjectStorage();
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
     const host = createCloudflareDurableObjectHost({ storage });
     const runId = "background:bg_retry";
 
@@ -94,7 +99,9 @@ describe("Cloudflare Durable Object host adapter", () => {
   });
 
   it("keeps unclaimable scheduled session prompts pending and reschedules the alarm", async () => {
-    const storage = new InMemoryCloudflareDurableObjectStorage();
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
     const host = createCloudflareDurableObjectHost({ storage });
     const idempotencyKey = "background-complete:demo:bg_unclaimable";
     const runId = "notification:bg_unclaimable";

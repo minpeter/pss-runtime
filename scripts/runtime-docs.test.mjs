@@ -18,7 +18,7 @@ describe("runtime docs", () => {
     expect(readme).toContain("for await (const event of run.events())");
     expect(readme).toContain("session.steer");
     expect(readme).not.toContain("consumeRunEvents");
-    expect(changeset).toContain('"@minpeter/pss-runtime": minor');
+    expect(changeset).toContain('"@minpeter/pss-runtime": patch');
     expect(changeset).not.toContain("consumeRunEvents");
     expect(runSource).not.toContain("consumeRunEvents");
     expect(runSource).not.toContain("AgentRunEventListener");

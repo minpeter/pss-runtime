@@ -23,28 +23,26 @@ describe("Agent session runtime input plugins", () => {
     const agent = new Agent({
       plugins: [
         {
-          events: {
-            on: async ({ event }) => {
-              if (event.type === "turn-start") {
-                await session.steer("turn start steer");
-                return;
-              }
+          on: async ({ event }) => {
+            if (event.type === "turn-start") {
+              await session.steer("turn start steer");
+              return;
+            }
 
-              if (event.type === "step-start" && step === 0) {
-                await session.steer("step start steer");
-                return;
-              }
+            if (event.type === "step-start" && step === 0) {
+              await session.steer("step start steer");
+              return;
+            }
 
-              if (event.type === "step-end" && step === 1) {
-                await session.steer("step end steer");
-                return;
-              }
+            if (event.type === "step-end" && step === 1) {
+              await session.steer("step end steer");
+              return;
+            }
 
-              if (event.type === "turn-end" && !turnEndSteered) {
-                turnEndSteered = true;
-                turnEndRun = session.steer("turn end steer");
-              }
-            },
+            if (event.type === "turn-end" && !turnEndSteered) {
+              turnEndSteered = true;
+              turnEndRun = session.steer("turn end steer");
+            }
           },
         },
       ],

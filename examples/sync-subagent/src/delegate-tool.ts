@@ -4,6 +4,7 @@ import {
   type AgentRun,
   delegateUserInput,
 } from "@minpeter/pss-runtime";
+import { defaultChildSessionKey } from "@minpeter/pss-runtime/namespace";
 import { jsonSchema, tool } from "ai";
 
 export const delegateToolName = "delegate_to_reader";
@@ -11,21 +12,6 @@ export const readerChildName = "reader";
 
 interface DelegateInput {
   readonly prompt: string;
-}
-
-export function parentSessionNamespace(
-  agentNamespace: string,
-  sessionKey: string
-): string {
-  return `app:${encodeURIComponent(agentNamespace)}:${encodeURIComponent(sessionKey)}`;
-}
-
-export function defaultChildSessionKey(
-  parentAgentNamespace: string,
-  parentSessionKey: string,
-  childName: string
-): string {
-  return `parent:${parentAgentNamespace}:${parentSessionKey}:subagent:${childName}`;
 }
 
 export function createDelegateToReaderTool(options: {

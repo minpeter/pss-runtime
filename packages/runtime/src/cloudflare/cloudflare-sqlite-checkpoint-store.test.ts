@@ -6,7 +6,10 @@ import {
   DurableObjectSqliteCheckpointStore,
 } from "./cloudflare-sqlite-checkpoint-store";
 import { storeKey } from "./cloudflare-store-utils";
-import { InMemoryCloudflareDurableObjectStorage } from "./durable-object-storage";
+import {
+  type CloudflareDurableObjectStorage,
+  InMemoryCloudflareDurableObjectStorage,
+} from "./durable-object-storage";
 import { InMemorySqlStorage } from "./in-memory-sql-storage";
 
 const PREFIX = "pss-runtime";
@@ -78,7 +81,7 @@ describe("DurableObjectSqliteCheckpointStore", () => {
     expect(
       () =>
         new DurableObjectSqliteCheckpointStore(
-          new InMemoryCloudflareDurableObjectStorage(),
+          {} as CloudflareDurableObjectStorage,
           PREFIX
         )
     ).toThrow(REQUIRES_SQLITE);
@@ -170,7 +173,7 @@ describe("DurableObjectSqliteCheckpointStore", () => {
   });
 
   it("round-trips checkpoints whose snapshot payload exceeds the 2MB blob limit", async () => {
-    // Reproduces the SQLITE_TOOBIG failure the legacy single-value KV store hit:
+    // Guards against SQLITE_TOOBIG-style accumulation failures:
     // each checkpoint embeds a full session snapshot, and many tool-call
     // checkpoints past the ~2.2MB threshold blew up a single re-written value.
     const { store } = await createRanStore();

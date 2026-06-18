@@ -55,7 +55,7 @@ export function createCheckpointSpyHost(): {
   return {
     checkpoints,
     host: {
-      capabilities: baseHost.capabilities,
+      kind: "execution",
       scheduler: baseHost.scheduler,
       store: {
         checkpoints: {

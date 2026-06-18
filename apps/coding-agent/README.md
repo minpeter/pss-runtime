@@ -1,15 +1,14 @@
 # @minpeter/pss-coding-agent
 
-Web tools, model wiring, and the `pss` TUI for pss-next.
+Model wiring and the `pss` TUI for pss-next. This package ships no built-in
+tools; bring your own `ToolSet` when you want tool calling.
 
 ```ts
-import { tools } from "@minpeter/pss-coding-agent";
 import { createCodingLanguageModel } from "@minpeter/pss-coding-agent/model";
 import { Agent } from "@minpeter/pss-runtime";
 
 const agent = new Agent({
   model: createCodingLanguageModel(),
-  tools,
 });
 
 const run = await agent.send("Hello from pss");
@@ -39,8 +38,8 @@ for await (const event of run.events()) {
 
 Guard `step-end` additions. Runtime input added at `step-end` intentionally
 continues the current turn before the next model snapshot, even if the assistant
-already printed final-looking text. Adding input on every `step-end` can keep the
-turn running indefinitely.
+already printed final-looking text. Adding input on every `step-end` can keep
+the turn running indefinitely.
 
 Runtime additions emit `runtime-input`: runtime/API-originated input mapped
 internally to the model's user role, separate from human `user-text` and
@@ -60,6 +59,16 @@ pss
 
 CLI commands: `pss`, `pss-coding-agent`.
 
+The `pss` TUI starts a plain conversational agent with no built-in tools. To run
+the TUI with tools, call `startTui({ tools })` from your own entrypoint (for
+example to wire `@minpeter/pss-web-tools`):
+
+```ts
+import { startTui } from "@minpeter/pss-coding-agent";
+
+await startTui({ tools });
+```
+
 When the TUI is idle, submitting text starts a normal `session.send()` turn. When
 a run is active, submitting text calls `session.steer(trimmed)` so the text lands
 in the current run and renders as dim `runtime: ...` input instead of a new human
@@ -68,10 +77,6 @@ turn.
 ## Env
 
 Set `AI_API_KEY`, `AI_BASE_URL`, and `AI_MODEL` for the model.
-
-`web_search` and `web_fetch` use `@minpeter/opensearch` via `@minpeter/pss-web-tools`
-with keyless public fallbacks and hosted MCP. No search provider API keys are
-configured.
 
 The TUI persists runtime-owned session state to files by default:
 

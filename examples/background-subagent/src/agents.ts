@@ -1,12 +1,10 @@
 import { Agent, type AgentHost } from "@minpeter/pss-runtime";
 import type { ExecutionHost } from "@minpeter/pss-runtime/execution";
+import { parentSessionNamespace } from "@minpeter/pss-runtime/namespace";
 import type { LanguageModel } from "ai";
 import { createBackgroundOutputTool } from "./background-output-tool";
 import { createConversationTagPlugin } from "./conversation-plugin";
-import {
-  createDelegateToReaderTool,
-  parentSessionNamespace,
-} from "./delegate-tool";
+import { createDelegateToReaderTool } from "./delegate-tool";
 import { createReadFileTool } from "./read-file-tool";
 
 export function createReaderAgent(model: LanguageModel, host: AgentHost) {

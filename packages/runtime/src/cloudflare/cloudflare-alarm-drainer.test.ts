@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentEvent, AgentRun } from "../index";
+import { InMemorySqlStorage } from "./in-memory-sql-storage";
 import {
   type CloudflareAlarmAgent,
   CloudflareAlarmDrainFailureError,
@@ -12,7 +13,9 @@ import {
 
 describe("Cloudflare alarm drain budgets", () => {
   it("re-arms continuation when the run budget leaves backlog", async () => {
-    const storage = new InMemoryCloudflareDurableObjectStorage();
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
     const host = createCloudflareDurableObjectHost({ storage });
 
     await host.scheduler.enqueueRun("run-a");
@@ -38,7 +41,9 @@ describe("Cloudflare alarm drain budgets", () => {
   });
 
   it("re-arms continuation when the deadline leaves run backlog", async () => {
-    const storage = new InMemoryCloudflareDurableObjectStorage();
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
     const host = createCloudflareDurableObjectHost({ storage });
 
     await host.scheduler.enqueueRun("run-a");
@@ -59,7 +64,9 @@ describe("Cloudflare alarm drain budgets", () => {
   });
 
   it("re-arms continuation when the session prompt budget leaves backlog", async () => {
-    const storage = new InMemoryCloudflareDurableObjectStorage();
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
     const host = createCloudflareDurableObjectHost({ storage });
 
     await host.scheduler.resumeSession("session-a", { runId: "run-a" });
@@ -82,7 +89,9 @@ describe("Cloudflare alarm drain budgets", () => {
   });
 
   it("caps retained events without buffering the full run stream", async () => {
-    const storage = new InMemoryCloudflareDurableObjectStorage();
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
     const host = createCloudflareDurableObjectHost({ storage });
     let yieldedEvents = 0;
 
@@ -118,7 +127,9 @@ describe("Cloudflare alarm drain budgets", () => {
   });
 
   it("stops a resumed run when the deadline expires inside the event stream", async () => {
-    const storage = new InMemoryCloudflareDurableObjectStorage();
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
     const host = createCloudflareDurableObjectHost({ storage });
 
     await host.scheduler.enqueueRun("run-deadline");
@@ -147,7 +158,9 @@ describe("Cloudflare alarm drain budgets", () => {
   });
 
   it("throws an opt-in failure error after re-arming failed work", async () => {
-    const storage = new InMemoryCloudflareDurableObjectStorage();
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
     const host = createCloudflareDurableObjectHost({ storage });
 
     await host.scheduler.enqueueRun("run-unclaimable");

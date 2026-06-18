@@ -29,14 +29,6 @@ interface BackgroundJobLaunch {
   readonly subagent: string;
 }
 
-export function defaultChildSessionKey(
-  parentAgentNamespace: string,
-  parentSessionKey: string,
-  subagent: string
-): string {
-  return `parent:${parentAgentNamespace}:${parentSessionKey}:subagent:${subagent}`;
-}
-
 export async function launchDurableBackgroundDelegation(
   input: BackgroundChildRunInput
 ): Promise<BackgroundJobLaunch> {

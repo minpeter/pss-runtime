@@ -1,8 +1,8 @@
 import { sessionStoreForHost } from "./agent-host-session-store";
 import { stableAgentNamespace } from "./agent-namespace";
 import {
-  type AgentConstructionOptions,
   type AgentModelOptions,
+  type AgentOptions,
   assertAgentOptions,
 } from "./agent-options";
 import { resumeAgentRun } from "./agent-resume";
@@ -28,7 +28,7 @@ export class Agent {
   readonly #plugins: readonly AgentPlugin[];
   readonly host: AgentHost;
   readonly namespace?: string;
-  constructor(options: AgentConstructionOptions) {
+  constructor(options: AgentOptions) {
     assertAgentOptions(options);
 
     this.namespace = options.namespace;
@@ -47,14 +47,34 @@ export class Agent {
     };
   }
 
+  /**
+   * Whether this agent's host can resume durable runs through `resume()`.
+   *
+   * `false` when the host is a `SessionHost`-only object (for example
+   * `{ kind: "session", sessionStore }`). In that case the in-memory
+   * `ExecutionHost` is not wired
+   * up, so `resume(runId)` always returns `null` instead of throwing.
+   */
+  get supportsResume(): boolean {
+    return executionHost(this.#host) !== undefined;
+  }
+
   send(input: AgentInput): Promise<AgentRun> {
     return this.session("default").send(input);
   }
 
+  /**
+   * Resume a durable run by id. Returns the resumed `AgentRun`, or `null` when
+   * the host does not support durable resume (`supportsResume === false`), the
+   * run id is unknown to this namespace, or a duplicate queue/alarm delivery
+   * already claimed it. This never throws for a missing host; check
+   * `supportsResume` first when you need to distinguish unsupported from
+   * not-found.
+   */
   async resume(runId: string): Promise<AgentRun | null> {
     const host = executionHost(this.#host);
     if (!host) {
-      throw new Error("Agent host does not support durable run resume.");
+      return null;
     }
 
     return await resumeAgentRun({

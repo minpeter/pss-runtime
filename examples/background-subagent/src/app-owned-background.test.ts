@@ -4,14 +4,15 @@ import {
   type ExecutionHost,
   type ResumeSessionOptions,
 } from "@minpeter/pss-runtime/execution";
-import { describe, expect, it } from "vitest";
-import { createAppAgent } from "./app-agent";
 import {
   defaultChildSessionKey,
-  launchDurableBackgroundDelegation,
-} from "./background-delegation";
+  parentSessionNamespace,
+} from "@minpeter/pss-runtime/namespace";
+import { describe, expect, it } from "vitest";
+import { createAppAgent } from "./app-agent";
+import { launchDurableBackgroundDelegation } from "./background-delegation";
 import { createBackgroundOutputTool } from "./background-output-tool";
-import { parentSessionNamespace, readerChildName } from "./delegate-tool";
+import { readerChildName } from "./delegate-tool";
 
 const parentSessionKey = "default";
 const ownerNamespace = parentSessionNamespace("coordinator", parentSessionKey);

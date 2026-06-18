@@ -1,9 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const legacyCloudflareSessionKeyPattern =
-  /`\$\{this\.#prefix\}:\$\{encodeURIComponent\(key\)\}`/;
-
 function readText(path) {
   return readFileSync(path, "utf8");
 }
@@ -23,7 +20,7 @@ describe("cloudflare durable object adapter", () => {
       "packages/runtime/src/cloudflare/cloudflare-alarm-work.ts"
     );
     const sessionStoreSource = readText(
-      "packages/runtime/src/cloudflare/durable-object-session-store.ts"
+      "packages/runtime/src/cloudflare/cloudflare-sqlite-session-store.ts"
     );
 
     expect(hostSource).not.toContain("createFakeCloudflareDurableObjectHost");
@@ -31,14 +28,17 @@ describe("cloudflare durable object adapter", () => {
     expect(hostSource).toContain("createCloudflareAlarmScheduler");
     expect(hostSource).toContain("setAlarm");
     expect(storeSource).toContain("DurableObjectExecutionStore");
+    expect(storeSource).toContain("DurableObjectSqliteSessionStore");
     expect(alarmWorkSource).toContain("agent.resume(");
     expect(alarmWorkSource).toContain("ackScheduledCloudflareRun");
     expect(alarmDrainerSource).toContain("rescheduleCloudflareAlarm");
-    expect(sessionStoreSource).toContain('storeKey(this.#prefix, "session"');
-    expect(sessionStoreSource).not.toMatch(legacyCloudflareSessionKeyPattern);
+    expect(sessionStoreSource).toContain("pss_session_meta");
   });
 
   it("drives Cloudflare scheduled runs and session prompts through stored alarms", async () => {
+    const { InMemorySqlStorage } = await import(
+      "../packages/runtime/src/cloudflare/in-memory-sql-storage.ts"
+    );
     const {
       InMemoryCloudflareDurableObjectStorage,
       ackScheduledCloudflareRun,
@@ -47,7 +47,9 @@ describe("cloudflare durable object adapter", () => {
       listScheduledCloudflareRuns,
       listScheduledCloudflareSessionPrompts,
     } = await import("../packages/runtime/src/cloudflare/index.ts");
-    const storage = new InMemoryCloudflareDurableObjectStorage();
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
     const host = createCloudflareDurableObjectHost({ storage });
     const runId = "background:bg_cloudflare_delayed";
     const idempotencyKey = "background-complete:example:bg_delayed";
@@ -89,32 +91,33 @@ describe("cloudflare durable object adapter", () => {
     ).resolves.toMatchObject({ ok: true });
   });
 
-  it("keeps durable runtime review fixes locked", async () => {
+  it("stores Durable Object sessions in SQLite rows", async () => {
+    const { InMemorySqlStorage } = await import(
+      "../packages/runtime/src/cloudflare/in-memory-sql-storage.ts"
+    );
+    const { DurableObjectSqliteSessionStore } = await import(
+      "../packages/runtime/src/cloudflare/cloudflare-sqlite-session-store.ts"
+    );
     const { InMemoryCloudflareDurableObjectStorage } = await import(
       "../packages/runtime/src/cloudflare/index.ts"
     );
-    const { DurableObjectSessionStore } = await import(
-      "../packages/runtime/src/cloudflare/durable-object-session-store.ts"
-    );
 
-    class CountingTransactionStorage extends InMemoryCloudflareDurableObjectStorage {
-      transactionCount = 0;
-
-      async transaction(fn) {
-        this.transactionCount += 1;
-        return await super.transaction(fn);
-      }
-    }
-
-    const storage = new CountingTransactionStorage();
-    const sessions = new DurableObjectSessionStore(storage);
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
+    const sessions = new DurableObjectSqliteSessionStore(storage, "script");
 
     await sessions.commit(
       "session:review",
-      { state: { persisted: true } },
+      {
+        state: { history: [{ role: "user", content: "hi" }], schemaVersion: 1 },
+      },
       { expectedVersion: null }
     );
 
-    expect(storage.transactionCount).toBe(1);
+    await expect(sessions.load("session:review")).resolves.toEqual({
+      state: { history: [{ role: "user", content: "hi" }], schemaVersion: 1 },
+      version: "1",
+    });
   });
 });

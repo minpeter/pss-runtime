@@ -3,6 +3,7 @@ import type { SessionStore } from "../index";
 import { DurableObjectExecutionStore } from "./cloudflare-execution-store";
 import {
   InMemoryCloudflareDurableObjectStorage as BaseInMemoryCloudflareDurableObjectStorage,
+  type CloudflareDurableObjectTransactionStorage,
   type CloudflareDurableObjectStorage as DurableObjectStoragePort,
 } from "./durable-object-storage";
 
@@ -50,7 +51,7 @@ export function createCloudflareDurableObjectHost({
 }): ExecutionHost {
   const store = new DurableObjectExecutionStore({ prefix, storage });
   return {
-    capabilities: {},
+    kind: "execution",
     scheduler,
     store: sessionStore
       ? executionStoreWithSessions(store, sessionStore)
@@ -181,7 +182,7 @@ async function removeFromList<T>(
 }
 
 async function readList<T>(
-  storage: CloudflareDurableObjectStorage,
+  storage: CloudflareDurableObjectTransactionStorage,
   key: string
 ): Promise<T[]> {
   return ((await storage.get<readonly T[]>(key)) ?? []).map((item) =>
@@ -198,7 +199,7 @@ async function setAlarm(
 
 async function withTransaction<T>(
   storage: CloudflareDurableObjectStorage,
-  fn: (storage: CloudflareDurableObjectStorage) => Promise<T>
+  fn: (storage: CloudflareDurableObjectTransactionStorage) => Promise<T>
 ): Promise<T> {
   return storage.transaction
     ? await storage.transaction(fn)

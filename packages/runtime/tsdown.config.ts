@@ -6,6 +6,7 @@ export default defineConfig({
     "src/cloudflare/index.ts",
     "src/execution/index.ts",
     "src/execution/memory.ts",
+    "src/namespace.ts",
     "src/session/store/memory.ts",
     "src/session/store/file.ts",
   ],

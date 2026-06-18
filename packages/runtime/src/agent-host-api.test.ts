@@ -24,7 +24,7 @@ import { assistantMessage, createCallbackModel } from "./test-fixtures";
 
 const fakeModel = createMockLanguageModelV4([mockLanguageModelV4Text("DONE")]);
 
-const inProcessHost = {} satisfies AgentHost;
+const inProcessHost = createInMemoryExecutionHost() satisfies AgentHost;
 
 const acceptsHostOptions: AgentOptions = {
   host: inProcessHost,
@@ -36,6 +36,7 @@ const functionModelOptions = {
 } as const;
 const aggregateHost = createInMemoryExecutionHost();
 const acceptsSessionHost = {
+  kind: "session",
   sessionStore: new SpyStore(),
 } satisfies SessionHost;
 const acceptsRunHost = {
@@ -58,9 +59,9 @@ const acceptsTransactionHost = {
 } satisfies ExecutionTransactionHost;
 const acceptsDurableBackgroundHost = {
   backgroundScheduler: aggregateHost.scheduler,
-  capabilities: {},
   checkpointStore: aggregateHost.store.checkpoints,
   eventStore: aggregateHost.store.events,
+  kind: "durable-background",
   notificationInbox: aggregateHost.store.notifications,
   runStore: aggregateHost.store.runs,
   sessionStore: aggregateHost.store.sessions,
@@ -68,8 +69,8 @@ const acceptsDurableBackgroundHost = {
 } satisfies DurableBackgroundHost;
 const acceptsDurableNotificationResumeHost = {
   backgroundScheduler: aggregateHost.scheduler,
-  capabilities: {},
   checkpointStore: aggregateHost.store.checkpoints,
+  kind: "durable-notification-resume",
   notificationInbox: aggregateHost.store.notifications,
   runStore: aggregateHost.store.runs,
   transaction: aggregateHost.store.transaction.bind(aggregateHost.store),
@@ -91,16 +92,13 @@ type RejectsRuntimeOptionKey = AssertFalse<
 type RejectsSessionsOptionKey = AssertFalse<
   "sessions" extends keyof AgentOptions ? true : false
 >;
-type AcceptsHostSessionStoreKey = IsAssignable<
-  { readonly sessionStore: SpyStore },
-  AgentHost
+type RejectsBareSessionStoreAsHost = AssertFalse<
+  IsAssignable<{ readonly sessionStore: SpyStore }, AgentHost>
 >;
 type RejectsExecutionHostSessionStoreKey = AssertFalse<
   IsAssignable<{ readonly sessionStore: SpyStore }, ExecutionHost>
 >;
-type RejectsHostKindKey = AssertFalse<
-  "kind" extends keyof AgentHost ? true : false
->;
+type RequiresHostKindKey = "kind" extends keyof AgentHost ? true : false;
 type AcceptsSessionHostAsAgentHost = IsAssignable<
   typeof acceptsSessionHost,
   AgentHost
@@ -135,9 +133,9 @@ const rejectsRuntimeModelOptionAssertion: AssertFalse<AcceptsRuntimeModelOption>
 const llmOptionAssertion: RejectsLlmOptionKey = false;
 const runtimeOptionAssertion: RejectsRuntimeOptionKey = false;
 const sessionsOptionAssertion: RejectsSessionsOptionKey = false;
-const hostSessionStoreAssertion: AcceptsHostSessionStoreKey = true;
+const hostSessionStoreAssertion: RejectsBareSessionStoreAsHost = false;
 const executionSessionStoreAssertion: RejectsExecutionHostSessionStoreKey = false;
-const hostKindAssertion: RejectsHostKindKey = false;
+const hostKindAssertion: RequiresHostKindKey = true;
 const acceptsSessionHostAssertion: AcceptsSessionHostAsAgentHost = true;
 const acceptsExecutionHostAssertion: AcceptsExecutionHostAsAgentHost = true;
 const backgroundSchedulerAssertion: BackgroundSchedulerMatchesExecutionScheduler = true;
@@ -151,9 +149,9 @@ describe("Agent host public API", () => {
     expect(llmOptionAssertion).toBe(false);
     expect(runtimeOptionAssertion).toBe(false);
     expect(sessionsOptionAssertion).toBe(false);
-    expect(hostSessionStoreAssertion).toBe(true);
+    expect(hostSessionStoreAssertion).toBe(false);
     expect(executionSessionStoreAssertion).toBe(false);
-    expect(hostKindAssertion).toBe(false);
+    expect(hostKindAssertion).toBe(true);
     expect(acceptsSessionHostAssertion).toBe(true);
     expect(acceptsExecutionHostAssertion).toBe(true);
     expect(backgroundSchedulerAssertion).toBe(true);
@@ -200,7 +198,7 @@ describe("Agent host public API", () => {
   it("uses host session store for session snapshots", async () => {
     const sessionStore = new SpyStore();
     const agent = new Agent({
-      host: { sessionStore },
+      host: { kind: "session", sessionStore },
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
       ),

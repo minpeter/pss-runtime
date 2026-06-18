@@ -1,6 +1,5 @@
 import type { SessionStore } from "../session/store/types";
 import type {
-  AgentHostCapabilities,
   CheckpointStore,
   EventStore,
   ExecutionScheduler,
@@ -10,27 +9,23 @@ import type {
 } from "./types";
 
 export interface SessionHost {
-  readonly capabilities?: AgentHostCapabilities;
-  readonly sessionStore?: SessionStore;
+  readonly kind: "session";
+  readonly sessionStore: SessionStore;
 }
 
 export interface RunHost {
-  readonly capabilities?: AgentHostCapabilities;
   readonly runStore: RunStore;
 }
 
 export interface CheckpointHost {
-  readonly capabilities?: AgentHostCapabilities;
   readonly checkpointStore: CheckpointStore;
 }
 
 export interface EventHost {
-  readonly capabilities?: AgentHostCapabilities;
   readonly eventStore: EventStore;
 }
 
 export interface NotificationHost {
-  readonly capabilities?: AgentHostCapabilities;
   readonly notificationInbox: NotificationInbox;
 }
 
@@ -38,11 +33,9 @@ export type BackgroundScheduler = ExecutionScheduler;
 
 export interface BackgroundSchedulerHost {
   readonly backgroundScheduler: BackgroundScheduler;
-  readonly capabilities?: AgentHostCapabilities;
 }
 
 export interface ExecutionTransactionHost {
-  readonly capabilities?: AgentHostCapabilities;
   readonly transaction: ExecutionStore["transaction"];
 }
 
@@ -52,8 +45,8 @@ export interface DurableBackgroundHost
     EventHost,
     ExecutionTransactionHost,
     NotificationHost,
-    RunHost,
-    SessionHost {
+    RunHost {
+  readonly kind: "durable-background";
   readonly sessionStore: SessionStore;
 }
 
@@ -62,4 +55,6 @@ export interface DurableNotificationResumeHost
     CheckpointHost,
     ExecutionTransactionHost,
     NotificationHost,
-    RunHost {}
+    RunHost {
+  readonly kind: "durable-notification-resume";
+}

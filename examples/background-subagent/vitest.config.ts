@@ -13,6 +13,13 @@ export default defineConfig({
         ),
       },
       {
+        find: /^@minpeter\/pss-runtime\/namespace$/,
+        replacement: resolve(
+          import.meta.dirname,
+          "../../packages/runtime/src/namespace.ts"
+        ),
+      },
+      {
         find: /^@minpeter\/pss-runtime$/,
         replacement: resolve(
           import.meta.dirname,

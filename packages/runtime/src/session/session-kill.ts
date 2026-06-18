@@ -20,12 +20,12 @@ export function closeKilledRuntimeInputs({
 }: CloseKilledRuntimeInputsOptions): void {
   closeRuntimeInput(activeRuntimeInput, message);
   runToClose?.emit({ type: "turn-error", message });
-  runToClose?.close(undefined, message);
+  runToClose?.close();
 
   while (inputQueue.length > 0) {
     const item = inputQueue.shift();
     closeRuntimeInput(item?.runtimeInput, message);
     item?.run.emit({ type: "turn-error", message });
-    item?.run.close(undefined, message);
+    item?.run.close();
   }
 }

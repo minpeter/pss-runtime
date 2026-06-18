@@ -27,10 +27,6 @@ export interface AgentEventContext {
 }
 
 export interface AgentPlugin {
-  readonly events?: {
-    /** @deprecated Use top-level `on`. */
-    readonly on?: (context: AgentEventContext) => MaybePromise<void>;
-  };
   readonly name?: string;
   readonly on?: (context: AgentEventContext) => MaybePromise<AgentPluginResult>;
 }
@@ -38,15 +34,6 @@ export interface AgentPlugin {
 export type PluginPipelineResult =
   | { readonly event: AgentEvent; readonly kind: "emit" }
   | { readonly kind: "handled" };
-
-export function runEventPlugins(
-  plugins: readonly AgentPlugin[],
-  context: AgentEventContext
-): Promise<void> {
-  return runPluginsForEvent(plugins, context, { observeOnly: true }).then(
-    () => undefined
-  );
-}
 
 export function runPluginsForEvent(
   plugins: readonly AgentPlugin[],
@@ -66,36 +53,14 @@ function isInterceptableEvent(
   );
 }
 
-function resolvePluginHandler(
-  plugin: AgentPlugin
-):
-  | ((context: AgentEventContext) => MaybePromise<AgentPluginResult>)
-  | undefined {
-  if (plugin.on) {
-    return plugin.on;
-  }
-
-  const legacyHandler = plugin.events?.on;
-  if (!legacyHandler) {
-    return;
-  }
-
-  return (legacyContext) =>
-    Promise.resolve(legacyHandler(legacyContext)).then(() => undefined);
-}
-
 function normalizeInterceptResult(
   result: AgentPluginResult | undefined
 ): AgentPluginInterceptResult | undefined {
-  if (result === undefined) {
+  if (result === undefined || result === null || typeof result !== "object") {
     return;
   }
 
-  if (result.action === "continue") {
-    return result;
-  }
-
-  if (result.action === "handled") {
+  if (result.action === "continue" || result.action === "handled") {
     return result;
   }
 
@@ -114,7 +79,7 @@ async function runPluginPipeline(
   let currentEvent = context.event;
 
   for (const plugin of plugins) {
-    const handler = resolvePluginHandler(plugin);
+    const handler = plugin.on;
     if (!handler) {
       continue;
     }

@@ -29,14 +29,6 @@ interface SessionSnapshotV1 {
 /**
  * Append-only session store for SQLite-backed Durable Objects.
  *
- * Unlike {@link DurableObjectExecutionSessionStore}, which re-serializes the
- * entire session snapshot into a single `storage.put` value every commit (and
- * eventually crosses the Durable Object ~2MB per-value limit on long sessions),
- * this store persists the message history as one small SQLite row per message.
- * Each commit only INSERTs the messages that are new since the last commit, so
- * no single stored value grows with the conversation and `SQLITE_TOOBIG` can no
- * longer be reached by accumulation.
- *
  * Snapshot v1 state (`{ schemaVersion: 1, history }`) is split into rows. Any
  * other opaque state is stored verbatim in a single meta blob column, so the
  * store remains a correct drop-in {@link SessionStore} for non-snapshot callers.
@@ -47,18 +39,12 @@ interface SessionSnapshotV1 {
  * Durable Object — exactly one writer wins, the rest get a `conflict`.
  */
 export class DurableObjectSqliteSessionStore implements SessionStore {
-  readonly #migrated = new Set<string>();
   readonly #prefix: string;
   readonly #sql: SqlStorage;
-  readonly #storage: CloudflareDurableObjectStorage;
   #schemaReady = false;
 
   constructor(storage: CloudflareDurableObjectStorage, prefix: string) {
-    // `sql` is read structurally so the shared CloudflareDurableObjectStorage
-    // port stays free of a `sql` member — otherwise a real `DurableObjectStorage`
-    // would stop being assignable to it. SQLite-backed Durable Objects expose
-    // `storage.sql` at runtime; a non-SQLite DO yields undefined and throws here.
-    const sql = (storage as { sql?: SqlStorage }).sql;
+    const sql = storage.sql as SqlStorage | undefined;
     if (!sql) {
       throw new Error(
         "DurableObjectSqliteSessionStore requires a SQLite-backed Durable Object (storage.sql is unavailable)"
@@ -66,23 +52,21 @@ export class DurableObjectSqliteSessionStore implements SessionStore {
     }
     this.#prefix = prefix;
     this.#sql = sql;
-    this.#storage = storage;
   }
 
-  async commit(
+  commit(
     sessionKey: string,
     next: SessionStoreCommit,
     options: { readonly expectedVersion: ExpectedSessionVersion }
   ): Promise<CommitResult> {
     this.#ensureSchema();
     const key = this.#rowKey(sessionKey);
-    await this.#ensureMigrated(key, sessionKey);
 
     // --- begin synchronous read-modify-write critical section (no await) ---
     const meta = this.#readMeta(key);
     const currentVersion = meta ? meta.version : null;
     if (options.expectedVersion !== currentVersion) {
-      return { ok: false, reason: "conflict" };
+      return Promise.resolve({ ok: false, reason: "conflict" });
     }
 
     const version = String(versionCounter(meta?.version) + 1);
@@ -111,10 +95,10 @@ export class DurableObjectSqliteSessionStore implements SessionStore {
     }
     // --- end critical section ---
 
-    return { ok: true, version };
+    return Promise.resolve({ ok: true, version });
   }
 
-  async delete(sessionKey: string): Promise<void> {
+  delete(sessionKey: string): Promise<void> {
     this.#ensureSchema();
     const key = this.#rowKey(sessionKey);
     this.#sql.exec(
@@ -122,33 +106,26 @@ export class DurableObjectSqliteSessionStore implements SessionStore {
       key
     );
     this.#sql.exec("DELETE FROM pss_session_meta WHERE session_key = ?", key);
-    // Evict from the migration cache so the key does not accumulate over the
-    // Durable Object's lifetime (a re-created session re-checks on next access).
-    this.#migrated.delete(key);
-    await this.#storage.delete(key);
-    await this.#storage.delete(
-      storeKey(this.#prefix, "session-version", sessionKey)
-    );
+    return Promise.resolve();
   }
 
-  async load(sessionKey: string): Promise<StoredSession | null> {
+  load(sessionKey: string): Promise<StoredSession | null> {
     this.#ensureSchema();
     const key = this.#rowKey(sessionKey);
-    await this.#ensureMigrated(key, sessionKey);
 
     const meta = this.#readMeta(key);
     if (!meta) {
-      return null;
+      return Promise.resolve(null);
     }
     const version = meta.version;
     if (meta.state_blob !== null) {
       const state: unknown = JSON.parse(meta.state_blob);
-      return { state, version };
+      return Promise.resolve({ state, version });
     }
     const history: unknown[] = this.#readActiveMessages(key).map(
       (row) => JSON.parse(row.message) as unknown
     );
-    return { state: { history, schemaVersion: 1 }, version };
+    return Promise.resolve({ state: { history, schemaVersion: 1 }, version });
   }
 
   #rowKey(sessionKey: string): string {
@@ -187,10 +164,6 @@ export class DurableObjectSqliteSessionStore implements SessionStore {
     if (!row) {
       return null;
     }
-    // Normalize the version to a string before the optimistic compare. A meta
-    // row written under an INTEGER-affinity column (older schema or schema
-    // drift — CREATE TABLE IF NOT EXISTS never alters an existing table) would
-    // otherwise read back as a number and spuriously reject a valid commit.
     return { ...row, version: String(row.version) };
   }
 
@@ -254,52 +227,6 @@ export class DurableObjectSqliteSessionStore implements SessionStore {
       meta.next_seq,
       meta.state_blob
     );
-  }
-
-  async #ensureMigrated(key: string, sessionKey: string): Promise<void> {
-    if (this.#migrated.has(key)) {
-      return;
-    }
-    if (this.#readMeta(key)) {
-      this.#migrated.add(key);
-      return;
-    }
-    const legacy = await this.#storage.get<StoredSession>(key);
-    // Re-check after the await: a concurrent commit/load may have migrated.
-    if (this.#migrated.has(key) || this.#readMeta(key)) {
-      this.#migrated.add(key);
-      return;
-    }
-    if (legacy) {
-      // Preserve the legacy version string verbatim so optimistic-version
-      // continuity holds for both numeric (execution store) and UUID-based
-      // (DurableObjectSessionStore) legacy sessions; the next commit derives its
-      // counter from it via versionCounter().
-      const version = legacy.version;
-      if (isSnapshotV1(legacy.state)) {
-        const nextSeq = this.#writeHistoryRows(key, legacy.state.history, 0);
-        this.#writeMeta(key, {
-          message_count: legacy.state.history.length,
-          next_seq: nextSeq,
-          state_blob: null,
-          version,
-        });
-      } else {
-        this.#writeMeta(key, {
-          message_count: 0,
-          next_seq: 0,
-          state_blob: JSON.stringify(legacy.state ?? null),
-          version,
-        });
-      }
-      this.#migrated.add(key);
-      await this.#storage.delete(key);
-      await this.#storage.delete(
-        storeKey(this.#prefix, "session-version", sessionKey)
-      );
-      return;
-    }
-    this.#migrated.add(key);
   }
 }
 

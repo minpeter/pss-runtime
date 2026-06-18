@@ -3,7 +3,8 @@
 Small agent runtime workspace.
 
 - `@minpeter/pss-runtime`: runtime, sessions, model loop.
-- `@minpeter/pss-coding-agent`: web tools, model wiring, and the `pss` TUI.
+- `@minpeter/pss-coding-agent`: model wiring and the `pss` TUI. It ships no
+  built-in tools; pass your own tool set when needed.
 
 ## Use
 
@@ -115,8 +116,8 @@ AI_BASE_URL=...
 AI_MODEL=...
 ```
 
-Web tools use `@minpeter/opensearch` with zero-key public fallbacks and hosted MCP.
-No search provider API keys are configured in this repo.
+The `pss` TUI does not enable web/search tools by default. Applications that need
+tools should provide them explicitly to the runtime or TUI entrypoint.
 
 The `pss` TUI stores sessions in `~/.pss/sessions` by default. Override with
 `PSS_SESSION_DIR` and `PSS_SESSION_KEY` when you want repo-local storage or a

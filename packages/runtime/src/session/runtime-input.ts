@@ -84,20 +84,6 @@ export async function withRuntimeInputWindow<T>(
   }
 }
 
-export async function withSteeringPlacement<T>(
-  runtimeInput: RuntimeInputState,
-  placement: RuntimeInputPlacement,
-  callback: () => Promise<T>
-): Promise<T> {
-  const previousSteerPlacement = runtimeInput.steerPlacement;
-  runtimeInput.steerPlacement = placement;
-  try {
-    return await callback();
-  } finally {
-    runtimeInput.steerPlacement = previousSteerPlacement;
-  }
-}
-
 export function shiftRuntimeInput(
   runtimeInput: RuntimeInputState,
   placement: RuntimeInputPlacement

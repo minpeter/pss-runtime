@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RunRecord } from "../execution";
 import { storeKey } from "./cloudflare-store-utils";
+import type { CloudflareDurableObjectStorage } from "./durable-object-storage";
 import { InMemorySqlStorage } from "./in-memory-sql-storage";
 import {
   createCloudflareDurableObjectHost,
@@ -8,6 +9,7 @@ import {
 } from "./index";
 
 const PREFIX = "pss-runtime";
+const requiresSqlitePattern = /SQLite-backed/;
 
 const createRun = (runId = "run-1"): RunRecord => ({
   checkpointVersion: 0,
@@ -19,6 +21,20 @@ const createRun = (runId = "run-1"): RunRecord => ({
 });
 
 describe("createCloudflareDurableObjectHost store selection", () => {
+  it("creates SQLite-backed in-memory storage by default", async () => {
+    const storage = new InMemoryCloudflareDurableObjectStorage();
+    const host = createCloudflareDurableObjectHost({ storage });
+
+    await host.store.runs.create(createRun());
+    await host.store.events.append("run-1", { type: "turn-start" });
+
+    const events: unknown[] = [];
+    for await (const entry of host.store.events.read("run-1")) {
+      events.push(entry.event);
+    }
+    expect(events).toEqual([{ type: "turn-start" }]);
+  });
+
   it("uses SQLite row stores for events/checkpoints on a SQLite-backed Durable Object", async () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
@@ -28,8 +44,8 @@ describe("createCloudflareDurableObjectHost store selection", () => {
     await host.store.runs.create(createRun());
 
     const big = "x".repeat(120_000);
-    // 20 events * ~120KB ~= ~2.4MB — past the 2MB per-value limit the legacy
-    // single-value KV store hit with SQLITE_TOOBIG.
+    // 20 events * ~120KB ~= ~2.4MB — past the Durable Object per-value limit
+    // that append-only SQLite rows avoid.
     for (let index = 0; index < 20; index += 1) {
       await host.store.events.append("run-1", {
         output: big,
@@ -63,7 +79,7 @@ describe("createCloudflareDurableObjectHost store selection", () => {
       { checkpointId: "cp-20", version: 20 }
     );
 
-    // The SQLite-backed stores left no legacy single-value KV list behind.
+    // The SQLite-backed stores do not write per-run list blobs.
     expect(
       await storage.get(storeKey(PREFIX, "events", "run-1"))
     ).toBeUndefined();
@@ -72,17 +88,65 @@ describe("createCloudflareDurableObjectHost store selection", () => {
     ).toBeUndefined();
   });
 
-  it("keeps the legacy KV stores on a non-SQLite Durable Object", async () => {
+  it("rolls back SQLite rows with failed execution transactions", async () => {
     const storage = new InMemoryCloudflareDurableObjectStorage();
     const host = createCloudflareDurableObjectHost({ storage });
 
-    await host.store.runs.create(createRun());
+    await expect(
+      host.store.transaction(async (tx) => {
+        await tx.runs.create(createRun("run-rollback"));
+        await tx.events.append("run-rollback", { type: "turn-start" });
+        await tx.checkpoints.append(
+          {
+            checkpointId: "checkpoint-rollback",
+            phase: "before-model",
+            runId: "run-rollback",
+            runtimeState: {},
+            sessionSnapshot: { messages: [] },
+            version: 1,
+          },
+          { expectedVersion: 0 }
+        );
+        await tx.notifications.enqueue({
+          idempotencyKey: "notify-rollback",
+          input: { text: "resume", type: "user-text" },
+          notificationId: "notification-rollback",
+          runId: "run-rollback",
+          sessionKey: "session-rollback",
+          status: "pending",
+        });
+        await tx.sessions.commit(
+          "session-rollback",
+          { state: { messages: ["inside transaction"] } },
+          { expectedVersion: null }
+        );
+        throw new Error("transaction failed");
+      })
+    ).rejects.toThrow("transaction failed");
 
-    await host.store.events.append("run-1", { type: "turn-start" });
+    await expect(host.store.runs.get("run-rollback")).resolves.toBeNull();
+    await expect(
+      host.store.sessions.load("session-rollback")
+    ).resolves.toBeNull();
+    await expect(
+      host.store.notifications.getByIdempotencyKey("notify-rollback")
+    ).resolves.toBeNull();
+    await expect(
+      host.store.checkpoints.latest("run-rollback")
+    ).resolves.toBeNull();
 
-    // The legacy store persists the whole run's events as one KV list value.
-    expect(
-      await storage.get(storeKey(PREFIX, "events", "run-1"))
-    ).toBeDefined();
+    const events: unknown[] = [];
+    for await (const entry of host.store.events.read("run-rollback")) {
+      events.push(entry);
+    }
+    expect(events).toEqual([]);
+  });
+
+  it("rejects non-SQLite Durable Object storage", () => {
+    expect(() =>
+      createCloudflareDurableObjectHost({
+        storage: {} as CloudflareDurableObjectStorage,
+      })
+    ).toThrow(requiresSqlitePattern);
   });
 });

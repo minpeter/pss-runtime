@@ -7,7 +7,7 @@ import type {
 
 export function createInMemoryExecutionHost(): ExecutionHost {
   return {
-    capabilities: {},
+    kind: "execution",
     store: new InMemoryExecutionStore(),
     scheduler: new InMemoryExecutionScheduler(),
   };
