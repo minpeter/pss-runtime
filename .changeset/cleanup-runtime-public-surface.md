@@ -9,8 +9,10 @@ Clean up the runtime public surface and tighten host/resume contracts.
 - Remove `AgentPlugin.events.on` (deprecated observe-only shim). Use the
   top-level `on` handler; intercept returns (`continue` / `transform` /
   `handled`) now apply to all plugins uniformly.
-- Drop `AgentSession.currentTurnId()`, `enqueueRuntimeInput()`, and the
-  private `#enqueuePendingRuntimeInput()` helper; they had no callers.
+- Drop `AgentSession.currentTurnId()`, `enqueueRuntimeInput()`,
+  `emitObserverEvent()`, and the private `#enqueuePendingRuntimeInput()` helper;
+  they were unused or test-only public-ish hooks. Observer-event behavior is now
+  covered through `SessionEventDispatcher` tests.
 - Collapse `AgentLanguageModelOptions`, `AgentConstructionOptions`, and
   `AgentOptions` into a single `AgentOptions` interface.
 - Remove the empty `AgentHostCapabilities` type and replace duck-typed host

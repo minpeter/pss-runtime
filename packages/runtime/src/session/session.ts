@@ -1,6 +1,5 @@
 import type { ModelGenerationOptions } from "../llm";
 import type { AgentPlugin } from "../plugins";
-import type { AgentEvent } from "./events";
 import type { AgentInput } from "./input";
 import { attachInputMeta, userInputFromEvent } from "./input-meta";
 import { normalizeAgentInput } from "./input-normalization";
@@ -154,10 +153,6 @@ export class AgentSession {
       });
     }
     return this.#deletePromise;
-  }
-
-  emitObserverEvent(event: AgentEvent): Promise<void> {
-    return this.#events.emitObserverEvent(this.#activeRun, event);
   }
 
   kill(): void {

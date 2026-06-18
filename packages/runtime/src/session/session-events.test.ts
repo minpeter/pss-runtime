@@ -62,6 +62,52 @@ describe("SessionEventDispatcher.emitRunEvent", () => {
   });
 });
 
+describe("SessionEventDispatcher.emitObserverEvent", () => {
+  it("emits observer events to the active run and plugins", async () => {
+    const pluginEventTypes: string[] = [];
+    const dispatcher = createDispatcher([
+      {
+        on: ({ event }) => {
+          pluginEventTypes.push(event.type);
+        },
+      },
+    ]);
+    const run = new BufferedAgentRun();
+
+    await dispatcher.emitObserverEvent(run, {
+      text: "observer reasoning",
+      type: "assistant-reasoning",
+    });
+
+    const iterator = run.events()[Symbol.asyncIterator]();
+    expect((await iterator.next()).value).toEqual({
+      text: "observer reasoning",
+      type: "assistant-reasoning",
+    });
+    await iterator.return?.();
+    expect(pluginEventTypes).toEqual(["assistant-reasoning"]);
+  });
+
+  it("buffers observer events during capture", async () => {
+    const dispatcher = createDispatcher([]);
+    const run = new BufferedAgentRun();
+
+    const captured = await dispatcher.captureObserverEvents(run, async () => {
+      await dispatcher.emitObserverEvent(run, {
+        text: "captured reasoning",
+        type: "assistant-reasoning",
+      });
+      return "ok";
+    });
+
+    expect(captured.value).toBe("ok");
+    expect(captured.events).toEqual([
+      { text: "captured reasoning", type: "assistant-reasoning" },
+    ]);
+    captured.release();
+  });
+});
+
 describe("SessionEventDispatcher.emitRunBoundaryEvent", () => {
   it("ignores transform returns on boundary events", async () => {
     const transformPlugin: AgentPlugin = {
