@@ -12,6 +12,7 @@
     "@minpeter/pss-example-basic",
     "@minpeter/pss-example-plugin",
     "@minpeter/pss-example-sync-subagent",
-    "@minpeter/pss-example-background-subagent"
+    "@minpeter/pss-example-background-subagent",
+    "@bori/agent-backend"
   ]
 }

@@ -4,6 +4,7 @@ import {
   dispatchCloudflareAgentNotification,
   InMemoryCloudflareDurableObjectStorage,
   listScheduledCloudflareSessionPrompts,
+  sourceCloudflareAgentNotificationIdempotencyKey,
 } from "../index";
 import { InMemorySqlStorage } from "../sql/node-test/node-sqlite-storage";
 
@@ -67,6 +68,57 @@ describe("dispatchCloudflareAgentNotification", () => {
     });
     expect(prompt?.idempotencyKey).toEqual(expect.any(String));
     expect(prompt?.idempotencyKey).not.toBe("connector:oauth:done");
+    expect(
+      sourceCloudflareAgentNotificationIdempotencyKey({
+        idempotencyKey: prompt?.idempotencyKey,
+        namespace: "agent-a",
+        sessionKey: "room:1:user:2",
+      })
+    ).toBe("connector:oauth:done");
     expect(storage.alarmTime()).toEqual(expect.any(Number));
+  });
+
+  it("keeps raw and malformed notification idempotency keys unchanged", () => {
+    expect(
+      sourceCloudflareAgentNotificationIdempotencyKey({
+        idempotencyKey: "reminder:run:1",
+        namespace: "agent-a",
+        sessionKey: "room:1:user:2",
+      })
+    ).toBe("reminder:run:1");
+    expect(
+      sourceCloudflareAgentNotificationIdempotencyKey({
+        idempotencyKey: "agent%3Aagent-a:%E0%A4%A:connector%3Abad",
+        namespace: "agent-a",
+        sessionKey: "room:1:user:2",
+      })
+    ).toBe("agent%3Aagent-a:%E0%A4%A:connector%3Abad");
+  });
+
+  it("keeps scoped notification keys for a different session unchanged", async () => {
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
+
+    await dispatchCloudflareAgentNotification({
+      idempotencyKey: "connector:oauth:done",
+      input: { text: "Connector OAuth completed", type: "user-text" },
+      namespace: "agent-a",
+      prefix: "bori-agent",
+      sessionKey: "room:1:user:2",
+      storage,
+    });
+
+    const [prompt] = await listScheduledCloudflareSessionPrompts(storage, {
+      prefix: "bori-agent",
+    });
+
+    expect(
+      sourceCloudflareAgentNotificationIdempotencyKey({
+        idempotencyKey: prompt?.idempotencyKey,
+        namespace: "agent-a",
+        sessionKey: "room:2:user:2",
+      })
+    ).toBe(prompt?.idempotencyKey);
   });
 });
