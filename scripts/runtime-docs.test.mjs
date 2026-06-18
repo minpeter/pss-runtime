@@ -13,7 +13,9 @@ describe("runtime docs", () => {
   it("keeps raw run.events as the public control loop", () => {
     const readme = readRepoFile("packages/runtime/README.md");
     const changeset = readRepoFile(".changeset/runtime-plugin-sessions.md");
-    const runSource = readRepoFile("packages/runtime/src/session/run.ts");
+    const runSource = readRepoFile(
+      "packages/runtime/src/session/protocol/run.ts"
+    );
 
     expect(readme).toContain("for await (const event of run.events())");
     expect(readme).toContain("session.steer");
