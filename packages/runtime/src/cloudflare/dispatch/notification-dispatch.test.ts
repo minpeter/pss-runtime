@@ -95,7 +95,7 @@ describe("dispatchCloudflareAgentNotification", () => {
     ).toBe("agent%3Aagent-a:%E0%A4%A:connector%3Abad");
   });
 
-  it("keeps scoped notification keys for a different session unchanged", async () => {
+  it("keeps scoped notification keys for a different thread unchanged", async () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });

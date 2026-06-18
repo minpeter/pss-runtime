@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentEvent } from "../../session/protocol/events";
+import type { AgentEvent } from "../../thread/protocol/events";
 import { createInMemoryExecutionHost } from "../memory";
 import { StoredAgentRun } from "./stored-agent-run";
 
@@ -12,14 +12,14 @@ async function collectRunEvents(run: StoredAgentRun): Promise<AgentEvent[]> {
 }
 
 describe("stored AgentRun events", () => {
-  it("replays stored events from cursor without session runs", async () => {
+  it("replays stored events from cursor without thread runs", async () => {
     const host = createInMemoryExecutionHost();
     await host.store.runs.create({
       checkpointVersion: 0,
       kind: "user-turn",
       rootRunId: "run-1",
       runId: "run-1",
-      threadKey: "session-1",
+      threadKey: "thread-1",
       status: "queued",
     });
     const cursor = await host.store.events.append("run-1", {

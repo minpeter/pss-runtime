@@ -64,6 +64,19 @@ export type {
   SqlStorage,
   SqlStorageCursorLike,
 } from "./sql/ports/storage-port";
+export type {
+  StoragePayloadBudgetOptions,
+  StoragePayloadKind,
+} from "./storage/payload-guard";
+export {
+  DEFAULT_STORAGE_PAYLOAD_MAX_BYTES,
+  StoragePayloadSerializationError,
+  StoragePayloadTooLargeError,
+} from "./storage/payload-guard";
 export { DurableObjectSqliteCheckpointStore } from "./storage/sqlite/checkpoint-store";
 export { DurableObjectSqliteEventStore } from "./storage/sqlite/event-store";
-export { DurableObjectSqliteSessionStore } from "./storage/sqlite/session-store";
+export {
+  DurableObjectSqliteThreadStore,
+  /** @deprecated Use DurableObjectSqliteThreadStore. */
+  DurableObjectSqliteThreadStore as DurableObjectSqliteSessionStore,
+} from "./storage/sqlite/thread-store";

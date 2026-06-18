@@ -3,7 +3,7 @@ import type {
   NotificationRecord,
   RunRecord,
 } from "../../execution/host/types";
-import type { AgentRun } from "../../session/protocol/run";
+import type { AgentRun } from "../../thread/protocol/run";
 import { ownsAgentNamespace } from "../identity/namespace";
 
 interface ResumeAgentRunInput {

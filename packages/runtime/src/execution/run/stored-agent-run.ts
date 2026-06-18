@@ -1,5 +1,5 @@
-import type { AgentEvent } from "../../session/protocol/events";
-import type { AgentRun } from "../../session/protocol/run";
+import type { AgentEvent } from "../../thread/protocol/events";
+import type { AgentRun } from "../../thread/protocol/run";
 import type { EventCursor, EventStore, StoredAgentEvent } from "../host/types";
 
 export class StoredAgentRun implements AgentRun {

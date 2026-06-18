@@ -1,5 +1,5 @@
-import type { AgentInput, NotifyOptions } from "../../session/handle/session";
-import type { AgentRun } from "../../session/protocol/run";
+import type { AgentInput, NotifyOptions } from "../../thread/handle/thread";
+import type { AgentRun } from "../../thread/protocol/run";
 import { namespacePart } from "../identity/namespace";
 
 export interface ThreadMetadata {

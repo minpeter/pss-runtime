@@ -13,9 +13,11 @@ export type {
 export { dispatchAgentNotification } from "./dispatch/notification-dispatch";
 export type {
   DurableBackgroundHost,
+  LegacySessionHost,
   SessionHost,
+  ThreadHost,
 } from "./host/capabilities";
-export { executionHost, sessionHost } from "./host/host";
+export { executionHost, sessionHost, threadHost } from "./host/host";
 export type {
   CheckpointPhase,
   CheckpointStore,

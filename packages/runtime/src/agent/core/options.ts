@@ -1,7 +1,7 @@
 import type { LanguageModel, ToolSet } from "ai";
 import type { AgentHost } from "../../execution/host/types";
 import type { AgentToolChoice } from "../../llm/llm";
-import type { AgentPlugin } from "../../session/plugins/pipeline";
+import type { AgentPlugin } from "../../thread/plugins/pipeline";
 
 export interface AgentOptions {
   readonly host?: AgentHost;

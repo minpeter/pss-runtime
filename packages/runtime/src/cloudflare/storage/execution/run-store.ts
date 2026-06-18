@@ -7,6 +7,10 @@ import type {
 } from "../../../execution";
 import type { CloudflareDurableObjectStorage } from "../durable-object/durable-object-storage";
 import {
+  resolveStoragePayloadMaxBytes,
+  type StoragePayloadBudgetOptions,
+} from "../payload-guard";
+import {
   getRun,
   indexRun,
   putRun,
@@ -23,10 +27,16 @@ const claimableStatuses = new Set<RunStatus>([
 ]);
 
 export class DurableObjectRunStore implements RunStore {
+  readonly #maxPayloadBytes: number;
   readonly #prefix: string;
   readonly #storage: CloudflareDurableObjectStorage;
 
-  constructor(storage: CloudflareDurableObjectStorage, prefix: string) {
+  constructor(
+    storage: CloudflareDurableObjectStorage,
+    prefix: string,
+    options: StoragePayloadBudgetOptions = {}
+  ) {
+    this.#maxPayloadBytes = resolveStoragePayloadMaxBytes(options);
     this.#prefix = prefix;
     this.#storage = storage;
   }
@@ -53,14 +63,18 @@ export class DurableObjectRunStore implements RunStore {
         leaseUntilMs: options.nowMs + options.leaseMs,
       };
       const claimed: RunRecord = { ...run, lease, status: "leased" };
-      await putRun(storage, this.#prefix, claimed);
+      await putRun(storage, this.#prefix, claimed, {
+        maxPayloadBytes: this.#maxPayloadBytes,
+      });
       return { lease, ok: true, record: structuredClone(claimed) };
     });
   }
 
   async create(record: RunRecord): Promise<RunRecord> {
     return await withTransaction(this.#storage, async (storage) => {
-      await putRun(storage, this.#prefix, record);
+      await putRun(storage, this.#prefix, record, {
+        maxPayloadBytes: this.#maxPayloadBytes,
+      });
       await indexRun(storage, this.#prefix, record);
       return structuredClone(record);
     });
@@ -88,7 +102,9 @@ export class DurableObjectRunStore implements RunStore {
 
   async update(record: RunRecord): Promise<RunRecord> {
     return await withTransaction(this.#storage, async (storage) => {
-      await putRun(storage, this.#prefix, record);
+      await putRun(storage, this.#prefix, record, {
+        maxPayloadBytes: this.#maxPayloadBytes,
+      });
       await indexRun(storage, this.#prefix, record);
       return structuredClone(record);
     });

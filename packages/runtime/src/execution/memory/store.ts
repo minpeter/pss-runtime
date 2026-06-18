@@ -1,11 +1,11 @@
-import type { AgentEvent } from "../../session/protocol/events";
+import type { AgentEvent } from "../../thread/protocol/events";
 import type {
   CommitResult,
-  ExpectedSessionVersion,
-  SessionStore,
-  SessionStoreCommit,
-  StoredSession,
-} from "../../session/store/types";
+  ExpectedThreadVersion,
+  StoredThread,
+  ThreadStore,
+  ThreadStoreCommit,
+} from "../../thread/store/types";
 import type {
   CheckpointStore,
   CheckpointWriteResult,
@@ -44,9 +44,12 @@ export class InMemoryExecutionStore implements ExecutionStore {
     () => this.#state
   );
   readonly runs: RunStore = new InMemoryRunStore(() => this.#state);
-  readonly sessions: SessionStore = new InMemoryExecutionSessionStore(
+  readonly threads: ThreadStore = new InMemoryExecutionThreadStore(
     () => this.#state
   );
+  get sessions(): ThreadStore {
+    return this.threads;
+  }
 
   async transaction<T>(
     fn: (tx: ExecutionStoreTransaction) => Promise<T>
@@ -74,7 +77,7 @@ class InMemoryTransactionStore implements ExecutionStoreTransaction {
   readonly events: EventStore;
   readonly notifications: NotificationInbox;
   readonly runs: RunStore;
-  readonly sessions: SessionStore;
+  readonly threads: ThreadStore;
   readonly #state: ExecutionState;
 
   constructor(state: ExecutionState) {
@@ -83,11 +86,15 @@ class InMemoryTransactionStore implements ExecutionStoreTransaction {
     this.events = new InMemoryEventStore(() => this.#state);
     this.notifications = new InMemoryNotificationInbox(() => this.#state);
     this.runs = new InMemoryRunStore(() => this.#state);
-    this.sessions = new InMemoryExecutionSessionStore(() => this.#state);
+    this.threads = new InMemoryExecutionThreadStore(() => this.#state);
+  }
+
+  get sessions(): ThreadStore {
+    return this.threads;
   }
 }
 
-class InMemoryExecutionSessionStore implements SessionStore {
+class InMemoryExecutionThreadStore implements ThreadStore {
   readonly #state: () => ExecutionState;
 
   constructor(state: () => ExecutionState) {
@@ -96,33 +103,33 @@ class InMemoryExecutionSessionStore implements SessionStore {
 
   commit(
     key: string,
-    next: SessionStoreCommit,
-    options: { readonly expectedVersion: ExpectedSessionVersion }
+    next: ThreadStoreCommit,
+    options: { readonly expectedVersion: ExpectedThreadVersion }
   ): Promise<CommitResult> {
     const state = this.#state();
-    const current = state.sessions.get(key);
+    const current = state.threads.get(key);
     const currentVersion = current?.version ?? null;
 
     if (options.expectedVersion !== currentVersion) {
       return Promise.resolve({ ok: false, reason: "conflict" });
     }
 
-    const versionNumber = (state.sessionVersions.get(key) ?? 0) + 1;
+    const versionNumber = (state.threadVersions.get(key) ?? 0) + 1;
     const version = String(versionNumber);
-    state.sessionVersions.set(key, versionNumber);
-    state.sessions.set(key, structuredClone({ state: next.state, version }));
+    state.threadVersions.set(key, versionNumber);
+    state.threads.set(key, structuredClone({ state: next.state, version }));
     return Promise.resolve({ ok: true, version });
   }
 
   delete(key: string): Promise<void> {
     const state = this.#state();
-    state.sessions.delete(key);
-    state.sessionVersions.delete(key);
+    state.threads.delete(key);
+    state.threadVersions.delete(key);
     return Promise.resolve();
   }
 
-  load(key: string): Promise<StoredSession | null> {
-    const stored = this.#state().sessions.get(key);
+  load(key: string): Promise<StoredThread | null> {
+    const stored = this.#state().threads.get(key);
     return Promise.resolve(stored ? structuredClone(stored) : null);
   }
 }

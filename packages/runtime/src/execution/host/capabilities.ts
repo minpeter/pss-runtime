@@ -1,4 +1,4 @@
-import type { SessionStore } from "../../session/store/types";
+import type { ThreadStore } from "../../thread/store/types";
 import type {
   CheckpointStore,
   EventStore,
@@ -8,10 +8,29 @@ import type {
   RunStore,
 } from "./types";
 
-export interface SessionHost {
-  readonly kind: "session";
-  readonly sessionStore: SessionStore;
+export interface ThreadHost {
+  readonly kind: "thread";
+  readonly threadStore: ThreadStore;
 }
+
+interface ThreadStoreHost {
+  readonly sessionStore?: ThreadStore;
+  readonly threadStore: ThreadStore;
+}
+
+interface LegacySessionStoreHost {
+  readonly sessionStore: ThreadStore;
+  readonly threadStore?: ThreadStore;
+}
+
+type ThreadStoreCompatibilityHost = LegacySessionStoreHost | ThreadStoreHost;
+
+export type LegacySessionHost = {
+  readonly kind: "session";
+} & ThreadStoreCompatibilityHost;
+
+/** @deprecated Use ThreadHost. */
+export type SessionHost = LegacySessionHost;
 
 interface RunHost {
   readonly runStore: RunStore;
@@ -37,13 +56,12 @@ interface ExecutionTransactionHost {
   readonly transaction: ExecutionStore["transaction"];
 }
 
-export interface DurableBackgroundHost
-  extends BackgroundSchedulerHost,
-    CheckpointHost,
-    EventHost,
-    ExecutionTransactionHost,
-    NotificationHost,
-    RunHost {
-  readonly kind: "durable-background";
-  readonly sessionStore: SessionStore;
-}
+export type DurableBackgroundHost = BackgroundSchedulerHost &
+  CheckpointHost &
+  EventHost &
+  ExecutionTransactionHost &
+  NotificationHost &
+  RunHost &
+  ThreadStoreCompatibilityHost & {
+    readonly kind: "durable-background";
+  };

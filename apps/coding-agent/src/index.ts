@@ -11,6 +11,6 @@ export type {
   CreateOpenAICompatibleModelFromEnvOptions,
 } from "./model";
 export { createCodingLanguageModel } from "./model";
-export type { CodingAgentSessionConfig } from "./session-config";
-export { resolveCodingAgentSessionConfig } from "./session-config";
+export type { CodingAgentThreadConfig } from "./thread-config";
+export { resolveCodingAgentThreadConfig } from "./thread-config";
 export { type StartTuiOptions, startTui } from "./tui";

@@ -1,5 +1,20 @@
 # @minpeter/pss-runtime
 
+## 0.1.0-next.11
+
+### Patch Changes
+
+- Harden Cloudflare Durable Object storage for long-running agent threads and
+  rename the runtime domain from sessions to threads. Runtime storage now rejects
+  oversized single-row payloads before Durable Object writes, stores tool
+  checkpoints as bounded thread references instead of full history snapshots, and
+  uses a SQLite row queue for scheduled Cloudflare work.
+
+  The public app-facing API now uses `agent.thread(...)`, `ThreadInput`, and
+  ThreadStore names. Deprecated Session aliases remain as explicit compatibility
+  adapters, while the coding-agent local thread store imports have moved to the
+  new thread-store subpaths.
+
 ## 0.1.0-next.10
 
 ### Patch Changes

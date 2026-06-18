@@ -89,7 +89,7 @@ describe("tool checkpointing", () => {
                   phase: "before-tool",
                   runId: "run-1",
                   runtimeState: {},
-                  sessionSnapshot: {},
+                  threadSnapshot: {},
                   version: 1,
                 },
                 { expectedVersion: 0 }
@@ -125,7 +125,7 @@ describe("tool checkpointing", () => {
         phase: "before-tool",
         runId: "run-1",
         runtimeState: {},
-        sessionSnapshot: {},
+        threadSnapshot: {},
         version: 1,
       },
       { expectedVersion: 1 }

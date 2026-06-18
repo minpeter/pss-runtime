@@ -49,7 +49,7 @@ export async function resumeRun(
         phase: "before-model",
         runId: options.runId,
         runtimeState: { step: nextStep.stepNumber },
-        sessionSnapshot: state,
+        threadSnapshot: state,
       });
     }
 
@@ -57,7 +57,7 @@ export async function resumeRun(
     const toolExecution = await createResumeToolExecution({
       host: options.host,
       runId: options.runId,
-      sessionSnapshot: stateBeforeModel,
+      threadSnapshot: stateBeforeModel,
       stepNumber: nextStep.stepNumber,
     });
     const output = await readModelOutput({
@@ -77,7 +77,7 @@ export async function resumeRun(
       phase: "after-model",
       runId: options.runId,
       runtimeState: { step: nextStep.stepNumber },
-      sessionSnapshot: stateAfterModel,
+      threadSnapshot: stateAfterModel,
     });
 
     const shouldContinue = await emitModelOutputEvents({
@@ -100,7 +100,7 @@ export async function resumeRun(
         phase: "suspended",
         runId: options.runId,
         runtimeState: { step: nextStep.stepNumber },
-        sessionSnapshot: stateAfterModel,
+        threadSnapshot: stateAfterModel,
       });
       return { status: "suspended", steps };
     }

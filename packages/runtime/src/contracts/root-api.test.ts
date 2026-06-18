@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type {
   CheckpointStore,
@@ -12,13 +14,24 @@ import type {
   RunRecord,
   RunStore,
   SessionHost,
+  ThreadHost,
 } from "../execution";
 import type {
   AgentEvent,
   AgentHost,
   ControlAgentEvent,
+  ExpectedSessionVersion,
+  ExpectedThreadVersion,
   LifecycleAgentEvent,
+  SessionInput,
+  SessionStore,
+  SessionStoreCommit,
+  StoredSession,
+  StoredThread,
   TelemetryAgentEvent,
+  ThreadInput,
+  ThreadStore,
+  ThreadStoreCommit,
   VisibleAgentEvent,
 } from "../index";
 import {
@@ -152,11 +165,22 @@ describe("runtime public exports", () => {
     expectTypeOf<
       ExecutionStoreTransaction["notifications"]
     >().toEqualTypeOf<NotificationInbox>();
-    const sessionHost = {
+    const threadHost = {
+      kind: "thread",
+      threadStore: {} as ThreadHost["threadStore"],
+    } satisfies ThreadHost;
+    const legacySessionHost = {
       kind: "session",
-      sessionStore: {} as SessionHost["sessionStore"],
+      threadStore: {} as ThreadHost["threadStore"],
     } satisfies SessionHost;
-    const agentHost = sessionHost satisfies AgentHost;
+    const legacySessionStoreHost = {
+      kind: "session",
+      sessionStore: {} as ThreadHost["threadStore"],
+    } satisfies SessionHost;
+    const agentHost = threadHost satisfies AgentHost;
+    const legacyAgentHost = legacySessionHost satisfies AgentHost;
+    const legacySessionStoreAgentHost =
+      legacySessionStoreHost satisfies AgentHost;
     expectTypeOf<DurableBackgroundHost["runStore"]>().toEqualTypeOf<RunStore>();
     expectTypeOf<
       DurableBackgroundHost["checkpointStore"]
@@ -173,6 +197,40 @@ describe("runtime public exports", () => {
     expectTypeOf<DurableBackgroundHost["transaction"]>().toEqualTypeOf<
       ExecutionStore["transaction"]
     >();
-    expect(agentHost.kind).toBe("session");
+    expect(agentHost.kind).toBe("thread");
+    expect(legacyAgentHost.kind).toBe("session");
+    expect(legacySessionStoreAgentHost.kind).toBe("session");
+  });
+
+  it("types legacy session aliases from the package root", () => {
+    expectTypeOf<SessionInput>().toEqualTypeOf<ThreadInput>();
+    expectTypeOf<SessionStore>().toEqualTypeOf<ThreadStore>();
+    expectTypeOf<SessionStoreCommit>().toEqualTypeOf<ThreadStoreCommit>();
+    expectTypeOf<StoredSession>().toEqualTypeOf<StoredThread>();
+    expectTypeOf<ExpectedSessionVersion>().toEqualTypeOf<ExpectedThreadVersion>();
+  });
+
+  it("declares thread store package subpaths with legacy adapters", async () => {
+    const packageJson = JSON.parse(
+      await readFile(
+        fileURLToPath(new URL("../../package.json", import.meta.url)),
+        "utf8"
+      )
+    ) as {
+      exports: Record<string, { "@minpeter/pss-source": string }>;
+    };
+
+    expect(packageJson.exports["./thread-store/memory"]).toMatchObject({
+      "@minpeter/pss-source": "./src/thread/store/memory.ts",
+    });
+    expect(packageJson.exports["./thread-store/file"]).toMatchObject({
+      "@minpeter/pss-source": "./src/thread/store/file.ts",
+    });
+    expect(packageJson.exports["./session-store/memory"]).toEqual(
+      packageJson.exports["./thread-store/memory"]
+    );
+    expect(packageJson.exports["./session-store/file"]).toEqual(
+      packageJson.exports["./thread-store/file"]
+    );
   });
 });

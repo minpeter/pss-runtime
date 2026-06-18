@@ -86,14 +86,14 @@ export async function appendCheckpoint({
   pendingToolCall,
   runId,
   runtimeState,
-  sessionSnapshot,
+  threadSnapshot,
 }: {
   readonly host: ExecutionHost;
   readonly pendingToolCall?: unknown;
   readonly phase: CheckpointPhase;
   readonly runId: string;
   readonly runtimeState: unknown;
-  readonly sessionSnapshot: ResumeRunState;
+  readonly threadSnapshot: ResumeRunState;
 }): Promise<void> {
   let lastConflict:
     | { readonly current: number; readonly expected: number }
@@ -112,7 +112,7 @@ export async function appendCheckpoint({
         phase,
         runId,
         runtimeState,
-        sessionSnapshot,
+        threadSnapshot,
         version,
       },
       { expectedVersion: run.checkpointVersion }

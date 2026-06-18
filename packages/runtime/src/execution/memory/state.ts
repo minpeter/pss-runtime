@@ -1,4 +1,4 @@
-import type { StoredSession } from "../../session/store/types";
+import type { StoredThread } from "../../thread/store/types";
 import type {
   NotificationRecord,
   RunCheckpoint,
@@ -11,8 +11,8 @@ export interface ExecutionState {
   readonly events: Map<string, StoredAgentEvent[]>;
   readonly notificationsByKey: Map<string, NotificationRecord>;
   readonly runs: Map<string, RunRecord>;
-  readonly sessions: Map<string, StoredSession>;
-  readonly sessionVersions: Map<string, number>;
+  readonly threads: Map<string, StoredThread>;
+  readonly threadVersions: Map<string, number>;
 }
 
 export function createEmptyState(): ExecutionState {
@@ -21,8 +21,8 @@ export function createEmptyState(): ExecutionState {
     events: new Map(),
     notificationsByKey: new Map(),
     runs: new Map(),
-    sessionVersions: new Map(),
-    sessions: new Map(),
+    threadVersions: new Map(),
+    threads: new Map(),
   };
 }
 
@@ -32,8 +32,8 @@ export function cloneState(state: ExecutionState): ExecutionState {
     events: cloneEventMap(state.events),
     notificationsByKey: cloneRecordMap(state.notificationsByKey),
     runs: cloneRecordMap(state.runs),
-    sessionVersions: cloneRecordMap(state.sessionVersions),
-    sessions: cloneRecordMap(state.sessions),
+    threadVersions: cloneRecordMap(state.threadVersions),
+    threads: cloneRecordMap(state.threads),
   };
 }
 

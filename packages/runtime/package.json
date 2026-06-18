@@ -1,7 +1,7 @@
 {
   "name": "@minpeter/pss-runtime",
-  "version": "0.1.0-next.10",
-  "description": "Generic agent runtime for sessions, model loops, and synchronized run events.",
+  "version": "0.1.0-next.11",
+  "description": "Generic agent runtime for threads, model loops, and synchronized run events.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,15 +11,25 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./thread-store/memory": {
+      "@minpeter/pss-source": "./src/thread/store/memory.ts",
+      "types": "./dist/thread/store/memory.d.ts",
+      "import": "./dist/thread/store/memory.js"
+    },
+    "./thread-store/file": {
+      "@minpeter/pss-source": "./src/thread/store/file.ts",
+      "types": "./dist/thread/store/file.d.ts",
+      "import": "./dist/thread/store/file.js"
+    },
     "./session-store/memory": {
-      "@minpeter/pss-source": "./src/session/store/memory.ts",
-      "types": "./dist/session/store/memory.d.ts",
-      "import": "./dist/session/store/memory.js"
+      "@minpeter/pss-source": "./src/thread/store/memory.ts",
+      "types": "./dist/thread/store/memory.d.ts",
+      "import": "./dist/thread/store/memory.js"
     },
     "./session-store/file": {
-      "@minpeter/pss-source": "./src/session/store/file.ts",
-      "types": "./dist/session/store/file.d.ts",
-      "import": "./dist/session/store/file.js"
+      "@minpeter/pss-source": "./src/thread/store/file.ts",
+      "types": "./dist/thread/store/file.d.ts",
+      "import": "./dist/thread/store/file.js"
     },
     "./cloudflare": {
       "@minpeter/pss-source": "./src/cloudflare/index.ts",

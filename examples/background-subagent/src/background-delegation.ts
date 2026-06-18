@@ -133,7 +133,7 @@ async function getOrCreateBackgroundChildRun(
         phase: "before-child-run",
         runId: run.runId,
         runtimeState,
-        sessionSnapshot: {},
+        threadSnapshot: {},
         version: 1,
       },
       { expectedVersion: 0 }
@@ -145,7 +145,7 @@ async function getOrCreateBackgroundChildRun(
         phase: "child-linked",
         runId: run.runId,
         runtimeState,
-        sessionSnapshot: {},
+        threadSnapshot: {},
         version: 2,
       },
       { expectedVersion: 1 }

@@ -1,9 +1,13 @@
 import type { NotificationRecord, RunRecord } from "../../../execution";
-import type { StoredSession } from "../../../index";
 import type {
   CloudflareDurableObjectStorage,
   CloudflareDurableObjectTransactionStorage,
 } from "../durable-object/durable-object-storage";
+import {
+  assertJsonPayloadWithinBudget,
+  resolveStoragePayloadMaxBytes,
+  type StoragePayloadBudgetOptions,
+} from "../payload-guard";
 
 export async function withTransaction<T>(
   storage: CloudflareDurableObjectStorage,
@@ -25,8 +29,14 @@ export async function getRun(
 export async function putRun(
   storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
-  record: RunRecord
+  record: RunRecord,
+  options: StoragePayloadBudgetOptions = {}
 ): Promise<void> {
+  assertJsonPayloadWithinBudget(
+    "run-record",
+    record,
+    resolveStoragePayloadMaxBytes(options)
+  );
   await storage.put(storeKey(prefix, "run", record.runId), record);
 }
 
@@ -66,33 +76,18 @@ export async function getNotification(
 export async function putNotification(
   storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
-  record: NotificationRecord
+  record: NotificationRecord,
+  options: StoragePayloadBudgetOptions = {}
 ): Promise<void> {
+  assertJsonPayloadWithinBudget(
+    "notification-record",
+    record,
+    resolveStoragePayloadMaxBytes(options)
+  );
   await storage.put(
     storeKey(prefix, "notification", record.idempotencyKey),
     record
   );
-}
-
-export async function getSession(
-  storage: CloudflareDurableObjectTransactionStorage,
-  prefix: string,
-  threadKey: string
-): Promise<StoredSession | null> {
-  return (
-    (await storage.get<StoredSession>(
-      storeKey(prefix, "session", threadKey)
-    )) ?? null
-  );
-}
-
-export async function putSession(
-  storage: CloudflareDurableObjectTransactionStorage,
-  prefix: string,
-  threadKey: string,
-  session: StoredSession
-): Promise<void> {
-  await storage.put(storeKey(prefix, "session", threadKey), session);
 }
 
 export async function readList<T>(

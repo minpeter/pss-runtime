@@ -14,7 +14,7 @@ describe("runtime docs", () => {
     const readme = readRepoFile("packages/runtime/README.md");
     const changeset = readRepoFile(".changeset/runtime-plugin-sessions.md");
     const runSource = readRepoFile(
-      "packages/runtime/src/session/protocol/run.ts"
+      "packages/runtime/src/thread/protocol/run.ts"
     );
 
     expect(readme).toContain("for await (const event of run.events())");

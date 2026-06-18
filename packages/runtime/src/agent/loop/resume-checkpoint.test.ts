@@ -5,7 +5,6 @@ import { createInMemoryExecutionHost } from "../../execution/memory";
 import { resumeRun } from "../../execution/resume/resume";
 import type { RuntimeToolExecutionCheckpoint } from "../../llm/llm";
 import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution";
-import { userTextToModelMessage } from "../../session/protocol/mapping";
 import {
   createCheckpointSpyHost,
   createQueuedUserTurnRun,
@@ -19,6 +18,7 @@ import {
   createScriptedModelOptions,
   userText,
 } from "../../testing/test-fixtures";
+import { userTextToModelMessage } from "../../thread/protocol/mapping";
 
 describe("resumeRun checkpoint recovery", () => {
   it("passes tool execution checkpoints to resumed model calls", async () => {
@@ -106,7 +106,7 @@ describe("resumeRun checkpoint recovery", () => {
         phase: "before-tool",
         runId: "run-1",
         runtimeState: { step: 1 },
-        sessionSnapshot: { history: [] },
+        threadSnapshot: { history: [] },
         version: 1,
       },
       { expectedVersion: 0 }

@@ -1,13 +1,13 @@
 import { executionHost } from "../../execution/host/host";
 import type { AgentHost, NotificationRecord } from "../../execution/host/types";
 import { createInMemoryExecutionHost } from "../../execution/memory";
-import { type AgentInput, AgentSession } from "../../session/handle/session";
-import type { AgentPlugin } from "../../session/plugins/pipeline";
-import type { AgentRun } from "../../session/protocol/run";
-import type { SessionStore } from "../../session/store/types";
+import { type AgentInput, AgentThread } from "../../thread/handle/thread";
+import type { AgentPlugin } from "../../thread/plugins/pipeline";
+import type { AgentRun } from "../../thread/protocol/run";
+import type { ThreadStore } from "../../thread/store/types";
 import { stableAgentNamespace } from "../identity/namespace";
 import { resumeAgentRun } from "../resume/resume";
-import { sessionStoreForHost } from "./host-session-store";
+import { threadStoreForHost } from "./host-thread-store";
 import {
   type AgentModelOptions,
   type AgentOptions,
@@ -33,7 +33,7 @@ export class Agent {
   readonly #modelOptions: AgentModelOptions;
   readonly #threads = new Map<string, AgentThreadEntry>();
   readonly #ownerNamespace: string;
-  readonly #store: SessionStore;
+  readonly #store: ThreadStore;
   readonly #host: AgentHost;
   readonly #plugins: readonly AgentPlugin[];
   readonly host: AgentHost;
@@ -47,7 +47,7 @@ export class Agent {
     });
     this.#host = options.host ?? createInMemoryExecutionHost();
     this.host = this.#host;
-    this.#store = sessionStoreForHost(this.#host);
+    this.#store = threadStoreForHost(this.#host);
     this.#plugins = options.plugins ?? [];
     this.#modelOptions = {
       instructions: options.instructions,
@@ -60,9 +60,8 @@ export class Agent {
   /**
    * Whether this agent's host can resume durable runs through `resume()`.
    *
-   * `false` when the host is a `SessionHost`-only object (for example
-   * `{ kind: "session", sessionStore }`). In that case the in-memory
-   * `ExecutionHost` is not wired
+   * `false` when the host is a `ThreadHost`-only object (for example
+   * `{ kind: "thread", threadStore }`). In that case the in-memory `ExecutionHost` is not wired
    * up, so `resume(runId)` always returns `null` instead of throwing.
    */
   get supportsResume(): boolean {
@@ -106,8 +105,8 @@ export class Agent {
       return existing;
     }
 
-    let session: AgentSession | undefined;
-    session = new AgentSession(
+    let thread: AgentThread | undefined;
+    thread = new AgentThread(
       this.#modelOptions,
       { key, store: this.#store },
       this.#plugins,
@@ -117,21 +116,21 @@ export class Agent {
     );
     const publicHandle: ThreadHandle = {
       delete: async () => {
-        session.kill();
+        thread.kill();
         this.#evictThreadHandle(key);
-        await session.delete();
+        await thread.delete();
       },
       dispose: () => {
-        session.kill();
+        thread.kill();
         this.#evictThreadHandle(key);
         return Promise.resolve();
       },
-      interrupt: () => session.interrupt(),
-      send: (input) => session.send(input),
-      steer: (input) => session.steer(input),
+      interrupt: () => thread.interrupt(),
+      send: (input) => thread.send(input),
+      steer: (input) => thread.steer(input),
     };
     const entry: AgentThreadEntry = {
-      notify: (input, options) => session.notify(input, options),
+      notify: (input, options) => thread.notify(input, options),
       publicHandle,
     };
     this.#threads.set(key, entry);

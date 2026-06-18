@@ -11,7 +11,7 @@ export function createQueuedRun(runId = "run-1"): RunRecord {
     kind: "user-turn",
     rootRunId: runId,
     runId,
-    threadKey: "session-1",
+    threadKey: "thread-1",
     status: "queued",
   };
 }
@@ -47,7 +47,7 @@ export async function appendCheckpoint(
       phase: "before-model",
       runId: "run-1",
       runtimeState: {},
-      sessionSnapshot: {},
+      threadSnapshot: {},
       version: expectedVersion + 1,
     },
     { expectedVersion }

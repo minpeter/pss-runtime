@@ -1,4 +1,4 @@
-export interface SessionMetaRow {
+export interface ThreadMetaRow {
   readonly message_count: number;
   readonly next_seq: number;
   readonly session_key: string;
@@ -6,7 +6,7 @@ export interface SessionMetaRow {
   readonly version: number | string;
 }
 
-export interface SessionMessageRow {
+export interface ThreadMessageRow {
   active: number;
   readonly message: string;
   readonly seq: number;
@@ -30,12 +30,21 @@ export interface CheckpointRow {
   readonly version: number;
 }
 
+export interface ScheduledWorkRow {
+  readonly created_at: number;
+  readonly kind: string;
+  readonly payload: string;
+  readonly prefix: string;
+  readonly work_id: string;
+}
+
 export interface InMemoryDurableObjectSqlState {
   checkpoints: CheckpointRow[];
   eventMeta: Map<string, EventMetaRow>;
   events: EventRow[];
-  sessionMessages: SessionMessageRow[];
-  sessionMeta: Map<string, SessionMetaRow>;
+  scheduledWork: ScheduledWorkRow[];
+  threadMessages: ThreadMessageRow[];
+  threadMeta: Map<string, ThreadMetaRow>;
 }
 
 export function createInMemoryDurableObjectSqlState(): InMemoryDurableObjectSqlState {
@@ -43,8 +52,9 @@ export function createInMemoryDurableObjectSqlState(): InMemoryDurableObjectSqlS
     checkpoints: [],
     eventMeta: new Map(),
     events: [],
-    sessionMessages: [],
-    sessionMeta: new Map(),
+    scheduledWork: [],
+    threadMessages: [],
+    threadMeta: new Map(),
   };
 }
 
@@ -57,12 +67,10 @@ export function cloneInMemoryDurableObjectSqlState(
       [...state.eventMeta].map(([key, value]) => [key, structuredClone(value)])
     ),
     events: structuredClone(state.events),
-    sessionMessages: structuredClone(state.sessionMessages),
-    sessionMeta: new Map(
-      [...state.sessionMeta].map(([key, value]) => [
-        key,
-        structuredClone(value),
-      ])
+    scheduledWork: structuredClone(state.scheduledWork),
+    threadMessages: structuredClone(state.threadMessages),
+    threadMeta: new Map(
+      [...state.threadMeta].map(([key, value]) => [key, structuredClone(value)])
     ),
   };
 }

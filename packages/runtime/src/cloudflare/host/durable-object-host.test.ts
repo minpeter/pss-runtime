@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type { AgentEvent, AgentRun } from "../../index";
+import { SpyStore } from "../../thread/handle/test-support";
 import {
   ackScheduledCloudflareRun,
   ackScheduledCloudflareThreadPrompt,
@@ -17,10 +18,17 @@ import {
   listScheduledCloudflareThreadPrompts,
 } from "../index";
 import { InMemorySqlStorage } from "../sql/node-test/node-sqlite-storage";
+import type { CloudflareDurableObjectTransactionStorage } from "../storage/durable-object/durable-object-storage";
 
 const unclaimableAgent = {
   resume: () => Promise.resolve(null),
 } satisfies CloudflareAlarmAgent;
+
+interface ScheduledWorkProbeRow {
+  readonly kind: string;
+  readonly payload: string;
+  readonly work_id: string;
+}
 
 describe("Cloudflare Durable Object host adapter", () => {
   it("stores scheduled runs and thread prompts until they are acked", async () => {
@@ -56,6 +64,13 @@ describe("Cloudflare Durable Object host adapter", () => {
       status: "pending",
     });
 
+    expect(readScheduledWorkRows(storage)).toHaveLength(2);
+    await expect(
+      storage.get("pss-runtime:scheduled-runs")
+    ).resolves.toBeUndefined();
+    await expect(
+      storage.get("pss-runtime:scheduled-session-prompts")
+    ).resolves.toBeUndefined();
     await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([
       runId,
     ]);
@@ -69,9 +84,153 @@ describe("Cloudflare Durable Object host adapter", () => {
     await expect(
       listScheduledCloudflareThreadPrompts(storage)
     ).resolves.toEqual([]);
+    expect(readScheduledWorkRows(storage)).toEqual([]);
     await expect(
       host.store.notifications.claimByIdempotencyKey(idempotencyKey)
     ).resolves.toMatchObject({ ok: true });
+  });
+
+  it("migrates legacy KV scheduled work into the SQLite row queue once", async () => {
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
+    const prompt = {
+      idempotencyKey: "legacy-idempotency",
+      notificationId: "legacy-notification",
+      runId: "legacy-notification-run",
+      threadKey: "legacy-thread",
+    };
+
+    await storage.put("pss-runtime:scheduled-runs", [
+      "legacy-run",
+      "legacy-run",
+    ]);
+    await storage.put("pss-runtime:scheduled-session-prompts", [
+      prompt,
+      prompt,
+    ]);
+
+    await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([
+      "legacy-run",
+    ]);
+    await expect(
+      listScheduledCloudflareThreadPrompts(storage)
+    ).resolves.toEqual([prompt]);
+    await expect(
+      storage.get("pss-runtime:scheduled-runs")
+    ).resolves.toBeUndefined();
+    await expect(
+      storage.get("pss-runtime:scheduled-session-prompts")
+    ).resolves.toBeUndefined();
+    expect(readScheduledWorkRows(storage)).toHaveLength(2);
+
+    await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([
+      "legacy-run",
+    ]);
+    await ackScheduledCloudflareRun(storage, "legacy-run");
+    await ackScheduledCloudflareThreadPrompt(storage, prompt);
+
+    await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([]);
+    await expect(
+      listScheduledCloudflareThreadPrompts(storage)
+    ).resolves.toEqual([]);
+    expect(readScheduledWorkRows(storage)).toEqual([]);
+  });
+
+  it("lists SQLite scheduled work with a row limit", async () => {
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
+    const host = createCloudflareDurableObjectHost({ storage });
+
+    await host.scheduler.enqueueRun("run-a");
+    await host.scheduler.enqueueRun("run-b");
+    await host.scheduler.enqueueRun("run-c");
+
+    await expect(
+      listScheduledCloudflareRuns(storage, { limit: 2 })
+    ).resolves.toEqual(["run-a", "run-b"]);
+    expect(readScheduledWorkRows(storage)).toHaveLength(3);
+  });
+
+  it("uses the SQLite scheduled queue with default in-memory Durable Object storage", async () => {
+    const storage = new InMemoryCloudflareDurableObjectStorage();
+    const host = createCloudflareDurableObjectHost({ storage });
+
+    await host.scheduler.enqueueRun("default-sql-run");
+    await host.scheduler.resumeThread("default-sql-thread", {
+      runId: "default-sql-notification",
+    });
+
+    await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([
+      "default-sql-run",
+    ]);
+    await expect(
+      listScheduledCloudflareThreadPrompts(storage)
+    ).resolves.toEqual([
+      { runId: "default-sql-notification", threadKey: "default-sql-thread" },
+    ]);
+  });
+
+  it("uses the SQLite scheduled queue when transaction storage omits sql", async () => {
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
+    const cloudflareLikeStorage = withoutTransactionSql(storage);
+    const host = createCloudflareDurableObjectHost({
+      storage: cloudflareLikeStorage,
+    });
+    const prompt = {
+      idempotencyKey: "tx-no-sql",
+      runId: "tx-no-sql-run",
+      threadKey: "tx-no-sql-thread",
+    };
+
+    await host.scheduler.enqueueRun(prompt.runId);
+    await host.scheduler.enqueueRun(prompt.runId);
+    await host.scheduler.resumeThread(prompt.threadKey, {
+      idempotencyKey: prompt.idempotencyKey,
+      runId: prompt.runId,
+    });
+    await host.scheduler.resumeThread(prompt.threadKey, {
+      idempotencyKey: prompt.idempotencyKey,
+      runId: prompt.runId,
+    });
+
+    expect(readScheduledWorkRows(storage)).toHaveLength(2);
+    await expect(
+      storage.get("pss-runtime:scheduled-runs")
+    ).resolves.toBeUndefined();
+    await expect(
+      storage.get("pss-runtime:scheduled-session-prompts")
+    ).resolves.toBeUndefined();
+    await expect(
+      listScheduledCloudflareRuns(cloudflareLikeStorage)
+    ).resolves.toEqual([prompt.runId]);
+    await expect(
+      listScheduledCloudflareThreadPrompts(cloudflareLikeStorage)
+    ).resolves.toEqual([prompt]);
+
+    await ackScheduledCloudflareRun(cloudflareLikeStorage, prompt.runId);
+    await ackScheduledCloudflareThreadPrompt(cloudflareLikeStorage, prompt);
+
+    expect(readScheduledWorkRows(storage)).toEqual([]);
+  });
+
+  it("accepts the deprecated sessionStore option as a custom thread store", async () => {
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
+    const sessionStore = new SpyStore();
+    const host = createCloudflareDurableObjectHost({ storage, sessionStore });
+
+    expect(host.store.threads).toBe(sessionStore);
+    expect(host.store.sessions).toBe(sessionStore);
+    await host.store.transaction((tx) => {
+      expect(tx.threads).toBe(sessionStore);
+      expect(tx.sessions).toBe(sessionStore);
+      return Promise.resolve();
+    });
   });
 
   it("keeps unclaimable scheduled runs pending and reschedules the alarm", async () => {
@@ -198,4 +357,36 @@ async function* eventStream(
     await Promise.resolve();
     yield event;
   }
+}
+
+function readScheduledWorkRows(
+  storage: InMemoryCloudflareDurableObjectStorage
+): ScheduledWorkProbeRow[] {
+  return (storage.sql as InMemorySqlStorage)
+    .exec<ScheduledWorkProbeRow>(
+      "SELECT kind, work_id, payload FROM pss_scheduled_work WHERE prefix = ? ORDER BY kind, created_at, work_id",
+      "pss-runtime"
+    )
+    .toArray();
+}
+
+function withoutTransactionSql(
+  storage: InMemoryCloudflareDurableObjectStorage
+): CloudflareDurableObjectStorage {
+  return {
+    delete: storage.delete.bind(storage),
+    get: storage.get.bind(storage),
+    put: storage.put.bind(storage),
+    setAlarm: storage.setAlarm.bind(storage),
+    sql: storage.sql,
+    transaction: async (fn) =>
+      await storage.transaction((tx) =>
+        fn({
+          delete: tx.delete.bind(tx),
+          get: tx.get.bind(tx),
+          put: tx.put.bind(tx),
+          setAlarm: tx.setAlarm?.bind(tx),
+        } satisfies CloudflareDurableObjectTransactionStorage)
+      ),
+  };
 }

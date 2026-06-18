@@ -3,8 +3,9 @@ import type {
   CheckpointRow,
   EventRow,
   InMemoryDurableObjectSqlState,
-  SessionMessageRow,
-  SessionMetaRow,
+  ScheduledWorkRow,
+  ThreadMessageRow,
+  ThreadMetaRow,
 } from "./state";
 
 export function selectSqlRows(
@@ -13,10 +14,10 @@ export function selectSqlRows(
   bindings: readonly unknown[]
 ): unknown[] {
   if (query.includes("from pss_session_meta")) {
-    return selectSessionMetaRows(state, query, bindings);
+    return selectThreadMetaRows(state, query, bindings);
   }
   if (query.includes("from pss_session_message")) {
-    return selectSessionMessageRows(state, query, bindings);
+    return selectThreadMessageRows(state, query, bindings);
   }
   if (query.includes("from pss_event_meta")) {
     return selectEventMetaRows(state, bindings);
@@ -27,34 +28,37 @@ export function selectSqlRows(
   if (query.includes("from pss_checkpoint")) {
     return selectCheckpointRows(state, query, bindings);
   }
+  if (query.includes("from pss_scheduled_work")) {
+    return selectScheduledWorkRows(state, query, bindings);
+  }
   throw new Error(`Unsupported in-memory Durable Object SQL query: ${query}`);
 }
 
-function selectSessionMetaRows(
+function selectThreadMetaRows(
   state: InMemoryDurableObjectSqlState,
   query: string,
   bindings: readonly unknown[]
 ): unknown[] {
   if (query.includes("where session_key = ?")) {
     const key = stringBinding(bindings[0]);
-    const row = state.sessionMeta.get(key);
-    return row ? [projectSessionMeta(row, query)] : [];
+    const row = state.threadMeta.get(key);
+    return row ? [projectThreadMeta(row, query)] : [];
   }
   if (query === "select session_key from pss_session_meta") {
-    return [...state.sessionMeta.keys()].map((session_key) => ({
+    return [...state.threadMeta.keys()].map((session_key) => ({
       session_key,
     }));
   }
-  throw new Error(`Unsupported in-memory session meta SQL query: ${query}`);
+  throw new Error(`Unsupported in-memory thread meta SQL query: ${query}`);
 }
 
-function selectSessionMessageRows(
+function selectThreadMessageRows(
   state: InMemoryDurableObjectSqlState,
   query: string,
   bindings: readonly unknown[]
 ): unknown[] {
   const key = stringBinding(bindings[0]);
-  const rows = state.sessionMessages.filter((row) => {
+  const rows = state.threadMessages.filter((row) => {
     if (row.session_key !== key) {
       return false;
     }
@@ -62,10 +66,9 @@ function selectSessionMessageRows(
   });
   return rows
     .sort(
-      (left: SessionMessageRow, right: SessionMessageRow) =>
-        left.seq - right.seq
+      (left: ThreadMessageRow, right: ThreadMessageRow) => left.seq - right.seq
     )
-    .map((row) => projectSessionMessage(row, query));
+    .map((row) => projectThreadMessage(row, query));
 }
 
 function selectEventMetaRows(
@@ -117,7 +120,40 @@ function selectCheckpointRows(
     }));
 }
 
-function projectSessionMeta(row: SessionMetaRow, query: string): unknown {
+function selectScheduledWorkRows(
+  state: InMemoryDurableObjectSqlState,
+  query: string,
+  bindings: readonly unknown[]
+): unknown[] {
+  const prefix = stringBinding(bindings[0]);
+  const kind = stringBinding(bindings[1]);
+  const workId = query.includes("work_id = ?")
+    ? stringBinding(bindings[2])
+    : undefined;
+  const limit = query.includes("limit ?")
+    ? numberBinding(bindings[workId === undefined ? 2 : 3])
+    : undefined;
+  const rows = state.scheduledWork
+    .filter(
+      (row) =>
+        row.prefix === prefix &&
+        row.kind === kind &&
+        (workId === undefined || row.work_id === workId)
+    )
+    .sort(
+      (left: ScheduledWorkRow, right: ScheduledWorkRow) =>
+        left.created_at - right.created_at
+    );
+
+  return rows.slice(0, limit).map((row) => {
+    if (query.startsWith("select work_id from")) {
+      return { work_id: row.work_id };
+    }
+    return { payload: row.payload, work_id: row.work_id };
+  });
+}
+
+function projectThreadMeta(row: ThreadMetaRow, query: string): unknown {
   if (query.startsWith("select version, message_count, next_seq, state_blob")) {
     return {
       message_count: row.message_count,
@@ -129,7 +165,7 @@ function projectSessionMeta(row: SessionMetaRow, query: string): unknown {
   return structuredClone(row);
 }
 
-function projectSessionMessage(row: SessionMessageRow, query: string): unknown {
+function projectThreadMessage(row: ThreadMessageRow, query: string): unknown {
   const projected: Record<string, unknown> = {};
   if (query.includes("seq")) {
     projected.seq = row.seq;

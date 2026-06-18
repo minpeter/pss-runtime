@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { InMemorySqlStorage } from "../cloudflare/sql/node-test/node-sqlite-storage";
+import { InMemoryCloudflareDurableObjectStorage } from "../cloudflare/storage/durable-object/durable-object-storage";
+import { DurableObjectExecutionStore } from "../cloudflare/storage/execution/store";
+import type { ExecutionHost, RunCheckpoint } from "../execution";
 import {
   checkpointedTool,
   createCheckpointSpyHost,
@@ -15,6 +19,48 @@ import {
 import { assistantMessage, toolCallPart, toolResultFor } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
+const textEncoder = new TextEncoder();
+
+function createCheckpointSpyCloudflareHost(maxPayloadBytes: number): {
+  readonly checkpoints: RunCheckpoint[];
+  readonly host: ExecutionHost;
+} {
+  const store = new DurableObjectExecutionStore({
+    maxPayloadBytes,
+    storage: new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    }),
+  });
+  const checkpoints: RunCheckpoint[] = [];
+
+  return {
+    checkpoints,
+    host: {
+      kind: "execution",
+      scheduler: {
+        enqueueRun: async () => undefined,
+        resumeThread: async () => undefined,
+      },
+      store: {
+        checkpoints: {
+          append: async (checkpoint, options) => {
+            const result = await store.checkpoints.append(checkpoint, options);
+            if (result.ok) {
+              checkpoints.push(checkpoint);
+            }
+            return result;
+          },
+          latest: (runId) => store.checkpoints.latest(runId),
+        },
+        events: store.events,
+        notifications: store.notifications,
+        runs: store.runs,
+        threads: store.threads,
+        transaction: (fn) => store.transaction(fn),
+      },
+    },
+  };
+}
 
 describe("tool checkpointing through Agent", () => {
   beforeEach(() => {
@@ -85,6 +131,14 @@ describe("tool checkpointing through Agent", () => {
     });
     expect(afterTool?.pendingToolCall).not.toHaveProperty("input");
     expect(afterTool?.pendingToolCall).not.toHaveProperty("output");
+    expect(beforeTool?.threadSnapshot).toEqual({
+      kind: "thread-reference",
+      schemaVersion: 1,
+      threadKey: "default",
+      threadVersion: expect.any(String),
+    });
+    expect(beforeTool?.threadSnapshot).not.toHaveProperty("history");
+    expect(afterTool?.threadSnapshot).toEqual(beforeTool?.threadSnapshot);
     await expect(
       host.store.runs.get(beforeTool?.runId ?? "")
     ).resolves.toMatchObject({
@@ -92,5 +146,73 @@ describe("tool checkpointing through Agent", () => {
       kind: "user-turn",
       status: "completed",
     });
+  });
+
+  it("keeps tool checkpoints bounded when the thread history is long", async () => {
+    const Agent = await loadAgent();
+    const { checkpoints, host } = createCheckpointSpyCloudflareHost(900);
+    const signal = new AbortController().signal;
+
+    for (let index = 0; index < 10; index += 1) {
+      generateTextMock.mockImplementationOnce(async () => ({
+        responseMessages: [assistantMessage(`ACK ${index}`)],
+      }));
+    }
+    generateTextMock
+      .mockImplementationOnce(async (options: GenerateTextToolOptions) => {
+        const toolCall = toolCallPart(
+          "call_sdk-tool-call-1",
+          "checkpointed_tool"
+        );
+        await executableTool(
+          options.tools ?? {},
+          "checkpointed_tool"
+        ).execute?.({}, toolOptions("call_sdk-tool-call-1", signal));
+
+        return {
+          responseMessages: [
+            assistantMessage([toolCall]),
+            toolResultFor(toolCall),
+          ],
+        };
+      })
+      .mockImplementationOnce(async () => ({
+        responseMessages: [assistantMessage("DONE")],
+      }));
+
+    const agent = new Agent({
+      host,
+      model: fakeModel,
+      tools: {
+        checkpointed_tool: checkpointedTool("idempotent", () => ({
+          ok: true,
+        })),
+      },
+    });
+
+    for (let index = 0; index < 10; index += 1) {
+      await collectRun(
+        await agent.send(`history turn ${index}: ${"x".repeat(80)}`)
+      );
+    }
+
+    const events = await collectRun(await agent.send("use the tool"));
+
+    expect(events.map((event) => event.type)).not.toContain("turn-error");
+    expect(checkpoints.map((checkpoint) => checkpoint.phase)).toEqual([
+      "before-tool",
+      "after-tool",
+    ]);
+    for (const checkpoint of checkpoints) {
+      const checkpointBytes = textEncoder.encode(
+        JSON.stringify(checkpoint)
+      ).byteLength;
+      expect(checkpointBytes).toBeLessThan(900);
+      expect(checkpoint.threadSnapshot).toMatchObject({
+        kind: "thread-reference",
+        threadKey: "default",
+      });
+      expect(checkpoint.threadSnapshot).not.toHaveProperty("history");
+    }
   });
 });

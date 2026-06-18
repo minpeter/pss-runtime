@@ -11,6 +11,11 @@ import {
   storeKey,
   withTransaction,
 } from "../execution/records";
+import {
+  resolveStoragePayloadMaxBytes,
+  type StoragePayloadBudgetOptions,
+  stringifyJsonPayloadWithinBudget,
+} from "../payload-guard";
 
 interface CheckpointRow {
   readonly checkpoint: string;
@@ -34,18 +39,24 @@ interface CheckpointRow {
  * API.)
  */
 export class DurableObjectSqliteCheckpointStore implements CheckpointStore {
+  readonly #maxPayloadBytes: number;
   readonly #prefix: string;
   readonly #sql: SqlStorage;
   readonly #storage: CloudflareDurableObjectStorage;
   #schemaReady = false;
 
-  constructor(storage: CloudflareDurableObjectStorage, prefix: string) {
+  constructor(
+    storage: CloudflareDurableObjectStorage,
+    prefix: string,
+    options: StoragePayloadBudgetOptions = {}
+  ) {
     const sql = storage.sql as SqlStorage | undefined;
     if (!sql) {
       throw new Error(
         "DurableObjectSqliteCheckpointStore requires a SQLite-backed Durable Object (storage.sql is unavailable)"
       );
     }
+    this.#maxPayloadBytes = resolveStoragePayloadMaxBytes(options);
     this.#prefix = prefix;
     this.#sql = sql;
     this.#storage = storage;
@@ -68,17 +79,27 @@ export class DurableObjectSqliteCheckpointStore implements CheckpointStore {
       }
 
       const key = this.#rowKey(checkpoint.runId);
+      const serializedCheckpoint = stringifyJsonPayloadWithinBudget(
+        "checkpoint",
+        checkpoint,
+        this.#maxPayloadBytes
+      );
       this.#sql.exec(
         "INSERT INTO pss_checkpoint (run_key, version, checkpoint) VALUES (?, ?, ?)",
         key,
         checkpoint.version,
-        JSON.stringify(checkpoint)
+        serializedCheckpoint
       );
       if (run) {
-        await putRun(storage, this.#prefix, {
-          ...run,
-          checkpointVersion: checkpoint.version,
-        });
+        await putRun(
+          storage,
+          this.#prefix,
+          {
+            ...run,
+            checkpointVersion: checkpoint.version,
+          },
+          { maxPayloadBytes: this.#maxPayloadBytes }
+        );
       }
       return { ok: true, version: checkpoint.version };
     });

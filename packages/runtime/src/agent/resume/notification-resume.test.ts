@@ -1,17 +1,17 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { createInMemoryExecutionHost } from "../../execution/memory";
-import { collect } from "../../session/handle/test-support";
 import {
   assistantMessage,
   createCallbackModel,
   eventTypes,
   userText,
 } from "../../testing/test-fixtures";
+import { collect } from "../../thread/handle/test-support";
 import { Agent } from "../core/agent";
 import { agentNamespace } from "../identity/namespace";
 import {
-  createSessionLoadFailingHost,
+  createThreadLoadFailingHost,
   expectResumeSurface,
   notificationRunRecord,
 } from "./notification-resume.test-support";
@@ -120,8 +120,8 @@ describe("host notification resume", () => {
     await expect(owner.resume(notification.runId)).resolves.not.toBeNull();
   });
 
-  it("keeps notification pending when session resume is not accepted", async () => {
-    const host = createSessionLoadFailingHost();
+  it("keeps notification pending when thread resume is not accepted", async () => {
+    const host = createThreadLoadFailingHost();
     const agent = new Agent({
       host,
       model: createCallbackModel(() =>
@@ -147,7 +147,7 @@ describe("host notification resume", () => {
     );
 
     await expect(agent.resume(notification.runId)).rejects.toThrow(
-      "session load failed"
+      "thread load failed"
     );
     await expect(
       host.store.notifications.getByIdempotencyKey(notification.idempotencyKey)
