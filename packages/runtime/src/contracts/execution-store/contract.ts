@@ -28,7 +28,7 @@ export function describeExecutionStoreContract({
             phase: "before-model",
             runId: "run-1",
             runtimeState: { step: 1 },
-            sessionSnapshot: { messages: [] },
+            threadSnapshot: { messages: [] },
             version: 1,
           },
           { expectedVersion: 0 }
@@ -39,11 +39,11 @@ export function describeExecutionStoreContract({
           input: { text: "ready", type: "user-text" },
           notificationId: "notification-1",
           runId: "run-1",
-          threadKey: "session-1",
+          threadKey: "thread-1",
           status: "pending",
         });
-        await tx.sessions.commit(
-          "session-1",
+        await tx.threads.commit(
+          "thread-1",
           { state: { messages: ["committed transaction"] } },
           { expectedVersion: null }
         );
@@ -65,7 +65,7 @@ export function describeExecutionStoreContract({
       ).resolves.toMatchObject({
         notificationId: "notification-1",
       });
-      await expect(store.sessions.load("session-1")).resolves.toMatchObject({
+      await expect(store.threads.load("thread-1")).resolves.toMatchObject({
         state: { messages: ["committed transaction"] },
         version: "1",
       });
@@ -84,13 +84,13 @@ export function describeExecutionStoreContract({
       await expect(store.runs.get("run-1")).resolves.toBeNull();
     });
 
-    it("rolls back transaction session writes when the transaction fails", async () => {
+    it("rolls back transaction thread writes when the transaction fails", async () => {
       const store = createStore();
 
       await expect(
         store.transaction(async (tx) => {
-          await tx.sessions.commit(
-            "session-1",
+          await tx.threads.commit(
+            "thread-1",
             { state: { messages: ["inside transaction"] } },
             { expectedVersion: null }
           );
@@ -98,7 +98,7 @@ export function describeExecutionStoreContract({
         })
       ).rejects.toThrow("transaction failed");
 
-      await expect(store.sessions.load("session-1")).resolves.toBeNull();
+      await expect(store.threads.load("thread-1")).resolves.toBeNull();
     });
 
     it("serializes concurrent transactions", async () => {
@@ -204,7 +204,7 @@ export function describeExecutionStoreContract({
           input,
           notificationId: "notification-1",
           runId: "run-1",
-          threadKey: "session-1",
+          threadKey: "thread-1",
           status: "pending",
         })
       ).resolves.toEqual({ ok: true });
@@ -214,7 +214,7 @@ export function describeExecutionStoreContract({
           input,
           notificationId: "notification-2",
           runId: "run-1",
-          threadKey: "session-1",
+          threadKey: "thread-1",
           status: "pending",
         })
       ).resolves.toEqual({

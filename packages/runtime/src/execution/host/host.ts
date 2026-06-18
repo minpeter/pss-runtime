@@ -1,19 +1,38 @@
-import type { DurableBackgroundHost, SessionHost } from "./capabilities";
-import type { AgentHost, ExecutionHost } from "./types";
+import type {
+  DurableBackgroundHost,
+  SessionHost,
+  ThreadHost,
+} from "./capabilities";
+import type { AgentHost, ExecutionHost, ExecutionStorePorts } from "./types";
 
 type Transaction = ExecutionHost["store"]["transaction"];
+interface CompatibleThreadStoreHost {
+  readonly sessionStore?: ThreadHost["threadStore"];
+  readonly threadStore?: ThreadHost["threadStore"];
+}
 
-export function sessionHost(host: AgentHost): SessionHost {
+export function threadHost(host: AgentHost): ThreadHost {
   switch (host.kind) {
-    case "session":
+    case "thread":
       return host;
+    case "session":
+      return { kind: "thread", threadStore: threadStoreFromHost(host) };
     case "durable-background":
-      return { kind: "session", sessionStore: host.sessionStore };
+      return { kind: "thread", threadStore: threadStoreFromHost(host) };
     case "execution":
-      return { kind: "session", sessionStore: host.store.sessions };
+      return {
+        kind: "thread",
+        threadStore: threadStoreFromExecutionStore(host.store),
+      };
     default:
       return assertNeverHost(host);
   }
+}
+
+/** @deprecated Use threadHost. */
+export function sessionHost(host: AgentHost): SessionHost {
+  const threadStore = threadHost(host).threadStore;
+  return { kind: "session", sessionStore: threadStore, threadStore };
 }
 
 export function executionHost(host: AgentHost): ExecutionHost | undefined {
@@ -52,7 +71,8 @@ function durableBackgroundHostFromExecutionHost(
     kind: "durable-background",
     notificationInbox: host.store.notifications,
     runStore: host.store.runs,
-    sessionStore: host.store.sessions,
+    sessionStore: threadStoreFromExecutionStore(host.store),
+    threadStore: threadStoreFromExecutionStore(host.store),
     transaction: transactionForStore(host.store),
   };
 }
@@ -60,6 +80,7 @@ function durableBackgroundHostFromExecutionHost(
 function executionHostFromDurableBackgroundHost(
   host: DurableBackgroundHost
 ): ExecutionHost {
+  const threadStore = threadStoreFromHost(host);
   return {
     kind: "execution",
     scheduler: host.backgroundScheduler,
@@ -68,7 +89,8 @@ function executionHostFromDurableBackgroundHost(
       events: host.eventStore,
       notifications: host.notificationInbox,
       runs: host.runStore,
-      sessions: host.sessionStore,
+      sessions: threadStore,
+      threads: threadStore,
       transaction: host.transaction,
     },
   };
@@ -76,6 +98,22 @@ function executionHostFromDurableBackgroundHost(
 
 function transactionForStore(store: ExecutionHost["store"]): Transaction {
   return (fn) => store.transaction(fn);
+}
+
+function threadStoreFromExecutionStore(
+  store: ExecutionStorePorts
+): ThreadHost["threadStore"] {
+  return store.threads ?? store.sessions ?? assertMissingThreadStore();
+}
+
+function threadStoreFromHost(
+  host: CompatibleThreadStoreHost
+): ThreadHost["threadStore"] {
+  return host.threadStore ?? host.sessionStore ?? assertMissingThreadStore();
+}
+
+function assertMissingThreadStore(): never {
+  throw new Error("ExecutionStore requires a threads store");
 }
 
 function assertNeverHost(host: never): never {

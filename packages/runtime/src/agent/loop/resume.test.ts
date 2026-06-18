@@ -3,8 +3,6 @@ import { describe, expect, it } from "vitest";
 import type { ExecutionHost } from "../../execution/host/types";
 import { createInMemoryExecutionHost } from "../../execution/memory";
 import { resumeRun } from "../../execution/resume/resume";
-import type { AgentEvent } from "../../session/protocol/events";
-import { userTextToModelMessage } from "../../session/protocol/mapping";
 import { createQueuedUserTurnRun } from "../../testing/execution-checkpoint-test-support";
 import {
   createMockLanguageModelV4,
@@ -18,6 +16,8 @@ import {
   toolResultFor,
   userText,
 } from "../../testing/test-fixtures";
+import type { AgentEvent } from "../../thread/protocol/events";
+import { userTextToModelMessage } from "../../thread/protocol/mapping";
 
 const collectEvents = async (
   host: ExecutionHost,

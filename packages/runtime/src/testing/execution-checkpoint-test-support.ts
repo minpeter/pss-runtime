@@ -16,7 +16,7 @@ export const createQueuedUserTurnRun = (runId = "run-1"): RunRecord => ({
   kind: "user-turn",
   rootRunId: runId,
   runId,
-  threadKey: "session-1",
+  threadKey: "thread-1",
   status: "queued",
 });
 
@@ -68,7 +68,7 @@ export function createCheckpointSpyHost(): {
         events: baseHost.store.events,
         notifications: baseHost.store.notifications,
         runs: baseHost.store.runs,
-        sessions: baseHost.store.sessions,
+        threads: baseHost.store.threads,
         transaction: (fn) => baseHost.store.transaction(fn),
       },
     },

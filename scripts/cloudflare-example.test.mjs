@@ -19,8 +19,8 @@ describe("cloudflare durable object adapter", () => {
     const alarmWorkSource = readText(
       "packages/runtime/src/cloudflare/alarm/scheduled-work.ts"
     );
-    const sessionStoreSource = readText(
-      "packages/runtime/src/cloudflare/storage/sqlite/session-store.ts"
+    const threadStoreSource = readText(
+      "packages/runtime/src/cloudflare/storage/sqlite/thread-store.ts"
     );
 
     expect(hostSource).not.toContain("createFakeCloudflareDurableObjectHost");
@@ -28,11 +28,11 @@ describe("cloudflare durable object adapter", () => {
     expect(hostSource).toContain("createCloudflareAlarmScheduler");
     expect(hostSource).toContain("setAlarm");
     expect(storeSource).toContain("DurableObjectExecutionStore");
-    expect(storeSource).toContain("DurableObjectSqliteSessionStore");
+    expect(storeSource).toContain("DurableObjectSqliteThreadStore");
     expect(alarmWorkSource).toContain("agent.resume(");
     expect(alarmWorkSource).toContain("ackScheduledCloudflareRun");
     expect(alarmDrainerSource).toContain("rescheduleCloudflareAlarm");
-    expect(sessionStoreSource).toContain("pss_session_meta");
+    expect(threadStoreSource).toContain("pss_session_meta");
   });
 
   it("drives Cloudflare scheduled runs and thread prompts through stored alarms", async () => {
@@ -91,12 +91,12 @@ describe("cloudflare durable object adapter", () => {
     ).resolves.toMatchObject({ ok: true });
   });
 
-  it("stores Durable Object sessions in SQLite rows", async () => {
+  it("stores Durable Object threads in SQLite rows", async () => {
     const { InMemorySqlStorage } = await import(
       "../packages/runtime/src/cloudflare/sql/node-test/node-sqlite-storage.ts"
     );
-    const { DurableObjectSqliteSessionStore } = await import(
-      "../packages/runtime/src/cloudflare/storage/sqlite/session-store.ts"
+    const { DurableObjectSqliteThreadStore } = await import(
+      "../packages/runtime/src/cloudflare/storage/sqlite/thread-store.ts"
     );
     const { InMemoryCloudflareDurableObjectStorage } = await import(
       "../packages/runtime/src/cloudflare/index.ts"
@@ -105,17 +105,17 @@ describe("cloudflare durable object adapter", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
-    const sessions = new DurableObjectSqliteSessionStore(storage, "script");
+    const threads = new DurableObjectSqliteThreadStore(storage, "script");
 
-    await sessions.commit(
-      "session:review",
+    await threads.commit(
+      "thread:review",
       {
         state: { history: [{ role: "user", content: "hi" }], schemaVersion: 1 },
       },
       { expectedVersion: null }
     );
 
-    await expect(sessions.load("session:review")).resolves.toEqual({
+    await expect(threads.load("thread:review")).resolves.toEqual({
       state: { history: [{ role: "user", content: "hi" }], schemaVersion: 1 },
       version: "1",
     });

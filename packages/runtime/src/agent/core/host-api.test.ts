@@ -5,8 +5,8 @@ import {
   type ExecutionHost,
   type ExecutionScheduler,
   type SessionHost,
+  type ThreadHost,
 } from "../../execution";
-import { collect, SpyStore } from "../../session/handle/test-support";
 import {
   createMockLanguageModelV4,
   mockLanguageModelV4Text,
@@ -15,6 +15,7 @@ import {
   assistantMessage,
   createCallbackModel,
 } from "../../testing/test-fixtures";
+import { collect, SpyStore } from "../../thread/handle/test-support";
 import { Agent, type AgentHost, type AgentOptions } from "./agent";
 
 const fakeModel = createMockLanguageModelV4([mockLanguageModelV4Text("DONE")]);
@@ -30,7 +31,15 @@ const functionModelOptions = {
   model: runtimeModel,
 } as const;
 const aggregateHost = createInMemoryExecutionHost();
-const acceptsSessionHost = {
+const acceptsThreadHost = {
+  kind: "thread",
+  threadStore: new SpyStore(),
+} satisfies ThreadHost;
+const acceptsLegacySessionHost = {
+  kind: "session",
+  threadStore: new SpyStore(),
+} satisfies SessionHost;
+const acceptsSessionStoreOnlyLegacySessionHost = {
   kind: "session",
   sessionStore: new SpyStore(),
 } satisfies SessionHost;
@@ -41,7 +50,17 @@ const acceptsDurableBackgroundHost = {
   kind: "durable-background",
   notificationInbox: aggregateHost.store.notifications,
   runStore: aggregateHost.store.runs,
-  sessionStore: aggregateHost.store.sessions,
+  threadStore: aggregateHost.store.threads,
+  transaction: aggregateHost.store.transaction.bind(aggregateHost.store),
+} satisfies DurableBackgroundHost;
+const acceptsSessionStoreOnlyDurableBackgroundHost = {
+  backgroundScheduler: aggregateHost.scheduler,
+  checkpointStore: aggregateHost.store.checkpoints,
+  eventStore: aggregateHost.store.events,
+  kind: "durable-background",
+  notificationInbox: aggregateHost.store.notifications,
+  runStore: aggregateHost.store.runs,
+  sessionStore: aggregateHost.store.threads,
   transaction: aggregateHost.store.transaction.bind(aggregateHost.store),
 } satisfies DurableBackgroundHost;
 
@@ -61,19 +80,31 @@ type RejectsRuntimeOptionKey = AssertFalse<
 type RejectsSessionsOptionKey = AssertFalse<
   "sessions" extends keyof AgentOptions ? true : false
 >;
-type RejectsBareSessionStoreAsHost = AssertFalse<
-  IsAssignable<{ readonly sessionStore: SpyStore }, AgentHost>
+type RejectsBareThreadStoreAsHost = AssertFalse<
+  IsAssignable<{ readonly threadStore: SpyStore }, AgentHost>
 >;
-type RejectsExecutionHostSessionStoreKey = AssertFalse<
-  IsAssignable<{ readonly sessionStore: SpyStore }, ExecutionHost>
+type RejectsExecutionHostThreadStoreKey = AssertFalse<
+  IsAssignable<{ readonly threadStore: SpyStore }, ExecutionHost>
 >;
 type RequiresHostKindKey = "kind" extends keyof AgentHost ? true : false;
-type AcceptsSessionHostAsAgentHost = IsAssignable<
-  typeof acceptsSessionHost,
+type AcceptsThreadHostAsAgentHost = IsAssignable<
+  typeof acceptsThreadHost,
+  AgentHost
+>;
+type AcceptsLegacySessionHostAsAgentHost = IsAssignable<
+  typeof acceptsLegacySessionHost,
+  AgentHost
+>;
+type AcceptsSessionStoreOnlyLegacySessionHostAsAgentHost = IsAssignable<
+  typeof acceptsSessionStoreOnlyLegacySessionHost,
   AgentHost
 >;
 type AcceptsExecutionHostAsAgentHost = IsAssignable<
   typeof aggregateHost,
+  AgentHost
+>;
+type AcceptsSessionStoreOnlyDurableBackgroundHostAsAgentHost = IsAssignable<
+  typeof acceptsSessionStoreOnlyDurableBackgroundHost,
   AgentHost
 >;
 type DurableSchedulerMatchesExecutionScheduler = IsAssignable<
@@ -84,33 +115,42 @@ type DurableSchedulerMatchesExecutionScheduler = IsAssignable<
 const typeFixtures = [
   acceptsDurableBackgroundHost,
   acceptsHostOptions,
-  acceptsSessionHost,
+  acceptsLegacySessionHost,
+  acceptsSessionStoreOnlyDurableBackgroundHost,
+  acceptsSessionStoreOnlyLegacySessionHost,
+  acceptsThreadHost,
 ];
 const acceptsHostOptionAssertion: AcceptsHostOption = true;
 const rejectsRuntimeModelOptionAssertion: AssertFalse<AcceptsRuntimeModelOption> = false;
 const llmOptionAssertion: RejectsLlmOptionKey = false;
 const runtimeOptionAssertion: RejectsRuntimeOptionKey = false;
 const sessionsOptionAssertion: RejectsSessionsOptionKey = false;
-const hostSessionStoreAssertion: RejectsBareSessionStoreAsHost = false;
-const executionSessionStoreAssertion: RejectsExecutionHostSessionStoreKey = false;
+const hostThreadStoreAssertion: RejectsBareThreadStoreAsHost = false;
+const executionThreadStoreAssertion: RejectsExecutionHostThreadStoreKey = false;
 const hostKindAssertion: RequiresHostKindKey = true;
-const acceptsSessionHostAssertion: AcceptsSessionHostAsAgentHost = true;
+const acceptsThreadHostAssertion: AcceptsThreadHostAsAgentHost = true;
+const acceptsLegacySessionHostAssertion: AcceptsLegacySessionHostAsAgentHost = true;
+const acceptsSessionStoreOnlyLegacySessionHostAssertion: AcceptsSessionStoreOnlyLegacySessionHostAsAgentHost = true;
 const acceptsExecutionHostAssertion: AcceptsExecutionHostAsAgentHost = true;
+const acceptsSessionStoreOnlyDurableBackgroundHostAssertion: AcceptsSessionStoreOnlyDurableBackgroundHostAsAgentHost = true;
 const durableSchedulerAssertion: DurableSchedulerMatchesExecutionScheduler = true;
 
 describe("Agent host public API", () => {
   it("accepts host option and keeps unsupported option keys out of AgentOptions", () => {
-    expect(typeFixtures).toHaveLength(3);
+    expect(typeFixtures).toHaveLength(6);
     expect(acceptsHostOptionAssertion).toBe(true);
     expect(rejectsRuntimeModelOptionAssertion).toBe(false);
     expect(llmOptionAssertion).toBe(false);
     expect(runtimeOptionAssertion).toBe(false);
     expect(sessionsOptionAssertion).toBe(false);
-    expect(hostSessionStoreAssertion).toBe(false);
-    expect(executionSessionStoreAssertion).toBe(false);
+    expect(hostThreadStoreAssertion).toBe(false);
+    expect(executionThreadStoreAssertion).toBe(false);
     expect(hostKindAssertion).toBe(true);
-    expect(acceptsSessionHostAssertion).toBe(true);
+    expect(acceptsThreadHostAssertion).toBe(true);
+    expect(acceptsLegacySessionHostAssertion).toBe(true);
+    expect(acceptsSessionStoreOnlyLegacySessionHostAssertion).toBe(true);
     expect(acceptsExecutionHostAssertion).toBe(true);
+    expect(acceptsSessionStoreOnlyDurableBackgroundHostAssertion).toBe(true);
     expect(durableSchedulerAssertion).toBe(true);
     expect(new Agent({ host: inProcessHost, model: fakeModel })).toBeInstanceOf(
       Agent
@@ -151,7 +191,21 @@ describe("Agent host public API", () => {
     ).toThrow("Agent: invalid options.model");
   });
 
-  it("uses host session store for thread snapshots", async () => {
+  it("uses host thread store for thread snapshots", async () => {
+    const threadStore = new SpyStore();
+    const agent = new Agent({
+      host: { kind: "thread", threadStore },
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
+    });
+
+    await collect(await agent.thread("host-owned").send("hello"));
+
+    expect(threadStore.commits.at(-1)?.key).toBe("host-owned");
+  });
+
+  it("uses deprecated session host store for thread snapshots", async () => {
     const sessionStore = new SpyStore();
     const agent = new Agent({
       host: { kind: "session", sessionStore },
@@ -160,15 +214,15 @@ describe("Agent host public API", () => {
       ),
     });
 
-    await collect(await agent.thread("host-owned").send("hello"));
+    await collect(await agent.thread("legacy-host-owned").send("hello"));
 
-    expect(sessionStore.commits.at(-1)?.key).toBe("host-owned");
+    expect(sessionStore.commits.at(-1)?.key).toBe("legacy-host-owned");
   });
 
   it("includes scoped thread addresses in the stored thread key", async () => {
-    const sessionStore = new SpyStore();
+    const threadStore = new SpyStore();
     const agent = new Agent({
-      host: { kind: "session", sessionStore },
+      host: { kind: "thread", threadStore },
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
       ),
@@ -178,7 +232,7 @@ describe("Agent host public API", () => {
       await agent.thread({ key: "room/1", scope: "user:1" }).send("hello")
     );
 
-    expect(sessionStore.commits.at(-1)?.key).toBe(
+    expect(threadStore.commits.at(-1)?.key).toBe(
       "scope:user%3A1:thread:room%2F1"
     );
   });

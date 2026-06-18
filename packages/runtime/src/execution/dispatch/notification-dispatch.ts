@@ -1,5 +1,5 @@
 import { agentNamespace } from "../../agent/identity/namespace";
-import type { AgentEvent, UserInput } from "../../session/protocol/events";
+import type { AgentEvent, UserInput } from "../../thread/protocol/events";
 import type {
   ExecutionHost,
   NotificationRecord,

@@ -5,13 +5,23 @@ import type {
   NotificationWriteResult,
 } from "../../../execution";
 import type { CloudflareDurableObjectStorage } from "../durable-object/durable-object-storage";
+import {
+  resolveStoragePayloadMaxBytes,
+  type StoragePayloadBudgetOptions,
+} from "../payload-guard";
 import { getNotification, putNotification, withTransaction } from "./records";
 
 export class DurableObjectNotificationInbox implements NotificationInbox {
+  readonly #maxPayloadBytes: number;
   readonly #prefix: string;
   readonly #storage: CloudflareDurableObjectStorage;
 
-  constructor(storage: CloudflareDurableObjectStorage, prefix: string) {
+  constructor(
+    storage: CloudflareDurableObjectStorage,
+    prefix: string,
+    options: StoragePayloadBudgetOptions = {}
+  ) {
+    this.#maxPayloadBytes = resolveStoragePayloadMaxBytes(options);
     this.#prefix = prefix;
     this.#storage = storage;
   }
@@ -32,7 +42,9 @@ export class DurableObjectNotificationInbox implements NotificationInbox {
         return { ok: false, reason: "already-claimed", record };
       }
       const claimed: NotificationRecord = { ...record, status: "acked" };
-      await putNotification(storage, this.#prefix, claimed);
+      await putNotification(storage, this.#prefix, claimed, {
+        maxPayloadBytes: this.#maxPayloadBytes,
+      });
       return { ok: true, record: claimed };
     });
   }
@@ -51,7 +63,9 @@ export class DurableObjectNotificationInbox implements NotificationInbox {
           reason: "duplicate",
         };
       }
-      await putNotification(storage, this.#prefix, record);
+      await putNotification(storage, this.#prefix, record, {
+        maxPayloadBytes: this.#maxPayloadBytes,
+      });
       return { ok: true };
     });
   }
@@ -65,10 +79,15 @@ export class DurableObjectNotificationInbox implements NotificationInbox {
   async releaseByIdempotencyKey(idempotencyKey: string): Promise<void> {
     const record = await this.getByIdempotencyKey(idempotencyKey);
     if (record?.status === "acked") {
-      await putNotification(this.#storage, this.#prefix, {
-        ...record,
-        status: "pending",
-      });
+      await putNotification(
+        this.#storage,
+        this.#prefix,
+        {
+          ...record,
+          status: "pending",
+        },
+        { maxPayloadBytes: this.#maxPayloadBytes }
+      );
     }
   }
 }

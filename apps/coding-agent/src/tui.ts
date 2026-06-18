@@ -9,10 +9,10 @@ import {
   TUI,
 } from "@earendil-works/pi-tui";
 import { Agent, type AgentOptions } from "@minpeter/pss-runtime";
-import { FileSessionStore } from "@minpeter/pss-runtime/session-store/file";
+import { FileThreadStore } from "@minpeter/pss-runtime/thread-store/file";
 import type { ToolSet } from "ai";
 import { createCodingLanguageModel } from "./model";
-import { resolveCodingAgentSessionConfig } from "./session-config";
+import { resolveCodingAgentThreadConfig } from "./thread-config";
 import { createTuiRunner } from "./tui-runner";
 import { safeInlineText } from "./tui-tool-printer";
 
@@ -26,11 +26,11 @@ export interface StartTuiOptions {
 }
 
 export async function startTui(options: StartTuiOptions = {}): Promise<void> {
-  const sessionConfig = resolveCodingAgentSessionConfig();
+  const threadConfig = resolveCodingAgentThreadConfig();
   const agentOptions: AgentOptions = {
     host: {
-      kind: "session",
-      sessionStore: new FileSessionStore(sessionConfig.directory),
+      kind: "thread",
+      threadStore: new FileThreadStore(threadConfig.directory),
     },
     instructions:
       "Answer in 2 short sentences and 280 characters or fewer unless the user explicitly asks for detail. Avoid headings.",
@@ -38,7 +38,7 @@ export async function startTui(options: StartTuiOptions = {}): Promise<void> {
     tools: options.tools,
   };
   const agent = new Agent(agentOptions);
-  const thread = agent.thread(sessionConfig.key);
+  const thread = agent.thread(threadConfig.key);
 
   const terminal = new ProcessTerminal();
   const tui = new TUI(terminal);
@@ -48,7 +48,7 @@ export async function startTui(options: StartTuiOptions = {}): Promise<void> {
 
   tui.addChild(
     new Text(
-      `\x1b[1mpss-next\x1b[0m \x1b[2m(thread ${safeInlineText(sessionConfig.key)} · Esc to interrupt · Ctrl-C to quit)\x1b[0m`,
+      `\x1b[1mpss-next\x1b[0m \x1b[2m(thread ${safeInlineText(threadConfig.key)} · Esc to interrupt · Ctrl-C to quit)\x1b[0m`,
       1,
       0
     )

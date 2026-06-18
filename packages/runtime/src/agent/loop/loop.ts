@@ -5,8 +5,8 @@ import {
   type ModelStepOutput,
 } from "../../llm/llm";
 import type { RuntimeToolExecutionContext } from "../../llm/tool-execution";
-import type { AgentEvent } from "../../session/protocol/events";
-import { modelMessageToAgentEvents } from "../../session/protocol/mapping";
+import type { AgentEvent } from "../../thread/protocol/events";
+import { modelMessageToAgentEvents } from "../../thread/protocol/mapping";
 
 interface ModelHistory {
   appendModelMessage(message: ModelMessage): void;

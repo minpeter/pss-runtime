@@ -8,13 +8,17 @@ export {
 } from "./agent/core/agent";
 export type { AgentHost } from "./execution/host/types";
 export type { AgentToolChoice } from "./llm/llm";
-export { delegateUserInput } from "./session/input/delegate-input";
-export type { AgentInput, SessionInput } from "./session/input/input";
+export { delegateUserInput } from "./thread/input/delegate-input";
+export type {
+  AgentInput,
+  SessionInput,
+  ThreadInput,
+} from "./thread/input/input";
 export {
   attachInputMeta,
   stripInputMeta,
   userInputFromEvent,
-} from "./session/input/input-meta";
+} from "./thread/input/input-meta";
 export type {
   AgentEventContext,
   AgentPlugin,
@@ -22,8 +26,8 @@ export type {
   AgentPluginResult,
   InterceptableAgentEvent,
   PluginPipelineResult,
-} from "./session/plugins/pipeline";
-export { runPluginsForEvent } from "./session/plugins/pipeline";
+} from "./thread/plugins/pipeline";
+export { runPluginsForEvent } from "./thread/plugins/pipeline";
 export type {
   AgentEvent,
   AgentEventListener,
@@ -49,19 +53,23 @@ export type {
   UserText,
   UserTextContent,
   VisibleAgentEvent,
-} from "./session/protocol/events";
+} from "./thread/protocol/events";
 export {
   isControlAgentEvent,
   isLifecycleAgentEvent,
   isTelemetryAgentEvent,
   isToolAgentEvent,
   isVisibleAgentEvent,
-} from "./session/protocol/events";
-export type { AgentRun } from "./session/protocol/run";
+} from "./thread/protocol/events";
+export type { AgentRun } from "./thread/protocol/run";
 export type {
   CommitResult,
   ExpectedSessionVersion,
+  ExpectedThreadVersion,
   SessionStore,
   SessionStoreCommit,
   StoredSession,
-} from "./session/store/types";
+  StoredThread,
+  ThreadStore,
+  ThreadStoreCommit,
+} from "./thread/store/types";

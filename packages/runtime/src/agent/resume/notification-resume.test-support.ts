@@ -1,7 +1,7 @@
 import { expect } from "vitest";
 import type { ExecutionHost, RunRecord } from "../../execution/host/types";
 import { createInMemoryExecutionHost } from "../../execution/memory";
-import type { AgentRun } from "../../session/protocol/run";
+import type { AgentRun } from "../../thread/protocol/run";
 import { agentNamespace } from "../identity/namespace";
 
 interface ResumableAgent {
@@ -17,16 +17,16 @@ export function expectResumeSurface(
   ).toBeTypeOf("function");
 }
 
-export function createSessionLoadFailingHost(): ExecutionHost {
+export function createThreadLoadFailingHost(): ExecutionHost {
   const base = createInMemoryExecutionHost();
   return {
     ...base,
     store: {
       ...base.store,
-      sessions: {
-        commit: base.store.sessions.commit.bind(base.store.sessions),
-        delete: base.store.sessions.delete.bind(base.store.sessions),
-        load: () => Promise.reject(new Error("session load failed")),
+      threads: {
+        commit: base.store.threads.commit.bind(base.store.threads),
+        delete: base.store.threads.delete.bind(base.store.threads),
+        load: () => Promise.reject(new Error("thread load failed")),
       },
     },
   };

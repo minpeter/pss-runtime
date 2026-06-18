@@ -10,7 +10,7 @@ const HAS_RETURNING = /\breturning\b/i;
  * Test double for {@link SqlStorage} backed by Node's built-in `node:sqlite`
  * (`DatabaseSync`, available in Node 24+ — no extra dependency). It mirrors the
  * synchronous cursor shape of Cloudflare's real `ctx.storage.sql.exec`, so the
- * session store can be exercised in plain vitest without a Workers runtime.
+ * thread store can be exercised in plain vitest without a Workers runtime.
  *
  * This is test support only and is intentionally NOT re-exported from the
  * package barrel.

@@ -4,7 +4,7 @@ import {
   dispatchAgentNotification,
 } from "../../execution/dispatch/notification-dispatch";
 import type { ExecutionHost } from "../../execution/host/types";
-import type { AgentEvent, UserInput } from "../../session/protocol/events";
+import type { AgentEvent, UserInput } from "../../thread/protocol/events";
 import { createCloudflareDurableObjectHost } from "../host/durable-object-host";
 import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 

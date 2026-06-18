@@ -16,7 +16,7 @@ const createRun = (runId = "run-1"): RunRecord => ({
   kind: "user-turn",
   rootRunId: runId,
   runId,
-  threadKey: "session-1",
+  threadKey: "thread-1",
   status: "queued",
 });
 
@@ -54,7 +54,7 @@ describe("createCloudflareDurableObjectHost store selection", () => {
         type: "tool-result",
       });
     }
-    // 20 checkpoints, each embedding a full session snapshot — past 2MB too.
+    // 20 checkpoints, each embedding a full thread snapshot — past 2MB too.
     for (let version = 1; version <= 20; version += 1) {
       await host.store.checkpoints.append(
         {
@@ -62,7 +62,7 @@ describe("createCloudflareDurableObjectHost store selection", () => {
           phase: "after-tool",
           runId: "run-1",
           runtimeState: {},
-          sessionSnapshot: { history: [big] },
+          threadSnapshot: { history: [big] },
           version,
         },
         { expectedVersion: version - 1 }
@@ -102,7 +102,7 @@ describe("createCloudflareDurableObjectHost store selection", () => {
             phase: "before-model",
             runId: "run-rollback",
             runtimeState: {},
-            sessionSnapshot: { messages: [] },
+            threadSnapshot: { messages: [] },
             version: 1,
           },
           { expectedVersion: 0 }
@@ -112,11 +112,11 @@ describe("createCloudflareDurableObjectHost store selection", () => {
           input: { text: "resume", type: "user-text" },
           notificationId: "notification-rollback",
           runId: "run-rollback",
-          threadKey: "session-rollback",
+          threadKey: "thread-rollback",
           status: "pending",
         });
-        await tx.sessions.commit(
-          "session-rollback",
+        await tx.threads.commit(
+          "thread-rollback",
           { state: { messages: ["inside transaction"] } },
           { expectedVersion: null }
         );
@@ -126,7 +126,7 @@ describe("createCloudflareDurableObjectHost store selection", () => {
 
     await expect(host.store.runs.get("run-rollback")).resolves.toBeNull();
     await expect(
-      host.store.sessions.load("session-rollback")
+      host.store.threads.load("thread-rollback")
     ).resolves.toBeNull();
     await expect(
       host.store.notifications.getByIdempotencyKey("notify-rollback")

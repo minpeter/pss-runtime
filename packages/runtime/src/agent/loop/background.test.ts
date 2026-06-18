@@ -1,8 +1,5 @@
 import type { ToolModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
-import type { AgentEvent } from "../../session/protocol/events";
-import { userTextToModelMessage } from "../../session/protocol/mapping";
-import { ModelMessageHistory } from "../../session/state/history";
 import {
   assistantMessage,
   createScriptedModelOptions,
@@ -10,6 +7,9 @@ import {
   toolCallPart,
   userText,
 } from "../../testing/test-fixtures";
+import type { AgentEvent } from "../../thread/protocol/events";
+import { userTextToModelMessage } from "../../thread/protocol/mapping";
+import { ModelMessageHistory } from "../../thread/state/history";
 import { runAgentLoop } from "./loop";
 
 describe("runAgentLoop tool results", () => {

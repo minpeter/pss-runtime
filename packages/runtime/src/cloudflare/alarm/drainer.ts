@@ -143,6 +143,7 @@ export async function drainCloudflareAlarm({
 
 async function drainRuns(options: DrainLoopOptions): Promise<void> {
   for (const runId of await listScheduledCloudflareRuns(options.storage, {
+    limit: Math.max(0, options.budget.maxRuns - options.state.runAttempts),
     prefix: options.prefix,
   })) {
     if (shouldStopRuns(options.state, options.budget)) {
@@ -155,6 +156,10 @@ async function drainRuns(options: DrainLoopOptions): Promise<void> {
 
 async function drainThreadPrompts(options: DrainLoopOptions): Promise<void> {
   const prompts = await listScheduledCloudflareThreadPrompts(options.storage, {
+    limit: Math.max(
+      0,
+      options.budget.maxThreadPrompts - options.state.threadPromptAttempts
+    ),
     prefix: options.prefix,
   });
   for (const prompt of prompts) {
@@ -183,6 +188,15 @@ async function summarizeDrain({
   });
   if (state.failedRuns.length > 0 || state.failedThreadPrompts.length > 0) {
     state.reasons.add("failure");
+  }
+  if (remainingRuns.length > 0 && state.runAttempts >= budget.maxRuns) {
+    state.reasons.add("run-budget");
+  }
+  if (
+    remainingPrompts.length > 0 &&
+    state.threadPromptAttempts >= budget.maxThreadPrompts
+  ) {
+    state.reasons.add("thread-prompt-budget");
   }
   const continuationScheduled = shouldRearm(
     state,

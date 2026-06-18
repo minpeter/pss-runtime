@@ -3,7 +3,7 @@ import {
   numberBinding,
   stringBinding,
 } from "./bindings";
-import type { InMemoryDurableObjectSqlState, SessionMetaRow } from "./state";
+import type { InMemoryDurableObjectSqlState, ThreadMetaRow } from "./state";
 
 export function writeSqlStatement(
   state: InMemoryDurableObjectSqlState,
@@ -11,7 +11,7 @@ export function writeSqlStatement(
   bindings: readonly unknown[]
 ): void {
   if (query.includes("pss_session_")) {
-    writeSessionStatement(state, query, bindings);
+    writeThreadStatement(state, query, bindings);
     return;
   }
   if (query.startsWith("insert into pss_event_meta")) {
@@ -26,50 +26,58 @@ export function writeSqlStatement(
     writeCheckpoint(state, bindings);
     return;
   }
+  if (query.startsWith("insert into pss_scheduled_work")) {
+    writeScheduledWork(state, bindings);
+    return;
+  }
+  if (query.startsWith("delete from pss_scheduled_work")) {
+    deleteScheduledWork(state, bindings);
+    return;
+  }
   throw new Error(
     `Unsupported in-memory Durable Object SQL statement: ${query}`
   );
 }
 
-function writeSessionStatement(
+function writeThreadStatement(
   state: InMemoryDurableObjectSqlState,
   query: string,
   bindings: readonly unknown[]
 ): void {
   if (query.startsWith("delete from pss_session_message")) {
-    deleteSessionMessages(state, bindings);
+    deleteThreadMessages(state, bindings);
     return;
   }
   if (query.startsWith("delete from pss_session_meta")) {
-    state.sessionMeta.delete(stringBinding(bindings[0]));
+    state.threadMeta.delete(stringBinding(bindings[0]));
     return;
   }
   if (query.startsWith("update pss_session_message set active = 0")) {
-    deactivateSessionMessages(state, query, bindings);
+    deactivateThreadMessages(state, query, bindings);
     return;
   }
   if (query.startsWith("insert into pss_session_message")) {
-    insertSessionMessage(state, query, bindings);
+    insertThreadMessage(state, query, bindings);
     return;
   }
   if (query.startsWith("insert into pss_session_meta")) {
-    insertSessionMeta(state, bindings);
+    insertThreadMeta(state, bindings);
     return;
   }
-  throw new Error(`Unsupported in-memory session SQL statement: ${query}`);
+  throw new Error(`Unsupported in-memory thread SQL statement: ${query}`);
 }
 
-function deleteSessionMessages(
+function deleteThreadMessages(
   state: InMemoryDurableObjectSqlState,
   bindings: readonly unknown[]
 ): void {
   const key = stringBinding(bindings[0]);
-  state.sessionMessages = state.sessionMessages.filter(
+  state.threadMessages = state.threadMessages.filter(
     (row) => row.session_key !== key
   );
 }
 
-function deactivateSessionMessages(
+function deactivateThreadMessages(
   state: InMemoryDurableObjectSqlState,
   query: string,
   bindings: readonly unknown[]
@@ -78,20 +86,20 @@ function deactivateSessionMessages(
   const minSeq = query.includes("seq >= ?")
     ? numberBinding(bindings[1])
     : Number.NEGATIVE_INFINITY;
-  for (const row of state.sessionMessages) {
+  for (const row of state.threadMessages) {
     if (row.session_key === key && row.active === 1 && row.seq >= minSeq) {
       row.active = 0;
     }
   }
 }
 
-function insertSessionMessage(
+function insertThreadMessage(
   state: InMemoryDurableObjectSqlState,
   query: string,
   bindings: readonly unknown[]
 ): void {
   const hasImplicitSeq = query.includes("values (?, 0, 1, ?)");
-  state.sessionMessages.push({
+  state.threadMessages.push({
     active: 1,
     message: stringBinding(hasImplicitSeq ? bindings[1] : bindings[2]),
     seq: hasImplicitSeq ? 0 : numberBinding(bindings[1]),
@@ -99,18 +107,18 @@ function insertSessionMessage(
   });
 }
 
-function insertSessionMeta(
+function insertThreadMeta(
   state: InMemoryDurableObjectSqlState,
   bindings: readonly unknown[]
 ): void {
   const key = stringBinding(bindings[0]);
-  state.sessionMeta.set(key, createSessionMetaRow(key, bindings));
+  state.threadMeta.set(key, createThreadMetaRow(key, bindings));
 }
 
-function createSessionMetaRow(
+function createThreadMetaRow(
   key: string,
   bindings: readonly unknown[]
-): SessionMetaRow {
+): ThreadMetaRow {
   if (bindings.length >= 5) {
     return {
       message_count: numberBinding(bindings[2]),
@@ -165,4 +173,37 @@ function writeCheckpoint(
     run_key: runKey,
     version,
   });
+}
+
+function writeScheduledWork(
+  state: InMemoryDurableObjectSqlState,
+  bindings: readonly unknown[]
+): void {
+  const prefix = stringBinding(bindings[0]);
+  const kind = stringBinding(bindings[1]);
+  const workId = stringBinding(bindings[2]);
+  state.scheduledWork = state.scheduledWork.filter(
+    (row) =>
+      !(row.prefix === prefix && row.kind === kind && row.work_id === workId)
+  );
+  state.scheduledWork.push({
+    created_at: numberBinding(bindings[4]),
+    kind,
+    payload: stringBinding(bindings[3]),
+    prefix,
+    work_id: workId,
+  });
+}
+
+function deleteScheduledWork(
+  state: InMemoryDurableObjectSqlState,
+  bindings: readonly unknown[]
+): void {
+  const prefix = stringBinding(bindings[0]);
+  const kind = stringBinding(bindings[1]);
+  const workId = stringBinding(bindings[2]);
+  state.scheduledWork = state.scheduledWork.filter(
+    (row) =>
+      !(row.prefix === prefix && row.kind === kind && row.work_id === workId)
+  );
 }

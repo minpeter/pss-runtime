@@ -1,8 +1,16 @@
-import type { AgentEvent, UserInput } from "../../session/protocol/events";
-import type { SessionStore } from "../../session/store/types";
-import type { DurableBackgroundHost, SessionHost } from "./capabilities";
+import type { AgentEvent, UserInput } from "../../thread/protocol/events";
+import type { ThreadStore } from "../../thread/store/types";
+import type {
+  DurableBackgroundHost,
+  LegacySessionHost,
+  ThreadHost,
+} from "./capabilities";
 
-export type AgentHost = DurableBackgroundHost | ExecutionHost | SessionHost;
+export type AgentHost =
+  | DurableBackgroundHost
+  | ExecutionHost
+  | LegacySessionHost
+  | ThreadHost;
 
 export interface ExecutionHost {
   readonly kind: "execution";
@@ -89,7 +97,7 @@ export interface RunCheckpoint {
   readonly phase: CheckpointPhase;
   readonly runId: string;
   readonly runtimeState: unknown;
-  readonly sessionSnapshot: unknown;
+  readonly threadSnapshot: unknown;
   readonly version: number;
 }
 
@@ -178,7 +186,9 @@ export interface ExecutionStorePorts {
   readonly events: EventStore;
   readonly notifications: NotificationInbox;
   readonly runs: RunStore;
-  readonly sessions: SessionStore;
+  /** @deprecated Use threads. */
+  readonly sessions?: ThreadStore;
+  readonly threads: ThreadStore;
 }
 
 export interface ExecutionStoreTransaction extends ExecutionStorePorts {}

@@ -7,6 +7,11 @@ import type { AgentEvent } from "../../../index";
 import type { SqlStorage } from "../../sql/ports/storage-port";
 import type { CloudflareDurableObjectStorage } from "../durable-object/durable-object-storage";
 import { storeKey } from "../execution/records";
+import {
+  resolveStoragePayloadMaxBytes,
+  type StoragePayloadBudgetOptions,
+  stringifyJsonPayloadWithinBudget,
+} from "../payload-guard";
 
 interface EventRow {
   readonly event: string;
@@ -23,7 +28,7 @@ interface EventMetaRow {
  * Each `append` only `INSERT`s the new event as one small SQLite row, so no
  * single stored value grows with the run length.
  *
- * Mirrors the design of {@link DurableObjectSqliteSessionStore}: the per-run
+ * Mirrors the design of {@link DurableObjectSqliteThreadStore}: the per-run
  * `next_seq` counter and the row `INSERT` form a single synchronous
  * (await-free) read-modify-write section, so concurrent appends to the same run
  * serialize on the JS event loop inside the single-threaded Durable Object and
@@ -32,35 +37,50 @@ interface EventMetaRow {
  * Event cursors are 1-based skip counts (`offset = seq + 1`).
  */
 export class DurableObjectSqliteEventStore implements EventStore {
+  readonly #maxPayloadBytes: number;
   readonly #prefix: string;
   readonly #sql: SqlStorage;
   #schemaReady = false;
 
-  constructor(storage: CloudflareDurableObjectStorage, prefix: string) {
+  constructor(
+    storage: CloudflareDurableObjectStorage,
+    prefix: string,
+    options: StoragePayloadBudgetOptions = {}
+  ) {
     const sql = storage.sql as SqlStorage | undefined;
     if (!sql) {
       throw new Error(
         "DurableObjectSqliteEventStore requires a SQLite-backed Durable Object (storage.sql is unavailable)"
       );
     }
+    this.#maxPayloadBytes = resolveStoragePayloadMaxBytes(options);
     this.#prefix = prefix;
     this.#sql = sql;
   }
 
   append(runId: string, event: AgentEvent): Promise<EventCursor> {
-    this.#ensureSchema();
-    const key = this.#rowKey(runId);
-    // Synchronous read-modify-write critical section (no await): concurrent
-    // appends to the same run serialize on the JS event loop inside the
-    // single-threaded Durable Object, so no `seq` collision can occur.
-    const seq = this.#consumeNextSeq(key);
-    this.#sql.exec(
-      "INSERT INTO pss_event (run_key, seq, event) VALUES (?, ?, ?)",
-      key,
-      seq,
-      JSON.stringify(event)
-    );
-    return Promise.resolve({ offset: seq + 1 });
+    try {
+      this.#ensureSchema();
+      const key = this.#rowKey(runId);
+      const serializedEvent = stringifyJsonPayloadWithinBudget(
+        "event",
+        event,
+        this.#maxPayloadBytes
+      );
+      // Synchronous read-modify-write critical section (no await): concurrent
+      // appends to the same run serialize on the JS event loop inside the
+      // single-threaded Durable Object, so no `seq` collision can occur.
+      const seq = this.#consumeNextSeq(key);
+      this.#sql.exec(
+        "INSERT INTO pss_event (run_key, seq, event) VALUES (?, ?, ?)",
+        key,
+        seq,
+        serializedEvent
+      );
+      return Promise.resolve({ offset: seq + 1 });
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   async *read(

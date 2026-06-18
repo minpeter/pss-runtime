@@ -27,7 +27,7 @@ function checkpoint(
     checkpointId: string;
     phase: "before-model" | "after-tool";
     runtimeState: unknown;
-    sessionSnapshot: unknown;
+    threadSnapshot: unknown;
   }> = {}
 ): Parameters<CheckpointStoreType["append"]>[0] {
   return {
@@ -35,7 +35,7 @@ function checkpoint(
     phase: overrides.phase ?? "before-model",
     runId,
     runtimeState: overrides.runtimeState ?? {},
-    sessionSnapshot: overrides.sessionSnapshot ?? {},
+    threadSnapshot: overrides.threadSnapshot ?? {},
     version,
   };
 }
@@ -46,12 +46,15 @@ function createRun(runId = "run-1"): RunRecord {
     kind: "user-turn",
     rootRunId: runId,
     runId,
-    threadKey: "session-1",
+    threadKey: "thread-1",
     status: "queued",
   };
 }
 
-async function createRanStore(runId = "run-1"): Promise<{
+async function createRanStore(
+  runId = "run-1",
+  options: { readonly maxPayloadBytes?: number } = {}
+): Promise<{
   readonly storage: InMemoryCloudflareDurableObjectStorage;
   readonly store: DurableObjectSqliteCheckpointStore;
 }> {
@@ -60,7 +63,11 @@ async function createRanStore(runId = "run-1"): Promise<{
   });
   const runs = new DurableObjectRunStore(storage, PREFIX);
   await runs.create(createRun(runId));
-  const store = new DurableObjectSqliteCheckpointStore(storage, PREFIX);
+  const store = new DurableObjectSqliteCheckpointStore(
+    storage,
+    PREFIX,
+    options
+  );
   return { storage, store };
 }
 
@@ -138,6 +145,25 @@ describe("DurableObjectSqliteCheckpointStore", () => {
     expect(readRows(storage, "run-1")).toHaveLength(1);
   });
 
+  it("rejects checkpoint rows that exceed the serialized payload budget", async () => {
+    const { storage, store } = await createRanStore("run-1", {
+      maxPayloadBytes: 80,
+    });
+
+    await expect(
+      store.append(
+        checkpoint("run-1", 1, {
+          runtimeState: { notes: "x".repeat(120) },
+        }),
+        { expectedVersion: 0 }
+      )
+    ).rejects.toMatchObject({
+      maxBytes: 80,
+      payloadKind: "checkpoint",
+    });
+    expect(readRows(storage, "run-1")).toEqual([]);
+  });
+
   it("appends many checkpoints without losing earlier ones", async () => {
     const { store, storage } = await createRanStore();
     for (let version = 1; version <= 5; version += 1) {
@@ -174,7 +200,7 @@ describe("DurableObjectSqliteCheckpointStore", () => {
 
   it("round-trips checkpoints whose snapshot payload exceeds the 2MB blob limit", async () => {
     // Guards against SQLITE_TOOBIG-style accumulation failures:
-    // each checkpoint embeds a full session snapshot, and many tool-call
+    // each checkpoint embeds a full thread snapshot, and many tool-call
     // checkpoints past the ~2.2MB threshold blew up a single re-written value.
     const { store } = await createRanStore();
     const big = "x".repeat(120_000);
@@ -182,7 +208,7 @@ describe("DurableObjectSqliteCheckpointStore", () => {
     for (let version = 1; version <= 20; version += 1) {
       await store.append(
         checkpoint("run-1", version, {
-          sessionSnapshot: { history: [big] },
+          threadSnapshot: { history: [big] },
         }),
         { expectedVersion: version - 1 }
       );
@@ -191,7 +217,7 @@ describe("DurableObjectSqliteCheckpointStore", () => {
     const latest = await store.latest("run-1");
     expect(latest).toMatchObject({ version: 20 });
     expect(
-      (latest?.sessionSnapshot as { history: string[] }).history[0]
+      (latest?.threadSnapshot as { history: string[] }).history[0]
     ).toHaveLength(120_000);
   });
 
@@ -201,7 +227,7 @@ describe("DurableObjectSqliteCheckpointStore", () => {
       checkpointId: "cp-abc",
       phase: "after-tool",
       runtimeState: { toolCallId: "call_1", toolName: "web_search" },
-      sessionSnapshot: { history: [{ role: "user", content: "hi" }] },
+      threadSnapshot: { history: [{ role: "user", content: "hi" }] },
     });
 
     await store.append(full, { expectedVersion: 0 });

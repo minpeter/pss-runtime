@@ -3,7 +3,7 @@ import type {
   UserMessageContent,
   UserText,
   UserTextContent,
-} from "../session/protocol/events";
+} from "../thread/protocol/events";
 
 export const userText = (text: UserTextContent): UserText => ({
   type: "user-text",

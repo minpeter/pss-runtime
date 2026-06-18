@@ -22,11 +22,11 @@ interface MetaRowProbe {
   readonly next_seq: number;
 }
 
-function createStore() {
+function createStore(options: { readonly maxPayloadBytes?: number } = {}) {
   const storage = new InMemoryCloudflareDurableObjectStorage({
     sql: new InMemorySqlStorage(),
   });
-  const store = new DurableObjectSqliteEventStore(storage, PREFIX);
+  const store = new DurableObjectSqliteEventStore(storage, PREFIX, options);
   return { storage, store };
 }
 
@@ -136,6 +136,22 @@ describe("DurableObjectSqliteEventStore", () => {
   it("reads nothing for an unknown run", async () => {
     const { store } = createStore();
     expect(await collect(store, "missing")).toEqual([]);
+  });
+
+  it("rejects event rows that exceed the serialized payload budget", async () => {
+    const { storage, store } = createStore({ maxPayloadBytes: 80 });
+    const event = {
+      output: "x".repeat(120),
+      toolCallId: "call_1",
+      toolName: "web_search",
+      type: "tool-result",
+    } as const;
+
+    await expect(store.append("run-1", event)).rejects.toMatchObject({
+      maxBytes: 80,
+      payloadKind: "event",
+    });
+    expect(readRows(storage, "run-1")).toEqual([]);
   });
 
   it("round-trips a run whose total event payload exceeds the 2MB blob limit", async () => {

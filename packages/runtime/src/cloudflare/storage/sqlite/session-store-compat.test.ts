@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { InMemorySqlStorage } from "../../sql/node-test/node-sqlite-storage";
 import { InMemoryCloudflareDurableObjectStorage } from "../durable-object/durable-object-storage";
 import { storeKey } from "../execution/records";
-import { DurableObjectSqliteSessionStore } from "./session-store";
-import { PREFIX, snapshot } from "./session-store.test-support";
+import { DurableObjectSqliteThreadStore } from "./thread-store";
+import { PREFIX, snapshot } from "./thread-store.test-support";
 
-describe("DurableObjectSqliteSessionStore compatibility", () => {
+describe("DurableObjectSqliteThreadStore compatibility", () => {
   it("normalizes a numeric meta version for the optimistic compare", async () => {
     const sql = new InMemorySqlStorage();
     const storage = new InMemoryCloudflareDurableObjectStorage({ sql });
@@ -26,7 +26,7 @@ describe("DurableObjectSqliteSessionStore compatibility", () => {
       key
     );
 
-    const store = new DurableObjectSqliteSessionStore(storage, PREFIX);
+    const store = new DurableObjectSqliteThreadStore(storage, PREFIX);
     await expect(store.load("num")).resolves.toEqual({
       state: { history: [{ i: 0 }], schemaVersion: 1 },
       version: "1",

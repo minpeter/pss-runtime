@@ -2,7 +2,7 @@ import type { Tool, ToolSet } from "ai";
 import { jsonSchema, tool } from "ai";
 import { expect, vi } from "vitest";
 import type { ModelGenerationOptions, ModelStepOptions } from "../llm/llm";
-import type { AgentEvent } from "../session/protocol/events";
+import type { AgentEvent } from "../thread/protocol/events";
 import {
   createMockLanguageModelV4,
   mockLanguageModelV4Empty,

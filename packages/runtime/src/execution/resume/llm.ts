@@ -6,7 +6,7 @@ import {
   type RuntimeToolExecutionContext,
 } from "../../llm/llm";
 import { persistedToolExecutionCheckpoint } from "../../llm/tool-execution";
-import { modelMessageToAgentEvents } from "../../session/protocol/mapping";
+import { modelMessageToAgentEvents } from "../../thread/protocol/mapping";
 import type { ExecutionHost } from "../host/types";
 import { appendCheckpoint } from "./checkpoints";
 import type { ResumeRunState } from "./types";
@@ -41,12 +41,12 @@ export async function readModelOutput({
 export async function createResumeToolExecution({
   host,
   runId,
-  sessionSnapshot,
+  threadSnapshot,
   stepNumber,
 }: {
   readonly host: ExecutionHost;
   readonly runId: string;
-  readonly sessionSnapshot: ResumeRunState;
+  readonly threadSnapshot: ResumeRunState;
   readonly stepNumber: number;
 }): Promise<RuntimeToolExecutionContext> {
   const run = await host.store.runs.get(runId);
@@ -63,7 +63,7 @@ export async function createResumeToolExecution({
           toolCallId: checkpoint.toolCallId,
           toolName: checkpoint.toolName,
         },
-        sessionSnapshot,
+        threadSnapshot,
       }),
     beforeTool: async (checkpoint) => {
       await appendCheckpoint({
@@ -76,7 +76,7 @@ export async function createResumeToolExecution({
           toolCallId: checkpoint.toolCallId,
           toolName: checkpoint.toolName,
         },
-        sessionSnapshot,
+        threadSnapshot,
       });
     },
     runId,

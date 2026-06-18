@@ -69,8 +69,8 @@ describe("Cloudflare alarm drain budgets", () => {
     });
     const host = createCloudflareDurableObjectHost({ storage });
 
-    await host.scheduler.resumeThread("session-a", { runId: "run-a" });
-    await host.scheduler.resumeThread("session-b", { runId: "run-b" });
+    await host.scheduler.resumeThread("thread-a", { runId: "run-a" });
+    await host.scheduler.resumeThread("thread-b", { runId: "run-b" });
 
     const summary = await drainCloudflareAlarm({
       agent: agentWithEvents([{ text: "done", type: "assistant-text" }]),
@@ -85,7 +85,7 @@ describe("Cloudflare alarm drain budgets", () => {
     expect(summary.continuationReasons).toContain("thread-prompt-budget");
     await expect(
       listScheduledCloudflareThreadPrompts(storage)
-    ).resolves.toEqual([{ runId: "run-b", threadKey: "session-b" }]);
+    ).resolves.toEqual([{ runId: "run-b", threadKey: "thread-b" }]);
   });
 
   it("caps retained events without buffering the full run stream", async () => {
@@ -195,7 +195,7 @@ async function enqueueStoredRun(
     kind: "notification",
     rootRunId: runId,
     runId,
-    threadKey: "session:test",
+    threadKey: "thread:test",
     status: "queued",
   });
   await host.scheduler.enqueueRun(runId);
