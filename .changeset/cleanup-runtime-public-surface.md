@@ -4,8 +4,9 @@
 
 Clean up the runtime public surface and tighten host/resume contracts.
 
-- Remove unused exports: `runEventPlugins`, `attachRuntimeInputMeta`,
-  `stripEventMeta`, and the internal `withSteeringPlacement` helper.
+- Remove unused internal helpers: `runEventPlugins`, `attachRuntimeInputMeta`,
+  `stripEventMeta`, and `withSteeringPlacement`. Keep the package-root
+  `runPluginsForEvent` helper for compatibility with plugin test utilities.
 - Remove `AgentPlugin.events.on` (deprecated observe-only shim). Use the
   top-level `on` handler; intercept returns (`continue` / `transform` /
   `handled`) now apply to all plugins uniformly.
@@ -30,6 +31,9 @@ Clean up the runtime public surface and tighten host/resume contracts.
   longer copy local namespace formatting helpers.
 - Remove Cloudflare Durable Object non-SQLite store fallbacks and legacy session
   migration; `createCloudflareDurableObjectHost` now requires `storage.sql` and
-  wires SQLite event/checkpoint/session stores directly.
+  wires SQLite event/checkpoint/session stores directly. The exported
+  `InMemoryCloudflareDurableObjectStorage` remains constructible without
+  arguments for test suites and supplies an in-memory SQLite-compatible backing
+  store by default.
 - Remove no-op internal plumbing: the always-true observer-event filter in the
   agent loop and the unused `BufferedAgentRun.close()` reason parameter.

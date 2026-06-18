@@ -21,6 +21,20 @@ const createRun = (runId = "run-1"): RunRecord => ({
 });
 
 describe("createCloudflareDurableObjectHost store selection", () => {
+  it("creates SQLite-backed in-memory storage by default", async () => {
+    const storage = new InMemoryCloudflareDurableObjectStorage();
+    const host = createCloudflareDurableObjectHost({ storage });
+
+    await host.store.runs.create(createRun());
+    await host.store.events.append("run-1", { type: "turn-start" });
+
+    const events: unknown[] = [];
+    for await (const entry of host.store.events.read("run-1")) {
+      events.push(entry.event);
+    }
+    expect(events).toEqual([{ type: "turn-start" }]);
+  });
+
   it("uses SQLite row stores for events/checkpoints on a SQLite-backed Durable Object", async () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
@@ -72,6 +86,60 @@ describe("createCloudflareDurableObjectHost store selection", () => {
     expect(
       await storage.get(storeKey(PREFIX, "checkpoints", "run-1"))
     ).toBeUndefined();
+  });
+
+  it("rolls back SQLite rows with failed execution transactions", async () => {
+    const storage = new InMemoryCloudflareDurableObjectStorage();
+    const host = createCloudflareDurableObjectHost({ storage });
+
+    await expect(
+      host.store.transaction(async (tx) => {
+        await tx.runs.create(createRun("run-rollback"));
+        await tx.events.append("run-rollback", { type: "turn-start" });
+        await tx.checkpoints.append(
+          {
+            checkpointId: "checkpoint-rollback",
+            phase: "before-model",
+            runId: "run-rollback",
+            runtimeState: {},
+            sessionSnapshot: { messages: [] },
+            version: 1,
+          },
+          { expectedVersion: 0 }
+        );
+        await tx.notifications.enqueue({
+          idempotencyKey: "notify-rollback",
+          input: { text: "resume", type: "user-text" },
+          notificationId: "notification-rollback",
+          runId: "run-rollback",
+          sessionKey: "session-rollback",
+          status: "pending",
+        });
+        await tx.sessions.commit(
+          "session-rollback",
+          { state: { messages: ["inside transaction"] } },
+          { expectedVersion: null }
+        );
+        throw new Error("transaction failed");
+      })
+    ).rejects.toThrow("transaction failed");
+
+    await expect(host.store.runs.get("run-rollback")).resolves.toBeNull();
+    await expect(
+      host.store.sessions.load("session-rollback")
+    ).resolves.toBeNull();
+    await expect(
+      host.store.notifications.getByIdempotencyKey("notify-rollback")
+    ).resolves.toBeNull();
+    await expect(
+      host.store.checkpoints.latest("run-rollback")
+    ).resolves.toBeNull();
+
+    const events: unknown[] = [];
+    for await (const entry of host.store.events.read("run-rollback")) {
+      events.push(entry);
+    }
+    expect(events).toEqual([]);
   });
 
   it("rejects non-SQLite Durable Object storage", () => {

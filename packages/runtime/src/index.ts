@@ -14,6 +14,7 @@ export type {
   InterceptableAgentEvent,
   PluginPipelineResult,
 } from "./plugins";
+export { runPluginsForEvent } from "./plugins";
 export { delegateUserInput } from "./session/delegate-input";
 export type {
   AgentEvent,

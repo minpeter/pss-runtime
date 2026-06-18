@@ -56,7 +56,7 @@ function isInterceptableEvent(
 function normalizeInterceptResult(
   result: AgentPluginResult | undefined
 ): AgentPluginInterceptResult | undefined {
-  if (result === undefined) {
+  if (result === undefined || result === null || typeof result !== "object") {
     return;
   }
 

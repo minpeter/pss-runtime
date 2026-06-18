@@ -1,3 +1,4 @@
+import { InMemoryDurableObjectSqlStorage } from "./in-memory-durable-object-sql-storage";
 import type { SqlStorage } from "./sql-storage";
 
 export interface CloudflareDurableObjectTransactionStorage {
@@ -5,6 +6,7 @@ export interface CloudflareDurableObjectTransactionStorage {
   get<T>(key: string): Promise<T | undefined>;
   put<T>(key: string, value: T): Promise<void>;
   setAlarm?(scheduledTime: Date | number): Promise<void>;
+  readonly sql?: unknown;
 }
 
 export interface CloudflareDurableObjectStorage
@@ -39,8 +41,8 @@ export class InMemoryCloudflareDurableObjectStorage
   #transactionChain: Promise<void> = Promise.resolve();
   #values = new Map<string, unknown>();
 
-  constructor(options: { readonly sql: SqlStorage }) {
-    this.sql = options.sql;
+  constructor(options: { readonly sql?: SqlStorage } = {}) {
+    this.sql = options.sql ?? new InMemoryDurableObjectSqlStorage();
   }
 
   alarmTime(): Date | number | undefined {
@@ -79,16 +81,21 @@ export class InMemoryCloudflareDurableObjectStorage
     await previousTransaction;
 
     const transactionValues = cloneMap(this.#values);
-    const transactionStorage = new TransactionalCloudflareStorage(
-      transactionValues,
-      (scheduledTime) => {
-        this.#alarmTime = scheduledTime;
-      }
-    );
+    let transactionAlarmTime = this.#alarmTime;
+    const transactionStorage = new TransactionalCloudflareStorage({
+      setAlarm: (scheduledTime) => {
+        transactionAlarmTime = scheduledTime;
+      },
+      sql: this.sql,
+      values: transactionValues,
+    });
 
     try {
-      const result = await fn(transactionStorage);
+      const result = await runSqlTransaction(this.sql, () =>
+        fn(transactionStorage)
+      );
       this.#values = transactionValues;
+      this.#alarmTime = transactionAlarmTime;
       return result;
     } finally {
       releaseTransaction();
@@ -100,13 +107,20 @@ class TransactionalCloudflareStorage
   implements CloudflareDurableObjectTransactionStorage
 {
   readonly #setAlarm: (scheduledTime: Date | number) => void;
+  readonly sql: SqlStorage;
   readonly #values: Map<string, unknown>;
 
-  constructor(
-    values: Map<string, unknown>,
-    setAlarm: (scheduledTime: Date | number) => void
-  ) {
+  constructor({
+    setAlarm,
+    sql,
+    values,
+  }: {
+    readonly setAlarm: (scheduledTime: Date | number) => void;
+    readonly sql: SqlStorage;
+    readonly values: Map<string, unknown>;
+  }) {
     this.#setAlarm = setAlarm;
+    this.sql = sql;
     this.#values = values;
   }
 
@@ -135,5 +149,51 @@ class TransactionalCloudflareStorage
 function cloneMap(values: Map<string, unknown>): Map<string, unknown> {
   return new Map(
     [...values.entries()].map(([key, value]) => [key, structuredClone(value)])
+  );
+}
+
+interface TransactionalSqlStorage extends SqlStorage {
+  transaction<T>(fn: () => Promise<T>): Promise<T>;
+}
+
+async function runSqlTransaction<T>(
+  sql: unknown,
+  fn: () => Promise<T>
+): Promise<T> {
+  if (isTransactionalSqlStorage(sql)) {
+    return await sql.transaction(fn);
+  }
+
+  if (!isSqlStorage(sql)) {
+    return await fn();
+  }
+
+  sql.exec("BEGIN");
+  try {
+    const result = await fn();
+    sql.exec("COMMIT");
+    return result;
+  } catch (error) {
+    sql.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+function isTransactionalSqlStorage(
+  value: unknown
+): value is TransactionalSqlStorage {
+  return (
+    isSqlStorage(value) &&
+    "transaction" in value &&
+    typeof value.transaction === "function"
+  );
+}
+
+function isSqlStorage(value: unknown): value is SqlStorage {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "exec" in value &&
+    typeof value.exec === "function"
   );
 }

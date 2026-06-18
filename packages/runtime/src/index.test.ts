@@ -36,6 +36,7 @@ import {
   isLifecycleAgentEvent,
   isTelemetryAgentEvent,
   isVisibleAgentEvent,
+  runPluginsForEvent,
 } from "./index";
 
 type EmptyHostIsRejected =
@@ -70,6 +71,7 @@ describe("runtime public exports", () => {
     const runStreamExport = ["Agent", "Run", "Stream"].join("");
 
     expect(runtime).toHaveProperty("Agent", Agent);
+    expect(runtime).toHaveProperty("runPluginsForEvent", runPluginsForEvent);
     expect(runtime).not.toHaveProperty("createInMemoryExecutionHost");
     expect(runtime).not.toHaveProperty("createCloudflareDurableObjectHost");
     expect(runtime).not.toHaveProperty("BackgroundScheduler");

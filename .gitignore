@@ -1,6 +1,8 @@
 node_modules
 .DS_Store
 dist
+AGENTS.md
+**/AGENTS.md
 .env
 .env.*
 !.env.example

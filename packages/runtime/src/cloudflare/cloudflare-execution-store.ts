@@ -50,7 +50,7 @@ export class DurableObjectExecutionStore implements ExecutionStore {
         fn(
           new DurableObjectExecutionStore({
             prefix: this.#prefix,
-            storage: withSqlStorage(storage, this.#storage.sql),
+            storage: withSqlStorage(storage, storage.sql ?? this.#storage.sql),
           })
         )
       );

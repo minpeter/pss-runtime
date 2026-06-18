@@ -68,4 +68,23 @@ describe("runPluginsForEvent", () => {
 
     expect(result).toEqual({ kind: "emit", event: { type: "turn-start" } });
   });
+
+  it("ignores invalid JavaScript plugin returns", async () => {
+    const invalidReturns: unknown[] = [null, false, 0, "continue"];
+
+    for (const value of invalidReturns) {
+      await expect(
+        runPluginsForEvent(
+          [{ on: () => value as ReturnType<NonNullable<AgentPlugin["on"]>> }],
+          {
+            event: { type: "user-text", text: "hello" },
+            history: emptyHistory,
+          }
+        )
+      ).resolves.toEqual({
+        event: { type: "user-text", text: "hello" },
+        kind: "emit",
+      });
+    }
+  });
 });
