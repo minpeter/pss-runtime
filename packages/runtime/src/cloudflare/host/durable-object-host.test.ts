@@ -119,6 +119,38 @@ describe("Cloudflare Durable Object host adapter", () => {
     expect(readScheduledWorkRows(storage)).toHaveLength(3);
   });
 
+  it("supports deleting SQLite scheduled work by normalized indexes in local tests", async () => {
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
+    const host = createCloudflareDurableObjectHost({ storage });
+
+    await host.scheduler.enqueueRun("run-a");
+    await host.scheduler.resumeThread("thread-a", { runId: "run-a" });
+    await host.scheduler.resumeThread("thread-b", { runId: "run-b" });
+
+    storage.sql.exec(
+      "DELETE FROM pss_scheduled_work WHERE prefix = ? AND thread_key = ?",
+      "pss-runtime",
+      "thread-a"
+    );
+    storage.sql.exec(
+      "DELETE FROM pss_scheduled_work WHERE prefix = ? AND run_id = ?",
+      "pss-runtime",
+      "run-a"
+    );
+
+    expect(readScheduledWorkRows(storage)).toEqual([
+      {
+        kind: "thread-prompt",
+        payload: JSON.stringify({ runId: "run-b", threadKey: "thread-b" }),
+        run_id: "run-b",
+        thread_key: "thread-b",
+        work_id: expect.any(String),
+      },
+    ]);
+  });
+
   it("uses the SQLite scheduled queue with default in-memory Durable Object storage", async () => {
     const storage = new InMemoryCloudflareDurableObjectStorage();
     const host = createCloudflareDurableObjectHost({ storage });

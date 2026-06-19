@@ -52,7 +52,7 @@ export function writeSqlStatement(
     return;
   }
   if (query.startsWith("delete from pss_scheduled_work")) {
-    deleteScheduledWork(state, bindings);
+    deleteScheduledWork(state, query, bindings);
     return;
   }
   throw new Error(
@@ -299,9 +299,24 @@ function writeScheduledWork(
 
 function deleteScheduledWork(
   state: InMemoryDurableObjectSqlState,
+  query: string,
   bindings: readonly unknown[]
 ): void {
   const prefix = stringBinding(bindings[0]);
+  if (query.includes("thread_key = ?")) {
+    const threadKey = stringBinding(bindings[1]);
+    state.scheduledWork = state.scheduledWork.filter(
+      (row) => !(row.prefix === prefix && row.thread_key === threadKey)
+    );
+    return;
+  }
+  if (query.includes("run_id = ?")) {
+    const runId = stringBinding(bindings[1]);
+    state.scheduledWork = state.scheduledWork.filter(
+      (row) => !(row.prefix === prefix && row.run_id === runId)
+    );
+    return;
+  }
   const kind = stringBinding(bindings[1]);
   const workId = stringBinding(bindings[2]);
   state.scheduledWork = state.scheduledWork.filter(
