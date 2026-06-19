@@ -1,17 +1,17 @@
-import {
-  createCloudflareDurableObjectHost,
-  listScheduledCloudflareRuns,
-  listScheduledCloudflareThreadPrompts,
-} from "../src/cloudflare/host/durable-object-host";
-import { InMemorySqlStorage } from "../src/cloudflare/sql/node-test/node-sqlite-storage";
-import { InMemoryCloudflareDurableObjectStorage } from "../src/cloudflare/storage/durable-object/durable-object-storage";
-import type { StorageLatencyTiming } from "../src/cloudflare/storage/execution/storage-metrics";
 import type {
   ExecutionHost,
   NotificationRecord,
   RunCheckpoint,
   RunRecord,
 } from "../src/execution";
+import {
+  createCloudflareDurableObjectHost,
+  listScheduledCloudflareRuns,
+  listScheduledCloudflareThreadPrompts,
+} from "../src/platform/cloudflare/host/durable-object-host";
+import { InMemorySqlStorage } from "../src/platform/cloudflare/sql/node-test/node-sqlite-storage";
+import { InMemoryCloudflareDurableObjectStorage } from "../src/platform/cloudflare/storage/durable-object/durable-object-storage";
+import type { StorageLatencyTiming } from "../src/platform/cloudflare/storage/execution/storage-metrics";
 import type { AgentEvent } from "../src/thread/protocol/events";
 import {
   preview,

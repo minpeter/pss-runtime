@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { InMemorySqlStorage } from "../cloudflare/sql/node-test/node-sqlite-storage";
-import { InMemoryCloudflareDurableObjectStorage } from "../cloudflare/storage/durable-object/durable-object-storage";
-import { DurableObjectExecutionStore } from "../cloudflare/storage/execution/store";
 import type { ExecutionHost, RunCheckpoint } from "../execution";
+import { InMemorySqlStorage } from "../platform/cloudflare/sql/node-test/node-sqlite-storage";
+import { InMemoryCloudflareDurableObjectStorage } from "../platform/cloudflare/storage/durable-object/durable-object-storage";
+import { DurableObjectExecutionStore } from "../platform/cloudflare/storage/execution/store";
 import {
   checkpointedTool,
   createCheckpointSpyHost,
