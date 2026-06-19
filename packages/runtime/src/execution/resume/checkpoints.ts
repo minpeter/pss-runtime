@@ -1,5 +1,6 @@
 import type { RuntimeToolExecutionCheckpointMetadata } from "../../llm/llm";
 import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution";
+import { createRunCheckpointId } from "../host/checkpoint-ids";
 import type {
   CheckpointPhase,
   ExecutionHost,
@@ -107,7 +108,7 @@ export async function appendCheckpoint({
     const version = run.checkpointVersion + 1;
     const result = await host.store.checkpoints.append(
       {
-        checkpointId: crypto.randomUUID(),
+        checkpointId: createRunCheckpointId({ phase, runId, version }),
         ...(pendingToolCall === undefined ? {} : { pendingToolCall }),
         phase,
         runId,

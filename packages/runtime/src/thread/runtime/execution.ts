@@ -1,17 +1,11 @@
 import type {
-  CheckpointPhase,
   ExecutionHost,
   RunRecord,
   RunStatus,
 } from "../../execution/host/types";
-import type {
-  RuntimeToolExecutionCheckpoint,
-  RuntimeToolExecutionContext,
-} from "../../llm/llm";
-import { persistedToolExecutionCheckpoint } from "../../llm/tool-execution";
+import type { RuntimeToolExecutionContext } from "../../llm/llm";
 import type { ThreadState } from "../state/thread-state";
-
-const maxCheckpointWriteAttempts = 5;
+import { createThreadToolExecutionContext } from "./execution-checkpoints";
 
 export interface ThreadExecutionOptions {
   readonly executionHost?: ExecutionHost;
@@ -27,15 +21,6 @@ export type ThreadExecutionTerminalStatus = Extract<
   RunStatus,
   "cancelled" | "completed" | "error" | "needs-recovery"
 >;
-
-export class ThreadExecutionCheckpointError extends Error {
-  constructor(runId: string, expectedVersion: number, currentVersion: number) {
-    super(
-      `Thread execution run ${runId} checkpoint conflict: expected ${expectedVersion}, got ${currentVersion}`
-    );
-    this.name = "ThreadExecutionCheckpointError";
-  }
-}
 
 export async function startThreadExecutionRun({
   executionHost,
@@ -68,86 +53,12 @@ export async function startThreadExecutionRun({
     complete: (status) =>
       completeThreadExecutionRun({ executionHost, runId, status }),
     runId,
-    toolExecution: {
-      attempt: 1,
-      afterTool: (checkpoint) =>
-        appendToolExecutionCheckpoint({
-          executionHost,
-          phase: "after-tool",
-          runId,
-          state,
-          toolCall: checkpoint,
-        }),
-      beforeTool: async (checkpoint) => {
-        await appendToolExecutionCheckpoint({
-          executionHost,
-          phase: "before-tool",
-          runId,
-          state,
-          toolCall: checkpoint,
-        });
-        return;
-      },
+    toolExecution: createThreadToolExecutionContext({
+      executionHost,
       runId,
-    },
+      state,
+    }),
   };
-}
-
-async function appendToolExecutionCheckpoint({
-  executionHost,
-  phase,
-  runId,
-  state,
-  toolCall,
-}: {
-  readonly executionHost: ExecutionHost;
-  readonly phase: Extract<CheckpointPhase, "after-tool" | "before-tool">;
-  readonly runId: string;
-  readonly state: ThreadState;
-  readonly toolCall: RuntimeToolExecutionCheckpoint & {
-    readonly output?: unknown;
-  };
-}): Promise<void> {
-  let lastConflict:
-    | { readonly current: number; readonly expected: number }
-    | undefined;
-  for (let attempt = 0; attempt < maxCheckpointWriteAttempts; attempt += 1) {
-    const run = await executionHost.store.runs.get(runId);
-    if (!run) {
-      throw new Error(`Thread execution run ${runId} is missing.`);
-    }
-
-    const result = await executionHost.store.checkpoints.append(
-      {
-        checkpointId: crypto.randomUUID(),
-        pendingToolCall: persistedToolExecutionCheckpoint(toolCall),
-        phase,
-        runId,
-        runtimeState: {
-          toolCallId: toolCall.toolCallId,
-          toolName: toolCall.toolName,
-        },
-        threadSnapshot: state.threadCheckpointReference(),
-        version: run.checkpointVersion + 1,
-      },
-      { expectedVersion: run.checkpointVersion }
-    );
-
-    if (result.ok) {
-      return;
-    }
-
-    lastConflict = {
-      current: result.currentVersion,
-      expected: run.checkpointVersion,
-    };
-  }
-
-  throw new ThreadExecutionCheckpointError(
-    runId,
-    lastConflict?.expected ?? 0,
-    lastConflict?.current ?? 0
-  );
 }
 
 async function completeThreadExecutionRun({

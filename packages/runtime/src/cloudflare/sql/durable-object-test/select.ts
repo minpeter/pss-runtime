@@ -3,6 +3,7 @@ import type {
   CheckpointRow,
   EventRow,
   InMemoryDurableObjectSqlState,
+  NotificationRow,
   RunRow,
   ScheduledWorkRow,
   ThreadMessageRow,
@@ -31,6 +32,9 @@ export function selectSqlRows(
   }
   if (query.includes("from pss_run")) {
     return selectRunRows(state, query, bindings);
+  }
+  if (query.includes("from pss_notification")) {
+    return selectNotificationRows(state, query, bindings);
   }
   if (query.includes("from pss_event_meta")) {
     return selectEventMetaRows(state, bindings);
@@ -121,6 +125,24 @@ function selectRunRows(
       .map(projectRun);
   }
   throw new Error(`Unsupported in-memory run SQL query: ${query}`);
+}
+
+function selectNotificationRows(
+  state: InMemoryDurableObjectSqlState,
+  query: string,
+  bindings: readonly unknown[]
+): unknown[] {
+  const prefix = stringBinding(bindings[0]);
+  if (query.includes("idempotency_key = ?")) {
+    const idempotencyKey = stringBinding(bindings[1]);
+    return state.notifications
+      .filter(
+        (row) => row.prefix === prefix && row.idempotency_key === idempotencyKey
+      )
+      .map(projectNotification)
+      .slice(0, 1);
+  }
+  throw new Error(`Unsupported in-memory notification SQL query: ${query}`);
 }
 
 function selectEventMetaRows(
@@ -232,5 +254,9 @@ function projectThreadMessage(row: ThreadMessageRow, query: string): unknown {
 }
 
 function projectRun(row: RunRow): unknown {
+  return { record: row.record };
+}
+
+function projectNotification(row: NotificationRow): unknown {
   return { record: row.record };
 }
