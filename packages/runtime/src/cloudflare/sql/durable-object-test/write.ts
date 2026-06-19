@@ -303,6 +303,14 @@ function deleteScheduledWork(
   bindings: readonly unknown[]
 ): void {
   const prefix = stringBinding(bindings[0]);
+  if (query.includes("payload like ?")) {
+    const pattern = stringBinding(bindings[1]);
+    state.scheduledWork = state.scheduledWork.filter(
+      (row) =>
+        !(row.prefix === prefix && sqliteLikeMatches(row.payload, pattern))
+    );
+    return;
+  }
   if (query.includes("thread_key = ?")) {
     const threadKey = stringBinding(bindings[1]);
     state.scheduledWork = state.scheduledWork.filter(
@@ -323,4 +331,37 @@ function deleteScheduledWork(
     (row) =>
       !(row.prefix === prefix && row.kind === kind && row.work_id === workId)
   );
+}
+
+function sqliteLikeMatches(value: string, pattern: string): boolean {
+  let source = "^";
+  let escaping = false;
+  for (const char of pattern) {
+    if (escaping) {
+      source += escapeRegExp(char);
+      escaping = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaping = true;
+      continue;
+    }
+    if (char === "%") {
+      source += ".*";
+      continue;
+    }
+    if (char === "_") {
+      source += ".";
+      continue;
+    }
+    source += escapeRegExp(char);
+  }
+  if (escaping) {
+    source += "\\\\";
+  }
+  return new RegExp(`${source}$`, "s").test(value);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
