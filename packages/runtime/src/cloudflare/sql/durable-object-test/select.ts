@@ -18,16 +18,10 @@ export function selectSqlRows(
   if (query.includes("from sqlite_master")) {
     return [];
   }
-  if (
-    query.includes("from pss_thread_meta") ||
-    query.includes("from pss_session_meta")
-  ) {
+  if (query.includes("from pss_thread_meta")) {
     return selectThreadMetaRows(state, query, bindings);
   }
-  if (
-    query.includes("from pss_thread_message") ||
-    query.includes("from pss_session_message")
-  ) {
+  if (query.includes("from pss_thread_message")) {
     return selectThreadMessageRows(state, query, bindings);
   }
   if (query.includes("from pss_run")) {
@@ -56,10 +50,7 @@ function selectThreadMetaRows(
   query: string,
   bindings: readonly unknown[]
 ): unknown[] {
-  if (
-    query.includes("where thread_key = ?") ||
-    query.includes("where session_key = ?")
-  ) {
+  if (query.includes("where thread_key = ?")) {
     const key = stringBinding(bindings[0]);
     const row = state.threadMeta.get(key);
     return row ? [projectThreadMeta(row, query)] : [];
@@ -67,11 +58,6 @@ function selectThreadMetaRows(
   if (query === "select thread_key from pss_thread_meta") {
     return [...state.threadMeta.keys()].map((thread_key) => ({
       thread_key,
-    }));
-  }
-  if (query === "select session_key from pss_session_meta") {
-    return [...state.threadMeta.keys()].map((session_key) => ({
-      session_key,
     }));
   }
   throw new Error(`Unsupported in-memory thread meta SQL query: ${query}`);

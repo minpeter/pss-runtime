@@ -12,7 +12,7 @@ export function writeSqlStatement(
   query: string,
   bindings: readonly unknown[]
 ): void {
-  if (query.includes("pss_thread_") || query.includes("pss_session_")) {
+  if (query.includes("pss_thread_")) {
     writeThreadStatement(state, query, bindings);
     return;
   }
@@ -52,38 +52,23 @@ function writeThreadStatement(
   query: string,
   bindings: readonly unknown[]
 ): void {
-  if (
-    query.startsWith("delete from pss_thread_message") ||
-    query.startsWith("delete from pss_session_message")
-  ) {
+  if (query.startsWith("delete from pss_thread_message")) {
     deleteThreadMessages(state, bindings);
     return;
   }
-  if (
-    query.startsWith("delete from pss_thread_meta") ||
-    query.startsWith("delete from pss_session_meta")
-  ) {
+  if (query.startsWith("delete from pss_thread_meta")) {
     state.threadMeta.delete(stringBinding(bindings[0]));
     return;
   }
-  if (
-    query.startsWith("update pss_thread_message set active = 0") ||
-    query.startsWith("update pss_session_message set active = 0")
-  ) {
+  if (query.startsWith("update pss_thread_message set active = 0")) {
     deactivateThreadMessages(state, query, bindings);
     return;
   }
-  if (
-    query.startsWith("insert into pss_thread_message") ||
-    query.startsWith("insert into pss_session_message")
-  ) {
+  if (query.startsWith("insert into pss_thread_message")) {
     insertThreadMessage(state, query, bindings);
     return;
   }
-  if (
-    query.startsWith("insert into pss_thread_meta") ||
-    query.startsWith("insert into pss_session_meta")
-  ) {
+  if (query.startsWith("insert into pss_thread_meta")) {
     insertThreadMeta(state, bindings);
     return;
   }

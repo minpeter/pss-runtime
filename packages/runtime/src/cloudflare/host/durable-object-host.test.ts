@@ -65,12 +65,6 @@ describe("Cloudflare Durable Object host adapter", () => {
     });
 
     expect(readScheduledWorkRows(storage)).toHaveLength(2);
-    await expect(
-      storage.get("pss-runtime:scheduled-runs")
-    ).resolves.toBeUndefined();
-    await expect(
-      storage.get("pss-runtime:scheduled-session-prompts")
-    ).resolves.toBeUndefined();
     await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([
       runId,
     ]);
@@ -88,53 +82,6 @@ describe("Cloudflare Durable Object host adapter", () => {
     await expect(
       host.store.notifications.claimByIdempotencyKey(idempotencyKey)
     ).resolves.toMatchObject({ ok: true });
-  });
-
-  it("migrates legacy KV scheduled work into the SQLite row queue once", async () => {
-    const storage = new InMemoryCloudflareDurableObjectStorage({
-      sql: new InMemorySqlStorage(),
-    });
-    const prompt = {
-      idempotencyKey: "legacy-idempotency",
-      notificationId: "legacy-notification",
-      runId: "legacy-notification-run",
-      threadKey: "legacy-thread",
-    };
-
-    await storage.put("pss-runtime:scheduled-runs", [
-      "legacy-run",
-      "legacy-run",
-    ]);
-    await storage.put("pss-runtime:scheduled-session-prompts", [
-      prompt,
-      prompt,
-    ]);
-
-    await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([
-      "legacy-run",
-    ]);
-    await expect(
-      listScheduledCloudflareThreadPrompts(storage)
-    ).resolves.toEqual([prompt]);
-    await expect(
-      storage.get("pss-runtime:scheduled-runs")
-    ).resolves.toBeUndefined();
-    await expect(
-      storage.get("pss-runtime:scheduled-session-prompts")
-    ).resolves.toBeUndefined();
-    expect(readScheduledWorkRows(storage)).toHaveLength(2);
-
-    await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([
-      "legacy-run",
-    ]);
-    await ackScheduledCloudflareRun(storage, "legacy-run");
-    await ackScheduledCloudflareThreadPrompt(storage, prompt);
-
-    await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([]);
-    await expect(
-      listScheduledCloudflareThreadPrompts(storage)
-    ).resolves.toEqual([]);
-    expect(readScheduledWorkRows(storage)).toEqual([]);
   });
 
   it("lists SQLite scheduled work with a row limit", async () => {
@@ -198,12 +145,6 @@ describe("Cloudflare Durable Object host adapter", () => {
     });
 
     expect(readScheduledWorkRows(storage)).toHaveLength(2);
-    await expect(
-      storage.get("pss-runtime:scheduled-runs")
-    ).resolves.toBeUndefined();
-    await expect(
-      storage.get("pss-runtime:scheduled-session-prompts")
-    ).resolves.toBeUndefined();
     await expect(
       listScheduledCloudflareRuns(cloudflareLikeStorage)
     ).resolves.toEqual([prompt.runId]);

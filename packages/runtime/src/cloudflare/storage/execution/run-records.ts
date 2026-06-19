@@ -6,85 +6,57 @@ import {
   resolveStoragePayloadMaxBytes,
   type StoragePayloadBudgetOptions,
 } from "../payload-guard";
-import { readList, storeKey } from "./records";
 
 interface RunRow {
   readonly record: string;
 }
 
-export async function getRun(
+export function getRun(
   storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
   runId: string
 ): Promise<RunRecord | null> {
-  const sql = sqlStorage(storage);
-  if (sql) {
-    const row = selectRunRow(sql, prefix, runId);
-    if (row) {
-      return parseRunRecord(row);
-    }
-  }
-
-  const legacy =
-    (await storage.get<RunRecord>(storeKey(prefix, "run", runId))) ?? null;
-  if (legacy && sql) {
-    await putRun(storage, prefix, legacy);
-    await storage.delete(storeKey(prefix, "run", runId));
-  }
-  return legacy;
+  const row = selectRunRow(requiredSqlStorage(storage), prefix, runId);
+  return Promise.resolve(row ? parseRunRecord(row) : null);
 }
 
-export async function getRunByDedupeKey(
+export function getRunByDedupeKey(
   storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
   dedupeKey: string
 ): Promise<RunRecord | null> {
-  const sql = sqlStorage(storage);
-  if (sql) {
-    ensureRunSchema(sql);
-    const row = sql
-      .exec<RunRow>(
-        "SELECT record FROM pss_run WHERE prefix = ? AND dedupe_key = ? LIMIT 1",
-        prefix,
-        dedupeKey
-      )
-      .toArray()[0];
-    return row ? parseRunRecord(row) : null;
-  }
-  const runId = await storage.get<string>(
-    storeKey(prefix, "run-dedupe", dedupeKey)
-  );
-  return runId ? await getRun(storage, prefix, runId) : null;
+  const sql = requiredSqlStorage(storage);
+  ensureRunSchema(sql);
+  const row = sql
+    .exec<RunRow>(
+      "SELECT record FROM pss_run WHERE prefix = ? AND dedupe_key = ? LIMIT 1",
+      prefix,
+      dedupeKey
+    )
+    .toArray()[0];
+  return Promise.resolve(row ? parseRunRecord(row) : null);
 }
 
-export async function listRunsByParentRunId(
+export function listRunsByParentRunId(
   storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
   parentRunId: string
 ): Promise<readonly RunRecord[]> {
-  const sql = sqlStorage(storage);
-  if (sql) {
-    ensureRunSchema(sql);
-    return sql
+  const sql = requiredSqlStorage(storage);
+  ensureRunSchema(sql);
+  return Promise.resolve(
+    sql
       .exec<RunRow>(
         "SELECT record FROM pss_run WHERE prefix = ? AND parent_run_id = ? ORDER BY created_at, rowid",
         prefix,
         parentRunId
       )
       .toArray()
-      .map(parseRunRecord);
-  }
-  const runIds = await readList<string>(
-    storage,
-    storeKey(prefix, "run-parent", parentRunId)
+      .map(parseRunRecord)
   );
-  const runs = await Promise.all(
-    runIds.map((runId) => getRun(storage, prefix, runId))
-  );
-  return runs.filter(isRunRecord);
 }
 
-export async function putRun(
+export function putRun(
   storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
   record: RunRecord,
@@ -95,43 +67,8 @@ export async function putRun(
     record,
     resolveStoragePayloadMaxBytes(options)
   );
-  const sql = sqlStorage(storage);
-  if (sql) {
-    putSqlRun(sql, prefix, record);
-    await storage.delete(storeKey(prefix, "run", record.runId));
-    return;
-  }
-  await storage.put(storeKey(prefix, "run", record.runId), record);
-}
-
-export async function indexRun(
-  storage: CloudflareDurableObjectTransactionStorage,
-  prefix: string,
-  record: RunRecord
-): Promise<void> {
-  if (hasSqlStorage(storage)) {
-    return;
-  }
-  if (record.dedupeKey) {
-    await storage.put(
-      storeKey(prefix, "run-dedupe", record.dedupeKey),
-      record.runId
-    );
-  }
-  if (record.parentRunId) {
-    const parentKey = storeKey(prefix, "run-parent", record.parentRunId);
-    const runIds = await readList<string>(storage, parentKey);
-    if (!runIds.includes(record.runId)) {
-      runIds.push(record.runId);
-      await storage.put(parentKey, runIds);
-    }
-  }
-}
-
-function hasSqlStorage(
-  storage: CloudflareDurableObjectTransactionStorage
-): boolean {
-  return sqlStorage(storage) !== undefined;
+  putSqlRun(requiredSqlStorage(storage), prefix, record);
+  return Promise.resolve();
 }
 
 function selectRunRow(
@@ -153,15 +90,14 @@ function parseRunRecord(row: RunRow): RunRecord {
   return JSON.parse(row.record) as RunRecord;
 }
 
-function isRunRecord(record: RunRecord | null): record is RunRecord {
-  return record !== null;
-}
-
-function sqlStorage(
+function requiredSqlStorage(
   storage: CloudflareDurableObjectTransactionStorage
-): SqlStorage | undefined {
+): SqlStorage {
   const sql = storage.sql;
-  return isSqlStorage(sql) ? sql : undefined;
+  if (isSqlStorage(sql)) {
+    return sql;
+  }
+  throw new Error("DurableObjectRunStore requires SQLite storage.");
 }
 
 function isSqlStorage(value: unknown): value is SqlStorage {

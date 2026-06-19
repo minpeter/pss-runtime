@@ -2,13 +2,16 @@ import type {
   CloudflareDurableObjectStorage,
   CloudflareDurableObjectTransactionStorage,
 } from "../durable-object/durable-object-storage";
+import { withSqlStorage } from "../durable-object/durable-object-storage";
 
 export async function withTransaction<T>(
   storage: CloudflareDurableObjectStorage,
   fn: (storage: CloudflareDurableObjectTransactionStorage) => Promise<T>
 ): Promise<T> {
   return storage.transaction
-    ? await storage.transaction(fn)
+    ? await storage.transaction((tx) =>
+        fn(tx.sql === undefined ? withSqlStorage(tx, storage.sql) : tx)
+      )
     : await fn(storage);
 }
 

@@ -14,7 +14,6 @@ import { withTransaction } from "./records";
 import {
   getRun,
   getRunByDedupeKey,
-  indexRun,
   listRunsByParentRunId,
   putRun,
 } from "./run-records";
@@ -75,7 +74,6 @@ export class DurableObjectRunStore implements RunStore {
       await putRun(storage, this.#prefix, record, {
         maxPayloadBytes: this.#maxPayloadBytes,
       });
-      await indexRun(storage, this.#prefix, record);
       return structuredClone(record);
     });
   }
@@ -101,7 +99,6 @@ export class DurableObjectRunStore implements RunStore {
       await putRun(storage, this.#prefix, record, {
         maxPayloadBytes: this.#maxPayloadBytes,
       });
-      await indexRun(storage, this.#prefix, record);
       return structuredClone(record);
     });
   }

@@ -6,36 +6,25 @@ import {
   resolveStoragePayloadMaxBytes,
   type StoragePayloadBudgetOptions,
 } from "../payload-guard";
-import { storeKey } from "./records";
 
 interface NotificationRow {
   readonly record: string;
 }
 
-export async function getNotification(
+export function getNotification(
   storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
   idempotencyKey: string
 ): Promise<NotificationRecord | null> {
-  const sql = sqlStorage(storage);
-  if (sql) {
-    const row = selectNotificationRow(sql, prefix, idempotencyKey);
-    if (row) {
-      return parseNotificationRecord(row);
-    }
-  }
-
-  const legacy =
-    (await storage.get<NotificationRecord>(
-      storeKey(prefix, "notification", idempotencyKey)
-    )) ?? null;
-  if (legacy && sql) {
-    await putNotification(storage, prefix, legacy);
-  }
-  return legacy;
+  const row = selectNotificationRow(
+    requiredSqlStorage(storage),
+    prefix,
+    idempotencyKey
+  );
+  return Promise.resolve(row ? parseNotificationRecord(row) : null);
 }
 
-export async function putNotification(
+export function putNotification(
   storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
   record: NotificationRecord,
@@ -46,14 +35,8 @@ export async function putNotification(
     record,
     resolveStoragePayloadMaxBytes(options)
   );
-  const sql = sqlStorage(storage);
-  const key = storeKey(prefix, "notification", record.idempotencyKey);
-  if (sql) {
-    putSqlNotification(sql, prefix, record);
-    await storage.delete(key);
-    return;
-  }
-  await storage.put(key, record);
+  putSqlNotification(requiredSqlStorage(storage), prefix, record);
+  return Promise.resolve();
 }
 
 function selectNotificationRow(
@@ -75,11 +58,14 @@ function parseNotificationRecord(row: NotificationRow): NotificationRecord {
   return JSON.parse(row.record) as NotificationRecord;
 }
 
-function sqlStorage(
+function requiredSqlStorage(
   storage: CloudflareDurableObjectTransactionStorage
-): SqlStorage | undefined {
+): SqlStorage {
   const sql = storage.sql;
-  return isSqlStorage(sql) ? sql : undefined;
+  if (isSqlStorage(sql)) {
+    return sql;
+  }
+  throw new Error("DurableObjectNotificationInbox requires SQLite storage.");
 }
 
 function isSqlStorage(value: unknown): value is SqlStorage {
