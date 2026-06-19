@@ -50,7 +50,7 @@ export async function shouldRetryScheduledRun(
     prefix,
     storage,
   }).store.runs.get(runId);
-  return run ? isRetryableRunStatus(run.status) : false;
+  return run?.kind === "notification" && isRetryableRunStatus(run.status);
 }
 
 export async function shouldRetryScheduledThreadPrompt(

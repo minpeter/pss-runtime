@@ -10,6 +10,11 @@ import type { ResumeRunState } from "./types";
 
 const maxCheckpointWriteAttempts = 5;
 
+interface ResumeStateCheckpointReference {
+  readonly kind: "resume-state-ref";
+  readonly messageCount: number;
+}
+
 type ResumeStepStart = "new-step" | "resume-before-model";
 
 interface ResumeStep {
@@ -94,7 +99,7 @@ export async function appendCheckpoint({
   readonly phase: CheckpointPhase;
   readonly runId: string;
   readonly runtimeState: unknown;
-  readonly threadSnapshot: ResumeRunState;
+  readonly threadSnapshot: ResumeStateCheckpointReference;
 }): Promise<void> {
   let lastConflict:
     | { readonly current: number; readonly expected: number }
@@ -134,6 +139,15 @@ export async function appendCheckpoint({
     lastConflict?.expected ?? 0,
     lastConflict?.current ?? 0
   );
+}
+
+export function resumeStateCheckpointReference(
+  state: ResumeRunState
+): ResumeStateCheckpointReference {
+  return {
+    kind: "resume-state-ref",
+    messageCount: state.history.length,
+  };
 }
 
 function runtimeToolCheckpoint(

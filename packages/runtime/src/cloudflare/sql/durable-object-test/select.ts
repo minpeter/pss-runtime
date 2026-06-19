@@ -209,7 +209,12 @@ function selectScheduledWorkRows(
     if (query.startsWith("select work_id from")) {
       return { work_id: row.work_id };
     }
-    return { payload: row.payload, work_id: row.work_id };
+    return {
+      payload: row.payload,
+      run_id: row.run_id,
+      thread_key: row.thread_key,
+      work_id: row.work_id,
+    };
   });
 }
 

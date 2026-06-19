@@ -27,6 +27,8 @@ const unclaimableAgent = {
 interface ScheduledWorkProbeRow {
   readonly kind: string;
   readonly payload: string;
+  readonly run_id: string | null;
+  readonly thread_key: string | null;
   readonly work_id: string;
 }
 
@@ -65,6 +67,22 @@ describe("Cloudflare Durable Object host adapter", () => {
     });
 
     expect(readScheduledWorkRows(storage)).toHaveLength(2);
+    expect(readScheduledWorkRows(storage)).toEqual([
+      {
+        kind: "run",
+        payload: JSON.stringify(runId),
+        run_id: runId,
+        thread_key: null,
+        work_id: runId,
+      },
+      {
+        kind: "thread-prompt",
+        payload: JSON.stringify(prompt),
+        run_id: notificationRunId,
+        thread_key: "example",
+        work_id: ["example", idempotencyKey, notificationRunId].join("\u0000"),
+      },
+    ]);
     await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([
       runId,
     ]);
@@ -305,7 +323,7 @@ function readScheduledWorkRows(
 ): ScheduledWorkProbeRow[] {
   return (storage.sql as InMemorySqlStorage)
     .exec<ScheduledWorkProbeRow>(
-      "SELECT kind, work_id, payload FROM pss_scheduled_work WHERE prefix = ? ORDER BY kind, created_at, work_id",
+      "SELECT kind, work_id, payload, thread_key, run_id FROM pss_scheduled_work WHERE prefix = ? ORDER BY kind, created_at, work_id",
       "pss-runtime"
     )
     .toArray();

@@ -86,6 +86,7 @@ export class DurableObjectSqliteThreadStore implements ThreadStore {
           history: next.state.history,
           key,
           maxPayloadBytes: this.#maxPayloadBytes,
+          meta,
           nextSeqStart,
           sql: this.#sql,
         });

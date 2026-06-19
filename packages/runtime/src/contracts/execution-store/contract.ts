@@ -157,6 +157,26 @@ export function describeExecutionStoreContract({
       ).resolves.toEqual({ ok: false, reason: "leased" });
     });
 
+    it("keeps the existing run unchanged when create sees a duplicate run id", async () => {
+      const store = createStore();
+      const original = createQueuedRun("run-duplicate");
+
+      const created = await store.runs.create(original);
+      const duplicate = await store.runs.create({
+        ...original,
+        checkpointVersion: 7,
+        status: "completed",
+      });
+
+      expect(created).toEqual({ ok: true, record: original });
+      expect(duplicate).toEqual({
+        ok: false,
+        reason: "duplicate",
+        record: original,
+      });
+      await expect(store.runs.get("run-duplicate")).resolves.toEqual(original);
+    });
+
     it("rejects stale checkpoint writes", async () => {
       const store = createStore();
       await store.runs.create(createQueuedRun());

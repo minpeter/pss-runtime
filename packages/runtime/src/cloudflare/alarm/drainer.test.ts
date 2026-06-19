@@ -178,6 +178,26 @@ describe("Cloudflare alarm drain budgets", () => {
       "run-unclaimable",
     ]);
   });
+
+  it("acks scheduled non-notification runs when resume returns null", async () => {
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
+    const host = createCloudflareDurableObjectHost({ storage });
+
+    await enqueueStoredRun(host, "run-user-turn", "user-turn");
+
+    const summary = await drainCloudflareAlarm({
+      agent: { resume: () => Promise.resolve(null) },
+      prefix: "pss-runtime",
+      storage,
+    });
+
+    expect(summary.failedRuns).toEqual([]);
+    expect(summary.remainingRuns).toBe(0);
+    expect(summary.continuationScheduled).toBe(false);
+    await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([]);
+  });
 });
 
 function agentWithEvents(events: readonly AgentEvent[]): CloudflareAlarmAgent {
@@ -188,11 +208,12 @@ function agentWithEvents(events: readonly AgentEvent[]): CloudflareAlarmAgent {
 
 async function enqueueStoredRun(
   host: ReturnType<typeof createCloudflareDurableObjectHost>,
-  runId: string
+  runId: string,
+  kind: "notification" | "user-turn" = "notification"
 ): Promise<void> {
   await host.store.runs.create({
     checkpointVersion: 0,
-    kind: "notification",
+    kind,
     rootRunId: runId,
     runId,
     threadKey: "thread:test",

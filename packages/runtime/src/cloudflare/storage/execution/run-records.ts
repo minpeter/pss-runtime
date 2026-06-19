@@ -71,6 +71,21 @@ export function putRun(
   return Promise.resolve();
 }
 
+export function insertRun(
+  storage: CloudflareDurableObjectTransactionStorage,
+  prefix: string,
+  record: RunRecord,
+  options: StoragePayloadBudgetOptions = {}
+): Promise<void> {
+  assertJsonPayloadWithinBudget(
+    "run-record",
+    record,
+    resolveStoragePayloadMaxBytes(options)
+  );
+  insertSqlRun(requiredSqlStorage(storage), prefix, record);
+  return Promise.resolve();
+}
+
 function selectRunRow(
   sql: SqlStorage,
   prefix: string,
@@ -126,6 +141,25 @@ function putSqlRun(sql: SqlStorage, prefix: string, record: RunRecord): void {
   const nowMs = Date.now();
   sql.exec(
     "INSERT INTO pss_run (prefix, run_id, record, dedupe_key, parent_run_id, root_run_id, thread_key, status, checkpoint_version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(prefix, run_id) DO UPDATE SET record = excluded.record, dedupe_key = excluded.dedupe_key, parent_run_id = excluded.parent_run_id, root_run_id = excluded.root_run_id, thread_key = excluded.thread_key, status = excluded.status, checkpoint_version = excluded.checkpoint_version, updated_at = excluded.updated_at",
+    prefix,
+    record.runId,
+    JSON.stringify(record),
+    record.dedupeKey ?? null,
+    record.parentRunId ?? null,
+    record.rootRunId,
+    record.threadKey,
+    record.status,
+    record.checkpointVersion,
+    nowMs,
+    nowMs
+  );
+}
+
+function insertSqlRun(sql: SqlStorage, prefix: string, record: RunRecord): void {
+  ensureRunSchema(sql);
+  const nowMs = Date.now();
+  sql.exec(
+    "INSERT INTO pss_run (prefix, run_id, record, dedupe_key, parent_run_id, root_run_id, thread_key, status, checkpoint_version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     prefix,
     record.runId,
     JSON.stringify(record),
