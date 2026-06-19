@@ -3,6 +3,7 @@ import {
   numberBinding,
   stringBinding,
 } from "./bindings";
+import { writeRunStatement } from "./run-write";
 import type { InMemoryDurableObjectSqlState, ThreadMetaRow } from "./state";
 
 export function writeSqlStatement(
@@ -10,8 +11,11 @@ export function writeSqlStatement(
   query: string,
   bindings: readonly unknown[]
 ): void {
-  if (query.includes("pss_session_")) {
+  if (query.includes("pss_thread_") || query.includes("pss_session_")) {
     writeThreadStatement(state, query, bindings);
+    return;
+  }
+  if (writeRunStatement(state, query, bindings)) {
     return;
   }
   if (query.startsWith("insert into pss_event_meta")) {
@@ -44,23 +48,38 @@ function writeThreadStatement(
   query: string,
   bindings: readonly unknown[]
 ): void {
-  if (query.startsWith("delete from pss_session_message")) {
+  if (
+    query.startsWith("delete from pss_thread_message") ||
+    query.startsWith("delete from pss_session_message")
+  ) {
     deleteThreadMessages(state, bindings);
     return;
   }
-  if (query.startsWith("delete from pss_session_meta")) {
+  if (
+    query.startsWith("delete from pss_thread_meta") ||
+    query.startsWith("delete from pss_session_meta")
+  ) {
     state.threadMeta.delete(stringBinding(bindings[0]));
     return;
   }
-  if (query.startsWith("update pss_session_message set active = 0")) {
+  if (
+    query.startsWith("update pss_thread_message set active = 0") ||
+    query.startsWith("update pss_session_message set active = 0")
+  ) {
     deactivateThreadMessages(state, query, bindings);
     return;
   }
-  if (query.startsWith("insert into pss_session_message")) {
+  if (
+    query.startsWith("insert into pss_thread_message") ||
+    query.startsWith("insert into pss_session_message")
+  ) {
     insertThreadMessage(state, query, bindings);
     return;
   }
-  if (query.startsWith("insert into pss_session_meta")) {
+  if (
+    query.startsWith("insert into pss_thread_meta") ||
+    query.startsWith("insert into pss_session_meta")
+  ) {
     insertThreadMeta(state, bindings);
     return;
   }
@@ -73,7 +92,7 @@ function deleteThreadMessages(
 ): void {
   const key = stringBinding(bindings[0]);
   state.threadMessages = state.threadMessages.filter(
-    (row) => row.session_key !== key
+    (row) => row.thread_key !== key
   );
 }
 
@@ -87,7 +106,7 @@ function deactivateThreadMessages(
     ? numberBinding(bindings[1])
     : Number.NEGATIVE_INFINITY;
   for (const row of state.threadMessages) {
-    if (row.session_key === key && row.active === 1 && row.seq >= minSeq) {
+    if (row.thread_key === key && row.active === 1 && row.seq >= minSeq) {
       row.active = 0;
     }
   }
@@ -103,7 +122,7 @@ function insertThreadMessage(
     active: 1,
     message: stringBinding(hasImplicitSeq ? bindings[1] : bindings[2]),
     seq: hasImplicitSeq ? 0 : numberBinding(bindings[1]),
-    session_key: stringBinding(bindings[0]),
+    thread_key: stringBinding(bindings[0]),
   });
 }
 
@@ -123,16 +142,16 @@ function createThreadMetaRow(
     return {
       message_count: numberBinding(bindings[2]),
       next_seq: numberBinding(bindings[3]),
-      session_key: key,
       state_blob: nullableStringBinding(bindings[4]),
+      thread_key: key,
       version: stringBinding(bindings[1]),
     };
   }
   return {
     message_count: 1,
     next_seq: 1,
-    session_key: key,
     state_blob: null,
+    thread_key: key,
     version: 1,
   };
 }

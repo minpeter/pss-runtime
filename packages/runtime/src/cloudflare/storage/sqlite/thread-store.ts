@@ -7,24 +7,23 @@ import type {
 } from "../../../index";
 import type { SqlStorage } from "../../sql/ports/storage-port";
 import type { CloudflareDurableObjectStorage } from "../durable-object/durable-object-storage";
-import { storeKey } from "../execution/records";
 import {
   resolveStoragePayloadMaxBytes,
   type StoragePayloadBudgetOptions,
   stringifyJsonPayloadWithinBudget,
 } from "../payload-guard";
-
-interface MetaRow {
-  readonly message_count: number;
-  readonly next_seq: number;
-  readonly state_blob: string | null;
-  readonly version: string;
-}
-
-interface MessageRow {
-  readonly message: string;
-  readonly seq: number;
-}
+import {
+  deleteThreadRows,
+  ensureThreadSchema,
+  legacyThreadRowKey,
+  migrateLegacyThreadRows,
+  readActiveThreadMessages,
+  readThreadMeta,
+  softDeleteActiveThreadRows,
+  threadRowKey,
+  writeThreadHistoryRows,
+  writeThreadMeta,
+} from "./thread-store-sql";
 
 interface ThreadSnapshotV1 {
   readonly history: unknown[];
@@ -73,9 +72,10 @@ export class DurableObjectSqliteThreadStore implements ThreadStore {
     try {
       this.#ensureSchema();
       const key = this.#rowKey(threadKey);
+      migrateLegacyThreadRows(this.#sql, this.#prefix, threadKey);
 
       // --- begin synchronous read-modify-write critical section (no await) ---
-      const meta = this.#readMeta(key);
+      const meta = readThreadMeta(this.#sql, key);
       const currentVersion = meta ? meta.version : null;
       if (options.expectedVersion !== currentVersion) {
         return Promise.resolve({ ok: false, reason: "conflict" });
@@ -85,12 +85,14 @@ export class DurableObjectSqliteThreadStore implements ThreadStore {
       const nextSeqStart = meta?.next_seq ?? 0;
 
       if (isSnapshotV1(next.state)) {
-        const nextSeq = this.#writeHistoryRows(
+        const nextSeq = writeThreadHistoryRows({
+          history: next.state.history,
           key,
-          next.state.history,
-          nextSeqStart
-        );
-        this.#writeMeta(key, {
+          maxPayloadBytes: this.#maxPayloadBytes,
+          nextSeqStart,
+          sql: this.#sql,
+        });
+        writeThreadMeta(this.#sql, key, {
           message_count: next.state.history.length,
           next_seq: nextSeq,
           state_blob: null,
@@ -102,8 +104,8 @@ export class DurableObjectSqliteThreadStore implements ThreadStore {
           next.state ?? null,
           this.#maxPayloadBytes
         );
-        this.#softDeleteActiveRows(key);
-        this.#writeMeta(key, {
+        softDeleteActiveThreadRows(this.#sql, key);
+        writeThreadMeta(this.#sql, key, {
           message_count: 0,
           next_seq: nextSeqStart,
           state_blob: stateBlob,
@@ -120,20 +122,19 @@ export class DurableObjectSqliteThreadStore implements ThreadStore {
 
   delete(threadKey: string): Promise<void> {
     this.#ensureSchema();
+    migrateLegacyThreadRows(this.#sql, this.#prefix, threadKey);
     const key = this.#rowKey(threadKey);
-    this.#sql.exec(
-      "DELETE FROM pss_session_message WHERE session_key = ?",
-      key
-    );
-    this.#sql.exec("DELETE FROM pss_session_meta WHERE session_key = ?", key);
+    const legacyKey = this.#legacyRowKey(threadKey);
+    deleteThreadRows(this.#sql, key, legacyKey);
     return Promise.resolve();
   }
 
   load(threadKey: string): Promise<StoredThread | null> {
     this.#ensureSchema();
     const key = this.#rowKey(threadKey);
+    migrateLegacyThreadRows(this.#sql, this.#prefix, threadKey);
 
-    const meta = this.#readMeta(key);
+    const meta = readThreadMeta(this.#sql, key);
     if (!meta) {
       return Promise.resolve(null);
     }
@@ -142,120 +143,26 @@ export class DurableObjectSqliteThreadStore implements ThreadStore {
       const state: unknown = JSON.parse(meta.state_blob);
       return Promise.resolve({ state, version });
     }
-    const history: unknown[] = this.#readActiveMessages(key).map((row) =>
-      JSON.parse(row.message)
+    const history: unknown[] = readActiveThreadMessages(this.#sql, key).map(
+      (row) => JSON.parse(row.message)
     );
     return Promise.resolve({ state: { history, schemaVersion: 1 }, version });
   }
 
   #rowKey(threadKey: string): string {
-    return storeKey(this.#prefix, "session", threadKey);
+    return threadRowKey(this.#prefix, threadKey);
+  }
+
+  #legacyRowKey(threadKey: string): string {
+    return legacyThreadRowKey(this.#prefix, threadKey);
   }
 
   #ensureSchema(): void {
     if (this.#schemaReady) {
       return;
     }
-    this.#sql.exec(
-      "CREATE TABLE IF NOT EXISTS pss_session_message (session_key TEXT NOT NULL, seq INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, message TEXT NOT NULL, PRIMARY KEY (session_key, seq))"
-    );
-    this.#sql.exec(
-      "CREATE INDEX IF NOT EXISTS pss_session_message_active ON pss_session_message (session_key, active, seq)"
-    );
-    this.#sql.exec(
-      "CREATE TABLE IF NOT EXISTS pss_session_meta (session_key TEXT PRIMARY KEY, version TEXT NOT NULL, message_count INTEGER NOT NULL, next_seq INTEGER NOT NULL, state_blob TEXT)"
-    );
+    ensureThreadSchema(this.#sql);
     this.#schemaReady = true;
-  }
-
-  #readMeta(key: string): MetaRow | null {
-    const rows = this.#sql
-      .exec<{
-        message_count: number;
-        next_seq: number;
-        state_blob: string | null;
-        version: number | string;
-      }>(
-        "SELECT version, message_count, next_seq, state_blob FROM pss_session_meta WHERE session_key = ?",
-        key
-      )
-      .toArray();
-    const row = rows[0];
-    if (!row) {
-      return null;
-    }
-    return { ...row, version: String(row.version) };
-  }
-
-  #readActiveMessages(key: string): MessageRow[] {
-    return this.#sql
-      .exec<MessageRow>(
-        "SELECT seq, message FROM pss_session_message WHERE session_key = ? AND active = 1 ORDER BY seq",
-        key
-      )
-      .toArray();
-  }
-
-  #writeHistoryRows(
-    key: string,
-    history: readonly unknown[],
-    nextSeqStart: number
-  ): number {
-    const existing = this.#readActiveMessages(key);
-    let prefix = 0;
-    while (
-      prefix < existing.length &&
-      prefix < history.length &&
-      existing[prefix].message === JSON.stringify(history[prefix])
-    ) {
-      prefix += 1;
-    }
-    const messages = history
-      .slice(prefix)
-      .map((message) =>
-        stringifyJsonPayloadWithinBudget(
-          "thread-message",
-          message,
-          this.#maxPayloadBytes
-        )
-      );
-    if (prefix < existing.length) {
-      // History diverged or shrank (rollback): soft-delete the divergent tail.
-      this.#sql.exec(
-        "UPDATE pss_session_message SET active = 0 WHERE session_key = ? AND active = 1 AND seq >= ?",
-        key,
-        existing[prefix].seq
-      );
-    }
-    let seq = nextSeqStart;
-    for (const message of messages) {
-      this.#sql.exec(
-        "INSERT INTO pss_session_message (session_key, seq, active, message) VALUES (?, ?, 1, ?)",
-        key,
-        seq,
-        message
-      );
-      seq += 1;
-    }
-    return seq;
-  }
-
-  #softDeleteActiveRows(key: string): void {
-    this.#sql.exec(
-      "UPDATE pss_session_message SET active = 0 WHERE session_key = ? AND active = 1",
-      key
-    );
-  }
-
-  #writeMeta(key: string, meta: MetaRow): void {
-    this.#sql.exec(
-      "INSERT INTO pss_session_meta (session_key, version, message_count, next_seq, state_blob) VALUES (?, ?, ?, ?, ?) ON CONFLICT(session_key) DO UPDATE SET version = excluded.version, message_count = excluded.message_count, next_seq = excluded.next_seq, state_blob = excluded.state_blob",
-      key,
-      meta.version,
-      meta.message_count,
-      meta.next_seq,
-      meta.state_blob
-    );
   }
 }
 

@@ -3,6 +3,7 @@ import type {
   CheckpointRow,
   EventRow,
   InMemoryDurableObjectSqlState,
+  RunRow,
   ScheduledWorkRow,
   ThreadMessageRow,
   ThreadMetaRow,
@@ -13,11 +14,23 @@ export function selectSqlRows(
   query: string,
   bindings: readonly unknown[]
 ): unknown[] {
-  if (query.includes("from pss_session_meta")) {
+  if (query.includes("from sqlite_master")) {
+    return [];
+  }
+  if (
+    query.includes("from pss_thread_meta") ||
+    query.includes("from pss_session_meta")
+  ) {
     return selectThreadMetaRows(state, query, bindings);
   }
-  if (query.includes("from pss_session_message")) {
+  if (
+    query.includes("from pss_thread_message") ||
+    query.includes("from pss_session_message")
+  ) {
     return selectThreadMessageRows(state, query, bindings);
+  }
+  if (query.includes("from pss_run")) {
+    return selectRunRows(state, query, bindings);
   }
   if (query.includes("from pss_event_meta")) {
     return selectEventMetaRows(state, bindings);
@@ -39,10 +52,18 @@ function selectThreadMetaRows(
   query: string,
   bindings: readonly unknown[]
 ): unknown[] {
-  if (query.includes("where session_key = ?")) {
+  if (
+    query.includes("where thread_key = ?") ||
+    query.includes("where session_key = ?")
+  ) {
     const key = stringBinding(bindings[0]);
     const row = state.threadMeta.get(key);
     return row ? [projectThreadMeta(row, query)] : [];
+  }
+  if (query === "select thread_key from pss_thread_meta") {
+    return [...state.threadMeta.keys()].map((thread_key) => ({
+      thread_key,
+    }));
   }
   if (query === "select session_key from pss_session_meta") {
     return [...state.threadMeta.keys()].map((session_key) => ({
@@ -59,7 +80,7 @@ function selectThreadMessageRows(
 ): unknown[] {
   const key = stringBinding(bindings[0]);
   const rows = state.threadMessages.filter((row) => {
-    if (row.session_key !== key) {
+    if (row.thread_key !== key) {
       return false;
     }
     return query.includes("active = 1") ? row.active === 1 : true;
@@ -69,6 +90,37 @@ function selectThreadMessageRows(
       (left: ThreadMessageRow, right: ThreadMessageRow) => left.seq - right.seq
     )
     .map((row) => projectThreadMessage(row, query));
+}
+
+function selectRunRows(
+  state: InMemoryDurableObjectSqlState,
+  query: string,
+  bindings: readonly unknown[]
+): unknown[] {
+  const prefix = stringBinding(bindings[0]);
+  if (query.includes("run_id = ?")) {
+    const runId = stringBinding(bindings[1]);
+    return state.runs
+      .filter((row) => row.prefix === prefix && row.run_id === runId)
+      .map(projectRun);
+  }
+  if (query.includes("dedupe_key = ?")) {
+    const dedupeKey = stringBinding(bindings[1]);
+    return state.runs
+      .filter((row) => row.prefix === prefix && row.dedupe_key === dedupeKey)
+      .map(projectRun)
+      .slice(0, 1);
+  }
+  if (query.includes("parent_run_id = ?")) {
+    const parentRunId = stringBinding(bindings[1]);
+    return state.runs
+      .filter(
+        (row) => row.prefix === prefix && row.parent_run_id === parentRunId
+      )
+      .sort((left: RunRow, right: RunRow) => left.created_at - right.created_at)
+      .map(projectRun);
+  }
+  throw new Error(`Unsupported in-memory run SQL query: ${query}`);
 }
 
 function selectEventMetaRows(
@@ -177,4 +229,8 @@ function projectThreadMessage(row: ThreadMessageRow, query: string): unknown {
     projected.message = row.message;
   }
   return projected;
+}
+
+function projectRun(row: RunRow): unknown {
+  return { record: row.record };
 }

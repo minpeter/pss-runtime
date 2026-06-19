@@ -5,12 +5,8 @@ import type {
 } from "../../../execution";
 import type { SqlStorage } from "../../sql/ports/storage-port";
 import type { CloudflareDurableObjectStorage } from "../durable-object/durable-object-storage";
-import {
-  getRun,
-  putRun,
-  storeKey,
-  withTransaction,
-} from "../execution/records";
+import { storeKey, withTransaction } from "../execution/records";
+import { getRun, putRun } from "../execution/run-records";
 import {
   resolveStoragePayloadMaxBytes,
   type StoragePayloadBudgetOptions,

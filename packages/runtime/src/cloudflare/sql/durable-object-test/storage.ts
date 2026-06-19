@@ -43,7 +43,11 @@ function normalizeSql(query: string): string {
 }
 
 function isSchemaStatement(query: string): boolean {
-  return query.startsWith("create table ") || query.startsWith("create index ");
+  return (
+    query.startsWith("create table ") ||
+    query.startsWith("create index ") ||
+    query.startsWith("create unique index ")
+  );
 }
 
 function isTransactionStatement(query: string): boolean {

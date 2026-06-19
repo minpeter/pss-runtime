@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { describeExecutionStoreContract } from "../../../contracts/execution-store/contract";
 import type { RunRecord } from "../../../execution";
+import { InMemorySqlStorage } from "../../sql/node-test/node-sqlite-storage";
 import { InMemoryCloudflareDurableObjectStorage } from "../durable-object/durable-object-storage";
+import { storeKey } from "./records";
 import { DurableObjectExecutionStore } from "./store";
 
 describeExecutionStoreContract({
@@ -67,6 +69,40 @@ describe("DurableObjectExecutionStore payload guards", () => {
     await expect(store.runs.get("run-update")).resolves.toEqual(
       runRecord("run-update")
     );
+  });
+
+  it("stores run records in SQLite rows instead of Durable Object KV values", async () => {
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
+    const store = new DurableObjectExecutionStore({
+      prefix: "run-sql-test",
+      storage,
+    });
+    const record = runRecord("run-sql", {
+      dedupeKey: "dedupe-1",
+      parentRunId: "parent-1",
+    });
+
+    await store.runs.create(record);
+
+    const rows = (storage.sql as InMemorySqlStorage)
+      .exec<{ readonly record: string }>(
+        "SELECT record FROM pss_run WHERE prefix = ? AND run_id = ?",
+        "run-sql-test",
+        "run-sql"
+      )
+      .toArray();
+    expect(rows.map((row) => JSON.parse(row.record))).toEqual([record]);
+    await expect(
+      storage.get(storeKey("run-sql-test", "run", "run-sql"))
+    ).resolves.toBeUndefined();
+    await expect(store.runs.getByDedupeKey("dedupe-1")).resolves.toEqual(
+      record
+    );
+    await expect(store.runs.listByParentRunId("parent-1")).resolves.toEqual([
+      record,
+    ]);
   });
 });
 
