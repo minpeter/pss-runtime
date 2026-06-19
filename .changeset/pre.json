@@ -20,10 +20,10 @@
     "runtime-plugin-sessions",
     "runtime-subagents",
     "runtime-thread-key-surface",
-    "runtime-thread-storage-hardening",
     "sqlite-event-checkpoint-stores",
     "sqlite-session-store",
     "sync-main-dependencies",
-    "thread-api-replaces-session"
+    "thread-api-replaces-session",
+    "thread-sqlite-run-rows"
   ]
 }
