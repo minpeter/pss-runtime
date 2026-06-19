@@ -52,12 +52,10 @@ const REQUIRED_RUNTIME_CLOUDFLARE_EXPORTS = [
   "listScheduledCloudflareThreadPrompts",
   "rescheduleCloudflareAlarm",
 ];
-const REQUIRED_RUNTIME_NODE_EXPORTS = [
-  "FileSessionStore",
-  "FileThreadStore",
-  "NodeFileThreadHostOptions",
-  "createNodeFileThreadHost",
-];
+const REQUIRED_RUNTIME_NODE_EXPORTS =
+  "FileExecutionStore FileSessionStore FileThreadStore NodeFileAgentContext NodeFileAgentContextFactoryOptions NodeFileAgentContextOptions NodeFileExecutionHostOptions NodeFileThreadHostOptions NodeScheduledThreadPrompt NodeScheduledWorkListOptions ackScheduledNodeRun ackScheduledNodeThreadPrompt appendScheduledNodeRun appendScheduledNodeThreadPrompt createNodeFileAgentContext createNodeFileExecutionHost createNodeFileScheduler createNodeFileThreadHost listScheduledNodeRuns listScheduledNodeThreadPrompts".split(
+    " "
+  );
 const FORBIDDEN_RUNTIME_ROOT_NAMES = [
   ...[
     "AgentMessage AgentModel AgentLoopResult AgentRunInput AgentTool AgentTools",
@@ -75,7 +73,12 @@ const FORBIDDEN_RUNTIME_ROOT_NAMES = [
     "getCloudflareDurableObjectStub InMemoryCloudflareDurableObjectStorage RunHost RunRecord",
     "RunInput RunStore RuntimeToolExecutionCheckpoint RuntimeToolExecutionContext",
     "RuntimeToolExecutionDecision RuntimeToolRetryPolicy",
-    "FileThreadStore FileSessionStore NodeFileThreadHostOptions createNodeFileThreadHost",
+    "FileExecutionStore FileThreadStore FileSessionStore NodeFileAgentContext",
+    "NodeFileAgentContextFactoryOptions NodeFileAgentContextOptions NodeFileExecutionHostOptions",
+    "NodeFileThreadHostOptions NodeScheduledThreadPrompt NodeScheduledWorkListOptions",
+    "ackScheduledNodeRun ackScheduledNodeThreadPrompt appendScheduledNodeRun appendScheduledNodeThreadPrompt",
+    "createNodeFileAgentContext createNodeFileExecutionHost createNodeFileScheduler createNodeFileThreadHost",
+    "listScheduledNodeRuns listScheduledNodeThreadPrompts",
   ].flatMap((names) => names.split(" ")),
   ["create", "Llm"].join(""),
   ["Runtime", "Create", "Llm", "Options"].join(""),

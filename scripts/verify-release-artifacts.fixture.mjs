@@ -24,8 +24,8 @@ export const runtimeCloudflareDeclaration = [
   "",
 ].join("\n");
 export const runtimeNodeDeclaration = [
-  'export { createNodeFileThreadHost, FileSessionStore, FileThreadStore } from "./index";',
-  'export type { NodeFileThreadHostOptions } from "./index";',
+  'export { ackScheduledNodeRun, ackScheduledNodeThreadPrompt, appendScheduledNodeRun, appendScheduledNodeThreadPrompt, createNodeFileAgentContext, createNodeFileExecutionHost, createNodeFileScheduler, createNodeFileThreadHost, FileExecutionStore, FileSessionStore, FileThreadStore, listScheduledNodeRuns, listScheduledNodeThreadPrompts } from "./index";',
+  'export type { NodeFileAgentContext, NodeFileAgentContextFactoryOptions, NodeFileAgentContextOptions, NodeFileExecutionHostOptions, NodeFileThreadHostOptions, NodeScheduledThreadPrompt, NodeScheduledWorkListOptions } from "./index";',
   "",
 ].join("\n");
 

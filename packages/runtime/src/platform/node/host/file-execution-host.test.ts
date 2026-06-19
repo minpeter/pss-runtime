@@ -1,0 +1,187 @@
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { Agent } from "../../../agent/core/agent";
+import { agentNamespace } from "../../../agent/identity/namespace";
+import { dispatchAgentNotification } from "../../../execution/dispatch/notification-dispatch";
+import {
+  assistantMessage,
+  createCallbackModel,
+  eventTypes,
+} from "../../../testing/test-fixtures";
+import { collect } from "../../../thread/handle/test-support";
+import { createNodeFileExecutionHost } from "./file-execution-host";
+import {
+  ackScheduledNodeRun,
+  ackScheduledNodeThreadPrompt,
+  appendScheduledNodeRun,
+  appendScheduledNodeThreadPrompt,
+  listScheduledNodeRuns,
+  listScheduledNodeThreadPrompts,
+} from "./scheduled-work-queue";
+
+const malformedScheduledWorkPattern =
+  /Invalid Node scheduled work file .*invalid JSON/;
+
+describe("createNodeFileExecutionHost", () => {
+  it("persists resumable notification runs across reconstructed hosts", async () => {
+    const directory = await tempDir();
+    try {
+      const firstHost = createNodeFileExecutionHost({ directory });
+      const dispatched = await dispatchAgentNotification({
+        host: firstHost,
+        idempotencyKey: "local-reminder:1",
+        input: { text: "local reminder fired", type: "user-text" },
+        namespace: "local-owner",
+        observerEvents: [
+          {
+            text: "local reminder completed",
+            type: "assistant-reasoning",
+          },
+        ],
+        threadKey: "thread:local",
+      });
+
+      await expect(listScheduledNodeThreadPrompts(directory)).resolves.toEqual([
+        expect.objectContaining({
+          notificationId: dispatched.notificationId,
+          runId: dispatched.runId,
+          threadKey: "thread:local",
+        }),
+      ]);
+
+      const secondHost = createNodeFileExecutionHost({ directory });
+      const agent = new Agent({
+        host: secondHost,
+        model: createCallbackModel(() =>
+          Promise.resolve([assistantMessage("RESUMED")])
+        ),
+        namespace: "local-owner",
+      });
+
+      expect(agent.supportsResume).toBe(true);
+
+      const run = await agent.resume(dispatched.runId);
+      expect(run).not.toBeNull();
+      if (!run) {
+        throw new Error("Expected resumed node file run.");
+      }
+
+      const events = await collect(run);
+      expect(eventTypes(events)).toEqual([
+        "assistant-reasoning",
+        "turn-start",
+        "runtime-input",
+        "step-start",
+        "assistant-text",
+        "step-end",
+        "turn-end",
+      ]);
+      await expect(
+        secondHost.store.runs.get(dispatched.runId)
+      ).resolves.toEqual(
+        expect.objectContaining({
+          ownerNamespace: agentNamespace("local-owner"),
+          status: "completed",
+        })
+      );
+
+      const duplicate = await agent.resume(dispatched.runId);
+      expect(duplicate).toBeNull();
+
+      const dataDirectory = await currentDataDirectory(directory);
+      expect(await readdir(join(dataDirectory, "threads"))).not.toHaveLength(0);
+      expect(await readdir(join(dataDirectory, "runs"))).not.toHaveLength(0);
+      expect(
+        await readdir(join(dataDirectory, "notifications"))
+      ).not.toHaveLength(0);
+      await expect(
+        readdir(join(directory, "scheduled-work", "thread-prompt"))
+      ).resolves.toHaveLength(1);
+    } finally {
+      await rm(directory, { force: true, recursive: true });
+    }
+  });
+
+  it("dedupes and acks local scheduled work files", async () => {
+    const directory = await tempDir();
+    try {
+      await appendScheduledNodeRun(directory, "run:1");
+      await appendScheduledNodeRun(directory, "run:1");
+      await appendScheduledNodeThreadPrompt(directory, {
+        idempotencyKey: "notify:1",
+        notificationId: "notification:1",
+        runId: "run:notify",
+        threadKey: "thread:1",
+      });
+      await appendScheduledNodeThreadPrompt(directory, {
+        idempotencyKey: "notify:1",
+        notificationId: "notification:other",
+        runId: "run:notify",
+        threadKey: "thread:1",
+      });
+
+      await expect(listScheduledNodeRuns(directory)).resolves.toEqual([
+        "run:1",
+      ]);
+      const prompts = await listScheduledNodeThreadPrompts(directory);
+      expect(prompts).toHaveLength(1);
+      expect(prompts[0]).toEqual({
+        idempotencyKey: "notify:1",
+        notificationId: "notification:1",
+        runId: "run:notify",
+        threadKey: "thread:1",
+      });
+
+      await ackScheduledNodeRun(directory, "run:1");
+      await ackScheduledNodeThreadPrompt(directory, prompts[0]);
+
+      await expect(listScheduledNodeRuns(directory)).resolves.toEqual([]);
+      await expect(listScheduledNodeThreadPrompts(directory)).resolves.toEqual(
+        []
+      );
+    } finally {
+      await rm(directory, { force: true, recursive: true });
+    }
+  });
+
+  it("throws deterministic errors for malformed scheduled work files", async () => {
+    const directory = await tempDir();
+    try {
+      await mkdir(join(directory, "scheduled-work", "run"), {
+        recursive: true,
+      });
+      await writeFile(
+        join(directory, "scheduled-work", "run", "bad.json"),
+        "{ nope",
+        "utf8"
+      );
+
+      await expect(listScheduledNodeRuns(directory)).rejects.toThrow(
+        malformedScheduledWorkPattern
+      );
+    } finally {
+      await rm(directory, { force: true, recursive: true });
+    }
+  });
+});
+
+function tempDir(): Promise<string> {
+  return mkdtemp(join(tmpdir(), "pss-runtime-node-execution-host-"));
+}
+
+async function currentDataDirectory(directory: string): Promise<string> {
+  const generationId = await readFile(
+    join(directory, ".current-generation"),
+    "utf8"
+  );
+  return join(directory, "generations", generationId.trim());
+}

@@ -36,10 +36,26 @@ describe("verifyReleaseArtifacts node declaration checks", () => {
     writeFileSync(nodeDeclarationPath(cwd), "export {};\n");
 
     expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
+      "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export FileExecutionStore",
       "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export FileSessionStore",
       "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export FileThreadStore",
+      "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export NodeFileAgentContext",
+      "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export NodeFileAgentContextFactoryOptions",
+      "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export NodeFileAgentContextOptions",
+      "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export NodeFileExecutionHostOptions",
       "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export NodeFileThreadHostOptions",
+      "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export NodeScheduledThreadPrompt",
+      "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export NodeScheduledWorkListOptions",
+      "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export ackScheduledNodeRun",
+      "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export ackScheduledNodeThreadPrompt",
+      "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export appendScheduledNodeRun",
+      "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export appendScheduledNodeThreadPrompt",
+      "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export createNodeFileAgentContext",
+      "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export createNodeFileExecutionHost",
+      "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export createNodeFileScheduler",
       "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export createNodeFileThreadHost",
+      "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export listScheduledNodeRuns",
+      "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export listScheduledNodeThreadPrompts",
     ]);
   });
 });

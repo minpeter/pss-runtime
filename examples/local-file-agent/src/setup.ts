@@ -1,6 +1,6 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { Agent } from "@minpeter/pss-runtime";
-import { createNodeFileThreadHost } from "@minpeter/pss-runtime/node";
+import { createNodeFileExecutionHost } from "@minpeter/pss-runtime/node";
 import { createEnv } from "@t3-oss/env-core";
 import { config as loadEnv } from "dotenv";
 import { z } from "zod";
@@ -29,7 +29,7 @@ const provider = createOpenAICompatible({
 });
 
 export const thread = new Agent({
-  host: createNodeFileThreadHost({ directory: env.PSS_EXAMPLE_THREAD_DIR }),
+  host: createNodeFileExecutionHost({ directory: env.PSS_EXAMPLE_THREAD_DIR }),
   instructions: "Answer briefly and remember useful context in the thread.",
   model: provider(env.AI_MODEL),
 }).thread(env.PSS_EXAMPLE_THREAD_KEY);
