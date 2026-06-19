@@ -10,14 +10,14 @@ import {
   resolveStoragePayloadMaxBytes,
   type StoragePayloadBudgetOptions,
 } from "../payload-guard";
+import { withTransaction } from "./records";
 import {
   getRun,
+  getRunByDedupeKey,
   indexRun,
+  listRunsByParentRunId,
   putRun,
-  readList,
-  storeKey,
-  withTransaction,
-} from "./records";
+} from "./run-records";
 
 const claimableStatuses = new Set<RunStatus>([
   "leased",
@@ -85,19 +85,15 @@ export class DurableObjectRunStore implements RunStore {
   }
 
   async getByDedupeKey(dedupeKey: string): Promise<RunRecord | null> {
-    const runId = await this.#storage.get<string>(
-      storeKey(this.#prefix, "run-dedupe", dedupeKey)
-    );
-    return runId ? await this.get(runId) : null;
+    return await getRunByDedupeKey(this.#storage, this.#prefix, dedupeKey);
   }
 
   async listByParentRunId(parentRunId: string): Promise<readonly RunRecord[]> {
-    const runIds = await readList<string>(
+    return await listRunsByParentRunId(
       this.#storage,
-      storeKey(this.#prefix, "run-parent", parentRunId)
+      this.#prefix,
+      parentRunId
     );
-    const runs = await Promise.all(runIds.map((runId) => this.get(runId)));
-    return runs.filter(isRunRecord);
   }
 
   async update(record: RunRecord): Promise<RunRecord> {
@@ -109,8 +105,4 @@ export class DurableObjectRunStore implements RunStore {
       return structuredClone(record);
     });
   }
-}
-
-function isRunRecord(record: RunRecord | null): record is RunRecord {
-  return record !== null;
 }

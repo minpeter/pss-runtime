@@ -40,8 +40,8 @@ export function readRows(
 ): MessageRowProbe[] {
   return (storage.sql as InMemorySqlStorage)
     .exec<MessageRowProbe>(
-      "SELECT seq, active, message FROM pss_session_message WHERE session_key = ? ORDER BY seq",
-      storeKey(PREFIX, "session", threadKey)
+      "SELECT seq, active, message FROM pss_thread_message WHERE thread_key = ? ORDER BY seq",
+      storeKey(PREFIX, "thread", threadKey)
     )
     .toArray();
 }

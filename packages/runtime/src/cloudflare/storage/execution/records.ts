@@ -1,4 +1,4 @@
-import type { NotificationRecord, RunRecord } from "../../../execution";
+import type { NotificationRecord } from "../../../execution";
 import type {
   CloudflareDurableObjectStorage,
   CloudflareDurableObjectTransactionStorage,
@@ -16,49 +16,6 @@ export async function withTransaction<T>(
   return storage.transaction
     ? await storage.transaction(fn)
     : await fn(storage);
-}
-
-export async function getRun(
-  storage: CloudflareDurableObjectTransactionStorage,
-  prefix: string,
-  runId: string
-): Promise<RunRecord | null> {
-  return (await storage.get<RunRecord>(storeKey(prefix, "run", runId))) ?? null;
-}
-
-export async function putRun(
-  storage: CloudflareDurableObjectTransactionStorage,
-  prefix: string,
-  record: RunRecord,
-  options: StoragePayloadBudgetOptions = {}
-): Promise<void> {
-  assertJsonPayloadWithinBudget(
-    "run-record",
-    record,
-    resolveStoragePayloadMaxBytes(options)
-  );
-  await storage.put(storeKey(prefix, "run", record.runId), record);
-}
-
-export async function indexRun(
-  storage: CloudflareDurableObjectTransactionStorage,
-  prefix: string,
-  record: RunRecord
-): Promise<void> {
-  if (record.dedupeKey) {
-    await storage.put(
-      storeKey(prefix, "run-dedupe", record.dedupeKey),
-      record.runId
-    );
-  }
-  if (record.parentRunId) {
-    const parentKey = storeKey(prefix, "run-parent", record.parentRunId);
-    const runIds = await readList<string>(storage, parentKey);
-    if (!runIds.includes(record.runId)) {
-      runIds.push(record.runId);
-      await storage.put(parentKey, runIds);
-    }
-  }
 }
 
 export async function getNotification(

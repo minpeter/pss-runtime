@@ -6,10 +6,11 @@ import { DurableObjectSqliteThreadStore } from "./thread-store";
 import { PREFIX, snapshot } from "./thread-store.test-support";
 
 describe("DurableObjectSqliteThreadStore compatibility", () => {
-  it("normalizes a numeric meta version for the optimistic compare", async () => {
+  it("migrates legacy session rows into thread rows", async () => {
     const sql = new InMemorySqlStorage();
     const storage = new InMemoryCloudflareDurableObjectStorage({ sql });
-    const key = storeKey(PREFIX, "session", "num");
+    const legacyKey = storeKey(PREFIX, "session", "num");
+    const threadKey = storeKey(PREFIX, "thread", "num");
     sql.exec(
       "CREATE TABLE pss_session_meta (session_key TEXT PRIMARY KEY, version INTEGER NOT NULL, message_count INTEGER NOT NULL, next_seq INTEGER NOT NULL, state_blob TEXT)"
     );
@@ -18,12 +19,12 @@ describe("DurableObjectSqliteThreadStore compatibility", () => {
     );
     sql.exec(
       "INSERT INTO pss_session_message (session_key, seq, active, message) VALUES (?, 0, 1, ?)",
-      key,
+      legacyKey,
       JSON.stringify({ i: 0 })
     );
     sql.exec(
       "INSERT INTO pss_session_meta (session_key, version, message_count, next_seq, state_blob) VALUES (?, 1, 1, 1, NULL)",
-      key
+      legacyKey
     );
 
     const store = new DurableObjectSqliteThreadStore(storage, PREFIX);
@@ -36,5 +37,21 @@ describe("DurableObjectSqliteThreadStore compatibility", () => {
         expectedVersion: "1",
       })
     ).resolves.toEqual({ ok: true, version: "2" });
+    expect(
+      sql
+        .exec(
+          "SELECT thread_key FROM pss_thread_meta WHERE thread_key = ?",
+          threadKey
+        )
+        .toArray()
+    ).toEqual([{ thread_key: threadKey }]);
+    expect(
+      sql
+        .exec(
+          "SELECT session_key FROM pss_session_meta WHERE session_key = ?",
+          legacyKey
+        )
+        .toArray()
+    ).toEqual([]);
   });
 });
