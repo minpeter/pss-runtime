@@ -149,6 +149,14 @@ describe("Cloudflare Durable Object host adapter", () => {
         work_id: expect.any(String),
       },
     ]);
+
+    storage.sql.exec(
+      "DELETE FROM pss_scheduled_work WHERE prefix = ? AND payload LIKE ? ESCAPE '\\'",
+      "pss-runtime",
+      '%"threadKey":"thread-b"%'
+    );
+
+    expect(readScheduledWorkRows(storage)).toEqual([]);
   });
 
   it("uses the SQLite scheduled queue with default in-memory Durable Object storage", async () => {
