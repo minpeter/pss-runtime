@@ -69,6 +69,10 @@
     "build": "tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "test:storage-stress": "vitest run src/cloudflare/storage/execution/store-stress.test.ts src/cloudflare/storage/execution/store-oversized-payload.test.ts",
+    "test:storage-stress:extreme": "PSS_RUNTIME_STORAGE_STRESS_PROFILE=extreme vitest run src/cloudflare/storage/execution/store-stress.test.ts",
+    "test:storage-stress:heavy": "PSS_RUNTIME_STORAGE_STRESS_PROFILE=heavy vitest run src/cloudflare/storage/execution/store-stress.test.ts src/cloudflare/storage/execution/store-oversized-payload.test.ts",
+    "test:storage-stress:torture": "PSS_RUNTIME_STORAGE_STRESS_PROFILE=torture vitest run src/cloudflare/storage/execution/store-stress.test.ts src/cloudflare/storage/execution/store-oversized-payload.test.ts",
     "lint": "ultracite check ."
   },
   "dependencies": {

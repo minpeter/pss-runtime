@@ -10,8 +10,12 @@ import { getRun, putRun } from "../execution/run-records";
 import {
   resolveStoragePayloadMaxBytes,
   type StoragePayloadBudgetOptions,
-  stringifyJsonPayloadWithinBudget,
 } from "../payload-guard";
+import {
+  ensurePayloadChunkSchema,
+  readJsonPayloadFromSqlRows,
+  writeJsonPayloadToSqlRows,
+} from "./payload-chunks";
 
 interface CheckpointRow {
   readonly checkpoint: string;
@@ -75,7 +79,9 @@ export class DurableObjectSqliteCheckpointStore implements CheckpointStore {
       }
 
       const key = this.#rowKey(checkpoint.runId);
-      const serializedCheckpoint = stringifyJsonPayloadWithinBudget(
+      const serializedCheckpoint = writeJsonPayloadToSqlRows(
+        this.#sql,
+        this.#payloadLocation(key, checkpoint.version),
         "checkpoint",
         checkpoint,
         this.#maxPayloadBytes
@@ -110,8 +116,15 @@ export class DurableObjectSqliteCheckpointStore implements CheckpointStore {
       )
       .toArray();
     const row = rows[0];
+    const checkpoint = row
+      ? readJsonPayloadFromSqlRows(
+          this.#sql,
+          this.#payloadLocation(this.#rowKey(runId), row.version),
+          row.checkpoint
+        )
+      : null;
     return Promise.resolve(
-      row ? (JSON.parse(row.checkpoint) as RunCheckpoint) : null
+      checkpoint ? (JSON.parse(checkpoint) as RunCheckpoint) : null
     );
   }
 
@@ -126,6 +139,11 @@ export class DurableObjectSqliteCheckpointStore implements CheckpointStore {
     this.#sql.exec(
       "CREATE TABLE IF NOT EXISTS pss_checkpoint (run_key TEXT NOT NULL, version INTEGER NOT NULL, checkpoint TEXT NOT NULL, PRIMARY KEY (run_key, version))"
     );
+    ensurePayloadChunkSchema(this.#sql);
     this.#schemaReady = true;
+  }
+
+  #payloadLocation(key: string, version: number) {
+    return { ownerKey: key, payloadKey: String(version), scope: "checkpoint" };
   }
 }

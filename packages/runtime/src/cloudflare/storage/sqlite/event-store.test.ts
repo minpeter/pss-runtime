@@ -138,7 +138,7 @@ describe("DurableObjectSqliteEventStore", () => {
     expect(await collect(store, "missing")).toEqual([]);
   });
 
-  it("rejects event rows that exceed the serialized payload budget", async () => {
+  it("chunks event rows that exceed the serialized payload budget", async () => {
     const { storage, store } = createStore({ maxPayloadBytes: 80 });
     const event = {
       output: "x".repeat(120),
@@ -147,11 +147,35 @@ describe("DurableObjectSqliteEventStore", () => {
       type: "tool-result",
     } as const;
 
-    await expect(store.append("run-1", event)).rejects.toMatchObject({
-      maxBytes: 80,
-      payloadKind: "event",
+    await expect(store.append("run-1", event)).resolves.toEqual({
+      offset: 1,
     });
-    expect(readRows(storage, "run-1")).toEqual([]);
+    await expect(collect(store, "run-1")).resolves.toMatchObject([{ event }]);
+    const chunkRows = (storage.sql as InMemorySqlStorage)
+      .exec<{ readonly count: number }>(
+        "SELECT COUNT(*) AS count FROM pss_payload_chunk WHERE scope = ?",
+        "event"
+      )
+      .toArray()[0];
+    expect(chunkRows?.count).toBeGreaterThan(0);
+  });
+
+  it("does not advance the cursor when event serialization fails", async () => {
+    const { store } = createStore();
+    const unserializableEvent = {
+      toJSON: () => undefined,
+      type: "turn-start",
+    } satisfies {
+      readonly toJSON: () => undefined;
+      readonly type: "turn-start";
+    };
+
+    await expect(
+      store.append("run-1", unserializableEvent)
+    ).rejects.toMatchObject({ payloadKind: "event" });
+    await expect(
+      store.append("run-1", { type: "turn-start" })
+    ).resolves.toEqual({ offset: 1 });
   });
 
   it("round-trips a run whose total event payload exceeds the 2MB blob limit", async () => {

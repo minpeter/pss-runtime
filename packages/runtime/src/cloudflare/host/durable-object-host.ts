@@ -42,12 +42,14 @@ export interface CloudflareDurableObjectState {
 export class InMemoryCloudflareDurableObjectStorage extends BaseInMemoryCloudflareDurableObjectStorage {}
 
 export function createCloudflareDurableObjectHost({
+  maxPayloadBytes,
   prefix = defaultPrefix,
   sessionStore,
   threadStore,
   storage,
   scheduler = createCloudflareAlarmScheduler({ prefix, storage }),
 }: {
+  readonly maxPayloadBytes?: number;
   readonly prefix?: string;
   readonly scheduler?: ExecutionScheduler;
   /** @deprecated Use threadStore. */
@@ -55,7 +57,11 @@ export function createCloudflareDurableObjectHost({
   readonly threadStore?: ThreadStore;
   readonly storage: CloudflareDurableObjectStorage;
 }): ExecutionHost {
-  const store = new DurableObjectExecutionStore({ prefix, storage });
+  const store = new DurableObjectExecutionStore({
+    maxPayloadBytes,
+    prefix,
+    storage,
+  });
   const customThreadStore = threadStore ?? sessionStore;
   return {
     kind: "execution",

@@ -1,11 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_STORAGE_COMPACTION_MODE as PUBLIC_DEFAULT_STORAGE_COMPACTION_MODE,
+  DEFAULT_STORAGE_EXTERNALIZATION_MODE as PUBLIC_DEFAULT_STORAGE_EXTERNALIZATION_MODE,
   DEFAULT_STORAGE_PAYLOAD_MAX_BYTES as PUBLIC_DEFAULT_STORAGE_PAYLOAD_MAX_BYTES,
+  DEFAULT_STORAGE_PAYLOAD_OVERFLOW_STRATEGY as PUBLIC_DEFAULT_STORAGE_PAYLOAD_OVERFLOW_STRATEGY,
   StoragePayloadSerializationError as PublicStoragePayloadSerializationError,
   StoragePayloadTooLargeError as PublicStoragePayloadTooLargeError,
+  resolveStoragePayloadPolicy as publicResolveStoragePayloadPolicy,
 } from "../index";
 import {
+  DEFAULT_STORAGE_COMPACTION_MODE,
+  DEFAULT_STORAGE_EXTERNALIZATION_MODE,
   DEFAULT_STORAGE_PAYLOAD_MAX_BYTES,
+  DEFAULT_STORAGE_PAYLOAD_OVERFLOW_STRATEGY,
+  resolveStoragePayloadPolicy,
   StoragePayloadSerializationError,
   StoragePayloadTooLargeError,
   serializedJsonByteLength,
@@ -73,9 +81,34 @@ describe("storage payload guard", () => {
     expect(PUBLIC_DEFAULT_STORAGE_PAYLOAD_MAX_BYTES).toBe(
       DEFAULT_STORAGE_PAYLOAD_MAX_BYTES
     );
+    expect(PUBLIC_DEFAULT_STORAGE_PAYLOAD_OVERFLOW_STRATEGY).toBe(
+      DEFAULT_STORAGE_PAYLOAD_OVERFLOW_STRATEGY
+    );
+    expect(PUBLIC_DEFAULT_STORAGE_EXTERNALIZATION_MODE).toBe(
+      DEFAULT_STORAGE_EXTERNALIZATION_MODE
+    );
+    expect(PUBLIC_DEFAULT_STORAGE_COMPACTION_MODE).toBe(
+      DEFAULT_STORAGE_COMPACTION_MODE
+    );
     expect(PublicStoragePayloadTooLargeError).toBe(StoragePayloadTooLargeError);
     expect(PublicStoragePayloadSerializationError).toBe(
       StoragePayloadSerializationError
     );
+    expect(publicResolveStoragePayloadPolicy).toBe(resolveStoragePayloadPolicy);
+  });
+
+  it("resolves explicit storage payload policy defaults", () => {
+    expect(resolveStoragePayloadPolicy()).toEqual({
+      compactionMode: "manual",
+      externalizationMode: "disabled",
+      maxPayloadBytes: DEFAULT_STORAGE_PAYLOAD_MAX_BYTES,
+      overflowStrategy: "sql-chunks",
+    });
+    expect(resolveStoragePayloadPolicy({ maxPayloadBytes: 512 })).toEqual({
+      compactionMode: "manual",
+      externalizationMode: "disabled",
+      maxPayloadBytes: 512,
+      overflowStrategy: "sql-chunks",
+    });
   });
 });

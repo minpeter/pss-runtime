@@ -272,13 +272,15 @@ function runScheduledWorkId(runId: string): string {
 function threadPromptScheduledWorkId(
   prompt: CloudflareScheduledThreadPrompt
 ): string {
-  return [
-    prompt.threadKey,
-    prompt.idempotencyKey ?? "",
-    prompt.runId ?? "",
-  ].join("\u0000");
+  return [prompt.threadKey, prompt.idempotencyKey ?? "", prompt.runId ?? ""]
+    .map(scheduledWorkIdPart)
+    .join("|");
 }
 
 function normalizedListLimit(limit: number | undefined): number | undefined {
   return limit === undefined ? undefined : Math.max(0, Math.floor(limit));
+}
+
+function scheduledWorkIdPart(value: string): string {
+  return `${value.length}:${value}`;
 }

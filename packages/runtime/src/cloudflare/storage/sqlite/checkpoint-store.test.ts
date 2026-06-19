@@ -145,23 +145,26 @@ describe("DurableObjectSqliteCheckpointStore", () => {
     expect(readRows(storage, "run-1")).toHaveLength(1);
   });
 
-  it("rejects checkpoint rows that exceed the serialized payload budget", async () => {
+  it("chunks checkpoint rows that exceed the serialized payload budget", async () => {
     const { storage, store } = await createRanStore("run-1", {
-      maxPayloadBytes: 80,
+      maxPayloadBytes: 220,
+    });
+    const value = checkpoint("run-1", 1, {
+      runtimeState: { notes: "x".repeat(300) },
     });
 
-    await expect(
-      store.append(
-        checkpoint("run-1", 1, {
-          runtimeState: { notes: "x".repeat(120) },
-        }),
-        { expectedVersion: 0 }
-      )
-    ).rejects.toMatchObject({
-      maxBytes: 80,
-      payloadKind: "checkpoint",
+    await expect(store.append(value, { expectedVersion: 0 })).resolves.toEqual({
+      ok: true,
+      version: 1,
     });
-    expect(readRows(storage, "run-1")).toEqual([]);
+    await expect(store.latest("run-1")).resolves.toEqual(value);
+    const chunkRows = (storage.sql as InMemorySqlStorage)
+      .exec<{ readonly count: number }>(
+        "SELECT COUNT(*) AS count FROM pss_payload_chunk WHERE scope = ?",
+        "checkpoint"
+      )
+      .toArray()[0];
+    expect(chunkRows?.count).toBeGreaterThan(0);
   });
 
   it("appends many checkpoints without losing earlier ones", async () => {

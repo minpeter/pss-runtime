@@ -65,11 +65,20 @@ export type {
   SqlStorageCursorLike,
 } from "./sql/ports/storage-port";
 export type {
+  ResolvedStoragePayloadPolicy,
+  StorageCompactionMode,
+  StorageExternalizationMode,
   StoragePayloadBudgetOptions,
   StoragePayloadKind,
+  StoragePayloadOverflowStrategy,
+  StoragePayloadPolicyOptions,
 } from "./storage/payload-guard";
 export {
+  DEFAULT_STORAGE_COMPACTION_MODE,
+  DEFAULT_STORAGE_EXTERNALIZATION_MODE,
   DEFAULT_STORAGE_PAYLOAD_MAX_BYTES,
+  DEFAULT_STORAGE_PAYLOAD_OVERFLOW_STRATEGY,
+  resolveStoragePayloadPolicy,
   StoragePayloadSerializationError,
   StoragePayloadTooLargeError,
 } from "./storage/payload-guard";

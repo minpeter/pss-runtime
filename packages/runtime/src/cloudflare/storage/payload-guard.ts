@@ -1,4 +1,7 @@
 export const DEFAULT_STORAGE_PAYLOAD_MAX_BYTES = 1_900_000;
+export const DEFAULT_STORAGE_PAYLOAD_OVERFLOW_STRATEGY = "sql-chunks";
+export const DEFAULT_STORAGE_EXTERNALIZATION_MODE = "disabled";
+export const DEFAULT_STORAGE_COMPACTION_MODE = "manual";
 
 export type StoragePayloadKind =
   | "checkpoint"
@@ -10,6 +13,24 @@ export type StoragePayloadKind =
 
 export interface StoragePayloadBudgetOptions {
   readonly maxPayloadBytes?: number;
+}
+
+export type StoragePayloadOverflowStrategy = "sql-chunks";
+export type StorageExternalizationMode = "disabled";
+export type StorageCompactionMode = "manual";
+
+export interface StoragePayloadPolicyOptions
+  extends StoragePayloadBudgetOptions {
+  readonly compactionMode?: StorageCompactionMode;
+  readonly externalizationMode?: StorageExternalizationMode;
+  readonly overflowStrategy?: StoragePayloadOverflowStrategy;
+}
+
+export interface ResolvedStoragePayloadPolicy {
+  readonly compactionMode: StorageCompactionMode;
+  readonly externalizationMode: StorageExternalizationMode;
+  readonly maxPayloadBytes: number;
+  readonly overflowStrategy: StoragePayloadOverflowStrategy;
 }
 
 export class StoragePayloadTooLargeError extends Error {
@@ -52,6 +73,19 @@ export function resolveStoragePayloadMaxBytes(
   options: StoragePayloadBudgetOptions = {}
 ): number {
   return options.maxPayloadBytes ?? DEFAULT_STORAGE_PAYLOAD_MAX_BYTES;
+}
+
+export function resolveStoragePayloadPolicy(
+  options: StoragePayloadPolicyOptions = {}
+): ResolvedStoragePayloadPolicy {
+  return {
+    compactionMode: options.compactionMode ?? DEFAULT_STORAGE_COMPACTION_MODE,
+    externalizationMode:
+      options.externalizationMode ?? DEFAULT_STORAGE_EXTERNALIZATION_MODE,
+    maxPayloadBytes: resolveStoragePayloadMaxBytes(options),
+    overflowStrategy:
+      options.overflowStrategy ?? DEFAULT_STORAGE_PAYLOAD_OVERFLOW_STRATEGY,
+  };
 }
 
 export function serializedJsonByteLength(serialized: string): number {
