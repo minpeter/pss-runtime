@@ -1,7 +1,7 @@
 import {
   appendCheckpoint,
-  resumeStepFromCheckpoint,
   resumeStateCheckpointReference,
+  resumeStepFromCheckpoint,
   throwIfManualToolRecoveryRequired,
 } from "./checkpoints";
 import {

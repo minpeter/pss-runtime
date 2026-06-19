@@ -155,7 +155,11 @@ function putSqlRun(sql: SqlStorage, prefix: string, record: RunRecord): void {
   );
 }
 
-function insertSqlRun(sql: SqlStorage, prefix: string, record: RunRecord): void {
+function insertSqlRun(
+  sql: SqlStorage,
+  prefix: string,
+  record: RunRecord
+): void {
   ensureRunSchema(sql);
   const nowMs = Date.now();
   sql.exec(

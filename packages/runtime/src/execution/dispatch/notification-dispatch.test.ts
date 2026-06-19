@@ -123,8 +123,7 @@ function hostWithDuplicateRunCreate(host: ExecutionHost): ExecutionHost {
       return { ok: false, reason: "duplicate", record: existing } as const;
     },
     get: (runId) => host.store.runs.get(runId),
-    getByDedupeKey: (dedupeKey) =>
-      host.store.runs.getByDedupeKey(dedupeKey),
+    getByDedupeKey: (dedupeKey) => host.store.runs.getByDedupeKey(dedupeKey),
     listByParentRunId: (parentRunId) =>
       host.store.runs.listByParentRunId(parentRunId),
     update: (record) => host.store.runs.update(record),

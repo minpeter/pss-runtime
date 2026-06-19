@@ -5,8 +5,8 @@ import { DurableObjectSqliteThreadStore } from "./thread-store";
 import {
   createStore,
   PREFIX,
-  readChunkRows,
   REQUIRES_SQLITE,
+  readChunkRows,
   readRows,
   snapshot,
 } from "./thread-store.test-support";
