@@ -15,6 +15,7 @@ export {
   createNodeFileThreadHost,
   type NodeFileThreadHostOptions,
 } from "./host/file-thread-host";
+export { drainScheduledNodeWork } from "./host/scheduled-work-drainer";
 export {
   ackScheduledNodeRun,
   ackScheduledNodeThreadPrompt,
@@ -22,9 +23,15 @@ export {
   appendScheduledNodeThreadPrompt,
   listScheduledNodeRuns,
   listScheduledNodeThreadPrompts,
-  type NodeScheduledThreadPrompt,
-  type NodeScheduledWorkListOptions,
-} from "./host/scheduled-work-queue";
+} from "./host/scheduled-work-store";
+export type {
+  NodeScheduledThreadPrompt,
+  NodeScheduledWorkAppendOptions,
+  NodeScheduledWorkDrainOptions,
+  NodeScheduledWorkDrainResult,
+  NodeScheduledWorkListOptions,
+  NodeScheduledWorkRunContext,
+} from "./host/scheduled-work-types";
 export { FileExecutionStore } from "./storage/file-execution-store";
 export {
   FileSessionStore,

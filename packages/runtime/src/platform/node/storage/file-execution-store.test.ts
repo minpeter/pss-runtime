@@ -1,38 +1,23 @@
-import { randomUUID } from "node:crypto";
-import {
-  mkdir,
-  mkdtemp,
-  readdir,
-  readFile,
-  utimes,
-  writeFile,
-} from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readdir, utimes } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { describe, expect, it } from "vitest";
 import { describeExecutionStoreContract } from "../../../contracts/execution-store/contract";
-import type {
-  NotificationRecord,
-  RunCheckpoint,
-  RunRecord,
-  StoredAgentEvent,
-} from "../../../execution";
 import { FileExecutionStore } from "./file-execution-store";
-
-const base64Url = (value: string) => Buffer.from(value).toString("base64url");
-const malformedCheckpointPattern =
-  /Invalid FileExecutionStore checkpoint file .*invalid JSON/;
-const malformedEventPattern =
-  /Invalid FileExecutionStore event log .*invalid JSON/;
-const malformedNotificationPattern =
-  /Invalid FileExecutionStore notification file .*invalid JSON/;
-const malformedRunPattern =
-  /Invalid FileExecutionStore run file .*invalid JSON/;
-const malformedThreadPattern = /Invalid FileThreadStore file .*invalid JSON/;
+import {
+  base64Url,
+  checkpointRecord,
+  collectEvents,
+  contractTempDir,
+  createDeferred,
+  currentDataDirectory,
+  notificationRecord,
+  runRecord,
+  tempDir,
+} from "./file-execution-store-test-support";
 
 describeExecutionStoreContract({
-  createStore: () => new FileExecutionStore(join(tmpdir(), randomUUID())),
+  createStore: () => new FileExecutionStore(contractTempDir()),
   name: "FileExecutionStore",
 });
 
@@ -125,120 +110,6 @@ describe("FileExecutionStore", () => {
     await expect(
       readdir(join(dataDirectory, "notifications"))
     ).resolves.toContain(`${base64Url("notify:persist")}.json`);
-  });
-
-  it("returns the existing run for duplicate run ids and dedupe keys", async () => {
-    const store = new FileExecutionStore(await tempDir());
-    const original = runRecord("run:duplicate", {
-      dedupeKey: "dedupe:duplicate",
-    });
-
-    await expect(store.runs.create(original)).resolves.toEqual({
-      ok: true,
-      record: original,
-    });
-    await expect(
-      store.runs.create({
-        ...runRecord("run:duplicate"),
-        checkpointVersion: 7,
-        dedupeKey: "other-dedupe",
-        status: "completed",
-      })
-    ).resolves.toEqual({
-      ok: false,
-      reason: "duplicate",
-      record: original,
-    });
-    await expect(
-      store.runs.create({
-        ...runRecord("run:other"),
-        dedupeKey: "dedupe:duplicate",
-      })
-    ).resolves.toEqual({
-      ok: false,
-      reason: "duplicate",
-      record: original,
-    });
-    await expect(store.runs.get("run:duplicate")).resolves.toEqual(original);
-    await expect(store.runs.get("run:other")).resolves.toBeNull();
-  });
-
-  it("claims only claimable runs after active leases expire", async () => {
-    const store = new FileExecutionStore(await tempDir());
-    await store.runs.create(runRecord("run:claim"));
-
-    await expect(
-      store.runs.claim("run:claim", {
-        attempt: 1,
-        leaseId: "lease-1",
-        leaseMs: 100,
-        nowMs: 1000,
-      })
-    ).resolves.toMatchObject({
-      lease: { attempt: 1, leaseId: "lease-1", leaseUntilMs: 1100 },
-      ok: true,
-      record: { status: "leased" },
-    });
-    await expect(
-      store.runs.claim("run:claim", {
-        attempt: 2,
-        leaseId: "lease-2",
-        leaseMs: 100,
-        nowMs: 1099,
-      })
-    ).resolves.toEqual({ ok: false, reason: "leased" });
-    await expect(
-      store.runs.claim("run:claim", {
-        attempt: 2,
-        leaseId: "lease-2",
-        leaseMs: 50,
-        nowMs: 1100,
-      })
-    ).resolves.toMatchObject({
-      lease: { attempt: 2, leaseId: "lease-2", leaseUntilMs: 1150 },
-      ok: true,
-    });
-
-    await store.runs.create(runRecord("run:done", { status: "completed" }));
-    await expect(
-      store.runs.claim("run:done", {
-        attempt: 1,
-        leaseId: "lease-done",
-        leaseMs: 100,
-        nowMs: 0,
-      })
-    ).resolves.toEqual({ ok: false, reason: "not-claimable" });
-  });
-
-  it("acks and releases notifications by idempotency key", async () => {
-    const store = new FileExecutionStore(await tempDir());
-    const notification = notificationRecord("notify:claim");
-
-    await expect(store.notifications.enqueue(notification)).resolves.toEqual({
-      ok: true,
-    });
-    await expect(
-      store.notifications.claimByIdempotencyKey("notify:claim")
-    ).resolves.toEqual({
-      ok: true,
-      record: { ...notification, status: "acked" },
-    });
-    await expect(
-      store.notifications.getByIdempotencyKey("notify:claim")
-    ).resolves.toEqual({ ...notification, status: "acked" });
-    await expect(
-      store.notifications.claimByIdempotencyKey("notify:claim")
-    ).resolves.toEqual({
-      ok: false,
-      reason: "already-claimed",
-      record: { ...notification, status: "acked" },
-    });
-
-    await store.notifications.releaseByIdempotencyKey("notify:claim");
-
-    await expect(
-      store.notifications.getByIdempotencyKey("notify:claim")
-    ).resolves.toEqual(notification);
   });
 
   it("rolls back file-backed transaction writes after a failure", async () => {
@@ -363,137 +234,4 @@ describe("FileExecutionStore", () => {
       state: { value: "outside" },
     });
   });
-
-  it("throws deterministic errors for malformed persisted JSON files", async () => {
-    const directory = await tempDir();
-    const store = new FileExecutionStore(directory);
-    await expect(store.runs.get("run:missing")).resolves.toBeNull();
-    const dataDirectory = await currentDataDirectory(directory);
-
-    await mkdir(join(dataDirectory, "runs"), { recursive: true });
-    await mkdir(join(dataDirectory, "events"), { recursive: true });
-    await mkdir(join(dataDirectory, "checkpoints", base64Url("run:bad")), {
-      recursive: true,
-    });
-    await mkdir(join(dataDirectory, "notifications"), { recursive: true });
-    await mkdir(join(dataDirectory, "threads"), { recursive: true });
-    await writeFile(
-      join(dataDirectory, "runs", `${base64Url("run:bad")}.json`),
-      "{ nope",
-      "utf8"
-    );
-    await writeFile(
-      join(dataDirectory, "events", `${base64Url("run:bad")}.jsonl`),
-      "{ nope\n",
-      "utf8"
-    );
-    await writeFile(
-      join(dataDirectory, "checkpoints", base64Url("run:bad"), "1.json"),
-      "{ nope",
-      "utf8"
-    );
-    await writeFile(
-      join(dataDirectory, "notifications", `${base64Url("notify:bad")}.json`),
-      "{ nope",
-      "utf8"
-    );
-    await writeFile(
-      join(dataDirectory, "threads", `${base64Url("thread:bad")}.json`),
-      "{ nope",
-      "utf8"
-    );
-
-    await expect(store.runs.get("run:bad")).rejects.toThrow(
-      malformedRunPattern
-    );
-    await expect(collectEvents(store.events.read("run:bad"))).rejects.toThrow(
-      malformedEventPattern
-    );
-    await expect(store.checkpoints.latest("run:bad")).rejects.toThrow(
-      malformedCheckpointPattern
-    );
-    await expect(
-      store.notifications.getByIdempotencyKey("notify:bad")
-    ).rejects.toThrow(malformedNotificationPattern);
-    await expect(store.threads.load("thread:bad")).rejects.toThrow(
-      malformedThreadPattern
-    );
-  });
 });
-
-async function collectEvents(
-  events: AsyncIterable<StoredAgentEvent>
-): Promise<readonly StoredAgentEvent[]> {
-  const collected: StoredAgentEvent[] = [];
-  for await (const event of events) {
-    collected.push(event);
-  }
-  return collected;
-}
-
-function tempDir(): Promise<string> {
-  return mkdtemp(join(tmpdir(), "pss-runtime-file-execution-store-"));
-}
-
-async function currentDataDirectory(directory: string): Promise<string> {
-  const generationId = await readFile(
-    join(directory, ".current-generation"),
-    "utf8"
-  );
-  return join(directory, "generations", generationId.trim());
-}
-
-function createDeferred(): {
-  readonly promise: Promise<void>;
-  resolve(): void;
-} {
-  let resolvePromise: () => void = () => undefined;
-  const promise = new Promise<void>((resolve) => {
-    resolvePromise = resolve;
-  });
-  return {
-    promise,
-    resolve: resolvePromise,
-  };
-}
-
-function runRecord(
-  runId: string,
-  overrides: Partial<RunRecord> = {}
-): RunRecord {
-  return {
-    checkpointVersion: 0,
-    kind: "user-turn",
-    rootRunId: runId,
-    runId,
-    threadKey: "thread-1",
-    status: "queued",
-    ...overrides,
-  };
-}
-
-function checkpointRecord(runId: string, version: number): RunCheckpoint {
-  return {
-    checkpointId: `${runId}:checkpoint-${version}`,
-    phase: "before-model",
-    runId,
-    runtimeState: { version },
-    threadSnapshot: { version },
-    version,
-  };
-}
-
-function notificationRecord(
-  idempotencyKey: string,
-  overrides: Partial<NotificationRecord> = {}
-): NotificationRecord {
-  return {
-    idempotencyKey,
-    input: { text: "ready", type: "user-text" },
-    notificationId: `${idempotencyKey}:notification`,
-    runId: "run-1",
-    threadKey: "thread-1",
-    status: "pending",
-    ...overrides,
-  };
-}

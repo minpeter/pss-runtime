@@ -3,7 +3,7 @@ import { FileExecutionStore } from "../storage/file-execution-store";
 import {
   appendScheduledNodeRun,
   appendScheduledNodeThreadPrompt,
-} from "./scheduled-work-queue";
+} from "./scheduled-work-store";
 
 export interface NodeFileExecutionHostOptions {
   readonly directory: string;
@@ -23,8 +23,8 @@ export function createNodeFileScheduler({
   directory,
 }: NodeFileExecutionHostOptions): ExecutionScheduler {
   return {
-    enqueueRun: async (runId) => {
-      await appendScheduledNodeRun(directory, runId);
+    enqueueRun: async (runId, options) => {
+      await appendScheduledNodeRun(directory, runId, options);
     },
     resumeThread: async (threadKey, options) => {
       await appendScheduledNodeThreadPrompt(directory, {

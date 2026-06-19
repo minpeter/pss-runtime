@@ -53,7 +53,7 @@ const REQUIRED_RUNTIME_CLOUDFLARE_EXPORTS = [
   "rescheduleCloudflareAlarm",
 ];
 const REQUIRED_RUNTIME_NODE_EXPORTS =
-  "FileExecutionStore FileSessionStore FileThreadStore NodeFileAgentContext NodeFileAgentContextFactoryOptions NodeFileAgentContextOptions NodeFileExecutionHostOptions NodeFileThreadHostOptions NodeScheduledThreadPrompt NodeScheduledWorkListOptions ackScheduledNodeRun ackScheduledNodeThreadPrompt appendScheduledNodeRun appendScheduledNodeThreadPrompt createNodeFileAgentContext createNodeFileExecutionHost createNodeFileScheduler createNodeFileThreadHost listScheduledNodeRuns listScheduledNodeThreadPrompts".split(
+  "FileExecutionStore FileSessionStore FileThreadStore NodeFileAgentContext NodeFileAgentContextFactoryOptions NodeFileAgentContextOptions NodeFileExecutionHostOptions NodeFileThreadHostOptions NodeScheduledThreadPrompt NodeScheduledWorkAppendOptions NodeScheduledWorkDrainOptions NodeScheduledWorkDrainResult NodeScheduledWorkListOptions NodeScheduledWorkRunContext ackScheduledNodeRun ackScheduledNodeThreadPrompt appendScheduledNodeRun appendScheduledNodeThreadPrompt createNodeFileAgentContext createNodeFileExecutionHost createNodeFileScheduler createNodeFileThreadHost drainScheduledNodeWork listScheduledNodeRuns listScheduledNodeThreadPrompts".split(
     " "
   );
 const FORBIDDEN_RUNTIME_ROOT_NAMES = [
@@ -75,9 +75,10 @@ const FORBIDDEN_RUNTIME_ROOT_NAMES = [
     "RuntimeToolExecutionDecision RuntimeToolRetryPolicy",
     "FileExecutionStore FileThreadStore FileSessionStore NodeFileAgentContext",
     "NodeFileAgentContextFactoryOptions NodeFileAgentContextOptions NodeFileExecutionHostOptions",
-    "NodeFileThreadHostOptions NodeScheduledThreadPrompt NodeScheduledWorkListOptions",
+    "NodeFileThreadHostOptions NodeScheduledThreadPrompt NodeScheduledWorkAppendOptions",
+    "NodeScheduledWorkDrainOptions NodeScheduledWorkDrainResult NodeScheduledWorkListOptions NodeScheduledWorkRunContext",
     "ackScheduledNodeRun ackScheduledNodeThreadPrompt appendScheduledNodeRun appendScheduledNodeThreadPrompt",
-    "createNodeFileAgentContext createNodeFileExecutionHost createNodeFileScheduler createNodeFileThreadHost",
+    "createNodeFileAgentContext createNodeFileExecutionHost createNodeFileScheduler createNodeFileThreadHost drainScheduledNodeWork",
     "listScheduledNodeRuns listScheduledNodeThreadPrompts",
   ].flatMap((names) => names.split(" ")),
   ["create", "Llm"].join(""),
