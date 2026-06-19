@@ -9,7 +9,7 @@ export default defineConfig({
         find: /^@minpeter\/pss-runtime\/cloudflare$/,
         replacement: resolve(
           import.meta.dirname,
-          "../../packages/runtime/src/cloudflare/index.ts"
+          "../../packages/runtime/src/platform/cloudflare/index.ts"
         ),
       },
       {

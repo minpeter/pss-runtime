@@ -20,6 +20,10 @@ const removedRuntimeModelNames = [
 ];
 const removedRuntimeModelValueName = ["create", "Llm"].join("");
 
+function runtimeDistDeclaration(cwd, ...segments) {
+  return join(cwd, "packages", "runtime", "dist", ...segments, "index.d.ts");
+}
+
 describe("verifyReleaseArtifacts runtime declaration checks", () => {
   it("allows direct AI SDK types in runtime public declarations", () => {
     const cwd = createFixture();
@@ -190,51 +194,49 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
 
   it("requires the runtime cloudflare declaration entrypoint", () => {
     const cwd = createFixture();
-    rmSync(
-      join(cwd, "packages", "runtime", "dist", "cloudflare", "index.d.ts")
-    );
+    rmSync(runtimeDistDeclaration(cwd, "platform", "cloudflare"));
 
     expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
-      "packages/runtime/dist/cloudflare/index.d.ts: missing cloudflare runtime declaration",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing cloudflare runtime declaration",
     ]);
   });
 
   it("checks Cloudflare Worker helpers on the cloudflare declaration subpath", () => {
     const cwd = createFixture();
     writeFileSync(
-      join(cwd, "packages", "runtime", "dist", "cloudflare", "index.d.ts"),
+      runtimeDistDeclaration(cwd, "platform", "cloudflare"),
       "export {};\n"
     );
 
     expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentContext",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentContextFactoryOptions",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentContextOptions",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentContextPrefixOptions",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentRunDrainOptions",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAlarmAgent",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAlarmDrainSummary",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectFetchOptions",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectId",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectNamespace",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectState",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectStorage",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectStub",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectStubOptions",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareScheduledThreadPrompt",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export InMemoryCloudflareDurableObjectStorage",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export ackScheduledCloudflareRun",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export ackScheduledCloudflareThreadPrompt",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareAlarmScheduler",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareAgentContext",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareDurableObjectHost",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export drainAgentRun",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export drainCloudflareAlarm",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export fetchCloudflareDurableObject",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export getCloudflareDurableObjectStub",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export listScheduledCloudflareRuns",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export listScheduledCloudflareThreadPrompts",
-      "packages/runtime/dist/cloudflare/index.d.ts: missing explicit cloudflare runtime export rescheduleCloudflareAlarm",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentContext",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentContextFactoryOptions",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentContextOptions",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentContextPrefixOptions",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentRunDrainOptions",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAlarmAgent",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAlarmDrainSummary",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectFetchOptions",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectId",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectNamespace",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectState",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectStorage",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectStub",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectStubOptions",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareScheduledThreadPrompt",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export InMemoryCloudflareDurableObjectStorage",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export ackScheduledCloudflareRun",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export ackScheduledCloudflareThreadPrompt",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareAlarmScheduler",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareAgentContext",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareDurableObjectHost",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export drainAgentRun",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export drainCloudflareAlarm",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export fetchCloudflareDurableObject",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export getCloudflareDurableObjectStub",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export listScheduledCloudflareRuns",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export listScheduledCloudflareThreadPrompts",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export rescheduleCloudflareAlarm",
     ]);
   });
 

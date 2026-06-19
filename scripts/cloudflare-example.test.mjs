@@ -8,22 +8,22 @@ function readText(path) {
 describe("cloudflare durable object adapter", () => {
   it("exposes the packaged Worker/Durable Object adapter surface", () => {
     const hostSource = readText(
-      "packages/runtime/src/cloudflare/host/durable-object-host.ts"
+      "packages/runtime/src/platform/cloudflare/host/durable-object-host.ts"
     );
     const storeSource = readText(
-      "packages/runtime/src/cloudflare/storage/execution/store.ts"
+      "packages/runtime/src/platform/cloudflare/storage/execution/store.ts"
     );
     const alarmDrainerSource = readText(
-      "packages/runtime/src/cloudflare/alarm/drainer.ts"
+      "packages/runtime/src/platform/cloudflare/alarm/drainer.ts"
     );
     const alarmWorkSource = readText(
-      "packages/runtime/src/cloudflare/alarm/scheduled-work.ts"
+      "packages/runtime/src/platform/cloudflare/alarm/scheduled-work.ts"
     );
     const threadStoreSource = readText(
-      "packages/runtime/src/cloudflare/storage/sqlite/thread-store.ts"
+      "packages/runtime/src/platform/cloudflare/storage/sqlite/thread-store.ts"
     );
     const threadStoreSqlSource = readText(
-      "packages/runtime/src/cloudflare/storage/sqlite/thread-store-sql.ts"
+      "packages/runtime/src/platform/cloudflare/storage/sqlite/thread-store-sql.ts"
     );
 
     expect(hostSource).not.toContain("createFakeCloudflareDurableObjectHost");
@@ -41,7 +41,7 @@ describe("cloudflare durable object adapter", () => {
 
   it("drives Cloudflare scheduled runs and thread prompts through stored alarms", async () => {
     const { InMemorySqlStorage } = await import(
-      "../packages/runtime/src/cloudflare/sql/node-test/node-sqlite-storage.ts"
+      "../packages/runtime/src/platform/cloudflare/sql/node-test/node-sqlite-storage.ts"
     );
     const {
       InMemoryCloudflareDurableObjectStorage,
@@ -50,7 +50,7 @@ describe("cloudflare durable object adapter", () => {
       createCloudflareDurableObjectHost,
       listScheduledCloudflareRuns,
       listScheduledCloudflareThreadPrompts,
-    } = await import("../packages/runtime/src/cloudflare/index.ts");
+    } = await import("../packages/runtime/src/platform/cloudflare/index.ts");
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
@@ -97,13 +97,13 @@ describe("cloudflare durable object adapter", () => {
 
   it("stores Durable Object threads in SQLite rows", async () => {
     const { InMemorySqlStorage } = await import(
-      "../packages/runtime/src/cloudflare/sql/node-test/node-sqlite-storage.ts"
+      "../packages/runtime/src/platform/cloudflare/sql/node-test/node-sqlite-storage.ts"
     );
     const { DurableObjectSqliteThreadStore } = await import(
-      "../packages/runtime/src/cloudflare/storage/sqlite/thread-store.ts"
+      "../packages/runtime/src/platform/cloudflare/storage/sqlite/thread-store.ts"
     );
     const { InMemoryCloudflareDurableObjectStorage } = await import(
-      "../packages/runtime/src/cloudflare/index.ts"
+      "../packages/runtime/src/platform/cloudflare/index.ts"
     );
 
     const storage = new InMemoryCloudflareDurableObjectStorage({

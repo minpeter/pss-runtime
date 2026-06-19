@@ -23,6 +23,11 @@ export const runtimeCloudflareDeclaration = [
   'export type { CloudflareAgentContext, CloudflareAgentContextFactoryOptions, CloudflareAgentContextOptions, CloudflareAgentContextPrefixOptions, CloudflareAgentRunDrainOptions, CloudflareAlarmAgent, CloudflareAlarmDrainSummary, CloudflareDurableObjectFetchOptions, CloudflareDurableObjectId, CloudflareDurableObjectNamespace, CloudflareDurableObjectState, CloudflareDurableObjectStorage, CloudflareDurableObjectStub, CloudflareDurableObjectStubOptions, CloudflareScheduledThreadPrompt } from "./index";',
   "",
 ].join("\n");
+export const runtimeNodeDeclaration = [
+  'export { createNodeFileThreadHost, FileSessionStore, FileThreadStore } from "./index";',
+  'export type { NodeFileThreadHostOptions } from "./index";',
+  "",
+].join("\n");
 
 let tempRoots = [];
 
@@ -108,12 +113,36 @@ function writeRuntimeDeclarationFixtures(cwd, packageName) {
     join(cwd, "packages", packageName, "dist", "execution", "index.d.ts"),
     runtimeExecutionDeclaration
   );
-  mkdirSync(join(cwd, "packages", packageName, "dist", "cloudflare"), {
+  mkdirSync(
+    join(cwd, "packages", packageName, "dist", "platform", "cloudflare"),
+    { recursive: true }
+  );
+  writeFileSync(
+    join(
+      cwd,
+      "packages",
+      packageName,
+      "dist",
+      "platform",
+      "cloudflare",
+      "index.d.ts"
+    ),
+    runtimeCloudflareDeclaration
+  );
+  mkdirSync(join(cwd, "packages", packageName, "dist", "platform", "node"), {
     recursive: true,
   });
   writeFileSync(
-    join(cwd, "packages", packageName, "dist", "cloudflare", "index.d.ts"),
-    runtimeCloudflareDeclaration
+    join(
+      cwd,
+      "packages",
+      packageName,
+      "dist",
+      "platform",
+      "node",
+      "index.d.ts"
+    ),
+    runtimeNodeDeclaration
   );
   writeFileSync(
     join(cwd, "packages", packageName, "dist", "llm.d.ts"),

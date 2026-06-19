@@ -77,6 +77,9 @@ describe("runtime public exports", () => {
     expect(runtime).toHaveProperty("runPluginsForEvent", runPluginsForEvent);
     expect(runtime).not.toHaveProperty("createInMemoryExecutionHost");
     expect(runtime).not.toHaveProperty("createCloudflareDurableObjectHost");
+    expect(runtime).not.toHaveProperty("createCloudflareAgentContext");
+    expect(runtime).not.toHaveProperty("createNodeFileThreadHost");
+    expect(runtime).not.toHaveProperty("FileThreadStore");
     expect(runtime).not.toHaveProperty("executionHost");
     expect(runtime).not.toHaveProperty("BackgroundScheduler");
     expect(runtime).not.toHaveProperty("ToolExecutionNeedsRecoveryError");
@@ -232,5 +235,39 @@ describe("runtime public exports", () => {
     expect(packageJson.exports["./session-store/file"]).toEqual(
       packageJson.exports["./thread-store/file"]
     );
+  });
+
+  it("declares the Cloudflare adapter as a platform implementation subpath", async () => {
+    const packageJson = JSON.parse(
+      await readFile(
+        fileURLToPath(new URL("../../package.json", import.meta.url)),
+        "utf8"
+      )
+    ) as {
+      exports: Record<string, { "@minpeter/pss-source": string }>;
+    };
+
+    expect(packageJson.exports["./cloudflare"]).toMatchObject({
+      "@minpeter/pss-source": "./src/platform/cloudflare/index.ts",
+      import: "./dist/platform/cloudflare/index.js",
+      types: "./dist/platform/cloudflare/index.d.ts",
+    });
+  });
+
+  it("declares the Node adapter as a platform implementation subpath", async () => {
+    const packageJson = JSON.parse(
+      await readFile(
+        fileURLToPath(new URL("../../package.json", import.meta.url)),
+        "utf8"
+      )
+    ) as {
+      exports: Record<string, { "@minpeter/pss-source": string }>;
+    };
+
+    expect(packageJson.exports["./node"]).toMatchObject({
+      "@minpeter/pss-source": "./src/platform/node/index.ts",
+      import: "./dist/platform/node/index.js",
+      types: "./dist/platform/node/index.d.ts",
+    });
   });
 });

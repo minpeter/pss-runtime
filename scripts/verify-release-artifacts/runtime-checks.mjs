@@ -52,6 +52,12 @@ const REQUIRED_RUNTIME_CLOUDFLARE_EXPORTS = [
   "listScheduledCloudflareThreadPrompts",
   "rescheduleCloudflareAlarm",
 ];
+const REQUIRED_RUNTIME_NODE_EXPORTS = [
+  "FileSessionStore",
+  "FileThreadStore",
+  "NodeFileThreadHostOptions",
+  "createNodeFileThreadHost",
+];
 const FORBIDDEN_RUNTIME_ROOT_NAMES = [
   ...[
     "AgentMessage AgentModel AgentLoopResult AgentRunInput AgentTool AgentTools",
@@ -69,6 +75,7 @@ const FORBIDDEN_RUNTIME_ROOT_NAMES = [
     "getCloudflareDurableObjectStub InMemoryCloudflareDurableObjectStorage RunHost RunRecord",
     "RunInput RunStore RuntimeToolExecutionCheckpoint RuntimeToolExecutionContext",
     "RuntimeToolExecutionDecision RuntimeToolRetryPolicy",
+    "FileThreadStore FileSessionStore NodeFileThreadHostOptions createNodeFileThreadHost",
   ].flatMap((names) => names.split(" ")),
   ["create", "Llm"].join(""),
   ["Runtime", "Create", "Llm", "Options"].join(""),
@@ -134,9 +141,25 @@ export function findRuntimeDeclarationLeaks({ cwd, packages }) {
     }),
     ...findRuntimeDeclarationExportLeaks({
       cwd,
-      file: join(packageDistPath(cwd, "runtime"), "cloudflare", "index.d.ts"),
+      file: join(
+        packageDistPath(cwd, "runtime"),
+        "platform",
+        "cloudflare",
+        "index.d.ts"
+      ),
       requiredExports: REQUIRED_RUNTIME_CLOUDFLARE_EXPORTS,
       surface: "cloudflare",
+    }),
+    ...findRuntimeDeclarationExportLeaks({
+      cwd,
+      file: join(
+        packageDistPath(cwd, "runtime"),
+        "platform",
+        "node",
+        "index.d.ts"
+      ),
+      requiredExports: REQUIRED_RUNTIME_NODE_EXPORTS,
+      surface: "node",
     }),
     ...findRuntimePublicPatternLeaks({ cwd }),
   ];

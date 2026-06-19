@@ -318,16 +318,16 @@ for await (const event of run.events()) {
 pending steering path or, when idle, when a new run is scheduled. It does not wait
 for a later model snapshot.
 
-## Session storage and portability
+## Thread Storage and Portability
 
-The runtime owns full session state encoding and history compaction semantics.
-Adapters own persistence only through `SessionStore`:
+The runtime owns full thread state encoding and history compaction semantics.
+Adapters own persistence only through `ThreadStore`:
 
-Stored session state is an opaque, versioned runtime snapshot for continuation.
+Stored thread state is an opaque, versioned runtime snapshot for continuation.
 Do not inspect it as a replay log; exact replay should be modeled separately as
 an `AgentEvent` log if that capability is added later.
 
-`SessionStore` is snapshot-only. It does not own background task ids, run
+`ThreadStore` is snapshot-only. It does not own background task ids, run
 leases, checkpoints, notification inbox state, or scheduling. Those live on the
 optional `host` execution contract.
 
@@ -335,54 +335,51 @@ Custom stores own version generation. `load(key)` returns the opaque `state` wit
 the store-minted `version`; `commit(key, { state }, { expectedVersion })` receives
 state only and should reject stale versions by returning `{ ok: false, reason:
 "conflict" }`. On success, the store persists `{ state, version }` and returns the
-new version to the runtime. `delete(key)` removes the persisted session for that
+new version to the runtime. `delete(key)` removes the persisted thread for that
 key.
 
 ```ts
-import { MemorySessionStore } from "@minpeter/pss-runtime/session-store/memory";
+import { MemoryThreadStore } from "@minpeter/pss-runtime/thread-store/memory";
 
 const agent = new Agent({
   host: {
-    kind: "session",
-    sessionStore: new MemorySessionStore(), // default when host is omitted
+    kind: "thread",
+    threadStore: new MemoryThreadStore(),
   },
   model,
   namespace: "support-agent",
 });
 ```
 
-For durable sessions, use the exported file POC. Set a stable `namespace` so
+For durable local Node threads, use the Node platform adapter. Set a stable `namespace` so
 reconstructed agents map the same app-owned thread keys back to the same
 transcripts:
 
 ```ts
-import { FileSessionStore } from "@minpeter/pss-runtime/session-store/file";
+import { createNodeFileThreadHost } from "@minpeter/pss-runtime/node";
 
 const agent = new Agent({
-  host: {
-    kind: "session",
-    sessionStore: new FileSessionStore(".pss/sessions"),
-  },
+  host: createNodeFileThreadHost({ directory: ".pss/threads" }),
   model,
   namespace: "support-agent",
 });
 ```
 
-A `host: { kind: "session", sessionStore }` object is a `SessionHost`-only host.
-That keeps session persistence on your store but disables the in-memory
+A `host: { kind: "thread", threadStore }` object is a `ThreadHost`-only host.
+That keeps thread persistence on your store but disables the in-memory
 `ExecutionHost`, so the agent runs without durable run records, tool-execution
 checkpoints, or `Agent.resume(...)`. `agent.supportsResume` is `false`. When
 omitted, `Agent` defaults to an in-memory `ExecutionHost` (and its
-`MemorySessionStore`). Pass a full `ExecutionHost` (or `DurableBackgroundHost`)
+`MemoryThreadStore`). Pass a full `ExecutionHost` (or `DurableBackgroundHost`)
 when you need durable runs, tool checkpoints, and resume alongside your
-`sessionStore`.
+`threadStore`.
 
 Hosts that need durable runs pass `host:` into `Agent`. The execution subpath
-keeps the durable surface split by responsibility. `SessionHost` is the small
-session-only contract, `ExecutionHost` is the aggregate contract for in-process
+keeps the durable surface split by responsibility. `ThreadHost` is the small
+thread-only contract, `ExecutionHost` is the aggregate contract for in-process
 or full-store hosts, and `DurableBackgroundHost` is the split durable contract
 for background scheduling, run records, checkpoints, events, notifications, and
-session persistence.
+thread persistence.
 
 ```ts
 import { Agent } from "@minpeter/pss-runtime";
@@ -407,7 +404,7 @@ const durableHost: DurableBackgroundHost = {
   eventStore,
   notificationInbox,
   runStore,
-  sessionStore,
+  threadStore,
   transaction,
 };
 ```
@@ -420,12 +417,27 @@ reconstruct runtime objects between turns. The same public DX stays centered on
 behind the `host` boundary.
 
 Long-running Node.js can keep an `Agent` and `ThreadHandle` alive across turns.
-`FileSessionStore` persists session snapshots only; app-owned background work
-needs its own durable task/output storage if it must survive process restarts.
+Use `@minpeter/pss-runtime/node` when a local process should persist thread
+snapshots on disk between restarts:
+
+```ts
+import { Agent } from "@minpeter/pss-runtime";
+import { createNodeFileThreadHost } from "@minpeter/pss-runtime/node";
+
+const agent = new Agent({
+  host: createNodeFileThreadHost({ directory: ".pss-local-threads" }),
+  model,
+});
+```
+
+The legacy `@minpeter/pss-runtime/thread-store/file` and
+`@minpeter/pss-runtime/session-store/file` subpaths still resolve for existing
+callers, but new Node/local code should import from the `node` platform subpath.
+App-owned background work still needs its own durable task/output storage if it
+must survive process restarts.
 
 Cloudflare Durable Objects and similar edge hosts should reconstruct `Agent`
-objects per turn and persist opaque session state through a durable
-`sessionStore`.
+objects per turn and persist opaque thread state through a durable `threadStore`.
 Use `@minpeter/pss-runtime/cloudflare` for the packaged Cloudflare Durable
 Object adapter. See the sync example package for blocking app-owned delegation
 and the background example package for durable background delegation in a local
@@ -445,8 +457,8 @@ request-local. Do not store canonical agent session or run state in memory
 attachments.
 
 Durable background workflows require host-owned task ids, attempts, leases,
-checkpoints, cancellation, scheduling, session snapshots, and completion
-notifications. The Cloudflare adapter persists scheduled runs and session
+checkpoints, cancellation, scheduling, thread snapshots, and completion
+notifications. The Cloudflare adapter persists scheduled runs and thread
 prompts, sets alarms, and resumes work through `Agent.resume(...)`.
 
 Use `dispatchCloudflareAgentNotification` for later events such as reminders,
