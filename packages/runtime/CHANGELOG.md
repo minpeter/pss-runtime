@@ -1,5 +1,11 @@
 # @minpeter/pss-runtime
 
+## 0.1.0-next.17
+
+### Patch Changes
+
+- c8bf377: Support scheduled work payload LIKE deletes in the local Durable Object SQL test adapter.
+
 ## 0.1.0-next.16
 
 ### Patch Changes
