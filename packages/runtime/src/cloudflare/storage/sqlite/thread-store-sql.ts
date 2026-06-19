@@ -1,9 +1,12 @@
 import type { SqlStorage } from "../../sql/ports/storage-port";
 import { storeKey } from "../execution/records";
 import {
+  StoragePayloadTooLargeError,
   serializedJsonByteLength,
   stringifyJsonPayloadWithinBudget,
 } from "../payload-guard";
+
+const threadChunkMarkerPrefix = "\u001epss-thread-chunk:";
 
 export interface ThreadMetaRow {
   readonly message_count: number;
@@ -15,6 +18,22 @@ export interface ThreadMetaRow {
 export interface ThreadMessageRow {
   readonly message: string;
   readonly seq: number;
+}
+
+interface RawThreadMessageRow {
+  readonly message: string;
+  readonly seq: number;
+}
+
+interface ThreadMessageChunkRow {
+  readonly chunk: string;
+  readonly chunk_index: number;
+  readonly seq: number;
+}
+
+interface ThreadMessageChunkMarker {
+  readonly kind: "legacy-json" | "raw-prefix";
+  readonly n: number;
 }
 
 interface WriteHistoryRowsOptions {
@@ -67,13 +86,42 @@ export function readActiveThreadMessages(
   sql: SqlStorage,
   key: string
 ): ThreadMessageRow[] {
-  return sql
+  const rows = sql
     .exec<ThreadMessageRow>(
       "SELECT seq, message FROM pss_thread_message WHERE thread_key = ? AND active = 1 ORDER BY seq",
       key
     )
-    .toArray()
-    .map((row) => ({ ...row, message: hydrateThreadMessage(sql, key, row) }));
+    .toArray();
+  const chunkMarkers = new Map<number, ThreadMessageChunkMarker>();
+  for (const row of rows) {
+    const marker = parseThreadMessageChunkMarker(row.message);
+    if (marker) {
+      chunkMarkers.set(row.seq, marker);
+    }
+  }
+  if (chunkMarkers.size === 0) {
+    return rows;
+  }
+  const chunks = readThreadMessageChunks(sql, key, [...chunkMarkers.keys()]);
+  return rows.map((row) => {
+    const marker = chunkMarkers.get(row.seq);
+    if (!marker) {
+      return row;
+    }
+    const rowChunks = chunks.get(row.seq) ?? [];
+    if (rowChunks.length !== marker.n) {
+      if (marker.kind === "legacy-json" && rowChunks.length === 0) {
+        return row;
+      }
+      throw new Error(
+        `Missing chunked thread message payload for ${key} seq ${row.seq}`
+      );
+    }
+    return {
+      ...row,
+      message: rowChunks.map((chunk) => chunk.chunk).join(""),
+    };
+  });
 }
 
 export function writeThreadHistoryRows(
@@ -94,12 +142,12 @@ export function writeThreadHistoryRows(
     });
   }
 
-  const existing = readActiveThreadMessages(sql, key);
+  const existing = readRawActiveThreadMessages(sql, key);
   let prefix = 0;
   while (
     prefix < existing.length &&
     prefix < history.length &&
-    existing[prefix].message === JSON.stringify(history[prefix])
+    rawThreadMessageEquals(sql, key, existing[prefix], history[prefix])
   ) {
     prefix += 1;
   }
@@ -117,6 +165,18 @@ export function writeThreadHistoryRows(
     seq: nextSeqStart,
     sql,
   });
+}
+
+function readRawActiveThreadMessages(
+  sql: SqlStorage,
+  key: string
+): RawThreadMessageRow[] {
+  return sql
+    .exec<RawThreadMessageRow>(
+      "SELECT seq, message FROM pss_thread_message WHERE thread_key = ? AND active = 1 ORDER BY seq",
+      key
+    )
+    .toArray();
 }
 
 export function softDeleteActiveThreadRows(sql: SqlStorage, key: string): void {
@@ -200,6 +260,7 @@ function stringifyThreadMessagePayload(
   }
 
   const chunks = chunkSerializedPayload(serialized, maxPayloadBytes);
+  const marker = createThreadChunkMarker(chunks.length, maxPayloadBytes);
   for (const [index, chunk] of chunks.entries()) {
     sql.exec(
       "INSERT INTO pss_thread_message_chunk (thread_key, seq, chunk_index, chunk) VALUES (?, ?, ?, ?)",
@@ -209,7 +270,7 @@ function stringifyThreadMessagePayload(
       chunk
     );
   }
-  return JSON.stringify({ $pss: "chunk", n: chunks.length });
+  return marker;
 }
 
 function chunkSerializedPayload(
@@ -218,63 +279,143 @@ function chunkSerializedPayload(
 ): string[] {
   const chunkMaxBytes = Math.max(1, maxPayloadBytes);
   const chunks: string[] = [];
-  let current = "";
+  let currentStart = 0;
+  let currentBytes = 0;
+  let index = 0;
   for (const char of serialized) {
-    const next = current + char;
-    if (current && serializedJsonByteLength(next) > chunkMaxBytes) {
-      chunks.push(current);
-      current = char;
+    const charStart = index;
+    const nextIndex = charStart + char.length;
+    const charBytes = utf8ByteLength(char);
+    if (currentBytes > 0 && currentBytes + charBytes > chunkMaxBytes) {
+      chunks.push(serialized.slice(currentStart, charStart));
+      currentStart = charStart;
+      currentBytes = charBytes;
     } else {
-      current = next;
+      currentBytes += charBytes;
     }
+    index = nextIndex;
   }
-  if (current) {
-    chunks.push(current);
+  if (currentStart < serialized.length) {
+    chunks.push(serialized.slice(currentStart));
   }
   return chunks;
 }
 
-function hydrateThreadMessage(
+function readThreadMessageChunks(
   sql: SqlStorage,
   key: string,
-  row: ThreadMessageRow
-): string {
-  const marker = parseThreadMessageChunkMarker(row.message);
-  if (!marker) {
-    return row.message;
-  }
-  const chunks = sql
-    .exec<{ chunk: string }>(
-      "SELECT chunk FROM pss_thread_message_chunk WHERE thread_key = ? AND seq = ? ORDER BY chunk_index",
+  seqs: readonly number[]
+): Map<number, readonly ThreadMessageChunkRow[]> {
+  const placeholders = seqs.map(() => "?").join(",");
+  const rows = sql
+    .exec<ThreadMessageChunkRow>(
+      `SELECT seq, chunk_index, chunk FROM pss_thread_message_chunk WHERE thread_key = ? AND seq IN (${placeholders}) ORDER BY seq, chunk_index`,
       key,
-      row.seq
+      ...seqs
     )
     .toArray();
-  if (chunks.length !== marker.n) {
-    throw new Error(
-      `Missing chunked thread message payload for ${key} seq ${row.seq}`
-    );
+  const chunks = new Map<number, ThreadMessageChunkRow[]>();
+  for (const row of rows) {
+    const group = chunks.get(row.seq);
+    if (group) {
+      group.push(row);
+    } else {
+      chunks.set(row.seq, [row]);
+    }
   }
-  return chunks.map((chunk) => chunk.chunk).join("");
+  return chunks;
+}
+
+function rawThreadMessageEquals(
+  sql: SqlStorage,
+  key: string,
+  row: RawThreadMessageRow,
+  value: unknown
+): boolean {
+  const serialized = JSON.stringify(value);
+  if (serialized === undefined) {
+    return false;
+  }
+  if (row.message === serialized) {
+    return true;
+  }
+  const marker = parseThreadMessageChunkMarker(row.message);
+  if (!marker) {
+    return false;
+  }
+  const chunks =
+    readThreadMessageChunks(sql, key, [row.seq]).get(row.seq) ?? [];
+  return (
+    chunks.length === marker.n &&
+    chunks.map((chunk) => chunk.chunk).join("") === serialized
+  );
+}
+
+function utf8ByteLength(char: string): number {
+  const codePoint = char.codePointAt(0);
+  if (codePoint === undefined) {
+    return 0;
+  }
+  if (codePoint <= 0x7f) {
+    return 1;
+  }
+  if (codePoint <= 0x7_ff) {
+    return 2;
+  }
+  if (codePoint <= 0xff_ff) {
+    return 3;
+  }
+  return 4;
 }
 
 function parseThreadMessageChunkMarker(
   message: string
-): { readonly n: number } | null {
+): ThreadMessageChunkMarker | null {
+  if (!message.startsWith(threadChunkMarkerPrefix)) {
+    return parseLegacyThreadMessageChunkMarker(message);
+  }
+  const count = Number(message.slice(threadChunkMarkerPrefix.length));
+  return Number.isInteger(count) && count > 0
+    ? { kind: "raw-prefix", n: count }
+    : null;
+}
+
+function parseLegacyThreadMessageChunkMarker(
+  message: string
+): ThreadMessageChunkMarker | null {
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(message) as unknown;
-    if (
-      typeof parsed === "object" &&
-      parsed !== null &&
-      "$pss" in parsed &&
-      (parsed as { $pss?: unknown }).$pss === "chunk" &&
-      "n" in parsed &&
-      typeof (parsed as { n?: unknown }).n === "number"
-    ) {
-      return { n: (parsed as { n: number }).n };
-    }
+    parsed = JSON.parse(message);
   } catch {
     return null;
   }
-  return null;
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    !("$pss" in parsed) ||
+    !("n" in parsed) ||
+    parsed.$pss !== "chunk" ||
+    typeof parsed.n !== "number"
+  ) {
+    return null;
+  }
+  return Number.isInteger(parsed.n) && parsed.n > 0
+    ? { kind: "legacy-json", n: parsed.n }
+    : null;
+}
+
+function createThreadChunkMarker(
+  chunkCount: number,
+  maxPayloadBytes: number
+): string {
+  const marker = `${threadChunkMarkerPrefix}${chunkCount}`;
+  const byteLength = serializedJsonByteLength(marker);
+  if (byteLength > maxPayloadBytes) {
+    throw new StoragePayloadTooLargeError({
+      byteLength,
+      maxBytes: maxPayloadBytes,
+      payloadKind: "thread-message",
+    });
+  }
+  return marker;
 }

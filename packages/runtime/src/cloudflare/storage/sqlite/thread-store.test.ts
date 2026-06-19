@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { decodeStoredThreadSnapshot } from "../../../thread/state/snapshot";
+import type { InMemorySqlStorage } from "../../sql/node-test/node-sqlite-storage";
 import type { CloudflareDurableObjectStorage } from "../durable-object/durable-object-storage";
+import { storeKey } from "../execution/records";
 import { DurableObjectSqliteThreadStore } from "./thread-store";
 import {
   createStore,
@@ -10,6 +12,7 @@ import {
   readRows,
   snapshot,
 } from "./thread-store.test-support";
+import { ensureThreadSchema } from "./thread-store-sql";
 
 describe("DurableObjectSqliteThreadStore", () => {
   it("throws when the Durable Object is not SQLite-backed", () => {
@@ -165,10 +168,72 @@ describe("DurableObjectSqliteThreadStore", () => {
     ).resolves.toEqual({ ok: true, version: "1" });
 
     const [row] = readRows(storage, "key");
-    expect(row?.message).toBe(JSON.stringify({ $pss: "chunk", n: 2 }));
+    expect(row?.message).toBe("\u001epss-thread-chunk:2");
     expect(readChunkRows(storage, "key")).toHaveLength(2);
     await expect(store.load("key")).resolves.toEqual({
       state: { history: [bigMessage], schemaVersion: 1 },
+      version: "1",
+    });
+  });
+
+  it("round-trips user JSON that resembles the legacy chunk marker", async () => {
+    const { store } = createStore();
+    const markerLikeMessage = { $pss: "chunk", n: 2 };
+
+    await expect(
+      store.commit("key", snapshot([markerLikeMessage]), {
+        expectedVersion: null,
+      })
+    ).resolves.toEqual({ ok: true, version: "1" });
+    await expect(store.load("key")).resolves.toEqual({
+      state: { history: [markerLikeMessage], schemaVersion: 1 },
+      version: "1",
+    });
+  });
+
+  it("hydrates existing rows that use the legacy JSON chunk marker", async () => {
+    const { storage, store } = createStore();
+    const threadKey = storeKey(PREFIX, "thread", "legacy");
+    const serializedMessage = JSON.stringify({
+      content: "legacy chunked message",
+      role: "user",
+    });
+    const midpoint = Math.floor(serializedMessage.length / 2);
+    const sql = storage.sql as InMemorySqlStorage;
+    ensureThreadSchema(sql);
+
+    sql.exec(
+      "INSERT INTO pss_thread_meta (thread_key, version, message_count, next_seq, state_blob) VALUES (?, ?, ?, ?, ?)",
+      threadKey,
+      "1",
+      1,
+      1,
+      null
+    );
+    sql.exec(
+      "INSERT INTO pss_thread_message (thread_key, seq, message, active) VALUES (?, ?, ?, ?)",
+      threadKey,
+      0,
+      JSON.stringify({ $pss: "chunk", n: 2 }),
+      1
+    );
+    sql.exec(
+      "INSERT INTO pss_thread_message_chunk (thread_key, seq, chunk_index, chunk) VALUES (?, ?, ?, ?), (?, ?, ?, ?)",
+      threadKey,
+      0,
+      0,
+      serializedMessage.slice(0, midpoint),
+      threadKey,
+      0,
+      1,
+      serializedMessage.slice(midpoint)
+    );
+
+    await expect(store.load("legacy")).resolves.toEqual({
+      state: {
+        history: [{ content: "legacy chunked message", role: "user" }],
+        schemaVersion: 1,
+      },
       version: "1",
     });
   });

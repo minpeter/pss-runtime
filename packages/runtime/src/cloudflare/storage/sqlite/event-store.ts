@@ -10,8 +10,12 @@ import { storeKey } from "../execution/records";
 import {
   resolveStoragePayloadMaxBytes,
   type StoragePayloadBudgetOptions,
-  stringifyJsonPayloadWithinBudget,
 } from "../payload-guard";
+import {
+  ensurePayloadChunkSchema,
+  readJsonPayloadsFromSqlRows,
+  writeJsonPayloadToSqlRows,
+} from "./payload-chunks";
 
 interface EventRow {
   readonly event: string;
@@ -62,21 +66,24 @@ export class DurableObjectSqliteEventStore implements EventStore {
     try {
       this.#ensureSchema();
       const key = this.#rowKey(runId);
-      const serializedEvent = stringifyJsonPayloadWithinBudget(
+      // Synchronous read-modify-write critical section (no await): concurrent
+      // appends to the same run serialize on the JS event loop inside the
+      // single-threaded Durable Object, so no `seq` collision can occur.
+      const seq = this.#readNextSeq(key);
+      const serializedEvent = writeJsonPayloadToSqlRows(
+        this.#sql,
+        this.#payloadLocation(key, seq),
         "event",
         event,
         this.#maxPayloadBytes
       );
-      // Synchronous read-modify-write critical section (no await): concurrent
-      // appends to the same run serialize on the JS event loop inside the
-      // single-threaded Durable Object, so no `seq` collision can occur.
-      const seq = this.#consumeNextSeq(key);
       this.#sql.exec(
         "INSERT INTO pss_event (run_key, seq, event) VALUES (?, ?, ?)",
         key,
         seq,
         serializedEvent
       );
+      this.#writeNextSeq(key, seq + 1);
       return Promise.resolve({ offset: seq + 1 });
     } catch (error) {
       return Promise.reject(error);
@@ -98,10 +105,23 @@ export class DurableObjectSqliteEventStore implements EventStore {
         start
       )
       .toArray();
+    const payloads = readJsonPayloadsFromSqlRows(
+      this.#sql,
+      "event",
+      key,
+      rows.map((row) => ({
+        payloadKey: String(row.seq),
+        storedPayload: row.event,
+      }))
+    );
     for (const row of rows) {
+      const event = payloads.get(String(row.seq));
+      if (event === undefined) {
+        throw new Error(`Missing event payload for ${key} seq ${row.seq}`);
+      }
       yield {
         cursor: { offset: row.seq + 1 },
-        event: JSON.parse(row.event) as AgentEvent,
+        event: JSON.parse(event) as AgentEvent,
         runId,
       };
     }
@@ -121,22 +141,29 @@ export class DurableObjectSqliteEventStore implements EventStore {
     this.#sql.exec(
       "CREATE TABLE IF NOT EXISTS pss_event_meta (run_key TEXT PRIMARY KEY, next_seq INTEGER NOT NULL)"
     );
+    ensurePayloadChunkSchema(this.#sql);
     this.#schemaReady = true;
   }
 
-  #consumeNextSeq(key: string): number {
+  #readNextSeq(key: string): number {
     const row = this.#sql
       .exec<EventMetaRow>(
         "SELECT next_seq FROM pss_event_meta WHERE run_key = ?",
         key
       )
       .toArray()[0];
-    const seq = row?.next_seq ?? 0;
+    return row?.next_seq ?? 0;
+  }
+
+  #writeNextSeq(key: string, nextSeq: number): void {
     this.#sql.exec(
       "INSERT INTO pss_event_meta (run_key, next_seq) VALUES (?, ?) ON CONFLICT(run_key) DO UPDATE SET next_seq = excluded.next_seq",
       key,
-      seq + 1
+      nextSeq
     );
-    return seq;
+  }
+
+  #payloadLocation(key: string, seq: number) {
+    return { ownerKey: key, payloadKey: String(seq), scope: "event" };
   }
 }

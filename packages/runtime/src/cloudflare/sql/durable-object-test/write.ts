@@ -5,7 +5,12 @@ import {
 } from "./bindings";
 import { writeNotificationStatement } from "./notification-write";
 import { writeRunStatement } from "./run-write";
-import type { InMemoryDurableObjectSqlState, ThreadMetaRow } from "./state";
+import type {
+  InMemoryDurableObjectSqlState,
+  PayloadChunkRow,
+  ThreadMessageChunkRow,
+  ThreadMetaRow,
+} from "./state";
 
 export function writeSqlStatement(
   state: InMemoryDurableObjectSqlState,
@@ -20,6 +25,14 @@ export function writeSqlStatement(
     return;
   }
   if (writeNotificationStatement(state, query, bindings)) {
+    return;
+  }
+  if (query.startsWith("insert into pss_payload_chunk")) {
+    insertPayloadChunk(state, bindings);
+    return;
+  }
+  if (query.startsWith("delete from pss_payload_chunk")) {
+    deletePayloadChunks(state, bindings);
     return;
   }
   if (query.startsWith("insert into pss_event_meta")) {
@@ -47,11 +60,59 @@ export function writeSqlStatement(
   );
 }
 
+function insertPayloadChunk(
+  state: InMemoryDurableObjectSqlState,
+  bindings: readonly unknown[]
+): void {
+  const row: PayloadChunkRow = {
+    chunk: stringBinding(bindings[4]),
+    chunk_index: numberBinding(bindings[3]),
+    owner_key: stringBinding(bindings[1]),
+    payload_key: stringBinding(bindings[2]),
+    scope: stringBinding(bindings[0]),
+  };
+  state.payloadChunks = state.payloadChunks.filter(
+    (existing) =>
+      !(
+        existing.scope === row.scope &&
+        existing.owner_key === row.owner_key &&
+        existing.payload_key === row.payload_key &&
+        existing.chunk_index === row.chunk_index
+      )
+  );
+  state.payloadChunks.push(row);
+}
+
+function deletePayloadChunks(
+  state: InMemoryDurableObjectSqlState,
+  bindings: readonly unknown[]
+): void {
+  const scope = stringBinding(bindings[0]);
+  const ownerKey = stringBinding(bindings[1]);
+  const payloadKey = stringBinding(bindings[2]);
+  state.payloadChunks = state.payloadChunks.filter(
+    (row) =>
+      !(
+        row.scope === scope &&
+        row.owner_key === ownerKey &&
+        row.payload_key === payloadKey
+      )
+  );
+}
+
 function writeThreadStatement(
   state: InMemoryDurableObjectSqlState,
   query: string,
   bindings: readonly unknown[]
 ): void {
+  if (query.startsWith("delete from pss_thread_message_chunk")) {
+    deleteThreadMessageChunks(state, bindings);
+    return;
+  }
+  if (query.startsWith("insert into pss_thread_message_chunk")) {
+    insertThreadMessageChunk(state, bindings);
+    return;
+  }
   if (query.startsWith("delete from pss_thread_message")) {
     deleteThreadMessages(state, bindings);
     return;
@@ -85,6 +146,16 @@ function deleteThreadMessages(
   );
 }
 
+function deleteThreadMessageChunks(
+  state: InMemoryDurableObjectSqlState,
+  bindings: readonly unknown[]
+): void {
+  const key = stringBinding(bindings[0]);
+  state.threadMessageChunks = state.threadMessageChunks.filter(
+    (row) => row.thread_key !== key
+  );
+}
+
 function deactivateThreadMessages(
   state: InMemoryDurableObjectSqlState,
   query: string,
@@ -113,6 +184,27 @@ function insertThreadMessage(
     seq: hasImplicitSeq ? 0 : numberBinding(bindings[1]),
     thread_key: stringBinding(bindings[0]),
   });
+}
+
+function insertThreadMessageChunk(
+  state: InMemoryDurableObjectSqlState,
+  bindings: readonly unknown[]
+): void {
+  const row: ThreadMessageChunkRow = {
+    chunk: stringBinding(bindings[3]),
+    chunk_index: numberBinding(bindings[2]),
+    seq: numberBinding(bindings[1]),
+    thread_key: stringBinding(bindings[0]),
+  };
+  state.threadMessageChunks = state.threadMessageChunks.filter(
+    (existing) =>
+      !(
+        existing.thread_key === row.thread_key &&
+        existing.seq === row.seq &&
+        existing.chunk_index === row.chunk_index
+      )
+  );
+  state.threadMessageChunks.push(row);
 }
 
 function insertThreadMeta(

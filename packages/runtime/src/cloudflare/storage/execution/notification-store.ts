@@ -78,17 +78,23 @@ export class DurableObjectNotificationInbox implements NotificationInbox {
   }
 
   async releaseByIdempotencyKey(idempotencyKey: string): Promise<void> {
-    const record = await this.getByIdempotencyKey(idempotencyKey);
-    if (record?.status === "acked") {
-      await putNotification(
-        this.#storage,
+    await withTransaction(this.#storage, async (storage) => {
+      const record = await getNotification(
+        storage,
         this.#prefix,
-        {
-          ...record,
-          status: "pending",
-        },
-        { maxPayloadBytes: this.#maxPayloadBytes }
+        idempotencyKey
       );
-    }
+      if (record?.status === "acked") {
+        await putNotification(
+          storage,
+          this.#prefix,
+          {
+            ...record,
+            status: "pending",
+          },
+          { maxPayloadBytes: this.#maxPayloadBytes }
+        );
+      }
+    });
   }
 }

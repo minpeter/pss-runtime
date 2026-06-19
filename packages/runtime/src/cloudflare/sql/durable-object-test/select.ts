@@ -4,8 +4,10 @@ import type {
   EventRow,
   InMemoryDurableObjectSqlState,
   NotificationRow,
+  PayloadChunkRow,
   RunRow,
   ScheduledWorkRow,
+  ThreadMessageChunkRow,
   ThreadMessageRow,
   ThreadMetaRow,
 } from "./state";
@@ -21,6 +23,9 @@ export function selectSqlRows(
   if (query.includes("from pss_thread_meta")) {
     return selectThreadMetaRows(state, query, bindings);
   }
+  if (query.includes("from pss_thread_message_chunk")) {
+    return selectThreadMessageChunkRows(state, bindings);
+  }
   if (query.includes("from pss_thread_message")) {
     return selectThreadMessageRows(state, query, bindings);
   }
@@ -29,6 +34,9 @@ export function selectSqlRows(
   }
   if (query.includes("from pss_notification")) {
     return selectNotificationRows(state, query, bindings);
+  }
+  if (query.includes("from pss_payload_chunk")) {
+    return selectPayloadChunkRows(state, query, bindings);
   }
   if (query.includes("from pss_event_meta")) {
     return selectEventMetaRows(state, bindings);
@@ -43,6 +51,31 @@ export function selectSqlRows(
     return selectScheduledWorkRows(state, query, bindings);
   }
   throw new Error(`Unsupported in-memory Durable Object SQL query: ${query}`);
+}
+
+function selectPayloadChunkRows(
+  state: InMemoryDurableObjectSqlState,
+  query: string,
+  bindings: readonly unknown[]
+): unknown[] {
+  const scope = stringBinding(bindings[0]);
+  const ownerKey = stringBinding(bindings[1]);
+  const payloadKeys = query.includes("payload_key in")
+    ? new Set(bindings.slice(2).map(stringBinding))
+    : new Set([stringBinding(bindings[2])]);
+  return state.payloadChunks
+    .filter(
+      (row) =>
+        row.scope === scope &&
+        row.owner_key === ownerKey &&
+        payloadKeys.has(row.payload_key)
+    )
+    .sort(
+      (left: PayloadChunkRow, right: PayloadChunkRow) =>
+        left.payload_key.localeCompare(right.payload_key) ||
+        left.chunk_index - right.chunk_index
+    )
+    .map((row) => projectPayloadChunk(row, query));
 }
 
 function selectThreadMetaRows(
@@ -80,6 +113,25 @@ function selectThreadMessageRows(
       (left: ThreadMessageRow, right: ThreadMessageRow) => left.seq - right.seq
     )
     .map((row) => projectThreadMessage(row, query));
+}
+
+function selectThreadMessageChunkRows(
+  state: InMemoryDurableObjectSqlState,
+  bindings: readonly unknown[]
+): unknown[] {
+  const key = stringBinding(bindings[0]);
+  const seqs = new Set(bindings.slice(1).map(numberBinding));
+  return state.threadMessageChunks
+    .filter((row) => row.thread_key === key && seqs.has(row.seq))
+    .sort(
+      (left: ThreadMessageChunkRow, right: ThreadMessageChunkRow) =>
+        left.seq - right.seq || left.chunk_index - right.chunk_index
+    )
+    .map((row) => ({
+      chunk: row.chunk,
+      chunk_index: row.chunk_index,
+      seq: row.seq,
+    }));
 }
 
 function selectRunRows(
@@ -250,4 +302,15 @@ function projectRun(row: RunRow): unknown {
 
 function projectNotification(row: NotificationRow): unknown {
   return { record: row.record };
+}
+
+function projectPayloadChunk(row: PayloadChunkRow, query: string): unknown {
+  const projected: Record<string, unknown> = {
+    chunk: row.chunk,
+    chunk_index: row.chunk_index,
+  };
+  if (query.includes("payload_key")) {
+    projected.payload_key = row.payload_key;
+  }
+  return projected;
 }

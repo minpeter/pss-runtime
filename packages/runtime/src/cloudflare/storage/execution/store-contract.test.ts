@@ -15,26 +15,32 @@ describeExecutionStoreContract({
 });
 
 describe("DurableObjectExecutionStore payload guards", () => {
-  it("rejects notification records that exceed the serialized payload budget", async () => {
-    const store = createBudgetedStore(220);
+  it("chunks notification records that exceed the serialized payload budget", async () => {
+    const storage = new InMemoryCloudflareDurableObjectStorage({
+      sql: new InMemorySqlStorage(),
+    });
+    const store = new DurableObjectExecutionStore({
+      maxPayloadBytes: 220,
+      prefix: "notification-payload-test",
+      storage,
+    });
+    const record = notificationRecord("notify-big", {
+      input: { text: "x".repeat(300), type: "user-text" },
+    });
 
-    await expect(
-      store.notifications.enqueue({
-        idempotencyKey: "notify-big",
-        input: { text: "x".repeat(300), type: "user-text" },
-        notificationId: "notification-big",
-        runId: "run-1",
-        threadKey: "thread-1",
-        status: "pending",
-      })
-    ).rejects.toMatchObject({
-      byteLength: expect.any(Number),
-      maxBytes: 220,
-      payloadKind: "notification-record",
+    await expect(store.notifications.enqueue(record)).resolves.toEqual({
+      ok: true,
     });
     await expect(
       store.notifications.getByIdempotencyKey("notify-big")
-    ).resolves.toBeNull();
+    ).resolves.toEqual(record);
+    const chunkRows = (storage.sql as InMemorySqlStorage)
+      .exec<{ readonly count: number }>(
+        "SELECT COUNT(*) AS count FROM pss_payload_chunk WHERE scope = ?",
+        "notification"
+      )
+      .toArray()[0];
+    expect(chunkRows?.count).toBeGreaterThan(0);
   });
 
   it("rejects run records on create when they exceed the serialized payload budget", async () => {
@@ -123,6 +129,27 @@ describe("DurableObjectExecutionStore payload guards", () => {
       )
       .toArray();
     expect(rows.map((row) => JSON.parse(row.record))).toEqual([record]);
+  });
+
+  it("round-trips chunked thread messages with the default Durable Object SQL test storage", async () => {
+    const store = new DurableObjectExecutionStore({
+      maxPayloadBytes: 80,
+      prefix: "default-sql-thread-chunk-test",
+      storage: new InMemoryCloudflareDurableObjectStorage(),
+    });
+    const message = { content: "x".repeat(160), role: "user" };
+
+    await expect(
+      store.threads.commit(
+        "thread-1",
+        { state: { history: [message], schemaVersion: 1 } },
+        { expectedVersion: null }
+      )
+    ).resolves.toEqual({ ok: true, version: "1" });
+    await expect(store.threads.load("thread-1")).resolves.toEqual({
+      state: { history: [message], schemaVersion: 1 },
+      version: "1",
+    });
   });
 });
 

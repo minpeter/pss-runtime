@@ -2,10 +2,14 @@ import type { NotificationRecord } from "../../../execution";
 import type { SqlStorage } from "../../sql/ports/storage-port";
 import type { CloudflareDurableObjectTransactionStorage } from "../durable-object/durable-object-storage";
 import {
-  assertJsonPayloadWithinBudget,
   resolveStoragePayloadMaxBytes,
   type StoragePayloadBudgetOptions,
 } from "../payload-guard";
+import {
+  ensurePayloadChunkSchema,
+  readJsonPayloadFromSqlRows,
+  writeJsonPayloadToSqlRows,
+} from "../sqlite/payload-chunks";
 
 interface NotificationRow {
   readonly record: string;
@@ -16,12 +20,11 @@ export function getNotification(
   prefix: string,
   idempotencyKey: string
 ): Promise<NotificationRecord | null> {
-  const row = selectNotificationRow(
-    requiredSqlStorage(storage),
-    prefix,
-    idempotencyKey
+  const sql = requiredSqlStorage(storage);
+  const row = selectNotificationRow(sql, prefix, idempotencyKey);
+  return Promise.resolve(
+    row ? parseStoredNotificationRecord(sql, prefix, idempotencyKey, row) : null
   );
-  return Promise.resolve(row ? parseNotificationRecord(row) : null);
 }
 
 export function putNotification(
@@ -30,12 +33,12 @@ export function putNotification(
   record: NotificationRecord,
   options: StoragePayloadBudgetOptions = {}
 ): Promise<void> {
-  assertJsonPayloadWithinBudget(
-    "notification-record",
+  putSqlNotification(
+    requiredSqlStorage(storage),
+    prefix,
     record,
     resolveStoragePayloadMaxBytes(options)
   );
-  putSqlNotification(requiredSqlStorage(storage), prefix, record);
   return Promise.resolve();
 }
 
@@ -52,10 +55,6 @@ function selectNotificationRow(
       idempotencyKey
     )
     .toArray()[0];
-}
-
-function parseNotificationRecord(row: NotificationRow): NotificationRecord {
-  return JSON.parse(row.record) as NotificationRecord;
 }
 
 function requiredSqlStorage(
@@ -84,20 +83,29 @@ function ensureNotificationSchema(sql: SqlStorage): void {
   sql.exec(
     "CREATE INDEX IF NOT EXISTS pss_notification_status ON pss_notification (prefix, status, created_at)"
   );
+  ensurePayloadChunkSchema(sql);
 }
 
 function putSqlNotification(
   sql: SqlStorage,
   prefix: string,
-  record: NotificationRecord
+  record: NotificationRecord,
+  maxPayloadBytes: number
 ): void {
   ensureNotificationSchema(sql);
   const nowMs = Date.now();
+  const serializedRecord = writeJsonPayloadToSqlRows(
+    sql,
+    notificationPayloadLocation(prefix, record.idempotencyKey),
+    "notification-record",
+    record,
+    maxPayloadBytes
+  );
   sql.exec(
     "INSERT INTO pss_notification (prefix, idempotency_key, record, notification_id, run_id, thread_key, owner_namespace, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(prefix, idempotency_key) DO UPDATE SET record = excluded.record, notification_id = excluded.notification_id, run_id = excluded.run_id, thread_key = excluded.thread_key, owner_namespace = excluded.owner_namespace, status = excluded.status, updated_at = excluded.updated_at",
     prefix,
     record.idempotencyKey,
-    JSON.stringify(record),
+    serializedRecord,
     record.notificationId,
     record.runId,
     record.threadKey,
@@ -106,4 +114,26 @@ function putSqlNotification(
     nowMs,
     nowMs
   );
+}
+
+function parseStoredNotificationRecord(
+  sql: SqlStorage,
+  prefix: string,
+  idempotencyKey: string,
+  row: NotificationRow
+): NotificationRecord {
+  const record = readJsonPayloadFromSqlRows(
+    sql,
+    notificationPayloadLocation(prefix, idempotencyKey),
+    row.record
+  );
+  return JSON.parse(record) as NotificationRecord;
+}
+
+function notificationPayloadLocation(prefix: string, idempotencyKey: string) {
+  return {
+    ownerKey: prefix,
+    payloadKey: idempotencyKey,
+    scope: "notification",
+  };
 }
