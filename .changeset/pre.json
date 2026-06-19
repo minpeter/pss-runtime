@@ -18,6 +18,7 @@
     "runtime-cloudflare-adapter",
     "runtime-plugin-constructor",
     "runtime-plugin-sessions",
+    "runtime-sqlite-notifications",
     "runtime-subagents",
     "runtime-thread-key-surface",
     "sqlite-event-checkpoint-stores",

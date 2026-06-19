@@ -1,5 +1,11 @@
 # @minpeter/pss-runtime
 
+## 0.1.0-next.13
+
+### Patch Changes
+
+- ae58a13: Store Cloudflare Durable Object notification records in SQLite rows with legacy KV read-through, and make runtime checkpoint ids include run, version, and phase metadata.
+
 ## 0.1.0-next.12
 
 ### Patch Changes
