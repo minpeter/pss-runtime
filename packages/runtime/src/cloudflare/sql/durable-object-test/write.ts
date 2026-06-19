@@ -195,10 +195,12 @@ function writeScheduledWork(
       !(row.prefix === prefix && row.kind === kind && row.work_id === workId)
   );
   state.scheduledWork.push({
-    created_at: numberBinding(bindings[4]),
+    created_at: numberBinding(bindings[6]),
     kind,
     payload: stringBinding(bindings[3]),
     prefix,
+    run_id: nullableStringBinding(bindings[5]),
+    thread_key: nullableStringBinding(bindings[4]),
     work_id: workId,
   });
 }

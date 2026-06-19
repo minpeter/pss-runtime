@@ -12,6 +12,12 @@ interface MessageRowProbe {
   readonly seq: number;
 }
 
+interface MessageChunkRowProbe {
+  readonly chunk: string;
+  readonly chunk_index: number;
+  readonly seq: number;
+}
+
 export function createStore(
   options: { readonly maxPayloadBytes?: number } = {}
 ): {
@@ -41,6 +47,18 @@ export function readRows(
   return (storage.sql as InMemorySqlStorage)
     .exec<MessageRowProbe>(
       "SELECT seq, active, message FROM pss_thread_message WHERE thread_key = ? ORDER BY seq",
+      storeKey(PREFIX, "thread", threadKey)
+    )
+    .toArray();
+}
+
+export function readChunkRows(
+  storage: InMemoryCloudflareDurableObjectStorage,
+  threadKey: string
+): MessageChunkRowProbe[] {
+  return (storage.sql as InMemorySqlStorage)
+    .exec<MessageChunkRowProbe>(
+      "SELECT seq, chunk_index, chunk FROM pss_thread_message_chunk WHERE thread_key = ? ORDER BY seq, chunk_index",
       storeKey(PREFIX, "thread", threadKey)
     )
     .toArray();

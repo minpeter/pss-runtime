@@ -80,7 +80,10 @@ export async function dispatchAgentNotification(
 
   try {
     await input.host.store.transaction(async (tx) => {
-      await tx.runs.create(runRecord);
+      const runCreate = await tx.runs.create(runRecord);
+      if (!runCreate.ok) {
+        throw new DuplicateNotificationError();
+      }
       const writeResult = await tx.notifications.enqueue(notificationRecord);
       if (!writeResult.ok) {
         throw new DuplicateNotificationError();

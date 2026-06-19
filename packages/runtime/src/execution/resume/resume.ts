@@ -1,6 +1,7 @@
 import {
   appendCheckpoint,
   resumeStepFromCheckpoint,
+  resumeStateCheckpointReference,
   throwIfManualToolRecoveryRequired,
 } from "./checkpoints";
 import {
@@ -49,7 +50,7 @@ export async function resumeRun(
         phase: "before-model",
         runId: options.runId,
         runtimeState: { step: nextStep.stepNumber },
-        threadSnapshot: state,
+        threadSnapshot: resumeStateCheckpointReference(state),
       });
     }
 
@@ -77,7 +78,7 @@ export async function resumeRun(
       phase: "after-model",
       runId: options.runId,
       runtimeState: { step: nextStep.stepNumber },
-      threadSnapshot: stateAfterModel,
+      threadSnapshot: resumeStateCheckpointReference(stateAfterModel),
     });
 
     const shouldContinue = await emitModelOutputEvents({
@@ -100,7 +101,7 @@ export async function resumeRun(
         phase: "suspended",
         runId: options.runId,
         runtimeState: { step: nextStep.stepNumber },
-        threadSnapshot: stateAfterModel,
+        threadSnapshot: resumeStateCheckpointReference(stateAfterModel),
       });
       return { status: "suspended", steps };
     }

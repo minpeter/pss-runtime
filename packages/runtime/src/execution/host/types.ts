@@ -72,6 +72,14 @@ export type ClaimRunResult =
       readonly reason: "leased" | "not-claimable" | "not-found";
     };
 
+export type CreateRunResult =
+  | { readonly ok: true; readonly record: RunRecord }
+  | {
+      readonly ok: false;
+      readonly reason: "duplicate";
+      readonly record: RunRecord;
+    };
+
 export interface ClaimRunOptions {
   readonly attempt: number;
   readonly leaseId: string;
@@ -150,7 +158,7 @@ export type NotificationClaimResult =
 
 export interface RunStore {
   claim(runId: string, options: ClaimRunOptions): Promise<ClaimRunResult>;
-  create(record: RunRecord): Promise<RunRecord>;
+  create(record: RunRecord): Promise<CreateRunResult>;
   get(runId: string): Promise<RunRecord | null>;
   getByDedupeKey(dedupeKey: string): Promise<RunRecord | null>;
   listByParentRunId(parentRunId: string): Promise<readonly RunRecord[]>;

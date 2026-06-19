@@ -21,7 +21,14 @@ type ScheduledWorkKind = "run" | "thread-prompt";
 
 interface ScheduledWorkRow {
   readonly payload: string;
+  readonly run_id?: string | null;
+  readonly thread_key?: string | null;
   readonly work_id: string;
+}
+
+interface ScheduledWorkIndexes {
+  readonly runId?: string;
+  readonly threadKey?: string;
 }
 
 export async function appendScheduledRun(
@@ -31,7 +38,9 @@ export async function appendScheduledRun(
 ): Promise<void> {
   await withTransaction(storage, (tx) => {
     const sql = requiredScheduledWorkSql(tx);
-    insertScheduledWork(sql, prefix, "run", runScheduledWorkId(runId), runId);
+    insertScheduledWork(sql, prefix, "run", runScheduledWorkId(runId), runId, {
+      runId,
+    });
     return Promise.resolve();
   });
 }
@@ -48,7 +57,11 @@ export async function appendScheduledThreadPrompt(
       prefix,
       "thread-prompt",
       threadPromptScheduledWorkId(prompt),
-      prompt
+      prompt,
+      {
+        runId: prompt.runId,
+        threadKey: prompt.threadKey,
+      }
     );
     return Promise.resolve();
   });
@@ -116,7 +129,8 @@ function insertScheduledWork(
   prefix: string,
   kind: ScheduledWorkKind,
   workId: string,
-  payload: unknown
+  payload: unknown,
+  indexes: ScheduledWorkIndexes
 ): void {
   ensureScheduledWorkSchema(sql);
   const existing = sql
@@ -131,11 +145,13 @@ function insertScheduledWork(
     return;
   }
   sql.exec(
-    "INSERT INTO pss_scheduled_work (prefix, kind, work_id, payload, created_at) VALUES (?, ?, ?, ?, ?)",
+    "INSERT INTO pss_scheduled_work (prefix, kind, work_id, payload, thread_key, run_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
     prefix,
     kind,
     workId,
     JSON.stringify(payload),
+    indexes.threadKey ?? null,
+    indexes.runId ?? null,
     Date.now()
   );
 }
@@ -183,10 +199,35 @@ function deleteScheduledWork(
 
 function ensureScheduledWorkSchema(sql: SqlStorage): void {
   sql.exec(
-    "CREATE TABLE IF NOT EXISTS pss_scheduled_work (prefix TEXT NOT NULL, kind TEXT NOT NULL, work_id TEXT NOT NULL, payload TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (prefix, kind, work_id))"
+    "CREATE TABLE IF NOT EXISTS pss_scheduled_work (prefix TEXT NOT NULL, kind TEXT NOT NULL, work_id TEXT NOT NULL, payload TEXT NOT NULL, thread_key TEXT, run_id TEXT, created_at INTEGER NOT NULL, PRIMARY KEY (prefix, kind, work_id))"
   );
+  ensureScheduledWorkColumn(sql, "thread_key");
+  ensureScheduledWorkColumn(sql, "run_id");
   sql.exec(
     "CREATE INDEX IF NOT EXISTS pss_scheduled_work_due ON pss_scheduled_work (prefix, kind, created_at, work_id)"
+  );
+  sql.exec(
+    "CREATE INDEX IF NOT EXISTS pss_scheduled_work_thread ON pss_scheduled_work (prefix, thread_key)"
+  );
+  sql.exec(
+    "CREATE INDEX IF NOT EXISTS pss_scheduled_work_run ON pss_scheduled_work (prefix, run_id)"
+  );
+}
+
+function ensureScheduledWorkColumn(sql: SqlStorage, column: string): void {
+  try {
+    sql.exec(`ALTER TABLE pss_scheduled_work ADD COLUMN ${column} TEXT`);
+  } catch (error) {
+    if (!isDuplicateColumnError(error)) {
+      throw error;
+    }
+  }
+}
+
+function isDuplicateColumnError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.toLowerCase().includes("duplicate column")
   );
 }
 

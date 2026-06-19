@@ -45,6 +45,7 @@ function normalizeSql(query: string): string {
 function isSchemaStatement(query: string): boolean {
   return (
     query.startsWith("create table ") ||
+    query.startsWith("alter table ") ||
     query.startsWith("create index ") ||
     query.startsWith("create unique index ")
   );

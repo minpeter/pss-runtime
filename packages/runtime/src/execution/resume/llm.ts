@@ -8,7 +8,10 @@ import {
 import { persistedToolExecutionCheckpoint } from "../../llm/tool-execution";
 import { modelMessageToAgentEvents } from "../../thread/protocol/mapping";
 import type { ExecutionHost } from "../host/types";
-import { appendCheckpoint } from "./checkpoints";
+import {
+  appendCheckpoint,
+  resumeStateCheckpointReference,
+} from "./checkpoints";
 import type { ResumeRunState } from "./types";
 
 export async function readModelOutput({
@@ -63,7 +66,7 @@ export async function createResumeToolExecution({
           toolCallId: checkpoint.toolCallId,
           toolName: checkpoint.toolName,
         },
-        threadSnapshot,
+        threadSnapshot: resumeStateCheckpointReference(threadSnapshot),
       }),
     beforeTool: async (checkpoint) => {
       await appendCheckpoint({
@@ -76,7 +79,7 @@ export async function createResumeToolExecution({
           toolCallId: checkpoint.toolCallId,
           toolName: checkpoint.toolName,
         },
-        threadSnapshot,
+        threadSnapshot: resumeStateCheckpointReference(threadSnapshot),
       });
     },
     runId,

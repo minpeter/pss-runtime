@@ -24,6 +24,7 @@ export type {
   CheckpointWriteResult,
   ClaimRunOptions,
   ClaimRunResult,
+  CreateRunResult,
   EventCursor,
   EventStore,
   ExecutionHost,

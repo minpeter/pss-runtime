@@ -124,4 +124,37 @@ describe("resumeRun checkpoint recovery", () => {
     ).rejects.toBeInstanceOf(ToolExecutionNeedsRecoveryError);
     expect(model.model.doGenerateCalls).toHaveLength(0);
   });
+
+  it("stores bounded checkpoint metadata instead of full resume history", async () => {
+    const { checkpoints, host } = createCheckpointSpyHost();
+    const history: ModelMessage[] = [
+      userTextToModelMessage(userText("queued")),
+    ];
+    const model = createScriptedModelOptions([[assistantMessage("done")]]);
+
+    await host.store.runs.create(createQueuedUserTurnRun());
+
+    await expect(
+      resumeRun({
+        budget: { maxSteps: 1 },
+        host,
+        loadState: () => Promise.resolve({ history }),
+        model,
+        runId: "run-1",
+        saveState: (state) => {
+          history.length = 0;
+          history.push(...state.history);
+          return Promise.resolve();
+        },
+      })
+    ).resolves.toEqual({ status: "completed", steps: 1 });
+
+    expect(history).toHaveLength(2);
+    expect(
+      checkpoints.map((checkpoint) => checkpoint.threadSnapshot)
+    ).toEqual([
+      { kind: "resume-state-ref", messageCount: 1 },
+      { kind: "resume-state-ref", messageCount: 2 },
+    ]);
+  });
 });

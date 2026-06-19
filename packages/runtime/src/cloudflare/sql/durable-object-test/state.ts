@@ -62,6 +62,8 @@ export interface ScheduledWorkRow {
   readonly kind: string;
   readonly payload: string;
   readonly prefix: string;
+  readonly run_id: string | null;
+  readonly thread_key: string | null;
   readonly work_id: string;
 }
 

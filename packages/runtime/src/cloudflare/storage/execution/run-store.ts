@@ -1,6 +1,7 @@
 import type {
   ClaimRunOptions,
   ClaimRunResult,
+  CreateRunResult,
   RunRecord,
   RunStatus,
   RunStore,
@@ -14,6 +15,7 @@ import { withTransaction } from "./records";
 import {
   getRun,
   getRunByDedupeKey,
+  insertRun,
   listRunsByParentRunId,
   putRun,
 } from "./run-records";
@@ -69,12 +71,25 @@ export class DurableObjectRunStore implements RunStore {
     });
   }
 
-  async create(record: RunRecord): Promise<RunRecord> {
+  async create(record: RunRecord): Promise<CreateRunResult> {
     return await withTransaction(this.#storage, async (storage) => {
-      await putRun(storage, this.#prefix, record, {
+      const existing =
+        (await getRun(storage, this.#prefix, record.runId)) ??
+        (record.dedupeKey
+          ? await getRunByDedupeKey(storage, this.#prefix, record.dedupeKey)
+          : null);
+      if (existing) {
+        return {
+          ok: false,
+          reason: "duplicate",
+          record: structuredClone(existing),
+        };
+      }
+
+      await insertRun(storage, this.#prefix, record, {
         maxPayloadBytes: this.#maxPayloadBytes,
       });
-      return structuredClone(record);
+      return { ok: true, record: structuredClone(record) };
     });
   }
 

@@ -5,6 +5,7 @@ import { DurableObjectSqliteThreadStore } from "./thread-store";
 import {
   createStore,
   PREFIX,
+  readChunkRows,
   REQUIRES_SQLITE,
   readRows,
   snapshot,
@@ -155,21 +156,21 @@ describe("DurableObjectSqliteThreadStore", () => {
     ).resolves.toEqual({ ok: false, reason: "conflict" });
   });
 
-  it("rejects snapshot message rows that exceed the serialized payload budget", async () => {
+  it("chunks snapshot message rows that exceed the serialized payload budget", async () => {
     const { storage, store } = createStore({ maxPayloadBytes: 80 });
+    const bigMessage = { content: "x".repeat(120), role: "user" };
 
     await expect(
-      store.commit(
-        "key",
-        snapshot([{ content: "x".repeat(120), role: "user" }]),
-        { expectedVersion: null }
-      )
-    ).rejects.toMatchObject({
-      maxBytes: 80,
-      payloadKind: "thread-message",
+      store.commit("key", snapshot([bigMessage]), { expectedVersion: null })
+    ).resolves.toEqual({ ok: true, version: "1" });
+
+    const [row] = readRows(storage, "key");
+    expect(row?.message).toBe(JSON.stringify({ $pss: "chunk", n: 2 }));
+    expect(readChunkRows(storage, "key")).toHaveLength(2);
+    await expect(store.load("key")).resolves.toEqual({
+      state: { history: [bigMessage], schemaVersion: 1 },
+      version: "1",
     });
-    expect(readRows(storage, "key")).toEqual([]);
-    await expect(store.load("key")).resolves.toBeNull();
   });
 
   it("rejects opaque thread state blobs that exceed the serialized payload budget", async () => {
