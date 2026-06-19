@@ -7,6 +7,7 @@ import {
 } from "../payload-guard";
 
 const payloadChunkMarkerPrefix = "\u001epss-payload-chunk:";
+const textEncoder = new TextEncoder();
 
 interface PayloadChunkRow {
   readonly chunk: string;
@@ -178,25 +179,48 @@ function chunkSerializedPayload(
   maxPayloadBytes: number
 ): string[] {
   const chunkMaxBytes = Math.max(1, maxPayloadBytes);
+  const totalBytes = textEncoder.encode(serialized).byteLength;
+  if (totalBytes <= chunkMaxBytes) {
+    return [serialized];
+  }
+  if (totalBytes === serialized.length) {
+    const chunks: string[] = [];
+    for (let index = 0; index < serialized.length; index += chunkMaxBytes) {
+      chunks.push(serialized.slice(index, index + chunkMaxBytes));
+    }
+    return chunks;
+  }
+
   const chunks: string[] = [];
   let currentStart = 0;
-  let currentBytes = 0;
-  let index = 0;
-  for (const char of serialized) {
-    const charStart = index;
-    const nextIndex = charStart + char.length;
-    const charBytes = utf8ByteLength(char);
-    if (currentBytes > 0 && currentBytes + charBytes > chunkMaxBytes) {
-      chunks.push(serialized.slice(currentStart, charStart));
-      currentStart = charStart;
-      currentBytes = charBytes;
-    } else {
-      currentBytes += charBytes;
+  while (currentStart < serialized.length) {
+    const firstEnd = nextCodePointEnd(serialized, currentStart);
+    let low = firstEnd;
+    let high = Math.max(
+      firstEnd,
+      Math.min(serialized.length, currentStart + chunkMaxBytes)
+    );
+    let best = firstEnd;
+    while (low <= high) {
+      const mid = avoidTrailingHighSurrogate(
+        serialized,
+        Math.floor((low + high) / 2)
+      );
+      if (mid <= currentStart) {
+        break;
+      }
+      const byteLength = textEncoder.encode(
+        serialized.slice(currentStart, mid)
+      ).byteLength;
+      if (byteLength <= chunkMaxBytes) {
+        best = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
     }
-    index = nextIndex;
-  }
-  if (currentStart < serialized.length) {
-    chunks.push(serialized.slice(currentStart));
+    chunks.push(serialized.slice(currentStart, best));
+    currentStart = best;
   }
   return chunks;
 }
@@ -228,19 +252,24 @@ function createPayloadChunkMarker(
   return marker;
 }
 
-function utf8ByteLength(char: string): number {
-  const codePoint = char.codePointAt(0);
-  if (codePoint === undefined) {
-    return 0;
+function avoidTrailingHighSurrogate(value: string, index: number): number {
+  if (index <= 0 || index >= value.length) {
+    return index;
   }
-  if (codePoint <= 0x7f) {
-    return 1;
+  const previous = value.charCodeAt(index - 1);
+  return previous >= 0xd8_00 && previous <= 0xdb_ff ? index - 1 : index;
+}
+
+function nextCodePointEnd(value: string, index: number): number {
+  if (index >= value.length) {
+    return index;
   }
-  if (codePoint <= 0x7_ff) {
-    return 2;
-  }
-  if (codePoint <= 0xff_ff) {
-    return 3;
-  }
-  return 4;
+  const first = value.charCodeAt(index);
+  const second = value.charCodeAt(index + 1);
+  return first >= 0xd8_00 &&
+    first <= 0xdb_ff &&
+    second >= 0xdc_00 &&
+    second <= 0xdf_ff
+    ? index + 2
+    : index + 1;
 }

@@ -1,5 +1,7 @@
 import type { SqlStorage } from "../../sql/ports/storage-port";
 
+const textEncoder = new TextEncoder();
+
 export type StorageMetricsTable =
   | "pss_checkpoint"
   | "pss_event"
@@ -121,23 +123,7 @@ function sumTextBytes(
 }
 
 function utf8ByteLength(value: string): number {
-  let bytes = 0;
-  for (const char of value) {
-    const codePoint = char.codePointAt(0);
-    if (codePoint === undefined) {
-      continue;
-    }
-    if (codePoint <= 0x7f) {
-      bytes += 1;
-    } else if (codePoint <= 0x7_ff) {
-      bytes += 2;
-    } else if (codePoint <= 0xff_ff) {
-      bytes += 3;
-    } else {
-      bytes += 4;
-    }
-  }
-  return bytes;
+  return textEncoder.encode(value).byteLength;
 }
 
 function percentile(
