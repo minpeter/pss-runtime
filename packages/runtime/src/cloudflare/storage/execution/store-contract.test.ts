@@ -3,7 +3,6 @@ import { describeExecutionStoreContract } from "../../../contracts/execution-sto
 import type { NotificationRecord, RunRecord } from "../../../execution";
 import { InMemorySqlStorage } from "../../sql/node-test/node-sqlite-storage";
 import { InMemoryCloudflareDurableObjectStorage } from "../durable-object/durable-object-storage";
-import { storeKey } from "./records";
 import { DurableObjectExecutionStore } from "./store";
 
 describeExecutionStoreContract({
@@ -94,9 +93,6 @@ describe("DurableObjectExecutionStore payload guards", () => {
       )
       .toArray();
     expect(rows.map((row) => JSON.parse(row.record))).toEqual([record]);
-    await expect(
-      storage.get(storeKey("run-sql-test", "run", "run-sql"))
-    ).resolves.toBeUndefined();
     await expect(store.runs.getByDedupeKey("dedupe-1")).resolves.toEqual(
       record
     );
@@ -127,49 +123,6 @@ describe("DurableObjectExecutionStore payload guards", () => {
       )
       .toArray();
     expect(rows.map((row) => JSON.parse(row.record))).toEqual([record]);
-    await expect(
-      storage.get(
-        storeKey("notification-sql-test", "notification", "notify-sql")
-      )
-    ).resolves.toBeUndefined();
-  });
-
-  it("migrates legacy notification KV records to SQLite rows when claimed by idempotency key", async () => {
-    const storage = new InMemoryCloudflareDurableObjectStorage({
-      sql: new InMemorySqlStorage(),
-    });
-    const store = new DurableObjectExecutionStore({
-      prefix: "notification-migration-test",
-      storage,
-    });
-    const legacy = notificationRecord("notify-legacy");
-    await storage.put(
-      storeKey("notification-migration-test", "notification", "notify-legacy"),
-      legacy
-    );
-
-    await expect(
-      store.notifications.claimByIdempotencyKey("notify-legacy")
-    ).resolves.toEqual({
-      ok: true,
-      record: { ...legacy, status: "acked" },
-    });
-
-    const rows = (storage.sql as InMemorySqlStorage)
-      .exec<{ readonly record: string }>(
-        "SELECT record FROM pss_notification WHERE prefix = ? AND idempotency_key = ?",
-        "notification-migration-test",
-        "notify-legacy"
-      )
-      .toArray();
-    expect(rows.map((row) => JSON.parse(row.record))).toEqual([
-      { ...legacy, status: "acked" },
-    ]);
-    await expect(
-      storage.get(
-        storeKey("notification-migration-test", "notification", "notify-legacy")
-      )
-    ).resolves.toBeUndefined();
   });
 });
 

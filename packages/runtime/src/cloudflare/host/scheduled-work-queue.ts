@@ -29,14 +29,10 @@ export async function appendScheduledRun(
   prefix: string,
   runId: string
 ): Promise<void> {
-  await withTransaction(storage, async (tx) => {
-    const sql = scheduledWorkSql(tx);
-    if (!sql) {
-      await appendUniqueLegacy(tx, scheduledRunsKey(prefix), runId);
-      return;
-    }
-    await migrateLegacyScheduledWork(tx, prefix);
+  await withTransaction(storage, (tx) => {
+    const sql = requiredScheduledWorkSql(tx);
     insertScheduledWork(sql, prefix, "run", runScheduledWorkId(runId), runId);
+    return Promise.resolve();
   });
 }
 
@@ -45,17 +41,8 @@ export async function appendScheduledThreadPrompt(
   prefix: string,
   prompt: CloudflareScheduledThreadPrompt
 ): Promise<void> {
-  await withTransaction(storage, async (tx) => {
-    const sql = scheduledWorkSql(tx);
-    if (!sql) {
-      await appendThreadPromptLegacy(
-        tx,
-        scheduledThreadPromptsKey(prefix),
-        prompt
-      );
-      return;
-    }
-    await migrateLegacyScheduledWork(tx, prefix);
+  await withTransaction(storage, (tx) => {
+    const sql = requiredScheduledWorkSql(tx);
     insertScheduledWork(
       sql,
       prefix,
@@ -63,133 +50,65 @@ export async function appendScheduledThreadPrompt(
       threadPromptScheduledWorkId(prompt),
       prompt
     );
+    return Promise.resolve();
   });
 }
 
-export async function listScheduledRuns(
+export function listScheduledRuns(
   storage: CloudflareDurableObjectStorage,
   options: ScheduledWorkListOptions,
   defaultPrefix: string
 ): Promise<readonly string[]> {
   const prefix = options.prefix ?? defaultPrefix;
-  const sql = scheduledWorkSql(storage);
-  if (!sql) {
-    return await readLegacyList<string>(
-      storage,
-      scheduledRunsKey(prefix),
-      options.limit
-    );
-  }
-
-  await migrateLegacyScheduledWork(storage, prefix);
-  return selectScheduledWork(sql, prefix, "run", options.limit).map(
-    (row) => JSON.parse(row.payload) as string
+  const sql = requiredScheduledWorkSql(storage);
+  return Promise.resolve(
+    selectScheduledWork(sql, prefix, "run", options.limit).map(
+      (row) => JSON.parse(row.payload) as string
+    )
   );
 }
 
-export async function ackScheduledRun(
+export function ackScheduledRun(
   storage: CloudflareDurableObjectStorage,
   runId: string,
   options: { readonly prefix?: string },
   defaultPrefix: string
 ): Promise<void> {
   const prefix = options.prefix ?? defaultPrefix;
-  const sql = scheduledWorkSql(storage);
-  if (!sql) {
-    await removeFromLegacyList<string>(
-      storage,
-      scheduledRunsKey(prefix),
-      (scheduledRunId) => scheduledRunId === runId
-    );
-    return;
-  }
-
-  await migrateLegacyScheduledWork(storage, prefix);
+  const sql = requiredScheduledWorkSql(storage);
   deleteScheduledWork(sql, prefix, "run", runScheduledWorkId(runId));
+  return Promise.resolve();
 }
 
-export async function listScheduledThreadPrompts(
+export function listScheduledThreadPrompts(
   storage: CloudflareDurableObjectStorage,
   options: ScheduledWorkListOptions,
   defaultPrefix: string
 ): Promise<readonly CloudflareScheduledThreadPrompt[]> {
   const prefix = options.prefix ?? defaultPrefix;
-  const sql = scheduledWorkSql(storage);
-  if (!sql) {
-    return await readLegacyList<CloudflareScheduledThreadPrompt>(
-      storage,
-      scheduledThreadPromptsKey(prefix),
-      options.limit
-    );
-  }
-
-  await migrateLegacyScheduledWork(storage, prefix);
-  return selectScheduledWork(sql, prefix, "thread-prompt", options.limit).map(
-    (row) => JSON.parse(row.payload) as CloudflareScheduledThreadPrompt
+  const sql = requiredScheduledWorkSql(storage);
+  return Promise.resolve(
+    selectScheduledWork(sql, prefix, "thread-prompt", options.limit).map(
+      (row) => JSON.parse(row.payload) as CloudflareScheduledThreadPrompt
+    )
   );
 }
 
-export async function ackScheduledThreadPrompt(
+export function ackScheduledThreadPrompt(
   storage: CloudflareDurableObjectStorage,
   prompt: CloudflareScheduledThreadPrompt,
   options: { readonly prefix?: string },
   defaultPrefix: string
 ): Promise<void> {
   const prefix = options.prefix ?? defaultPrefix;
-  const sql = scheduledWorkSql(storage);
-  if (!sql) {
-    await removeFromLegacyList<CloudflareScheduledThreadPrompt>(
-      storage,
-      scheduledThreadPromptsKey(prefix),
-      (scheduledPrompt) => threadPromptsMatch(scheduledPrompt, prompt)
-    );
-    return;
-  }
-
-  await migrateLegacyScheduledWork(storage, prefix);
+  const sql = requiredScheduledWorkSql(storage);
   deleteScheduledWork(
     sql,
     prefix,
     "thread-prompt",
     threadPromptScheduledWorkId(prompt)
   );
-}
-
-async function migrateLegacyScheduledWork(
-  storage: CloudflareDurableObjectTransactionStorage,
-  prefix: string
-): Promise<void> {
-  const sql = scheduledWorkSql(storage);
-  if (!sql) {
-    return;
-  }
-
-  const legacyRuns =
-    (await storage.get<readonly string[]>(scheduledRunsKey(prefix))) ?? [];
-  const legacyPrompts =
-    (await storage.get<readonly CloudflareScheduledThreadPrompt[]>(
-      scheduledThreadPromptsKey(prefix)
-    )) ?? [];
-
-  if (legacyRuns.length === 0 && legacyPrompts.length === 0) {
-    ensureScheduledWorkSchema(sql);
-    return;
-  }
-
-  for (const runId of legacyRuns) {
-    insertScheduledWork(sql, prefix, "run", runScheduledWorkId(runId), runId);
-  }
-  for (const prompt of legacyPrompts) {
-    insertScheduledWork(
-      sql,
-      prefix,
-      "thread-prompt",
-      threadPromptScheduledWorkId(prompt),
-      prompt
-    );
-  }
-  await storage.delete(scheduledRunsKey(prefix));
-  await storage.delete(scheduledThreadPromptsKey(prefix));
+  return Promise.resolve();
 }
 
 function insertScheduledWork(
@@ -271,63 +190,6 @@ function ensureScheduledWorkSchema(sql: SqlStorage): void {
   );
 }
 
-async function appendUniqueLegacy<T>(
-  storage: CloudflareDurableObjectTransactionStorage,
-  key: string,
-  value: T
-): Promise<void> {
-  const values = await readLegacyList<T>(storage, key);
-  if (!values.includes(value)) {
-    values.push(value);
-    await storage.put(key, values);
-  }
-}
-
-async function appendThreadPromptLegacy(
-  storage: CloudflareDurableObjectTransactionStorage,
-  key: string,
-  prompt: CloudflareScheduledThreadPrompt
-): Promise<void> {
-  const values = await readLegacyList<CloudflareScheduledThreadPrompt>(
-    storage,
-    key
-  );
-  const isDuplicate = values.some(
-    (existing) =>
-      existing.threadKey === prompt.threadKey &&
-      existing.idempotencyKey === prompt.idempotencyKey &&
-      existing.runId === prompt.runId
-  );
-  if (!isDuplicate) {
-    values.push(prompt);
-    await storage.put(key, values);
-  }
-}
-
-async function removeFromLegacyList<T>(
-  storage: CloudflareDurableObjectStorage,
-  key: string,
-  shouldRemove: (value: T) => boolean
-): Promise<void> {
-  await withTransaction(storage, async (tx) => {
-    const remaining = (await readLegacyList<T>(tx, key)).filter(
-      (value) => !shouldRemove(value)
-    );
-    await tx.put(key, remaining);
-  });
-}
-
-async function readLegacyList<T>(
-  storage: CloudflareDurableObjectTransactionStorage,
-  key: string,
-  limit?: number
-): Promise<T[]> {
-  const values = (await storage.get<readonly T[]>(key)) ?? [];
-  return values
-    .slice(0, normalizedListLimit(limit))
-    .map((item) => structuredClone(item));
-}
-
 async function withTransaction<T>(
   storage: CloudflareDurableObjectStorage,
   fn: (storage: CloudflareDurableObjectTransactionStorage) => Promise<T>
@@ -347,9 +209,9 @@ function withTransactionSqlStorage(
   return storage.sql === undefined ? withSqlStorage(storage, sql) : storage;
 }
 
-function scheduledWorkSql(
+function requiredScheduledWorkSql(
   storage: CloudflareDurableObjectTransactionStorage
-): SqlStorage | undefined {
+): SqlStorage {
   const sql = storage.sql;
   if (
     typeof sql === "object" &&
@@ -359,15 +221,7 @@ function scheduledWorkSql(
   ) {
     return sql as SqlStorage;
   }
-  return;
-}
-
-function scheduledRunsKey(prefix: string): string {
-  return `${prefix}:scheduled-runs`;
-}
-
-function scheduledThreadPromptsKey(prefix: string): string {
-  return `${prefix}:scheduled-session-prompts`;
+  throw new Error("Cloudflare scheduled work queue requires SQLite storage.");
 }
 
 function runScheduledWorkId(runId: string): string {
@@ -386,16 +240,4 @@ function threadPromptScheduledWorkId(
 
 function normalizedListLimit(limit: number | undefined): number | undefined {
   return limit === undefined ? undefined : Math.max(0, Math.floor(limit));
-}
-
-function threadPromptsMatch(
-  left: CloudflareScheduledThreadPrompt,
-  right: CloudflareScheduledThreadPrompt
-): boolean {
-  return (
-    left.idempotencyKey === right.idempotencyKey &&
-    left.notificationId === right.notificationId &&
-    left.runId === right.runId &&
-    left.threadKey === right.threadKey
-  );
 }

@@ -15,8 +15,6 @@ import {
 import {
   deleteThreadRows,
   ensureThreadSchema,
-  legacyThreadRowKey,
-  migrateLegacyThreadRows,
   readActiveThreadMessages,
   readThreadMeta,
   softDeleteActiveThreadRows,
@@ -72,7 +70,6 @@ export class DurableObjectSqliteThreadStore implements ThreadStore {
     try {
       this.#ensureSchema();
       const key = this.#rowKey(threadKey);
-      migrateLegacyThreadRows(this.#sql, this.#prefix, threadKey);
 
       // --- begin synchronous read-modify-write critical section (no await) ---
       const meta = readThreadMeta(this.#sql, key);
@@ -122,17 +119,14 @@ export class DurableObjectSqliteThreadStore implements ThreadStore {
 
   delete(threadKey: string): Promise<void> {
     this.#ensureSchema();
-    migrateLegacyThreadRows(this.#sql, this.#prefix, threadKey);
     const key = this.#rowKey(threadKey);
-    const legacyKey = this.#legacyRowKey(threadKey);
-    deleteThreadRows(this.#sql, key, legacyKey);
+    deleteThreadRows(this.#sql, key);
     return Promise.resolve();
   }
 
   load(threadKey: string): Promise<StoredThread | null> {
     this.#ensureSchema();
     const key = this.#rowKey(threadKey);
-    migrateLegacyThreadRows(this.#sql, this.#prefix, threadKey);
 
     const meta = readThreadMeta(this.#sql, key);
     if (!meta) {
@@ -151,10 +145,6 @@ export class DurableObjectSqliteThreadStore implements ThreadStore {
 
   #rowKey(threadKey: string): string {
     return threadRowKey(this.#prefix, threadKey);
-  }
-
-  #legacyRowKey(threadKey: string): string {
-    return legacyThreadRowKey(this.#prefix, threadKey);
   }
 
   #ensureSchema(): void {
