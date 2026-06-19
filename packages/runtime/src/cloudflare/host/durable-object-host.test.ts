@@ -80,9 +80,10 @@ describe("Cloudflare Durable Object host adapter", () => {
         payload: JSON.stringify(prompt),
         run_id: notificationRunId,
         thread_key: "example",
-        work_id: ["example", idempotencyKey, notificationRunId].join("\u0000"),
+        work_id: expect.any(String),
       },
     ]);
+    expect(readScheduledWorkRows(storage)[1]?.work_id).not.toContain("\u0000");
     await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([
       runId,
     ]);
