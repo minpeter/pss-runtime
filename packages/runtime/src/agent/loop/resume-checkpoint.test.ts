@@ -150,9 +150,7 @@ describe("resumeRun checkpoint recovery", () => {
     ).resolves.toEqual({ status: "completed", steps: 1 });
 
     expect(history).toHaveLength(2);
-    expect(
-      checkpoints.map((checkpoint) => checkpoint.threadSnapshot)
-    ).toEqual([
+    expect(checkpoints.map((checkpoint) => checkpoint.threadSnapshot)).toEqual([
       { kind: "resume-state-ref", messageCount: 1 },
       { kind: "resume-state-ref", messageCount: 2 },
     ]);
