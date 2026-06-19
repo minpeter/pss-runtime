@@ -1,5 +1,11 @@
 # @minpeter/pss-runtime
 
+## 0.1.0-next.16
+
+### Patch Changes
+
+- a5418f0: Support secondary-index scheduled work deletes in the local Durable Object SQL test adapter.
+
 ## 0.1.0-next.15
 
 ### Patch Changes
