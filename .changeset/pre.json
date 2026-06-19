@@ -19,6 +19,7 @@
     "runtime-plugin-constructor",
     "runtime-plugin-sessions",
     "runtime-sqlite-notifications",
+    "runtime-storage-integrity",
     "runtime-subagents",
     "runtime-thread-key-surface",
     "sqlite-event-checkpoint-stores",
