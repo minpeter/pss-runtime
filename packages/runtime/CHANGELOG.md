@@ -1,5 +1,11 @@
 # @minpeter/pss-runtime
 
+## 0.1.0-next.15
+
+### Patch Changes
+
+- d1e0186: Add a local Cloudflare Durable Object storage stress harness, including an opt-in 200MB-scale extreme profile, and expose host-level payload budget configuration.
+
 ## 0.1.0-next.14
 
 ### Patch Changes

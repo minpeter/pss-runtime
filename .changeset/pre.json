@@ -20,6 +20,7 @@
     "runtime-plugin-sessions",
     "runtime-sqlite-notifications",
     "runtime-storage-integrity",
+    "runtime-storage-stress-harness",
     "runtime-subagents",
     "runtime-thread-key-surface",
     "sqlite-event-checkpoint-stores",
