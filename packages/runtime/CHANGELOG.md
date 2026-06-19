@@ -1,5 +1,11 @@
 # @minpeter/pss-runtime
 
+## 0.1.0-next.12
+
+### Patch Changes
+
+- a58c756: Rename Cloudflare SQLite thread history tables from `pss_session_*` to `pss_thread_*` with legacy row migration, and store run records in SQLite rows instead of Durable Object KV values.
+
 ## 0.1.0-next.11
 
 ### Patch Changes
