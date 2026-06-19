@@ -9,7 +9,8 @@ import {
   resolveStoragePayloadMaxBytes,
   type StoragePayloadBudgetOptions,
 } from "../payload-guard";
-import { getNotification, putNotification, withTransaction } from "./records";
+import { getNotification, putNotification } from "./notification-records";
+import { withTransaction } from "./records";
 
 export class DurableObjectNotificationInbox implements NotificationInbox {
   readonly #maxPayloadBytes: number;

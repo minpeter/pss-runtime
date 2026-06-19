@@ -27,6 +27,19 @@ export interface RunRow {
   readonly updated_at: number;
 }
 
+export interface NotificationRow {
+  readonly created_at: number;
+  readonly idempotency_key: string;
+  readonly notification_id: string;
+  readonly owner_namespace: string | null;
+  readonly prefix: string;
+  readonly record: string;
+  readonly run_id: string;
+  readonly status: string;
+  readonly thread_key: string;
+  readonly updated_at: number;
+}
+
 export interface EventMetaRow {
   readonly next_seq: number;
   readonly run_key: string;
@@ -56,6 +69,7 @@ export interface InMemoryDurableObjectSqlState {
   checkpoints: CheckpointRow[];
   eventMeta: Map<string, EventMetaRow>;
   events: EventRow[];
+  notifications: NotificationRow[];
   runs: RunRow[];
   scheduledWork: ScheduledWorkRow[];
   threadMessages: ThreadMessageRow[];
@@ -67,6 +81,7 @@ export function createInMemoryDurableObjectSqlState(): InMemoryDurableObjectSqlS
     checkpoints: [],
     eventMeta: new Map(),
     events: [],
+    notifications: [],
     runs: [],
     scheduledWork: [],
     threadMessages: [],
@@ -83,6 +98,7 @@ export function cloneInMemoryDurableObjectSqlState(
       [...state.eventMeta].map(([key, value]) => [key, structuredClone(value)])
     ),
     events: structuredClone(state.events),
+    notifications: structuredClone(state.notifications),
     runs: structuredClone(state.runs),
     scheduledWork: structuredClone(state.scheduledWork),
     threadMessages: structuredClone(state.threadMessages),

@@ -3,6 +3,7 @@ import {
   numberBinding,
   stringBinding,
 } from "./bindings";
+import { writeNotificationStatement } from "./notification-write";
 import { writeRunStatement } from "./run-write";
 import type { InMemoryDurableObjectSqlState, ThreadMetaRow } from "./state";
 
@@ -16,6 +17,9 @@ export function writeSqlStatement(
     return;
   }
   if (writeRunStatement(state, query, bindings)) {
+    return;
+  }
+  if (writeNotificationStatement(state, query, bindings)) {
     return;
   }
   if (query.startsWith("insert into pss_event_meta")) {
