@@ -1,5 +1,11 @@
 # @minpeter/pss-runtime
 
+## 0.1.0-next.19
+
+### Patch Changes
+
+- 515b089: Fix the runtime README to document the exported `thread-store/file` subpath without referencing the removed `session-store/file` path.
+
 ## 0.1.0-next.18
 
 ### Patch Changes
