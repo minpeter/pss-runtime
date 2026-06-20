@@ -19,6 +19,7 @@
     "runtime-cloudflare-adapter",
     "runtime-plugin-constructor",
     "runtime-plugin-sessions",
+    "runtime-readme-thread-store-export",
     "runtime-scheduled-work-like-delete",
     "runtime-scheduled-work-test-adapter",
     "runtime-sqlite-notifications",
