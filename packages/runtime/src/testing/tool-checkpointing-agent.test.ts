@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ExecutionHost, RunCheckpoint } from "../execution";
+import type { Checkpoint, ExecutionHost } from "../execution";
 import { InMemorySqlStorage } from "../platform/cloudflare/sql/node-test/node-sqlite-storage";
 import { InMemoryCloudflareDurableObjectStorage } from "../platform/cloudflare/storage/durable-object/durable-object-storage";
 import { DurableObjectExecutionStore } from "../platform/cloudflare/storage/execution/store";
@@ -22,7 +22,7 @@ const generateTextMock = getGenerateTextMock();
 const textEncoder = new TextEncoder();
 
 function createCheckpointSpyCloudflareHost(maxPayloadBytes: number): {
-  readonly checkpoints: RunCheckpoint[];
+  readonly checkpoints: Checkpoint[];
   readonly host: ExecutionHost;
 } {
   const store = new DurableObjectExecutionStore({
@@ -31,7 +31,7 @@ function createCheckpointSpyCloudflareHost(maxPayloadBytes: number): {
       sql: new InMemorySqlStorage(),
     }),
   });
-  const checkpoints: RunCheckpoint[] = [];
+  const checkpoints: Checkpoint[] = [];
 
   return {
     checkpoints,
@@ -54,7 +54,7 @@ function createCheckpointSpyCloudflareHost(maxPayloadBytes: number): {
         },
         events: store.events,
         notifications: store.notifications,
-        runs: store.runs,
+        turns: store.turns,
         threads: store.threads,
         transaction: (fn) => store.transaction(fn),
       },
@@ -140,7 +140,7 @@ describe("tool checkpointing through Agent", () => {
     expect(beforeTool?.threadSnapshot).not.toHaveProperty("history");
     expect(afterTool?.threadSnapshot).toEqual(beforeTool?.threadSnapshot);
     await expect(
-      host.store.runs.get(beforeTool?.runId ?? "")
+      host.store.turns.get(beforeTool?.runId ?? "")
     ).resolves.toMatchObject({
       checkpointVersion: 2,
       kind: "user-turn",

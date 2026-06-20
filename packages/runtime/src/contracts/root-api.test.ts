@@ -11,27 +11,16 @@ import type {
   ExecutionStoreTransaction,
   NotificationInbox,
   NotificationRecord,
-  RunRecord,
-  RunStore,
-  SessionHost,
   ThreadHost,
+  TurnRecord,
+  TurnStore,
 } from "../execution";
 import type {
   AgentEvent,
   AgentHost,
   ControlAgentEvent,
-  ExpectedSessionVersion,
-  ExpectedThreadVersion,
   LifecycleAgentEvent,
-  SessionInput,
-  SessionStore,
-  SessionStoreCommit,
-  StoredSession,
-  StoredThread,
   TelemetryAgentEvent,
-  ThreadInput,
-  ThreadStore,
-  ThreadStoreCommit,
   VisibleAgentEvent,
 } from "../index";
 import {
@@ -156,7 +145,7 @@ describe("runtime public exports", () => {
       ExecutionStore["notifications"]
     >().toEqualTypeOf<NotificationInbox>();
     expectTypeOf<ExecutionHost["kind"]>().toEqualTypeOf<"execution">();
-    expectTypeOf<ExecutionStore["runs"]>().toEqualTypeOf<RunStore>();
+    expectTypeOf<ExecutionStore["turns"]>().toEqualTypeOf<TurnStore>();
     expectTypeOf<
       ExecutionStore["checkpoints"]
     >().toEqualTypeOf<CheckpointStore>();
@@ -165,9 +154,11 @@ describe("runtime public exports", () => {
       Parameters<NotificationInbox["enqueue"]>[0]
     >().toEqualTypeOf<NotificationRecord>();
     expectTypeOf<
-      Awaited<ReturnType<RunStore["get"]>>
-    >().toEqualTypeOf<RunRecord | null>();
-    expectTypeOf<ExecutionStoreTransaction["runs"]>().toEqualTypeOf<RunStore>();
+      Awaited<ReturnType<TurnStore["get"]>>
+    >().toEqualTypeOf<TurnRecord | null>();
+    expectTypeOf<
+      ExecutionStoreTransaction["turns"]
+    >().toEqualTypeOf<TurnStore>();
     expectTypeOf<
       ExecutionStoreTransaction["notifications"]
     >().toEqualTypeOf<NotificationInbox>();
@@ -175,19 +166,10 @@ describe("runtime public exports", () => {
       kind: "thread",
       threadStore: {} as ThreadHost["threadStore"],
     } satisfies ThreadHost;
-    const legacySessionHost = {
-      kind: "session",
-      threadStore: {} as ThreadHost["threadStore"],
-    } satisfies SessionHost;
-    const legacySessionStoreHost = {
-      kind: "session",
-      sessionStore: {} as ThreadHost["threadStore"],
-    } satisfies SessionHost;
     const agentHost = threadHost satisfies AgentHost;
-    const legacyAgentHost = legacySessionHost satisfies AgentHost;
-    const legacySessionStoreAgentHost =
-      legacySessionStoreHost satisfies AgentHost;
-    expectTypeOf<DurableBackgroundHost["runStore"]>().toEqualTypeOf<RunStore>();
+    expectTypeOf<
+      DurableBackgroundHost["turnStore"]
+    >().toEqualTypeOf<TurnStore>();
     expectTypeOf<
       DurableBackgroundHost["checkpointStore"]
     >().toEqualTypeOf<CheckpointStore>();
@@ -204,19 +186,9 @@ describe("runtime public exports", () => {
       ExecutionStore["transaction"]
     >();
     expect(agentHost.kind).toBe("thread");
-    expect(legacyAgentHost.kind).toBe("session");
-    expect(legacySessionStoreAgentHost.kind).toBe("session");
   });
 
-  it("types legacy session aliases from the package root", () => {
-    expectTypeOf<SessionInput>().toEqualTypeOf<ThreadInput>();
-    expectTypeOf<SessionStore>().toEqualTypeOf<ThreadStore>();
-    expectTypeOf<SessionStoreCommit>().toEqualTypeOf<ThreadStoreCommit>();
-    expectTypeOf<StoredSession>().toEqualTypeOf<StoredThread>();
-    expectTypeOf<ExpectedSessionVersion>().toEqualTypeOf<ExpectedThreadVersion>();
-  });
-
-  it("declares thread store package subpaths with legacy adapters", async () => {
+  it("declares thread store package subpaths without session aliases", async () => {
     const packageJson = JSON.parse(
       await readFile(
         fileURLToPath(new URL("../../package.json", import.meta.url)),
@@ -232,12 +204,8 @@ describe("runtime public exports", () => {
     expect(packageJson.exports["./thread-store/file"]).toMatchObject({
       "@minpeter/pss-source": "./src/thread/store/file.ts",
     });
-    expect(packageJson.exports["./session-store/memory"]).toEqual(
-      packageJson.exports["./thread-store/memory"]
-    );
-    expect(packageJson.exports["./session-store/file"]).toEqual(
-      packageJson.exports["./thread-store/file"]
-    );
+    expect(packageJson.exports["./session-store/memory"]).toBeUndefined();
+    expect(packageJson.exports["./session-store/file"]).toBeUndefined();
   });
 
   it("declares the Cloudflare adapter as a platform implementation subpath", async () => {

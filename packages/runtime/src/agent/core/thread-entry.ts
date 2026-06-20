@@ -1,5 +1,5 @@
 import type { AgentInput, NotifyOptions } from "../../thread/handle/thread";
-import type { AgentRun } from "../../thread/protocol/run";
+import type { AgentTurn } from "../../thread/protocol/turn";
 import { namespacePart } from "../identity/namespace";
 
 export interface ThreadMetadata {
@@ -18,12 +18,12 @@ export interface ThreadHandle {
   delete(): Promise<void>;
   dispose(): Promise<void>;
   interrupt(): void;
-  send(input: AgentInput): Promise<AgentRun>;
-  steer(input: AgentInput): Promise<AgentRun>;
+  send(input: AgentInput): Promise<AgentTurn>;
+  steer(input: AgentInput): Promise<AgentTurn>;
 }
 
 export interface AgentThreadEntry {
-  notify(input: AgentInput, options?: NotifyOptions): Promise<AgentRun>;
+  notify(input: AgentInput, options?: NotifyOptions): Promise<AgentTurn>;
   readonly publicHandle: ThreadHandle;
 }
 

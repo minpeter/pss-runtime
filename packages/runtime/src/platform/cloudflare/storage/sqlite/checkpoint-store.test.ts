@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { RunRecord } from "../../../../execution";
+import type { TurnRecord } from "../../../../execution";
 import { InMemorySqlStorage } from "../../sql/node-test/node-sqlite-storage";
 import {
   type CloudflareDurableObjectStorage,
@@ -40,7 +40,7 @@ function checkpoint(
   };
 }
 
-function createRun(runId = "run-1"): RunRecord {
+function createRun(runId = "run-1"): TurnRecord {
   return {
     checkpointVersion: 0,
     kind: "user-turn",

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { AgentEvent } from "../../thread/protocol/events";
 import { createInMemoryExecutionHost } from "../memory";
-import { StoredAgentRun } from "./stored-agent-run";
+import { StoredAgentTurn } from "./stored-agent-turn";
 
-async function collectRunEvents(run: StoredAgentRun): Promise<AgentEvent[]> {
+async function collectRunEvents(run: StoredAgentTurn): Promise<AgentEvent[]> {
   const events: AgentEvent[] = [];
   for await (const event of run.events()) {
     events.push(event);
@@ -11,10 +11,10 @@ async function collectRunEvents(run: StoredAgentRun): Promise<AgentEvent[]> {
   return events;
 }
 
-describe("stored AgentRun events", () => {
+describe("stored AgentTurn events", () => {
   it("replays stored events from cursor without thread runs", async () => {
     const host = createInMemoryExecutionHost();
-    await host.store.runs.create({
+    await host.store.turns.create({
       checkpointVersion: 0,
       kind: "user-turn",
       rootRunId: "run-1",
@@ -27,7 +27,7 @@ describe("stored AgentRun events", () => {
     });
     await host.store.events.append("run-1", { type: "turn-end" });
 
-    const run = new StoredAgentRun({
+    const run = new StoredAgentTurn({
       cursor,
       eventStore: host.store.events,
       runId: "run-1",
@@ -40,7 +40,7 @@ describe("stored AgentRun events", () => {
 
   it("rejects concurrent event iteration for one run", () => {
     const host = createInMemoryExecutionHost();
-    const run = new StoredAgentRun({
+    const run = new StoredAgentTurn({
       eventStore: host.store.events,
       runId: "run-1",
     });
@@ -48,7 +48,7 @@ describe("stored AgentRun events", () => {
     run.events();
 
     expect(() => run.events()).toThrow(
-      "AgentRun.events() can only be consumed once"
+      "AgentTurn.events() can only be consumed once"
     );
   });
 });

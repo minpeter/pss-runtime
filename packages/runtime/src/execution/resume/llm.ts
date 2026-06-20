@@ -52,7 +52,7 @@ export async function createResumeToolExecution({
   readonly threadSnapshot: ResumeRunState;
   readonly stepNumber: number;
 }): Promise<RuntimeToolExecutionContext> {
-  const run = await host.store.runs.get(runId);
+  const run = await host.store.turns.get(runId);
   return {
     attempt: run?.lease?.attempt ?? 1,
     afterTool: (checkpoint) =>

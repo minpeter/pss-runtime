@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentPlugin } from "../plugins/pipeline";
-import { BufferedAgentRun } from "../protocol/run";
+import { BufferedAgentTurn } from "../protocol/turn";
 import { ThreadEventDispatcher } from "./events";
 
 function createDispatcher(
@@ -27,7 +27,7 @@ describe("ThreadEventDispatcher.emitRunEvent", () => {
       },
     };
     const dispatcher = createDispatcher([transformPlugin]);
-    const run = new BufferedAgentRun();
+    const run = new BufferedAgentTurn();
 
     const emitted = await dispatcher.emitRunEvent(run, {
       type: "user-text",
@@ -48,7 +48,7 @@ describe("ThreadEventDispatcher.emitRunEvent", () => {
       on: () => ({ action: "handled" }),
     };
     const dispatcher = createDispatcher([handledPlugin]);
-    const run = new BufferedAgentRun();
+    const run = new BufferedAgentTurn();
 
     const emitted = await dispatcher.emitRunEvent(run, {
       type: "user-text",
@@ -72,7 +72,7 @@ describe("ThreadEventDispatcher.emitObserverEvent", () => {
         },
       },
     ]);
-    const run = new BufferedAgentRun();
+    const run = new BufferedAgentTurn();
 
     await dispatcher.emitObserverEvent(run, {
       text: "observer reasoning",
@@ -90,7 +90,7 @@ describe("ThreadEventDispatcher.emitObserverEvent", () => {
 
   it("buffers observer events during capture", async () => {
     const dispatcher = createDispatcher([]);
-    const run = new BufferedAgentRun();
+    const run = new BufferedAgentTurn();
 
     const captured = await dispatcher.captureObserverEvents(run, async () => {
       await dispatcher.emitObserverEvent(run, {
@@ -117,7 +117,7 @@ describe("ThreadEventDispatcher.emitRunBoundaryEvent", () => {
       }),
     };
     const dispatcher = createDispatcher([transformPlugin]);
-    const run = new BufferedAgentRun();
+    const run = new BufferedAgentTurn();
 
     const iterator = run.events()[Symbol.asyncIterator]();
     const boundary = dispatcher.emitRunBoundaryEvent(run, {

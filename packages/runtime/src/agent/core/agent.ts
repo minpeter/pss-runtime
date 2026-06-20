@@ -3,10 +3,10 @@ import type { AgentHost, NotificationRecord } from "../../execution/host/types";
 import { createInMemoryExecutionHost } from "../../execution/memory";
 import { type AgentInput, AgentThread } from "../../thread/handle/thread";
 import type { AgentPlugin } from "../../thread/plugins/pipeline";
-import type { AgentRun } from "../../thread/protocol/run";
+import type { AgentTurn } from "../../thread/protocol/turn";
 import type { ThreadStore } from "../../thread/store/types";
 import { stableAgentNamespace } from "../identity/namespace";
-import { resumeAgentRun } from "../resume/resume";
+import { resumeAgentTurn } from "../resume/resume";
 import { threadStoreForHost } from "./host-thread-store";
 import {
   type AgentModelOptions,
@@ -68,25 +68,25 @@ export class Agent {
     return executionHost(this.#host) !== undefined;
   }
 
-  send(input: AgentInput): Promise<AgentRun> {
+  send(input: AgentInput): Promise<AgentTurn> {
     return this.thread("default").send(input);
   }
 
   /**
-   * Resume a durable run by id. Returns the resumed `AgentRun`, or `null` when
+   * Resume a durable run by id. Returns the resumed `AgentTurn`, or `null` when
    * the host does not support durable resume (`supportsResume === false`), the
    * run id is unknown to this namespace, or a duplicate queue/alarm delivery
    * already claimed it. This never throws for a missing host; check
    * `supportsResume` first when you need to distinguish unsupported from
    * not-found.
    */
-  async resume(runId: string): Promise<AgentRun | null> {
+  async resume(runId: string): Promise<AgentTurn | null> {
     const host = executionHost(this.#host);
     if (!host) {
       return null;
     }
 
-    return await resumeAgentRun({
+    return await resumeAgentTurn({
       host,
       ownerNamespace: this.#ownerNamespace,
       resumeNotification: (notification) =>
@@ -141,7 +141,7 @@ export class Agent {
     this.#threads.delete(key);
   }
 
-  #resumeNotification(notification: NotificationRecord): Promise<AgentRun> {
+  #resumeNotification(notification: NotificationRecord): Promise<AgentTurn> {
     return this.#threadEntry(notification.threadKey).notify(
       notification.input,
       { observerEvents: notification.observerEvents }

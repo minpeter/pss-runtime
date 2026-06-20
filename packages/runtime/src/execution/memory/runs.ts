@@ -1,31 +1,31 @@
 import type {
-  ClaimRunOptions,
-  ClaimRunResult,
-  CreateRunResult,
-  RunRecord,
-  RunStatus,
-  RunStore,
+  ClaimTurnOptions,
+  ClaimTurnResult,
+  CreateTurnResult,
+  TurnRecord,
+  TurnStatus,
+  TurnStore,
 } from "../host/types";
 import type { ExecutionState } from "./state";
 
-const claimableStatuses = new Set<RunStatus>([
+const claimableStatuses = new Set<TurnStatus>([
   "leased",
   "queued",
   "running",
   "suspended",
 ]);
 
-export class InMemoryRunStore implements RunStore {
+export class InMemoryRunStore implements TurnStore {
   readonly #state: () => ExecutionState;
 
   constructor(state: () => ExecutionState) {
     this.#state = state;
   }
 
-  create(record: RunRecord): Promise<CreateRunResult> {
+  create(record: TurnRecord): Promise<CreateTurnResult> {
     const state = this.#state();
     const existing =
-      state.runs.get(record.runId) ?? existingDedupeRun(state, record);
+      state.turns.get(record.runId) ?? existingDedupeRun(state, record);
     if (existing) {
       return Promise.resolve({
         ok: false,
@@ -35,37 +35,37 @@ export class InMemoryRunStore implements RunStore {
     }
 
     const stored = structuredClone(record);
-    state.runs.set(record.runId, stored);
+    state.turns.set(record.runId, stored);
     return Promise.resolve({ ok: true, record: structuredClone(stored) });
   }
 
-  get(runId: string): Promise<RunRecord | null> {
-    const record = this.#state().runs.get(runId);
+  get(runId: string): Promise<TurnRecord | null> {
+    const record = this.#state().turns.get(runId);
     return Promise.resolve(record ? structuredClone(record) : null);
   }
 
-  getByDedupeKey(dedupeKey: string): Promise<RunRecord | null> {
-    const record = [...this.#state().runs.values()].find(
+  getByDedupeKey(dedupeKey: string): Promise<TurnRecord | null> {
+    const record = [...this.#state().turns.values()].find(
       (candidate) => candidate.dedupeKey === dedupeKey
     );
     return Promise.resolve(record ? structuredClone(record) : null);
   }
 
-  listByParentRunId(parentRunId: string): Promise<readonly RunRecord[]> {
-    const records = [...this.#state().runs.values()].filter(
+  listByParentRunId(parentRunId: string): Promise<readonly TurnRecord[]> {
+    const records = [...this.#state().turns.values()].filter(
       (candidate) => candidate.parentRunId === parentRunId
     );
     return Promise.resolve(records.map((record) => structuredClone(record)));
   }
 
-  update(record: RunRecord): Promise<RunRecord> {
+  update(record: TurnRecord): Promise<TurnRecord> {
     const stored = structuredClone(record);
-    this.#state().runs.set(record.runId, stored);
+    this.#state().turns.set(record.runId, stored);
     return Promise.resolve(structuredClone(stored));
   }
 
-  claim(runId: string, options: ClaimRunOptions): Promise<ClaimRunResult> {
-    const record = this.#state().runs.get(runId);
+  claim(runId: string, options: ClaimTurnOptions): Promise<ClaimTurnResult> {
+    const record = this.#state().turns.get(runId);
     if (!record) {
       return Promise.resolve({ ok: false, reason: "not-found" });
     }
@@ -83,12 +83,12 @@ export class InMemoryRunStore implements RunStore {
       leaseId: options.leaseId,
       leaseUntilMs: options.nowMs + options.leaseMs,
     };
-    const claimed: RunRecord = {
+    const claimed: TurnRecord = {
       ...record,
       lease,
       status: "leased",
     };
-    this.#state().runs.set(runId, claimed);
+    this.#state().turns.set(runId, claimed);
     return Promise.resolve({
       lease,
       ok: true,
@@ -99,10 +99,10 @@ export class InMemoryRunStore implements RunStore {
 
 function existingDedupeRun(
   state: ExecutionState,
-  record: RunRecord
-): RunRecord | undefined {
+  record: TurnRecord
+): TurnRecord | undefined {
   return record.dedupeKey
-    ? [...state.runs.values()].find(
+    ? [...state.turns.values()].find(
         (candidate) => candidate.dedupeKey === record.dedupeKey
       )
     : undefined;

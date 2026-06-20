@@ -32,7 +32,7 @@ describe("tool checkpointing", () => {
     const host = createInMemoryExecutionHost();
     const order: string[] = [];
     const signal = new AbortController().signal;
-    await host.store.runs.create(createQueuedUserTurnRun());
+    await host.store.turns.create(createQueuedUserTurnRun());
 
     generateTextMock.mockImplementationOnce(
       async (options: GenerateTextToolOptions) => {
@@ -109,7 +109,7 @@ describe("tool checkpointing", () => {
     const host = createInMemoryExecutionHost();
     const signal = new AbortController().signal;
     let executions = 0;
-    await host.store.runs.create({
+    await host.store.turns.create({
       ...createQueuedUserTurnRun(),
       checkpointVersion: 1,
     });

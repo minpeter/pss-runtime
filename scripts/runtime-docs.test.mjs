@@ -10,20 +10,20 @@ function readRepoFile(path) {
 }
 
 describe("runtime docs", () => {
-  it("keeps raw run.events as the public control loop", () => {
+  it("keeps raw turn.events as the public control loop", () => {
     const readme = readRepoFile("packages/runtime/README.md");
     const changeset = readRepoFile(".changeset/runtime-plugin-sessions.md");
-    const runSource = readRepoFile(
-      "packages/runtime/src/thread/protocol/run.ts"
+    const turnSource = readRepoFile(
+      "packages/runtime/src/thread/protocol/turn.ts"
     );
 
-    expect(readme).toContain("for await (const event of run.events())");
+    expect(readme).toContain("for await (const event of turn.events())");
     expect(readme).toContain("thread.steer");
     expect(readme).not.toContain("consumeRunEvents");
     expect(changeset).toContain('"@minpeter/pss-runtime": patch');
     expect(changeset).not.toContain("consumeRunEvents");
-    expect(runSource).not.toContain("consumeRunEvents");
-    expect(runSource).not.toContain("AgentRunEventListener");
+    expect(turnSource).not.toContain("consumeRunEvents");
+    expect(turnSource).not.toContain("AgentRunEventListener");
   });
 
   it("keeps the durable background host snippet assignable", () => {

@@ -1,7 +1,3 @@
-// biome-ignore-all lint/performance/noBarrelFile: Legacy package subpath compatibility entrypoint.
+// biome-ignore-all lint/performance/noBarrelFile: Public package subpath entrypoint required by package exports.
 
-export {
-  /** @deprecated Use FileThreadStore. */
-  FileSessionStore,
-  FileThreadStore,
-} from "../../platform/node/storage/file-thread-store";
+export { FileThreadStore } from "../../platform/node/storage/file-thread-store";

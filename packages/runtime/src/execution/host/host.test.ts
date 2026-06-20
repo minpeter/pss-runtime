@@ -12,7 +12,7 @@ describe("execution host capability normalizers", () => {
       eventStore: aggregateHost.store.events,
       kind: "durable-background",
       notificationInbox: aggregateHost.store.notifications,
-      runStore: aggregateHost.store.runs,
+      turnStore: aggregateHost.store.turns,
       threadStore: aggregateHost.store.threads,
       transaction: aggregateHost.store.transaction.bind(aggregateHost.store),
     } satisfies DurableBackgroundHost;
@@ -20,29 +20,24 @@ describe("execution host capability normalizers", () => {
     expect(durableBackgroundHost(splitHost)).toBe(splitHost);
   });
 
-  it("normalizes durable background hosts with only deprecated sessionStore", () => {
+  it("normalizes durable background hosts into execution hosts", () => {
     const aggregateHost = createInMemoryExecutionHost();
-    const legacySplitHost = {
+    const splitHost = {
       backgroundScheduler: aggregateHost.scheduler,
       checkpointStore: aggregateHost.store.checkpoints,
       eventStore: aggregateHost.store.events,
       kind: "durable-background",
       notificationInbox: aggregateHost.store.notifications,
-      runStore: aggregateHost.store.runs,
-      sessionStore: aggregateHost.store.threads,
+      turnStore: aggregateHost.store.turns,
+      threadStore: aggregateHost.store.threads,
       transaction: aggregateHost.store.transaction.bind(aggregateHost.store),
     } satisfies DurableBackgroundHost;
 
-    expect(durableBackgroundHost(legacySplitHost)).toBe(legacySplitHost);
-    expect(threadHost(legacySplitHost).threadStore).toBe(
-      aggregateHost.store.threads
-    );
-    const normalizedExecutionHost = executionHost(legacySplitHost);
+    expect(durableBackgroundHost(splitHost)).toBe(splitHost);
+    expect(threadHost(splitHost).threadStore).toBe(aggregateHost.store.threads);
+    const normalizedExecutionHost = executionHost(splitHost);
 
     expect(normalizedExecutionHost?.store.threads).toBe(
-      aggregateHost.store.threads
-    );
-    expect(normalizedExecutionHost?.store.sessions).toBe(
       aggregateHost.store.threads
     );
   });

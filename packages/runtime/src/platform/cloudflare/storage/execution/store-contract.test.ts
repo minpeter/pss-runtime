@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { describeExecutionStoreContract } from "../../../../contracts/execution-store/contract";
-import type { NotificationRecord, RunRecord } from "../../../../execution";
+import type { NotificationRecord, TurnRecord } from "../../../../execution";
 import { InMemorySqlStorage } from "../../sql/node-test/node-sqlite-storage";
 import { InMemoryCloudflareDurableObjectStorage } from "../durable-object/durable-object-storage";
 import { DurableObjectExecutionStore } from "./store";
@@ -47,7 +47,7 @@ describe("DurableObjectExecutionStore payload guards", () => {
     const store = createBudgetedStore(180);
 
     await expect(
-      store.runs.create(
+      store.turns.create(
         runRecord("run-create", { output: { notes: "x".repeat(240) } })
       )
     ).rejects.toMatchObject({
@@ -55,15 +55,15 @@ describe("DurableObjectExecutionStore payload guards", () => {
       maxBytes: 180,
       payloadKind: "run-record",
     });
-    await expect(store.runs.get("run-create")).resolves.toBeNull();
+    await expect(store.turns.get("run-create")).resolves.toBeNull();
   });
 
   it("rejects run records on update when they exceed the serialized payload budget", async () => {
     const store = createBudgetedStore(180);
-    await store.runs.create(runRecord("run-update"));
+    await store.turns.create(runRecord("run-update"));
 
     await expect(
-      store.runs.update(
+      store.turns.update(
         runRecord("run-update", { output: { notes: "x".repeat(240) } })
       )
     ).rejects.toMatchObject({
@@ -71,7 +71,7 @@ describe("DurableObjectExecutionStore payload guards", () => {
       maxBytes: 180,
       payloadKind: "run-record",
     });
-    await expect(store.runs.get("run-update")).resolves.toEqual(
+    await expect(store.turns.get("run-update")).resolves.toEqual(
       runRecord("run-update")
     );
   });
@@ -89,7 +89,7 @@ describe("DurableObjectExecutionStore payload guards", () => {
       parentRunId: "parent-1",
     });
 
-    await store.runs.create(record);
+    await store.turns.create(record);
 
     const rows = (storage.sql as InMemorySqlStorage)
       .exec<{ readonly record: string }>(
@@ -99,10 +99,10 @@ describe("DurableObjectExecutionStore payload guards", () => {
       )
       .toArray();
     expect(rows.map((row) => JSON.parse(row.record))).toEqual([record]);
-    await expect(store.runs.getByDedupeKey("dedupe-1")).resolves.toEqual(
+    await expect(store.turns.getByDedupeKey("dedupe-1")).resolves.toEqual(
       record
     );
-    await expect(store.runs.listByParentRunId("parent-1")).resolves.toEqual([
+    await expect(store.turns.listByParentRunId("parent-1")).resolves.toEqual([
       record,
     ]);
   });
@@ -165,8 +165,8 @@ function createBudgetedStore(
 
 function runRecord(
   runId: string,
-  overrides: Partial<RunRecord> = {}
-): RunRecord {
+  overrides: Partial<TurnRecord> = {}
+): TurnRecord {
   return {
     checkpointVersion: 0,
     kind: "user-turn",

@@ -1,7 +1,7 @@
 import {
   type Agent,
   type AgentInput,
-  type AgentRun,
+  type AgentTurn,
   delegateUserInput,
 } from "@minpeter/pss-runtime";
 import { defaultChildThreadKey } from "@minpeter/pss-runtime/namespace";
@@ -90,7 +90,7 @@ async function runBlockingDelegation({
   }
 }
 
-async function collectAssistantText(run: AgentRun) {
+async function collectAssistantText(run: AgentTurn) {
   let text = "";
   for await (const event of run.events()) {
     if (event.type === "assistant-text") {

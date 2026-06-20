@@ -1,11 +1,11 @@
 import { expect } from "vitest";
-import type { ExecutionHost, RunRecord } from "../../execution/host/types";
+import type { ExecutionHost, TurnRecord } from "../../execution/host/types";
 import { createInMemoryExecutionHost } from "../../execution/memory";
-import type { AgentRun } from "../../thread/protocol/run";
+import type { AgentTurn } from "../../thread/protocol/turn";
 import { agentNamespace } from "../identity/namespace";
 
 interface ResumableAgent {
-  resume(runId: string): Promise<AgentRun | null>;
+  resume(runId: string): Promise<AgentTurn | null>;
 }
 
 export function expectResumeSurface(
@@ -40,7 +40,7 @@ export function notificationRunRecord({
   readonly idempotencyKey: string;
   readonly ownerNamespace?: string;
   readonly runId: string;
-}): RunRecord {
+}): TurnRecord {
   return {
     checkpointVersion: 0,
     dedupeKey: idempotencyKey,

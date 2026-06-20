@@ -26,7 +26,7 @@ describe("resumeRun checkpoint recovery", () => {
     const history: ModelMessage[] = [
       userTextToModelMessage(userText("queued")),
     ];
-    await host.store.runs.create(createQueuedUserTurnRun());
+    await host.store.turns.create(createQueuedUserTurnRun());
 
     const model = createMockLanguageModelV4([
       mockLanguageModelV4ToolCall({
@@ -98,7 +98,7 @@ describe("resumeRun checkpoint recovery", () => {
     const model = createScriptedModelOptions([
       [assistantMessage("SHOULD NOT RUN")],
     ]);
-    await host.store.runs.create(createQueuedUserTurnRun());
+    await host.store.turns.create(createQueuedUserTurnRun());
     await host.store.checkpoints.append(
       {
         checkpointId: "pending-tool",
@@ -132,7 +132,7 @@ describe("resumeRun checkpoint recovery", () => {
     ];
     const model = createScriptedModelOptions([[assistantMessage("done")]]);
 
-    await host.store.runs.create(createQueuedUserTurnRun());
+    await host.store.turns.create(createQueuedUserTurnRun());
 
     await expect(
       resumeRun({

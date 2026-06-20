@@ -1,24 +1,14 @@
-import type {
-  DurableBackgroundHost,
-  SessionHost,
-  ThreadHost,
-} from "./capabilities";
+import type { DurableBackgroundHost, ThreadHost } from "./capabilities";
 import type { AgentHost, ExecutionHost, ExecutionStorePorts } from "./types";
 
 type Transaction = ExecutionHost["store"]["transaction"];
-interface CompatibleThreadStoreHost {
-  readonly sessionStore?: ThreadHost["threadStore"];
-  readonly threadStore?: ThreadHost["threadStore"];
-}
 
 export function threadHost(host: AgentHost): ThreadHost {
   switch (host.kind) {
     case "thread":
       return host;
-    case "session":
-      return { kind: "thread", threadStore: threadStoreFromHost(host) };
     case "durable-background":
-      return { kind: "thread", threadStore: threadStoreFromHost(host) };
+      return { kind: "thread", threadStore: host.threadStore };
     case "execution":
       return {
         kind: "thread",
@@ -27,12 +17,6 @@ export function threadHost(host: AgentHost): ThreadHost {
     default:
       return assertNeverHost(host);
   }
-}
-
-/** @deprecated Use threadHost. */
-export function sessionHost(host: AgentHost): SessionHost {
-  const threadStore = threadHost(host).threadStore;
-  return { kind: "session", sessionStore: threadStore, threadStore };
 }
 
 export function executionHost(host: AgentHost): ExecutionHost | undefined {
@@ -70,27 +54,25 @@ function durableBackgroundHostFromExecutionHost(
     eventStore: host.store.events,
     kind: "durable-background",
     notificationInbox: host.store.notifications,
-    runStore: host.store.runs,
-    sessionStore: threadStoreFromExecutionStore(host.store),
     threadStore: threadStoreFromExecutionStore(host.store),
     transaction: transactionForStore(host.store),
+    turnStore: host.store.turns,
   };
 }
 
 function executionHostFromDurableBackgroundHost(
   host: DurableBackgroundHost
 ): ExecutionHost {
-  const threadStore = threadStoreFromHost(host);
+  const threadStore = host.threadStore;
   return {
     kind: "execution",
     scheduler: host.backgroundScheduler,
     store: {
-      checkpoints: host.checkpointStore,
       events: host.eventStore,
       notifications: host.notificationInbox,
-      runs: host.runStore,
-      sessions: threadStore,
+      checkpoints: host.checkpointStore,
       threads: threadStore,
+      turns: host.turnStore,
       transaction: host.transaction,
     },
   };
@@ -103,13 +85,7 @@ function transactionForStore(store: ExecutionHost["store"]): Transaction {
 function threadStoreFromExecutionStore(
   store: ExecutionStorePorts
 ): ThreadHost["threadStore"] {
-  return store.threads ?? store.sessions ?? assertMissingThreadStore();
-}
-
-function threadStoreFromHost(
-  host: CompatibleThreadStoreHost
-): ThreadHost["threadStore"] {
-  return host.threadStore ?? host.sessionStore ?? assertMissingThreadStore();
+  return store.threads ?? assertMissingThreadStore();
 }
 
 function assertMissingThreadStore(): never {

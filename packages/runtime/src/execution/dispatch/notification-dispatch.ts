@@ -3,7 +3,7 @@ import type { AgentEvent, UserInput } from "../../thread/protocol/events";
 import type {
   ExecutionHost,
   NotificationRecord,
-  RunRecord,
+  TurnRecord,
 } from "../host/types";
 
 export interface DispatchAgentNotificationInput {
@@ -66,7 +66,7 @@ export async function dispatchAgentNotification(
     runId,
     threadKey: input.threadKey,
     status: "queued",
-  } satisfies RunRecord;
+  } satisfies TurnRecord;
   const notificationRecord = {
     idempotencyKey: storageIdempotencyKey,
     input: input.input,
@@ -80,7 +80,7 @@ export async function dispatchAgentNotification(
 
   try {
     await input.host.store.transaction(async (tx) => {
-      const runCreate = await tx.runs.create(runRecord);
+      const runCreate = await tx.turns.create(runRecord);
       if (!runCreate.ok) {
         throw new DuplicateNotificationError();
       }
@@ -131,7 +131,7 @@ async function queuedNotificationRun({
   readonly threadKey: string;
   readonly storageIdempotencyKey: string;
 }): Promise<SchedulableAgentNotification | null> {
-  const existingRun = await host.store.runs.getByDedupeKey(
+  const existingRun = await host.store.turns.getByDedupeKey(
     storageIdempotencyKey
   );
   if (

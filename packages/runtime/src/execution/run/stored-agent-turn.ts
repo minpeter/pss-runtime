@@ -1,8 +1,8 @@
 import type { AgentEvent } from "../../thread/protocol/events";
-import type { AgentRun } from "../../thread/protocol/run";
+import type { AgentTurn } from "../../thread/protocol/turn";
 import type { EventCursor, EventStore, StoredAgentEvent } from "../host/types";
 
-export class StoredAgentRun implements AgentRun {
+export class StoredAgentTurn implements AgentTurn {
   readonly #cursor: EventCursor | undefined;
   readonly #eventStore: EventStore;
   readonly #runId: string;
@@ -24,7 +24,7 @@ export class StoredAgentRun implements AgentRun {
 
   events(): AsyncIterable<AgentEvent> {
     if (this.#eventsStarted) {
-      throw new Error("AgentRun.events() can only be consumed once");
+      throw new Error("AgentTurn.events() can only be consumed once");
     }
     this.#eventsStarted = true;
 
@@ -49,7 +49,7 @@ class StoredAgentEventIterator implements AsyncIterableIterator<AgentEvent> {
   async next(): Promise<IteratorResult<AgentEvent>> {
     if (this.#nextPending) {
       throw new Error(
-        "AgentRun.events() does not allow concurrent next() calls"
+        "AgentTurn.events() does not allow concurrent next() calls"
       );
     }
 

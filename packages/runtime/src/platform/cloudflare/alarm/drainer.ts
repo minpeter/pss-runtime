@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentRun } from "../../../index";
+import type { AgentEvent, AgentTurn } from "../../../index";
 import {
   type CloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
@@ -42,7 +42,7 @@ export interface CloudflareAlarmDrainSummary {
 }
 
 export interface CloudflareAlarmAgent {
-  resume(runId: string): Promise<AgentRun | null>;
+  resume(runId: string): Promise<AgentTurn | null>;
 }
 
 export type CloudflareAlarmRunSource = "scheduled-run" | "thread-prompt";

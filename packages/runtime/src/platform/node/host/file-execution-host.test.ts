@@ -89,7 +89,7 @@ describe("createNodeFileExecutionHost", () => {
         "turn-end",
       ]);
       await expect(
-        secondHost.store.runs.get(dispatched.runId)
+        secondHost.store.turns.get(dispatched.runId)
       ).resolves.toEqual(
         expect.objectContaining({
           ownerNamespace: agentNamespace("local-owner"),
@@ -186,7 +186,7 @@ describe("createNodeFileExecutionHost", () => {
         ),
         namespace: "local-owner",
       });
-      await host.store.runs.create({
+      await host.store.turns.create({
         checkpointVersion: 0,
         kind: "notification",
         lease: {

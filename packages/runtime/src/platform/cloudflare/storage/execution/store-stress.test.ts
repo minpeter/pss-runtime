@@ -122,7 +122,7 @@ describe("DurableObjectExecutionStore storage stress", () => {
         for (let runIndex = 0; runIndex < stressRunsPerThread; runIndex += 1) {
           const runId = `${threadKey}:run-${runIndex}`;
           const run = runRecord({ runId, threadKey });
-          await host.store.runs.create(run);
+          await host.store.turns.create(run);
           await host.store.events.append(runId, eventRecord("step-start"));
           await host.store.events.append(runId, eventRecord("step-end"));
           await host.store.checkpoints.append(
@@ -136,7 +136,7 @@ describe("DurableObjectExecutionStore storage stress", () => {
             },
             { expectedVersion: 0 }
           );
-          await host.store.runs.update({
+          await host.store.turns.update({
             ...run,
             checkpointVersion: 1,
             status: "completed",
@@ -163,7 +163,7 @@ describe("DurableObjectExecutionStore storage stress", () => {
         host.store.threads.load(`thread-${stressThreadCount - 1}`)
       ).resolves.toMatchObject({ version: String(stressTurnsPerThread) });
       await expect(
-        host.store.runs.listByParentRunId("missing-parent")
+        host.store.turns.listByParentRunId("missing-parent")
       ).resolves.toEqual([]);
       await expect(
         listScheduledCloudflareRuns(storage, {

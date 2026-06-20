@@ -1,6 +1,6 @@
 import type {
   AgentEvent,
-  AgentRun,
+  AgentTurn,
   ThreadHandle,
   UserInput,
   UserMessage,
@@ -22,9 +22,9 @@ export interface TuiRunnerOptions {
 }
 
 export interface TuiRunner {
-  readonly activeRun: AgentRun | undefined;
-  clearActiveRun(run?: AgentRun): void;
-  consumeRun(run: AgentRun): Promise<void>;
+  readonly activeRun: AgentTurn | undefined;
+  clearActiveRun(run?: AgentTurn): void;
+  consumeRun(run: AgentTurn): Promise<void>;
   submit(text: string): void;
 }
 
@@ -71,15 +71,15 @@ export function createTuiRunner({
   requestRender,
   thread,
 }: TuiRunnerOptions): TuiRunner {
-  let activeRun: AgentRun | undefined;
+  let activeRun: AgentTurn | undefined;
 
-  const clearActiveRun = (run?: AgentRun): void => {
+  const clearActiveRun = (run?: AgentTurn): void => {
     if (run === undefined || activeRun === run) {
       activeRun = undefined;
     }
   };
 
-  const consumeRun = async (run: AgentRun): Promise<void> => {
+  const consumeRun = async (run: AgentTurn): Promise<void> => {
     activeRun = run;
 
     try {

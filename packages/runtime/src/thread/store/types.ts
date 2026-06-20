@@ -22,15 +22,3 @@ export interface ThreadStore {
   delete(key: string): Promise<void>;
   load(key: string): Promise<StoredThread | null>;
 }
-
-/** @deprecated Use StoredThread. */
-export type StoredSession = StoredThread;
-
-/** @deprecated Use ThreadStoreCommit. */
-export type SessionStoreCommit = ThreadStoreCommit;
-
-/** @deprecated Use ExpectedThreadVersion. */
-export type ExpectedSessionVersion = ExpectedThreadVersion;
-
-/** @deprecated Use ThreadStore. */
-export type SessionStore = ThreadStore;

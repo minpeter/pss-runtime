@@ -125,7 +125,6 @@ function parseStoredFileThread(value: unknown, file: string): StoredThread {
 }
 
 /** @deprecated Use FileThreadStore. */
-export { FileThreadStore as FileSessionStore };
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;

@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentRun } from "@minpeter/pss-runtime";
+import type { AgentEvent, AgentTurn } from "@minpeter/pss-runtime";
 import { describe, expect, it } from "vitest";
 
 import { collectAssistantText, WORKER_AGENT_INSTRUCTIONS } from "./agent";
@@ -84,7 +84,7 @@ describe("collectAssistantText", () => {
   });
 });
 
-function runWithEvents(events: readonly AgentEvent[]): AgentRun {
+function runWithEvents(events: readonly AgentEvent[]): AgentTurn {
   return {
     events: () => eventStream(events),
   };

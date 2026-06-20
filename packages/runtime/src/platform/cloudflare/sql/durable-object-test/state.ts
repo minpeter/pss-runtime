@@ -88,11 +88,11 @@ export interface InMemoryDurableObjectSqlState {
   events: EventRow[];
   notifications: NotificationRow[];
   payloadChunks: PayloadChunkRow[];
-  runs: RunRow[];
   scheduledWork: ScheduledWorkRow[];
   threadMessageChunks: ThreadMessageChunkRow[];
   threadMessages: ThreadMessageRow[];
   threadMeta: Map<string, ThreadMetaRow>;
+  turns: RunRow[];
 }
 
 export function createInMemoryDurableObjectSqlState(): InMemoryDurableObjectSqlState {
@@ -102,7 +102,7 @@ export function createInMemoryDurableObjectSqlState(): InMemoryDurableObjectSqlS
     events: [],
     notifications: [],
     payloadChunks: [],
-    runs: [],
+    turns: [],
     scheduledWork: [],
     threadMessageChunks: [],
     threadMessages: [],
@@ -121,7 +121,7 @@ export function cloneInMemoryDurableObjectSqlState(
     events: structuredClone(state.events),
     notifications: structuredClone(state.notifications),
     payloadChunks: structuredClone(state.payloadChunks),
-    runs: structuredClone(state.runs),
+    turns: structuredClone(state.turns),
     scheduledWork: structuredClone(state.scheduledWork),
     threadMessageChunks: structuredClone(state.threadMessageChunks),
     threadMessages: structuredClone(state.threadMessages),

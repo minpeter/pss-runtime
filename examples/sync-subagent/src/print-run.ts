@@ -1,6 +1,6 @@
-import type { AgentEvent, AgentRun } from "@minpeter/pss-runtime";
+import type { AgentEvent, AgentTurn } from "@minpeter/pss-runtime";
 
-export async function drainRunForCli(run: AgentRun) {
+export async function drainRunForCli(run: AgentTurn) {
   for await (const event of run.events()) {
     printCliEvent(event);
   }

@@ -23,12 +23,12 @@ describe("FileExecutionStore edge cases", () => {
       dedupeKey: "dedupe:duplicate",
     });
 
-    await expect(store.runs.create(original)).resolves.toEqual({
+    await expect(store.turns.create(original)).resolves.toEqual({
       ok: true,
       record: original,
     });
     await expect(
-      store.runs.create({
+      store.turns.create({
         ...runRecord("run:duplicate"),
         checkpointVersion: 7,
         dedupeKey: "other-dedupe",
@@ -40,7 +40,7 @@ describe("FileExecutionStore edge cases", () => {
       record: original,
     });
     await expect(
-      store.runs.create({
+      store.turns.create({
         ...runRecord("run:other"),
         dedupeKey: "dedupe:duplicate",
       })
@@ -49,16 +49,16 @@ describe("FileExecutionStore edge cases", () => {
       reason: "duplicate",
       record: original,
     });
-    await expect(store.runs.get("run:duplicate")).resolves.toEqual(original);
-    await expect(store.runs.get("run:other")).resolves.toBeNull();
+    await expect(store.turns.get("run:duplicate")).resolves.toEqual(original);
+    await expect(store.turns.get("run:other")).resolves.toBeNull();
   });
 
   it("claims only claimable runs after active leases expire", async () => {
     const store = new FileExecutionStore(await tempDir());
-    await store.runs.create(runRecord("run:claim"));
+    await store.turns.create(runRecord("run:claim"));
 
     await expect(
-      store.runs.claim("run:claim", {
+      store.turns.claim("run:claim", {
         attempt: 1,
         leaseId: "lease-1",
         leaseMs: 100,
@@ -70,7 +70,7 @@ describe("FileExecutionStore edge cases", () => {
       record: { status: "leased" },
     });
     await expect(
-      store.runs.claim("run:claim", {
+      store.turns.claim("run:claim", {
         attempt: 2,
         leaseId: "lease-2",
         leaseMs: 100,
@@ -78,7 +78,7 @@ describe("FileExecutionStore edge cases", () => {
       })
     ).resolves.toEqual({ ok: false, reason: "leased" });
     await expect(
-      store.runs.claim("run:claim", {
+      store.turns.claim("run:claim", {
         attempt: 2,
         leaseId: "lease-2",
         leaseMs: 50,
@@ -89,9 +89,9 @@ describe("FileExecutionStore edge cases", () => {
       ok: true,
     });
 
-    await store.runs.create(runRecord("run:done", { status: "completed" }));
+    await store.turns.create(runRecord("run:done", { status: "completed" }));
     await expect(
-      store.runs.claim("run:done", {
+      store.turns.claim("run:done", {
         attempt: 1,
         leaseId: "lease-done",
         leaseMs: 100,
@@ -134,7 +134,7 @@ describe("FileExecutionStore edge cases", () => {
   it("throws deterministic errors for malformed persisted JSON files", async () => {
     const directory = await tempDir();
     const store = new FileExecutionStore(directory);
-    await expect(store.runs.get("run:missing")).resolves.toBeNull();
+    await expect(store.turns.get("run:missing")).resolves.toBeNull();
     const dataDirectory = await currentDataDirectory(directory);
 
     await mkdir(join(dataDirectory, "runs"), { recursive: true });
@@ -170,7 +170,7 @@ describe("FileExecutionStore edge cases", () => {
       "utf8"
     );
 
-    await expect(store.runs.get("run:bad")).rejects.toThrow(
+    await expect(store.turns.get("run:bad")).rejects.toThrow(
       malformedRunPattern
     );
     await expect(collectEvents(store.events.read("run:bad"))).rejects.toThrow(

@@ -55,4 +55,3 @@ export type AgentInput =
 export type ThreadInput = AgentInput;
 
 /** @deprecated Use ThreadInput or AgentInput. */
-export type SessionInput = AgentInput;

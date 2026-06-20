@@ -35,7 +35,7 @@ describe("resumeRun", () => {
   it("suspends without calling the model when maxSteps is zero", async () => {
     const host = createInMemoryExecutionHost();
     const model = createScriptedModelOptions([[assistantMessage("DONE")]]);
-    await host.store.runs.create(createQueuedUserTurnRun());
+    await host.store.turns.create(createQueuedUserTurnRun());
 
     await expect(
       resumeRun({
@@ -57,7 +57,7 @@ describe("resumeRun", () => {
     const controller = new AbortController();
     controller.abort();
     const model = createScriptedModelOptions([[assistantMessage("DONE")]]);
-    await host.store.runs.create(createQueuedUserTurnRun());
+    await host.store.turns.create(createQueuedUserTurnRun());
 
     await expect(
       resumeRun({
@@ -90,7 +90,7 @@ describe("resumeRun", () => {
       ],
       [assistantMessage("DONE")],
     ]);
-    await host.store.runs.create(createQueuedUserTurnRun());
+    await host.store.turns.create(createQueuedUserTurnRun());
 
     const first = await resumeRun({
       budget: { maxSteps: 1 },
@@ -149,7 +149,7 @@ describe("resumeRun", () => {
       modelCalls += 1;
       return Promise.resolve(mockLanguageModelV4Text(`attempt ${modelCalls}`));
     });
-    await host.store.runs.create(createQueuedUserTurnRun());
+    await host.store.turns.create(createQueuedUserTurnRun());
 
     await expect(
       resumeRun({

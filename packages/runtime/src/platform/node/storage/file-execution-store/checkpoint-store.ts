@@ -1,9 +1,9 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type {
+  Checkpoint,
   CheckpointStore,
   CheckpointWriteResult,
-  RunCheckpoint,
 } from "../../../../execution/host/types";
 import { readJsonFile, writeJsonFile } from "./json";
 import type { FileRunStore } from "./run-store";
@@ -14,20 +14,20 @@ import { encodeKey, isNodeError } from "./utils";
 export class FileCheckpointStore implements CheckpointStore {
   readonly #directory: DataDirectoryResolver;
   readonly #lock: <T>(fn: () => Promise<T>) => Promise<T>;
-  readonly #runs: FileRunStore;
+  readonly #turns: FileRunStore;
 
   constructor(
     directory: DataDirectoryResolver,
     lock: <T>(fn: () => Promise<T>) => Promise<T>,
-    runs: FileRunStore
+    turns: FileRunStore
   ) {
     this.#directory = directory;
     this.#lock = lock;
-    this.#runs = runs;
+    this.#turns = turns;
   }
 
   async append(
-    checkpoint: RunCheckpoint,
+    checkpoint: Checkpoint,
     options: { readonly expectedVersion: number }
   ): Promise<CheckpointWriteResult> {
     return await this.#lock(async () => {
@@ -45,7 +45,7 @@ export class FileCheckpointStore implements CheckpointStore {
         await this.#fileForCheckpoint(checkpoint.runId, checkpoint.version),
         checkpoint
       );
-      await this.#runs.updateCheckpointVersion(
+      await this.#turns.updateCheckpointVersion(
         checkpoint.runId,
         checkpoint.version
       );
@@ -53,11 +53,11 @@ export class FileCheckpointStore implements CheckpointStore {
     });
   }
 
-  async latest(runId: string): Promise<RunCheckpoint | null> {
+  async latest(runId: string): Promise<Checkpoint | null> {
     return await this.#lock(async () => await this.latestUnlocked(runId));
   }
 
-  async latestUnlocked(runId: string): Promise<RunCheckpoint | null> {
+  async latestUnlocked(runId: string): Promise<Checkpoint | null> {
     const directory = join(
       await this.#directory(),
       "checkpoints",

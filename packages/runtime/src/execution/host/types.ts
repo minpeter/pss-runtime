@@ -1,16 +1,8 @@
 import type { AgentEvent, UserInput } from "../../thread/protocol/events";
 import type { ThreadStore } from "../../thread/store/types";
-import type {
-  DurableBackgroundHost,
-  LegacySessionHost,
-  ThreadHost,
-} from "./capabilities";
+import type { DurableBackgroundHost, ThreadHost } from "./capabilities";
 
-export type AgentHost =
-  | DurableBackgroundHost
-  | ExecutionHost
-  | LegacySessionHost
-  | ThreadHost;
+export type AgentHost = DurableBackgroundHost | ExecutionHost | ThreadHost;
 
 export interface ExecutionHost {
   readonly kind: "execution";
@@ -32,9 +24,9 @@ export interface ResumeThreadOptions {
   readonly runId: string;
 }
 
-export type RunKind = "notification" | "tool-recovery" | "user-turn";
+export type TurnKind = "notification" | "tool-recovery" | "user-turn";
 
-export type RunStatus =
+export type TurnStatus =
   | "cancelled"
   | "completed"
   | "error"
@@ -44,43 +36,47 @@ export type RunStatus =
   | "running"
   | "suspended";
 
-export interface RunLease {
+export interface TurnLease {
   readonly attempt: number;
   readonly leaseId: string;
   readonly leaseUntilMs: number;
 }
 
-export interface RunRecord {
+export interface TurnRecord {
   readonly checkpointVersion: number;
   readonly dedupeKey?: string;
-  readonly kind: RunKind;
-  readonly lease?: RunLease;
+  readonly kind: TurnKind;
+  readonly lease?: TurnLease;
   readonly output?: unknown;
   readonly ownerNamespace?: string;
   readonly parentRunId?: string;
   readonly publicTaskId?: string;
   readonly rootRunId: string;
   readonly runId: string;
-  readonly status: RunStatus;
+  readonly status: TurnStatus;
   readonly threadKey: string;
 }
 
-export type ClaimRunResult =
-  | { readonly lease: RunLease; readonly ok: true; readonly record: RunRecord }
+export type ClaimTurnResult =
+  | {
+      readonly lease: TurnLease;
+      readonly ok: true;
+      readonly record: TurnRecord;
+    }
   | {
       readonly ok: false;
       readonly reason: "leased" | "not-claimable" | "not-found";
     };
 
-export type CreateRunResult =
-  | { readonly ok: true; readonly record: RunRecord }
+export type CreateTurnResult =
+  | { readonly ok: true; readonly record: TurnRecord }
   | {
       readonly ok: false;
       readonly reason: "duplicate";
-      readonly record: RunRecord;
+      readonly record: TurnRecord;
     };
 
-export interface ClaimRunOptions {
+export interface ClaimTurnOptions {
   readonly attempt: number;
   readonly leaseId: string;
   readonly leaseMs: number;
@@ -98,7 +94,7 @@ export type CheckpointPhase =
   | "child-linked"
   | "suspended";
 
-export interface RunCheckpoint {
+export interface Checkpoint {
   readonly checkpointId: string;
   readonly childRunId?: string;
   readonly pendingToolCall?: unknown;
@@ -156,21 +152,21 @@ export type NotificationClaimResult =
       readonly record?: NotificationRecord;
     };
 
-export interface RunStore {
-  claim(runId: string, options: ClaimRunOptions): Promise<ClaimRunResult>;
-  create(record: RunRecord): Promise<CreateRunResult>;
-  get(runId: string): Promise<RunRecord | null>;
-  getByDedupeKey(dedupeKey: string): Promise<RunRecord | null>;
-  listByParentRunId(parentRunId: string): Promise<readonly RunRecord[]>;
-  update(record: RunRecord): Promise<RunRecord>;
+export interface TurnStore {
+  claim(runId: string, options: ClaimTurnOptions): Promise<ClaimTurnResult>;
+  create(record: TurnRecord): Promise<CreateTurnResult>;
+  get(runId: string): Promise<TurnRecord | null>;
+  getByDedupeKey(dedupeKey: string): Promise<TurnRecord | null>;
+  listByParentRunId(parentRunId: string): Promise<readonly TurnRecord[]>;
+  update(record: TurnRecord): Promise<TurnRecord>;
 }
 
 export interface CheckpointStore {
   append(
-    checkpoint: RunCheckpoint,
+    checkpoint: Checkpoint,
     options: { readonly expectedVersion: number }
   ): Promise<CheckpointWriteResult>;
-  latest(runId: string): Promise<RunCheckpoint | null>;
+  latest(runId: string): Promise<Checkpoint | null>;
 }
 
 export interface EventStore {
@@ -193,10 +189,8 @@ export interface ExecutionStorePorts {
   readonly checkpoints: CheckpointStore;
   readonly events: EventStore;
   readonly notifications: NotificationInbox;
-  readonly runs: RunStore;
-  /** @deprecated Use threads. */
-  readonly sessions?: ThreadStore;
   readonly threads: ThreadStore;
+  readonly turns: TurnStore;
 }
 
 export interface ExecutionStoreTransaction extends ExecutionStorePorts {}

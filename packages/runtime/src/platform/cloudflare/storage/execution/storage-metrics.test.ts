@@ -29,7 +29,7 @@ describe("storage metrics", () => {
       },
       { expectedVersion: null }
     );
-    await host.store.runs.create({
+    await host.store.turns.create({
       checkpointVersion: 0,
       kind: "user-turn",
       rootRunId: runId,

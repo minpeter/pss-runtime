@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { createRunCheckpointId } from "./checkpoint-ids";
+import { createCheckpointId } from "./checkpoint-ids";
 
 const checkpointIdPattern =
-  /^run-checkpoint:turn%3Aagent%2Fthread%3Aabc:3:before-tool:/;
+  /^checkpoint:turn%3Aagent%2Fthread%3Aabc:3:before-tool:/;
 
-describe("createRunCheckpointId", () => {
+describe("createCheckpointId", () => {
   it("includes the run id, version, and checkpoint phase", () => {
-    const checkpointId = createRunCheckpointId({
+    const checkpointId = createCheckpointId({
       phase: "before-tool",
       runId: "turn:agent/thread:abc",
       version: 3,

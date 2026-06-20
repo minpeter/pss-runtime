@@ -20,13 +20,15 @@ describe("dispatchCloudflareAgentNotification", () => {
       threadKey: "room:1:user:2",
     });
 
-    await expect(host.store.runs.get(dispatched.runId)).resolves.toMatchObject({
-      kind: "notification",
-      runId: dispatched.runId,
-      threadKey: "room:1:user:2",
-      status: "queued",
-    });
-    const run = await host.store.runs.get(dispatched.runId);
+    await expect(host.store.turns.get(dispatched.runId)).resolves.toMatchObject(
+      {
+        kind: "notification",
+        runId: dispatched.runId,
+        threadKey: "room:1:user:2",
+        status: "queued",
+      }
+    );
+    const run = await host.store.turns.get(dispatched.runId);
     await expect(
       host.store.notifications.getByIdempotencyKey(run?.dedupeKey ?? "")
     ).resolves.toMatchObject({

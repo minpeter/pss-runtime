@@ -53,7 +53,7 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      `export type { AgentMessage, ${forbiddenModelName}, AgentRun, AgentTool, AgentTools, CreateLlmOptions, Llm, LlmContext, LlmOutput, LlmOutputPart, ${removedRuntimeModelNames.join(", ")}, RuntimeInput } from "./llm";\nexport type { AgentHost } from "./execution/types";\n`
+      `export type { AgentMessage, ${forbiddenModelName}, AgentRun, AgentTool, AgentTools, CreateLlmOptions, Llm, LlmContext, LlmOutput, LlmOutputPart, ${removedRuntimeModelNames.join(", ")}, RuntimeInput } from "./llm";\nexport type { AgentHost } from "./execution/types";\nexport type { AgentTurn } from "./thread";\n`
     );
 
     expect(
@@ -61,6 +61,7 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
     ).toEqual([
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name AgentMessage",
       `packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ${forbiddenModelName}`,
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name AgentRun",
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name AgentTool",
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name AgentTools",
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name CreateLlmOptions",
@@ -178,7 +179,7 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
     );
     expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
       "packages/runtime/dist/index.d.ts: missing explicit root runtime export AgentHost",
-      "packages/runtime/dist/index.d.ts: missing explicit root runtime export AgentRun",
+      "packages/runtime/dist/index.d.ts: missing explicit root runtime export AgentTurn",
       "packages/runtime/dist/index.d.ts: missing explicit root runtime export RuntimeInput",
     ]);
   });
@@ -213,7 +214,9 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
       "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentContextFactoryOptions",
       "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentContextOptions",
       "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentContextPrefixOptions",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentRunDrainOptions",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export AgentTurnDrainResult",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export AgentTurnDrainStopReason",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentTurnDrainOptions",
       "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAlarmAgent",
       "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAlarmDrainSummary",
       "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectFetchOptions",
@@ -230,7 +233,8 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
       "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareAlarmScheduler",
       "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareAgentContext",
       "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareDurableObjectHost",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export drainAgentRun",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export drainAgentTurn",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export drainAgentTurnWithBudget",
       "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export drainCloudflareAlarm",
       "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export fetchCloudflareDurableObject",
       "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export getCloudflareDurableObjectStub",
@@ -258,8 +262,9 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ExecutionStoreTransaction",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export NotificationInbox",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export NotificationRecord",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RunRecord",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RunStore",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export TurnRecord",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export TurnStore",
+      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export TurnStatus",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RuntimeToolExecutionCheckpoint",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RuntimeToolExecutionContext",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RuntimeToolExecutionDecision",

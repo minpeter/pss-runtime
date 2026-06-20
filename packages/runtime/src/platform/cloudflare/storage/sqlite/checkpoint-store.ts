@@ -1,7 +1,7 @@
 import type {
+  Checkpoint,
   CheckpointStore,
   CheckpointWriteResult,
-  RunCheckpoint,
 } from "../../../../execution";
 import type { SqlStorage } from "../../sql/ports/storage-port";
 import type { CloudflareDurableObjectStorage } from "../durable-object/durable-object-storage";
@@ -30,8 +30,8 @@ interface CheckpointRow {
  * checkpoints can no longer reach the Durable Object ~2MB per-value limit
  * (`SQLITE_TOOBIG`) by accumulation.
  *
- * The optimistic version check reads the run record (`RunStore`) as the
- * version authority. The check, the row `INSERT`, and the `RunStore` bump run
+ * The optimistic version check reads the run record (`TurnStore`) as the
+ * version authority. The check, the row `INSERT`, and the `TurnStore` bump run
  * inside a single `storage.transaction`
  * so concurrent writes to the same run serialize — exactly one wins, the rest
  * get `stale-version`. (`ctx.storage.sql.exec` issued inside a Durable Object
@@ -63,7 +63,7 @@ export class DurableObjectSqliteCheckpointStore implements CheckpointStore {
   }
 
   async append(
-    checkpoint: RunCheckpoint,
+    checkpoint: Checkpoint,
     options: { readonly expectedVersion: number }
   ): Promise<CheckpointWriteResult> {
     this.#ensureSchema();
@@ -107,7 +107,7 @@ export class DurableObjectSqliteCheckpointStore implements CheckpointStore {
     });
   }
 
-  latest(runId: string): Promise<RunCheckpoint | null> {
+  latest(runId: string): Promise<Checkpoint | null> {
     this.#ensureSchema();
     const rows = this.#sql
       .exec<CheckpointRow>(
@@ -124,7 +124,7 @@ export class DurableObjectSqliteCheckpointStore implements CheckpointStore {
         )
       : null;
     return Promise.resolve(
-      checkpoint ? (JSON.parse(checkpoint) as RunCheckpoint) : null
+      checkpoint ? (JSON.parse(checkpoint) as Checkpoint) : null
     );
   }
 

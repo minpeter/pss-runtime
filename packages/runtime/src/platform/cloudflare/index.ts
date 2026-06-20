@@ -17,8 +17,12 @@ export {
   CloudflareAlarmDrainFailureError,
   drainCloudflareAlarm,
 } from "./alarm/drainer";
-export type { CloudflareAgentRunDrainOptions } from "./alarm/run-drain";
-export { drainAgentRun } from "./alarm/run-drain";
+export type {
+  AgentTurnDrainResult,
+  AgentTurnDrainStopReason,
+  CloudflareAgentTurnDrainOptions,
+} from "./alarm/run-drain";
+export { drainAgentTurn, drainAgentTurnWithBudget } from "./alarm/run-drain";
 export type {
   DispatchCloudflareAgentNotificationInput,
   SourceCloudflareAgentNotificationIdempotencyKeyInput,
@@ -84,8 +88,4 @@ export {
 } from "./storage/payload-guard";
 export { DurableObjectSqliteCheckpointStore } from "./storage/sqlite/checkpoint-store";
 export { DurableObjectSqliteEventStore } from "./storage/sqlite/event-store";
-export {
-  DurableObjectSqliteThreadStore,
-  /** @deprecated Use DurableObjectSqliteThreadStore. */
-  DurableObjectSqliteThreadStore as DurableObjectSqliteSessionStore,
-} from "./storage/sqlite/thread-store";
+export { DurableObjectSqliteThreadStore } from "./storage/sqlite/thread-store";

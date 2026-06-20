@@ -12,14 +12,16 @@ export function createFileExecutionStorePorts(
   lock: <T>(fn: () => Promise<T>) => Promise<T>
 ): ExecutionStoreTransaction {
   const runs = new FileRunStore(directory, lock);
+  const checkpoints = new FileCheckpointStore(directory, lock, runs);
+  const threads = new LockedThreadStore(
+    async () => join(await directory(), "threads"),
+    lock
+  );
   return {
-    checkpoints: new FileCheckpointStore(directory, lock, runs),
     events: new FileEventStore(directory, lock),
     notifications: new FileNotificationInbox(directory, lock),
-    runs,
-    threads: new LockedThreadStore(
-      async () => join(await directory(), "threads"),
-      lock
-    ),
+    checkpoints,
+    threads,
+    turns: runs,
   };
 }

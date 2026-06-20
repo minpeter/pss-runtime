@@ -1,5 +1,5 @@
 import type { AgentEvent, RuntimeInput } from "../protocol/events";
-import type { BufferedAgentRun } from "../protocol/run";
+import type { BufferedAgentTurn } from "../protocol/turn";
 import type { ThreadEventDispatcher } from "../runtime/events";
 import type { ThreadState } from "../state/thread-state";
 import type { UserInput } from "./input";
@@ -42,7 +42,7 @@ export async function commitPreUserRuntimeInputs(
 
 export function emitCommittedRuntimeInputs(
   events: ThreadEventDispatcher,
-  run: BufferedAgentRun,
+  run: BufferedAgentTurn,
   committed: readonly AgentEvent[]
 ): void {
   for (const event of committed) {
@@ -52,7 +52,7 @@ export function emitCommittedRuntimeInputs(
 
 export async function emitRuntimeInputEvent(
   events: ThreadEventDispatcher,
-  run: BufferedAgentRun,
+  run: BufferedAgentTurn,
   state: ThreadState,
   queued: QueuedRuntimeInput
 ): Promise<boolean> {

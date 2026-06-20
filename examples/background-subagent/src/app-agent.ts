@@ -1,8 +1,8 @@
-import type { Agent, AgentRun } from "@minpeter/pss-runtime";
+import type { Agent, AgentTurn } from "@minpeter/pss-runtime";
 import type {
   ExecutionHost,
   NotificationRecord,
-  RunRecord,
+  TurnRecord,
 } from "@minpeter/pss-runtime/execution";
 import { readDurableBackgroundDelegationState } from "./background-delegation";
 import { readerChildName } from "./delegate-tool";
@@ -16,7 +16,7 @@ export function createAppAgent(options: {
 }): Agent {
   return {
     resume: async (runId: string) => {
-      const run = await options.host.store.runs.get(runId);
+      const run = await options.host.store.turns.get(runId);
       if (run?.runId.startsWith("background:")) {
         return await resumeBackgroundDelegation({
           host: options.host,
@@ -54,8 +54,8 @@ async function resumeBackgroundDelegation({
   readonly ownerNamespace: string;
   readonly parentThreadKey: string;
   readonly reader: Agent;
-  readonly run: RunRecord;
-}): Promise<AgentRun | null> {
+  readonly run: TurnRecord;
+}): Promise<AgentTurn | null> {
   if (run.status === "completed") {
     return null;
   }
@@ -67,7 +67,7 @@ async function resumeBackgroundDelegation({
   }
   assertOwnedBackgroundRun({ ownerNamespace, parentThreadKey, run, state });
 
-  await host.store.runs.update({ ...run, status: "running" });
+  await host.store.turns.update({ ...run, status: "running" });
   const childRun = await reader.thread(run.threadKey).send(state.prompt);
   const events = await collectRunEvents(childRun);
   const output = {
@@ -75,7 +75,7 @@ async function resumeBackgroundDelegation({
     subagent: readerChildName,
     text: collectAssistantText(events),
   };
-  await host.store.runs.update({
+  await host.store.turns.update({
     ...run,
     checkpointVersion: run.checkpointVersion,
     output,
@@ -90,8 +90,8 @@ async function resumeBackgroundDelegation({
   return replayRun(events);
 }
 
-async function collectRunEvents(run: AgentRun) {
-  const events: Awaited<ReturnType<AgentRun["events"]>> extends AsyncIterable<
+async function collectRunEvents(run: AgentTurn) {
+  const events: Awaited<ReturnType<AgentTurn["events"]>> extends AsyncIterable<
     infer Event
   >
     ? Event[]
@@ -117,7 +117,7 @@ async function enqueueCompletionNotification({
   state,
 }: {
   readonly host: ExecutionHost;
-  readonly run: RunRecord;
+  readonly run: TurnRecord;
   readonly state: NonNullable<
     ReturnType<typeof readDurableBackgroundDelegationState>
   >;
@@ -146,7 +146,7 @@ async function enqueueCompletionNotification({
     return;
   }
 
-  await host.store.runs.create({
+  await host.store.turns.create({
     checkpointVersion: 0,
     dedupeKey: idempotencyKey,
     kind: "notification",
@@ -176,8 +176,8 @@ async function resumeCompletionNotification({
   readonly host: ExecutionHost;
   readonly ownerNamespace: string;
   readonly parentThreadKey: string;
-  readonly run: RunRecord;
-}): Promise<AgentRun | null> {
+  readonly run: TurnRecord;
+}): Promise<AgentTurn | null> {
   if (
     run.ownerNamespace !== ownerNamespace ||
     run.threadKey !== parentThreadKey
@@ -198,7 +198,7 @@ async function resumeCompletionNotification({
   const notificationRun = await coordinator
     .thread(notification.threadKey)
     .send(notification.input);
-  await host.store.runs.update({ ...run, status: "completed" });
+  await host.store.turns.update({ ...run, status: "completed" });
   return notificationRun;
 }
 
@@ -254,7 +254,7 @@ function assertOwnedBackgroundRun({
 }: {
   readonly ownerNamespace: string;
   readonly parentThreadKey: string;
-  readonly run: RunRecord;
+  readonly run: TurnRecord;
   readonly state: NonNullable<
     ReturnType<typeof readDurableBackgroundDelegationState>
   >;
@@ -265,7 +265,7 @@ function assertOwnedBackgroundRun({
 
   if (state.parentThreadKey !== parentThreadKey) {
     throw new Error(
-      `Background task ${run.runId} is not linked to this session.`
+      `Background task ${run.runId} is not linked to this thread.`
     );
   }
 
@@ -276,7 +276,7 @@ function assertOwnedBackgroundRun({
 
 function replayRun(
   events: Awaited<ReturnType<typeof collectRunEvents>>
-): AgentRun {
+): AgentTurn {
   return {
     events: () => eventStream(events),
   };

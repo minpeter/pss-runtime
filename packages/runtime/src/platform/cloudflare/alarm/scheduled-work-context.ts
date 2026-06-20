@@ -1,4 +1,4 @@
-import type { RunRecord, RunStatus } from "../../../execution";
+import type { TurnRecord, TurnStatus } from "../../../execution";
 import {
   type CloudflareDurableObjectStorage,
   type CloudflareScheduledThreadPrompt,
@@ -14,7 +14,7 @@ export async function scheduledRunContext(
   const run = await createCloudflareDurableObjectHost({
     prefix,
     storage,
-  }).store.runs.get(runId);
+  }).store.turns.get(runId);
   return {
     runId,
     threadKey: run?.threadKey ?? "",
@@ -49,7 +49,7 @@ export async function shouldRetryScheduledRun(
   const run = await createCloudflareDurableObjectHost({
     prefix,
     storage,
-  }).store.runs.get(runId);
+  }).store.turns.get(runId);
   return run?.kind === "notification" && isRetryableRunStatus(run.status);
 }
 
@@ -76,12 +76,12 @@ export async function prepareScheduledNotificationRetry(
   const host = createCloudflareDurableObjectHost({ prefix, storage });
   let prepared = false;
   await host.store.transaction(async (tx) => {
-    const run = await tx.runs.get(runId);
+    const run = await tx.turns.get(runId);
     if (run?.kind !== "notification" || !run.dedupeKey) {
       return;
     }
 
-    await tx.runs.update(retryableNotificationRun(run));
+    await tx.turns.update(retryableNotificationRun(run));
     await tx.notifications.releaseByIdempotencyKey(run.dedupeKey);
     prepared = true;
   });
@@ -107,7 +107,7 @@ async function scheduledThreadPromptRunId(
   return notification?.runId;
 }
 
-function isRetryableRunStatus(status: RunStatus | undefined): boolean {
+function isRetryableRunStatus(status: TurnStatus | undefined): boolean {
   return (
     status === "leased" ||
     status === "queued" ||
@@ -116,7 +116,7 @@ function isRetryableRunStatus(status: RunStatus | undefined): boolean {
   );
 }
 
-function retryableNotificationRun(run: RunRecord): RunRecord {
+function retryableNotificationRun(run: TurnRecord): TurnRecord {
   const { lease: _lease, ...runWithoutLease } = run;
   return { ...runWithoutLease, status: "queued" };
 }

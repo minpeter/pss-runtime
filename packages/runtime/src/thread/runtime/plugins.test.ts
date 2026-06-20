@@ -12,7 +12,7 @@ import { collect } from "../handle/test-support";
 import { userTextToModelMessage } from "../protocol/mapping";
 
 describe("Agent thread runtime input plugins", () => {
-  it("drains event-plugin steering at turn-start, step-start, and step-end but starts a new run after turn-end", async () => {
+  it("drains event-plugin steering at turn-start, step-start, and step-end but starts a new turn after turn-end", async () => {
     const seenHistory: ModelMessage[][] = [];
     let turnEndRun:
       | Promise<Awaited<ReturnType<typeof thread.steer>>>
@@ -85,7 +85,7 @@ describe("Agent thread runtime input plugins", () => {
       ],
     ]);
     if (!turnEndRun) {
-      throw new Error("expected turn-end steer to start a new run");
+      throw new Error("expected turn-end steer to start a new turn");
     }
     const turnEndEvents = await collect(await turnEndRun);
     expect(turnEndEvents[0]).toEqual(sentUserText("turn end steer"));

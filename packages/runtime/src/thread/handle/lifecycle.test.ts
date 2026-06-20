@@ -13,7 +13,7 @@ import { userTextToModelMessage } from "../protocol/mapping";
 import { collect } from "./test-support";
 
 describe("Agent thread lifecycle", () => {
-  it("idle thread.steer starts a new run after turn-end", async () => {
+  it("idle thread.steer starts a new turn after turn-end", async () => {
     let calls = 0;
     const agent = new Agent({
       model: createCallbackModel(() => {
@@ -30,7 +30,7 @@ describe("Agent thread lifecycle", () => {
     expect(calls).toBe(2);
   });
 
-  it("idle thread.steer starts a new run after model turn-error", async () => {
+  it("idle thread.steer starts a new turn after model turn-error", async () => {
     let calls = 0;
     const agent = new Agent({
       model: createCallbackModel(() => {
@@ -49,7 +49,7 @@ describe("Agent thread lifecycle", () => {
     expect(calls).toBe(2);
   });
 
-  it("idle thread.steer starts a new run after interrupt turn-abort", async () => {
+  it("idle thread.steer starts a new turn after interrupt turn-abort", async () => {
     const llmStarted = createDeferred();
     const llmGate = createDeferred();
     const thread = new Agent({

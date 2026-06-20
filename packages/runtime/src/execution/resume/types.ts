@@ -10,10 +10,10 @@ export interface ResumeRunBudget {
   readonly maxSteps: number;
 }
 
-export type ResumeRunStatus = "aborted" | "completed" | "suspended";
+export type ResumeTurnStatus = "aborted" | "completed" | "suspended";
 
 export interface ResumeRunResult {
-  readonly status: ResumeRunStatus;
+  readonly status: ResumeTurnStatus;
   readonly steps: number;
 }
 

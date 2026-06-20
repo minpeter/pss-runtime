@@ -4,7 +4,7 @@ import {
   shiftRuntimeInput,
 } from "../input/runtime-input";
 import { emitRuntimeInputEvent } from "../input/runtime-input-emit";
-import type { BufferedAgentRun } from "../protocol/run";
+import type { BufferedAgentTurn } from "../protocol/turn";
 import type { ThreadState } from "../state/thread-state";
 import type { ThreadEventDispatcher } from "./events";
 
@@ -17,7 +17,7 @@ export async function drainRuntimeInput({
 }: {
   readonly events: ThreadEventDispatcher;
   readonly placement: RuntimeInputPlacement;
-  readonly run: BufferedAgentRun;
+  readonly run: BufferedAgentTurn;
   readonly runtimeInput: RuntimeInputState;
   readonly state: ThreadState;
 }): Promise<boolean> {

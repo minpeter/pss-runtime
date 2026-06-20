@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { RunRecord } from "../../../../execution";
+import type { TurnRecord } from "../../../../execution";
 import {
   createCloudflareDurableObjectHost,
   InMemoryCloudflareDurableObjectStorage,
@@ -11,7 +11,7 @@ import { storeKey } from "../execution/records";
 const PREFIX = "pss-runtime";
 const requiresSqlitePattern = /SQLite-backed/;
 
-const createRun = (runId = "run-1"): RunRecord => ({
+const createRun = (runId = "run-1"): TurnRecord => ({
   checkpointVersion: 0,
   kind: "user-turn",
   rootRunId: runId,
@@ -25,7 +25,7 @@ describe("createCloudflareDurableObjectHost store selection", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage();
     const host = createCloudflareDurableObjectHost({ storage });
 
-    await host.store.runs.create(createRun());
+    await host.store.turns.create(createRun());
     await host.store.events.append("run-1", { type: "turn-start" });
 
     const events: unknown[] = [];
@@ -41,7 +41,7 @@ describe("createCloudflareDurableObjectHost store selection", () => {
     });
     const host = createCloudflareDurableObjectHost({ storage });
 
-    await host.store.runs.create(createRun());
+    await host.store.turns.create(createRun());
 
     const big = "x".repeat(120_000);
     // 20 events * ~120KB ~= ~2.4MB — past the Durable Object per-value limit
@@ -94,7 +94,7 @@ describe("createCloudflareDurableObjectHost store selection", () => {
 
     await expect(
       host.store.transaction(async (tx) => {
-        await tx.runs.create(createRun("run-rollback"));
+        await tx.turns.create(createRun("run-rollback"));
         await tx.events.append("run-rollback", { type: "turn-start" });
         await tx.checkpoints.append(
           {
@@ -124,7 +124,7 @@ describe("createCloudflareDurableObjectHost store selection", () => {
       })
     ).rejects.toThrow("transaction failed");
 
-    await expect(host.store.runs.get("run-rollback")).resolves.toBeNull();
+    await expect(host.store.turns.get("run-rollback")).resolves.toBeNull();
     await expect(
       host.store.threads.load("thread-rollback")
     ).resolves.toBeNull();
