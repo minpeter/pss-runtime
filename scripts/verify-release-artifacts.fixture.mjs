@@ -7,24 +7,24 @@ export const cliBinReadFailurePattern =
 export const forbiddenModelName = ["Agent", "Model"].join("");
 export const runtimeRootDeclaration = [
   'export type { AgentHost } from "./execution/types";',
-  'export type { AgentRun, RuntimeInput } from "./session/events";',
+  'export type { AgentTurn, RuntimeInput } from "./thread";',
   "",
 ].join("\n");
 export const runtimeExecutionDeclaration = [
   'export { createInMemoryExecutionHost } from "./memory";',
-  'export type { DurableBackgroundHost, SessionHost } from "./capabilities";',
-  'export type { CheckpointStore, EventStore, ExecutionHost, ExecutionScheduler, ExecutionStore, ExecutionStoreTransaction, NotificationInbox, NotificationRecord, RunRecord, RunStore } from "./types";',
+  'export type { DurableBackgroundHost } from "./capabilities";',
+  'export type { CheckpointStore, EventStore, ExecutionHost, ExecutionScheduler, ExecutionStore, ExecutionStoreTransaction, NotificationInbox, NotificationRecord, TurnRecord, TurnStatus, TurnStore } from "./types";',
   'export type { RuntimeToolExecutionCheckpoint, RuntimeToolExecutionContext, RuntimeToolExecutionDecision, RuntimeToolRetryPolicy } from "../llm-tool-execution";',
   'export { ToolExecutionNeedsRecoveryError } from "../llm-tool-execution";',
   "",
 ].join("\n");
 export const runtimeCloudflareDeclaration = [
-  'export { ackScheduledCloudflareRun, ackScheduledCloudflareThreadPrompt, createCloudflareAlarmScheduler, createCloudflareAgentContext, createCloudflareDurableObjectHost, drainAgentRun, drainCloudflareAlarm, fetchCloudflareDurableObject, getCloudflareDurableObjectStub, InMemoryCloudflareDurableObjectStorage, listScheduledCloudflareRuns, listScheduledCloudflareThreadPrompts, rescheduleCloudflareAlarm } from "./index";',
-  'export type { CloudflareAgentContext, CloudflareAgentContextFactoryOptions, CloudflareAgentContextOptions, CloudflareAgentContextPrefixOptions, CloudflareAgentRunDrainOptions, CloudflareAlarmAgent, CloudflareAlarmDrainSummary, CloudflareDurableObjectFetchOptions, CloudflareDurableObjectId, CloudflareDurableObjectNamespace, CloudflareDurableObjectState, CloudflareDurableObjectStorage, CloudflareDurableObjectStub, CloudflareDurableObjectStubOptions, CloudflareScheduledThreadPrompt } from "./index";',
+  'export { ackScheduledCloudflareRun, ackScheduledCloudflareThreadPrompt, createCloudflareAlarmScheduler, createCloudflareAgentContext, createCloudflareDurableObjectHost, drainAgentTurn, drainAgentTurnWithBudget, drainCloudflareAlarm, fetchCloudflareDurableObject, getCloudflareDurableObjectStub, InMemoryCloudflareDurableObjectStorage, listScheduledCloudflareRuns, listScheduledCloudflareThreadPrompts, rescheduleCloudflareAlarm } from "./index";',
+  'export type { AgentTurnDrainResult, AgentTurnDrainStopReason, CloudflareAgentContext, CloudflareAgentContextFactoryOptions, CloudflareAgentContextOptions, CloudflareAgentContextPrefixOptions, CloudflareAgentTurnDrainOptions, CloudflareAlarmAgent, CloudflareAlarmDrainSummary, CloudflareDurableObjectFetchOptions, CloudflareDurableObjectId, CloudflareDurableObjectNamespace, CloudflareDurableObjectState, CloudflareDurableObjectStorage, CloudflareDurableObjectStub, CloudflareDurableObjectStubOptions, CloudflareScheduledThreadPrompt } from "./index";',
   "",
 ].join("\n");
 export const runtimeNodeDeclaration = [
-  'export { ackScheduledNodeRun, ackScheduledNodeThreadPrompt, appendScheduledNodeRun, appendScheduledNodeThreadPrompt, createNodeFileAgentContext, createNodeFileExecutionHost, createNodeFileScheduler, createNodeFileThreadHost, drainScheduledNodeWork, FileExecutionStore, FileSessionStore, FileThreadStore, listScheduledNodeRuns, listScheduledNodeThreadPrompts } from "./index";',
+  'export { ackScheduledNodeRun, ackScheduledNodeThreadPrompt, appendScheduledNodeRun, appendScheduledNodeThreadPrompt, createNodeFileAgentContext, createNodeFileExecutionHost, createNodeFileScheduler, createNodeFileThreadHost, drainScheduledNodeWork, FileExecutionStore, FileThreadStore, listScheduledNodeRuns, listScheduledNodeThreadPrompts } from "./index";',
   'export type { NodeFileAgentContext, NodeFileAgentContextFactoryOptions, NodeFileAgentContextOptions, NodeFileExecutionHostOptions, NodeFileThreadHostOptions, NodeScheduledThreadPrompt, NodeScheduledWorkAppendOptions, NodeScheduledWorkDrainOptions, NodeScheduledWorkDrainResult, NodeScheduledWorkListOptions, NodeScheduledWorkRunContext } from "./index";',
   "",
 ].join("\n");

@@ -33,7 +33,4 @@ export type {
   NodeScheduledWorkRunContext,
 } from "./host/scheduled-work-types";
 export { FileExecutionStore } from "./storage/file-execution-store";
-export {
-  FileSessionStore,
-  FileThreadStore,
-} from "./storage/file-thread-store";
+export { FileThreadStore } from "./storage/file-thread-store";

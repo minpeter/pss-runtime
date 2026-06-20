@@ -7,7 +7,7 @@ import type {
   ExecutionStore,
   ExecutionStoreTransaction,
   NotificationInbox,
-  RunStore,
+  TurnStore,
 } from "../../../execution/host/types";
 import type { ThreadStore } from "../../../thread/store/types";
 import {
@@ -26,7 +26,7 @@ export class FileExecutionStore implements ExecutionStore {
   readonly checkpoints: CheckpointStore;
   readonly events: EventStore;
   readonly notifications: NotificationInbox;
-  readonly runs: RunStore;
+  readonly turns: TurnStore;
   readonly threads: ThreadStore;
 
   readonly #directory: string;
@@ -40,15 +40,11 @@ export class FileExecutionStore implements ExecutionStore {
       createFileExecutionLock(this.#lockDirectory, "auto")
     );
 
-    this.runs = ports.runs;
+    this.turns = ports.turns;
     this.events = ports.events;
     this.checkpoints = ports.checkpoints;
     this.notifications = ports.notifications;
     this.threads = ports.threads;
-  }
-
-  get sessions(): ThreadStore {
-    return this.threads;
   }
 
   async transaction<T>(

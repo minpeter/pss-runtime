@@ -1,27 +1,27 @@
-import type { AgentEvent, AgentRun } from "../../../index";
+import type { AgentEvent, AgentTurn } from "../../../index";
 
-export type AgentRunDrainStopReason = "deadline" | "event-budget";
+export type AgentTurnDrainStopReason = "deadline" | "event-budget";
 
-export interface CloudflareAgentRunDrainOptions {
+export interface CloudflareAgentTurnDrainOptions {
   readonly deadlineMs?: number;
   readonly maxEvents?: number;
   readonly onEvent?: (event: AgentEvent) => Promise<void> | void;
   readonly startedAt?: number;
 }
 
-export interface AgentRunDrainResult {
+export interface AgentTurnDrainResult {
   readonly droppedEvents: number;
   readonly events: readonly AgentEvent[];
-  readonly stoppedReason?: AgentRunDrainStopReason;
+  readonly stoppedReason?: AgentTurnDrainStopReason;
 }
 
-export async function drainAgentRun(
-  run: AgentRun,
-  options: CloudflareAgentRunDrainOptions = {}
+export async function drainAgentTurn(
+  run: AgentTurn,
+  options: CloudflareAgentTurnDrainOptions = {}
 ): Promise<AgentEvent[]> {
   return [
     ...(
-      await drainAgentRunWithBudget(run, {
+      await drainAgentTurnWithBudget(run, {
         deadlineMs: options.deadlineMs,
         maxEvents: options.maxEvents,
         onEvent: options.onEvent,
@@ -31,10 +31,10 @@ export async function drainAgentRun(
   ];
 }
 
-export async function drainAgentRunWithBudget(
-  run: AgentRun,
-  options: CloudflareAgentRunDrainOptions = {}
-): Promise<AgentRunDrainResult> {
+export async function drainAgentTurnWithBudget(
+  run: AgentTurn,
+  options: CloudflareAgentTurnDrainOptions = {}
+): Promise<AgentTurnDrainResult> {
   const events: AgentEvent[] = [];
   let droppedEvents = 0;
   const deadlineAt =
@@ -42,7 +42,7 @@ export async function drainAgentRunWithBudget(
       ? undefined
       : (options.startedAt ?? Date.now()) + options.deadlineMs;
   const iterator = run.events()[Symbol.asyncIterator]();
-  let stoppedReason: AgentRunDrainStopReason | undefined;
+  let stoppedReason: AgentTurnDrainStopReason | undefined;
 
   try {
     while (true) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { agentNamespace } from "../../agent/identity/namespace";
-import type { ExecutionHost, RunRecord, RunStore } from "../host/types";
+import type { ExecutionHost, TurnRecord, TurnStore } from "../host/types";
 import { createInMemoryExecutionHost } from "../memory";
 import { dispatchAgentNotification } from "./notification-dispatch";
 
@@ -28,7 +28,7 @@ describe("dispatchAgentNotification", () => {
       idempotencyKey: "reminder:1",
     });
     expect(second).toEqual({ ...first, deduplicated: true });
-    const run = await host.store.runs.get(first.runId);
+    const run = await host.store.turns.get(first.runId);
     expect(run).toMatchObject({
       kind: "notification",
       ownerNamespace: agentNamespace("agent-a"),
@@ -77,11 +77,11 @@ describe("dispatchAgentNotification", () => {
     expect(second.deduplicated).toBe(false);
     expect(second.runId).not.toBe(first.runId);
     expect(duplicateFirst).toEqual({ ...first, deduplicated: true });
-    await expect(host.store.runs.get(first.runId)).resolves.toMatchObject({
+    await expect(host.store.turns.get(first.runId)).resolves.toMatchObject({
       ownerNamespace: agentNamespace("agent-a"),
       threadKey: "room:1:user:1",
     });
-    await expect(host.store.runs.get(second.runId)).resolves.toMatchObject({
+    await expect(host.store.turns.get(second.runId)).resolves.toMatchObject({
       ownerNamespace: agentNamespace("agent-b"),
       threadKey: "room:1:user:2",
     });
@@ -112,35 +112,35 @@ describe("dispatchAgentNotification", () => {
 
 function hostWithDuplicateRunCreate(host: ExecutionHost): ExecutionHost {
   const runs = {
-    claim: (runId, options) => host.store.runs.claim(runId, options),
-    create: async (record: RunRecord) => {
+    claim: (runId, options) => host.store.turns.claim(runId, options),
+    create: async (record: TurnRecord) => {
       const existing = record.dedupeKey
-        ? await host.store.runs.getByDedupeKey(record.dedupeKey)
-        : await host.store.runs.get(record.runId);
+        ? await host.store.turns.getByDedupeKey(record.dedupeKey)
+        : await host.store.turns.get(record.runId);
       if (!existing) {
         throw new Error("Expected pre-existing run for duplicate create race.");
       }
       return { ok: false, reason: "duplicate", record: existing } as const;
     },
-    get: (runId) => host.store.runs.get(runId),
-    getByDedupeKey: (dedupeKey) => host.store.runs.getByDedupeKey(dedupeKey),
+    get: (runId) => host.store.turns.get(runId),
+    getByDedupeKey: (dedupeKey) => host.store.turns.getByDedupeKey(dedupeKey),
     listByParentRunId: (parentRunId) =>
-      host.store.runs.listByParentRunId(parentRunId),
-    update: (record) => host.store.runs.update(record),
-  } satisfies RunStore;
+      host.store.turns.listByParentRunId(parentRunId),
+    update: (record) => host.store.turns.update(record),
+  } satisfies TurnStore;
 
   return {
     ...host,
     store: {
       ...host.store,
-      runs,
+      turns: runs,
       transaction: (callback) =>
         callback({
-          checkpoints: host.store.checkpoints,
           events: host.store.events,
           notifications: host.store.notifications,
-          runs,
+          checkpoints: host.store.checkpoints,
           threads: host.store.threads,
+          turns: runs,
         }),
     },
   };

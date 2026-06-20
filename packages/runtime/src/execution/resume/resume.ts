@@ -17,7 +17,7 @@ export type {
   ResumeRunOptions,
   ResumeRunResult,
   ResumeRunState,
-  ResumeRunStatus,
+  ResumeTurnStatus,
 } from "./types";
 
 export async function resumeRun(

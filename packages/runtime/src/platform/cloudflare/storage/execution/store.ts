@@ -4,7 +4,7 @@ import type {
   ExecutionStore,
   ExecutionStoreTransaction,
   NotificationInbox,
-  RunStore,
+  TurnStore,
 } from "../../../../execution";
 import type { ThreadStore } from "../../../../index";
 import {
@@ -25,7 +25,7 @@ export class DurableObjectExecutionStore implements ExecutionStore {
   readonly checkpoints: CheckpointStore;
   readonly events: EventStore;
   readonly notifications: NotificationInbox;
-  readonly runs: RunStore;
+  readonly turns: TurnStore;
   readonly threads: ThreadStore;
   readonly #maxPayloadBytes: number;
   readonly #prefix: string;
@@ -59,7 +59,7 @@ export class DurableObjectExecutionStore implements ExecutionStore {
       prefix,
       payloadBudget
     );
-    this.runs = new DurableObjectRunStore(storage, prefix, payloadBudget);
+    this.turns = new DurableObjectRunStore(storage, prefix, payloadBudget);
     this.threads = new DurableObjectSqliteThreadStore(
       storage,
       prefix,

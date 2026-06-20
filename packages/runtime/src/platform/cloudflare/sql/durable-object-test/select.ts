@@ -142,20 +142,20 @@ function selectRunRows(
   const prefix = stringBinding(bindings[0]);
   if (query.includes("run_id = ?")) {
     const runId = stringBinding(bindings[1]);
-    return state.runs
+    return state.turns
       .filter((row) => row.prefix === prefix && row.run_id === runId)
       .map(projectRun);
   }
   if (query.includes("dedupe_key = ?")) {
     const dedupeKey = stringBinding(bindings[1]);
-    return state.runs
+    return state.turns
       .filter((row) => row.prefix === prefix && row.dedupe_key === dedupeKey)
       .map(projectRun)
       .slice(0, 1);
   }
   if (query.includes("parent_run_id = ?")) {
     const parentRunId = stringBinding(bindings[1]);
-    return state.runs
+    return state.turns
       .filter(
         (row) => row.prefix === prefix && row.parent_run_id === parentRunId
       )

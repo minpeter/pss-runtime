@@ -1,4 +1,4 @@
-import type { RunRecord } from "../../../../execution";
+import type { TurnRecord } from "../../../../execution";
 import type { AgentEvent } from "../../../../index";
 import {
   type CloudflareDurableObjectStorage,
@@ -123,12 +123,12 @@ async function writeThreadTurns(input: WriteThreadTurnsInput): Promise<number> {
     }
 
     const run = runRecord({ runId, threadKey: input.threadKey });
-    const create = await input.host.store.runs.create(run);
+    const create = await input.host.store.turns.create(run);
     if (!create.ok) {
       throw new Error(`mock run create failed for ${runId}`);
     }
     if (turn === 0) {
-      const duplicate = await input.host.store.runs.create(run);
+      const duplicate = await input.host.store.turns.create(run);
       if (duplicate.ok) {
         throw new Error(`mock run duplicate was inserted for ${runId}`);
       }
@@ -156,7 +156,7 @@ async function writeThreadTurns(input: WriteThreadTurnsInput): Promise<number> {
       runId,
       eventRecord("step-end", input.eventPayloadBytes)
     );
-    await input.host.store.runs.update({
+    await input.host.store.turns.update({
       ...run,
       checkpointVersion: 1,
       status: "completed",
@@ -217,7 +217,7 @@ function assistantContent(turn: number, input: WriteThreadTurnsInput): string {
 function runRecord(input: {
   readonly runId: string;
   readonly threadKey: string;
-}): RunRecord {
+}): TurnRecord {
   return {
     checkpointVersion: 0,
     dedupeKey: `${input.runId}:dedupe`,

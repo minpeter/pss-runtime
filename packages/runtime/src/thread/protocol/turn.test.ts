@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentEvent } from "./events";
-import { BufferedAgentRun } from "./run";
+import { BufferedAgentTurn } from "./turn";
 
 const expectPending = async (promise: Promise<unknown>) => {
   const marker = Symbol("pending");
@@ -9,9 +9,9 @@ const expectPending = async (promise: Promise<unknown>) => {
   );
 };
 
-describe("AgentRun", () => {
+describe("AgentTurn", () => {
   it("delivers events emitted before events consumption", async () => {
-    const run = new BufferedAgentRun();
+    const run = new BufferedAgentTurn();
     run.emit({ type: "user-text", text: "hello" });
     run.emit({ type: "turn-end" });
     run.close();
@@ -28,7 +28,7 @@ describe("AgentRun", () => {
   });
 
   it("delivers events emitted after events consumption starts", async () => {
-    const run = new BufferedAgentRun();
+    const run = new BufferedAgentTurn();
     const events: unknown[] = [];
     const collecting = (async () => {
       for await (const event of run.events()) {
@@ -45,7 +45,7 @@ describe("AgentRun", () => {
   });
 
   it("keeps boundary emit pending until the consumer asks for another event", async () => {
-    const run = new BufferedAgentRun();
+    const run = new BufferedAgentTurn();
     const iterator = run.events()[Symbol.asyncIterator]();
 
     const boundary = run.emitBoundary({ type: "step-end" });
@@ -66,15 +66,15 @@ describe("AgentRun", () => {
   });
 
   it("rejects duplicate events readers", () => {
-    const run = new BufferedAgentRun();
+    const run = new BufferedAgentTurn();
     run.events();
     expect(() => run.events()).toThrow(
-      "AgentRun.events() can only be consumed once"
+      "AgentTurn.events() can only be consumed once"
     );
   });
 
   it("returns the same iterator for repeated async iterator access", () => {
-    const run = new BufferedAgentRun();
+    const run = new BufferedAgentTurn();
     const eventIterator = run.events();
 
     expect(eventIterator[Symbol.asyncIterator]()).toBe(
@@ -83,12 +83,12 @@ describe("AgentRun", () => {
   });
 
   it("rejects concurrent next calls so consumers cannot prefetch", async () => {
-    const run = new BufferedAgentRun();
+    const run = new BufferedAgentTurn();
     const iterator = run.events()[Symbol.asyncIterator]();
 
     const waitingNext = iterator.next();
     await expect(iterator.next()).rejects.toThrow(
-      "AgentRun.events() does not allow concurrent next() calls"
+      "AgentTurn.events() does not allow concurrent next() calls"
     );
 
     run.emit({ type: "turn-start" });
@@ -99,7 +99,7 @@ describe("AgentRun", () => {
   });
 
   it("rejects same-tick prefetch when a boundary event is already queued", async () => {
-    const run = new BufferedAgentRun();
+    const run = new BufferedAgentTurn();
     const iterator = run.events()[Symbol.asyncIterator]();
 
     const boundary = run.emitBoundary({ type: "step-end" });
@@ -107,7 +107,7 @@ describe("AgentRun", () => {
     const second = iterator.next();
 
     await expect(second).rejects.toThrow(
-      "AgentRun.events() does not allow concurrent next() calls"
+      "AgentTurn.events() does not allow concurrent next() calls"
     );
     await expectPending(boundary);
     await expect(first).resolves.toEqual({
@@ -127,7 +127,7 @@ describe("AgentRun", () => {
   });
 
   it("return() settles pending boundary ack and pending next waiter", async () => {
-    const run = new BufferedAgentRun();
+    const run = new BufferedAgentTurn();
     const iterator = run.events()[Symbol.asyncIterator]();
 
     const boundary = run.emitBoundary({ type: "step-start" });
@@ -149,7 +149,7 @@ describe("AgentRun", () => {
   });
 
   it("close() settles queued boundary acknowledgements", async () => {
-    const run = new BufferedAgentRun();
+    const run = new BufferedAgentTurn();
     const boundary = run.emitBoundary({ type: "step-start" });
     await expectPending(boundary);
 
@@ -159,7 +159,7 @@ describe("AgentRun", () => {
   });
 
   it("closes and discards queued events when the events iterator returns early", async () => {
-    const run = new BufferedAgentRun();
+    const run = new BufferedAgentTurn();
     const iterator = run.events()[Symbol.asyncIterator]();
 
     run.emit({ type: "turn-start" });

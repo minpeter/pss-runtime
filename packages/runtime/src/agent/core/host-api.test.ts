@@ -4,7 +4,6 @@ import {
   type DurableBackgroundHost,
   type ExecutionHost,
   type ExecutionScheduler,
-  type SessionHost,
   type ThreadHost,
 } from "../../execution";
 import {
@@ -35,32 +34,14 @@ const acceptsThreadHost = {
   kind: "thread",
   threadStore: new SpyStore(),
 } satisfies ThreadHost;
-const acceptsLegacySessionHost = {
-  kind: "session",
-  threadStore: new SpyStore(),
-} satisfies SessionHost;
-const acceptsSessionStoreOnlyLegacySessionHost = {
-  kind: "session",
-  sessionStore: new SpyStore(),
-} satisfies SessionHost;
 const acceptsDurableBackgroundHost = {
   backgroundScheduler: aggregateHost.scheduler,
   checkpointStore: aggregateHost.store.checkpoints,
   eventStore: aggregateHost.store.events,
   kind: "durable-background",
   notificationInbox: aggregateHost.store.notifications,
-  runStore: aggregateHost.store.runs,
+  turnStore: aggregateHost.store.turns,
   threadStore: aggregateHost.store.threads,
-  transaction: aggregateHost.store.transaction.bind(aggregateHost.store),
-} satisfies DurableBackgroundHost;
-const acceptsSessionStoreOnlyDurableBackgroundHost = {
-  backgroundScheduler: aggregateHost.scheduler,
-  checkpointStore: aggregateHost.store.checkpoints,
-  eventStore: aggregateHost.store.events,
-  kind: "durable-background",
-  notificationInbox: aggregateHost.store.notifications,
-  runStore: aggregateHost.store.runs,
-  sessionStore: aggregateHost.store.threads,
   transaction: aggregateHost.store.transaction.bind(aggregateHost.store),
 } satisfies DurableBackgroundHost;
 
@@ -91,21 +72,30 @@ type AcceptsThreadHostAsAgentHost = IsAssignable<
   typeof acceptsThreadHost,
   AgentHost
 >;
-type AcceptsLegacySessionHostAsAgentHost = IsAssignable<
-  typeof acceptsLegacySessionHost,
-  AgentHost
->;
-type AcceptsSessionStoreOnlyLegacySessionHostAsAgentHost = IsAssignable<
-  typeof acceptsSessionStoreOnlyLegacySessionHost,
-  AgentHost
->;
 type AcceptsExecutionHostAsAgentHost = IsAssignable<
   typeof aggregateHost,
   AgentHost
 >;
-type AcceptsSessionStoreOnlyDurableBackgroundHostAsAgentHost = IsAssignable<
-  typeof acceptsSessionStoreOnlyDurableBackgroundHost,
-  AgentHost
+type RejectsLegacyKindAsAgentHost = AssertFalse<
+  IsAssignable<
+    { readonly kind: "legacy"; readonly threadStore: SpyStore },
+    AgentHost
+  >
+>;
+type RejectsLegacyStoreOnlyDurableBackgroundHost = AssertFalse<
+  IsAssignable<
+    {
+      readonly backgroundScheduler: typeof aggregateHost.scheduler;
+      readonly eventStore: typeof aggregateHost.store.events;
+      readonly kind: "durable-background";
+      readonly notificationInbox: typeof aggregateHost.store.notifications;
+      readonly legacyStore: SpyStore;
+      readonly checkpointStore: typeof aggregateHost.store.checkpoints;
+      readonly transaction: typeof aggregateHost.store.transaction;
+      readonly turnStore: typeof aggregateHost.store.turns;
+    },
+    AgentHost
+  >
 >;
 type DurableSchedulerMatchesExecutionScheduler = IsAssignable<
   DurableBackgroundHost["backgroundScheduler"],
@@ -115,9 +105,6 @@ type DurableSchedulerMatchesExecutionScheduler = IsAssignable<
 const typeFixtures = [
   acceptsDurableBackgroundHost,
   acceptsHostOptions,
-  acceptsLegacySessionHost,
-  acceptsSessionStoreOnlyDurableBackgroundHost,
-  acceptsSessionStoreOnlyLegacySessionHost,
   acceptsThreadHost,
 ];
 const acceptsHostOptionAssertion: AcceptsHostOption = true;
@@ -129,15 +116,14 @@ const hostThreadStoreAssertion: RejectsBareThreadStoreAsHost = false;
 const executionThreadStoreAssertion: RejectsExecutionHostThreadStoreKey = false;
 const hostKindAssertion: RequiresHostKindKey = true;
 const acceptsThreadHostAssertion: AcceptsThreadHostAsAgentHost = true;
-const acceptsLegacySessionHostAssertion: AcceptsLegacySessionHostAsAgentHost = true;
-const acceptsSessionStoreOnlyLegacySessionHostAssertion: AcceptsSessionStoreOnlyLegacySessionHostAsAgentHost = true;
 const acceptsExecutionHostAssertion: AcceptsExecutionHostAsAgentHost = true;
-const acceptsSessionStoreOnlyDurableBackgroundHostAssertion: AcceptsSessionStoreOnlyDurableBackgroundHostAsAgentHost = true;
+const rejectsLegacyKindAssertion: RejectsLegacyKindAsAgentHost = false;
+const rejectsLegacyStoreOnlyDurableBackgroundHostAssertion: RejectsLegacyStoreOnlyDurableBackgroundHost = false;
 const durableSchedulerAssertion: DurableSchedulerMatchesExecutionScheduler = true;
 
 describe("Agent host public API", () => {
   it("accepts host option and keeps unsupported option keys out of AgentOptions", () => {
-    expect(typeFixtures).toHaveLength(6);
+    expect(typeFixtures).toHaveLength(3);
     expect(acceptsHostOptionAssertion).toBe(true);
     expect(rejectsRuntimeModelOptionAssertion).toBe(false);
     expect(llmOptionAssertion).toBe(false);
@@ -147,10 +133,9 @@ describe("Agent host public API", () => {
     expect(executionThreadStoreAssertion).toBe(false);
     expect(hostKindAssertion).toBe(true);
     expect(acceptsThreadHostAssertion).toBe(true);
-    expect(acceptsLegacySessionHostAssertion).toBe(true);
-    expect(acceptsSessionStoreOnlyLegacySessionHostAssertion).toBe(true);
     expect(acceptsExecutionHostAssertion).toBe(true);
-    expect(acceptsSessionStoreOnlyDurableBackgroundHostAssertion).toBe(true);
+    expect(rejectsLegacyKindAssertion).toBe(false);
+    expect(rejectsLegacyStoreOnlyDurableBackgroundHostAssertion).toBe(false);
     expect(durableSchedulerAssertion).toBe(true);
     expect(new Agent({ host: inProcessHost, model: fakeModel })).toBeInstanceOf(
       Agent
@@ -203,20 +188,6 @@ describe("Agent host public API", () => {
     await collect(await agent.thread("host-owned").send("hello"));
 
     expect(threadStore.commits.at(-1)?.key).toBe("host-owned");
-  });
-
-  it("uses deprecated session host store for thread snapshots", async () => {
-    const sessionStore = new SpyStore();
-    const agent = new Agent({
-      host: { kind: "session", sessionStore },
-      model: createCallbackModel(() =>
-        Promise.resolve([assistantMessage("DONE")])
-      ),
-    });
-
-    await collect(await agent.thread("legacy-host-owned").send("hello"));
-
-    expect(sessionStore.commits.at(-1)?.key).toBe("legacy-host-owned");
   });
 
   it("includes scoped thread addresses in the stored thread key", async () => {

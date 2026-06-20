@@ -1,16 +1,16 @@
 import type {
+  Checkpoint,
   NotificationRecord,
-  RunCheckpoint,
-  RunKind,
-  RunLease,
-  RunRecord,
-  RunStatus,
   StoredAgentEvent,
+  TurnKind,
+  TurnLease,
+  TurnRecord,
+  TurnStatus,
 } from "../../../../execution/host/types";
 import type { AgentEvent, UserInput } from "../../../../thread/protocol/events";
 import { isRecord } from "./utils";
 
-export function parseRunRecord(value: unknown, file: string): RunRecord {
+export function parseRunRecord(value: unknown, file: string): TurnRecord {
   if (!isRecord(value)) {
     throw invalidFile(file, "expected run object");
   }
@@ -49,10 +49,7 @@ export function parseRunRecord(value: unknown, file: string): RunRecord {
   };
 }
 
-export function parseRunCheckpoint(
-  value: unknown,
-  file: string
-): RunCheckpoint {
+export function parseRunCheckpoint(value: unknown, file: string): Checkpoint {
   if (!isRecord(value)) {
     throw invalidFile(file, "expected checkpoint object");
   }
@@ -157,7 +154,7 @@ export function parseEventLogLine(
   };
 }
 
-export function isClaimable(record: RunRecord): boolean {
+export function isClaimable(record: TurnRecord): boolean {
   return (
     record.status === "leased" ||
     record.status === "needs-recovery" ||
@@ -186,7 +183,7 @@ function isStringArray(value: unknown): value is readonly string[] {
   );
 }
 
-function isRunLease(value: unknown): value is RunLease {
+function isRunLease(value: unknown): value is TurnLease {
   return (
     isRecord(value) &&
     typeof value.attempt === "number" &&
@@ -195,7 +192,7 @@ function isRunLease(value: unknown): value is RunLease {
   );
 }
 
-function isRunKind(value: unknown): value is RunKind {
+function isRunKind(value: unknown): value is TurnKind {
   return (
     value === "notification" ||
     value === "tool-recovery" ||
@@ -203,7 +200,7 @@ function isRunKind(value: unknown): value is RunKind {
   );
 }
 
-function isRunStatus(value: unknown): value is RunStatus {
+function isRunStatus(value: unknown): value is TurnStatus {
   return (
     value === "cancelled" ||
     value === "completed" ||
@@ -216,7 +213,7 @@ function isRunStatus(value: unknown): value is RunStatus {
   );
 }
 
-function isCheckpointPhase(value: unknown): value is RunCheckpoint["phase"] {
+function isCheckpointPhase(value: unknown): value is Checkpoint["phase"] {
   return (
     value === "after-model" ||
     value === "after-notification" ||

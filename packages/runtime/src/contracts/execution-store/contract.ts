@@ -21,7 +21,7 @@ export function describeExecutionStoreContract({
       const store = createStore();
 
       await store.transaction(async (tx) => {
-        await tx.runs.create(createQueuedRun());
+        await tx.turns.create(createQueuedRun());
         const checkpointResult = await tx.checkpoints.append(
           {
             checkpointId: "checkpoint-1",
@@ -51,7 +51,7 @@ export function describeExecutionStoreContract({
         expect(checkpointResult).toEqual({ ok: true, version: 1 });
       });
 
-      await expect(store.runs.get("run-1")).resolves.toMatchObject({
+      await expect(store.turns.get("run-1")).resolves.toMatchObject({
         runId: "run-1",
         status: "queued",
       });
@@ -76,12 +76,12 @@ export function describeExecutionStoreContract({
 
       await expect(
         store.transaction(async (tx) => {
-          await tx.runs.create(createQueuedRun());
+          await tx.turns.create(createQueuedRun());
           throw new Error("transaction failed");
         })
       ).rejects.toThrow("transaction failed");
 
-      await expect(store.runs.get("run-1")).resolves.toBeNull();
+      await expect(store.turns.get("run-1")).resolves.toBeNull();
     });
 
     it("rolls back transaction thread writes when the transaction fails", async () => {
@@ -108,18 +108,18 @@ export function describeExecutionStoreContract({
       let secondSettled = false;
 
       const first = store.transaction(async (tx) => {
-        await tx.runs.create(createQueuedRun("run-serial"));
+        await tx.turns.create(createQueuedRun("run-serial"));
         firstStarted.resolve();
         await firstCanFinish.promise;
       });
       await firstStarted.promise;
       const second = store
         .transaction(async (tx) => {
-          const run = await tx.runs.get("run-serial");
+          const run = await tx.turns.get("run-serial");
           if (!run) {
             throw new Error("Expected first transaction to commit first.");
           }
-          await tx.runs.update({ ...run, status: "cancelled" });
+          await tx.turns.update({ ...run, status: "cancelled" });
         })
         .then(() => {
           secondSettled = true;
@@ -130,17 +130,17 @@ export function describeExecutionStoreContract({
       firstCanFinish.resolve();
       await Promise.all([first, second]);
 
-      await expect(store.runs.get("run-serial")).resolves.toMatchObject({
+      await expect(store.turns.get("run-serial")).resolves.toMatchObject({
         status: "cancelled",
       });
     });
 
     it("rejects duplicate active run claims", async () => {
       const store = createStore();
-      await store.runs.create(createQueuedRun());
+      await store.turns.create(createQueuedRun());
 
       await expect(
-        store.runs.claim("run-1", {
+        store.turns.claim("run-1", {
           attempt: 1,
           leaseId: "lease-1",
           leaseMs: 100,
@@ -148,7 +148,7 @@ export function describeExecutionStoreContract({
         })
       ).resolves.toMatchObject({ ok: true });
       await expect(
-        store.runs.claim("run-1", {
+        store.turns.claim("run-1", {
           attempt: 2,
           leaseId: "lease-2",
           leaseMs: 100,
@@ -161,8 +161,8 @@ export function describeExecutionStoreContract({
       const store = createStore();
       const original = createQueuedRun("run-duplicate");
 
-      const created = await store.runs.create(original);
-      const duplicate = await store.runs.create({
+      const created = await store.turns.create(original);
+      const duplicate = await store.turns.create({
         ...original,
         checkpointVersion: 7,
         status: "completed",
@@ -174,12 +174,12 @@ export function describeExecutionStoreContract({
         reason: "duplicate",
         record: original,
       });
-      await expect(store.runs.get("run-duplicate")).resolves.toEqual(original);
+      await expect(store.turns.get("run-duplicate")).resolves.toEqual(original);
     });
 
     it("rejects stale checkpoint writes", async () => {
       const store = createStore();
-      await store.runs.create(createQueuedRun());
+      await store.turns.create(createQueuedRun());
 
       const first = await appendCheckpoint(store, 0);
       const stale = await appendCheckpoint(store, 0);
@@ -194,7 +194,7 @@ export function describeExecutionStoreContract({
 
     it("replays events from a cursor without duplicates", async () => {
       const store = createStore();
-      await store.runs.create(createQueuedRun());
+      await store.turns.create(createQueuedRun());
 
       const firstCursor = await store.events.append("run-1", {
         type: "turn-start",

@@ -5,7 +5,7 @@ import {
   runPluginsForEvent,
 } from "../plugins/pipeline";
 import type { AgentEvent } from "../protocol/events";
-import type { BufferedAgentRun } from "../protocol/run";
+import type { BufferedAgentTurn } from "../protocol/turn";
 
 interface ThreadEventDispatcherOptions {
   readonly history: () => readonly ModelMessage[];
@@ -26,7 +26,7 @@ export class ThreadEventDispatcher {
   }
 
   async captureObserverEvents<T>(
-    run: BufferedAgentRun,
+    run: BufferedAgentTurn,
     callback: () => Promise<T>
   ): Promise<{
     readonly events: AgentEvent[];
@@ -57,7 +57,7 @@ export class ThreadEventDispatcher {
   }
 
   emitObserverEvent(
-    activeRun: BufferedAgentRun | undefined,
+    activeRun: BufferedAgentTurn | undefined,
     event: AgentEvent
   ): Promise<void> {
     const observerEventBuffer = this.#observerEventBuffer;
@@ -74,7 +74,7 @@ export class ThreadEventDispatcher {
   }
 
   async emitRunBoundaryEvent(
-    run: BufferedAgentRun,
+    run: BufferedAgentTurn,
     event: AgentEvent
   ): Promise<void> {
     await runPluginsForEvent(
@@ -90,7 +90,7 @@ export class ThreadEventDispatcher {
   }
 
   async emitRunEvent(
-    run: BufferedAgentRun,
+    run: BufferedAgentTurn,
     event: AgentEvent
   ): Promise<AgentEvent | "handled"> {
     const processed = await this.interceptEvent(event);
@@ -111,7 +111,7 @@ export class ThreadEventDispatcher {
     return pipeline.event;
   }
 
-  emitProcessedEvent(run: BufferedAgentRun, event: AgentEvent): void {
+  emitProcessedEvent(run: BufferedAgentTurn, event: AgentEvent): void {
     run.emit(event);
   }
 

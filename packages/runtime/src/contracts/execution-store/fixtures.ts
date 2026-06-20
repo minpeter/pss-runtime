@@ -1,11 +1,11 @@
 import type {
   CheckpointWriteResult,
   ExecutionStore,
-  RunRecord,
   StoredAgentEvent,
+  TurnRecord,
 } from "../../execution";
 
-export function createQueuedRun(runId = "run-1"): RunRecord {
+export function createQueuedRun(runId = "run-1"): TurnRecord {
   return {
     checkpointVersion: 0,
     kind: "user-turn",

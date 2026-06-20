@@ -12,7 +12,7 @@ import {
   emitCommittedRuntimeInputs,
 } from "../input/runtime-input-emit";
 import type { AgentEvent } from "../protocol/events";
-import type { BufferedAgentRun } from "../protocol/run";
+import type { BufferedAgentTurn } from "../protocol/turn";
 import { errorMessage } from "../state/thread-errors";
 import type { ThreadState } from "../state/thread-state";
 import { drainRuntimeInput } from "./drain";
@@ -27,7 +27,7 @@ import { emitTurnErrorAfterRecovery } from "./turn-error";
 
 interface ActiveTurn {
   readonly abort: AbortController;
-  readonly run: BufferedAgentRun;
+  readonly run: BufferedAgentTurn;
   readonly runtimeInput: RuntimeInputState;
   readonly turnId: string;
 }
@@ -164,7 +164,7 @@ async function closeSuccessfulTurn({
   readonly deactivateRun: () => void;
   readonly events: ThreadEventDispatcher;
   readonly result: "aborted" | "completed";
-  readonly run: BufferedAgentRun;
+  readonly run: BufferedAgentTurn;
   readonly runtimeInput: RuntimeInputState;
 }): Promise<void> {
   const terminalEvent = result === "aborted" ? "turn-abort" : "turn-end";
@@ -187,7 +187,7 @@ async function emitTurnEvent({
 }: {
   readonly event: AgentEvent;
   readonly events: ThreadEventDispatcher;
-  readonly run: BufferedAgentRun;
+  readonly run: BufferedAgentTurn;
   readonly runtimeInput: RuntimeInputState;
   readonly state: ThreadState;
 }): Promise<{ readonly runtimeInputAdded: boolean } | undefined> {

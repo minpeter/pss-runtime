@@ -5,7 +5,7 @@ import type {
   ExecutionScheduler,
   ExecutionStore,
   NotificationInbox,
-  RunStore,
+  TurnStore,
 } from "./types";
 
 export interface ThreadHost {
@@ -14,26 +14,11 @@ export interface ThreadHost {
 }
 
 interface ThreadStoreHost {
-  readonly sessionStore?: ThreadStore;
   readonly threadStore: ThreadStore;
 }
 
-interface LegacySessionStoreHost {
-  readonly sessionStore: ThreadStore;
-  readonly threadStore?: ThreadStore;
-}
-
-type ThreadStoreCompatibilityHost = LegacySessionStoreHost | ThreadStoreHost;
-
-export type LegacySessionHost = {
-  readonly kind: "session";
-} & ThreadStoreCompatibilityHost;
-
-/** @deprecated Use ThreadHost. */
-export type SessionHost = LegacySessionHost;
-
-interface RunHost {
-  readonly runStore: RunStore;
+interface TurnHost {
+  readonly turnStore: TurnStore;
 }
 
 interface CheckpointHost {
@@ -57,11 +42,10 @@ interface ExecutionTransactionHost {
 }
 
 export type DurableBackgroundHost = BackgroundSchedulerHost &
-  CheckpointHost &
   EventHost &
   ExecutionTransactionHost &
   NotificationHost &
-  RunHost &
-  ThreadStoreCompatibilityHost & {
+  CheckpointHost &
+  ThreadStoreHost & {
     readonly kind: "durable-background";
-  };
+  } & TurnHost;

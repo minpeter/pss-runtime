@@ -11,24 +11,24 @@ const agent = new Agent({
   model: createCodingLanguageModel(),
 });
 
-const run = await agent.send("Hello from pss");
-for await (const event of run.events()) {
+const turn = await agent.send("Hello from pss");
+for await (const event of turn.events()) {
   console.dir(event, { depth: null });
 }
 ```
 
-`run.events()` is synchronized and drives the run. The runtime waits at
+`turn.events()` is synchronized and drives the turn. The runtime waits at
 `turn-start`, `step-start`, and `step-end` until the events consumer continues,
-so consume the events to let the run progress. Use `thread.send(input)` for a
-new user turn and `thread.steer(input)` to steer the active run. If no run is
-active, `thread.steer(input)` starts a normal run.
+so consume the events to let the turn progress. Use `thread.send(input)` for a
+new user turn and `thread.steer(input)` to steer the active turn. If no turn is
+active, `thread.steer(input)` starts a normal turn.
 
 ```ts
 const thread = agent.thread("default");
-const run = await thread.send("Explain the latest result.");
+const turn = await thread.send("Explain the latest result.");
 let askedForExample = false;
 
-for await (const event of run.events()) {
+for await (const event of turn.events()) {
   if (event.type === "step-end" && !askedForExample) {
     askedForExample = true;
     await thread.steer("Add one concrete example.");
@@ -44,7 +44,7 @@ the turn running indefinitely.
 Runtime additions emit `runtime-input`: runtime/API-originated input mapped
 internally to the model's user role, separate from human `user-text` and
 `user-message` events. `thread.send(input)` starts or enqueues a new turn;
-`thread.steer(input)` steers the active run or starts a normal run when idle.
+`thread.steer(input)` steers the active turn or starts a normal turn when idle.
 
 ## CLI
 
@@ -71,7 +71,7 @@ await startTui({ tools });
 
 When the TUI is idle, submitting text starts a normal `thread.send()` turn. When
 a run is active, submitting text calls `thread.steer(trimmed)` so the text lands
-in the current run and renders as dim `runtime: ...` input instead of a new human
+in the current turn and renders as dim `runtime: ...` input instead of a new human
 turn.
 
 ## Env

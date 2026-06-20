@@ -1,6 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import type { AgentEvent, AgentRun } from "../../../index";
-import { SpyStore } from "../../../thread/handle/test-support";
+import type { AgentEvent, AgentTurn } from "../../../index";
 import {
   ackScheduledCloudflareRun,
   ackScheduledCloudflareThreadPrompt,
@@ -11,7 +10,7 @@ import {
   type CloudflareDurableObjectStorage,
   type CloudflareDurableObjectStub,
   createCloudflareDurableObjectHost,
-  drainAgentRun,
+  drainAgentTurn,
   drainCloudflareAlarm,
   InMemoryCloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
@@ -217,22 +216,6 @@ describe("Cloudflare Durable Object host adapter", () => {
     expect(readScheduledWorkRows(storage)).toEqual([]);
   });
 
-  it("accepts the deprecated sessionStore option as a custom thread store", async () => {
-    const storage = new InMemoryCloudflareDurableObjectStorage({
-      sql: new InMemorySqlStorage(),
-    });
-    const sessionStore = new SpyStore();
-    const host = createCloudflareDurableObjectHost({ storage, sessionStore });
-
-    expect(host.store.threads).toBe(sessionStore);
-    expect(host.store.sessions).toBe(sessionStore);
-    await host.store.transaction((tx) => {
-      expect(tx.threads).toBe(sessionStore);
-      expect(tx.sessions).toBe(sessionStore);
-      return Promise.resolve();
-    });
-  });
-
   it("keeps unclaimable scheduled runs pending and reschedules the alarm", async () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
@@ -240,7 +223,7 @@ describe("Cloudflare Durable Object host adapter", () => {
     const host = createCloudflareDurableObjectHost({ storage });
     const runId = "background:bg_retry";
 
-    await host.store.runs.create(notificationRunRecord(runId));
+    await host.store.turns.create(notificationRunRecord(runId));
     await host.scheduler.enqueueRun(runId);
 
     const summary = await drainCloudflareAlarm({
@@ -275,7 +258,7 @@ describe("Cloudflare Durable Object host adapter", () => {
       idempotencyKey,
       runId,
     });
-    await host.store.runs.create(notificationRunRecord(runId, idempotencyKey));
+    await host.store.turns.create(notificationRunRecord(runId, idempotencyKey));
 
     const summary = await drainCloudflareAlarm({
       agent: unclaimableAgent,
@@ -302,7 +285,7 @@ describe("Cloudflare Durable Object host adapter", () => {
     ] satisfies readonly AgentEvent[];
     const observedEvents: AgentEvent[] = [];
 
-    const drainedEvents = await drainAgentRun(runWithEvents(runEvents), {
+    const drainedEvents = await drainAgentTurn(runWithEvents(runEvents), {
       onEvent: (event) => {
         observedEvents.push(event);
       },
@@ -344,7 +327,7 @@ function notificationRunRecord(runId: string, idempotencyKey = runId) {
   } as const;
 }
 
-function runWithEvents(events: readonly AgentEvent[]): AgentRun {
+function runWithEvents(events: readonly AgentEvent[]): AgentTurn {
   return {
     events: () => eventStream(events),
   };

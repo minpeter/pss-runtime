@@ -1,19 +1,19 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type {
-  ClaimRunOptions,
-  ClaimRunResult,
-  CreateRunResult,
-  RunLease,
-  RunRecord,
-  RunStore,
+  ClaimTurnOptions,
+  ClaimTurnResult,
+  CreateTurnResult,
+  TurnLease,
+  TurnRecord,
+  TurnStore,
 } from "../../../../execution/host/types";
 import { readJsonFile, writeJsonFile } from "./json";
 import { isClaimable, parseRunRecord } from "./schemas";
 import type { DataDirectoryResolver } from "./types";
 import { encodeKey, isNodeError } from "./utils";
 
-export class FileRunStore implements RunStore {
+export class FileRunStore implements TurnStore {
   readonly #directory: DataDirectoryResolver;
   readonly #lock: <T>(fn: () => Promise<T>) => Promise<T>;
 
@@ -27,8 +27,8 @@ export class FileRunStore implements RunStore {
 
   async claim(
     runId: string,
-    options: ClaimRunOptions
-  ): Promise<ClaimRunResult> {
+    options: ClaimTurnOptions
+  ): Promise<ClaimTurnResult> {
     return await this.#lock(async () => {
       const record = await this.#getUnlocked(runId);
       if (!record) {
@@ -47,18 +47,18 @@ export class FileRunStore implements RunStore {
         return { ok: false, reason: "leased" };
       }
 
-      const lease: RunLease = {
+      const lease: TurnLease = {
         attempt: options.attempt,
         leaseId: options.leaseId,
         leaseUntilMs: options.nowMs + options.leaseMs,
       };
-      const claimed: RunRecord = { ...record, lease, status: "leased" };
+      const claimed: TurnRecord = { ...record, lease, status: "leased" };
       await this.#writeUnlocked(claimed);
       return { lease, ok: true, record: claimed };
     });
   }
 
-  async create(record: RunRecord): Promise<CreateRunResult> {
+  async create(record: TurnRecord): Promise<CreateTurnResult> {
     return await this.#lock(async () => {
       const existingById = await this.#getUnlocked(record.runId);
       if (existingById) {
@@ -83,24 +83,24 @@ export class FileRunStore implements RunStore {
     });
   }
 
-  async get(runId: string): Promise<RunRecord | null> {
+  async get(runId: string): Promise<TurnRecord | null> {
     return await this.#lock(async () => await this.#getUnlocked(runId));
   }
 
-  async getByDedupeKey(dedupeKey: string): Promise<RunRecord | null> {
+  async getByDedupeKey(dedupeKey: string): Promise<TurnRecord | null> {
     return await this.#lock(
       async () => await this.#getByDedupeKeyUnlocked(dedupeKey)
     );
   }
 
-  async listByParentRunId(parentRunId: string): Promise<readonly RunRecord[]> {
+  async listByParentRunId(parentRunId: string): Promise<readonly TurnRecord[]> {
     return await this.#lock(async () => {
       const records = await this.#listUnlocked();
       return records.filter((record) => record.parentRunId === parentRunId);
     });
   }
 
-  async update(record: RunRecord): Promise<RunRecord> {
+  async update(record: TurnRecord): Promise<TurnRecord> {
     return await this.#lock(async () => {
       await this.#writeUnlocked(record);
       return record;
@@ -118,12 +118,12 @@ export class FileRunStore implements RunStore {
     await this.#writeUnlocked({ ...record, checkpointVersion });
   }
 
-  async #getByDedupeKeyUnlocked(dedupeKey: string): Promise<RunRecord | null> {
+  async #getByDedupeKeyUnlocked(dedupeKey: string): Promise<TurnRecord | null> {
     const records = await this.#listUnlocked();
     return records.find((record) => record.dedupeKey === dedupeKey) ?? null;
   }
 
-  async #getUnlocked(runId: string): Promise<RunRecord | null> {
+  async #getUnlocked(runId: string): Promise<TurnRecord | null> {
     return await readJsonFile(
       await this.#fileForRun(runId),
       parseRunRecord,
@@ -131,7 +131,7 @@ export class FileRunStore implements RunStore {
     );
   }
 
-  async #listUnlocked(): Promise<readonly RunRecord[]> {
+  async #listUnlocked(): Promise<readonly TurnRecord[]> {
     const directory = join(await this.#directory(), "runs");
     let entries: readonly string[];
     try {
@@ -143,7 +143,7 @@ export class FileRunStore implements RunStore {
       throw error;
     }
 
-    const records: RunRecord[] = [];
+    const records: TurnRecord[] = [];
     for (const entry of entries) {
       if (!entry.endsWith(".json")) {
         continue;
@@ -160,7 +160,7 @@ export class FileRunStore implements RunStore {
     return records;
   }
 
-  async #writeUnlocked(record: RunRecord): Promise<void> {
+  async #writeUnlocked(record: TurnRecord): Promise<void> {
     await writeJsonFile(await this.#fileForRun(record.runId), record);
   }
 

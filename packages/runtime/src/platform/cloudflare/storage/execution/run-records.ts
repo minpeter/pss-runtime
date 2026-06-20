@@ -1,4 +1,4 @@
-import type { RunRecord } from "../../../../execution";
+import type { TurnRecord } from "../../../../execution";
 import type { SqlStorage } from "../../sql/ports/storage-port";
 import type { CloudflareDurableObjectTransactionStorage } from "../durable-object/durable-object-storage";
 import {
@@ -15,7 +15,7 @@ export function getRun(
   storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
   runId: string
-): Promise<RunRecord | null> {
+): Promise<TurnRecord | null> {
   const row = selectRunRow(requiredSqlStorage(storage), prefix, runId);
   return Promise.resolve(row ? parseRunRecord(row) : null);
 }
@@ -24,7 +24,7 @@ export function getRunByDedupeKey(
   storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
   dedupeKey: string
-): Promise<RunRecord | null> {
+): Promise<TurnRecord | null> {
   const sql = requiredSqlStorage(storage);
   ensureRunSchema(sql);
   const row = sql
@@ -41,7 +41,7 @@ export function listRunsByParentRunId(
   storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
   parentRunId: string
-): Promise<readonly RunRecord[]> {
+): Promise<readonly TurnRecord[]> {
   const sql = requiredSqlStorage(storage);
   ensureRunSchema(sql);
   return Promise.resolve(
@@ -59,7 +59,7 @@ export function listRunsByParentRunId(
 export function putRun(
   storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
-  record: RunRecord,
+  record: TurnRecord,
   options: StoragePayloadBudgetOptions = {}
 ): Promise<void> {
   assertJsonPayloadWithinBudget(
@@ -74,7 +74,7 @@ export function putRun(
 export function insertRun(
   storage: CloudflareDurableObjectTransactionStorage,
   prefix: string,
-  record: RunRecord,
+  record: TurnRecord,
   options: StoragePayloadBudgetOptions = {}
 ): Promise<void> {
   assertJsonPayloadWithinBudget(
@@ -101,8 +101,8 @@ function selectRunRow(
     .toArray()[0];
 }
 
-function parseRunRecord(row: RunRow): RunRecord {
-  return JSON.parse(row.record) as RunRecord;
+function parseRunRecord(row: RunRow): TurnRecord {
+  return JSON.parse(row.record) as TurnRecord;
 }
 
 function requiredSqlStorage(
@@ -136,7 +136,7 @@ function ensureRunSchema(sql: SqlStorage): void {
   );
 }
 
-function putSqlRun(sql: SqlStorage, prefix: string, record: RunRecord): void {
+function putSqlRun(sql: SqlStorage, prefix: string, record: TurnRecord): void {
   ensureRunSchema(sql);
   const nowMs = Date.now();
   sql.exec(
@@ -158,7 +158,7 @@ function putSqlRun(sql: SqlStorage, prefix: string, record: RunRecord): void {
 function insertSqlRun(
   sql: SqlStorage,
   prefix: string,
-  record: RunRecord
+  record: TurnRecord
 ): void {
   ensureRunSchema(sql);
   const nowMs = Date.now();

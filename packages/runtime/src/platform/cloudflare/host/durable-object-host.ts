@@ -44,7 +44,6 @@ export class InMemoryCloudflareDurableObjectStorage extends BaseInMemoryCloudfla
 export function createCloudflareDurableObjectHost({
   maxPayloadBytes,
   prefix = defaultPrefix,
-  sessionStore,
   threadStore,
   storage,
   scheduler = createCloudflareAlarmScheduler({ prefix, storage }),
@@ -52,8 +51,6 @@ export function createCloudflareDurableObjectHost({
   readonly maxPayloadBytes?: number;
   readonly prefix?: string;
   readonly scheduler?: ExecutionScheduler;
-  /** @deprecated Use threadStore. */
-  readonly sessionStore?: ThreadStore;
   readonly threadStore?: ThreadStore;
   readonly storage: CloudflareDurableObjectStorage;
 }): ExecutionHost {
@@ -62,13 +59,10 @@ export function createCloudflareDurableObjectHost({
     prefix,
     storage,
   });
-  const customThreadStore = threadStore ?? sessionStore;
   return {
     kind: "execution",
     scheduler,
-    store: customThreadStore
-      ? executionStoreWithThreads(store, customThreadStore)
-      : store,
+    store: threadStore ? executionStoreWithThreads(store, threadStore) : store,
   };
 }
 
@@ -145,21 +139,19 @@ function executionStoreWithThreads(
   threads: ThreadStore
 ): ExecutionHost["store"] {
   return {
-    checkpoints: store.checkpoints,
     events: store.events,
     notifications: store.notifications,
-    runs: store.runs,
-    sessions: threads,
+    checkpoints: store.checkpoints,
     threads,
+    turns: store.turns,
     transaction: (fn) =>
       store.transaction((tx) =>
         fn({
-          checkpoints: tx.checkpoints,
           events: tx.events,
           notifications: tx.notifications,
-          runs: tx.runs,
-          sessions: threads,
+          checkpoints: tx.checkpoints,
           threads,
+          turns: tx.turns,
         })
       ),
   };

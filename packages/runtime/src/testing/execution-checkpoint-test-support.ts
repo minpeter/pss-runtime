@@ -1,9 +1,9 @@
 import type { Tool, ToolSet } from "ai";
 import { jsonSchema, tool } from "ai";
 import type {
+  Checkpoint,
   ExecutionHost,
-  RunCheckpoint,
-  RunRecord,
+  TurnRecord,
 } from "../execution/host/types";
 import { createInMemoryExecutionHost } from "../execution/memory";
 
@@ -11,7 +11,7 @@ export interface GenerateTextToolOptions {
   readonly tools?: ToolSet;
 }
 
-export const createQueuedUserTurnRun = (runId = "run-1"): RunRecord => ({
+export const createQueuedUserTurnRun = (runId = "run-1"): TurnRecord => ({
   checkpointVersion: 0,
   kind: "user-turn",
   rootRunId: runId,
@@ -47,11 +47,11 @@ export function toolOptions(toolCallId: string, signal: AbortSignal) {
 }
 
 export function createCheckpointSpyHost(): {
-  readonly checkpoints: RunCheckpoint[];
+  readonly checkpoints: Checkpoint[];
   readonly host: ExecutionHost;
 } {
   const baseHost = createInMemoryExecutionHost();
-  const checkpoints: RunCheckpoint[] = [];
+  const checkpoints: Checkpoint[] = [];
   return {
     checkpoints,
     host: {
@@ -67,7 +67,7 @@ export function createCheckpointSpyHost(): {
         },
         events: baseHost.store.events,
         notifications: baseHost.store.notifications,
-        runs: baseHost.store.runs,
+        turns: baseHost.store.turns,
         threads: baseHost.store.threads,
         transaction: (fn) => baseHost.store.transaction(fn),
       },

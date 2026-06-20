@@ -1,11 +1,7 @@
 import type { RuntimeToolExecutionCheckpointMetadata } from "../../llm/llm";
 import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution";
-import { createRunCheckpointId } from "../host/checkpoint-ids";
-import type {
-  CheckpointPhase,
-  ExecutionHost,
-  RunCheckpoint,
-} from "../host/types";
+import { createCheckpointId } from "../host/checkpoint-ids";
+import type { Checkpoint, CheckpointPhase, ExecutionHost } from "../host/types";
 import type { ResumeRunState } from "./types";
 
 const maxCheckpointWriteAttempts = 5;
@@ -49,7 +45,7 @@ class ResumeRunMissingRunError extends Error {
 }
 
 export function resumeStepFromCheckpoint(
-  checkpoint: RunCheckpoint | null
+  checkpoint: Checkpoint | null
 ): ResumeStep {
   if (
     checkpoint?.phase === "before-model" ||
@@ -69,7 +65,7 @@ export function resumeStepFromCheckpoint(
 }
 
 export function throwIfManualToolRecoveryRequired(
-  checkpoint: RunCheckpoint | null
+  checkpoint: Checkpoint | null
 ): void {
   if (
     checkpoint?.phase !== "before-tool" &&
@@ -105,7 +101,7 @@ export async function appendCheckpoint({
     | { readonly current: number; readonly expected: number }
     | undefined;
   for (let attempt = 0; attempt < maxCheckpointWriteAttempts; attempt += 1) {
-    const run = await host.store.runs.get(runId);
+    const run = await host.store.turns.get(runId);
     if (!run) {
       throw new ResumeRunMissingRunError(runId);
     }
@@ -113,7 +109,7 @@ export async function appendCheckpoint({
     const version = run.checkpointVersion + 1;
     const result = await host.store.checkpoints.append(
       {
-        checkpointId: createRunCheckpointId({ phase, runId, version }),
+        checkpointId: createCheckpointId({ phase, runId, version }),
         ...(pendingToolCall === undefined ? {} : { pendingToolCall }),
         phase,
         runId,
@@ -195,7 +191,7 @@ function runtimeToolCheckpoint(
   };
 }
 
-function checkpointStep(checkpoint: RunCheckpoint): number {
+function checkpointStep(checkpoint: Checkpoint): number {
   const state = checkpoint.runtimeState;
   if (
     typeof state === "object" &&

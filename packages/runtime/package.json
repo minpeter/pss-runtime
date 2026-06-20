@@ -21,16 +21,6 @@
       "types": "./dist/thread/store/file.d.ts",
       "import": "./dist/thread/store/file.js"
     },
-    "./session-store/memory": {
-      "@minpeter/pss-source": "./src/thread/store/memory.ts",
-      "types": "./dist/thread/store/memory.d.ts",
-      "import": "./dist/thread/store/memory.js"
-    },
-    "./session-store/file": {
-      "@minpeter/pss-source": "./src/thread/store/file.ts",
-      "types": "./dist/thread/store/file.d.ts",
-      "import": "./dist/thread/store/file.js"
-    },
     "./cloudflare": {
       "@minpeter/pss-source": "./src/platform/cloudflare/index.ts",
       "types": "./dist/platform/cloudflare/index.d.ts",

@@ -3,13 +3,13 @@ import {
   type QueuedInput,
   type RuntimeInputState,
 } from "../input/runtime-input";
-import type { BufferedAgentRun } from "../protocol/run";
+import type { BufferedAgentTurn } from "../protocol/turn";
 
 interface CloseKilledRuntimeInputsOptions {
   readonly activeRuntimeInput: RuntimeInputState | undefined;
   readonly inputQueue: QueuedInput[];
   readonly message: string;
-  readonly runToClose: BufferedAgentRun | undefined;
+  readonly runToClose: BufferedAgentTurn | undefined;
 }
 
 export function closeKilledRuntimeInputs({

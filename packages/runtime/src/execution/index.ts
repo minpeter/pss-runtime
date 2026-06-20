@@ -13,18 +13,17 @@ export type {
 export { dispatchAgentNotification } from "./dispatch/notification-dispatch";
 export type {
   DurableBackgroundHost,
-  LegacySessionHost,
-  SessionHost,
   ThreadHost,
 } from "./host/capabilities";
-export { executionHost, sessionHost, threadHost } from "./host/host";
+export { executionHost, threadHost } from "./host/host";
 export type {
+  Checkpoint,
   CheckpointPhase,
   CheckpointStore,
   CheckpointWriteResult,
-  ClaimRunOptions,
-  ClaimRunResult,
-  CreateRunResult,
+  ClaimTurnOptions,
+  ClaimTurnResult,
+  CreateTurnResult,
   EventCursor,
   EventStore,
   ExecutionHost,
@@ -37,12 +36,11 @@ export type {
   NotificationStatus,
   NotificationWriteResult,
   ResumeThreadOptions,
-  RunCheckpoint,
-  RunKind,
-  RunLease,
-  RunRecord,
-  RunStatus,
-  RunStore,
   StoredAgentEvent,
+  TurnKind,
+  TurnLease,
+  TurnRecord,
+  TurnStatus,
+  TurnStore,
 } from "./host/types";
 export { createInMemoryExecutionHost } from "./memory";

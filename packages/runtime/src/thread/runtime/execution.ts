@@ -1,7 +1,7 @@
 import type {
   ExecutionHost,
-  RunRecord,
-  RunStatus,
+  TurnRecord,
+  TurnStatus,
 } from "../../execution/host/types";
 import type { RuntimeToolExecutionContext } from "../../llm/llm";
 import type { ThreadState } from "../state/thread-state";
@@ -18,7 +18,7 @@ export interface ThreadExecutionRun {
 }
 
 export type ThreadExecutionTerminalStatus = Extract<
-  RunStatus,
+  TurnStatus,
   "cancelled" | "completed" | "error" | "needs-recovery"
 >;
 
@@ -38,7 +38,7 @@ export async function startThreadExecutionRun({
   }
 
   const runId = `turn:${threadKey}:${turnId}`;
-  const run: RunRecord = {
+  const run: TurnRecord = {
     checkpointVersion: 0,
     dedupeKey: runId,
     kind: "user-turn",
@@ -47,7 +47,7 @@ export async function startThreadExecutionRun({
     threadKey,
     status: "running",
   };
-  await executionHost.store.runs.create(run);
+  await executionHost.store.turns.create(run);
 
   return {
     complete: (status) =>
@@ -70,10 +70,10 @@ async function completeThreadExecutionRun({
   readonly runId: string;
   readonly status: ThreadExecutionTerminalStatus;
 }): Promise<void> {
-  const run = await executionHost.store.runs.get(runId);
+  const run = await executionHost.store.turns.get(runId);
   if (!run) {
     return;
   }
 
-  await executionHost.store.runs.update({ ...run, status });
+  await executionHost.store.turns.update({ ...run, status });
 }

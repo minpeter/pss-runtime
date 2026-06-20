@@ -10,7 +10,7 @@ import {
   type RuntimeInputState,
 } from "../input/runtime-input";
 import type { AgentPlugin } from "../plugins/pipeline";
-import { type AgentRun, BufferedAgentRun } from "../protocol/run";
+import { type AgentTurn, BufferedAgentTurn } from "../protocol/turn";
 import { ThreadEventDispatcher } from "../runtime/events";
 import type { ThreadExecutionOptions } from "../runtime/execution";
 import { closeKilledRuntimeInputs } from "../runtime/kill";
@@ -27,7 +27,7 @@ import {
 } from "../state/thread-state";
 
 export type { AgentInput, ThreadInput, UserInput } from "../input/input";
-export type { AgentRun } from "../protocol/run";
+export type { AgentTurn } from "../protocol/turn";
 export type { NotifyOptions } from "../runtime/notification";
 
 export class AgentThread {
@@ -39,12 +39,12 @@ export class AgentThread {
   readonly #threadKey: string;
   readonly #state: ThreadState;
   #activeAbort?: AbortController;
-  #activeRun?: BufferedAgentRun;
+  #activeRun?: BufferedAgentTurn;
   #activeRuntimeInput?: RuntimeInputState;
   #deletePromise?: Promise<void>;
   #killed = false;
   #running = false;
-  #runToCloseOnKill?: BufferedAgentRun;
+  #runToCloseOnKill?: BufferedAgentTurn;
 
   constructor(
     model: ModelGenerationOptions,
@@ -63,7 +63,7 @@ export class AgentThread {
     });
   }
 
-  async send(input: AgentInput): Promise<AgentRun> {
+  async send(input: AgentInput): Promise<AgentTurn> {
     if (this.#killed || this.#deletePromise) {
       throw threadTerminalError(this.#killed);
     }
@@ -82,7 +82,7 @@ export class AgentThread {
       normalized.meta === undefined
         ? attachInputMeta(normalized, { source: "send" })
         : normalized;
-    const run = new BufferedAgentRun();
+    const run = new BufferedAgentTurn();
     const emitted = await this.#events.emitRunEvent(run, acceptedInput);
     if (emitted === "handled") {
       run.close();
@@ -108,7 +108,7 @@ export class AgentThread {
   async notify(
     input: AgentInput,
     options: NotifyOptions = {}
-  ): Promise<AgentRun> {
+  ): Promise<AgentTurn> {
     if (this.#killed || this.#deletePromise) {
       throw threadTerminalError(this.#killed);
     }
@@ -130,7 +130,7 @@ export class AgentThread {
     });
   }
 
-  async steer(input: AgentInput): Promise<AgentRun> {
+  async steer(input: AgentInput): Promise<AgentTurn> {
     if (this.#killed || this.#deletePromise) {
       throw threadTerminalError(this.#killed);
     }

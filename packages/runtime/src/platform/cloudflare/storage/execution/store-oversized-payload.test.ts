@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { RunRecord } from "../../../../execution";
+import type { TurnRecord } from "../../../../execution";
 import type { AgentEvent } from "../../../../index";
 import { createCloudflareDurableObjectHost } from "../../index";
 import { InMemorySqlStorage } from "../../sql/node-test/node-sqlite-storage";
@@ -45,7 +45,7 @@ describe("DurableObjectExecutionStore oversized payload stress", () => {
     expect(threadCommit).toEqual({ ok: true, version: "1" });
 
     const run = runRecord({ runId, threadKey });
-    await host.store.runs.create(run);
+    await host.store.turns.create(run);
     await host.store.events.append(runId, {
       text: oversizedEventText,
       type: "assistant-text",
@@ -67,7 +67,7 @@ describe("DurableObjectExecutionStore oversized payload stress", () => {
       },
       { expectedVersion: 0 }
     );
-    await host.store.runs.update({
+    await host.store.turns.update({
       ...run,
       checkpointVersion: 1,
       status: "completed",
@@ -144,7 +144,7 @@ describe("DurableObjectExecutionStore oversized payload stress", () => {
       runId: latencyRunId,
       threadKey: latencyThreadKey,
     });
-    await timed(timings, "run create", () => host.store.runs.create(run));
+    await timed(timings, "run create", () => host.store.turns.create(run));
     await timed(timings, "assistant event append", () =>
       host.store.events.append(latencyRunId, {
         text: hugeAssistantOutput,
@@ -173,7 +173,7 @@ describe("DurableObjectExecutionStore oversized payload stress", () => {
       )
     );
     await timed(timings, "run update", () =>
-      host.store.runs.update({
+      host.store.turns.update({
         ...run,
         checkpointVersion: 1,
         status: "completed",
@@ -223,7 +223,7 @@ describe("DurableObjectExecutionStore oversized payload stress", () => {
 function runRecord(input: {
   readonly runId: string;
   readonly threadKey: string;
-}): RunRecord {
+}): TurnRecord {
   return {
     checkpointVersion: 0,
     kind: "user-turn",

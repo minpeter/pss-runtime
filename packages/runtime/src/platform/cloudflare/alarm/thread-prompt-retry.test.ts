@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentEvent, AgentRun } from "../../../index";
+import type { AgentEvent, AgentTurn } from "../../../index";
 import {
   createCloudflareDurableObjectHost,
   drainCloudflareAlarm,
@@ -31,10 +31,10 @@ describe("Cloudflare alarm thread prompt retries", () => {
       { error: "model unavailable", id: idempotencyKey },
     ]);
     expect(summary.continuationScheduled).toBe(true);
-    await expect(host.store.runs.get(runId)).resolves.toEqual(
+    await expect(host.store.turns.get(runId)).resolves.toEqual(
       expect.objectContaining({ status: "queued" })
     );
-    expect((await host.store.runs.get(runId))?.lease).toBeUndefined();
+    expect((await host.store.turns.get(runId))?.lease).toBeUndefined();
     await expect(
       host.store.notifications.getByIdempotencyKey(idempotencyKey)
     ).resolves.toEqual(expect.objectContaining({ status: "pending" }));
@@ -65,10 +65,10 @@ describe("Cloudflare alarm thread prompt retries", () => {
     expect(summary.events).toEqual([{ text: "first", type: "assistant-text" }]);
     expect(summary.continuationReasons).toContain("event-budget");
     expect(summary.continuationScheduled).toBe(true);
-    await expect(host.store.runs.get(runId)).resolves.toEqual(
+    await expect(host.store.turns.get(runId)).resolves.toEqual(
       expect.objectContaining({ status: "queued" })
     );
-    expect((await host.store.runs.get(runId))?.lease).toBeUndefined();
+    expect((await host.store.turns.get(runId))?.lease).toBeUndefined();
     await expect(
       host.store.notifications.getByIdempotencyKey(idempotencyKey)
     ).resolves.toEqual(expect.objectContaining({ status: "pending" }));
@@ -87,11 +87,11 @@ async function completeAndClaimNotification({
   readonly idempotencyKey: string;
   readonly runId: string;
 }): Promise<void> {
-  const run = await host.store.runs.get(runId);
+  const run = await host.store.turns.get(runId);
   if (!run) {
     throw new Error("expected stored notification run");
   }
-  await host.store.runs.update({
+  await host.store.turns.update({
     ...run,
     lease: {
       attempt: 1,
@@ -125,7 +125,7 @@ async function createScheduledNotification(idempotencyKey: string): Promise<{
     threadKey,
     status: "pending",
   });
-  await host.store.runs.create({
+  await host.store.turns.create({
     checkpointVersion: 0,
     dedupeKey: idempotencyKey,
     kind: "notification",
@@ -139,7 +139,7 @@ async function createScheduledNotification(idempotencyKey: string): Promise<{
   return { host, idempotencyKey, runId, threadKey, storage };
 }
 
-function runWithEvents(events: readonly AgentEvent[]): AgentRun {
+function runWithEvents(events: readonly AgentEvent[]): AgentTurn {
   return {
     events: () => eventStream(events),
   };

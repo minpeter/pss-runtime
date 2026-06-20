@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentEvent, AgentRun } from "../../../index";
+import type { AgentEvent, AgentTurn } from "../../../index";
 import {
   type CloudflareAlarmAgent,
   createCloudflareDurableObjectHost,
@@ -18,7 +18,7 @@ describe("Cloudflare alarm run contexts", () => {
     const host = createCloudflareDurableObjectHost({ storage });
     const contexts: string[] = [];
 
-    await host.store.runs.create({
+    await host.store.turns.create({
       checkpointVersion: 0,
       kind: "notification",
       rootRunId: "run-context",
@@ -89,7 +89,7 @@ describe("Cloudflare alarm run contexts", () => {
     });
     const host = createCloudflareDurableObjectHost({ storage });
 
-    await host.store.runs.create(notificationRunRecord("run-turn-error"));
+    await host.store.turns.create(notificationRunRecord("run-turn-error"));
     await host.scheduler.enqueueRun("run-turn-error");
 
     const summary = await drainCloudflareAlarm({
@@ -181,7 +181,7 @@ function agentWithEvents(events: readonly AgentEvent[]): CloudflareAlarmAgent {
   };
 }
 
-function runWithEvents(events: readonly AgentEvent[]): AgentRun {
+function runWithEvents(events: readonly AgentEvent[]): AgentTurn {
   return {
     events: () => eventStream(events),
   };

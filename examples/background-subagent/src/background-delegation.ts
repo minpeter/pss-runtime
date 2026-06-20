@@ -1,5 +1,8 @@
 import type { AgentInput } from "@minpeter/pss-runtime";
-import type { ExecutionHost, RunRecord } from "@minpeter/pss-runtime/execution";
+import type {
+  ExecutionHost,
+  TurnRecord,
+} from "@minpeter/pss-runtime/execution";
 
 const backgroundDelegationStateKind = "background-delegation" as const;
 
@@ -94,27 +97,27 @@ async function createDurableBackgroundTaskId({
 
 async function getBackgroundChildRun(
   input: BackgroundChildRunInput
-): Promise<RunRecord | undefined> {
+): Promise<TurnRecord | undefined> {
   const dedupeKey = backgroundSubagentDedupeKey(input);
   return (
-    (await input.executionHost.store.runs.getByDedupeKey(dedupeKey)) ??
+    (await input.executionHost.store.turns.getByDedupeKey(dedupeKey)) ??
     undefined
   );
 }
 
 async function getOrCreateBackgroundChildRun(
   input: BackgroundChildRunInput & { readonly publicTaskId: string }
-): Promise<RunRecord | undefined> {
+): Promise<TurnRecord | undefined> {
   const dedupeKey = backgroundSubagentDedupeKey(input);
   return await input.executionHost.store.transaction(async (tx) => {
-    const existing = await tx.runs.getByDedupeKey(dedupeKey);
+    const existing = await tx.turns.getByDedupeKey(dedupeKey);
     if (existing) {
       return existing;
     }
 
     const parentRunId = input.parentThreadKey ?? input.threadKey;
     const runtimeState = durableBackgroundChildRunState(input);
-    const run: RunRecord = {
+    const run: TurnRecord = {
       checkpointVersion: 0,
       dedupeKey,
       kind: "user-turn",
@@ -126,7 +129,7 @@ async function getOrCreateBackgroundChildRun(
       threadKey: `${input.threadKey}:task:${input.publicTaskId}`,
       status: "queued",
     };
-    await tx.runs.create(run);
+    await tx.turns.create(run);
     await tx.checkpoints.append(
       {
         checkpointId: crypto.randomUUID(),
@@ -150,7 +153,7 @@ async function getOrCreateBackgroundChildRun(
       },
       { expectedVersion: 1 }
     );
-    return (await tx.runs.get(run.runId)) ?? run;
+    return (await tx.turns.get(run.runId)) ?? run;
   });
 }
 

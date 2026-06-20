@@ -1,6 +1,6 @@
 import type { AgentEvent } from "./events";
 
-export interface AgentRun {
+export interface AgentTurn {
   events(): AsyncIterable<AgentEvent>;
 }
 
@@ -14,7 +14,7 @@ interface NextWaiter {
   readonly resolve: (value: IteratorResult<AgentEvent>) => void;
 }
 
-export class BufferedAgentRun implements AgentRun {
+export class BufferedAgentTurn implements AgentTurn {
   readonly #events: QueuedEvent[] = [];
   #closed = false;
   #error: unknown;
@@ -66,7 +66,7 @@ export class BufferedAgentRun implements AgentRun {
 
   events(): AsyncIterable<AgentEvent> {
     if (this.#eventsStarted) {
-      throw new Error("AgentRun.events() can only be consumed once");
+      throw new Error("AgentTurn.events() can only be consumed once");
     }
     this.#eventsStarted = true;
 
@@ -101,7 +101,7 @@ export class BufferedAgentRun implements AgentRun {
   #next(): Promise<IteratorResult<AgentEvent>> {
     if (this.#resultPending || this.#waiter) {
       return Promise.reject(
-        new Error("AgentRun.events() does not allow concurrent next() calls")
+        new Error("AgentTurn.events() does not allow concurrent next() calls")
       );
     }
 

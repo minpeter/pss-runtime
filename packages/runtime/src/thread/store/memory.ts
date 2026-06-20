@@ -39,6 +39,3 @@ export class MemoryThreadStore implements ThreadStore {
     return Promise.resolve({ ok: true, version });
   }
 }
-
-/** @deprecated Use MemoryThreadStore. */
-export { MemoryThreadStore as MemorySessionStore };

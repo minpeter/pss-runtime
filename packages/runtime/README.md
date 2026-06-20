@@ -4,8 +4,8 @@
 
 # @minpeter/pss-runtime
 
-Minimal, platform-agnostic agent runtime with keyed sessions, synchronized
-`run.events()`, and opaque persistence contracts.
+Minimal, platform-agnostic agent runtime with keyed threads, synchronized
+`turn.events()`, and opaque persistence contracts.
 
 ## Core DX
 
@@ -37,15 +37,15 @@ const agent = new Agent({
   model: provider(env.AI_MODEL),
 });
 
-const run = await agent.send("Hello");
-for await (const event of run.events()) {
+const turn = await agent.send("Hello");
+for await (const event of turn.events()) {
   console.log(event);
 }
 ```
 
-`run.events()` is the run driver. The runtime stops at synchronized lifecycle
+`turn.events()` is the turn driver. The runtime stops at synchronized lifecycle
 boundaries until the events consumer asks for the next event, so callers must
-consume the events for the run to progress. This is what lets code react to
+consume the events for the turn to progress. This is what lets code react to
 `turn-start`, `step-start`, and `step-end` before the next model snapshot is
 created.
 
@@ -69,8 +69,8 @@ Per-key conversations use `thread(key)`:
 
 ```ts
 const roomThread = agent.thread("room:123:user:456");
-const run = await roomThread.send(["Context: user prefers short answers", "Hi"]);
-for await (const event of run.events()) {
+const turn = await roomThread.send(["Context: user prefers short answers", "Hi"]);
+for await (const event of turn.events()) {
   // events for this single turn
 }
 ```
@@ -82,7 +82,7 @@ parts through the same API. String input and `readonly string[]` remain supporte
 shortcuts for text-only turns.
 
 ```ts
-const run = await agent.send([
+const turn = await agent.send([
   { type: "text", text: "Describe this UI screenshot." },
   {
     type: "image",
@@ -107,12 +107,12 @@ await agent.send([
 ]);
 ```
 
-The runtime normalizes and persists these content parts as session continuation
+The runtime normalizes and persists these content parts as thread continuation
 state; it does not fetch remote media, decode files, or guarantee provider support
 for every media type.
 
-The public transcript protocol is `AgentEvent`: live runs emit runtime-defined
-events through `run.events()`. Provider/model message history is internal
+The public transcript protocol is `AgentEvent`: live turns emit runtime-defined
+events through `turn.events()`. Provider/model message history is internal
 continuation state, not a public history API.
 
 ## Delegation
@@ -136,9 +136,9 @@ const coordinator = new Agent({
     delegate_to_reader: tool({
       description: "Ask the reader agent to inspect the knowledge base.",
       execute: async ({ prompt }) => {
-        const run = await reader.thread("kb").send(prompt);
+        const turn = await reader.thread("kb").send(prompt);
         const text: string[] = [];
-        for await (const event of run.events()) {
+        for await (const event of turn.events()) {
           if (event.type === "assistant-text") {
             text.push(event.text);
           }
@@ -153,7 +153,7 @@ const coordinator = new Agent({
 
 For background delegation, let your host own task ids, scheduling, output
 storage, and notification resume. The runtime provides generic execution stores,
-notifications, `Agent.resume(...)`, and `run.events()`; it does not generate
+notifications, `Agent.resume(...)`, and `turn.events()`; it does not generate
 delegation tools or own child-agent lifecycle semantics. See
 the sync and background example packages for app-owned blocking and background
 delegation patterns.
@@ -212,10 +212,10 @@ on `event.meta?.source`:
 |----------|----------|
 | `send` | `thread.send()` / `agent.send()` |
 | `steer` | `thread.steer()` and drained steering queue |
-| `notify` | `session.notify()` runtime input |
+| `notify` | host notification runtime input |
 | `delegate` | parent `delegate_to_*` child `thread.send()` |
 
-`meta` appears on `run.events()` for input events but is stripped before session
+`meta` appears on `turn.events()` for input events but is stripped before thread
 history persistence and model mapping. It never reaches the LLM prompt.
 
 ### Delegate prompt wrapping
@@ -259,14 +259,14 @@ plugin.
 
 ## Send, Host Resume, and Steer
 
-Use `thread.send(input)` for a new user turn. If a run is already active, the
-turn is queued until the active run finishes. Use `thread.steer(input)` when
-the input should steer the active run; if no run is active, it starts a normal
-run.
+Use `thread.send(input)` for a new user turn. If a turn is already active, the
+turn is queued until the active turn finishes. Use `thread.steer(input)` when
+the input should steer the active turn; if no turn is active, it starts a normal
+turn.
 
 Durable hosts resume completed background work by writing a notification record
 and calling `agent.resume(notificationRunId)`. The resume call claims the
-notification idempotently through its durable run id and returns one `AgentRun`,
+notification idempotently through its durable run id and returns one `AgentTurn`,
 or `null` when a duplicate queue/alarm delivery already claimed it.
 
 `agent.resume(runId)` also returns `null` when the host does not support durable
@@ -278,8 +278,8 @@ Runtime-originated input is delivered through the host notification inbox and
 internal plugin paths. App code should use `thread.send()`, `thread.steer()`,
 or `agent.resume(runId)` for host-scheduled durable work.
 
-Each accepted call returns one `AgentRun`. Drain that run's `events()` stream to
-observe the turn; each `AgentRun.events()` stream is single-consumer.
+Each accepted call returns one `AgentTurn`. Drain that turn's `events()` stream to
+observe the turn; each `AgentTurn.events()` stream is single-consumer.
 
 Input APIs accept the same input shapes: strings, arrays of strings,
 `{ type: "user-text", text }`, and multipart `{ type: "user-message", content }`
@@ -299,10 +299,10 @@ on every `step-end` can keep the turn running indefinitely.
 
 ```ts
 const thread = agent.thread("room:123:user:456");
-const run = await thread.send("Draft a short answer.");
+const turn = await thread.send("Draft a short answer.");
 let addedSteer = false;
 
-for await (const event of run.events()) {
+for await (const event of turn.events()) {
   if (event.type === "assistant-text") {
     process.stdout.write(event.text);
   }
@@ -314,8 +314,8 @@ for await (const event of run.events()) {
 }
 ```
 
-`thread.steer()` resolves when the input is accepted into the active run's
-pending steering path or, when idle, when a new run is scheduled. It does not wait
+`thread.steer()` resolves when the input is accepted into the active turn's
+pending steering path or, when idle, when a new turn is scheduled. It does not wait
 for a later model snapshot.
 
 ## Thread Storage and Portability

@@ -34,7 +34,7 @@ describe("FileExecutionStore", () => {
       runId: "run:persist",
     });
 
-    await expect(store.runs.create(run)).resolves.toEqual({
+    await expect(store.turns.create(run)).resolves.toEqual({
       ok: true,
       record: run,
     });
@@ -59,18 +59,18 @@ describe("FileExecutionStore", () => {
     ).resolves.toEqual({ ok: true, version: "1" });
 
     const reopened = new FileExecutionStore(directory);
-    await expect(reopened.runs.get("run:persist")).resolves.toEqual({
+    await expect(reopened.turns.get("run:persist")).resolves.toEqual({
       ...run,
       checkpointVersion: 1,
     });
     await expect(
-      reopened.runs.getByDedupeKey("dedupe:persist")
+      reopened.turns.getByDedupeKey("dedupe:persist")
     ).resolves.toEqual({
       ...run,
       checkpointVersion: 1,
     });
     await expect(
-      reopened.runs.listByParentRunId("parent:persist")
+      reopened.turns.listByParentRunId("parent:persist")
     ).resolves.toEqual([{ ...run, checkpointVersion: 1 }]);
     await expect(reopened.checkpoints.latest("run:persist")).resolves.toEqual(
       checkpoint
@@ -91,8 +91,6 @@ describe("FileExecutionStore", () => {
       state: { messages: ["persisted"] },
       version: "1",
     });
-    expect(reopened.sessions).toBe(reopened.threads);
-
     const dataDirectory = await currentDataDirectory(directory);
 
     await expect(readdir(join(dataDirectory, "threads"))).resolves.toContain(
@@ -117,7 +115,7 @@ describe("FileExecutionStore", () => {
 
     await expect(
       store.transaction(async (tx) => {
-        await tx.runs.create(runRecord("run:rollback"));
+        await tx.turns.create(runRecord("run:rollback"));
         await tx.events.append("run:rollback", { type: "turn-start" });
         await tx.checkpoints.append(checkpointRecord("run:rollback", 1), {
           expectedVersion: 0,
@@ -134,7 +132,7 @@ describe("FileExecutionStore", () => {
       })
     ).rejects.toThrow("rollback me");
 
-    await expect(store.runs.get("run:rollback")).resolves.toBeNull();
+    await expect(store.turns.get("run:rollback")).resolves.toBeNull();
     await expect(
       collectEvents(store.events.read("run:rollback"))
     ).resolves.toEqual([]);

@@ -1,5 +1,5 @@
 import type { AgentEvent, RuntimeInput } from "../protocol/events";
-import type { BufferedAgentRun } from "../protocol/run";
+import type { BufferedAgentTurn } from "../protocol/turn";
 import type { AgentInput, UserInput } from "./input";
 import { attachInputMeta } from "./input-meta";
 import { normalizeAgentInput } from "./input-normalization";
@@ -23,7 +23,7 @@ export interface QueuedInput {
   readonly initialEvents: AgentEvent[];
   readonly input?: UserInput;
   readonly preUserRuntimeInputs: QueuedRuntimeInput[];
-  readonly run: BufferedAgentRun;
+  readonly run: BufferedAgentTurn;
   readonly runtimeInput: RuntimeInputState;
 }
 

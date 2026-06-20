@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentEvent, AgentRun } from "../../../index";
+import type { AgentEvent, AgentTurn } from "../../../index";
 import {
   type CloudflareAlarmAgent,
   CloudflareAlarmDrainFailureError,
@@ -211,7 +211,7 @@ async function enqueueStoredRun(
   runId: string,
   kind: "notification" | "user-turn" = "notification"
 ): Promise<void> {
-  await host.store.runs.create({
+  await host.store.turns.create({
     checkpointVersion: 0,
     kind,
     rootRunId: runId,
@@ -230,7 +230,7 @@ function agentWithStream(
   };
 }
 
-function runWithEvents(events: readonly AgentEvent[]): AgentRun {
+function runWithEvents(events: readonly AgentEvent[]): AgentTurn {
   return {
     events: () => eventStream(events),
   };

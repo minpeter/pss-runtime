@@ -3,7 +3,7 @@ import {
   closeRuntimeInput,
   type RuntimeInputState,
 } from "../input/runtime-input";
-import type { BufferedAgentRun } from "../protocol/run";
+import type { BufferedAgentTurn } from "../protocol/turn";
 import { errorMessage } from "../state/thread-errors";
 import {
   ThreadCommitConflictError,
@@ -19,7 +19,7 @@ export async function emitTurnErrorAfterRecovery({
 }: {
   readonly error: unknown;
   readonly historySnapshot: ModelMessage[];
-  readonly run: BufferedAgentRun;
+  readonly run: BufferedAgentTurn;
   readonly runtimeInput: RuntimeInputState;
   readonly state: ThreadState;
 }): Promise<void> {

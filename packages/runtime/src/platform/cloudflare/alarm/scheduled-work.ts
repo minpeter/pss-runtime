@@ -13,7 +13,10 @@ import type {
   CloudflareAlarmAgentForRun,
   CloudflareAlarmEventHandler,
 } from "./drainer";
-import { type AgentRunDrainResult, drainAgentRunWithBudget } from "./run-drain";
+import {
+  type AgentTurnDrainResult,
+  drainAgentTurnWithBudget,
+} from "./run-drain";
 import {
   prepareScheduledNotificationRetry,
   scheduledRunContext,
@@ -62,7 +65,7 @@ export async function resumeScheduledRun({
       return;
     }
     state.resumedRuns.push(runId);
-    const drainResult = await drainAgentRunWithBudget(run, {
+    const drainResult = await drainAgentTurnWithBudget(run, {
       deadlineMs: budget.deadlineMs,
       maxEvents: eventSlotsRemaining(state, budget),
       onEvent: onEvent ? (event) => onEvent(context, event) : undefined,
@@ -129,7 +132,7 @@ export async function resumeScheduledThreadPrompt({
       await ackScheduledCloudflareThreadPrompt(storage, prompt, { prefix });
       return;
     }
-    const drainResult = await drainAgentRunWithBudget(run, {
+    const drainResult = await drainAgentTurnWithBudget(run, {
       deadlineMs: budget.deadlineMs,
       maxEvents: eventSlotsRemaining(state, budget),
       onEvent: onEvent ? (event) => onEvent(context, event) : undefined,
@@ -183,7 +186,7 @@ function describeError(error: unknown): string {
 
 function appendRunDrainEvents(
   state: AlarmDrainState,
-  result: AgentRunDrainResult
+  result: AgentTurnDrainResult
 ): void {
   state.events.push(...result.events);
   state.droppedEvents += result.droppedEvents;
@@ -195,7 +198,7 @@ function appendRunDrainEvents(
 function appendTurnErrorFailure(
   failedWork: AlarmDrainState["failedRuns"],
   id: string,
-  result: AgentRunDrainResult
+  result: AgentTurnDrainResult
 ): boolean {
   const turnError = result.events.find((event) => event.type === "turn-error");
   if (!turnError) {

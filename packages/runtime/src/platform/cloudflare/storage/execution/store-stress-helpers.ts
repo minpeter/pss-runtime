@@ -1,4 +1,4 @@
-import type { RunRecord } from "../../../../execution";
+import type { TurnRecord } from "../../../../execution";
 import type { AgentEvent } from "../../../../index";
 import { createCloudflareDurableObjectHost } from "../../index";
 import type { InMemoryCloudflareDurableObjectStorage } from "../durable-object/durable-object-storage";
@@ -15,7 +15,7 @@ export async function hostLoadFinalThread(
 export function runRecord(input: {
   readonly runId: string;
   readonly threadKey: string;
-}): RunRecord {
+}): TurnRecord {
   return {
     checkpointVersion: 0,
     kind: "user-turn",

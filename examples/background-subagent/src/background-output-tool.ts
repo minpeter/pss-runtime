@@ -1,4 +1,7 @@
-import type { ExecutionHost, RunStatus } from "@minpeter/pss-runtime/execution";
+import type {
+  ExecutionHost,
+  TurnStatus,
+} from "@minpeter/pss-runtime/execution";
 import { jsonSchema, tool } from "ai";
 import { readDurableBackgroundDelegationState } from "./background-delegation";
 import { readerChildName } from "./delegate-tool";
@@ -19,7 +22,7 @@ export function createBackgroundOutputTool({
   return tool<BackgroundOutputInput, unknown, Record<string, unknown>>({
     description: "백그라운드 reader 작업의 결과를 가져온다.",
     execute: async ({ task_id }) => {
-      const record = await executionHost.store.runs.get(
+      const record = await executionHost.store.turns.get(
         `background:${task_id}`
       );
       if (!record || record.publicTaskId !== task_id) {
@@ -55,7 +58,7 @@ export function createBackgroundOutputTool({
   });
 }
 
-function normalizeStatus(status: RunStatus): string {
+function normalizeStatus(status: TurnStatus): string {
   if (status === "completed" || status === "cancelled" || status === "error") {
     return status;
   }

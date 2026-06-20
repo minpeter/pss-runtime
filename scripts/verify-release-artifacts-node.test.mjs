@@ -37,7 +37,6 @@ describe("verifyReleaseArtifacts node declaration checks", () => {
 
     expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
       "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export FileExecutionStore",
-      "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export FileSessionStore",
       "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export FileThreadStore",
       "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export NodeFileAgentContext",
       "packages/runtime/dist/platform/node/index.d.ts: missing explicit node runtime export NodeFileAgentContextFactoryOptions",

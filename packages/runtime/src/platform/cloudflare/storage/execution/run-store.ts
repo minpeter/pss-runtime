@@ -1,10 +1,10 @@
 import type {
-  ClaimRunOptions,
-  ClaimRunResult,
-  CreateRunResult,
-  RunRecord,
-  RunStatus,
-  RunStore,
+  ClaimTurnOptions,
+  ClaimTurnResult,
+  CreateTurnResult,
+  TurnRecord,
+  TurnStatus,
+  TurnStore,
 } from "../../../../execution";
 import type { CloudflareDurableObjectStorage } from "../durable-object/durable-object-storage";
 import {
@@ -20,14 +20,14 @@ import {
   putRun,
 } from "./run-records";
 
-const claimableStatuses = new Set<RunStatus>([
+const claimableStatuses = new Set<TurnStatus>([
   "leased",
   "queued",
   "running",
   "suspended",
 ]);
 
-export class DurableObjectRunStore implements RunStore {
+export class DurableObjectRunStore implements TurnStore {
   readonly #maxPayloadBytes: number;
   readonly #prefix: string;
   readonly #storage: CloudflareDurableObjectStorage;
@@ -44,8 +44,8 @@ export class DurableObjectRunStore implements RunStore {
 
   async claim(
     runId: string,
-    options: ClaimRunOptions
-  ): Promise<ClaimRunResult> {
+    options: ClaimTurnOptions
+  ): Promise<ClaimTurnResult> {
     return await withTransaction(this.#storage, async (storage) => {
       const run = await getRun(storage, this.#prefix, runId);
       if (!run) {
@@ -63,7 +63,7 @@ export class DurableObjectRunStore implements RunStore {
         leaseId: options.leaseId,
         leaseUntilMs: options.nowMs + options.leaseMs,
       };
-      const claimed: RunRecord = { ...run, lease, status: "leased" };
+      const claimed: TurnRecord = { ...run, lease, status: "leased" };
       await putRun(storage, this.#prefix, claimed, {
         maxPayloadBytes: this.#maxPayloadBytes,
       });
@@ -71,7 +71,7 @@ export class DurableObjectRunStore implements RunStore {
     });
   }
 
-  async create(record: RunRecord): Promise<CreateRunResult> {
+  async create(record: TurnRecord): Promise<CreateTurnResult> {
     return await withTransaction(this.#storage, async (storage) => {
       const existing =
         (await getRun(storage, this.#prefix, record.runId)) ??
@@ -93,15 +93,15 @@ export class DurableObjectRunStore implements RunStore {
     });
   }
 
-  async get(runId: string): Promise<RunRecord | null> {
+  async get(runId: string): Promise<TurnRecord | null> {
     return await getRun(this.#storage, this.#prefix, runId);
   }
 
-  async getByDedupeKey(dedupeKey: string): Promise<RunRecord | null> {
+  async getByDedupeKey(dedupeKey: string): Promise<TurnRecord | null> {
     return await getRunByDedupeKey(this.#storage, this.#prefix, dedupeKey);
   }
 
-  async listByParentRunId(parentRunId: string): Promise<readonly RunRecord[]> {
+  async listByParentRunId(parentRunId: string): Promise<readonly TurnRecord[]> {
     return await listRunsByParentRunId(
       this.#storage,
       this.#prefix,
@@ -109,7 +109,7 @@ export class DurableObjectRunStore implements RunStore {
     );
   }
 
-  async update(record: RunRecord): Promise<RunRecord> {
+  async update(record: TurnRecord): Promise<TurnRecord> {
     return await withTransaction(this.#storage, async (storage) => {
       await putRun(storage, this.#prefix, record, {
         maxPayloadBytes: this.#maxPayloadBytes,

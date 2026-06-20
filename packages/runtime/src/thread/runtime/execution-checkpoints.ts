@@ -1,4 +1,4 @@
-import { createRunCheckpointId } from "../../execution/host/checkpoint-ids";
+import { createCheckpointId } from "../../execution/host/checkpoint-ids";
 import type {
   CheckpointPhase,
   ExecutionHost,
@@ -73,7 +73,7 @@ async function appendThreadToolExecutionCheckpoint({
     | { readonly current: number; readonly expected: number }
     | undefined;
   for (let attempt = 0; attempt < maxCheckpointWriteAttempts; attempt += 1) {
-    const run = await executionHost.store.runs.get(runId);
+    const run = await executionHost.store.turns.get(runId);
     if (!run) {
       throw new Error(`Thread execution run ${runId} is missing.`);
     }
@@ -81,7 +81,7 @@ async function appendThreadToolExecutionCheckpoint({
     const version = run.checkpointVersion + 1;
     const result = await executionHost.store.checkpoints.append(
       {
-        checkpointId: createRunCheckpointId({ phase, runId, version }),
+        checkpointId: createCheckpointId({ phase, runId, version }),
         pendingToolCall: persistedToolExecutionCheckpoint(toolCall),
         phase,
         runId,

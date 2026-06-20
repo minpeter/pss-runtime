@@ -26,11 +26,11 @@ function upsertRun(
   bindings: readonly unknown[]
 ): void {
   const row = createRunRow(bindings);
-  state.runs = state.runs.filter(
+  state.turns = state.turns.filter(
     (existing) =>
       !(existing.prefix === row.prefix && existing.run_id === row.run_id)
   );
-  state.runs.push(row);
+  state.turns.push(row);
 }
 
 function deleteRun(
@@ -39,7 +39,7 @@ function deleteRun(
 ): void {
   const prefix = stringBinding(bindings[0]);
   const runId = stringBinding(bindings[1]);
-  state.runs = state.runs.filter(
+  state.turns = state.turns.filter(
     (row) => !(row.prefix === prefix && row.run_id === runId)
   );
 }

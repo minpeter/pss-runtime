@@ -2,7 +2,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { listFiles, packageDistPath, relativeToCwd } from "./shared.mjs";
 
-const REQUIRED_RUNTIME_ROOT_EXPORTS = ["AgentHost", "AgentRun", "RuntimeInput"];
+const REQUIRED_RUNTIME_ROOT_EXPORTS = [
+  "AgentHost",
+  "AgentTurn",
+  "RuntimeInput",
+];
 const REQUIRED_RUNTIME_EXECUTION_EXPORTS = [
   "CheckpointStore",
   "createInMemoryExecutionHost",
@@ -14,8 +18,9 @@ const REQUIRED_RUNTIME_EXECUTION_EXPORTS = [
   "ExecutionStoreTransaction",
   "NotificationInbox",
   "NotificationRecord",
-  "RunRecord",
-  "RunStore",
+  "TurnRecord",
+  "TurnStore",
+  "TurnStatus",
   "RuntimeToolExecutionCheckpoint",
   "RuntimeToolExecutionContext",
   "RuntimeToolExecutionDecision",
@@ -27,7 +32,9 @@ const REQUIRED_RUNTIME_CLOUDFLARE_EXPORTS = [
   "CloudflareAgentContextFactoryOptions",
   "CloudflareAgentContextOptions",
   "CloudflareAgentContextPrefixOptions",
-  "CloudflareAgentRunDrainOptions",
+  "AgentTurnDrainResult",
+  "AgentTurnDrainStopReason",
+  "CloudflareAgentTurnDrainOptions",
   "CloudflareAlarmAgent",
   "CloudflareAlarmDrainSummary",
   "CloudflareDurableObjectFetchOptions",
@@ -44,7 +51,8 @@ const REQUIRED_RUNTIME_CLOUDFLARE_EXPORTS = [
   "createCloudflareAlarmScheduler",
   "createCloudflareAgentContext",
   "createCloudflareDurableObjectHost",
-  "drainAgentRun",
+  "drainAgentTurn",
+  "drainAgentTurnWithBudget",
   "drainCloudflareAlarm",
   "fetchCloudflareDurableObject",
   "getCloudflareDurableObjectStub",
@@ -53,21 +61,21 @@ const REQUIRED_RUNTIME_CLOUDFLARE_EXPORTS = [
   "rescheduleCloudflareAlarm",
 ];
 const REQUIRED_RUNTIME_NODE_EXPORTS =
-  "FileExecutionStore FileSessionStore FileThreadStore NodeFileAgentContext NodeFileAgentContextFactoryOptions NodeFileAgentContextOptions NodeFileExecutionHostOptions NodeFileThreadHostOptions NodeScheduledThreadPrompt NodeScheduledWorkAppendOptions NodeScheduledWorkDrainOptions NodeScheduledWorkDrainResult NodeScheduledWorkListOptions NodeScheduledWorkRunContext ackScheduledNodeRun ackScheduledNodeThreadPrompt appendScheduledNodeRun appendScheduledNodeThreadPrompt createNodeFileAgentContext createNodeFileExecutionHost createNodeFileScheduler createNodeFileThreadHost drainScheduledNodeWork listScheduledNodeRuns listScheduledNodeThreadPrompts".split(
+  "FileExecutionStore FileThreadStore NodeFileAgentContext NodeFileAgentContextFactoryOptions NodeFileAgentContextOptions NodeFileExecutionHostOptions NodeFileThreadHostOptions NodeScheduledThreadPrompt NodeScheduledWorkAppendOptions NodeScheduledWorkDrainOptions NodeScheduledWorkDrainResult NodeScheduledWorkListOptions NodeScheduledWorkRunContext ackScheduledNodeRun ackScheduledNodeThreadPrompt appendScheduledNodeRun appendScheduledNodeThreadPrompt createNodeFileAgentContext createNodeFileExecutionHost createNodeFileScheduler createNodeFileThreadHost drainScheduledNodeWork listScheduledNodeRuns listScheduledNodeThreadPrompts".split(
     " "
   );
 const FORBIDDEN_RUNTIME_ROOT_NAMES = [
   ...[
-    "AgentMessage AgentModel AgentLoopResult AgentRunInput AgentTool AgentTools",
+    "AgentMessage AgentModel AgentLoopResult AgentRun AgentRunInput AgentTool AgentTools",
     "BackgroundScheduler BackgroundSchedulerHost CheckpointHost CheckpointStore",
     "CloudflareAgentContext CloudflareAgentContextFactoryOptions CloudflareAgentContextOptions",
-    "CloudflareAgentContextPrefixOptions CloudflareAgentRunDrainOptions CloudflareAlarmAgent",
+    "AgentTurnDrainResult AgentTurnDrainStopReason CloudflareAgentContextPrefixOptions CloudflareAgentTurnDrainOptions CloudflareAlarmAgent",
     "CloudflareAlarmDrainSummary CloudflareDurableObjectFetchOptions CloudflareDurableObjectId",
     "CloudflareDurableObjectNamespace CloudflareDurableObjectState CloudflareDurableObjectStorage",
     "CloudflareDurableObjectStub CloudflareDurableObjectStubOptions CloudflareScheduledThreadPrompt",
     "createInMemoryExecutionHost createCloudflareAlarmScheduler createCloudflareAgentContext",
     "createCloudflareDurableObjectHost CreateLlmOptions DurableBackgroundHost DurableNotificationResumeHost",
-    "drainCloudflareAlarm EventHost EventStore ExecutionHost ExecutionScheduler ExecutionStore",
+    "drainAgentTurn drainAgentTurnWithBudget drainCloudflareAlarm EventHost EventStore ExecutionHost ExecutionScheduler ExecutionStore",
     "ExecutionStoreTransaction ExecutionTransactionHost Llm LlmContext LlmOutput LlmOutputPart",
     "NotificationHost NotificationInbox NotificationRecord fetchCloudflareDurableObject",
     "getCloudflareDurableObjectStub InMemoryCloudflareDurableObjectStorage RunHost RunRecord",

@@ -9,7 +9,7 @@ import {
   type RuntimeInputState,
 } from "../input/runtime-input";
 import type { AgentEvent } from "../protocol/events";
-import { type AgentRun, BufferedAgentRun } from "../protocol/run";
+import { type AgentTurn, BufferedAgentTurn } from "../protocol/turn";
 import { errorMessage } from "../state/thread-errors";
 
 export interface NotifyOptions {
@@ -18,11 +18,11 @@ export interface NotifyOptions {
 }
 
 interface QueueThreadNotificationOptions {
-  readonly activeRun: BufferedAgentRun | undefined;
+  readonly activeRun: BufferedAgentTurn | undefined;
   readonly activeRuntimeInput: RuntimeInputState | undefined;
   readonly drain: () => Promise<void>;
   emitObserverEvent(
-    run: BufferedAgentRun | undefined,
+    run: BufferedAgentTurn | undefined,
     event: AgentEvent
   ): Promise<void>;
   readonly inputQueue: QueuedInput[];
@@ -33,7 +33,7 @@ export async function queueThreadNotification(
   input: AgentInput,
   options: NotifyOptions,
   state: QueueThreadNotificationOptions
-): Promise<AgentRun> {
+): Promise<AgentTurn> {
   const queuedRuntimeInput: QueuedRuntimeInput = {
     input: attachInputMeta(normalizeAgentInput(input), { source: "notify" }),
     placement: "turn-start",
@@ -61,12 +61,12 @@ export async function queueThreadNotification(
 
   if (options.deferWhenUnobserved === true) {
     state.pendingRuntimeInputs.push(queuedRuntimeInput);
-    const deferredRun = new BufferedAgentRun();
+    const deferredRun = new BufferedAgentTurn();
     deferredRun.close();
     return deferredRun;
   }
 
-  const run = new BufferedAgentRun();
+  const run = new BufferedAgentTurn();
   state.inputQueue.push({
     initialEvents: observerEvents,
     preUserRuntimeInputs: [],
@@ -78,7 +78,7 @@ export async function queueThreadNotification(
 }
 
 export function startThreadQueueDrain(
-  run: BufferedAgentRun,
+  run: BufferedAgentTurn,
   drain: () => Promise<void>
 ): void {
   drain().catch((error: unknown) => {

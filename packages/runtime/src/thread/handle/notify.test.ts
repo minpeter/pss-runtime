@@ -12,7 +12,7 @@ import {
 } from "../../testing/test-fixtures";
 import type { AgentEvent } from "../protocol/events";
 import { userTextToModelMessage } from "../protocol/mapping";
-import type { AgentRun } from "../protocol/run";
+import type { AgentTurn } from "../protocol/turn";
 import { MemoryThreadStore } from "../store/memory";
 import { AgentThread } from "./thread";
 
@@ -22,7 +22,7 @@ describe("AgentThread.notify", () => {
       Promise.resolve([assistantMessage("SENT")])
     );
 
-    const events = await collectAgentRun(await thread.send("hello"));
+    const events = await collectAgentTurn(await thread.send("hello"));
 
     expect(eventTypes(events)).toEqual([
       "user-text",
@@ -43,7 +43,7 @@ describe("AgentThread.notify", () => {
       return Promise.resolve([assistantMessage("NOTIFIED")]);
     });
 
-    const events = await collectAgentRun(await thread.notify(notification));
+    const events = await collectAgentTurn(await thread.notify(notification));
 
     expect(eventTypes(events)).toEqual([
       "turn-start",
@@ -68,7 +68,7 @@ describe("AgentThread.notify", () => {
     );
 
     const directRun = await thread.notify("job done");
-    const events = await collectAgentRun(directRun);
+    const events = await collectAgentTurn(directRun);
 
     expect(eventTypes(events)).toContain("runtime-input");
   });
@@ -101,7 +101,7 @@ describe("AgentThread.notify", () => {
     firstCanFinish.resolve();
 
     await drainIterator(firstIterator);
-    const secondEvents = await collectAgentRun(secondRun);
+    const secondEvents = await collectAgentTurn(secondRun);
 
     expect(notifiedRun).toBe(secondRun);
     expect(eventTypes(secondEvents)).toEqual([
@@ -189,7 +189,7 @@ function getProperty(value: unknown, property: "notify"): unknown {
   return property in value ? value[property] : undefined;
 }
 
-async function collectAgentRun(run: AgentRun): Promise<AgentEvent[]> {
+async function collectAgentTurn(run: AgentTurn): Promise<AgentEvent[]> {
   const events: AgentEvent[] = [];
   for await (const event of run.events()) {
     events.push(event);

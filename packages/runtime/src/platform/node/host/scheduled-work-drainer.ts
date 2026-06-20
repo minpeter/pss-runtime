@@ -1,6 +1,6 @@
 import type { Agent } from "../../../agent/core/agent";
 import { executionHost } from "../../../execution/host/host";
-import type { RunStatus } from "../../../execution/host/types";
+import type { TurnStatus } from "../../../execution/host/types";
 import type { AgentEvent } from "../../../thread/protocol/events";
 import { decrementLimit, normalizedListLimit } from "./scheduled-work-codec";
 import {
@@ -139,13 +139,13 @@ async function shouldAckNullResume(
   if (!host) {
     return false;
   }
-  const record = await host.store.runs.get(runId);
+  const record = await host.store.turns.get(runId);
   if (!record) {
     return true;
   }
   return isTerminalRunStatus(record.status);
 }
 
-function isTerminalRunStatus(status: RunStatus): boolean {
+function isTerminalRunStatus(status: TurnStatus): boolean {
   return status === "cancelled" || status === "completed" || status === "error";
 }

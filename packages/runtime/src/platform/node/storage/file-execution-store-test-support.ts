@@ -3,10 +3,10 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
+  Checkpoint,
   NotificationRecord,
-  RunCheckpoint,
-  RunRecord,
   StoredAgentEvent,
+  TurnRecord,
 } from "../../../execution";
 
 export const base64Url = (value: string) =>
@@ -65,8 +65,8 @@ export function createDeferred(): {
 
 export function runRecord(
   runId: string,
-  overrides: Partial<RunRecord> = {}
-): RunRecord {
+  overrides: Partial<TurnRecord> = {}
+): TurnRecord {
   return {
     checkpointVersion: 0,
     kind: "user-turn",
@@ -78,10 +78,7 @@ export function runRecord(
   };
 }
 
-export function checkpointRecord(
-  runId: string,
-  version: number
-): RunCheckpoint {
+export function checkpointRecord(runId: string, version: number): Checkpoint {
   return {
     checkpointId: `${runId}:checkpoint-${version}`,
     phase: "before-model",

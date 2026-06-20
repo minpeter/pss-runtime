@@ -3,9 +3,9 @@ import {
   Agent,
   type AgentEvent,
   type AgentHost,
-  type AgentRun,
+  type AgentTurn,
 } from "@minpeter/pss-runtime";
-import { drainAgentRun } from "@minpeter/pss-runtime/cloudflare";
+import { drainAgentTurn } from "@minpeter/pss-runtime/cloudflare";
 
 import type { Env } from "./env";
 
@@ -74,8 +74,8 @@ export function createConfiguredAgent(env: Env, host: AgentHost): Agent {
   });
 }
 
-export async function collectAssistantText(run: AgentRun): Promise<string> {
-  const events = await drainAgentRun(run);
+export async function collectAssistantText(run: AgentTurn): Promise<string> {
+  const events = await drainAgentTurn(run);
   const turnError = events.find(
     (event): event is Extract<AgentEvent, { type: "turn-error" }> =>
       event.type === "turn-error"

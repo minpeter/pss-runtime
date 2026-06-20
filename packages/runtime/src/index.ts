@@ -9,11 +9,7 @@ export {
 export type { AgentHost } from "./execution/host/types";
 export type { AgentToolChoice } from "./llm/llm";
 export { delegateUserInput } from "./thread/input/delegate-input";
-export type {
-  AgentInput,
-  SessionInput,
-  ThreadInput,
-} from "./thread/input/input";
+export type { AgentInput, ThreadInput } from "./thread/input/input";
 export {
   attachInputMeta,
   stripInputMeta,
@@ -61,14 +57,10 @@ export {
   isToolAgentEvent,
   isVisibleAgentEvent,
 } from "./thread/protocol/events";
-export type { AgentRun } from "./thread/protocol/run";
+export type { AgentTurn } from "./thread/protocol/turn";
 export type {
   CommitResult,
-  ExpectedSessionVersion,
   ExpectedThreadVersion,
-  SessionStore,
-  SessionStoreCommit,
-  StoredSession,
   StoredThread,
   ThreadStore,
   ThreadStoreCommit,

@@ -1,4 +1,4 @@
-import type { Agent, AgentRun } from "@minpeter/pss-runtime";
+import type { Agent, AgentTurn } from "@minpeter/pss-runtime";
 import {
   createInMemoryExecutionHost,
   type ExecutionHost,
@@ -24,7 +24,7 @@ interface ThreadPromptWaiter {
 }
 
 export interface LocalHost extends ExecutionHost {
-  resumeThread(options?: { readonly timeoutMs?: number }): Promise<AgentRun>;
+  resumeThread(options?: { readonly timeoutMs?: number }): Promise<AgentTurn>;
 }
 
 class LocalHostError extends Error {

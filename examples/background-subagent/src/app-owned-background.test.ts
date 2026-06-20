@@ -1,4 +1,4 @@
-import type { Agent, AgentInput, AgentRun } from "@minpeter/pss-runtime";
+import type { Agent, AgentInput, AgentTurn } from "@minpeter/pss-runtime";
 import {
   createInMemoryExecutionHost,
   type ExecutionHost,
@@ -35,11 +35,11 @@ describe("app-owned background delegation", () => {
     const job = await launchTask(host, {
       ownerNamespace: "app:other:default",
     });
-    const run = await host.store.runs.get(`background:${job.id}`);
+    const run = await host.store.turns.get(`background:${job.id}`);
     if (!run) {
       throw new Error("expected background run to exist");
     }
-    await host.store.runs.update({
+    await host.store.turns.update({
       ...run,
       output: { text: "SECRET" },
       status: "completed",
@@ -81,7 +81,7 @@ describe("app-owned background delegation", () => {
     await appAgent.resume(`background:${job.id}`);
 
     await expect(
-      host.store.runs.get(`notification:${job.id}`)
+      host.store.turns.get(`notification:${job.id}`)
     ).resolves.toBeNull();
     expect(resumeCalls).toEqual([]);
   });
@@ -102,7 +102,7 @@ describe("app-owned background delegation", () => {
       "coordinator saw notification"
     );
     await expect(
-      host.store.runs.get(`notification:${job.id}`)
+      host.store.turns.get(`notification:${job.id}`)
     ).resolves.toEqual(expect.objectContaining({ status: "completed" }));
   });
 });
@@ -141,7 +141,7 @@ function createTestAppAgent(host: ExecutionHost): Agent {
   });
 }
 
-async function collectAssistantText(run: AgentRun) {
+async function collectAssistantText(run: AgentTurn) {
   let text = "";
   for await (const event of run.events()) {
     if (event.type === "assistant-text") {
@@ -162,7 +162,7 @@ function createReaderAgent(): Agent {
   } as unknown as Agent;
 }
 
-function runWithText(text: string): AgentRun {
+function runWithText(text: string): AgentTurn {
   return {
     events: () => eventStream([{ text, type: "assistant-text" }]),
   };

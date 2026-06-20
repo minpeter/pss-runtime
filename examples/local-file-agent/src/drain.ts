@@ -1,6 +1,6 @@
-import type { AgentRun } from "@minpeter/pss-runtime";
+import type { AgentTurn } from "@minpeter/pss-runtime";
 
-export async function drain(run: AgentRun): Promise<void> {
+export async function drain(run: AgentTurn): Promise<void> {
   for await (const event of run.events()) {
     switch (event.type) {
       case "assistant-text":

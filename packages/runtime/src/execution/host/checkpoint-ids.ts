@@ -1,6 +1,6 @@
 import type { CheckpointPhase } from "./types";
 
-export function createRunCheckpointId({
+export function createCheckpointId({
   phase,
   runId,
   version,
@@ -9,7 +9,7 @@ export function createRunCheckpointId({
   readonly runId: string;
   readonly version: number;
 }): string {
-  return `run-checkpoint:${encodeCheckpointIdPart(runId)}:${version}:${phase}:${crypto.randomUUID()}`;
+  return `checkpoint:${encodeCheckpointIdPart(runId)}:${version}:${phase}:${crypto.randomUUID()}`;
 }
 
 function encodeCheckpointIdPart(value: string): string {

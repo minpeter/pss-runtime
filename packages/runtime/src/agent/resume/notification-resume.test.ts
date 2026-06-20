@@ -46,7 +46,7 @@ describe("host notification resume", () => {
       status: "pending",
     } as const;
     await host.store.notifications.enqueue(notification);
-    await host.store.runs.create(
+    await host.store.turns.create(
       notificationRunRecord({
         idempotencyKey: notification.idempotencyKey,
         runId: notification.runId,
@@ -104,7 +104,7 @@ describe("host notification resume", () => {
       status: "pending",
     } as const;
     await host.store.notifications.enqueue(notification);
-    await host.store.runs.create(
+    await host.store.turns.create(
       notificationRunRecord({
         idempotencyKey: notification.idempotencyKey,
         ownerNamespace: agentNamespace("owner"),
@@ -139,7 +139,7 @@ describe("host notification resume", () => {
       status: "pending",
     } as const;
     await host.store.notifications.enqueue(notification);
-    await host.store.runs.create(
+    await host.store.turns.create(
       notificationRunRecord({
         idempotencyKey: notification.idempotencyKey,
         runId: notification.runId,
@@ -176,7 +176,7 @@ describe("host notification resume", () => {
       threadKey: "default",
       status: "acked",
     });
-    await host.store.runs.create(
+    await host.store.turns.create(
       notificationRunRecord({ idempotencyKey, runId })
     );
 
@@ -190,7 +190,7 @@ describe("host notification resume", () => {
     await expect(
       host.store.notifications.getByIdempotencyKey(idempotencyKey)
     ).resolves.toEqual(expect.objectContaining({ status: "acked" }));
-    await expect(host.store.runs.get(runId)).resolves.toEqual(
+    await expect(host.store.turns.get(runId)).resolves.toEqual(
       expect.objectContaining({ status: "completed" })
     );
     expect(calls).toBe(1);
@@ -207,12 +207,12 @@ describe("host notification resume", () => {
     });
     const idempotencyKey = "background-complete:bg_missing";
     const runId = "notification-run-missing";
-    await host.store.runs.create(
+    await host.store.turns.create(
       notificationRunRecord({ idempotencyKey, runId })
     );
 
     await expect(agent.resume(runId)).resolves.toBeNull();
-    await expect(host.store.runs.get(runId)).resolves.toEqual(
+    await expect(host.store.turns.get(runId)).resolves.toEqual(
       expect.objectContaining({ status: "leased" })
     );
   });

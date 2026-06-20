@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentEvent, AgentRun } from "../../../index";
+import type { AgentEvent, AgentTurn } from "../../../index";
 import {
   type CloudflareDurableObjectNamespace,
   createCloudflareAgentContext,
@@ -70,7 +70,7 @@ describe("Cloudflare Worker DX helpers", () => {
 
     await storage.put("prefix", "tenant-prefix");
     const host = context.host("tenant-prefix");
-    await host.store.runs.create({
+    await host.store.turns.create({
       checkpointVersion: 0,
       kind: "notification",
       rootRunId: "background:bg_context",
@@ -93,7 +93,7 @@ describe("Cloudflare Worker DX helpers", () => {
   });
 });
 
-function runWithText(text: string): AgentRun {
+function runWithText(text: string): AgentTurn {
   return {
     events: () => eventStream([{ text, type: "assistant-text" }]),
   };

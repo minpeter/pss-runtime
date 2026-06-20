@@ -7,6 +7,7 @@ import type {
   ThreadStoreCommit,
 } from "../../thread/store/types";
 import type {
+  Checkpoint,
   CheckpointStore,
   CheckpointWriteResult,
   EventCursor,
@@ -14,9 +15,8 @@ import type {
   ExecutionStore,
   ExecutionStoreTransaction,
   NotificationInbox,
-  RunCheckpoint,
-  RunStore,
   StoredAgentEvent,
+  TurnStore,
 } from "../host/types";
 import { InMemoryNotificationInbox } from "./notifications";
 import { InMemoryRunStore } from "./runs";
@@ -33,7 +33,7 @@ export class InMemoryExecutionStore implements ExecutionStore {
   readonly notifications: NotificationInbox = new InMemoryNotificationInbox(
     () => this.#state
   );
-  readonly runs: RunStore = new InMemoryRunStore(() => this.#state);
+  readonly turns: TurnStore = new InMemoryRunStore(() => this.#state);
   readonly threads: ThreadStore = new InMemoryExecutionThreadStore(
     () => this.#state
   );
@@ -66,7 +66,7 @@ class InMemoryTransactionStore implements ExecutionStoreTransaction {
   readonly checkpoints: CheckpointStore;
   readonly events: EventStore;
   readonly notifications: NotificationInbox;
-  readonly runs: RunStore;
+  readonly turns: TurnStore;
   readonly threads: ThreadStore;
   readonly #state: ExecutionState;
 
@@ -75,7 +75,7 @@ class InMemoryTransactionStore implements ExecutionStoreTransaction {
     this.checkpoints = new InMemoryCheckpointStore(() => this.#state);
     this.events = new InMemoryEventStore(() => this.#state);
     this.notifications = new InMemoryNotificationInbox(() => this.#state);
-    this.runs = new InMemoryRunStore(() => this.#state);
+    this.turns = new InMemoryRunStore(() => this.#state);
     this.threads = new InMemoryExecutionThreadStore(() => this.#state);
   }
 
@@ -132,10 +132,10 @@ class InMemoryCheckpointStore implements CheckpointStore {
   }
 
   append(
-    checkpoint: RunCheckpoint,
+    checkpoint: Checkpoint,
     options: { readonly expectedVersion: number }
   ): Promise<CheckpointWriteResult> {
-    const run = this.#state().runs.get(checkpoint.runId);
+    const run = this.#state().turns.get(checkpoint.runId);
     const currentVersion = run?.checkpointVersion ?? 0;
     if (currentVersion !== options.expectedVersion) {
       return Promise.resolve({
@@ -150,7 +150,7 @@ class InMemoryCheckpointStore implements CheckpointStore {
     checkpoints.push(stored);
     this.#state().checkpoints.set(checkpoint.runId, checkpoints);
     if (run) {
-      this.#state().runs.set(checkpoint.runId, {
+      this.#state().turns.set(checkpoint.runId, {
         ...run,
         checkpointVersion: checkpoint.version,
       });
@@ -159,7 +159,7 @@ class InMemoryCheckpointStore implements CheckpointStore {
     return Promise.resolve({ ok: true, version: checkpoint.version });
   }
 
-  latest(runId: string): Promise<RunCheckpoint | null> {
+  latest(runId: string): Promise<Checkpoint | null> {
     const checkpoints = this.#state().checkpoints.get(runId) ?? [];
     const checkpoint = checkpoints.at(-1);
     return Promise.resolve(checkpoint ? structuredClone(checkpoint) : null);

@@ -1,25 +1,25 @@
 import type {
   ExecutionHost,
   NotificationRecord,
-  RunRecord,
+  TurnRecord,
 } from "../../execution/host/types";
-import type { AgentRun } from "../../thread/protocol/run";
+import type { AgentTurn } from "../../thread/protocol/turn";
 import { ownsAgentNamespace } from "../identity/namespace";
 
-interface ResumeAgentRunInput {
+interface ResumeAgentTurnInput {
   readonly host: ExecutionHost;
   readonly ownerNamespace: string;
-  resumeNotification(notification: NotificationRecord): Promise<AgentRun>;
+  resumeNotification(notification: NotificationRecord): Promise<AgentTurn>;
   readonly runId: string;
 }
 
-export async function resumeAgentRun({
+export async function resumeAgentTurn({
   host,
   ownerNamespace,
   resumeNotification,
   runId,
-}: ResumeAgentRunInput): Promise<AgentRun | null> {
-  const run = await host.store.runs.get(runId);
+}: ResumeAgentTurnInput): Promise<AgentTurn | null> {
+  const run = await host.store.turns.get(runId);
   if (!run) {
     return null;
   }
@@ -91,7 +91,7 @@ async function claimNotificationForRun({
   return null;
 }
 
-function canAccessRun(run: RunRecord, ownerNamespace: string): boolean {
+function canAccessRun(run: TurnRecord, ownerNamespace: string): boolean {
   if (run.ownerNamespace) {
     return ownsAgentNamespace(run.ownerNamespace, ownerNamespace);
   }
@@ -106,19 +106,19 @@ export async function completeNotificationRun(
   host: ExecutionHost,
   runId: string
 ): Promise<void> {
-  const run = await host.store.runs.get(runId);
+  const run = await host.store.turns.get(runId);
   if (run?.kind !== "notification" || run.status === "completed") {
     return;
   }
 
-  await host.store.runs.update({ ...run, status: "completed" });
+  await host.store.turns.update({ ...run, status: "completed" });
 }
 
 async function claimRun(
   host: ExecutionHost,
-  run: RunRecord
-): Promise<RunRecord | null> {
-  const claim = await host.store.runs.claim(run.runId, {
+  run: TurnRecord
+): Promise<TurnRecord | null> {
+  const claim = await host.store.turns.claim(run.runId, {
     attempt: (run.lease?.attempt ?? 0) + 1,
     leaseId: crypto.randomUUID(),
     leaseMs: 300_000,
