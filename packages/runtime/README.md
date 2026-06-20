@@ -430,9 +430,9 @@ const agent = new Agent({
 });
 ```
 
-The legacy `@minpeter/pss-runtime/thread-store/file` and
-`@minpeter/pss-runtime/session-store/file` subpaths still resolve for existing
-callers, but new Node/local code should import from the `node` platform subpath.
+The legacy `@minpeter/pss-runtime/thread-store/file` subpath still resolves for
+existing callers, but new Node/local code should import from the `node` platform
+subpath.
 App-owned background work still needs its own durable task/output storage if it
 must survive process restarts.
 
