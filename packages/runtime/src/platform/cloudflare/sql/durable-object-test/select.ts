@@ -7,6 +7,7 @@ import type {
   PayloadChunkRow,
   RunRow,
   ScheduledWorkRow,
+  ThreadCompactionRow,
   ThreadMessageChunkRow,
   ThreadMessageRow,
   ThreadMetaRow,
@@ -22,6 +23,9 @@ export function selectSqlRows(
   }
   if (query.includes("from pss_thread_meta")) {
     return selectThreadMetaRows(state, query, bindings);
+  }
+  if (query.includes("from pss_thread_compaction")) {
+    return selectThreadCompactionRows(state, query, bindings);
   }
   if (query.includes("from pss_thread_message_chunk")) {
     return selectThreadMessageChunkRows(state, bindings);
@@ -96,6 +100,21 @@ function selectThreadMetaRows(
   throw new Error(`Unsupported in-memory thread meta SQL query: ${query}`);
 }
 
+function selectThreadCompactionRows(
+  state: InMemoryDurableObjectSqlState,
+  query: string,
+  bindings: readonly unknown[]
+): unknown[] {
+  const key = stringBinding(bindings[0]);
+  return state.threadCompactions
+    .filter((row) => row.thread_key === key)
+    .sort(
+      (left: ThreadCompactionRow, right: ThreadCompactionRow) =>
+        left.ordinal - right.ordinal
+    )
+    .map((row) => projectThreadCompaction(row, query));
+}
+
 function selectThreadMessageRows(
   state: InMemoryDurableObjectSqlState,
   query: string,
@@ -132,6 +151,25 @@ function selectThreadMessageChunkRows(
       chunk_index: row.chunk_index,
       seq: row.seq,
     }));
+}
+
+function projectThreadCompaction(
+  row: ThreadCompactionRow,
+  query: string
+): unknown {
+  if (query.includes("ordinal")) {
+    return {
+      end_seq_exclusive: row.end_seq_exclusive,
+      ordinal: row.ordinal,
+      start_seq: row.start_seq,
+      summary: row.summary,
+    };
+  }
+  return {
+    end_seq_exclusive: row.end_seq_exclusive,
+    start_seq: row.start_seq,
+    summary: row.summary,
+  };
 }
 
 function selectRunRows(

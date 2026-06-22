@@ -26,6 +26,11 @@ import {
   SpyStore,
 } from "./test-support";
 
+const storedAssistantText = (text: string): ModelMessage => ({
+  content: [{ providerOptions: undefined, text, type: "text" }],
+  role: "assistant",
+});
+
 describe("Agent thread persistence", () => {
   it("file thread store preserves image content parts across reload", async () => {
     const input = userMessage([
@@ -231,6 +236,51 @@ describe("Agent thread persistence", () => {
     expect(finalCommit?.next.state).not.toBeInstanceOf(Array);
     expect(finalCommit?.next).not.toHaveProperty("version");
     expect(store.commits[0]?.expectedVersion).toBeNull();
+  });
+
+  it("compacts model context without dropping full stored history", async () => {
+    const store = new SpyStore();
+    const seenHistory: ModelMessage[][] = [];
+    const agent = new Agent({
+      host: { kind: "thread", threadStore: store },
+      model: createCallbackModel(({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([
+          assistantMessage(`DONE ${seenHistory.length}`),
+        ]);
+      }),
+    });
+    const thread = agent.thread("compact");
+
+    await collect(await thread.send("old"));
+    await thread.compact({
+      endSeqExclusive: 2,
+      startSeq: 0,
+      summary: "old exchange summarized",
+    });
+    await collect(await thread.send("tail"));
+
+    expect(seenHistory[1]).toEqual([
+      { content: "old exchange summarized", role: "system" },
+      userTextToModelMessage(userText("tail")),
+    ]);
+    expect(store.threads.get("compact")?.state).toEqual({
+      compactions: [
+        {
+          endSeqExclusive: 2,
+          schemaVersion: 1,
+          startSeq: 0,
+          summary: { content: "old exchange summarized", role: "system" },
+        },
+      ],
+      history: [
+        userTextToModelMessage(userText("old")),
+        storedAssistantText("DONE 1"),
+        userTextToModelMessage(userText("tail")),
+        storedAssistantText("DONE 2"),
+      ],
+      schemaVersion: 2,
+    });
   });
 
   it("refreshes stored state after commit conflicts so the handle can recover", async () => {

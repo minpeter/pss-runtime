@@ -22,6 +22,7 @@ import {
 import { processQueuedInput } from "../runtime/turn-processor";
 import { threadKilledError, threadTerminalError } from "../state/thread-errors";
 import {
+  type ThreadCompactionInput,
   type ThreadPersistenceOptions,
   ThreadState,
 } from "../state/thread-state";
@@ -29,6 +30,7 @@ import {
 export type { AgentInput, ThreadInput, UserInput } from "../input/input";
 export type { AgentTurn } from "../protocol/turn";
 export type { NotifyOptions } from "../runtime/notification";
+export type { ThreadCompactionInput } from "../state/thread-state";
 
 export class AgentThread {
   readonly #events: ThreadEventDispatcher;
@@ -143,6 +145,20 @@ export class AgentThread {
 
     await addSteeringInput(runtimeInput, input);
     return run;
+  }
+
+  async compact(input: ThreadCompactionInput): Promise<void> {
+    if (this.#killed || this.#deletePromise) {
+      throw threadTerminalError(this.#killed);
+    }
+
+    await this.#state.ensureLoaded();
+
+    if (this.#killed || this.#deletePromise) {
+      throw threadTerminalError(this.#killed);
+    }
+
+    await this.#state.compact(input);
   }
 
   interrupt(): void {

@@ -55,6 +55,35 @@ describe("generateModelStep", () => {
     );
   });
 
+  it("hoists system history into instructions for provider-compatible prompts", async () => {
+    const runModelStep = await loadModelStepRunner();
+    const signal = new AbortController().signal;
+    const messages = [{ role: "user" as const, content: "tail" }];
+
+    await expect(
+      runModelStep(
+        {
+          instructions: "base",
+          model: fakeModel,
+        },
+        {
+          history: [
+            { role: "system", content: "compacted context" },
+            ...messages,
+          ],
+          signal,
+        }
+      )
+    ).resolves.toEqual([assistantMessage("DONE")]);
+
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        instructions: "base\n\ncompacted context",
+        messages,
+      })
+    );
+  });
+
   it("passes configured toolChoice to generateText", async () => {
     const runModelStep = await loadModelStepRunner();
     const signal = new AbortController().signal;

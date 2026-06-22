@@ -36,6 +36,16 @@ export class InMemoryDurableObjectSqlStorage implements SqlStorage {
       throw error;
     }
   }
+
+  transactionSync<T>(fn: () => T): T {
+    const previous = cloneInMemoryDurableObjectSqlState(this.#state);
+    try {
+      return fn();
+    } catch (error) {
+      this.#state = previous;
+      throw error;
+    }
+  }
 }
 
 function normalizeSql(query: string): string {

@@ -8,6 +8,7 @@ export type StoragePayloadKind =
   | "event"
   | "notification-record"
   | "run-record"
+  | "thread-compaction"
   | "thread-message"
   | "thread-state";
 

@@ -44,10 +44,11 @@ export async function generateModelStep({
   tools,
 }: ModelStepOptions): Promise<ModelStepOutput> {
   const toolCallIds = new Map<string, string>();
+  const prompt = promptForModel({ history, instructions });
   const { responseMessages } = await generateText({
     abortSignal: signal,
-    instructions,
-    messages: [...history],
+    instructions: prompt.instructions,
+    messages: prompt.messages,
     model,
     toolChoice,
     tools: normalizeToolCallIds(tools, toolCallIds, toolExecution),
@@ -56,4 +57,39 @@ export async function generateModelStep({
   return responseMessages.map((message) =>
     rewriteMessageToolCallIds(message, toolCallIds)
   );
+}
+
+function promptForModel({
+  history,
+  instructions,
+}: {
+  readonly history: readonly ModelMessage[];
+  readonly instructions?: string;
+}): {
+  readonly instructions?: string;
+  readonly messages: ModelMessage[];
+} {
+  const messages: ModelMessage[] = [];
+  const systemContents: string[] = instructions ? [instructions] : [];
+  for (const message of history) {
+    if (message.role === "system") {
+      systemContents.push(systemContentText(message.content));
+      continue;
+    }
+    messages.push(message);
+  }
+
+  return {
+    ...(systemContents.length === 0
+      ? {}
+      : { instructions: systemContents.join("\n\n") }),
+    messages,
+  };
+}
+
+function systemContentText(content: ModelMessage["content"]): string {
+  if (typeof content === "string") {
+    return content;
+  }
+  return JSON.stringify(content);
 }

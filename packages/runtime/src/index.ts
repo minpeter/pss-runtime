@@ -1,7 +1,9 @@
 export {
   Agent,
+  type AgentAutoCompactionOptions,
   type AgentOptions,
   type ThreadAddress,
+  type ThreadCompactionInput,
   type ThreadHandle,
   type ThreadKey,
   type ThreadMetadata,

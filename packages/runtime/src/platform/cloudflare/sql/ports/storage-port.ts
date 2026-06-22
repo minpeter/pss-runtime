@@ -14,4 +14,6 @@ export interface SqlStorage {
     query: string,
     ...bindings: unknown[]
   ): SqlStorageCursorLike<T>;
+  transaction?<T>(fn: () => Promise<T>): Promise<T>;
+  transactionSync?<T>(fn: () => T): T;
 }

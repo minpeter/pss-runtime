@@ -10,6 +10,7 @@ import { modelMessageToAgentEvents } from "../../thread/protocol/mapping";
 
 interface ModelHistory {
   appendModelMessage(message: ModelMessage): void;
+  modelContextSnapshot(): ModelMessage[];
   modelSnapshot(): ModelMessage[];
 }
 
@@ -177,7 +178,7 @@ async function readModelOutput({
 }): Promise<ModelStepOutput | "aborted"> {
   try {
     return await generateModelStep({
-      history: history.modelSnapshot(),
+      history: history.modelContextSnapshot(),
       ...model,
       signal,
       toolExecution,

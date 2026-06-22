@@ -9,6 +9,7 @@ import {
   PREFIX,
   REQUIRES_SQLITE,
   readChunkRows,
+  readCompactionRows,
   readRows,
   snapshot,
 } from "./thread-store.test-support";
@@ -53,6 +54,120 @@ describe("DurableObjectSqliteThreadStore", () => {
       { expectedVersion: "1" }
     );
     expect(second).toEqual({ ok: true, version: "2" });
+  });
+
+  it("stores v2 compactions in rows while preserving full message rows", async () => {
+    const { storage, store } = createStore();
+    const fullHistory = [
+      { content: "old", role: "user" },
+      { content: "answer", role: "assistant" },
+      { content: "tail", role: "user" },
+    ];
+
+    await expect(
+      store.commit(
+        "compact",
+        {
+          state: {
+            compactions: [
+              {
+                endSeqExclusive: 2,
+                schemaVersion: 1,
+                startSeq: 0,
+                summary: { content: "old summary", role: "system" },
+              },
+            ],
+            history: fullHistory,
+            schemaVersion: 2,
+          },
+        },
+        { expectedVersion: null }
+      )
+    ).resolves.toEqual({ ok: true, version: "1" });
+
+    expect(readRows(storage, "compact")).toHaveLength(3);
+    expect(readCompactionRows(storage, "compact")).toEqual([
+      {
+        end_seq_exclusive: 2,
+        ordinal: 0,
+        start_seq: 0,
+        summary: JSON.stringify({ content: "old summary", role: "system" }),
+      },
+    ]);
+    await expect(store.load("compact")).resolves.toEqual({
+      state: {
+        compactions: [
+          {
+            endSeqExclusive: 2,
+            schemaVersion: 1,
+            startSeq: 0,
+            summary: { content: "old summary", role: "system" },
+          },
+        ],
+        history: fullHistory,
+        schemaVersion: 2,
+      },
+      version: "1",
+    });
+  });
+
+  it("keeps the previous durable rows when compaction payload validation rejects", async () => {
+    const { storage, store } = createStore({ maxPayloadBytes: 120 });
+    const initialHistory = [
+      { content: "old", role: "user" },
+      { content: "answer", role: "assistant" },
+    ];
+
+    await expect(
+      store.commit("compact-too-large", snapshot(initialHistory), {
+        expectedVersion: null,
+      })
+    ).resolves.toEqual({ ok: true, version: "1" });
+
+    await expect(
+      store.commit(
+        "compact-too-large",
+        {
+          state: {
+            compactions: [
+              {
+                endSeqExclusive: 2,
+                schemaVersion: 1,
+                startSeq: 0,
+                summary: {
+                  content: "x".repeat(180),
+                  role: "system",
+                },
+              },
+            ],
+            history: [...initialHistory, { content: "tail", role: "user" }],
+            schemaVersion: 2,
+          },
+        },
+        { expectedVersion: "1" }
+      )
+    ).rejects.toMatchObject({
+      maxBytes: 120,
+      payloadKind: "thread-compaction",
+    });
+
+    expect(readRows(storage, "compact-too-large")).toEqual([
+      {
+        active: 1,
+        message: JSON.stringify(initialHistory[0]),
+        seq: 0,
+      },
+      {
+        active: 1,
+        message: JSON.stringify(initialHistory[1]),
+        seq: 1,
+      },
+    ]);
+    expect(readCompactionRows(storage, "compact-too-large")).toEqual([]);
+    await expect(store.load("compact-too-large")).resolves.toEqual({
+      state: { history: initialHistory, schemaVersion: 1 },
+      version: "1",
+    });
   });
 
   it("appends only the new messages (delta-append, unchanged prefix kept)", async () => {

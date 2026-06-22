@@ -15,6 +15,7 @@ export interface CloudflareDurableObjectStorage
   transaction?<T>(
     fn: (storage: CloudflareDurableObjectTransactionStorage) => Promise<T>
   ): Promise<T>;
+  transactionSync?<T>(fn: () => T): T;
 }
 
 export function withSqlStorage(
@@ -26,6 +27,8 @@ export function withSqlStorage(
     get: (key) => storage.get(key),
     put: (key, value) => storage.put(key, value),
     sql,
+    transaction: (fn) => fn(withSql),
+    transactionSync: (fn) => fn(),
   };
   if (storage.setAlarm) {
     withSql.setAlarm = (time) => storage.setAlarm?.(time) ?? Promise.resolve();
@@ -101,6 +104,32 @@ export class InMemoryCloudflareDurableObjectStorage
       releaseTransaction();
     }
   }
+
+  transactionSync<T>(fn: () => T): T {
+    const previousValues = cloneMap(this.#values);
+    const previousAlarmTime = this.#alarmTime;
+    const sql = this.sql;
+
+    if (isTransactionalSyncSqlStorage(sql)) {
+      return sql.transactionSync(() => {
+        try {
+          return fn();
+        } catch (error) {
+          this.#values = previousValues;
+          this.#alarmTime = previousAlarmTime;
+          throw error;
+        }
+      });
+    }
+
+    try {
+      return fn();
+    } catch (error) {
+      this.#values = previousValues;
+      this.#alarmTime = previousAlarmTime;
+      throw error;
+    }
+  }
 }
 
 class TransactionalCloudflareStorage
@@ -156,6 +185,10 @@ interface TransactionalSqlStorage extends SqlStorage {
   transaction<T>(fn: () => Promise<T>): Promise<T>;
 }
 
+interface TransactionalSyncSqlStorage extends SqlStorage {
+  transactionSync<T>(fn: () => T): T;
+}
+
 async function runSqlTransaction<T>(
   sql: unknown,
   fn: () => Promise<T>
@@ -164,19 +197,7 @@ async function runSqlTransaction<T>(
     return await sql.transaction(fn);
   }
 
-  if (!isSqlStorage(sql)) {
-    return await fn();
-  }
-
-  sql.exec("BEGIN");
-  try {
-    const result = await fn();
-    sql.exec("COMMIT");
-    return result;
-  } catch (error) {
-    sql.exec("ROLLBACK");
-    throw error;
-  }
+  return await fn();
 }
 
 function isTransactionalSqlStorage(
@@ -186,6 +207,16 @@ function isTransactionalSqlStorage(
     isSqlStorage(value) &&
     "transaction" in value &&
     typeof value.transaction === "function"
+  );
+}
+
+function isTransactionalSyncSqlStorage(
+  value: unknown
+): value is TransactionalSyncSqlStorage {
+  return (
+    isSqlStorage(value) &&
+    "transactionSync" in value &&
+    typeof value.transactionSync === "function"
   );
 }
 
