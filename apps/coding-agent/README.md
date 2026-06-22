@@ -59,6 +59,12 @@ pss
 
 CLI commands: `pss`, `pss-coding-agent`.
 
+Inspect the configured local thread without starting the TUI:
+
+```sh
+pss inspect-thread
+```
+
 The `pss` TUI starts a plain conversational agent with no built-in tools. To run
 the TUI with tools, call `startTui({ tools })` from your own entrypoint (for
 example to wire `@minpeter/pss-web-tools`):
@@ -78,17 +84,28 @@ turn.
 
 Set `AI_API_KEY`, `AI_BASE_URL`, and `AI_MODEL` for the model.
 
-The TUI persists runtime-owned session state to files by default:
+The TUI persists runtime-owned thread state to files by default:
 
-- `PSS_SESSION_DIR` overrides the store directory. Default: `~/.pss/sessions`.
-- `PSS_SESSION_KEY` overrides the conversation key. Default: `cwd:<current working directory>`.
+- `PSS_THREAD_DIR` overrides the store directory. Default: `~/.pss/threads`.
+- `PSS_THREAD_KEY` overrides the conversation key. Default: `cwd:<current working directory>`.
+- `PSS_SESSION_DIR` and `PSS_SESSION_KEY` remain accepted as legacy aliases.
+
+Local auto-compaction is disabled unless both thresholds are set:
+
+- `PSS_AUTO_COMPACTION_MIN_MESSAGES` starts compaction once stored history reaches this count.
+- `PSS_AUTO_COMPACTION_RETAIN_MESSAGES` keeps this many newest messages outside the summary.
+
+Both values must be positive integers, and retain messages must be smaller than
+minimum messages.
 
 Examples:
 
 ```sh
 pss
-PSS_SESSION_KEY=workspace:demo pss
-PSS_SESSION_DIR=.pss/sessions pss
+PSS_THREAD_KEY=workspace:demo pss
+PSS_THREAD_DIR=.pss/threads pss
+PSS_AUTO_COMPACTION_MIN_MESSAGES=24 PSS_AUTO_COMPACTION_RETAIN_MESSAGES=8 pss
+PSS_THREAD_KEY=workspace:demo pss inspect-thread
 ```
 
 ## Dev

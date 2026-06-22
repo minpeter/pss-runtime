@@ -13,8 +13,7 @@ import { FileThreadStore } from "@minpeter/pss-runtime/thread-store/file";
 import type { ToolSet } from "ai";
 import { createCodingLanguageModel } from "./model";
 import { resolveCodingAgentThreadConfig } from "./thread-config";
-import { createTuiRunner } from "./tui-runner";
-import { safeInlineText } from "./tui-tool-printer";
+import { createTuiRunner, formatTuiHeader } from "./tui-runner";
 
 export interface StartTuiOptions {
   /**
@@ -35,6 +34,7 @@ export async function startTui(options: StartTuiOptions = {}): Promise<void> {
     instructions:
       "Answer in 2 short sentences and 280 characters or fewer unless the user explicitly asks for detail. Avoid headings.",
     model: createCodingLanguageModel(),
+    autoCompaction: threadConfig.autoCompaction,
     tools: options.tools,
   };
   const agent = new Agent(agentOptions);
@@ -48,7 +48,10 @@ export async function startTui(options: StartTuiOptions = {}): Promise<void> {
 
   tui.addChild(
     new Text(
-      `\x1b[1mpss-next\x1b[0m \x1b[2m(thread ${safeInlineText(threadConfig.key)} · Esc to interrupt · Ctrl-C to quit)\x1b[0m`,
+      formatTuiHeader({
+        autoCompaction: threadConfig.autoCompaction,
+        threadKey: threadConfig.key,
+      }),
       1,
       0
     )

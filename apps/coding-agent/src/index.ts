@@ -13,4 +13,13 @@ export type {
 export { createCodingLanguageModel } from "./model";
 export type { CodingAgentThreadConfig } from "./thread-config";
 export { resolveCodingAgentThreadConfig } from "./thread-config";
+export type {
+  ThreadInspectionCompaction,
+  ThreadInspectionReport,
+} from "./thread-inspect";
+export {
+  formatThreadInspectionReport,
+  inspectCodingAgentThread,
+  storageFileForThread,
+} from "./thread-inspect";
 export { type StartTuiOptions, startTui } from "./tui";

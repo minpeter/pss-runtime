@@ -1,5 +1,6 @@
 import type {
   AgentEvent,
+  AgentOptions,
   AgentTurn,
   ThreadHandle,
   UserInput,
@@ -29,6 +30,21 @@ export interface TuiRunner {
 
 const dimText = "\x1b[2m";
 const resetText = "\x1b[0m";
+
+export interface TuiHeaderOptions {
+  readonly autoCompaction: AgentOptions["autoCompaction"];
+  readonly threadKey: string;
+}
+
+export function formatTuiHeader({
+  autoCompaction,
+  threadKey,
+}: TuiHeaderOptions): string {
+  const compactionText = autoCompaction
+    ? `compaction min=${autoCompaction.minMessages} retain=${autoCompaction.retainMessages}`
+    : "compaction off";
+  return `\x1b[1mpss-next\x1b[0m \x1b[2m(thread ${safeInlineText(threadKey)} \u00b7 ${compactionText} \u00b7 Esc to interrupt \u00b7 Ctrl-C to quit)\x1b[0m`;
+}
 
 export const formatUserTextContent = (text: UserTextContent): string =>
   typeof text === "string" ? text : text.join("\n");
