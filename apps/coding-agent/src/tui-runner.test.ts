@@ -4,12 +4,12 @@ import { createTuiRunner, formatEvent } from "./tui-runner";
 
 describe("TUI runner", () => {
   it("renders runtime input distinctly from human input", () => {
-    expect(formatEvent({ text: "hello", type: "user-text" })).toBe(
+    expect(formatEvent({ text: "hello", type: "user-input" })).toBe(
       "\x1b[36myou\x1b[0m: hello"
     );
     expect(
       formatEvent({
-        input: { text: "extra", type: "user-text" },
+        input: { text: "extra", type: "user-input" },
         placement: "step-end",
         type: "runtime-input",
       })
@@ -18,7 +18,7 @@ describe("TUI runner", () => {
 
   it("starts idle submissions with thread.send and consumes the run", async () => {
     const run = createRun([
-      { text: "hello", type: "user-text" },
+      { text: "hello", type: "user-input" },
       { type: "turn-end" },
     ]);
     const thread = {
@@ -43,7 +43,7 @@ describe("TUI runner", () => {
   it("steers active submissions without sending a new turn", async () => {
     let releaseEvent: (() => void) | undefined;
     const run = createRun([
-      { text: "initial", type: "user-text" },
+      { text: "initial", type: "user-input" },
       new Promise<AgentEvent>((resolve) => {
         releaseEvent = () => resolve({ type: "turn-end" });
       }),
@@ -72,13 +72,13 @@ describe("TUI runner", () => {
   it("consumes a distinct run returned by active steering", async () => {
     let releaseActive: (() => void) | undefined;
     const activeRun = createRun([
-      { text: "initial", type: "user-text" },
+      { text: "initial", type: "user-input" },
       new Promise<AgentEvent>((resolve) => {
         releaseActive = () => resolve({ type: "turn-end" });
       }),
     ]);
     const fallbackRun = createRun([
-      { text: "fallback", type: "user-text" },
+      { text: "fallback", type: "user-input" },
       { type: "turn-end" },
     ]);
     const lines: string[] = [];
@@ -106,7 +106,7 @@ describe("TUI runner", () => {
 
   it("renders active steering errors", async () => {
     const run = createRun([
-      { text: "initial", type: "user-text" },
+      { text: "initial", type: "user-input" },
       new Promise<AgentEvent>(() => undefined),
     ]);
     const lines: string[] = [];
@@ -151,7 +151,7 @@ describe("TUI runner", () => {
     let releaseEvent: (() => void) | undefined;
     let releaseAfterTerminal: (() => void) | undefined;
     const run = createRun([
-      { text: "initial", type: "user-text" },
+      { text: "initial", type: "user-input" },
       new Promise<AgentEvent>((resolve) => {
         releaseEvent = () => resolve({ type: "turn-abort" });
       }),

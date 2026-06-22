@@ -25,7 +25,7 @@ describe("AgentThread.notify", () => {
     const events = await collectAgentTurn(await thread.send("hello"));
 
     expect(eventTypes(events)).toEqual([
-      "user-text",
+      "user-input",
       "turn-start",
       "step-start",
       "assistant-text",
@@ -59,6 +59,42 @@ describe("AgentThread.notify", () => {
     expect(events).not.toContainEqual(userText(notification));
     expect(seenHistory).toEqual([
       [userTextToModelMessage(userText(notification))],
+    ]);
+  });
+
+  it("applies notification overlays without carrying them into future turns", async () => {
+    const seenHistory: ModelMessage[][] = [];
+    const thread = createThread("notify-overlay", ({ history }) => {
+      seenHistory.push([...history]);
+      return Promise.resolve([assistantMessage("DONE")]);
+    });
+
+    const notifiedEvents = await collectAgentTurn(
+      await thread.notify("background done", {
+        overlays: ["volatile notification context"],
+      })
+    );
+    await collectAgentTurn(await thread.send("next"));
+
+    expect(eventTypes(notifiedEvents)).toEqual([
+      "turn-start",
+      "runtime-input",
+      "runtime-input",
+      "step-start",
+      "assistant-text",
+      "step-end",
+      "turn-end",
+    ]);
+    expect(seenHistory).toEqual([
+      [
+        userTextToModelMessage(userText("volatile notification context")),
+        userTextToModelMessage(userText("background done")),
+      ],
+      [
+        userTextToModelMessage(userText("background done")),
+        assistantMessage("DONE"),
+        userTextToModelMessage(userText("next")),
+      ],
     ]);
   });
 
@@ -105,7 +141,7 @@ describe("AgentThread.notify", () => {
 
     expect(notifiedRun).toBe(secondRun);
     expect(eventTypes(secondEvents)).toEqual([
-      "user-text",
+      "user-input",
       "turn-start",
       "runtime-input",
       "step-start",

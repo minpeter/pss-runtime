@@ -130,6 +130,7 @@ export interface NotificationRecord {
   readonly input: UserInput;
   readonly notificationId: string;
   readonly observerEvents?: readonly AgentEvent[];
+  readonly overlays?: readonly UserInput[];
   readonly ownerNamespace?: string;
   readonly runId: string;
   readonly status: NotificationStatus;

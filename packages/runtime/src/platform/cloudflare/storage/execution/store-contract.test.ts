@@ -25,7 +25,7 @@ describe("DurableObjectExecutionStore payload guards", () => {
       storage,
     });
     const record = notificationRecord("notify-big", {
-      input: { text: "x".repeat(300), type: "user-text" },
+      input: { text: "x".repeat(300), type: "user-input" },
     });
 
     await expect(store.notifications.enqueue(record)).resolves.toEqual({
@@ -184,7 +184,7 @@ function notificationRecord(
 ): NotificationRecord {
   return {
     idempotencyKey,
-    input: { text: "wake up", type: "user-text" },
+    input: { text: "wake up", type: "user-input" },
     notificationId: "notification-1",
     runId: "run-1",
     threadKey: "thread-1",

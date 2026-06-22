@@ -33,8 +33,12 @@ export async function commitPreUserRuntimeInputs(
 
     committed.push(processed);
     const input = runtimeInputHistoryFromEvent(processed, queued);
-    state.appendUserInput(input);
-    await state.commit();
+    if (queued.canonical === false) {
+      state.appendTransientUserInput(input);
+    } else {
+      state.appendUserInput(input);
+      await state.commit();
+    }
   }
 
   return committed;

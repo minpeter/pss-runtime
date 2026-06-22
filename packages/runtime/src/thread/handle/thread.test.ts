@@ -4,9 +4,10 @@ import { Agent } from "../../agent/core/agent";
 import {
   assistantMessage,
   createCallbackModel,
+  eventTypes,
+  overlayRuntimeInput,
   sentUserMessage,
   sentUserText,
-  userMessage,
   userText,
 } from "../../testing/test-fixtures";
 import { userTextToModelMessage } from "../protocol/mapping";
@@ -121,7 +122,7 @@ describe("Agent thread API", () => {
     );
   });
 
-  it("rejects malformed explicit user-message input before queueing", async () => {
+  it("rejects malformed content parts before queueing", async () => {
     const agent = new Agent({
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
@@ -129,16 +130,13 @@ describe("Agent thread API", () => {
     });
 
     await expect(
-      agent.send({
-        type: "user-message",
-        content: [{ type: "file", data: "abc" }],
-      } as never)
+      agent.send([{ type: "file", data: "abc" }] as never)
     ).rejects.toThrow(
       'Agent input content parts must be { type: "text", text }, { type: "image", image }, or { type: "file", data, mediaType }.'
     );
   });
 
-  it("rejects explicit user-message content that is not an array", async () => {
+  it("rejects explicit user input objects before queueing", async () => {
     const agent = new Agent({
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
@@ -147,15 +145,15 @@ describe("Agent thread API", () => {
 
     await expect(
       agent.send({
-        content: "not-content-parts",
-        type: "user-message",
+        type: "user-input",
+        text: "not-public-input",
       } as never)
     ).rejects.toThrow(
-      "Agent input must be text, text parts, content parts, user-text, or user-message."
+      "Agent input must be text, text parts, or content parts."
     );
   });
 
-  it("thread.send accepts user-message events", async () => {
+  it("thread.send accepts multipart content parts", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
       model: createCallbackModel(({ history }) => {
@@ -165,12 +163,10 @@ describe("Agent thread API", () => {
     });
 
     await collect(
-      await agent.thread("custom").send(
-        userMessage([
-          { type: "text", text: "summarize" },
-          { type: "image", image: "iVBORw0KGgo=" },
-        ])
-      )
+      await agent.thread("custom").send([
+        { type: "text", text: "summarize" },
+        { type: "image", image: "iVBORw0KGgo=" },
+      ])
     );
 
     expect(seenHistory).toEqual([
@@ -192,7 +188,7 @@ describe("Agent thread API", () => {
     ]);
   });
 
-  it("thread.send accepts user-text events", async () => {
+  it("thread.send accepts text", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
       model: createCallbackModel(({ history }) => {
@@ -201,10 +197,49 @@ describe("Agent thread API", () => {
       }),
     });
 
-    await collect(
-      await agent.thread("custom").send({ type: "user-text", text: "hello" })
-    );
+    await collect(await agent.thread("custom").send("hello"));
 
     expect(seenHistory).toEqual([[userTextToModelMessage(userText("hello"))]]);
+  });
+
+  it("thread.overlay injects next-turn runtime context before send input", async () => {
+    const seenHistory: ModelMessage[][] = [];
+    const agent = new Agent({
+      model: createCallbackModel(({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      }),
+    });
+    const thread = agent.thread("custom");
+
+    const returned = thread.overlay("profile: warm tone");
+    const events = await collect(
+      await returned.overlay("locale: ko").send("hello")
+    );
+
+    expect(returned).toBe(thread);
+    expect(eventTypes(events)).toEqual([
+      "user-input",
+      "turn-start",
+      "runtime-input",
+      "runtime-input",
+      "step-start",
+      "assistant-text",
+      "step-end",
+      "turn-end",
+    ]);
+    expect(events).toContainEqual(
+      overlayRuntimeInput("profile: warm tone", "turn-start")
+    );
+    expect(events).toContainEqual(
+      overlayRuntimeInput("locale: ko", "turn-start")
+    );
+    expect(seenHistory).toEqual([
+      [
+        userTextToModelMessage(userText("profile: warm tone")),
+        userTextToModelMessage(userText("locale: ko")),
+        userTextToModelMessage(userText("hello")),
+      ],
+    ]);
   });
 });

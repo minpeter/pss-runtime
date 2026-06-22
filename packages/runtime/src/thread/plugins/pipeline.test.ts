@@ -5,10 +5,14 @@ import { type AgentPlugin, runPluginsForEvent } from "./pipeline";
 const emptyHistory: AgentEventContext["history"] = [];
 
 describe("runPluginsForEvent", () => {
-  it("chains transforms on user-text in plugin registration order", async () => {
+  it("chains transforms on user-input in plugin registration order", async () => {
     const prefixA: AgentPlugin = {
       on: ({ event }) => {
-        if (event.type !== "user-text" || typeof event.text !== "string") {
+        if (
+          event.type !== "user-input" ||
+          !("text" in event) ||
+          typeof event.text !== "string"
+        ) {
           return;
         }
         return {
@@ -19,7 +23,11 @@ describe("runPluginsForEvent", () => {
     };
     const prefixB: AgentPlugin = {
       on: ({ event }) => {
-        if (event.type !== "user-text" || typeof event.text !== "string") {
+        if (
+          event.type !== "user-input" ||
+          !("text" in event) ||
+          typeof event.text !== "string"
+        ) {
           return;
         }
         return {
@@ -30,13 +38,13 @@ describe("runPluginsForEvent", () => {
     };
 
     const result = await runPluginsForEvent([prefixA, prefixB], {
-      event: { type: "user-text", text: "hello" },
+      event: { type: "user-input", text: "hello" },
       history: emptyHistory,
     });
 
     expect(result).toEqual({
       kind: "emit",
-      event: { type: "user-text", text: "B:A:hello" },
+      event: { type: "user-input", text: "B:A:hello" },
     });
   });
 
@@ -46,7 +54,7 @@ describe("runPluginsForEvent", () => {
     };
 
     const result = await runPluginsForEvent([handledPlugin], {
-      event: { type: "user-text", text: "hello" },
+      event: { type: "user-input", text: "hello" },
       history: emptyHistory,
     });
 
@@ -57,7 +65,7 @@ describe("runPluginsForEvent", () => {
     const transformTurnStart: AgentPlugin = {
       on: () => ({
         action: "transform",
-        event: { type: "user-text", text: "should-not-apply" },
+        event: { type: "user-input", text: "should-not-apply" },
       }),
     };
 
@@ -77,12 +85,12 @@ describe("runPluginsForEvent", () => {
         runPluginsForEvent(
           [{ on: () => value as ReturnType<NonNullable<AgentPlugin["on"]>> }],
           {
-            event: { type: "user-text", text: "hello" },
+            event: { type: "user-input", text: "hello" },
             history: emptyHistory,
           }
         )
       ).resolves.toEqual({
-        event: { type: "user-text", text: "hello" },
+        event: { type: "user-input", text: "hello" },
         kind: "emit",
       });
     }

@@ -109,7 +109,7 @@ describe("createCloudflareDurableObjectHost store selection", () => {
         );
         await tx.notifications.enqueue({
           idempotencyKey: "notify-rollback",
-          input: { text: "resume", type: "user-text" },
+          input: { text: "resume", type: "user-input" },
           notificationId: "notification-rollback",
           runId: "run-rollback",
           threadKey: "thread-rollback",

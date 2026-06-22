@@ -74,7 +74,7 @@ describe("DurableObjectExecutionStore oversized payload stress", () => {
     });
     await host.store.notifications.enqueue({
       idempotencyKey: `${runId}:notification`,
-      input: { text: oversizedUserInput, type: "user-text" },
+      input: { text: oversizedUserInput, type: "user-input" },
       notificationId: `${runId}:notification`,
       runId,
       status: "pending",
@@ -102,7 +102,7 @@ describe("DurableObjectExecutionStore oversized payload stress", () => {
       );
     expect(claimedNotification).toMatchObject({
       ok: true,
-      record: { input: { text: oversizedUserInput, type: "user-text" } },
+      record: { input: { text: oversizedUserInput, type: "user-input" } },
     });
     expect(countRows(sql, "pss_thread_message_chunk")).toBeGreaterThan(0);
     expect(countRows(sql, "pss_payload_chunk")).toBeGreaterThan(0);
@@ -182,7 +182,7 @@ describe("DurableObjectExecutionStore oversized payload stress", () => {
     await timed(timings, "notification enqueue", () =>
       host.store.notifications.enqueue({
         idempotencyKey: `${latencyRunId}:notification`,
-        input: { text: hugeUserInput, type: "user-text" },
+        input: { text: hugeUserInput, type: "user-input" },
         notificationId: `${latencyRunId}:notification`,
         runId: latencyRunId,
         status: "pending",

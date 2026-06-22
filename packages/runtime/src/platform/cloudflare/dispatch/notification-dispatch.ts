@@ -13,6 +13,7 @@ interface DispatchCloudflareAgentNotificationBase {
   readonly input: UserInput;
   readonly namespace: string;
   readonly observerEvents?: readonly AgentEvent[];
+  readonly overlays?: readonly UserInput[];
   readonly threadKey: string;
 }
 
@@ -34,6 +35,7 @@ export function dispatchCloudflareAgentNotification({
   input,
   namespace,
   observerEvents,
+  overlays,
   prefix,
   threadKey,
   storage,
@@ -49,6 +51,7 @@ export function dispatchCloudflareAgentNotification({
     input,
     namespace,
     observerEvents,
+    overlays,
     threadKey,
   });
 }

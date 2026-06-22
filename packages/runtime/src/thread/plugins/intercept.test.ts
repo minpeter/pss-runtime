@@ -16,10 +16,10 @@ describe("thread plugin intercept integration", () => {
   it("routes by meta.source=send in a unified on handler", async () => {
     const tagPlugin: AgentPlugin = {
       on: ({ event }) => {
-        if (event.type !== "user-text" || event.meta?.source !== "send") {
+        if (event.type !== "user-input" || event.meta?.source !== "send") {
           return;
         }
-        if (typeof event.text !== "string") {
+        if (!("text" in event) || typeof event.text !== "string") {
           return;
         }
         return {
@@ -57,7 +57,7 @@ describe("thread plugin intercept integration", () => {
 
     await collect(await agent.send("hello"));
 
-    expect(seen).toContain("user-text");
+    expect(seen).toContain("user-input");
     expect(seen).toContain("turn-end");
   });
 
@@ -94,7 +94,11 @@ describe("thread plugin intercept integration", () => {
       plugins: [
         {
           on: ({ event }) => {
-            if (event.type !== "user-text" || typeof event.text !== "string") {
+            if (
+              event.type !== "user-input" ||
+              !("text" in event) ||
+              typeof event.text !== "string"
+            ) {
               return;
             }
             return {

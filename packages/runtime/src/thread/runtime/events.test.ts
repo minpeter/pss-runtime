@@ -14,10 +14,14 @@ function createDispatcher(
 }
 
 describe("ThreadEventDispatcher.emitRunEvent", () => {
-  it("returns transformed user-text and emits the transformed event", async () => {
+  it("returns transformed user-input and emits the transformed event", async () => {
     const transformPlugin: AgentPlugin = {
       on: ({ event }) => {
-        if (event.type !== "user-text" || typeof event.text !== "string") {
+        if (
+          event.type !== "user-input" ||
+          !("text" in event) ||
+          typeof event.text !== "string"
+        ) {
           return;
         }
         return {
@@ -30,20 +34,20 @@ describe("ThreadEventDispatcher.emitRunEvent", () => {
     const run = new BufferedAgentTurn();
 
     const emitted = await dispatcher.emitRunEvent(run, {
-      type: "user-text",
+      type: "user-input",
       text: "hello",
     });
 
-    expect(emitted).toEqual({ type: "user-text", text: "TAG:hello" });
+    expect(emitted).toEqual({ type: "user-input", text: "TAG:hello" });
     const iterator = run.events()[Symbol.asyncIterator]();
     expect((await iterator.next()).value).toEqual({
-      type: "user-text",
+      type: "user-input",
       text: "TAG:hello",
     });
     await iterator.return?.();
   });
 
-  it("returns handled without emitting user-text to the run", async () => {
+  it("returns handled without emitting user-input to the run", async () => {
     const handledPlugin: AgentPlugin = {
       on: () => ({ action: "handled" }),
     };
@@ -51,7 +55,7 @@ describe("ThreadEventDispatcher.emitRunEvent", () => {
     const run = new BufferedAgentTurn();
 
     const emitted = await dispatcher.emitRunEvent(run, {
-      type: "user-text",
+      type: "user-input",
       text: "hello",
     });
 
@@ -113,7 +117,7 @@ describe("ThreadEventDispatcher.emitRunBoundaryEvent", () => {
     const transformPlugin: AgentPlugin = {
       on: () => ({
         action: "transform",
-        event: { type: "user-text", text: "ignored" },
+        event: { type: "user-input", text: "ignored" },
       }),
     };
     const dispatcher = createDispatcher([transformPlugin]);

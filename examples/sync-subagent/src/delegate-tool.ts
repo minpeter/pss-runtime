@@ -27,7 +27,7 @@ export function createDelegateToReaderTool(options: {
         throw new Error("Delegation was aborted before it started.");
       }
 
-      const prompt = delegateUserInput(input.prompt, { delegateToolName });
+      const prompt = delegateUserInput(input.prompt);
       const childThreadKey = defaultChildThreadKey(
         options.parentAgentNamespace,
         options.parentThreadKey,

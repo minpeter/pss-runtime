@@ -13,7 +13,6 @@ import {
   createCallbackModel,
   createDeferred,
   eventTypes,
-  userMessage,
   userText,
 } from "../../testing/test-fixtures";
 import type { AgentEvent } from "../protocol/events";
@@ -33,7 +32,7 @@ const storedAssistantText = (text: string): ModelMessage => ({
 
 describe("Agent thread persistence", () => {
   it("file thread store preserves image content parts across reload", async () => {
-    const input = userMessage([
+    const input = [
       { type: "text", text: "remember this image" },
       {
         type: "image",
@@ -46,7 +45,7 @@ describe("Agent thread persistence", () => {
         filename: "note.txt",
         mediaType: "text/plain",
       },
-    ]);
+    ] as const;
     const directory = await mkdtemp(join(tmpdir(), "pss-runtime-image-store-"));
     const store = new FileThreadStore(directory);
 
@@ -121,6 +120,39 @@ describe("Agent thread persistence", () => {
       assistantMessage("DONE"),
       userTextToModelMessage(userText("second")),
     ]);
+  });
+
+  it("keeps overlay visible to one turn without persisting it", async () => {
+    const store = new SpyStore();
+    const seenHistory: ModelMessage[][] = [];
+    const agent = new Agent({
+      host: { kind: "thread", threadStore: store },
+      model: createCallbackModel(({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([
+          assistantMessage(`DONE ${seenHistory.length}`),
+        ]);
+      }),
+    });
+    const thread = agent.thread("overlay");
+
+    await collect(await thread.overlay("volatile context").send("first"));
+    await collect(await thread.send("second"));
+
+    expect(seenHistory).toEqual([
+      [
+        userTextToModelMessage(userText("volatile context")),
+        userTextToModelMessage(userText("first")),
+      ],
+      [
+        userTextToModelMessage(userText("first")),
+        assistantMessage("DONE 1"),
+        userTextToModelMessage(userText("second")),
+      ],
+    ]);
+    expect(JSON.stringify(store.threads.get("overlay")?.state)).not.toContain(
+      "volatile context"
+    );
   });
 
   it("isolates named thread keys and resumes same-key state", async () => {

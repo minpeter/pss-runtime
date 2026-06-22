@@ -29,6 +29,7 @@
     "runtime-subagents",
     "runtime-thread-key-surface",
     "runtime-turn-step-naming",
+    "runtime-user-input",
     "sqlite-event-checkpoint-stores",
     "sqlite-session-store",
     "sync-main-dependencies",

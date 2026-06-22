@@ -7,6 +7,7 @@ import { normalizeAgentInput } from "./input-normalization";
 export type RuntimeInputPlacement = RuntimeInput["placement"];
 
 export interface QueuedRuntimeInput {
+  readonly canonical?: boolean;
   readonly input: UserInput;
   readonly placement: RuntimeInputPlacement;
 }

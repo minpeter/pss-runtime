@@ -3,7 +3,6 @@ import type {
   AgentTurn,
   ThreadHandle,
   UserInput,
-  UserMessage,
   UserMessageContentPart,
   UserTextContent,
 } from "@minpeter/pss-runtime";
@@ -36,10 +35,8 @@ export const formatUserTextContent = (text: UserTextContent): string =>
 
 export const formatEvent = (event: AgentEvent): string | undefined => {
   switch (event.type) {
-    case "user-text":
-      return `\x1b[36myou\x1b[0m: ${safeText(formatUserTextContent(event.text))}`;
-    case "user-message":
-      return `\x1b[36myou\x1b[0m: ${safeText(formatUserMessageContent(event))}`;
+    case "user-input":
+      return `\x1b[36myou\x1b[0m: ${safeText(formatUserInput(event))}`;
     case "runtime-input":
       return `${dimText}runtime: ${safeText(formatRuntimeInput(event.input))}${resetText}`;
     case "assistant-text":
@@ -143,19 +140,29 @@ function errorMessage(error: unknown): string {
 }
 
 function formatRuntimeInput(input: UserInput): string {
-  if (isUserText(input)) {
+  if ("text" in input) {
     return formatUserTextContent(input.text);
   }
 
-  if (isUserMessage(input)) {
-    return formatUserMessageContent(input);
+  if ("content" in input) {
+    return formatUserMessageContent(input.content);
   }
 
   return safeInlineText(String(input));
 }
 
-function formatUserMessageContent(message: UserMessage): string {
-  return message.content.map(formatUserMessagePart).join("\n");
+function formatUserInput(input: UserInput): string {
+  if ("text" in input) {
+    return formatUserTextContent(input.text);
+  }
+
+  return formatUserMessageContent(input.content);
+}
+
+function formatUserMessageContent(
+  content: readonly UserMessageContentPart[]
+): string {
+  return content.map(formatUserMessagePart).join("\n");
 }
 
 function formatUserMessagePart(part: UserMessageContentPart): string {
@@ -176,29 +183,5 @@ function isTerminalTurnEvent(event: AgentEvent): boolean {
     event.type === "turn-end" ||
     event.type === "turn-error" ||
     event.type === "turn-abort"
-  );
-}
-
-function isUserMessage(input: unknown): input is UserMessage {
-  return (
-    typeof input === "object" &&
-    input !== null &&
-    "type" in input &&
-    input.type === "user-message" &&
-    "content" in input &&
-    Array.isArray(input.content)
-  );
-}
-
-function isUserText(
-  input: unknown
-): input is { text: UserTextContent; type: "user-text" } {
-  return (
-    typeof input === "object" &&
-    input !== null &&
-    "type" in input &&
-    input.type === "user-text" &&
-    "text" in input &&
-    (typeof input.text === "string" || Array.isArray(input.text))
   );
 }

@@ -12,7 +12,7 @@ const expectPending = async (promise: Promise<unknown>) => {
 describe("AgentTurn", () => {
   it("delivers events emitted before events consumption", async () => {
     const run = new BufferedAgentTurn();
-    run.emit({ type: "user-text", text: "hello" });
+    run.emit({ type: "user-input", text: "hello" });
     run.emit({ type: "turn-end" });
     run.close();
 
@@ -22,7 +22,7 @@ describe("AgentTurn", () => {
     }
 
     expect(events).toEqual([
-      { type: "user-text", text: "hello" },
+      { type: "user-input", text: "hello" },
       { type: "turn-end" },
     ]);
   });

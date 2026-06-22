@@ -216,14 +216,7 @@ export function readDurableBackgroundDelegationState(
 }
 
 function isAgentInput(value: unknown): value is AgentInput {
-  if (typeof value === "string" || Array.isArray(value)) {
-    return true;
-  }
-
-  return (
-    isRecord(value) &&
-    (value.type === "user-text" || value.type === "user-message")
-  );
+  return typeof value === "string" || Array.isArray(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

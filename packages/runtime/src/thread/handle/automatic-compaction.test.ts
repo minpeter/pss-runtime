@@ -114,6 +114,58 @@ describe("Agent thread automatic compaction", () => {
     ]);
   });
 
+  it("does not summarize one-turn overlays during automatic compaction", async () => {
+    const store = new SpyStore();
+    const seenHistory: ModelMessage[][] = [];
+    let calls = 0;
+    const agent = agentWithAutoCompaction({
+      autoCompaction: { minMessages: 4, retainMessages: 2 },
+      host: { kind: "thread", threadStore: store },
+      model: createCallbackModel(({ history }) => {
+        seenHistory.push([...history]);
+        calls += 1;
+        if (calls === 1) {
+          return [assistantMessage("old done")];
+        }
+        if (calls === 2) {
+          return [assistantMessage("tail done")];
+        }
+        if (calls === 3) {
+          return [assistantMessage("summary without overlay")];
+        }
+        return [assistantMessage("after compaction")];
+      }),
+    });
+    const thread = agent.thread("overlay-auto");
+
+    await collect(await thread.overlay("volatile context").send("old"));
+    await collect(await thread.send("tail"));
+    await waitForModelCalls(() => calls, 3);
+
+    expect(seenHistory[0]).toEqual([
+      userTextToModelMessage(userText("volatile context")),
+      userTextToModelMessage(userText("old")),
+    ]);
+    expect(JSON.stringify(seenHistory[2])).not.toContain("volatile context");
+    expect(store.threads.get("overlay-auto")?.state).toMatchObject({
+      compactions: [
+        {
+          endSeqExclusive: 2,
+          schemaVersion: 1,
+          startSeq: 0,
+          summary: { content: "summary without overlay", role: "system" },
+        },
+      ],
+      history: [
+        userTextToModelMessage(userText("old")),
+        storedAssistantText("old done"),
+        userTextToModelMessage(userText("tail")),
+        storedAssistantText("tail done"),
+      ],
+      schemaVersion: 2,
+    });
+  });
+
   it("closes the triggering turn before the background summary finishes", async () => {
     const store = new SpyStore();
     const summaryStarted = createDeferred();

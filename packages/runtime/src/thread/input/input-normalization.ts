@@ -1,22 +1,16 @@
-import type {
-  AgentInput,
-  UserInput,
-  UserMessage,
-  UserMessageContentPart,
-  UserText,
-} from "./input";
+import type { AgentInput, UserInput, UserMessageContentPart } from "./input";
 
 export function normalizeAgentInput(input: AgentInput): UserInput {
   if (typeof input === "string") {
     return {
-      type: "user-text",
+      type: "user-input",
       text: input,
     };
   }
 
   if (isStringArrayInput(input)) {
     return {
-      type: "user-text",
+      type: "user-input",
       text: structuredClone(input),
     };
   }
@@ -24,23 +18,24 @@ export function normalizeAgentInput(input: AgentInput): UserInput {
   if (isArrayInput(input)) {
     assertUserMessageContent(input);
     return {
-      type: "user-message",
+      type: "user-input",
       content: structuredClone(input),
     };
   }
 
-  if (isUserMessage(input)) {
-    assertUserMessageContent(input.content);
-    return structuredClone(input);
-  }
-
-  if (isUserText(input)) {
-    return structuredClone(input);
-  }
-
   throw new TypeError(
-    "Agent input must be text, text parts, content parts, user-text, or user-message."
+    "Agent input must be text, text parts, or content parts."
   );
+}
+
+export function normalizeInternalAgentInput(
+  input: AgentInput | UserInput
+): UserInput {
+  if (isUserInput(input)) {
+    return structuredClone(input);
+  }
+
+  return normalizeAgentInput(input);
 }
 
 function isStringArrayInput(input: unknown): input is readonly string[] {
@@ -53,25 +48,34 @@ function isArrayInput(
   return Array.isArray(input);
 }
 
-function isUserMessage(input: AgentInput): input is UserMessage {
-  return (
-    input !== null &&
-    typeof input === "object" &&
-    !isArrayInput(input) &&
-    input.type === "user-message" &&
-    "content" in input &&
-    Array.isArray(input.content)
-  );
+function isUserInput(input: unknown): input is UserInput {
+  if (!isRecord(input)) {
+    return false;
+  }
+
+  if (input.type !== "user-input") {
+    return false;
+  }
+
+  if ("text" in input && isUserText(input)) {
+    return true;
+  }
+
+  const content = input.content;
+  if (Array.isArray(content)) {
+    assertUserMessageContent(content);
+    return true;
+  }
+
+  return false;
 }
 
-function isUserText(input: AgentInput): input is UserText {
-  return (
-    input !== null &&
-    typeof input === "object" &&
-    !isArrayInput(input) &&
-    input.type === "user-text" &&
-    (typeof input.text === "string" || isStringArrayInput(input.text))
-  );
+function isUserText(input: Record<string, unknown>): boolean {
+  return typeof input.text === "string" || isStringArrayInput(input.text);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function assertUserMessageContent(

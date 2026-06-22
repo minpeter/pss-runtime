@@ -13,7 +13,6 @@ import {
   assistantMessage,
   toolCallPart,
   toolResultFor,
-  userText,
 } from "../testing/test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
@@ -129,7 +128,7 @@ describe("runtime tool call ids", () => {
       },
     });
 
-    const events = await collectRun(await agent.send(userText("delegate")));
+    const events = await collectRun(await agent.send("delegate"));
     const toolCall = events.find((event) => event.type === "tool-call");
     const toolResult = events.find((event) => event.type === "tool-result");
 

@@ -29,6 +29,7 @@ describe("host notification resume", () => {
         return Promise.resolve([assistantMessage("NOTIFIED")]);
       }),
       namespace: "notify-owner",
+      notificationOverlays: ["volatile resume context"],
     });
     const notification = {
       idempotencyKey: "background-complete:bg_1",
@@ -65,6 +66,7 @@ describe("host notification resume", () => {
       "assistant-reasoning",
       "turn-start",
       "runtime-input",
+      "runtime-input",
       "step-start",
       "assistant-text",
       "step-end",
@@ -72,6 +74,7 @@ describe("host notification resume", () => {
     ]);
     expect(seenHistory).toHaveLength(1);
     expect(JSON.stringify(seenHistory[0])).toContain("bg_1");
+    expect(JSON.stringify(seenHistory[0])).toContain("volatile resume context");
 
     const duplicateRun = await agent.resume(notification.runId);
     expect(duplicateRun).toBeNull();

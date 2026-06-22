@@ -132,8 +132,8 @@ async function writeDemoScenario(runtimeHost: ExecutionHost): Promise<void> {
   const notification: NotificationRecord = {
     idempotencyKey: ids.idempotencyKey,
     input: {
-      content: "배송 알림이 들어왔어. 이어서 처리해줘.",
-      type: "user-text",
+      text: "배송 알림이 들어왔어. 이어서 처리해줘.",
+      type: "user-input",
     },
     notificationId: ids.notificationId,
     ownerNamespace: "demo-agent",

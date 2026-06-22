@@ -94,6 +94,16 @@ export class ThreadState {
     this.#history.appendUserInput(input);
   }
 
+  appendTransientUserInput(
+    input: Parameters<ModelMessageHistory["appendTransientUserInput"]>[0]
+  ) {
+    this.#history.appendTransientUserInput(input);
+  }
+
+  clearTransientInputs(): void {
+    this.#history.clearTransientInputs();
+  }
+
   rollback(snapshot: ModelMessage[]): void {
     this.#history.rollback(snapshot);
   }

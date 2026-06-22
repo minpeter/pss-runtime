@@ -15,7 +15,7 @@ describe("dispatchCloudflareAgentNotification", () => {
     const dispatched = await dispatchCloudflareAgentNotification({
       host,
       idempotencyKey: "background:ready",
-      input: { text: "Background signal", type: "user-text" },
+      input: { text: "Background signal", type: "user-input" },
       namespace: "agent-a",
       threadKey: "room:1:user:2",
     });
@@ -44,7 +44,7 @@ describe("dispatchCloudflareAgentNotification", () => {
 
     const first = await dispatchCloudflareAgentNotification({
       idempotencyKey: "connector:oauth:done",
-      input: { text: "Connector OAuth completed", type: "user-text" },
+      input: { text: "Connector OAuth completed", type: "user-input" },
       namespace: "agent-a",
       prefix: "bori-agent",
       threadKey: "room:1:user:2",
@@ -52,7 +52,7 @@ describe("dispatchCloudflareAgentNotification", () => {
     });
     const second = await dispatchCloudflareAgentNotification({
       idempotencyKey: "connector:oauth:done",
-      input: { text: "ignored duplicate", type: "user-text" },
+      input: { text: "ignored duplicate", type: "user-input" },
       namespace: "agent-a",
       prefix: "bori-agent",
       threadKey: "room:1:user:2",
@@ -104,7 +104,7 @@ describe("dispatchCloudflareAgentNotification", () => {
 
     await dispatchCloudflareAgentNotification({
       idempotencyKey: "connector:oauth:done",
-      input: { text: "Connector OAuth completed", type: "user-text" },
+      input: { text: "Connector OAuth completed", type: "user-input" },
       namespace: "agent-a",
       prefix: "bori-agent",
       threadKey: "room:1:user:2",

@@ -144,7 +144,7 @@ describe("DurableObjectExecutionStore storage stress", () => {
           const notificationKey = `${runId}:notify`;
           await host.store.notifications.enqueue({
             idempotencyKey: notificationKey,
-            input: { text: `notify ${runId}`, type: "user-text" },
+            input: { text: `notify ${runId}`, type: "user-input" },
             notificationId: `${runId}:notification`,
             runId,
             status: "pending",

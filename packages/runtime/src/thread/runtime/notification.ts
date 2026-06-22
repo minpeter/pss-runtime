@@ -1,6 +1,6 @@
-import type { AgentInput } from "../input/input";
+import type { AgentInput, UserInput } from "../input/input";
 import { attachInputMeta } from "../input/input-meta";
-import { normalizeAgentInput } from "../input/input-normalization";
+import { normalizeInternalAgentInput } from "../input/input-normalization";
 import {
   createRuntimeInputState,
   type QueuedInput,
@@ -15,6 +15,7 @@ import { errorMessage } from "../state/thread-errors";
 export interface NotifyOptions {
   readonly deferWhenUnobserved?: boolean;
   readonly observerEvents?: readonly AgentEvent[];
+  readonly overlays?: readonly (AgentInput | UserInput)[];
 }
 
 interface QueueThreadNotificationOptions {
@@ -30,19 +31,22 @@ interface QueueThreadNotificationOptions {
 }
 
 export async function queueThreadNotification(
-  input: AgentInput,
+  input: AgentInput | UserInput,
   options: NotifyOptions,
   state: QueueThreadNotificationOptions
 ): Promise<AgentTurn> {
   const queuedRuntimeInput: QueuedRuntimeInput = {
-    input: attachInputMeta(normalizeAgentInput(input), { source: "notify" }),
+    input: attachInputMeta(normalizeInternalAgentInput(input), {
+      source: "notify",
+    }),
     placement: "turn-start",
   };
+  const queuedOverlays = createNotificationOverlays(options.overlays ?? []);
   const observerEvents = cloneObserverEvents(options.observerEvents ?? []);
   const queuedTurn = state.inputQueue[0];
   if (queuedTurn) {
     queuedTurn.initialEvents.push(...observerEvents);
-    queuedTurn.preUserRuntimeInputs.push(queuedRuntimeInput);
+    queuedTurn.preUserRuntimeInputs.push(...queuedOverlays, queuedRuntimeInput);
     return queuedTurn.run;
   }
 
@@ -52,6 +56,9 @@ export async function queueThreadNotification(
     for (const event of observerEvents) {
       await state.emitObserverEvent(activeRun, event);
     }
+    for (const overlay of queuedOverlays) {
+      queueRuntimeInput(runtimeInput, { ...overlay, placement: "step-end" });
+    }
     queueRuntimeInput(runtimeInput, {
       input: structuredClone(queuedRuntimeInput.input),
       placement: "step-end",
@@ -60,6 +67,7 @@ export async function queueThreadNotification(
   }
 
   if (options.deferWhenUnobserved === true) {
+    state.pendingRuntimeInputs.push(...queuedOverlays);
     state.pendingRuntimeInputs.push(queuedRuntimeInput);
     const deferredRun = new BufferedAgentTurn();
     deferredRun.close();
@@ -69,7 +77,7 @@ export async function queueThreadNotification(
   const run = new BufferedAgentTurn();
   state.inputQueue.push({
     initialEvents: observerEvents,
-    preUserRuntimeInputs: [],
+    preUserRuntimeInputs: queuedOverlays,
     run,
     runtimeInput: createRuntimeInputState([queuedRuntimeInput]),
   });
@@ -89,4 +97,16 @@ export function startThreadQueueDrain(
 
 function cloneObserverEvents(events: readonly AgentEvent[]): AgentEvent[] {
   return events.map((event) => structuredClone(event));
+}
+
+function createNotificationOverlays(
+  overlays: readonly (AgentInput | UserInput)[]
+): QueuedRuntimeInput[] {
+  return overlays.map((input) => ({
+    canonical: false,
+    input: attachInputMeta(normalizeInternalAgentInput(input), {
+      source: "overlay",
+    }),
+    placement: "turn-start",
+  }));
 }

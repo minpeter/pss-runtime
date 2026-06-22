@@ -29,7 +29,7 @@ describe("Agent thread plugin events", () => {
     const events = await collect(await agent.send("hello"));
 
     expect(eventTypes(events)).toEqual([
-      "user-text",
+      "user-input",
       "turn-start",
       "step-start",
       "assistant-text",
@@ -37,7 +37,7 @@ describe("Agent thread plugin events", () => {
       "turn-end",
     ]);
     expect(pluginCalls).toEqual([
-      "user-text:0",
+      "user-input:0",
       "turn-start:1",
       "step-start:1",
       "assistant-text:2",
@@ -97,7 +97,7 @@ describe("Agent thread plugin events", () => {
     );
 
     expect(eventTypes(firstEvents)).toEqual([
-      "user-text",
+      "user-input",
       "turn-start",
       "step-start",
       "assistant-text",
@@ -105,7 +105,7 @@ describe("Agent thread plugin events", () => {
       "turn-error",
     ]);
     expect(eventTypes(secondEvents)).toEqual([
-      "user-text",
+      "user-input",
       "turn-start",
       "step-start",
       "assistant-text",

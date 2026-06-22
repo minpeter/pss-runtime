@@ -119,7 +119,7 @@ async function createScheduledNotification(idempotencyKey: string): Promise<{
 
   await host.store.notifications.enqueue({
     idempotencyKey,
-    input: { text: "Reminder fired", type: "user-text" },
+    input: { text: "Reminder fired", type: "user-input" },
     notificationId: `${idempotencyKey}:notification`,
     runId,
     threadKey,

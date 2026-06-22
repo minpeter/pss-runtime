@@ -18,7 +18,7 @@ export type { InputEventMeta, InputSource } from "../input/input-meta-types";
 export interface RuntimeInput {
   /**
    * Runtime/API-originated model input inserted into the current turn.
-   * This is distinct from human-originated user-text and user-message input.
+   * This is distinct from human-originated user-input.
    */
   input: UserInput;
   meta?: InputEventMeta;
@@ -79,8 +79,7 @@ export type AgentEventListener = (event: AgentEvent) => void;
 
 const visibleAgentEventTypes = {
   "assistant-text": true,
-  "user-message": true,
-  "user-text": true,
+  "user-input": true,
 } satisfies Partial<Record<AgentEvent["type"], true>>;
 
 const lifecycleAgentEventTypes = {

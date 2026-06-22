@@ -12,11 +12,15 @@ import type { AgentPlugin } from "../plugins/pipeline";
 import { userTextToModelMessage } from "../protocol/mapping";
 
 describe("thread.send intercept", () => {
-  it("queues transformed user-text into model history", async () => {
+  it("queues transformed user-input into model history", async () => {
     const seenHistory: ModelMessage[][] = [];
     const transformPlugin: AgentPlugin = {
       on: ({ event }) => {
-        if (event.type !== "user-text" || typeof event.text !== "string") {
+        if (
+          event.type !== "user-input" ||
+          !("text" in event) ||
+          typeof event.text !== "string"
+        ) {
           return;
         }
         return {

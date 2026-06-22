@@ -2,6 +2,7 @@ import type {
   AgentInput,
   NotifyOptions,
   ThreadCompactionInput,
+  UserInput,
 } from "../../thread/handle/thread";
 import type { AgentTurn } from "../../thread/protocol/turn";
 import { namespacePart } from "../identity/namespace";
@@ -23,12 +24,16 @@ export interface ThreadHandle {
   delete(): Promise<void>;
   dispose(): Promise<void>;
   interrupt(): void;
+  overlay(input: AgentInput): ThreadHandle;
   send(input: AgentInput): Promise<AgentTurn>;
   steer(input: AgentInput): Promise<AgentTurn>;
 }
 
 export interface AgentThreadEntry {
-  notify(input: AgentInput, options?: NotifyOptions): Promise<AgentTurn>;
+  notify(
+    input: AgentInput | UserInput,
+    options?: NotifyOptions
+  ): Promise<AgentTurn>;
   readonly publicHandle: ThreadHandle;
 }
 

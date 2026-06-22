@@ -27,7 +27,7 @@ type ModelEvent = AssistantReasoning | AssistantText | ToolCall | ToolResult;
 // UserInput -> AI SDK UserModelMessage
 export function userInputToModelMessage(input: UserInput): UserModelMessage {
   const stripped = stripInputMeta(input);
-  if (stripped.type === "user-message") {
+  if ("content" in stripped) {
     return userMessageToModelMessage(stripped);
   }
 

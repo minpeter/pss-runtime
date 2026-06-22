@@ -54,7 +54,7 @@ describe("storage metrics", () => {
     );
     await host.store.notifications.enqueue({
       idempotencyKey: `${runId}:notification`,
-      input: { text: "다".repeat(480), type: "user-text" },
+      input: { text: "다".repeat(480), type: "user-input" },
       notificationId: `${runId}:notification`,
       runId,
       status: "pending",
