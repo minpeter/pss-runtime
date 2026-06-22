@@ -8,8 +8,8 @@ import type {
 import type { UserInput } from "../input/input";
 import { stripInputMeta } from "../input/input-meta";
 import type {
+  AssistantOutput,
   AssistantReasoning,
-  AssistantText,
   ToolCall,
   ToolResult,
   UserMessage,
@@ -22,7 +22,7 @@ import type {
 
 type AssistantContentPart = Exclude<AssistantContent, string>[number];
 type ToolContentPart = ToolModelMessage["content"][number];
-type ModelEvent = AssistantReasoning | AssistantText | ToolCall | ToolResult;
+type ModelEvent = AssistantReasoning | AssistantOutput | ToolCall | ToolResult;
 
 // UserInput -> AI SDK UserModelMessage
 export function userInputToModelMessage(input: UserInput): UserModelMessage {
@@ -147,7 +147,7 @@ function assistantContentPartToEvents(
   part: AssistantContentPart
 ): ModelEvent[] {
   if (part.type === "text") {
-    return part.text ? [{ type: "assistant-text", text: part.text }] : [];
+    return part.text ? [{ type: "assistant-output", text: part.text }] : [];
   }
 
   if (part.type === "reasoning") {

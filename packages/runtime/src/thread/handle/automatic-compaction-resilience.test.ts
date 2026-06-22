@@ -13,7 +13,7 @@ import {
 import { userTextToModelMessage } from "../protocol/mapping";
 import {
   agentWithAutoCompaction,
-  storedAssistantText,
+  storedAssistantOutput,
   waitForModelCalls,
 } from "./automatic-compaction.test-support";
 import {
@@ -97,9 +97,9 @@ describe("Agent thread automatic compaction resilience", () => {
     expect(store.threads.get("summary-fails")?.state).toEqual({
       history: [
         userTextToModelMessage(userText("old")),
-        storedAssistantText("FIRST"),
+        storedAssistantOutput("FIRST"),
         userTextToModelMessage(userText("tail")),
-        storedAssistantText("SECOND"),
+        storedAssistantOutput("SECOND"),
       ],
       schemaVersion: 1,
     });
@@ -138,9 +138,9 @@ describe("Agent thread automatic compaction resilience", () => {
     expect(store.threads.get("summary-conflict")?.state).toEqual({
       history: [
         userTextToModelMessage(userText("old")),
-        storedAssistantText("FIRST"),
+        storedAssistantOutput("FIRST"),
         userTextToModelMessage(userText("tail")),
-        storedAssistantText("SECOND"),
+        storedAssistantOutput("SECOND"),
       ],
       schemaVersion: 1,
     });
@@ -192,11 +192,11 @@ describe("Agent thread automatic compaction resilience", () => {
     expect(store.threads.get("summary-rejected")?.state).toMatchObject({
       history: [
         userTextToModelMessage(userText("old")),
-        storedAssistantText("FIRST"),
+        storedAssistantOutput("FIRST"),
         userTextToModelMessage(userText("tail")),
-        storedAssistantText("SECOND"),
+        storedAssistantOutput("SECOND"),
         userTextToModelMessage(userText("after failure")),
-        storedAssistantText("AFTER FAILURE"),
+        storedAssistantOutput("AFTER FAILURE"),
       ],
       schemaVersion: 1,
     });

@@ -68,7 +68,7 @@ describe("host notification resume", () => {
       "runtime-input",
       "runtime-input",
       "step-start",
-      "assistant-text",
+      "assistant-output",
       "step-end",
       "turn-end",
     ]);
@@ -189,7 +189,7 @@ describe("host notification resume", () => {
       throw new Error("Expected notification resume retry to return a run.");
     }
 
-    expect(eventTypes(await collect(run))).toContain("assistant-text");
+    expect(eventTypes(await collect(run))).toContain("assistant-output");
     await expect(
       host.store.notifications.getByIdempotencyKey(idempotencyKey)
     ).resolves.toEqual(expect.objectContaining({ status: "acked" }));

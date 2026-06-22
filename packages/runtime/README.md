@@ -139,7 +139,7 @@ const coordinator = new Agent({
         const turn = await reader.thread("kb").send(prompt);
         const text: string[] = [];
         for await (const event of turn.events()) {
-          if (event.type === "assistant-text") {
+          if (event.type === "assistant-output") {
             text.push(event.text);
           }
         }
@@ -303,7 +303,7 @@ const turn = await thread.send("Draft a short answer.");
 let addedSteer = false;
 
 for await (const event of turn.events()) {
-  if (event.type === "assistant-text") {
+  if (event.type === "assistant-output") {
     process.stdout.write(event.text);
   }
 

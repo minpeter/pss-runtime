@@ -52,8 +52,8 @@ describe("Cloudflare alarm thread prompt retries", () => {
         resume: async () => {
           await completeAndClaimNotification({ host, idempotencyKey, runId });
           return runWithEvents([
-            { text: "first", type: "assistant-text" },
-            { text: "second", type: "assistant-text" },
+            { text: "first", type: "assistant-output" },
+            { text: "second", type: "assistant-output" },
           ]);
         },
       },
@@ -62,7 +62,9 @@ describe("Cloudflare alarm thread prompt retries", () => {
       storage,
     });
 
-    expect(summary.events).toEqual([{ text: "first", type: "assistant-text" }]);
+    expect(summary.events).toEqual([
+      { text: "first", type: "assistant-output" },
+    ]);
     expect(summary.continuationReasons).toContain("event-budget");
     expect(summary.continuationScheduled).toBe(true);
     await expect(host.store.turns.get(runId)).resolves.toEqual(

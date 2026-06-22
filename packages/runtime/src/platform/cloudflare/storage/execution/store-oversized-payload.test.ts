@@ -48,7 +48,7 @@ describe("DurableObjectExecutionStore oversized payload stress", () => {
     await host.store.turns.create(run);
     await host.store.events.append(runId, {
       text: oversizedEventText,
-      type: "assistant-text",
+      type: "assistant-output",
     });
     await host.store.events.append(runId, {
       output: { text: oversizedEventText },
@@ -89,7 +89,7 @@ describe("DurableObjectExecutionStore oversized payload stress", () => {
       oversizedThreadText.length
     );
     expect(await collectEventSummaries(host.store.events, runId)).toEqual([
-      { textLength: oversizedEventText.length, type: "assistant-text" },
+      { textLength: oversizedEventText.length, type: "assistant-output" },
       { outputLength: oversizedEventText.length, type: "tool-result" },
     ]);
     await expect(host.store.checkpoints.latest(runId)).resolves.toMatchObject({
@@ -148,7 +148,7 @@ describe("DurableObjectExecutionStore oversized payload stress", () => {
     await timed(timings, "assistant event append", () =>
       host.store.events.append(latencyRunId, {
         text: hugeAssistantOutput,
-        type: "assistant-text",
+        type: "assistant-output",
       })
     );
     await timed(timings, "tool event append", () =>
@@ -261,7 +261,7 @@ function threadHistoryTextLength(state: unknown, index: number): number {
 }
 
 type EventSummary =
-  | { readonly textLength: number; readonly type: "assistant-text" }
+  | { readonly textLength: number; readonly type: "assistant-output" }
   | { readonly outputLength: number; readonly type: "tool-result" };
 
 interface TextMessageProbe {
@@ -302,8 +302,8 @@ function isTextMessage(value: unknown): value is TextMessageProbe {
 }
 
 function eventSummary(event: AgentEvent): EventSummary {
-  if (event.type === "assistant-text") {
-    return { textLength: event.text.length, type: "assistant-text" };
+  if (event.type === "assistant-output") {
+    return { textLength: event.text.length, type: "assistant-output" };
   }
   if (event.type === "tool-result" && isTextOutput(event.output)) {
     return { outputLength: event.output.text.length, type: "tool-result" };

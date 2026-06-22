@@ -25,7 +25,7 @@ import {
   SpyStore,
 } from "./test-support";
 
-const storedAssistantText = (text: string): ModelMessage => ({
+const storedAssistantOutput = (text: string): ModelMessage => ({
   content: [{ providerOptions: undefined, text, type: "text" }],
   role: "assistant",
 });
@@ -307,9 +307,9 @@ describe("Agent thread persistence", () => {
       ],
       history: [
         userTextToModelMessage(userText("old")),
-        storedAssistantText("DONE 1"),
+        storedAssistantOutput("DONE 1"),
         userTextToModelMessage(userText("tail")),
-        storedAssistantText("DONE 2"),
+        storedAssistantOutput("DONE 2"),
       ],
       schemaVersion: 2,
     });

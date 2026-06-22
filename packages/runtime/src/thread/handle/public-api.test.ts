@@ -40,7 +40,7 @@ describe("ThreadHandle public API", () => {
 
     expect(events).toContainEqual({
       text: "mocked reply",
-      type: "assistant-text",
+      type: "assistant-output",
     });
     expect(model.doGenerateCalls).toHaveLength(1);
     expect(JSON.stringify(model.doGenerateCalls[0]?.prompt)).toContain("hello");

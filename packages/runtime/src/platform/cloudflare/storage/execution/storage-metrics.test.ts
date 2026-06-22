@@ -39,7 +39,7 @@ describe("storage metrics", () => {
     });
     await host.store.events.append(runId, {
       text: "가".repeat(480),
-      type: "assistant-text",
+      type: "assistant-output",
     });
     await host.store.checkpoints.append(
       {

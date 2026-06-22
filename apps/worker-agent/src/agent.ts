@@ -74,7 +74,7 @@ export function createConfiguredAgent(env: Env, host: AgentHost): Agent {
   });
 }
 
-export async function collectAssistantText(run: AgentTurn): Promise<string> {
+export async function collectAssistantOutput(run: AgentTurn): Promise<string> {
   const events = await drainAgentTurn(run);
   const turnError = events.find(
     (event): event is Extract<AgentEvent, { type: "turn-error" }> =>
@@ -87,8 +87,8 @@ export async function collectAssistantText(run: AgentTurn): Promise<string> {
 
   return events
     .filter(
-      (event): event is Extract<AgentEvent, { type: "assistant-text" }> =>
-        event.type === "assistant-text"
+      (event): event is Extract<AgentEvent, { type: "assistant-output" }> =>
+        event.type === "assistant-output"
     )
     .map((event) => event.text)
     .join("\n")

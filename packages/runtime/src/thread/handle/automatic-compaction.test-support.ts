@@ -17,7 +17,7 @@ export const agentWithAutoCompaction = (
   options: AutoCompactionAgentOptions
 ): Agent => new Agent(options);
 
-export const storedAssistantText = (text: string): ModelMessage => ({
+export const storedAssistantOutput = (text: string): ModelMessage => ({
   content: [{ providerOptions: undefined, text, type: "text" }],
   role: "assistant",
 });

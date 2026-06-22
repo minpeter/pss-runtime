@@ -73,7 +73,7 @@ async function resumeBackgroundDelegation({
   const output = {
     result: "completed",
     subagent: readerChildName,
-    text: collectAssistantText(events),
+    text: collectAssistantOutput(events),
   };
   await host.store.turns.update({
     ...run,
@@ -102,11 +102,11 @@ async function collectRunEvents(run: AgentTurn) {
   return events;
 }
 
-function collectAssistantText(
+function collectAssistantOutput(
   events: Awaited<ReturnType<typeof collectRunEvents>>
 ): string {
   return events
-    .filter((event) => event.type === "assistant-text")
+    .filter((event) => event.type === "assistant-output")
     .map((event) => event.text)
     .join("\n");
 }

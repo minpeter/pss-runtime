@@ -118,7 +118,7 @@ describe("runtime public exports", () => {
   it("types event classifier exports from the package root", () => {
     const visible = {
       text: "hello",
-      type: "assistant-text",
+      type: "assistant-output",
     } satisfies VisibleAgentEvent;
     const lifecycle = { type: "turn-start" } satisfies LifecycleAgentEvent;
     const telemetry = {
@@ -134,7 +134,7 @@ describe("runtime public exports", () => {
     ];
 
     expect(events.map((event) => event.type)).toEqual([
-      "assistant-text",
+      "assistant-output",
       "turn-start",
       "assistant-reasoning",
       "turn-start",

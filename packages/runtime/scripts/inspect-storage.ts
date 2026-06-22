@@ -87,7 +87,7 @@ async function writeDemoScenario(runtimeHost: ExecutionHost): Promise<void> {
     { type: "step-start" },
     {
       text: "주문 조회를 위해 내부 도구를 호출합니다.",
-      type: "assistant-text",
+      type: "assistant-output",
     },
     {
       input: { orderId: "order-123" },

@@ -29,8 +29,8 @@ export { runPluginsForEvent } from "./thread/plugins/pipeline";
 export type {
   AgentEvent,
   AgentEventListener,
+  AssistantOutput,
   AssistantReasoning,
-  AssistantText,
   ControlAgentEvent,
   InputEventMeta,
   InputSource,

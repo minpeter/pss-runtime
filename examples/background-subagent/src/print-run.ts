@@ -8,7 +8,7 @@ export async function drainRunForCli(run: AgentTurn) {
 
 function printCliEvent(event: AgentEvent) {
   switch (event.type) {
-    case "assistant-text":
+    case "assistant-output":
       process.stdout.write(event.text);
       return;
     case "tool-call":

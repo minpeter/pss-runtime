@@ -39,7 +39,7 @@ export const formatEvent = (event: AgentEvent): string | undefined => {
       return `\x1b[36myou\x1b[0m: ${safeText(formatUserInput(event))}`;
     case "runtime-input":
       return `${dimText}runtime: ${safeText(formatRuntimeInput(event.input))}${resetText}`;
-    case "assistant-text":
+    case "assistant-output":
       return `\x1b[32massistant\x1b[0m: ${safeText(event.text)}`;
     case "assistant-reasoning":
       return `\x1b[35mreasoning\x1b[0m: ${truncateDetail(safeInlineText(event.text), 240)}`;

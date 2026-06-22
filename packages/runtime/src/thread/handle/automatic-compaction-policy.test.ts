@@ -10,7 +10,7 @@ import { userTextToModelMessage } from "../protocol/mapping";
 import {
   agentWithAutoCompaction,
   nextMacrotask,
-  storedAssistantText,
+  storedAssistantOutput,
 } from "./automatic-compaction.test-support";
 import { collect, SpyStore } from "./test-support";
 import { AgentThread } from "./thread";
@@ -38,9 +38,9 @@ describe("Agent thread automatic compaction policy", () => {
     expect(store.threads.get("default-disabled")?.state).toEqual({
       history: [
         userTextToModelMessage(userText("old")),
-        storedAssistantText("DONE 1"),
+        storedAssistantOutput("DONE 1"),
         userTextToModelMessage(userText("next")),
-        storedAssistantText("DONE 2"),
+        storedAssistantOutput("DONE 2"),
       ],
       schemaVersion: 1,
     });
@@ -64,7 +64,7 @@ describe("Agent thread automatic compaction policy", () => {
     expect(store.threads.get("below-threshold")?.state).toEqual({
       history: [
         userTextToModelMessage(userText("small")),
-        storedAssistantText("DONE"),
+        storedAssistantOutput("DONE"),
       ],
       schemaVersion: 1,
     });
@@ -132,9 +132,9 @@ describe("Agent thread automatic compaction policy", () => {
     expect(store.threads.get("notify-only-auto-skip")?.state).toEqual({
       history: [
         userTextToModelMessage(userText("first notification")),
-        storedAssistantText("first notification done"),
+        storedAssistantOutput("first notification done"),
         userTextToModelMessage(userText("second notification")),
-        storedAssistantText("second notification done"),
+        storedAssistantOutput("second notification done"),
       ],
       schemaVersion: 1,
     });

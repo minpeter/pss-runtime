@@ -38,7 +38,7 @@ describe("thread event protocol boundary", () => {
 
   it("classifies public event stream categories with type guards", () => {
     const events = [
-      { text: "shown", type: "assistant-text" },
+      { text: "shown", type: "assistant-output" },
       { type: "turn-start" },
       {
         input: { value: 1 },

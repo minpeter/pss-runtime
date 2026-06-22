@@ -61,7 +61,7 @@ function agentEventVariants(): readonly AgentEvent[] {
     { type: "turn-end" },
     { type: "step-start" },
     { text: "hidden chain summary", type: "assistant-reasoning" },
-    { text: "visible answer", type: "assistant-text" },
+    { text: "visible answer", type: "assistant-output" },
     {
       input: { query: "weather", units: "metric" },
       toolCallId: "call_weather",

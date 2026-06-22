@@ -15,7 +15,7 @@ import {
 import { userTextToModelMessage } from "../protocol/mapping";
 import {
   agentWithAutoCompaction,
-  storedAssistantText,
+  storedAssistantOutput,
   waitForModelCalls,
 } from "./automatic-compaction.test-support";
 import { collect, SpyStore } from "./test-support";
@@ -60,9 +60,9 @@ describe("Agent thread automatic compaction", () => {
       ],
       history: [
         userTextToModelMessage(userText("old")),
-        storedAssistantText("old done"),
+        storedAssistantOutput("old done"),
         userTextToModelMessage(userText("tail")),
-        storedAssistantText("tail done"),
+        storedAssistantOutput("tail done"),
       ],
       schemaVersion: 2,
     });
@@ -158,9 +158,9 @@ describe("Agent thread automatic compaction", () => {
       ],
       history: [
         userTextToModelMessage(userText("old")),
-        storedAssistantText("old done"),
+        storedAssistantOutput("old done"),
         userTextToModelMessage(userText("tail")),
-        storedAssistantText("tail done"),
+        storedAssistantOutput("tail done"),
       ],
       schemaVersion: 2,
     });
@@ -196,9 +196,9 @@ describe("Agent thread automatic compaction", () => {
     expect(store.threads.get("non-blocking-summary")?.state).toEqual({
       history: [
         userTextToModelMessage(userText("first")),
-        storedAssistantText("first done"),
+        storedAssistantOutput("first done"),
         userTextToModelMessage(userText("second")),
-        storedAssistantText("second done"),
+        storedAssistantOutput("second done"),
       ],
       schemaVersion: 1,
     });
