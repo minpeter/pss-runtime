@@ -1,4 +1,12 @@
 #!/usr/bin/env node
-import { startTui } from "../dist/tui.js";
+import { runCodingAgentCli } from "../dist/cli.js";
 
-await startTui();
+try {
+  const exitCode = await runCodingAgentCli();
+  if (exitCode !== 0) {
+    process.exitCode = exitCode;
+  }
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+}

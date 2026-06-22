@@ -187,10 +187,9 @@ const agent = new Agent({
 For most events, `on` is observe-only: return nothing (or `{ action: "continue" }`)
 and the runtime emits the event unchanged.
 
-Three input event types support intercept returns:
+Two input event types support intercept returns:
 
-- `user-text`
-- `user-message`
+- `user-input`
 - `runtime-input`
 
 Return one of:
@@ -221,7 +220,7 @@ history persistence and model mapping. It never reaches the LLM prompt.
 ### Delegate prompt wrapping
 
 Child agents receive delegated prompts with `meta.source === "delegate"`. Wrap or
-rewrite them with a plugin instead of agent-level prompt shims:
+rewrite text input with a plugin instead of agent-level prompt shims:
 
 ```ts
 import type { AgentPlugin, UserText } from "@minpeter/pss-runtime";
@@ -230,7 +229,11 @@ import { Agent } from "@minpeter/pss-runtime";
 const pokeTagsPlugin: AgentPlugin = {
   name: "poke-tags",
   on: ({ event }) => {
-    if (event.type !== "user-text" || event.meta?.source !== "delegate") {
+    if (
+      event.type !== "user-input" ||
+      event.meta?.source !== "delegate" ||
+      !("text" in event)
+    ) {
       return;
     }
 
@@ -281,12 +284,12 @@ or `agent.resume(runId)` for host-scheduled durable work.
 Each accepted call returns one `AgentTurn`. Drain that turn's `events()` stream to
 observe the turn; each `AgentTurn.events()` stream is single-consumer.
 
-Input APIs accept the same input shapes: strings, arrays of strings,
-`{ type: "user-text", text }`, and multipart `{ type: "user-message", content }`
-values. Active steering and host resume input emit `runtime-input` events. A
-`runtime-input` is runtime/API-originated input mapped internally to the model's
-user role. It is distinct from human-origin `user-text` and `user-message`
-events.
+Input APIs accept strings, arrays of strings, or multipart arrays such as
+`[{ type: "text", text: "hello" }, { type: "image", image }]`. The runtime
+normalizes accepted `send` input into `user-input` events. Active steering and
+host resume input emit `runtime-input` events. A `runtime-input` is
+runtime/API-originated input mapped internally to the model's user role. It is
+distinct from human-origin `user-input` events.
 
 Runtime input windows are tied to synchronized events:
 
@@ -363,6 +366,20 @@ const agent = new Agent({
   model,
   namespace: "support-agent",
 });
+```
+
+Use `inspectNodeFileThread` when local tooling needs to inspect the exact file
+runtime uses for a thread:
+
+```ts
+import { inspectNodeFileThread } from "@minpeter/pss-runtime/node";
+
+const report = await inspectNodeFileThread({
+  directory: ".pss/threads",
+  key: "room:123:user:456",
+});
+
+console.log(report.messageCount, report.compactionCount, report.storageFile);
 ```
 
 A `host: { kind: "thread", threadStore }` object is a `ThreadHost`-only host.
@@ -473,7 +490,7 @@ import {
 
 await dispatchCloudflareAgentNotification({
   idempotencyKey: `reminder:${reminderId}`,
-  input: { type: "user-text", text: reminderText },
+  input: reminderText,
   namespace: "support-agent",
   prefix: "agent",
   threadKey: `room:${roomId}:user:${userId}`,

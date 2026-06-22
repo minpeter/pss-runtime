@@ -1,0 +1,65 @@
+import {
+  inspectNodeFileThread,
+  type NodeFileThreadInspection,
+  type NodeFileThreadInspectionCompaction,
+  nodeFileThreadStorageFile,
+} from "@minpeter/pss-runtime/node";
+import type { CodingAgentThreadConfig } from "./thread-config";
+
+export type ThreadInspectionCompaction = NodeFileThreadInspectionCompaction;
+
+export interface ThreadInspectionReport extends NodeFileThreadInspection {
+  readonly autoCompaction: CodingAgentThreadConfig["autoCompaction"];
+  readonly compactions: readonly ThreadInspectionCompaction[];
+}
+
+export async function inspectCodingAgentThread(
+  config: CodingAgentThreadConfig
+): Promise<ThreadInspectionReport> {
+  const inspection = await inspectNodeFileThread({
+    directory: config.directory,
+    key: config.key,
+  });
+
+  return {
+    autoCompaction: config.autoCompaction,
+    ...inspection,
+  };
+}
+
+export function formatThreadInspectionReport(
+  report: ThreadInspectionReport
+): string {
+  const compactions =
+    report.compactions.length === 0
+      ? "compactions: none"
+      : `compactions:\n${report.compactions
+          .map(
+            (record) =>
+              `  - startSeq=${record.startSeq} endSeqExclusive=${record.endSeqExclusive} summaryBytes=${record.summaryBytes}`
+          )
+          .join("\n")}`;
+
+  return [
+    `threadKey: ${report.threadKey}`,
+    `storageFile: ${report.storageFile}`,
+    `version: ${report.version ?? "none"}`,
+    `messageCount: ${report.messageCount}`,
+    `compactionCount: ${report.compactionCount}`,
+    compactions,
+    `summaryBytes: ${report.summaryBytes}`,
+    `autoCompaction: ${formatAutoCompaction(report.autoCompaction)}`,
+  ].join("\n");
+}
+
+export function storageFileForThread(directory: string, key: string): string {
+  return nodeFileThreadStorageFile({ directory, key });
+}
+
+function formatAutoCompaction(
+  autoCompaction: CodingAgentThreadConfig["autoCompaction"]
+): string {
+  return autoCompaction
+    ? `min=${autoCompaction.minMessages} retain=${autoCompaction.retainMessages}`
+    : "off";
+}

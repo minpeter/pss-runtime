@@ -1,8 +1,27 @@
 import type { AgentEvent } from "@minpeter/pss-runtime";
 import { describe, expect, it, vi } from "vitest";
-import { createTuiRunner, formatEvent } from "./tui-runner";
+import { createTuiRunner, formatEvent, formatTuiHeader } from "./tui-runner";
 
 describe("TUI runner", () => {
+  it("formats the header when compaction is disabled", () => {
+    expect(
+      formatTuiHeader({ autoCompaction: false, threadKey: "cwd:/repo/demo" })
+    ).toBe(
+      "\x1b[1mpss-next\x1b[0m \x1b[2m(thread cwd:/repo/demo \u00b7 compaction off \u00b7 Esc to interrupt \u00b7 Ctrl-C to quit)\x1b[0m"
+    );
+  });
+
+  it("formats the header when compaction is enabled", () => {
+    expect(
+      formatTuiHeader({
+        autoCompaction: { minMessages: 12, retainMessages: 4 },
+        threadKey: "workspace:demo",
+      })
+    ).toBe(
+      "\x1b[1mpss-next\x1b[0m \x1b[2m(thread workspace:demo \u00b7 compaction min=12 retain=4 \u00b7 Esc to interrupt \u00b7 Ctrl-C to quit)\x1b[0m"
+    );
+  });
+
   it("renders runtime input distinctly from human input", () => {
     expect(formatEvent({ text: "hello", type: "user-input" })).toBe(
       "\x1b[36myou\x1b[0m: hello"

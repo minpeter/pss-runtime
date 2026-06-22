@@ -21,6 +21,16 @@
       "types": "./dist/model.d.ts",
       "import": "./dist/model.js"
     },
+    "./thread-config": {
+      "@minpeter/pss-source": "./src/thread-config.ts",
+      "types": "./dist/thread-config.d.ts",
+      "import": "./dist/thread-config.js"
+    },
+    "./thread-inspect": {
+      "@minpeter/pss-source": "./src/thread-inspect.ts",
+      "types": "./dist/thread-inspect.d.ts",
+      "import": "./dist/thread-inspect.js"
+    },
     "./tui": {
       "@minpeter/pss-source": "./src/tui.ts",
       "types": "./dist/tui.d.ts",
@@ -46,6 +56,7 @@
     "provenance": true
   },
   "scripts": {
+    "start": "tsx --conditions=@minpeter/pss-source src/tui.ts",
     "build": "tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
