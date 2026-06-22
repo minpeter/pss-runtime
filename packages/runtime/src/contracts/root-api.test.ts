@@ -283,4 +283,14 @@ describe("runtime public exports", () => {
       types: "./dist/platform/node/index.d.ts",
     });
   });
+
+  it("exports Node file thread inspection from the Node adapter only", async () => {
+    const runtime = await import("../index");
+    const nodeAdapter = await import("../platform/node");
+
+    expect(runtime).not.toHaveProperty("inspectNodeFileThread");
+    expect(runtime).not.toHaveProperty("nodeFileThreadStorageFile");
+    expect(nodeAdapter).toHaveProperty("inspectNodeFileThread");
+    expect(nodeAdapter).toHaveProperty("nodeFileThreadStorageFile");
+  });
 });

@@ -58,6 +58,7 @@ describe("thread inspection", () => {
 
       expect(formatThreadInspectionReport(report)).toBe(`threadKey: inspect:key
 storageFile: ${join(directory, threadFileName(key))}
+version: 7
 messageCount: 3
 compactionCount: 1
 compactions:
@@ -82,6 +83,7 @@ autoCompaction: min=12 retain=4`);
 
       expect(formatThreadInspectionReport(report)).toBe(`threadKey: missing:key
 storageFile: ${join(directory, threadFileName(key))}
+version: none
 messageCount: 0
 compactionCount: 0
 compactions: none

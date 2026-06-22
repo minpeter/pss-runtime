@@ -9,7 +9,7 @@ import {
   TUI,
 } from "@earendil-works/pi-tui";
 import { Agent, type AgentOptions } from "@minpeter/pss-runtime";
-import { FileThreadStore } from "@minpeter/pss-runtime/thread-store/file";
+import { createNodeFileThreadHost } from "@minpeter/pss-runtime/node";
 import type { ToolSet } from "ai";
 import { createCodingLanguageModel } from "./model";
 import { resolveCodingAgentThreadConfig } from "./thread-config";
@@ -27,10 +27,7 @@ export interface StartTuiOptions {
 export async function startTui(options: StartTuiOptions = {}): Promise<void> {
   const threadConfig = resolveCodingAgentThreadConfig();
   const agentOptions: AgentOptions = {
-    host: {
-      kind: "thread",
-      threadStore: new FileThreadStore(threadConfig.directory),
-    },
+    host: createNodeFileThreadHost({ directory: threadConfig.directory }),
     instructions:
       "Answer in 2 short sentences and 280 characters or fewer unless the user explicitly asks for detail. Avoid headings.",
     model: createCodingLanguageModel(),

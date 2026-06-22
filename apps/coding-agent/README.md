@@ -42,9 +42,9 @@ already printed final-looking text. Adding input on every `step-end` can keep
 the turn running indefinitely.
 
 Runtime additions emit `runtime-input`: runtime/API-originated input mapped
-internally to the model's user role, separate from human `user-text` and
-`user-message` events. `thread.send(input)` starts or enqueues a new turn;
-`thread.steer(input)` steers the active turn or starts a normal turn when idle.
+internally to the model's user role, separate from human `user-input` events.
+`thread.send(input)` starts or enqueues a new turn; `thread.steer(input)` steers
+the active turn or starts a normal turn when idle.
 
 ## CLI
 
@@ -64,6 +64,10 @@ Inspect the configured local thread without starting the TUI:
 ```sh
 pss inspect-thread
 ```
+
+The inspection command uses the runtime Node adapter to decode stored thread
+snapshots, so the CLI reports the same file path, message count, compaction
+records, and version that runtime storage uses.
 
 The `pss` TUI starts a plain conversational agent with no built-in tools. To run
 the TUI with tools, call `startTui({ tools })` from your own entrypoint (for

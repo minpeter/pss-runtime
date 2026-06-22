@@ -33,4 +33,11 @@ export type {
   NodeScheduledWorkRunContext,
 } from "./host/scheduled-work-types";
 export { FileExecutionStore } from "./storage/file-execution-store";
+export {
+  inspectNodeFileThread,
+  type NodeFileThreadInspection,
+  type NodeFileThreadInspectionCompaction,
+  type NodeFileThreadInspectionOptions,
+  nodeFileThreadStorageFile,
+} from "./storage/file-thread-inspection";
 export { FileThreadStore } from "./storage/file-thread-store";
