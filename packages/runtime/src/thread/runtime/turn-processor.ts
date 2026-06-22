@@ -15,6 +15,7 @@ import type { AgentEvent } from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
 import { errorMessage } from "../state/thread-errors";
 import type { ThreadState } from "../state/thread-state";
+import { scheduleThreadAutoCompaction } from "./auto-compaction";
 import { drainRuntimeInput } from "./drain";
 import type { ThreadEventDispatcher } from "./events";
 import {
@@ -125,6 +126,13 @@ export async function processQueuedInput({
       run,
       runtimeInput,
     });
+    if (result === "completed" && input) {
+      scheduleThreadAutoCompaction({
+        model,
+        policy: execution.autoCompaction,
+        state,
+      });
+    }
   } catch (error) {
     const turnError = error instanceof Error ? error : new Error(String(error));
     await executionRun?.complete(executionStatusForError(turnError));

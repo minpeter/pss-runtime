@@ -5,6 +5,7 @@ import type {
   ThreadStore,
   ThreadStoreCommit,
 } from "../../../../index";
+import { isAgentThreadSnapshot } from "../../../../thread/state/snapshot";
 import type { SqlStorage } from "../../sql/ports/storage-port";
 import type { CloudflareDurableObjectStorage } from "../durable-object/durable-object-storage";
 import {
@@ -13,20 +14,19 @@ import {
   stringifyJsonPayloadWithinBudget,
 } from "../payload-guard";
 import {
+  deleteThreadCompactions,
   deleteThreadRows,
   ensureThreadSchema,
   readActiveThreadMessages,
+  readThreadCompactions,
   readThreadMeta,
+  serializeThreadCompactions,
   softDeleteActiveThreadRows,
   threadRowKey,
+  writeThreadCompactions,
   writeThreadHistoryRows,
   writeThreadMeta,
 } from "./thread-store-sql";
-
-interface ThreadSnapshotV1 {
-  readonly history: unknown[];
-  readonly schemaVersion: 1;
-}
 
 /**
  * Append-only thread store for SQLite-backed Durable Objects.
@@ -44,7 +44,9 @@ export class DurableObjectSqliteThreadStore implements ThreadStore {
   readonly #maxPayloadBytes: number;
   readonly #prefix: string;
   readonly #sql: SqlStorage;
+  readonly #transaction: <T>(operation: () => T) => Promise<T>;
   #schemaReady = false;
+  #writeQueue: Promise<void> = Promise.resolve();
 
   constructor(
     storage: CloudflareDurableObjectStorage,
@@ -60,9 +62,10 @@ export class DurableObjectSqliteThreadStore implements ThreadStore {
     this.#maxPayloadBytes = resolveStoragePayloadMaxBytes(options);
     this.#prefix = prefix;
     this.#sql = sql;
+    this.#transaction = createStorageTransaction(storage, sql);
   }
 
-  commit(
+  async commit(
     threadKey: string,
     next: ThreadStoreCommit,
     options: { readonly expectedVersion: ExpectedThreadVersion }
@@ -71,58 +74,80 @@ export class DurableObjectSqliteThreadStore implements ThreadStore {
       this.#ensureSchema();
       const key = this.#rowKey(threadKey);
 
-      // --- begin synchronous read-modify-write critical section (no await) ---
-      const meta = readThreadMeta(this.#sql, key);
-      const currentVersion = meta ? meta.version : null;
-      if (options.expectedVersion !== currentVersion) {
-        return Promise.resolve({ ok: false, reason: "conflict" });
-      }
+      const prepared = isAgentThreadSnapshot(next.state)
+        ? {
+            kind: "snapshot" as const,
+            compactions: serializeThreadCompactions(
+              next.state.schemaVersion === 2 ? next.state.compactions : [],
+              this.#maxPayloadBytes
+            ),
+            state: next.state,
+          }
+        : {
+            kind: "opaque" as const,
+            stateBlob: stringifyJsonPayloadWithinBudget(
+              "thread-state",
+              next.state ?? null,
+              this.#maxPayloadBytes
+            ),
+          };
 
-      const version = String(versionCounter(meta?.version) + 1);
-      const nextSeqStart = meta?.next_seq ?? 0;
+      return await this.#enqueueWrite(() =>
+        this.#transaction(() => {
+          // --- begin synchronous read-modify-write critical section (no await) ---
+          const meta = readThreadMeta(this.#sql, key);
+          const currentVersion = meta ? meta.version : null;
+          if (options.expectedVersion !== currentVersion) {
+            return { ok: false, reason: "conflict" };
+          }
 
-      if (isSnapshotV1(next.state)) {
-        const nextSeq = writeThreadHistoryRows({
-          history: next.state.history,
-          key,
-          maxPayloadBytes: this.#maxPayloadBytes,
-          meta,
-          nextSeqStart,
-          sql: this.#sql,
-        });
-        writeThreadMeta(this.#sql, key, {
-          message_count: next.state.history.length,
-          next_seq: nextSeq,
-          state_blob: null,
-          version,
-        });
-      } else {
-        const stateBlob = stringifyJsonPayloadWithinBudget(
-          "thread-state",
-          next.state ?? null,
-          this.#maxPayloadBytes
-        );
-        softDeleteActiveThreadRows(this.#sql, key);
-        writeThreadMeta(this.#sql, key, {
-          message_count: 0,
-          next_seq: nextSeqStart,
-          state_blob: stateBlob,
-          version,
-        });
-      }
-      // --- end critical section ---
+          const version = String(versionCounter(meta?.version) + 1);
+          const nextSeqStart = meta?.next_seq ?? 0;
 
-      return Promise.resolve({ ok: true, version });
+          if (prepared.kind === "snapshot") {
+            const nextSeq = writeThreadHistoryRows({
+              history: prepared.state.history,
+              key,
+              maxPayloadBytes: this.#maxPayloadBytes,
+              meta,
+              nextSeqStart,
+              sql: this.#sql,
+            });
+            writeThreadCompactions(this.#sql, key, prepared.compactions);
+            writeThreadMeta(this.#sql, key, {
+              message_count: prepared.state.history.length,
+              next_seq: nextSeq,
+              state_blob: null,
+              version,
+            });
+          } else {
+            softDeleteActiveThreadRows(this.#sql, key);
+            deleteThreadCompactions(this.#sql, key);
+            writeThreadMeta(this.#sql, key, {
+              message_count: 0,
+              next_seq: nextSeqStart,
+              state_blob: prepared.stateBlob,
+              version,
+            });
+          }
+          // --- end critical section ---
+
+          return { ok: true, version };
+        })
+      );
     } catch (error) {
       return Promise.reject(error);
     }
   }
 
-  delete(threadKey: string): Promise<void> {
+  async delete(threadKey: string): Promise<void> {
     this.#ensureSchema();
     const key = this.#rowKey(threadKey);
-    deleteThreadRows(this.#sql, key);
-    return Promise.resolve();
+    await this.#enqueueWrite(() =>
+      this.#transaction(() => {
+        deleteThreadRows(this.#sql, key);
+      })
+    );
   }
 
   load(threadKey: string): Promise<StoredThread | null> {
@@ -141,6 +166,13 @@ export class DurableObjectSqliteThreadStore implements ThreadStore {
     const history: unknown[] = readActiveThreadMessages(this.#sql, key).map(
       (row) => JSON.parse(row.message)
     );
+    const compactions = readThreadCompactions(this.#sql, key);
+    if (compactions.length > 0) {
+      return Promise.resolve({
+        state: { compactions, history, schemaVersion: 2 },
+        version,
+      });
+    }
     return Promise.resolve({ state: { history, schemaVersion: 1 }, version });
   }
 
@@ -155,6 +187,15 @@ export class DurableObjectSqliteThreadStore implements ThreadStore {
     ensureThreadSchema(this.#sql);
     this.#schemaReady = true;
   }
+
+  #enqueueWrite<T>(operation: () => Promise<T>): Promise<T> {
+    const next = this.#writeQueue.then(operation, operation);
+    this.#writeQueue = next.then(
+      () => undefined,
+      () => undefined
+    );
+    return next;
+  }
 }
 
 function versionCounter(version: string | undefined): number {
@@ -162,13 +203,27 @@ function versionCounter(version: string | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function isSnapshotV1(value: unknown): value is ThreadSnapshotV1 {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    "schemaVersion" in value &&
-    (value as { schemaVersion?: unknown }).schemaVersion === 1 &&
-    "history" in value &&
-    Array.isArray((value as { history?: unknown }).history)
+function createStorageTransaction(
+  storage: CloudflareDurableObjectStorage,
+  sql: SqlStorage
+): <T>(operation: () => T) => Promise<T> {
+  const transactionSync = storage.transactionSync?.bind(storage);
+  if (transactionSync) {
+    return <T>(operation: () => T) =>
+      Promise.resolve(transactionSync(operation));
+  }
+
+  const transaction = storage.transaction?.bind(storage);
+  if (transaction) {
+    return <T>(operation: () => T) => transaction(async () => operation());
+  }
+
+  const sqlTransaction = sql.transaction?.bind(sql);
+  if (sqlTransaction) {
+    return <T>(operation: () => T) => sqlTransaction(async () => operation());
+  }
+
+  throw new Error(
+    "DurableObjectSqliteThreadStore requires Cloudflare Durable Object storage transaction support."
   );
 }

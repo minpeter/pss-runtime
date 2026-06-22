@@ -1,4 +1,8 @@
-import type { AgentInput, NotifyOptions } from "../../thread/handle/thread";
+import type {
+  AgentInput,
+  NotifyOptions,
+  ThreadCompactionInput,
+} from "../../thread/handle/thread";
 import type { AgentTurn } from "../../thread/protocol/turn";
 import { namespacePart } from "../identity/namespace";
 
@@ -15,6 +19,7 @@ export interface ThreadAddress {
 export type ThreadKey = string | ThreadAddress;
 
 export interface ThreadHandle {
+  compact(input: ThreadCompactionInput): Promise<void>;
   delete(): Promise<void>;
   dispose(): Promise<void>;
   interrupt(): void;

@@ -1,3 +1,4 @@
+import type { ThreadCompactionRecord } from "../../../../thread/state/snapshot";
 import type { SqlStorage } from "../../sql/ports/storage-port";
 import { storeKey } from "../execution/records";
 import {
@@ -21,6 +22,13 @@ export interface ThreadMessageRow {
   readonly seq: number;
 }
 
+export interface StoredThreadCompactionRecord {
+  readonly endSeqExclusive: number;
+  readonly schemaVersion: 1;
+  readonly startSeq: number;
+  readonly summary: unknown;
+}
+
 interface RawThreadMessageRow {
   readonly message: string;
   readonly seq: number;
@@ -35,6 +43,13 @@ interface ThreadMessageChunkRow {
 interface ThreadMessageChunkMarker {
   readonly kind: "legacy-json" | "raw-prefix";
   readonly n: number;
+}
+
+export interface SerializedThreadCompactionRow {
+  readonly endSeqExclusive: number;
+  readonly ordinal: number;
+  readonly startSeq: number;
+  readonly summary: string;
 }
 
 interface WriteHistoryRowsOptions {
@@ -62,6 +77,12 @@ export function ensureThreadSchema(sql: SqlStorage): void {
   );
   sql.exec(
     "CREATE TABLE IF NOT EXISTS pss_thread_message_chunk (thread_key TEXT NOT NULL, seq INTEGER NOT NULL, chunk_index INTEGER NOT NULL, chunk TEXT NOT NULL, PRIMARY KEY (thread_key, seq, chunk_index))"
+  );
+  sql.exec(
+    "CREATE TABLE IF NOT EXISTS pss_thread_compaction (thread_key TEXT NOT NULL, ordinal INTEGER NOT NULL, start_seq INTEGER NOT NULL, end_seq_exclusive INTEGER NOT NULL, summary TEXT NOT NULL, PRIMARY KEY (thread_key, ordinal))"
+  );
+  sql.exec(
+    "CREATE INDEX IF NOT EXISTS pss_thread_compaction_range ON pss_thread_compaction (thread_key, start_seq, end_seq_exclusive)"
   );
 }
 
@@ -187,6 +208,70 @@ export function softDeleteActiveThreadRows(sql: SqlStorage, key: string): void {
   );
 }
 
+export function readThreadCompactions(
+  sql: SqlStorage,
+  key: string
+): StoredThreadCompactionRecord[] {
+  const rows = sql
+    .exec<{
+      end_seq_exclusive: number;
+      start_seq: number;
+      summary: string;
+    }>(
+      "SELECT start_seq, end_seq_exclusive, summary FROM pss_thread_compaction WHERE thread_key = ? ORDER BY ordinal",
+      key
+    )
+    .toArray();
+
+  return rows.map((row) => {
+    const summary: unknown = JSON.parse(row.summary);
+    return {
+      endSeqExclusive: row.end_seq_exclusive,
+      schemaVersion: 1,
+      startSeq: row.start_seq,
+      summary,
+    };
+  });
+}
+
+export function serializeThreadCompactions(
+  compactions: readonly ThreadCompactionRecord[],
+  maxPayloadBytes: number
+): SerializedThreadCompactionRow[] {
+  return compactions.map((record, ordinal) => ({
+    endSeqExclusive: record.endSeqExclusive,
+    ordinal,
+    startSeq: record.startSeq,
+    summary: stringifyJsonPayloadWithinBudget(
+      "thread-compaction",
+      record.summary,
+      maxPayloadBytes
+    ),
+  }));
+}
+
+export function writeThreadCompactions(
+  sql: SqlStorage,
+  key: string,
+  rows: readonly SerializedThreadCompactionRow[]
+): void {
+  deleteThreadCompactions(sql, key);
+  for (const row of rows) {
+    sql.exec(
+      "INSERT INTO pss_thread_compaction (thread_key, ordinal, start_seq, end_seq_exclusive, summary) VALUES (?, ?, ?, ?, ?)",
+      key,
+      row.ordinal,
+      row.startSeq,
+      row.endSeqExclusive,
+      row.summary
+    );
+  }
+}
+
+export function deleteThreadCompactions(sql: SqlStorage, key: string): void {
+  sql.exec("DELETE FROM pss_thread_compaction WHERE thread_key = ?", key);
+}
+
 export function writeThreadMeta(
   sql: SqlStorage,
   key: string,
@@ -203,6 +288,7 @@ export function writeThreadMeta(
 }
 
 export function deleteThreadRows(sql: SqlStorage, key: string): void {
+  deleteThreadCompactions(sql, key);
   sql.exec("DELETE FROM pss_thread_message_chunk WHERE thread_key = ?", key);
   sql.exec("DELETE FROM pss_thread_message WHERE thread_key = ?", key);
   sql.exec("DELETE FROM pss_thread_meta WHERE thread_key = ?", key);

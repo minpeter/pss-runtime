@@ -96,3 +96,22 @@ export class ConflictOnCommitStore extends SpyStore {
     return super.commit(key, next, options);
   }
 }
+
+export class RejectOnCompactionCommitStore extends SpyStore {
+  override commit(
+    key: string,
+    next: ThreadStoreCommit,
+    options: { expectedVersion: string | null }
+  ): Promise<CommitResult> {
+    if (
+      typeof next.state === "object" &&
+      next.state !== null &&
+      "schemaVersion" in next.state &&
+      next.state.schemaVersion === 2
+    ) {
+      return Promise.reject(new Error("compaction commit failed"));
+    }
+
+    return super.commit(key, next, options);
+  }
+}

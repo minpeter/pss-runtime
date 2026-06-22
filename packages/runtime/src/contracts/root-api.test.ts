@@ -16,11 +16,15 @@ import type {
   TurnStore,
 } from "../execution";
 import type {
+  AgentAutoCompactionOptions,
   AgentEvent,
   AgentHost,
+  AgentOptions,
   ControlAgentEvent,
   LifecycleAgentEvent,
   TelemetryAgentEvent,
+  ThreadCompactionInput,
+  ThreadHandle,
   VisibleAgentEvent,
 } from "../index";
 import {
@@ -134,6 +138,34 @@ describe("runtime public exports", () => {
       "assistant-reasoning",
       "turn-start",
     ]);
+  });
+
+  it("types public thread compaction options from the package root", () => {
+    const autoCompaction = {
+      minMessages: 12,
+      retainMessages: 4,
+    } satisfies AgentAutoCompactionOptions;
+    const model = {} as AgentOptions["model"];
+    const enabledOptions = {
+      autoCompaction,
+      model,
+    } satisfies AgentOptions;
+    const disabledOptions = {
+      autoCompaction: false,
+      model,
+    } satisfies AgentOptions;
+    const compaction = {
+      endSeqExclusive: 8,
+      startSeq: 0,
+      summary: "Earlier turns established the durable context.",
+    } satisfies ThreadCompactionInput;
+
+    expectTypeOf<
+      Parameters<ThreadHandle["compact"]>[0]
+    >().toEqualTypeOf<ThreadCompactionInput>();
+    expect(enabledOptions.autoCompaction).toEqual(autoCompaction);
+    expect(disabledOptions.autoCompaction).toBe(false);
+    expect(compaction.startSeq).toBe(0);
   });
 
   it("types advanced host contracts", () => {

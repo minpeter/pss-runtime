@@ -9,9 +9,11 @@ import { stableAgentNamespace } from "../identity/namespace";
 import { resumeAgentTurn } from "../resume/resume";
 import { threadStoreForHost } from "./host-thread-store";
 import {
+  type AgentAutoCompactionOptions,
   type AgentModelOptions,
   type AgentOptions,
   assertAgentOptions,
+  normalizeAgentAutoCompactionOptions,
 } from "./options";
 import {
   type AgentThreadEntry,
@@ -21,7 +23,8 @@ import {
 } from "./thread-entry";
 
 export type { AgentHost } from "../../execution/host/types";
-export type { AgentOptions } from "./options";
+export type { ThreadCompactionInput } from "../../thread/handle/thread";
+export type { AgentAutoCompactionOptions, AgentOptions } from "./options";
 export type {
   ThreadAddress,
   ThreadHandle,
@@ -36,6 +39,7 @@ export class Agent {
   readonly #store: ThreadStore;
   readonly #host: AgentHost;
   readonly #plugins: readonly AgentPlugin[];
+  readonly #autoCompaction?: AgentAutoCompactionOptions;
   readonly host: AgentHost;
   readonly namespace?: string;
   constructor(options: AgentOptions) {
@@ -49,6 +53,9 @@ export class Agent {
     this.host = this.#host;
     this.#store = threadStoreForHost(this.#host);
     this.#plugins = options.plugins ?? [];
+    this.#autoCompaction = normalizeAgentAutoCompactionOptions(
+      options.autoCompaction
+    );
     this.#modelOptions = {
       instructions: options.instructions,
       model: options.model,
@@ -111,10 +118,12 @@ export class Agent {
       { key, store: this.#store },
       this.#plugins,
       {
+        autoCompaction: this.#autoCompaction,
         executionHost: executionHost(this.#host),
       }
     );
     const publicHandle: ThreadHandle = {
+      compact: (input) => thread.compact(input),
       delete: async () => {
         thread.kill();
         this.#evictThreadHandle(key);

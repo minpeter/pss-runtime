@@ -8,6 +8,7 @@ import { writeRunStatement } from "./run-write";
 import type {
   InMemoryDurableObjectSqlState,
   PayloadChunkRow,
+  ThreadCompactionRow,
   ThreadMessageChunkRow,
   ThreadMetaRow,
 } from "./state";
@@ -105,6 +106,14 @@ function writeThreadStatement(
   query: string,
   bindings: readonly unknown[]
 ): void {
+  if (query.startsWith("delete from pss_thread_compaction")) {
+    deleteThreadCompactions(state, bindings);
+    return;
+  }
+  if (query.startsWith("insert into pss_thread_compaction")) {
+    insertThreadCompaction(state, bindings);
+    return;
+  }
   if (query.startsWith("delete from pss_thread_message_chunk")) {
     deleteThreadMessageChunks(state, bindings);
     return;
@@ -134,6 +143,37 @@ function writeThreadStatement(
     return;
   }
   throw new Error(`Unsupported in-memory thread SQL statement: ${query}`);
+}
+
+function deleteThreadCompactions(
+  state: InMemoryDurableObjectSqlState,
+  bindings: readonly unknown[]
+): void {
+  const key = stringBinding(bindings[0]);
+  state.threadCompactions = state.threadCompactions.filter(
+    (row) => row.thread_key !== key
+  );
+}
+
+function insertThreadCompaction(
+  state: InMemoryDurableObjectSqlState,
+  bindings: readonly unknown[]
+): void {
+  const row: ThreadCompactionRow = {
+    end_seq_exclusive: numberBinding(bindings[3]),
+    ordinal: numberBinding(bindings[1]),
+    start_seq: numberBinding(bindings[2]),
+    summary: stringBinding(bindings[4]),
+    thread_key: stringBinding(bindings[0]),
+  };
+  state.threadCompactions = state.threadCompactions.filter(
+    (existing) =>
+      !(
+        existing.thread_key === row.thread_key &&
+        existing.ordinal === row.ordinal
+      )
+  );
+  state.threadCompactions.push(row);
 }
 
 function deleteThreadMessages(

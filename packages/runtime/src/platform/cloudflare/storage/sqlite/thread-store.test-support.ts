@@ -18,6 +18,13 @@ interface MessageChunkRowProbe {
   readonly seq: number;
 }
 
+interface CompactionRowProbe {
+  readonly end_seq_exclusive: number;
+  readonly ordinal: number;
+  readonly start_seq: number;
+  readonly summary: string;
+}
+
 export function createStore(
   options: { readonly maxPayloadBytes?: number } = {}
 ): {
@@ -59,6 +66,18 @@ export function readChunkRows(
   return (storage.sql as InMemorySqlStorage)
     .exec<MessageChunkRowProbe>(
       "SELECT seq, chunk_index, chunk FROM pss_thread_message_chunk WHERE thread_key = ? ORDER BY seq, chunk_index",
+      storeKey(PREFIX, "thread", threadKey)
+    )
+    .toArray();
+}
+
+export function readCompactionRows(
+  storage: InMemoryCloudflareDurableObjectStorage,
+  threadKey: string
+): CompactionRowProbe[] {
+  return (storage.sql as InMemorySqlStorage)
+    .exec<CompactionRowProbe>(
+      "SELECT ordinal, start_seq, end_seq_exclusive, summary FROM pss_thread_compaction WHERE thread_key = ? ORDER BY ordinal",
       storeKey(PREFIX, "thread", threadKey)
     )
     .toArray();

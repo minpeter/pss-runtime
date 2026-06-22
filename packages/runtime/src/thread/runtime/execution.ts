@@ -5,9 +5,11 @@ import type {
 } from "../../execution/host/types";
 import type { RuntimeToolExecutionContext } from "../../llm/llm";
 import type { ThreadState } from "../state/thread-state";
+import type { ThreadAutoCompactionOptions } from "./auto-compaction";
 import { createThreadToolExecutionContext } from "./execution-checkpoints";
 
 export interface ThreadExecutionOptions {
+  readonly autoCompaction?: ThreadAutoCompactionOptions;
   readonly executionHost?: ExecutionHost;
 }
 

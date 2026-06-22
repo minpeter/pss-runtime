@@ -1,7 +1,11 @@
 import type { ModelMessage } from "ai";
 import type { ThreadStore } from "../store/types";
 import { ModelMessageHistory } from "./history";
-import { decodeStoredThreadSnapshot, encodeThreadSnapshot } from "./snapshot";
+import {
+  decodeStoredThreadState,
+  encodeThreadSnapshot,
+  type ThreadCompactionRecord,
+} from "./snapshot";
 
 export interface ThreadPersistenceOptions {
   readonly key: string;
@@ -13,6 +17,12 @@ export interface ThreadCheckpointReference {
   readonly schemaVersion: 1;
   readonly threadKey: string;
   readonly threadVersion: string | null;
+}
+
+export interface ThreadCompactionInput {
+  readonly endSeqExclusive: number;
+  readonly startSeq: number;
+  readonly summary: string;
 }
 
 export class ThreadCommitConflictError extends Error {
@@ -61,6 +71,14 @@ export class ThreadState {
     return this.#history.modelSnapshot();
   }
 
+  modelContextSnapshot(): ModelMessage[] {
+    return this.#history.modelContextSnapshot();
+  }
+
+  compactionSnapshot(): ThreadCompactionRecord[] {
+    return this.#history.compactionSnapshot();
+  }
+
   threadCheckpointReference(): ThreadCheckpointReference {
     return {
       kind: "thread-reference",
@@ -80,12 +98,45 @@ export class ThreadState {
     this.#history.rollback(snapshot);
   }
 
+  async compact(input: ThreadCompactionInput): Promise<void> {
+    if (this.#deleteRequested || this.#deleted) {
+      return;
+    }
+
+    const previous = {
+      compactions: this.#history.compactionSnapshot(),
+      history: this.#history.modelSnapshot(),
+      storeVersion: this.#storeVersion,
+    };
+    const record: ThreadCompactionRecord = {
+      endSeqExclusive: input.endSeqExclusive,
+      schemaVersion: 1,
+      startSeq: input.startSeq,
+      summary: { content: input.summary, role: "system" },
+    };
+    this.#history.recordCompaction(record);
+    try {
+      await this.commit();
+    } catch (error) {
+      if (!(error instanceof ThreadCommitConflictError)) {
+        this.#storeVersion = previous.storeVersion;
+        this.#history = new ModelMessageHistory(
+          previous.history,
+          undefined,
+          previous.compactions
+        );
+      }
+      throw error;
+    }
+  }
+
   async commit(): Promise<void> {
     if (this.#deleteRequested || this.#deleted) {
       return;
     }
 
     const snapshot = this.#history.modelSnapshot();
+    const compactions = this.#history.compactionSnapshot();
     await this.#enqueueWrite(async () => {
       if (this.#deleteRequested || this.#deleted) {
         return;
@@ -93,7 +144,7 @@ export class ThreadState {
 
       const result = await this.#persistence.store.commit(
         this.#persistence.key,
-        { state: encodeThreadSnapshot(snapshot) },
+        { state: encodeThreadSnapshot(snapshot, compactions) },
         { expectedVersion: this.#storeVersion ?? null }
       );
 
@@ -112,6 +163,7 @@ export class ThreadState {
     }
 
     const previous = {
+      compactions: this.#history.compactionSnapshot(),
       history: this.#history.modelSnapshot(),
       loaded: this.#loaded,
       storeVersion: this.#storeVersion,
@@ -126,7 +178,11 @@ export class ThreadState {
         this.#deleteRequested = false;
         this.#loaded = previous.loaded;
         this.#storeVersion = previous.storeVersion;
-        this.#history = new ModelMessageHistory(previous.history);
+        this.#history = new ModelMessageHistory(
+          previous.history,
+          undefined,
+          previous.compactions
+        );
         throw error;
       }
 
@@ -156,6 +212,11 @@ export class ThreadState {
   async #replaceWithStoredThread(): Promise<void> {
     const stored = await this.#persistence.store.load(this.#persistence.key);
     this.#storeVersion = stored?.version;
-    this.#history = new ModelMessageHistory(decodeStoredThreadSnapshot(stored));
+    const state = decodeStoredThreadState(stored);
+    this.#history = new ModelMessageHistory(
+      state.history,
+      undefined,
+      state.compactions
+    );
   }
 }
