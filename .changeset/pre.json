@@ -16,6 +16,7 @@
     "order-subagent-events",
     "remove-coding-agent-tools",
     "remove-runtime-llm",
+    "runtime-auto-compaction",
     "runtime-cloudflare-adapter",
     "runtime-plugin-constructor",
     "runtime-plugin-sessions",
