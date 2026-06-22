@@ -1,17 +1,13 @@
 import type { AgentEvent, RuntimeInput } from "../protocol/events";
-import type { UserInput, UserMessage, UserText } from "./input";
+import type { UserInput } from "./input";
 import type { InputEventMeta } from "./input-meta-types";
 
 export type { InputEventMeta, InputSource } from "./input-meta-types";
 
-export function attachInputMeta(
-  input: UserInput,
+export function attachInputMeta<T extends UserInput>(
+  input: T,
   meta: InputEventMeta
-): UserText | UserMessage {
-  if (input.type === "user-text") {
-    return { ...input, meta };
-  }
-
+): T & { readonly meta: InputEventMeta } {
   return { ...input, meta };
 }
 
@@ -29,17 +25,12 @@ export function attachRuntimeInputMeta(
 }
 
 export function stripInputMeta(input: UserInput): UserInput {
-  if (input.type === "user-text") {
-    const { meta: _meta, ...rest } = input;
-    return rest;
-  }
-
   const { meta: _meta, ...rest } = input;
   return rest;
 }
 
 export function stripEventMeta(event: AgentEvent): AgentEvent {
-  if (event.type === "user-text" || event.type === "user-message") {
+  if (event.type === "user-input") {
     return stripInputMeta(event);
   }
 
@@ -54,6 +45,6 @@ export function stripEventMeta(event: AgentEvent): AgentEvent {
   return event;
 }
 
-export function userInputFromEvent(event: UserText | UserMessage): UserInput {
+export function userInputFromEvent(event: UserInput): UserInput {
   return stripInputMeta(event);
 }

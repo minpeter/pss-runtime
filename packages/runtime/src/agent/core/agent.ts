@@ -39,6 +39,7 @@ export class Agent {
   readonly #store: ThreadStore;
   readonly #host: AgentHost;
   readonly #plugins: readonly AgentPlugin[];
+  readonly #notificationOverlays?: AgentOptions["notificationOverlays"];
   readonly #autoCompaction?: AgentAutoCompactionOptions;
   readonly host: AgentHost;
   readonly namespace?: string;
@@ -53,6 +54,7 @@ export class Agent {
     this.host = this.#host;
     this.#store = threadStoreForHost(this.#host);
     this.#plugins = options.plugins ?? [];
+    this.#notificationOverlays = options.notificationOverlays;
     this.#autoCompaction = normalizeAgentAutoCompactionOptions(
       options.autoCompaction
     );
@@ -77,6 +79,10 @@ export class Agent {
 
   send(input: AgentInput): Promise<AgentTurn> {
     return this.thread("default").send(input);
+  }
+
+  overlay(input: AgentInput): ThreadHandle {
+    return this.thread("default").overlay(input);
   }
 
   /**
@@ -135,6 +141,10 @@ export class Agent {
         return Promise.resolve();
       },
       interrupt: () => thread.interrupt(),
+      overlay: (input) => {
+        thread.overlay(input);
+        return publicHandle;
+      },
       send: (input) => thread.send(input),
       steer: (input) => thread.steer(input),
     };
@@ -153,7 +163,13 @@ export class Agent {
   #resumeNotification(notification: NotificationRecord): Promise<AgentTurn> {
     return this.#threadEntry(notification.threadKey).notify(
       notification.input,
-      { observerEvents: notification.observerEvents }
+      {
+        observerEvents: notification.observerEvents,
+        overlays: [
+          ...(notification.overlays ?? []),
+          ...(this.#notificationOverlays ?? []),
+        ],
+      }
     );
   }
 }

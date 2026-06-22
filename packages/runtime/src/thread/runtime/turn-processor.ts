@@ -117,6 +117,7 @@ export async function processQueuedInput({
       toolExecution: executionRun?.toolExecution,
     });
 
+    state.clearTransientInputs();
     await state.commit();
     await executionRun?.complete(executionStatusForResult(result));
     await closeSuccessfulTurn({

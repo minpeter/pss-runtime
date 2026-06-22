@@ -34,7 +34,10 @@ describe("Agent thread terminal state", () => {
     llmGate.resolve();
 
     expect(eventTypes(await firstEvents)).toContain("turn-error");
-    expect(eventTypes(await secondEvents)).toEqual(["user-text", "turn-error"]);
+    expect(eventTypes(await secondEvents)).toEqual([
+      "user-input",
+      "turn-error",
+    ]);
     await expect(thread.steer("late")).rejects.toThrow("Thread killed");
   });
 
@@ -57,7 +60,7 @@ describe("Agent thread terminal state", () => {
       throw new Error("thread.dispose() did not close the active run");
     }
     expect(eventTypes(events)).toEqual([
-      "user-text",
+      "user-input",
       "turn-start",
       "step-start",
       "turn-error",
@@ -92,7 +95,7 @@ describe("Agent thread terminal state", () => {
       throw new Error("thread.dispose() did not close the terminal event run");
     }
     expect(eventTypes(events)).toEqual([
-      "user-text",
+      "user-input",
       "turn-start",
       "step-start",
       "assistant-text",
@@ -153,7 +156,7 @@ describe("Agent thread terminal state", () => {
       throw new Error("thread.delete() did not close the active run");
     }
     expect(eventTypes(events)).toEqual([
-      "user-text",
+      "user-input",
       "turn-start",
       "step-start",
       "turn-error",

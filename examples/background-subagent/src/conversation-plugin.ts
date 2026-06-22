@@ -4,7 +4,11 @@ export function createConversationTagPlugin(): AgentPlugin {
   return {
     name: "conversation-tag",
     on: ({ event }) => {
-      if (event.type !== "user-text" || typeof event.text !== "string") {
+      if (
+        event.type !== "user-input" ||
+        !("text" in event) ||
+        typeof event.text !== "string"
+      ) {
         return;
       }
 

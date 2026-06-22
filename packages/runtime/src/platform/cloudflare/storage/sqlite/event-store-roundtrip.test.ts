@@ -27,7 +27,7 @@ describe("DurableObjectSqliteEventStore AgentEvent round-trip", () => {
 
 function agentEventVariants(): readonly AgentEvent[] {
   return [
-    { meta: { source: "send" }, text: "hello", type: "user-text" },
+    { meta: { source: "send" }, text: "hello", type: "user-input" },
     {
       content: [
         { text: "multipart text", type: "text" },
@@ -47,10 +47,10 @@ function agentEventVariants(): readonly AgentEvent[] {
         },
       ],
       meta: { source: "notify" },
-      type: "user-message",
+      type: "user-input",
     },
     {
-      input: { text: "runtime says continue", type: "user-text" },
+      input: { text: "runtime says continue", type: "user-input" },
       meta: { source: "steer" },
       placement: "step-start",
       type: "runtime-input",

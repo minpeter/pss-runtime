@@ -1,4 +1,4 @@
-import type { Agent, AgentTurn } from "@minpeter/pss-runtime";
+import type { Agent, AgentInput, AgentTurn } from "@minpeter/pss-runtime";
 import type {
   ExecutionHost,
   NotificationRecord,
@@ -134,7 +134,7 @@ async function enqueueCompletionNotification({
         `<system-reminder>Background task ${taskId} completed.`,
         "Use background_output with the task_id to inspect the stored result.</system-reminder>",
       ].join(" "),
-      type: "user-text",
+      type: "user-input",
     },
     notificationId,
     ownerNamespace: run.ownerNamespace,
@@ -197,9 +197,13 @@ async function resumeCompletionNotification({
 
   const notificationRun = await coordinator
     .thread(notification.threadKey)
-    .send(notification.input);
+    .send(userInputToAgentInput(notification.input));
   await host.store.turns.update({ ...run, status: "completed" });
   return notificationRun;
+}
+
+function userInputToAgentInput(input: NotificationRecord["input"]): AgentInput {
+  return "text" in input ? input.text : input.content;
 }
 
 async function claimOwnedNotification({

@@ -11,14 +11,14 @@ describe("dispatchAgentNotification", () => {
     const first = await dispatchAgentNotification({
       host,
       idempotencyKey: "reminder:1",
-      input: { text: "Reminder fired", type: "user-text" },
+      input: { text: "Reminder fired", type: "user-input" },
       namespace: "agent-a",
       threadKey: "room:1:user:2",
     });
     const second = await dispatchAgentNotification({
       host,
       idempotencyKey: "reminder:1",
-      input: { text: "Reminder fired again", type: "user-text" },
+      input: { text: "Reminder fired again", type: "user-input" },
       namespace: "agent-a",
       threadKey: "room:1:user:2",
     });
@@ -41,7 +41,7 @@ describe("dispatchAgentNotification", () => {
       host.store.notifications.getByIdempotencyKey(run?.dedupeKey ?? "")
     ).resolves.toMatchObject({
       idempotencyKey: run?.dedupeKey,
-      input: { text: "Reminder fired", type: "user-text" },
+      input: { text: "Reminder fired", type: "user-input" },
       ownerNamespace: agentNamespace("agent-a"),
       runId: first.runId,
       threadKey: "room:1:user:2",
@@ -55,21 +55,21 @@ describe("dispatchAgentNotification", () => {
     const first = await dispatchAgentNotification({
       host,
       idempotencyKey: "reminder:shared",
-      input: { text: "Agent A reminder", type: "user-text" },
+      input: { text: "Agent A reminder", type: "user-input" },
       namespace: "agent-a",
       threadKey: "room:1:user:1",
     });
     const second = await dispatchAgentNotification({
       host,
       idempotencyKey: "reminder:shared",
-      input: { text: "Agent B reminder", type: "user-text" },
+      input: { text: "Agent B reminder", type: "user-input" },
       namespace: "agent-b",
       threadKey: "room:1:user:2",
     });
     const duplicateFirst = await dispatchAgentNotification({
       host,
       idempotencyKey: "reminder:shared",
-      input: { text: "ignored duplicate", type: "user-text" },
+      input: { text: "ignored duplicate", type: "user-input" },
       namespace: "agent-a",
       threadKey: "room:1:user:1",
     });
@@ -92,7 +92,7 @@ describe("dispatchAgentNotification", () => {
     const first = await dispatchAgentNotification({
       host: baseHost,
       idempotencyKey: "reminder:race",
-      input: { text: "first", type: "user-text" },
+      input: { text: "first", type: "user-input" },
       namespace: "agent-a",
       threadKey: "room:1:user:2",
     });
@@ -101,7 +101,7 @@ describe("dispatchAgentNotification", () => {
     const duplicate = await dispatchAgentNotification({
       host: racingHost,
       idempotencyKey: "reminder:race",
-      input: { text: "duplicate", type: "user-text" },
+      input: { text: "duplicate", type: "user-input" },
       namespace: "agent-a",
       threadKey: "room:1:user:2",
     });

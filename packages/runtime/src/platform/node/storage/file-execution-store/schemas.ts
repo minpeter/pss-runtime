@@ -105,12 +105,22 @@ export function parseNotificationRecord(
   ) {
     throw invalidFile(file, "expected agent observer events");
   }
+  const overlays = Array.isArray(value.overlays)
+    ? value.overlays.filter(isUserInput)
+    : undefined;
+  if (
+    Array.isArray(value.overlays) &&
+    overlays?.length !== value.overlays.length
+  ) {
+    throw invalidFile(file, "expected notification overlays");
+  }
 
   return {
     idempotencyKey: value.idempotencyKey,
     input: value.input,
     notificationId: value.notificationId,
     ...(observerEvents ? { observerEvents } : {}),
+    ...(overlays ? { overlays } : {}),
     ...(typeof value.ownerNamespace === "string"
       ? { ownerNamespace: value.ownerNamespace }
       : {}),
@@ -171,9 +181,10 @@ function isAgentEvent(value: unknown): value is AgentEvent {
 function isUserInput(value: unknown): value is UserInput {
   return (
     isRecord(value) &&
-    ((value.type === "user-text" &&
-      (typeof value.text === "string" || isStringArray(value.text))) ||
-      (value.type === "user-message" && Array.isArray(value.content)))
+    value.type === "user-input" &&
+    (typeof value.text === "string" ||
+      isStringArray(value.text) ||
+      Array.isArray(value.content))
   );
 }
 

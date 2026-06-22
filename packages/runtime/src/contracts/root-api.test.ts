@@ -19,6 +19,7 @@ import type {
   AgentAutoCompactionOptions,
   AgentEvent,
   AgentHost,
+  AgentInput,
   AgentOptions,
   ControlAgentEvent,
   LifecycleAgentEvent,
@@ -149,6 +150,7 @@ describe("runtime public exports", () => {
     const enabledOptions = {
       autoCompaction,
       model,
+      notificationOverlays: ["runtime context"],
     } satisfies AgentOptions;
     const disabledOptions = {
       autoCompaction: false,
@@ -163,7 +165,15 @@ describe("runtime public exports", () => {
     expectTypeOf<
       Parameters<ThreadHandle["compact"]>[0]
     >().toEqualTypeOf<ThreadCompactionInput>();
+    expectTypeOf<
+      Parameters<ThreadHandle["overlay"]>[0]
+    >().toEqualTypeOf<AgentInput>();
+    expectTypeOf<
+      ReturnType<ThreadHandle["overlay"]>
+    >().toEqualTypeOf<ThreadHandle>();
+    expectTypeOf<ReturnType<Agent["overlay"]>>().toEqualTypeOf<ThreadHandle>();
     expect(enabledOptions.autoCompaction).toEqual(autoCompaction);
+    expect(enabledOptions.notificationOverlays).toEqual(["runtime context"]);
     expect(disabledOptions.autoCompaction).toBe(false);
     expect(compaction.startSeq).toBe(0);
   });

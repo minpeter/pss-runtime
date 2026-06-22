@@ -9,11 +9,11 @@ import {
 } from "./input-meta";
 
 describe("input-meta helpers", () => {
-  it("attaches meta to user-text without mutating unrelated fields", () => {
+  it("attaches meta to user-input without mutating unrelated fields", () => {
     expect(
-      attachInputMeta({ type: "user-text", text: "hello" }, { source: "send" })
+      attachInputMeta({ type: "user-input", text: "hello" }, { source: "send" })
     ).toEqual({
-      type: "user-text",
+      type: "user-input",
       text: "hello",
       meta: { source: "send" },
     });
@@ -21,11 +21,11 @@ describe("input-meta helpers", () => {
 
   it("strips meta from user input before model mapping", () => {
     const input = attachInputMeta(
-      { type: "user-text", text: "hello" },
+      { type: "user-input", text: "hello" },
       { source: "send" }
     );
-    if (input.type !== "user-text") {
-      throw new Error("expected user-text");
+    if (input.type !== "user-input") {
+      throw new Error("expected user-input");
     }
 
     expect(userTextToModelMessage(input)).toEqual({
@@ -36,25 +36,25 @@ describe("input-meta helpers", () => {
 
   it("stripInputMeta is idempotent", () => {
     const withMeta = attachInputMeta(
-      { type: "user-text", text: "hello" },
+      { type: "user-input", text: "hello" },
       { source: "delegate", delegateToolName: "poke" }
     );
     const stripped = stripInputMeta(withMeta);
 
     expect(stripInputMeta(stripped)).toEqual(stripped);
-    expect(stripped).toEqual({ type: "user-text", text: "hello" });
+    expect(stripped).toEqual({ type: "user-input", text: "hello" });
   });
 
   it("stripEventMeta removes meta from runtime-input", () => {
     const event: RuntimeInput = attachRuntimeInputMeta(
-      { type: "user-text", text: "steer me" },
+      { type: "user-input", text: "steer me" },
       "step-end",
       { source: "steer", streaming: "steer" }
     );
 
     expect(stripEventMeta(event)).toEqual({
       type: "runtime-input",
-      input: { type: "user-text", text: "steer me" },
+      input: { type: "user-input", text: "steer me" },
       placement: "step-end",
     });
   });

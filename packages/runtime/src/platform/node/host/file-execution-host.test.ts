@@ -40,7 +40,7 @@ describe("createNodeFileExecutionHost", () => {
       const dispatched = await dispatchAgentNotification({
         host: firstHost,
         idempotencyKey: "local-reminder:1",
-        input: { text: "local reminder fired", type: "user-text" },
+        input: { text: "local reminder fired", type: "user-input" },
         namespace: "local-owner",
         observerEvents: [
           {

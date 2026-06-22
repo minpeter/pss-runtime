@@ -95,7 +95,7 @@ export function notificationRecord(
 ): NotificationRecord {
   return {
     idempotencyKey,
-    input: { text: "ready", type: "user-text" },
+    input: { text: "ready", type: "user-input" },
     notificationId: `${idempotencyKey}:notification`,
     runId: "run-1",
     threadKey: "thread-1",

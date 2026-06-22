@@ -36,7 +36,7 @@ export function describeExecutionStoreContract({
         await tx.events.append("run-1", { type: "turn-start" });
         await tx.notifications.enqueue({
           idempotencyKey: "notify-1",
-          input: { text: "ready", type: "user-text" },
+          input: { text: "ready", type: "user-input" },
           notificationId: "notification-1",
           runId: "run-1",
           threadKey: "thread-1",
@@ -216,7 +216,7 @@ export function describeExecutionStoreContract({
 
     it("dedupes notifications by idempotency key", async () => {
       const store = createStore();
-      const input = { text: "ready", type: "user-text" } as const;
+      const input = { text: "ready", type: "user-input" } as const;
 
       await expect(
         store.notifications.enqueue({

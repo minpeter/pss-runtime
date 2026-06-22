@@ -1,5 +1,5 @@
 import type { ModelGenerationOptions } from "../../llm/llm";
-import type { AgentInput } from "../input/input";
+import type { AgentInput, UserInput } from "../input/input";
 import { attachInputMeta, userInputFromEvent } from "../input/input-meta";
 import { normalizeAgentInput } from "../input/input-normalization";
 import {
@@ -37,6 +37,7 @@ export class AgentThread {
   readonly #execution: ThreadExecutionOptions;
   readonly #inputQueue: QueuedInput[] = [];
   readonly #model: ModelGenerationOptions;
+  readonly #pendingOverlays: QueuedRuntimeInput[] = [];
   readonly #pendingRuntimeInputs: QueuedRuntimeInput[] = [];
   readonly #threadKey: string;
   readonly #state: ThreadState;
@@ -76,9 +77,6 @@ export class AgentThread {
       throw threadTerminalError(this.#killed);
     }
 
-    const runtimeInput = createRuntimeInputState(
-      this.#pendingRuntimeInputs.splice(0)
-    );
     const normalized = normalizeAgentInput(input);
     const acceptedInput =
       normalized.meta === undefined
@@ -92,14 +90,15 @@ export class AgentThread {
     }
 
     const queuedInput = userInputFromEvent(
-      emitted.type === "user-text" || emitted.type === "user-message"
-        ? emitted
-        : acceptedInput
+      emitted.type === "user-input" ? emitted : acceptedInput
+    );
+    const runtimeInput = createRuntimeInputState(
+      this.#pendingRuntimeInputs.splice(0)
     );
     this.#inputQueue.push({
       initialEvents: [],
       input: structuredClone(queuedInput),
-      preUserRuntimeInputs: [],
+      preUserRuntimeInputs: this.#pendingOverlays.splice(0),
       run,
       runtimeInput,
     });
@@ -107,8 +106,23 @@ export class AgentThread {
     return run;
   }
 
+  overlay(input: AgentInput): this {
+    if (this.#killed || this.#deletePromise) {
+      throw threadTerminalError(this.#killed);
+    }
+
+    this.#pendingOverlays.push({
+      canonical: false,
+      input: attachInputMeta(normalizeAgentInput(input), {
+        source: "overlay",
+      }),
+      placement: "turn-start",
+    });
+    return this;
+  }
+
   async notify(
-    input: AgentInput,
+    input: AgentInput | UserInput,
     options: NotifyOptions = {}
   ): Promise<AgentTurn> {
     if (this.#killed || this.#deletePromise) {
@@ -183,6 +197,7 @@ export class AgentThread {
 
     this.#killed = true;
     const killedError = threadKilledError();
+    this.#pendingOverlays.length = 0;
     this.#pendingRuntimeInputs.length = 0;
     this.#activeAbort?.abort();
     closeKilledRuntimeInputs({

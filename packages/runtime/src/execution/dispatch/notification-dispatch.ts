@@ -12,6 +12,7 @@ export interface DispatchAgentNotificationInput {
   readonly input: UserInput;
   readonly namespace: string;
   readonly observerEvents?: readonly AgentEvent[];
+  readonly overlays?: readonly UserInput[];
   readonly threadKey: string;
 }
 
@@ -72,6 +73,7 @@ export async function dispatchAgentNotification(
     input: input.input,
     notificationId,
     observerEvents: input.observerEvents,
+    overlays: input.overlays,
     ownerNamespace,
     runId,
     threadKey: input.threadKey,

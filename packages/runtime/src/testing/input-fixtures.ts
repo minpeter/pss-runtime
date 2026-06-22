@@ -6,25 +6,25 @@ import type {
 } from "../thread/protocol/events";
 
 export const userText = (text: UserTextContent): UserText => ({
-  type: "user-text",
+  type: "user-input",
   text,
 });
 
 export const sentUserText = (text: UserTextContent): UserText => ({
   meta: { source: "send" },
   text,
-  type: "user-text",
+  type: "user-input",
 });
 
 export const userMessage = (content: UserMessageContent): UserMessage => ({
-  type: "user-message",
+  type: "user-input",
   content,
 });
 
 export const sentUserMessage = (content: UserMessageContent): UserMessage => ({
   content,
   meta: { source: "send" },
-  type: "user-message",
+  type: "user-input",
 });
 
 export const steerRuntimeInput = (
@@ -34,7 +34,7 @@ export const steerRuntimeInput = (
   input: {
     meta: { source: "steer", streaming: "steer" as const },
     text,
-    type: "user-text" as const,
+    type: "user-input" as const,
   },
   meta: { source: "steer" as const, streaming: "steer" as const },
   placement,
@@ -48,9 +48,23 @@ export const notifyRuntimeInput = (
   input: {
     meta: { source: "notify" as const },
     text,
-    type: "user-text" as const,
+    type: "user-input" as const,
   },
   meta: { source: "notify" as const },
+  placement,
+  type: "runtime-input" as const,
+});
+
+export const overlayRuntimeInput = (
+  text: UserTextContent,
+  placement: "step-end" | "step-start" | "turn-start" = "turn-start"
+) => ({
+  input: {
+    meta: { source: "overlay" as const },
+    text,
+    type: "user-input" as const,
+  },
+  meta: { source: "overlay" as const },
   placement,
   type: "runtime-input" as const,
 });
@@ -62,7 +76,7 @@ export const steerRuntimeInputMessage = (
   input: {
     content,
     meta: { source: "steer" as const, streaming: "steer" as const },
-    type: "user-message" as const,
+    type: "user-input" as const,
   },
   meta: { source: "steer" as const, streaming: "steer" as const },
   placement,

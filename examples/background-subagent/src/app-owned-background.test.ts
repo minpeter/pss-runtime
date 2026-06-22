@@ -69,7 +69,7 @@ describe("app-owned background delegation", () => {
     const idempotencyKey = `background-complete:${parentThreadKey}:${job.id}`;
     await host.store.notifications.enqueue({
       idempotencyKey,
-      input: { text: "already queued", type: "user-text" },
+      input: { text: "already queued", type: "user-input" },
       notificationId: `notification:${job.id}`,
       ownerNamespace,
       runId: `notification:${job.id}`,

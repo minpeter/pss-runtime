@@ -89,7 +89,7 @@ describe("Agent thread runtime input windows", () => {
     const finalHistory = [...secondStepHistory, assistantMessage("DONE")];
 
     expect(pluginCalls).toEqual([
-      "user-text:2",
+      "user-input:2",
       "turn-start:3",
       "runtime-input:3",
       "step-start:4",
@@ -103,7 +103,7 @@ describe("Agent thread runtime input windows", () => {
       "turn-end:8",
     ]);
     expect(eventTypes(events)).toEqual([
-      "user-text",
+      "user-input",
       "turn-start",
       "runtime-input",
       "step-start",
@@ -127,8 +127,8 @@ describe("Agent thread runtime input windows", () => {
     );
     expect(seenHistory).toEqual([firstStepHistory, secondStepHistory]);
     expect(trace).toEqual([
-      "plugin:user-text",
-      "event:user-text",
+      "plugin:user-input",
+      "event:user-input",
       "plugin:turn-start",
       "event:turn-start",
       "plugin:runtime-input",

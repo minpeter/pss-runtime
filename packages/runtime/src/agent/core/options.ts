@@ -1,6 +1,7 @@
 import type { LanguageModel, ToolSet } from "ai";
 import type { AgentHost } from "../../execution/host/types";
 import type { AgentToolChoice } from "../../llm/llm";
+import type { AgentInput, UserInput } from "../../thread/input/input";
 import type { AgentPlugin } from "../../thread/plugins/pipeline";
 
 export interface AgentAutoCompactionOptions {
@@ -14,6 +15,7 @@ export interface AgentOptions {
   readonly instructions?: string;
   readonly model: LanguageModel;
   readonly namespace?: string;
+  readonly notificationOverlays?: readonly (AgentInput | UserInput)[];
   readonly plugins?: readonly AgentPlugin[];
   readonly toolChoice?: AgentToolChoice;
   readonly tools?: ToolSet;

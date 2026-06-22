@@ -58,7 +58,7 @@ describe("Cloudflare Durable Object host adapter", () => {
     });
     await host.store.notifications.enqueue({
       idempotencyKey,
-      input: { text: "ready", type: "user-text" },
+      input: { text: "ready", type: "user-input" },
       notificationId: "notification-delayed",
       runId: notificationRunId,
       threadKey: "example",

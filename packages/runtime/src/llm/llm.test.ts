@@ -8,7 +8,7 @@ import {
   loadAgent,
   loadModelStepRunner,
 } from "../testing/llm-test-utils";
-import { assistantMessage, userText } from "../testing/test-fixtures";
+import { assistantMessage } from "../testing/test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
 
@@ -153,7 +153,7 @@ describe("Agent tool wiring", () => {
       tools: injectedTools,
     });
 
-    await drainRun(await agent.send(userText("use injected tools")));
+    await drainRun(await agent.send("use injected tools"));
 
     expect(generateTextMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -172,7 +172,7 @@ describe("Agent tool wiring", () => {
       toolChoice: "required",
     });
 
-    await drainRun(await agent.send(userText("force tool choice")));
+    await drainRun(await agent.send("force tool choice"));
 
     expect(generateTextMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -186,7 +186,7 @@ describe("Agent tool wiring", () => {
     const Agent = await loadAgent();
     const agent = new Agent({ model: fakeModel });
 
-    await drainRun(await agent.send(userText("run without product tools")));
+    await drainRun(await agent.send("run without product tools"));
 
     expect(generateTextMock).toHaveBeenCalledWith(
       expect.objectContaining({

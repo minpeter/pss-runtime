@@ -168,7 +168,7 @@ async function writeThreadTurns(input: WriteThreadTurnsInput): Promise<number> {
         idempotencyKey: notificationKey,
         input: {
           text: notificationContent(runId, input.notificationPayloadBytes),
-          type: "user-text",
+          type: "user-input",
         },
         notificationId: notificationKey,
         runId,

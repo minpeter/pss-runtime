@@ -5,7 +5,7 @@ export type UserTextContent = string | readonly string[];
 export interface UserText {
   meta?: InputEventMeta;
   text: UserTextContent;
-  type: "user-text";
+  type: "user-input";
 }
 
 export interface UserMessageTextPart {
@@ -43,15 +43,14 @@ export type UserMessageContent = readonly UserMessageContentPart[];
 export interface UserMessage {
   content: UserMessageContent;
   meta?: InputEventMeta;
-  type: "user-message";
+  type: "user-input";
 }
 
 export type UserInput = UserMessage | UserText;
 export type AgentInput =
   | readonly string[]
   | readonly UserMessageContentPart[]
-  | string
-  | UserInput;
+  | string;
 export type ThreadInput = AgentInput;
 
 /** @deprecated Use ThreadInput or AgentInput. */

@@ -10,6 +10,7 @@ export class ModelMessageHistory {
   readonly #compactions: ThreadCompactionRecord[] = [];
   readonly #modelHistory: ModelMessage[] = [];
   readonly #onChange?: (snapshot: ModelMessage[]) => void;
+  readonly #transientMessages: TransientModelMessage[] = [];
 
   constructor(
     history?: ModelMessage[],
@@ -32,7 +33,11 @@ export class ModelMessageHistory {
   modelContextSnapshot(
     options: { readonly maxMessages?: number } = {}
   ): ModelMessage[] {
-    const compacted = applyCompactions(this.#modelHistory, this.#compactions);
+    const compacted = applyCompactions(
+      this.#modelHistory,
+      this.#compactions,
+      this.#transientMessages
+    );
     if (
       options.maxMessages === undefined ||
       compacted.length <= options.maxMessages
@@ -58,14 +63,26 @@ export class ModelMessageHistory {
     this.#triggerChange();
   }
 
+  appendTransientUserInput(input: UserInput): void {
+    this.#transientMessages.push({
+      index: this.#modelHistory.length,
+      message: userInputToModelMessage(input),
+    });
+  }
+
   appendModelMessage(message: ModelMessage): void {
     this.#modelHistory.push(structuredClone(message));
     this.#triggerChange();
   }
 
+  clearTransientInputs(): void {
+    this.#transientMessages.length = 0;
+  }
+
   rollback(snapshot: ModelMessage[]): void {
     this.#modelHistory.length = 0;
     this.#modelHistory.push(...structuredClone(snapshot));
+    this.clearTransientInputs();
     for (let index = this.#compactions.length - 1; index >= 0; index -= 1) {
       const record = this.#compactions[index];
       if (!record || record.endSeqExclusive > this.#modelHistory.length) {
@@ -82,11 +99,16 @@ export class ModelMessageHistory {
 
 function applyCompactions(
   history: readonly ModelMessage[],
-  compactions: readonly ThreadCompactionRecord[]
+  compactions: readonly ThreadCompactionRecord[],
+  transientMessages: readonly TransientModelMessage[] = []
 ): ModelMessage[] {
   const kept = nonOverlappedCompactions(history.length, compactions);
   if (kept.length === 0) {
-    return history.map((message) => structuredClone(message));
+    return applyTransientMessages(
+      history.map((message) => structuredClone(message)),
+      history.length,
+      transientMessages
+    );
   }
 
   const byStart = new Map<number, ThreadCompactionRecord>();
@@ -96,6 +118,7 @@ function applyCompactions(
 
   const output: ModelMessage[] = [];
   for (let index = 0; index < history.length; ) {
+    appendTransientMessages(output, transientMessages, index);
     const record = byStart.get(index);
     if (record) {
       output.push(structuredClone(record.summary));
@@ -109,7 +132,46 @@ function applyCompactions(
     }
     index += 1;
   }
+  appendTransientMessages(output, transientMessages, history.length);
   return output;
+}
+
+interface TransientModelMessage {
+  readonly index: number;
+  readonly message: ModelMessage;
+}
+
+function applyTransientMessages(
+  history: ModelMessage[],
+  historyLength: number,
+  transientMessages: readonly TransientModelMessage[]
+): ModelMessage[] {
+  if (transientMessages.length === 0) {
+    return history;
+  }
+
+  const output: ModelMessage[] = [];
+  for (let index = 0; index < historyLength; index += 1) {
+    appendTransientMessages(output, transientMessages, index);
+    const message = history[index];
+    if (message) {
+      output.push(message);
+    }
+  }
+  appendTransientMessages(output, transientMessages, historyLength);
+  return output;
+}
+
+function appendTransientMessages(
+  output: ModelMessage[],
+  transientMessages: readonly TransientModelMessage[],
+  index: number
+): void {
+  for (const transient of transientMessages) {
+    if (transient.index === index) {
+      output.push(structuredClone(transient.message));
+    }
+  }
 }
 
 function nonOverlappedCompactions(

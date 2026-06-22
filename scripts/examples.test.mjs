@@ -185,7 +185,7 @@ describe("examples workspace packages", () => {
     expect(agentsSource).toContain("read_file: createReadFileTool()");
 
     expect(conversationPluginSource).toContain('action: "transform"');
-    expect(conversationPluginSource).toContain("user-text");
+    expect(conversationPluginSource).toContain("user-input");
 
     expect(delegateToolSource).toContain("delegate_to_reader");
     expect(delegateToolSource).toContain("delegateUserInput");

@@ -49,11 +49,7 @@ export function runPluginsForEvent(
 function isInterceptableEvent(
   event: AgentEvent
 ): event is InterceptableAgentEvent {
-  return (
-    event.type === "user-text" ||
-    event.type === "user-message" ||
-    event.type === "runtime-input"
-  );
+  return event.type === "user-input" || event.type === "runtime-input";
 }
 
 function normalizeInterceptResult(
