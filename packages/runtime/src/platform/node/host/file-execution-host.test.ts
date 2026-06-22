@@ -84,7 +84,7 @@ describe("createNodeFileExecutionHost", () => {
         "turn-start",
         "runtime-input",
         "step-start",
-        "assistant-text",
+        "assistant-output",
         "step-end",
         "turn-end",
       ]);

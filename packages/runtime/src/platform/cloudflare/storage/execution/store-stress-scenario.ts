@@ -236,7 +236,7 @@ function eventRecord(
   if (payloadBytes > 0) {
     return {
       text: payloadText(`event-${type}`, payloadBytes),
-      type: "assistant-text",
+      type: "assistant-output",
     };
   }
   if (type === "step-start") {

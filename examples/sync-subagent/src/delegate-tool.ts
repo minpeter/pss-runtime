@@ -79,7 +79,7 @@ async function runBlockingDelegation({
   const abort = () => childThread.interrupt();
   abortSignal?.addEventListener("abort", abort, { once: true });
   try {
-    const text = await collectAssistantText(await childThread.send(prompt));
+    const text = await collectAssistantOutput(await childThread.send(prompt));
     return {
       result: "completed" as const,
       subagent: readerChildName,
@@ -90,10 +90,10 @@ async function runBlockingDelegation({
   }
 }
 
-async function collectAssistantText(run: AgentTurn) {
+async function collectAssistantOutput(run: AgentTurn) {
   let text = "";
   for await (const event of run.events()) {
-    if (event.type === "assistant-text") {
+    if (event.type === "assistant-output") {
       text += event.text;
     }
   }

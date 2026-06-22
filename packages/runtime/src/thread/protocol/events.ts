@@ -26,9 +26,9 @@ export interface RuntimeInput {
   type: "runtime-input";
 }
 
-export interface AssistantText {
+export interface AssistantOutput {
   text: string;
-  type: "assistant-text";
+  type: "assistant-output";
 }
 export interface AssistantReasoning {
   text: string;
@@ -67,7 +67,7 @@ export type AgentEvent =
   /** The model produced reasoning content. */
   | AssistantReasoning
   /** The model produced visible assistant text. */
-  | AssistantText
+  | AssistantOutput
   /** The model requested a tool call. */
   | ToolCall
   /** A tool call returned a result. */
@@ -78,7 +78,7 @@ export type AgentEvent =
 export type AgentEventListener = (event: AgentEvent) => void;
 
 const visibleAgentEventTypes = {
-  "assistant-text": true,
+  "assistant-output": true,
   "user-input": true,
 } satisfies Partial<Record<AgentEvent["type"], true>>;
 

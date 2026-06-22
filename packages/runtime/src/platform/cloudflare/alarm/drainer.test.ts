@@ -23,7 +23,7 @@ describe("Cloudflare alarm drain budgets", () => {
     await enqueueStoredRun(host, "run-c");
 
     const summary = await drainCloudflareAlarm({
-      agent: agentWithEvents([{ text: "a", type: "assistant-text" }]),
+      agent: agentWithEvents([{ text: "a", type: "assistant-output" }]),
       maxRuns: 1,
       prefix: "pss-runtime",
       storage,
@@ -50,7 +50,7 @@ describe("Cloudflare alarm drain budgets", () => {
     await host.scheduler.enqueueRun("run-b");
 
     const summary = await drainCloudflareAlarm({
-      agent: agentWithEvents([{ text: "unused", type: "assistant-text" }]),
+      agent: agentWithEvents([{ text: "unused", type: "assistant-output" }]),
       deadlineMs: 0,
       prefix: "pss-runtime",
       storage,
@@ -73,7 +73,7 @@ describe("Cloudflare alarm drain budgets", () => {
     await host.scheduler.resumeThread("thread-b", { runId: "run-b" });
 
     const summary = await drainCloudflareAlarm({
-      agent: agentWithEvents([{ text: "done", type: "assistant-text" }]),
+      agent: agentWithEvents([{ text: "done", type: "assistant-output" }]),
       maxThreadPrompts: 1,
       prefix: "pss-runtime",
       storage,
@@ -100,9 +100,9 @@ describe("Cloudflare alarm drain budgets", () => {
     const summary = await drainCloudflareAlarm({
       agent: agentWithStream(async function* () {
         const events = [
-          { text: "one", type: "assistant-text" },
-          { text: "two", type: "assistant-text" },
-          { text: "three", type: "assistant-text" },
+          { text: "one", type: "assistant-output" },
+          { text: "two", type: "assistant-output" },
+          { text: "three", type: "assistant-output" },
         ] satisfies readonly AgentEvent[];
         for (const event of events) {
           await Promise.resolve();
@@ -115,7 +115,7 @@ describe("Cloudflare alarm drain budgets", () => {
       storage,
     });
 
-    expect(summary.events).toEqual([{ text: "one", type: "assistant-text" }]);
+    expect(summary.events).toEqual([{ text: "one", type: "assistant-output" }]);
     expect(summary.droppedEvents).toBe(1);
     expect(summary.continuationScheduled).toBe(true);
     expect(summary.continuationReasons).toContain("event-budget");
@@ -136,9 +136,9 @@ describe("Cloudflare alarm drain budgets", () => {
 
     const summary = await drainCloudflareAlarm({
       agent: agentWithStream(async function* () {
-        yield { text: "before deadline", type: "assistant-text" };
+        yield { text: "before deadline", type: "assistant-output" };
         await new Promise((resolve) => setTimeout(resolve, 50));
-        yield { text: "after deadline", type: "assistant-text" };
+        yield { text: "after deadline", type: "assistant-output" };
       }),
       deadlineMs: 10,
       prefix: "pss-runtime",
@@ -146,7 +146,7 @@ describe("Cloudflare alarm drain budgets", () => {
     });
 
     expect(summary.events).toEqual([
-      { text: "before deadline", type: "assistant-text" },
+      { text: "before deadline", type: "assistant-output" },
     ]);
     expect(summary.droppedEvents).toBe(0);
     expect(summary.continuationScheduled).toBe(true);

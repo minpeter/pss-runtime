@@ -98,7 +98,7 @@ describe("app-owned background delegation", () => {
     if (!notificationRun) {
       throw new Error("expected completion notification to resume");
     }
-    await expect(collectAssistantText(notificationRun)).resolves.toBe(
+    await expect(collectAssistantOutput(notificationRun)).resolves.toBe(
       "coordinator saw notification"
     );
     await expect(
@@ -141,10 +141,10 @@ function createTestAppAgent(host: ExecutionHost): Agent {
   });
 }
 
-async function collectAssistantText(run: AgentTurn) {
+async function collectAssistantOutput(run: AgentTurn) {
   let text = "";
   for await (const event of run.events()) {
-    if (event.type === "assistant-text") {
+    if (event.type === "assistant-output") {
       text += event.text;
     }
   }
@@ -164,12 +164,15 @@ function createReaderAgent(): Agent {
 
 function runWithText(text: string): AgentTurn {
   return {
-    events: () => eventStream([{ text, type: "assistant-text" }]),
+    events: () => eventStream([{ text, type: "assistant-output" }]),
   };
 }
 
 async function* eventStream(
-  events: readonly { readonly text: string; readonly type: "assistant-text" }[]
+  events: readonly {
+    readonly text: string;
+    readonly type: "assistant-output";
+  }[]
 ) {
   for (const event of events) {
     await Promise.resolve();

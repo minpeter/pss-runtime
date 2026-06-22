@@ -85,7 +85,7 @@ describe("Cloudflare Worker DX helpers", () => {
     expect(calls).toEqual(["test:tenant-prefix:background:bg_context"]);
     expect(summary.resumedRuns).toEqual(["background:bg_context"]);
     expect(summary.events).toEqual([
-      { text: "tenant-prefix", type: "assistant-text" },
+      { text: "tenant-prefix", type: "assistant-output" },
     ]);
     await expect(
       listScheduledCloudflareRuns(storage, { prefix: "tenant-prefix" })
@@ -95,7 +95,7 @@ describe("Cloudflare Worker DX helpers", () => {
 
 function runWithText(text: string): AgentTurn {
   return {
-    events: () => eventStream([{ text, type: "assistant-text" }]),
+    events: () => eventStream([{ text, type: "assistant-output" }]),
   };
 }
 

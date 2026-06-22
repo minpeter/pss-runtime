@@ -3,7 +3,7 @@ import type { AgentTurn } from "@minpeter/pss-runtime";
 export async function drain(run: AgentTurn): Promise<void> {
   for await (const event of run.events()) {
     switch (event.type) {
-      case "assistant-text":
+      case "assistant-output":
         process.stdout.write(`\n${event.text}\n`);
         break;
       case "tool-call":

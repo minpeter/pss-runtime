@@ -34,7 +34,7 @@ describe("Cloudflare alarm run contexts", () => {
           `${context.source}:${context.runId}:${context.threadKey}`
         );
         return agentWithEvents([
-          { text: context.threadKey, type: "assistant-text" },
+          { text: context.threadKey, type: "assistant-output" },
         ]);
       },
       prefix: "pss-runtime",
@@ -43,7 +43,7 @@ describe("Cloudflare alarm run contexts", () => {
 
     expect(contexts).toEqual(["scheduled-run:run-context:room:1:user:2"]);
     expect(summary.events).toEqual([
-      { text: "room:1:user:2", type: "assistant-text" },
+      { text: "room:1:user:2", type: "assistant-output" },
     ]);
   });
 
@@ -66,10 +66,10 @@ describe("Cloudflare alarm run contexts", () => {
         contexts.push(
           `${context.source}:${context.idempotencyKey}:${context.notificationId}:${context.runId}:${context.threadKey}`
         );
-        return agentWithEvents([{ text: "done", type: "assistant-text" }]);
+        return agentWithEvents([{ text: "done", type: "assistant-output" }]);
       },
       onEvent: (context, event) => {
-        if (event.type === "assistant-text") {
+        if (event.type === "assistant-output") {
           observedEvents.push(`${context.runId}:${event.text}`);
         }
       },

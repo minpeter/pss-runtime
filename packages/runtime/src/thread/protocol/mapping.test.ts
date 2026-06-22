@@ -118,7 +118,7 @@ describe("thread mapping", () => {
     });
 
     expect(modelMessageToAgentEvents(assistantMessage("DONE"))).toEqual([
-      { type: "assistant-text", text: "DONE" },
+      { type: "assistant-output", text: "DONE" },
     ]);
     expect(
       modelMessageToAgentEvents(
@@ -135,7 +135,7 @@ describe("thread mapping", () => {
         type: "assistant-reasoning",
         text: "search before answering",
       },
-      { type: "assistant-text", text: "thinking aloud" },
+      { type: "assistant-output", text: "thinking aloud" },
       {
         type: "tool-call",
         input: { query: "latest OpenAI API updates" },
@@ -158,7 +158,7 @@ describe("thread mapping", () => {
       )
     ).toEqual([
       { type: "assistant-reasoning", text: "internal trace" },
-      { type: "assistant-text", text: "visible answer" },
+      { type: "assistant-output", text: "visible answer" },
       {
         type: "tool-call",
         input: {},
@@ -207,7 +207,7 @@ describe("thread mapping", () => {
       assistantMessage("runtime-input")
     ).map((event) => event.type);
 
-    expect(eventTypes).toEqual(["assistant-text"]);
+    expect(eventTypes).toEqual(["assistant-output"]);
     expect(eventTypes).not.toContain("runtime-input");
   });
 });

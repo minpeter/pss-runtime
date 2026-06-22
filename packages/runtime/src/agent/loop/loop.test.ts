@@ -51,7 +51,7 @@ describe("runAgentLoop", () => {
 
     expect(events).toEqual([
       { type: "step-start" },
-      { type: "assistant-text", text: "I should keep going." },
+      { type: "assistant-output", text: "I should keep going." },
       {
         type: "tool-call",
         input: {},
@@ -66,7 +66,7 @@ describe("runAgentLoop", () => {
       },
       { type: "step-end" },
       { type: "step-start" },
-      { type: "assistant-text", text: "DONE" },
+      { type: "assistant-output", text: "DONE" },
       { type: "step-end" },
     ]);
     expect(history.modelSnapshot()).toMatchObject([

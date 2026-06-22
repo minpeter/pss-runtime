@@ -4,7 +4,7 @@ import {
   createCloudflareAgentContext,
 } from "@minpeter/pss-runtime/cloudflare";
 
-import { collectAssistantText, createConfiguredAgent } from "./agent";
+import { collectAssistantOutput, createConfiguredAgent } from "./agent";
 import type { Env } from "./env";
 
 const SESSION_KEY = "default";
@@ -37,7 +37,7 @@ export class AgentDurableObject {
 
     const agent = this.#context.agent();
     const run = await agent.thread(SESSION_KEY).send(payload.text);
-    const reply = await collectAssistantText(run);
+    const reply = await collectAssistantOutput(run);
 
     return Response.json({ reply: reply || "(no response)" });
   }

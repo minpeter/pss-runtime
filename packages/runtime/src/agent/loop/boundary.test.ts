@@ -68,7 +68,7 @@ describe("runAgentLoop boundary awaits", () => {
     expect(model.doGenerateCalls).toHaveLength(1);
     expect(eventTypes(events)).toEqual([
       "step-start",
-      "assistant-text",
+      "assistant-output",
       "step-end",
     ]);
   });
@@ -120,7 +120,7 @@ describe("runAgentLoop boundary awaits", () => {
       "tool-result",
       "step-end",
       "step-start",
-      "assistant-text",
+      "assistant-output",
       "step-end",
     ]);
   });
@@ -152,7 +152,7 @@ describe("runAgentLoop boundary awaits", () => {
 
     expect(eventTypes(events)).toEqual([
       "step-start",
-      "assistant-text",
+      "assistant-output",
       "step-end",
     ]);
     expect(settled).toBe(false);
@@ -190,10 +190,10 @@ describe("runAgentLoop boundary awaits", () => {
     expect(model.model.doGenerateCalls).toHaveLength(2);
     expect(eventTypes(events)).toEqual([
       "step-start",
-      "assistant-text",
+      "assistant-output",
       "step-end",
       "step-start",
-      "assistant-text",
+      "assistant-output",
       "step-end",
     ]);
     expect(history.modelSnapshot()).toMatchObject([

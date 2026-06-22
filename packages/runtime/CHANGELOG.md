@@ -1,5 +1,13 @@
 # @minpeter/pss-runtime
 
+## 0.1.0-next.22
+
+### Patch Changes
+
+- Rename visible assistant response events from `assistant-text` to `assistant-output`.
+  The new name better matches the thread model where user messages are inputs and
+  assistant messages are model outputs appended back into the thread.
+
 ## 0.1.0-next.21
 
 ### Patch Changes

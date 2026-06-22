@@ -280,8 +280,8 @@ describe("Cloudflare Durable Object host adapter", () => {
 
   it("observes drained run events when an event callback is provided", async () => {
     const runEvents = [
-      { text: "first", type: "assistant-text" },
-      { text: "second", type: "assistant-text" },
+      { text: "first", type: "assistant-output" },
+      { text: "second", type: "assistant-output" },
     ] satisfies readonly AgentEvent[];
     const observedEvents: AgentEvent[] = [];
 

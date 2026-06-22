@@ -32,7 +32,7 @@ describe("Agent thread plugin events", () => {
       "user-input",
       "turn-start",
       "step-start",
-      "assistant-text",
+      "assistant-output",
       "step-end",
       "turn-end",
     ]);
@@ -40,7 +40,7 @@ describe("Agent thread plugin events", () => {
       "user-input:0",
       "turn-start:1",
       "step-start:1",
-      "assistant-text:2",
+      "assistant-output:2",
       "step-end:2",
       "turn-end:2",
     ]);
@@ -100,7 +100,7 @@ describe("Agent thread plugin events", () => {
       "user-input",
       "turn-start",
       "step-start",
-      "assistant-text",
+      "assistant-output",
       "step-end",
       "turn-error",
     ]);
@@ -108,7 +108,7 @@ describe("Agent thread plugin events", () => {
       "user-input",
       "turn-start",
       "step-start",
-      "assistant-text",
+      "assistant-output",
       "step-end",
       "turn-error",
     ]);

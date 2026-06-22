@@ -60,7 +60,7 @@ describe("runAgentLoop tool results", () => {
       "tool-result",
       "step-end",
       "step-start",
-      "assistant-text",
+      "assistant-output",
       "step-end",
     ]);
     expect(history.modelSnapshot()).toMatchObject([

@@ -1,7 +1,7 @@
 import type { AgentEvent, AgentTurn } from "@minpeter/pss-runtime";
 import { describe, expect, it } from "vitest";
 
-import { collectAssistantText, WORKER_AGENT_INSTRUCTIONS } from "./agent";
+import { collectAssistantOutput, WORKER_AGENT_INSTRUCTIONS } from "./agent";
 
 describe("worker-agent instructions", () => {
   it("uses Apex as the assistant name", () => {
@@ -52,13 +52,13 @@ describe("worker-agent instructions", () => {
   });
 });
 
-describe("collectAssistantText", () => {
+describe("collectAssistantOutput", () => {
   it("joins assistant text events", async () => {
     await expect(
-      collectAssistantText(
+      collectAssistantOutput(
         runWithEvents([
-          { type: "assistant-text", text: "first" },
-          { type: "assistant-text", text: "second" },
+          { type: "assistant-output", text: "first" },
+          { type: "assistant-output", text: "second" },
         ])
       )
     ).resolves.toBe("first\nsecond");
@@ -66,7 +66,7 @@ describe("collectAssistantText", () => {
 
   it("rejects when the run contains a turn-error without assistant text", async () => {
     await expect(
-      collectAssistantText(
+      collectAssistantOutput(
         runWithEvents([{ type: "turn-error", message: "model unavailable" }])
       )
     ).rejects.toThrow("model unavailable");
@@ -74,9 +74,9 @@ describe("collectAssistantText", () => {
 
   it("rejects when a turn-error follows assistant text", async () => {
     await expect(
-      collectAssistantText(
+      collectAssistantOutput(
         runWithEvents([
-          { type: "assistant-text", text: "partial" },
+          { type: "assistant-output", text: "partial" },
           { type: "turn-error", message: "tool failed" },
         ])
       )

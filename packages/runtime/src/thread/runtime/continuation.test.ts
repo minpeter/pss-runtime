@@ -50,11 +50,11 @@ describe("Agent thread runtime input continuation", () => {
       sentUserText("initial user"),
       { type: "turn-start" },
       { type: "step-start" },
-      { type: "assistant-text", text: "This could be final." },
+      { type: "assistant-output", text: "This could be final." },
       { type: "step-end" },
       steerRuntimeInput("extra", "step-end"),
       { type: "step-start" },
-      { type: "assistant-text", text: "DONE" },
+      { type: "assistant-output", text: "DONE" },
       { type: "step-end" },
       { type: "turn-end" },
     ]);

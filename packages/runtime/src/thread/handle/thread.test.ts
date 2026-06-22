@@ -30,7 +30,7 @@ describe("Agent thread API", () => {
       sentUserText("hello"),
       { type: "turn-start" },
       { type: "step-start" },
-      { type: "assistant-text", text: "DONE" },
+      { type: "assistant-output", text: "DONE" },
       { type: "step-end" },
       { type: "turn-end" },
     ]);
@@ -224,7 +224,7 @@ describe("Agent thread API", () => {
       "runtime-input",
       "runtime-input",
       "step-start",
-      "assistant-text",
+      "assistant-output",
       "step-end",
       "turn-end",
     ]);
