@@ -381,6 +381,42 @@ describe("DurableObjectSqliteThreadStore", () => {
     ).resolves.toEqual({ ok: true, version: "1" });
   });
 
+  it("hard-deletes thread-local rows for chunked v2 snapshots", async () => {
+    const { storage, store } = createStore({ maxPayloadBytes: 80 });
+    const bigMessage = { content: "x".repeat(120), role: "user" };
+
+    await expect(
+      store.commit(
+        "delete-rows",
+        {
+          state: {
+            compactions: [
+              {
+                endSeqExclusive: 1,
+                schemaVersion: 1,
+                startSeq: 0,
+                summary: { content: "summary", role: "system" },
+              },
+            ],
+            history: [bigMessage],
+            schemaVersion: 2,
+          },
+        },
+        { expectedVersion: null }
+      )
+    ).resolves.toEqual({ ok: true, version: "1" });
+    expect(readRows(storage, "delete-rows")).toHaveLength(1);
+    expect(readChunkRows(storage, "delete-rows")).toHaveLength(2);
+    expect(readCompactionRows(storage, "delete-rows")).toHaveLength(1);
+
+    await store.delete("delete-rows");
+
+    await expect(store.load("delete-rows")).resolves.toBeNull();
+    expect(readRows(storage, "delete-rows")).toEqual([]);
+    expect(readChunkRows(storage, "delete-rows")).toEqual([]);
+    expect(readCompactionRows(storage, "delete-rows")).toEqual([]);
+  });
+
   it("protects committed state from caller mutation", async () => {
     const { store } = createStore();
     const history = [{ nested: { value: 1 } }];

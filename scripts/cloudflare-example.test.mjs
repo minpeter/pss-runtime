@@ -22,8 +22,8 @@ describe("cloudflare durable object adapter", () => {
     const threadStoreSource = readText(
       "packages/runtime/src/platform/cloudflare/storage/sqlite/thread-store.ts"
     );
-    const threadStoreSqlSource = readText(
-      "packages/runtime/src/platform/cloudflare/storage/sqlite/thread-store-sql.ts"
+    const threadStoreSchemaSource = readText(
+      "packages/runtime/src/platform/cloudflare/storage/sqlite/thread-store-sql/schema/bootstrap.ts"
     );
 
     expect(hostSource).not.toContain("createFakeCloudflareDurableObjectHost");
@@ -36,7 +36,7 @@ describe("cloudflare durable object adapter", () => {
     expect(alarmWorkSource).toContain("ackScheduledCloudflareRun");
     expect(alarmDrainerSource).toContain("rescheduleCloudflareAlarm");
     expect(threadStoreSource).toContain("DurableObjectSqliteThreadStore");
-    expect(threadStoreSqlSource).toContain("pss_thread_meta");
+    expect(threadStoreSchemaSource).toContain("pss_thread_meta");
   });
 
   it("drives Cloudflare scheduled runs and thread prompts through stored alarms", async () => {
