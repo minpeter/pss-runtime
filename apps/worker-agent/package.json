@@ -14,7 +14,8 @@
     "ship:worker": "wrangler deploy --env=\"\"",
     "ship:webhook": "tsx scripts/telegram.ts webhook",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "ultracite check ."
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "3.0.0-canary.56",
