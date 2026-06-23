@@ -31,6 +31,11 @@ export const runtimeFileDeclaration = [
   'export type { NodeFileAgentContext, NodeFileAgentContextFactoryOptions, NodeFileAgentContextOptions, NodeFileExecutionHostOptions, NodeFileThreadHostOptions, NodeScheduledThreadPrompt, NodeScheduledWorkAppendOptions, NodeScheduledWorkDrainOptions, NodeScheduledWorkDrainResult, NodeScheduledWorkListOptions, NodeScheduledWorkRunContext } from "./index";',
   "",
 ].join("\n");
+export const runtimeOtelDeclaration = [
+  'export { traceAgentTurn } from "./index";',
+  'export type { TraceAgentTurnEventAttributes, TraceAgentTurnOptions, TraceAgentTurnSpan, TraceAgentTurnTracer } from "./index";',
+  "",
+].join("\n");
 
 let tempRoots = [];
 
@@ -161,6 +166,13 @@ function writeRuntimeDeclarationFixtures(cwd, packageName) {
       "index.d.ts"
     ),
     runtimeFileDeclaration
+  );
+  mkdirSync(join(cwd, "packages", packageName, "dist", "otel"), {
+    recursive: true,
+  });
+  writeFileSync(
+    join(cwd, "packages", packageName, "dist", "otel", "index.d.ts"),
+    runtimeOtelDeclaration
   );
   writeFileSync(
     join(cwd, "packages", packageName, "dist", "llm.d.ts"),

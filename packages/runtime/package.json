@@ -11,6 +11,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./otel": {
+      "@minpeter/pss-source": "./src/otel/index.ts",
+      "types": "./dist/otel/index.d.ts",
+      "import": "./dist/otel/index.js"
+    },
     "./platform/memory": {
       "@minpeter/pss-source": "./src/platform/memory/index.ts",
       "types": "./dist/platform/memory/index.d.ts",
@@ -69,6 +74,7 @@
     "lint": "ultracite check ."
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
     "ai": "7.0.0-canary.176"
   },
   "devDependencies": {

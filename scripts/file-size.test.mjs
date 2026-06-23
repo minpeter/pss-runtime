@@ -13,6 +13,7 @@ const sourceFilesWithCurrentEdits = [
   "scripts/verify-release-artifacts/runtime-public-surface.mjs",
   "scripts/verify-release-artifacts/shared.mjs",
   "scripts/verify-release-artifacts-package.test.mjs",
+  "scripts/verify-release-artifacts-runtime-otel.test.mjs",
   "scripts/verify-release-artifacts-runtime.test.mjs",
   "scripts/verify-release-artifacts-runtime-subpaths.test.mjs",
 ];

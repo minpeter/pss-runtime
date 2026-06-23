@@ -202,6 +202,38 @@ Return one of:
 Plugins run in registration order. Each `transform` updates the event seen by
 later plugins, so transforms chain sequentially.
 
+## OpenTelemetry
+
+The OpenTelemetry adapter lives on its own subpath so the runtime root stays
+small:
+
+```ts
+import { Agent } from "@minpeter/pss-runtime";
+import { traceAgentTurn } from "@minpeter/pss-runtime/otel";
+
+const agent = new Agent({ model });
+const turn = await agent.send("Hello");
+const tracedTurn = traceAgentTurn(turn);
+
+for await (const event of tracedTurn.events()) {
+  if (event.type === "assistant-output") {
+    process.stdout.write(event.text);
+  }
+}
+```
+
+`traceAgentTurn(turn)` returns an `AgentTurn` whose `events()` iterator yields
+the original `AgentEvent` objects while recording a `pss.runtime.turn` span with
+`pss.runtime.event` events. It closes the span on `turn-end`, marks `turn-error`
+as `ERROR` with a sanitized exception, and marks `turn-abort` as an aborted
+error span.
+
+The package depends only on `@opentelemetry/api`; applications still configure
+the OpenTelemetry SDK/exporter. By default, event attributes summarize
+assistant text, reasoning, inputs, and tool payloads by length/type rather than
+recording raw content or error messages. Applications can add caller-owned
+metadata with the `eventAttributes` option.
+
 ### Input `meta.source`
 
 The runtime attaches `meta` on input events at API boundaries. Plugins can route

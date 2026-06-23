@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type {
   CheckpointStore,
@@ -35,6 +37,7 @@ import {
   runPluginsForEvent,
   threadStoreKey as runtimeThreadStoreKey,
 } from "../index";
+import type { TraceAgentTurnOptions } from "../otel";
 
 type EmptyHostIsRejected =
   Record<string, never> extends AgentHost ? true : false;
@@ -231,6 +234,41 @@ describe("runtime public exports", () => {
       ExecutionStore["transaction"]
     >();
     expect(agentHost.kind).toBe("thread");
+  });
+
+  it("declares the OpenTelemetry adapter as an observability subpath", async () => {
+    const runtime = await import("../index");
+    const otel = await import("../otel");
+    const packageJson = JSON.parse(
+      await readFile(
+        fileURLToPath(new URL("../../package.json", import.meta.url)),
+        "utf8"
+      )
+    ) as {
+      exports: Record<string, { "@minpeter/pss-source": string }>;
+    };
+
+    expect(runtime).not.toHaveProperty("traceAgentTurn");
+    expect(runtime).not.toHaveProperty("createOpenTelemetryPlugin");
+    expect(runtime).not.toHaveProperty("recordAgentEvent");
+    expect(runtime).not.toHaveProperty("agentEventAttributes");
+    expect(otel).toHaveProperty("traceAgentTurn");
+    expect(otel).not.toHaveProperty("createOpenTelemetryPlugin");
+    expect(otel).not.toHaveProperty("recordAgentEvent");
+    expect(otel).not.toHaveProperty("agentEventAttributes");
+    expect(packageJson.exports["./otel"]).toMatchObject({
+      "@minpeter/pss-source": "./src/otel/index.ts",
+      import: "./dist/otel/index.js",
+      types: "./dist/otel/index.d.ts",
+    });
+    const options = {
+      eventAttributes: (event: AgentEvent) => ({
+        "test.event_type": event.type,
+      }),
+      eventName: "test.event",
+      tracerName: "test-tracer",
+    } satisfies TraceAgentTurnOptions;
+    expect(options.eventName).toBe("test.event");
   });
 
   it("exports Node file thread inspection from the file adapter only", async () => {

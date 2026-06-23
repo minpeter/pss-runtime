@@ -68,6 +68,11 @@ export const REQUIRED_RUNTIME_FILE_EXPORTS =
     " "
   );
 
+export const REQUIRED_RUNTIME_OTEL_EXPORTS =
+  "TraceAgentTurnEventAttributes TraceAgentTurnOptions TraceAgentTurnSpan TraceAgentTurnTracer traceAgentTurn".split(
+    " "
+  );
+
 export const FORBIDDEN_RUNTIME_ROOT_NAMES = [
   ...[
     "AgentMessage AgentModel AgentLoopResult AgentRun AgentRunInput AgentTool AgentTools",

@@ -3,6 +3,7 @@ import { defineConfig } from "tsdown";
 export default defineConfig({
   entry: [
     "src/index.ts",
+    "src/otel/index.ts",
     "src/platform/cloudflare/index.ts",
     "src/platform/file/index.ts",
     "src/platform/memory/index.ts",
