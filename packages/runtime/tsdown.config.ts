@@ -16,4 +16,16 @@ export default defineConfig({
   fixedExtension: false,
   sourcemap: true,
   dts: true,
+  inputOptions: {
+    // The dts pipeline (rolldown-plugin-dts:fake-js) intentionally emits no
+    // sourcemap for `.d.ts` chunks, which triggers a spurious SOURCEMAP_BROKEN
+    // warning even though the published `.js.map` files are correct. Drop only
+    // that one log and let every other warning through.
+    onLog(level, log, defaultHandler) {
+      if (log.code === "SOURCEMAP_BROKEN") {
+        return;
+      }
+      defaultHandler(level, log);
+    },
+  },
 });

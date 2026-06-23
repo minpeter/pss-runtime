@@ -5,6 +5,44 @@ import { describe, expect, it } from "vitest";
 import { runCodingAgentCli } from "./cli";
 
 describe("coding-agent CLI", () => {
+  it("prints usage when help is requested", async () => {
+    let output = "";
+
+    const exitCode = await runCodingAgentCli({
+      argv: ["--help"],
+      start: () =>
+        Promise.reject(new Error("TUI should not start for help output")),
+      stdout: {
+        write(text: string): void {
+          output += text;
+        },
+      },
+    });
+
+    expect(exitCode).toBe(0);
+    expect(output).toContain("Usage: pss [command]\n");
+    expect(output).toContain("inspect-thread");
+  });
+
+  it("returns an error code with usage when the command is unknown", async () => {
+    let output = "";
+
+    const exitCode = await runCodingAgentCli({
+      argv: ["wat"],
+      start: () =>
+        Promise.reject(new Error("TUI should not start for unknown commands")),
+      stdout: {
+        write(text: string): void {
+          output += text;
+        },
+      },
+    });
+
+    expect(exitCode).toBe(1);
+    expect(output).toContain("Unknown pss command: wat\n\n");
+    expect(output).toContain("Usage: pss [command]\n");
+  });
+
   it("routes inspect-thread through the local inspection surface", async () => {
     const directory = await mkdtemp(join(tmpdir(), "pss-coding-agent-cli-"));
     let output = "";
