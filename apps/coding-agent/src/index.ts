@@ -22,4 +22,16 @@ export {
   inspectCodingAgentThread,
   storageFileForThread,
 } from "./thread-inspect";
+export type {
+  CodingAgentOpenSearchClient,
+  CodingAgentToolSet,
+  CreateCodingAgentToolsOptions,
+  WebFetchInput,
+  WebSearchInput,
+} from "./tools";
+export {
+  CodingAgentToolAbortError,
+  CodingAgentToolsConfigError,
+  createCodingAgentTools,
+} from "./tools";
 export { type StartTuiOptions, startTui } from "./tui";

@@ -5,9 +5,6 @@ export default defineConfig({
     conditions: ["@minpeter/pss-source", "import", "module", "default"],
   },
   test: {
-    env: {
-      EXA_API_KEY: "test-exa-key",
-    },
     environment: "node",
   },
 });
