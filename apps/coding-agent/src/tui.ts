@@ -13,13 +13,13 @@ import { createNodeFileThreadHost } from "@minpeter/pss-runtime/node";
 import type { ToolSet } from "ai";
 import { createCodingLanguageModel } from "./model";
 import { resolveCodingAgentThreadConfig } from "./thread-config";
+import { resolveStartTuiTools } from "./tools";
 import { createTuiRunner, formatTuiHeader } from "./tui-runner";
 
 export interface StartTuiOptions {
   /**
-   * Optional tool set passed straight to the `Agent`. The `pss` TUI ships no
-   * built-in tools; pass your own (for example `opensearch-ai-sdk`) when
-   * you want the model to call them.
+   * Optional tool set passed straight to the `Agent`. When omitted, the TUI
+   * enables OpenSearch-backed web_search and web_fetch tools.
    */
   readonly tools?: ToolSet;
 }
@@ -32,7 +32,7 @@ export async function startTui(options: StartTuiOptions = {}): Promise<void> {
       "Answer in 2 short sentences and 280 characters or fewer unless the user explicitly asks for detail. Avoid headings.",
     model: createCodingLanguageModel(),
     autoCompaction: threadConfig.autoCompaction,
-    tools: options.tools,
+    tools: resolveStartTuiTools(options.tools),
   };
   const agent = new Agent(agentOptions);
   const thread = agent.thread(threadConfig.key);

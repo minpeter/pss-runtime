@@ -8,6 +8,7 @@ export default defineConfig({
     "src/model.ts",
     "src/thread-config.ts",
     "src/thread-inspect.ts",
+    "src/tools.ts",
     "src/tui.ts",
   ],
   unbundle: true,

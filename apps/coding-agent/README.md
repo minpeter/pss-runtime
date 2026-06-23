@@ -1,7 +1,7 @@
 # @minpeter/pss-coding-agent
 
-Model wiring and the `pss` TUI for pss-next. This package ships no built-in
-tools; bring your own `ToolSet` when you want tool calling.
+Model wiring and the `pss` TUI for pss-next. The TUI includes OpenSearch-backed
+`web_search` and `web_fetch` tools by default.
 
 ```ts
 import { createCodingLanguageModel } from "@minpeter/pss-coding-agent/model";
@@ -69,16 +69,9 @@ The inspection command uses the runtime Node adapter to decode stored thread
 snapshots, so the CLI reports the same file path, message count, compaction
 records, and version that runtime storage uses.
 
-The `pss` TUI starts a plain conversational agent with no built-in tools. To run
-the TUI with tools, call `startTui({ tools })` from your own entrypoint (for
-example to wire OpenSearch web tools):
-
-```ts
-import { startTui } from "@minpeter/pss-coding-agent";
-import { createOpenSearchTools } from "opensearch-ai-sdk/node";
-
-await startTui({ tools: createOpenSearchTools() });
-```
+The `pss` TUI starts with OpenSearch-backed `web_search` and `web_fetch` tools.
+Call `startTui({ tools })` from your own entrypoint when you want to replace the
+default tool set.
 
 When the TUI is idle, submitting text starts a normal `thread.send()` turn. When
 a run is active, submitting text calls `thread.steer(trimmed)` so the text lands

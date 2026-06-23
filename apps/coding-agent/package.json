@@ -31,6 +31,11 @@
       "types": "./dist/thread-inspect.d.ts",
       "import": "./dist/thread-inspect.js"
     },
+    "./tools": {
+      "@minpeter/pss-source": "./src/tools.ts",
+      "types": "./dist/tools.d.ts",
+      "import": "./dist/tools.js"
+    },
     "./tui": {
       "@minpeter/pss-source": "./src/tui.ts",
       "types": "./dist/tui.d.ts",
@@ -65,6 +70,7 @@
   "dependencies": {
     "@ai-sdk/openai-compatible": "3.0.0-canary.56",
     "@earendil-works/pi-tui": "^0.79.4",
+    "@minpeter/opensearch": "0.0.4",
     "@minpeter/pss-runtime": "workspace:^",
     "@t3-oss/env-core": "^0.13.11",
     "ai": "7.0.0-canary.176",
