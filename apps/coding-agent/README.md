@@ -71,12 +71,13 @@ records, and version that runtime storage uses.
 
 The `pss` TUI starts a plain conversational agent with no built-in tools. To run
 the TUI with tools, call `startTui({ tools })` from your own entrypoint (for
-example to wire `@minpeter/pss-web-tools`):
+example to wire OpenSearch web tools):
 
 ```ts
 import { startTui } from "@minpeter/pss-coding-agent";
+import { createOpenSearchTools } from "opensearch-ai-sdk/node";
 
-await startTui({ tools });
+await startTui({ tools: createOpenSearchTools() });
 ```
 
 When the TUI is idle, submitting text starts a normal `thread.send()` turn. When

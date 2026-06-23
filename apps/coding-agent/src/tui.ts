@@ -18,7 +18,7 @@ import { createTuiRunner, formatTuiHeader } from "./tui-runner";
 export interface StartTuiOptions {
   /**
    * Optional tool set passed straight to the `Agent`. The `pss` TUI ships no
-   * built-in tools; pass your own (for example `@minpeter/pss-web-tools`) when
+   * built-in tools; pass your own (for example `opensearch-ai-sdk`) when
    * you want the model to call them.
    */
   readonly tools?: ToolSet;

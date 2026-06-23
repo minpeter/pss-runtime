@@ -117,7 +117,15 @@ AI_MODEL=...
 ```
 
 The `pss` TUI does not enable web/search tools by default. Applications that need
-tools should provide them explicitly to the runtime or TUI entrypoint.
+tools should provide them explicitly to the runtime or TUI entrypoint. For web
+search and fetch tools, use OpenSearch:
+
+```ts
+import { startTui } from "@minpeter/pss-coding-agent";
+import { createOpenSearchTools } from "opensearch-ai-sdk/node";
+
+await startTui({ tools: createOpenSearchTools() });
+```
 
 The `pss` TUI stores sessions in `~/.pss/sessions` by default. Override with
 `PSS_SESSION_DIR` and `PSS_SESSION_KEY` when you want repo-local storage or a
