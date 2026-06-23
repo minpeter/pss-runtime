@@ -79,7 +79,14 @@ export async function runPluginsForToolCall(
       continue;
     }
 
-    const result = normalizeToolCallResult(await handler(context));
+    const result = normalizeToolCallResult(
+      await handler({
+        ...context,
+        capabilities: structuredClone(context.capabilities),
+        history: structuredClone(context.history),
+        input: structuredClone(context.input),
+      })
+    );
     if (!result || result.action === "continue") {
       continue;
     }
