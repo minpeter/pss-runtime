@@ -34,6 +34,11 @@ export async function runCodingAgentCli({
     return 0;
   }
 
+  if (command === "help" || command === "--help" || command === "-h") {
+    stdout.write(`${formatUsage()}\n`);
+    return 0;
+  }
+
   if (command === "inspect-thread") {
     const config = resolveCodingAgentThreadConfig(env, cwd, home);
     const report = await inspectCodingAgentThread(config);
@@ -41,5 +46,17 @@ export async function runCodingAgentCli({
     return 0;
   }
 
-  throw new Error(`Unknown pss command: ${command}`);
+  stdout.write(`Unknown pss command: ${command}\n\n${formatUsage()}\n`);
+  return 1;
+}
+
+function formatUsage(): string {
+  return [
+    "Usage: pss [command]",
+    "",
+    "Commands:",
+    "  (no command)     Start the interactive TUI",
+    "  inspect-thread   Print a report for the configured thread",
+    "  help             Show this help message",
+  ].join("\n");
 }
