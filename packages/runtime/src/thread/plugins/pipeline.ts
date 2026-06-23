@@ -1,5 +1,9 @@
 import type { ModelMessage } from "ai";
 import type {
+  RuntimeToolCapability,
+  RuntimeToolRetryPolicy,
+} from "../../llm/llm";
+import type {
   AgentEvent,
   RuntimeInput,
   UserMessage,
@@ -23,15 +27,34 @@ export type AgentPluginInterceptResult =
 
 export type AgentPluginResult = AgentPluginInterceptResult | undefined;
 
+export type AgentToolCallResult =
+  | { readonly action: "continue" }
+  | { readonly action: "needs-recovery" };
+
 export interface AgentEventContext {
   readonly event: AgentEvent;
   readonly history: AgentEventHistory;
   readonly signal?: AbortSignal;
 }
 
+export interface AgentToolCallContext {
+  readonly attempt: number;
+  readonly capabilities: readonly RuntimeToolCapability[];
+  readonly history: AgentEventHistory;
+  readonly idempotencyKey: string;
+  readonly input: unknown;
+  readonly policy: RuntimeToolRetryPolicy;
+  readonly signal?: AbortSignal;
+  readonly toolCallId: string;
+  readonly toolName: string;
+}
+
 export interface AgentPlugin {
   readonly name?: string;
   readonly on?: (context: AgentEventContext) => MaybePromise<AgentPluginResult>;
+  readonly onToolCall?: (
+    context: AgentToolCallContext
+  ) => MaybePromise<AgentToolCallResult | undefined>;
 }
 
 export type PluginPipelineResult =
@@ -44,6 +67,27 @@ export function runPluginsForEvent(
   options: { readonly observeOnly?: boolean } = {}
 ): Promise<PluginPipelineResult> {
   return runPluginPipeline(plugins, context, options.observeOnly === true);
+}
+
+export async function runPluginsForToolCall(
+  plugins: readonly AgentPlugin[],
+  context: AgentToolCallContext
+): Promise<AgentToolCallResult> {
+  for (const plugin of plugins) {
+    const handler = plugin.onToolCall;
+    if (!handler) {
+      continue;
+    }
+
+    const result = normalizeToolCallResult(await handler(context));
+    if (!result || result.action === "continue") {
+      continue;
+    }
+
+    return result;
+  }
+
+  return { action: "continue" };
 }
 
 function isInterceptableEvent(
@@ -64,6 +108,20 @@ function normalizeInterceptResult(
   }
 
   if (result.action === "transform") {
+    return result;
+  }
+
+  return;
+}
+
+function normalizeToolCallResult(
+  result: AgentToolCallResult | undefined
+): AgentToolCallResult | undefined {
+  if (result === undefined || result === null || typeof result !== "object") {
+    return;
+  }
+
+  if (result.action === "continue" || result.action === "needs-recovery") {
     return result;
   }
 

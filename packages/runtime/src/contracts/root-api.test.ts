@@ -21,8 +21,12 @@ import type {
   AgentHost,
   AgentInput,
   AgentOptions,
+  AgentToolCallContext,
+  AgentToolCallResult,
   ControlAgentEvent,
   LifecycleAgentEvent,
+  RuntimeToolCapability,
+  RuntimeToolMetadata,
   TelemetryAgentEvent,
   ThreadCompactionInput,
   ThreadHandle,
@@ -35,6 +39,7 @@ import {
   isTelemetryAgentEvent,
   isVisibleAgentEvent,
   runPluginsForEvent,
+  runPluginsForToolCall,
 } from "../index";
 
 type EmptyHostIsRejected =
@@ -69,6 +74,10 @@ describe("runtime public exports", () => {
 
     expect(runtime).toHaveProperty("Agent", Agent);
     expect(runtime).toHaveProperty("runPluginsForEvent", runPluginsForEvent);
+    expect(runtime).toHaveProperty(
+      "runPluginsForToolCall",
+      runPluginsForToolCall
+    );
     expect(runtime).not.toHaveProperty("createInMemoryExecutionHost");
     expect(runtime).not.toHaveProperty("createCloudflareDurableObjectHost");
     expect(runtime).not.toHaveProperty("createCloudflareAgentContext");
@@ -176,6 +185,43 @@ describe("runtime public exports", () => {
     expect(enabledOptions.notificationOverlays).toEqual(["runtime context"]);
     expect(disabledOptions.autoCompaction).toBe(false);
     expect(compaction.startSeq).toBe(0);
+  });
+
+  it("types public runtime tool metadata and tool-call plugin results", () => {
+    const capabilities = [
+      {
+        kind: "filesystem",
+        operations: ["read", "write"],
+        scope: "workspace",
+      },
+      { kind: "network", hosts: ["api.example.test"] },
+      { kind: "human-approval", reason: "publishes externally" },
+    ] satisfies readonly RuntimeToolCapability[];
+    const metadata = {
+      capabilities,
+      retryPolicy: "manual-recovery",
+    } satisfies RuntimeToolMetadata;
+    const context = {
+      attempt: 1,
+      capabilities,
+      history: [],
+      idempotencyKey: "run-1:call_tool-1",
+      input: { path: "README.md" },
+      policy: "manual-recovery",
+      toolCallId: "call_tool-1",
+      toolName: "write_file",
+    } satisfies AgentToolCallContext;
+    const continueResult = {
+      action: "continue",
+    } satisfies AgentToolCallResult;
+    const recoveryResult = {
+      action: "needs-recovery",
+    } satisfies AgentToolCallResult;
+
+    expect(metadata.capabilities).toEqual(capabilities);
+    expect(context.toolName).toBe("write_file");
+    expect(continueResult.action).toBe("continue");
+    expect(recoveryResult.action).toBe("needs-recovery");
   });
 
   it("types advanced host contracts", () => {

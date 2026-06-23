@@ -202,6 +202,56 @@ Return one of:
 Plugins run in registration order. Each `transform` updates the event seen by
 later plugins, so transforms chain sequentially.
 
+### Tool-call interception
+
+Plugins can also expose `onToolCall` to inspect a tool call after the runtime
+writes the `before-tool` checkpoint and before the tool's `execute` function
+runs:
+
+```ts
+import type { AgentPlugin } from "@minpeter/pss-runtime";
+
+const approvalPlugin: AgentPlugin = {
+  name: "approval",
+  onToolCall: ({ capabilities, toolName }) => {
+    const writesFiles = capabilities.some(
+      (capability) => capability.kind === "filesystem"
+    );
+    if (writesFiles && toolName !== "approved_write") {
+      return { action: "needs-recovery" };
+    }
+    return { action: "continue" };
+  },
+};
+```
+
+`onToolCall` receives `toolName`, `toolCallId`, `input`, `policy`, `attempt`,
+`idempotencyKey`, normalized `capabilities`, current model-message `history`,
+and `signal`. Returning `{ action: "needs-recovery" }` stops before real tool
+execution and marks the durable run for manual recovery. Returning
+`{ action: "continue" }`, returning nothing, or returning an invalid value lets
+execution continue. The hook does not transform inputs or inject outputs.
+
+Tool definitions may declare top-level runtime metadata next to AI SDK tool
+fields:
+
+```ts
+const tools = {
+  write_file: {
+    ...tool({ execute: writeFile, inputSchema }),
+    capabilities: [
+      { kind: "filesystem", operations: ["write"], scope: "workspace" },
+      { kind: "human-approval", reason: "writes files" },
+    ],
+    retryPolicy: "manual-recovery",
+  },
+};
+```
+
+Capability metadata is treated as untrusted runtime metadata. The runtime only
+preserves arrays of objects with a string `kind`; malformed capability metadata
+normalizes to an empty list and is not persisted.
+
 ### Input `meta.source`
 
 The runtime attaches `meta` on input events at API boundaries. Plugins can route
@@ -523,10 +573,11 @@ checkpoint and may re-enter the operation.
 When `Agent` receives an `ExecutionHost`, high-level model turns create a
 `user-turn` run record and thread tool execution context into managed model
 calls. Tools are checkpointed before and after execution and receive stable
-`attempt`, `idempotencyKey`, `retryPolicy`, `signal`, and public `toolCallId`
-values. The `@minpeter/pss-runtime/execution` entrypoint also exposes the same
-low-level tool execution checkpoint types for custom resume runners built
-directly on AI SDK `LanguageModel` objects.
+`attempt`, `idempotencyKey`, `retryPolicy`, `signal`, public `toolCallId`, and
+normalized `capabilities` values. Non-empty valid capabilities are persisted
+with `pendingToolCall` checkpoint metadata. The `@minpeter/pss-runtime/execution`
+entrypoint also exposes the same low-level tool execution checkpoint types for
+custom resume runners built directly on AI SDK `LanguageModel` objects.
 
 These checkpoints are rollback boundaries, not a complete host adapter by
 themselves. Edge hosts still need durable scheduling, leases, resume workers,

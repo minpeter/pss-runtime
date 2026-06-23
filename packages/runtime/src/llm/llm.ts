@@ -1,6 +1,9 @@
 import type { LanguageModel, ModelMessage, ToolChoice, ToolSet } from "ai";
 import { generateText } from "ai";
-import type { RuntimeToolExecutionContext } from "./tool-execution";
+import type {
+  RuntimeToolExecutionContext,
+  RuntimeToolMetadata,
+} from "./tool-execution";
 import {
   normalizeToolCallIds,
   rewriteMessageToolCallIds,
@@ -8,14 +11,23 @@ import {
 
 export type {
   RuntimePersistedToolExecutionCheckpoint,
+  RuntimeToolCapability,
   RuntimeToolExecutionCheckpoint,
   RuntimeToolExecutionCheckpointMetadata,
   RuntimeToolExecutionContext,
   RuntimeToolExecutionDecision,
+  RuntimeToolMetadata,
   RuntimeToolRetryPolicy,
 } from "./tool-execution";
 
 export type AgentToolChoice = ToolChoice<ToolSet>;
+export type RuntimeToolDefinition = ToolSet[string] &
+  Omit<RuntimeToolMetadata, "capabilities"> & {
+    readonly capabilities?: unknown;
+  };
+export interface RuntimeToolSet {
+  readonly [toolName: string]: RuntimeToolDefinition;
+}
 export type ModelStepOutput = Awaited<
   ReturnType<typeof generateText>
 >["responseMessages"];
@@ -25,7 +37,7 @@ export interface ModelGenerationOptions {
   instructions?: string;
   model: LanguageModel;
   toolChoice?: AgentToolChoice;
-  tools?: ToolSet;
+  tools?: RuntimeToolSet;
 }
 
 export interface ModelStepOptions extends ModelGenerationOptions {

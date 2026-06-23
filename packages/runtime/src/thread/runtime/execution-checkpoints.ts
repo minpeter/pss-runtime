@@ -6,11 +6,16 @@ import type {
 import type {
   RuntimeToolExecutionCheckpoint,
   RuntimeToolExecutionContext,
+  RuntimeToolExecutionDecision,
 } from "../../llm/llm";
 import { persistedToolExecutionCheckpoint } from "../../llm/tool-execution";
 import type { ThreadState } from "../state/thread-state";
 
 const maxCheckpointWriteAttempts = 5;
+
+export type ThreadToolCallInterceptor = (
+  checkpoint: RuntimeToolExecutionCheckpoint
+) => Promise<RuntimeToolExecutionDecision> | RuntimeToolExecutionDecision;
 
 export class ThreadExecutionCheckpointError extends Error {
   constructor(runId: string, expectedVersion: number, currentVersion: number) {
@@ -23,10 +28,12 @@ export class ThreadExecutionCheckpointError extends Error {
 
 export function createThreadToolExecutionContext({
   executionHost,
+  interceptToolCall,
   runId,
   state,
 }: {
   readonly executionHost: ExecutionHost;
+  readonly interceptToolCall?: ThreadToolCallInterceptor;
   readonly runId: string;
   readonly state: ThreadState;
 }): RuntimeToolExecutionContext {
@@ -48,7 +55,7 @@ export function createThreadToolExecutionContext({
         state,
         toolCall: checkpoint,
       });
-      return;
+      return interceptToolCall?.(checkpoint);
     },
     runId,
   };

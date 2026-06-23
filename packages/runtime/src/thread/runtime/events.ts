@@ -1,8 +1,13 @@
 import type { ModelMessage } from "ai";
+import type {
+  RuntimeToolExecutionCheckpoint,
+  RuntimeToolExecutionDecision,
+} from "../../llm/llm";
 import {
   type AgentPlugin,
   type PluginPipelineResult,
   runPluginsForEvent,
+  runPluginsForToolCall,
 } from "../plugins/pipeline";
 import type { AgentEvent } from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
@@ -109,6 +114,26 @@ export class ThreadEventDispatcher {
     }
 
     return pipeline.event;
+  }
+
+  async interceptToolCall(
+    checkpoint: RuntimeToolExecutionCheckpoint
+  ): Promise<RuntimeToolExecutionDecision> {
+    const result = await runPluginsForToolCall(this.#plugins, {
+      attempt: checkpoint.attempt,
+      capabilities: checkpoint.capabilities,
+      history: this.#history(),
+      idempotencyKey: checkpoint.idempotencyKey,
+      input: checkpoint.input,
+      policy: checkpoint.policy,
+      signal: this.#signal(),
+      toolCallId: checkpoint.toolCallId,
+      toolName: checkpoint.toolName,
+    });
+
+    return result.action === "needs-recovery"
+      ? { status: "needs-recovery" }
+      : undefined;
   }
 
   emitProcessedEvent(run: BufferedAgentTurn, event: AgentEvent): void {

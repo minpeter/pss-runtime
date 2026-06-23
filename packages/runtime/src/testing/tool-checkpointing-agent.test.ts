@@ -106,9 +106,18 @@ describe("tool checkpointing through Agent", () => {
       host,
       model: fakeModel,
       tools: {
-        checkpointed_tool: checkpointedTool("idempotent", () => ({
-          ok: true,
-        })),
+        checkpointed_tool: {
+          ...checkpointedTool("idempotent", () => ({
+            ok: true,
+          })),
+          capabilities: [
+            {
+              kind: "filesystem",
+              operations: ["read"],
+              scope: "workspace",
+            },
+          ],
+        },
       },
     });
 
@@ -121,6 +130,13 @@ describe("tool checkpointing through Agent", () => {
     const [beforeTool, afterTool] = checkpoints;
     expect(beforeTool?.pendingToolCall).toMatchObject({
       idempotencyKey: `${beforeTool?.runId}:call_sdk-tool-call-1`,
+      capabilities: [
+        {
+          kind: "filesystem",
+          operations: ["read"],
+          scope: "workspace",
+        },
+      ],
       policy: "idempotent",
       toolName: "checkpointed_tool",
     });
@@ -214,5 +230,63 @@ describe("tool checkpointing through Agent", () => {
       });
       expect(checkpoint.threadSnapshot).not.toHaveProperty("history");
     }
+  });
+
+  it("lets plugins stop tool execution after the before-tool checkpoint", async () => {
+    const Agent = await loadAgent();
+    const { checkpoints, host } = createCheckpointSpyHost();
+    const signal = new AbortController().signal;
+    let executions = 0;
+    const interceptedToolNames: string[] = [];
+
+    generateTextMock.mockImplementationOnce(
+      async (options: GenerateTextToolOptions) => {
+        await executableTool(options.tools ?? {}, "dangerous_tool").execute?.(
+          {},
+          toolOptions("call_sdk-tool-call-1", signal)
+        );
+
+        return {
+          responseMessages: [assistantMessage("SHOULD NOT FINISH")],
+        };
+      }
+    );
+
+    const agent = new Agent({
+      host,
+      model: fakeModel,
+      plugins: [
+        {
+          onToolCall: (context) => {
+            interceptedToolNames.push(context.toolName);
+            return { action: "needs-recovery" };
+          },
+        },
+      ],
+      tools: {
+        dangerous_tool: checkpointedTool("manual-recovery", () => {
+          executions += 1;
+          return { ok: true };
+        }),
+      },
+    });
+
+    const events = await collectRun(await agent.send("use the tool"));
+
+    expect(interceptedToolNames).toEqual(["dangerous_tool"]);
+    expect(executions).toBe(0);
+    expect(checkpoints.map((checkpoint) => checkpoint.phase)).toEqual([
+      "before-tool",
+    ]);
+    expect(checkpoints[0]?.pendingToolCall).toMatchObject({
+      policy: "manual-recovery",
+      toolName: "dangerous_tool",
+    });
+    expect(events.map((event) => event.type)).toContain("turn-error");
+    await expect(
+      host.store.turns.get(checkpoints[0]?.runId ?? "")
+    ).resolves.toMatchObject({
+      status: "needs-recovery",
+    });
   });
 });

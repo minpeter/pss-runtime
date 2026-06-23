@@ -1,5 +1,5 @@
 import type { AssistantModelMessage, ToolModelMessage, ToolSet } from "ai";
-import type { ModelStepOutput } from "./llm";
+import type { ModelStepOutput, RuntimeToolSet } from "./llm";
 
 const toolCallIdPrefix = "call_";
 const publicToolCallIdPattern = /^call[-_]/;
@@ -8,8 +8,19 @@ type ModelStepMessage = ModelStepOutput[number];
 
 export type RuntimeToolRetryPolicy = "idempotent" | "manual-recovery" | "pure";
 
+export interface RuntimeToolCapability {
+  readonly kind: string;
+  readonly [metadata: string]: unknown;
+}
+
+export interface RuntimeToolMetadata {
+  readonly capabilities?: readonly RuntimeToolCapability[];
+  readonly retryPolicy?: RuntimeToolRetryPolicy;
+}
+
 export interface RuntimeToolExecutionCheckpointMetadata {
   readonly attempt: number;
+  readonly capabilities?: readonly RuntimeToolCapability[];
   readonly idempotencyKey: string;
   readonly policy: RuntimeToolRetryPolicy;
   readonly toolCallId: string;
@@ -18,11 +29,18 @@ export interface RuntimeToolExecutionCheckpointMetadata {
 
 export interface RuntimeToolExecutionCheckpoint
   extends RuntimeToolExecutionCheckpointMetadata {
+  readonly capabilities: readonly RuntimeToolCapability[];
   readonly input: unknown;
 }
 
-export type RuntimePersistedToolExecutionCheckpoint =
-  RuntimeToolExecutionCheckpointMetadata;
+export interface RuntimePersistedToolExecutionCheckpoint {
+  readonly attempt: number;
+  readonly capabilities?: readonly RuntimeToolCapability[];
+  readonly idempotencyKey: string;
+  readonly policy: RuntimeToolRetryPolicy;
+  readonly toolCallId: string;
+  readonly toolName: string;
+}
 
 export type RuntimeToolExecutionDecision =
   | { readonly status: "needs-recovery" }
@@ -59,8 +77,12 @@ export class ToolExecutionNeedsRecoveryError extends Error {
 export function persistedToolExecutionCheckpoint(
   checkpoint: RuntimeToolExecutionCheckpointMetadata
 ): RuntimePersistedToolExecutionCheckpoint {
+  const capabilities = normalizeRuntimeToolCapabilities(
+    checkpoint.capabilities
+  );
   return {
     attempt: checkpoint.attempt,
+    ...(capabilities.length === 0 ? {} : { capabilities }),
     idempotencyKey: checkpoint.idempotencyKey,
     policy: checkpoint.policy,
     toolCallId: checkpoint.toolCallId,
@@ -69,7 +91,7 @@ export function persistedToolExecutionCheckpoint(
 }
 
 export function normalizeToolCallIds(
-  tools: ToolSet | undefined,
+  tools: RuntimeToolSet | undefined,
   toolCallIds: Map<string, string>,
   toolExecution: RuntimeToolExecutionContext | undefined
 ): ToolSet | undefined {
@@ -127,6 +149,7 @@ function wrapToolExecute(
     execute: async (input: unknown, options: ToolExecutionOptionsLike) => {
       const toolCallId = publicToolCallId(options.toolCallId, toolCallIds);
       const checkpoint = toolCheckpoint({
+        capabilities: toolCapabilities(toolDefinition),
         input,
         policy: toolRetryPolicy(toolDefinition),
         toolCallId,
@@ -181,12 +204,14 @@ interface RuntimeToolExecutionOptionsLike extends ToolExecutionOptionsLike {
 }
 
 function toolCheckpoint({
+  capabilities,
   input,
   policy,
   toolCallId,
   toolExecution,
   toolName,
 }: {
+  readonly capabilities: readonly RuntimeToolCapability[];
   readonly input: unknown;
   readonly policy: RuntimeToolRetryPolicy;
   readonly toolCallId: string;
@@ -195,12 +220,62 @@ function toolCheckpoint({
 }): RuntimeToolExecutionCheckpoint {
   return {
     attempt: toolExecution.attempt,
+    capabilities,
     idempotencyKey: `${toolExecution.runId}:${toolCallId}`,
     input,
     policy,
     toolCallId,
     toolName,
   };
+}
+
+function toolCapabilities(
+  toolDefinition: unknown
+): readonly RuntimeToolCapability[] {
+  if (
+    typeof toolDefinition === "object" &&
+    toolDefinition !== null &&
+    "capabilities" in toolDefinition
+  ) {
+    return normalizeRuntimeToolCapabilities(toolDefinition.capabilities);
+  }
+
+  return [];
+}
+
+export function normalizeRuntimeToolCapabilities(
+  value: unknown
+): readonly RuntimeToolCapability[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const capabilities: RuntimeToolCapability[] = [];
+  for (const item of value) {
+    const capability = runtimeToolCapability(item);
+    if (!capability) {
+      return [];
+    }
+    capabilities.push(capability);
+  }
+
+  return capabilities;
+}
+
+function runtimeToolCapability(
+  value: unknown
+): RuntimeToolCapability | undefined {
+  if (!isRecord(value) || typeof value.kind !== "string") {
+    return;
+  }
+
+  return { ...value, kind: value.kind };
+}
+
+function isRecord(
+  value: unknown
+): value is { readonly [key: string]: unknown } {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function toolRetryPolicy(toolDefinition: unknown): RuntimeToolRetryPolicy {
