@@ -30,11 +30,13 @@ import type {
 } from "../index";
 import {
   Agent,
+  collectAssistantText,
   isControlAgentEvent,
   isLifecycleAgentEvent,
   isTelemetryAgentEvent,
   isVisibleAgentEvent,
   runPluginsForEvent,
+  streamAssistantText,
 } from "../index";
 
 type EmptyHostIsRejected =
@@ -97,6 +99,16 @@ describe("runtime public exports", () => {
       isTelemetryAgentEvent
     );
     expect(runtime).toHaveProperty("isControlAgentEvent", isControlAgentEvent);
+  });
+
+  it("exports assistant text-stream helpers from the package root", async () => {
+    const runtime = await import("../index");
+
+    expect(runtime).toHaveProperty("streamAssistantText", streamAssistantText);
+    expect(runtime).toHaveProperty(
+      "collectAssistantText",
+      collectAssistantText
+    );
   });
 
   it("does not expose runtime-owned subagent helpers from the package root", async () => {

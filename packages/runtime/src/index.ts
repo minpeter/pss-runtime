@@ -59,6 +59,10 @@ export {
   isToolAgentEvent,
   isVisibleAgentEvent,
 } from "./thread/protocol/events";
+export {
+  collectAssistantText,
+  streamAssistantText,
+} from "./thread/protocol/text-stream";
 export type { AgentTurn } from "./thread/protocol/turn";
 export type {
   CommitResult,

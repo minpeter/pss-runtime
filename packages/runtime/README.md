@@ -49,6 +49,26 @@ consume the events for the turn to progress. This is what lets code react to
 `turn-start`, `step-start`, and `step-end` before the next model snapshot is
 created.
 
+For the common "I only want the visible assistant text" case, the root export
+ships two thin helpers over `turn.events()`. They do not replace the structured
+stream and do not change its contract: each helper consumes `turn.events()`
+exactly once, so the turn is still single-consumer.
+
+```ts
+import { collectAssistantText, streamAssistantText } from "@minpeter/pss-runtime";
+
+// Incremental: yields each visible assistant-output chunk in order.
+for await (const chunk of streamAssistantText(await agent.send("Hello"))) {
+  process.stdout.write(chunk);
+}
+
+// One-shot: drains the turn and returns the concatenated assistant text.
+const text = await collectAssistantText(await agent.send("Hello"));
+```
+
+Reach for `turn.events()` directly whenever you need tool calls, lifecycle, or
+telemetry events; the helpers intentionally drop everything except visible text.
+
 `model` is the single public constructor key for model execution. Pass an AI SDK
 `LanguageModel` object and configure runtime-owned prompting through
 `instructions`, `tools`, and `toolChoice`:
