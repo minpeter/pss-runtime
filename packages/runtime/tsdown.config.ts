@@ -3,6 +3,7 @@ import { defineConfig } from "tsdown";
 export default defineConfig({
   entry: [
     "src/index.ts",
+    "src/channel/index.ts",
     "src/platform/cloudflare/index.ts",
     "src/platform/node/index.ts",
     "src/execution/index.ts",

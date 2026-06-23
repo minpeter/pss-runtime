@@ -28,6 +28,11 @@ export const runtimeNodeDeclaration = [
   'export type { NodeFileAgentContext, NodeFileAgentContextFactoryOptions, NodeFileAgentContextOptions, NodeFileExecutionHostOptions, NodeFileThreadHostOptions, NodeScheduledThreadPrompt, NodeScheduledWorkAppendOptions, NodeScheduledWorkDrainOptions, NodeScheduledWorkDrainResult, NodeScheduledWorkListOptions, NodeScheduledWorkRunContext } from "./index";',
   "",
 ].join("\n");
+export const runtimeChannelDeclaration = [
+  'export { projectChannelAssistantDelivery } from "./index";',
+  'export type { ChannelAssistantDelivery, ChannelAssistantTextDelivery, ChannelInboundMessage } from "./index";',
+  "",
+].join("\n");
 
 let tempRoots = [];
 
@@ -143,6 +148,13 @@ function writeRuntimeDeclarationFixtures(cwd, packageName) {
       "index.d.ts"
     ),
     runtimeNodeDeclaration
+  );
+  mkdirSync(join(cwd, "packages", packageName, "dist", "channel"), {
+    recursive: true,
+  });
+  writeFileSync(
+    join(cwd, "packages", packageName, "dist", "channel", "index.d.ts"),
+    runtimeChannelDeclaration
   );
   writeFileSync(
     join(cwd, "packages", packageName, "dist", "llm.d.ts"),

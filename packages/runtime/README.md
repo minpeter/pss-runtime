@@ -77,6 +77,57 @@ for await (const event of turn.events()) {
 
 `agent.send(...)` is shorthand for `agent.thread("default").send(...)`.
 
+## Channel Adapters
+
+Use `@minpeter/pss-runtime/channel` when a product channel needs a small typed
+boundary around runtime turns. The channel adapter resolves an inbound message to
+a thread key and runtime input; the app still owns `agent.thread(...).send(...)`
+and drains `turn.events()`.
+
+```ts
+import { Agent } from "@minpeter/pss-runtime";
+import {
+  projectChannelAssistantDelivery,
+  type ChannelAssistantDelivery,
+  type ChannelInboundMessage,
+} from "@minpeter/pss-runtime/channel";
+
+interface ChatMessage {
+  roomId: string;
+  text: string;
+  userId: string;
+}
+
+function toChannelInbound(message: ChatMessage): ChannelInboundMessage {
+  return {
+    input: message.text,
+    threadKey: { key: message.userId, scope: message.roomId },
+  };
+}
+
+async function deliverChatMessage(
+  delivery: ChannelAssistantDelivery
+): Promise<void> {
+  await postChatMessage(delivery.text);
+}
+
+const agent = new Agent({ model });
+const inbound = toChannelInbound(inboundMessage);
+const turn = await agent.thread(inbound.threadKey).send(inbound.input);
+
+for await (const event of turn.events()) {
+  const delivery = projectChannelAssistantDelivery(event);
+  if (delivery !== undefined) {
+    await deliverChatMessage(delivery);
+  }
+}
+```
+
+The default projector emits deliveries only for non-empty `assistant-output`
+events. Lifecycle, tool, telemetry, runtime-input, and user-input events remain
+available to the app through `turn.events()`, but are not published to channels
+by default.
+
 For model providers that support multimodal input, send JSON-serializable content
 parts through the same API. String input and `readonly string[]` remain supported
 shortcuts for text-only turns.

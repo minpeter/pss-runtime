@@ -2,11 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { listFiles, packageDistPath, relativeToCwd } from "./shared.mjs";
 
-const REQUIRED_RUNTIME_ROOT_EXPORTS = [
-  "AgentHost",
-  "AgentTurn",
-  "RuntimeInput",
-];
+const REQUIRED_RUNTIME_ROOT_EXPORTS = names("AgentHost AgentTurn RuntimeInput");
 const REQUIRED_RUNTIME_EXECUTION_EXPORTS = [
   "CheckpointStore",
   "createInMemoryExecutionHost",
@@ -60,10 +56,12 @@ const REQUIRED_RUNTIME_CLOUDFLARE_EXPORTS = [
   "listScheduledCloudflareThreadPrompts",
   "rescheduleCloudflareAlarm",
 ];
-const REQUIRED_RUNTIME_NODE_EXPORTS =
-  "FileExecutionStore FileThreadStore NodeFileAgentContext NodeFileAgentContextFactoryOptions NodeFileAgentContextOptions NodeFileExecutionHostOptions NodeFileThreadHostOptions NodeScheduledThreadPrompt NodeScheduledWorkAppendOptions NodeScheduledWorkDrainOptions NodeScheduledWorkDrainResult NodeScheduledWorkListOptions NodeScheduledWorkRunContext ackScheduledNodeRun ackScheduledNodeThreadPrompt appendScheduledNodeRun appendScheduledNodeThreadPrompt createNodeFileAgentContext createNodeFileExecutionHost createNodeFileScheduler createNodeFileThreadHost drainScheduledNodeWork listScheduledNodeRuns listScheduledNodeThreadPrompts".split(
-    " "
-  );
+const REQUIRED_RUNTIME_NODE_EXPORTS = names(
+  "FileExecutionStore FileThreadStore NodeFileAgentContext NodeFileAgentContextFactoryOptions NodeFileAgentContextOptions NodeFileExecutionHostOptions NodeFileThreadHostOptions NodeScheduledThreadPrompt NodeScheduledWorkAppendOptions NodeScheduledWorkDrainOptions NodeScheduledWorkDrainResult NodeScheduledWorkListOptions NodeScheduledWorkRunContext ackScheduledNodeRun ackScheduledNodeThreadPrompt appendScheduledNodeRun appendScheduledNodeThreadPrompt createNodeFileAgentContext createNodeFileExecutionHost createNodeFileScheduler createNodeFileThreadHost drainScheduledNodeWork listScheduledNodeRuns listScheduledNodeThreadPrompts"
+);
+const REQUIRED_RUNTIME_CHANNEL_EXPORTS = names(
+  "ChannelAssistantDelivery ChannelAssistantTextDelivery ChannelInboundMessage projectChannelAssistantDelivery"
+);
 const FORBIDDEN_RUNTIME_ROOT_NAMES = [
   ...[
     "AgentMessage AgentModel AgentLoopResult AgentRun AgentRunInput AgentTool AgentTools",
@@ -95,9 +93,7 @@ const FORBIDDEN_RUNTIME_ROOT_NAMES = [
   ["Runtime", "Llm", "Context"].join(""),
   ["Runtime", "Llm", "Output"].join(""),
   ["Runtime", "Llm", "Output", "Part"].join(""),
-  "runAgentLoop",
-  "ToolExecutionNeedsRecoveryError",
-  "SessionHost",
+  ...names("runAgentLoop ToolExecutionNeedsRecoveryError SessionHost"),
 ];
 const FORBIDDEN_RUNTIME_PUBLIC_PATTERNS = [
   {
@@ -132,6 +128,10 @@ const FORBIDDEN_RUNTIME_SUBAGENT_NAMES = [
   ["register", "Subagents"].join(""),
 ];
 const RUNTIME_PUBLIC_ARTIFACT_RE = /\.(?:d\.ts|[cm]?js)$/;
+
+function names(value) {
+  return value.split(" ");
+}
 
 export function findRuntimeDeclarationLeaks({ cwd, packages }) {
   if (!packages.includes("runtime")) {
@@ -172,6 +172,12 @@ export function findRuntimeDeclarationLeaks({ cwd, packages }) {
       ),
       requiredExports: REQUIRED_RUNTIME_NODE_EXPORTS,
       surface: "node",
+    }),
+    ...findRuntimeDeclarationExportLeaks({
+      cwd,
+      file: join(packageDistPath(cwd, "runtime"), "channel", "index.d.ts"),
+      requiredExports: REQUIRED_RUNTIME_CHANNEL_EXPORTS,
+      surface: "channel",
     }),
     ...findRuntimePublicPatternLeaks({ cwd }),
   ];

@@ -55,6 +55,13 @@ const forbiddenModelAdapterRootExports = [
   ["Runtime", "Llm", "Output", "Part"].join(""),
   ["create", "Llm"].join(""),
 ] as const;
+const forbiddenChannelAdapterRootExports = [
+  ["Channel", "Adapter"].join(""),
+  ["Channel", "Inbound", "Message"].join(""),
+  ["Channel", "Assistant", "Delivery"].join(""),
+  ["Channel", "Assistant", "Text", "Delivery"].join(""),
+  ["project", "Channel", "Assistant", "Delivery"].join(""),
+] as const;
 
 describe("runtime public exports", () => {
   it("does not expose internal agent loop runner from package root", async () => {
@@ -111,6 +118,14 @@ describe("runtime public exports", () => {
     const runtime = await import("../index");
 
     for (const forbiddenName of forbiddenModelAdapterRootExports) {
+      expect(runtime).not.toHaveProperty(forbiddenName);
+    }
+  });
+
+  it("does not expose channel adapter contracts from the package root", async () => {
+    const runtime = await import("../index");
+
+    for (const forbiddenName of forbiddenChannelAdapterRootExports) {
       expect(runtime).not.toHaveProperty(forbiddenName);
     }
   });
@@ -248,6 +263,23 @@ describe("runtime public exports", () => {
     });
     expect(packageJson.exports["./session-store/memory"]).toBeUndefined();
     expect(packageJson.exports["./session-store/file"]).toBeUndefined();
+  });
+
+  it("declares the channel adapter contract as a package subpath", async () => {
+    const packageJson = JSON.parse(
+      await readFile(
+        fileURLToPath(new URL("../../package.json", import.meta.url)),
+        "utf8"
+      )
+    ) as {
+      exports: Record<string, { "@minpeter/pss-source": string }>;
+    };
+
+    expect(packageJson.exports["./channel"]).toMatchObject({
+      "@minpeter/pss-source": "./src/channel/index.ts",
+      import: "./dist/channel/index.js",
+      types: "./dist/channel/index.d.ts",
+    });
   });
 
   it("declares the Cloudflare adapter as a platform implementation subpath", async () => {

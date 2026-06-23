@@ -32,4 +32,22 @@ describe("runtime docs", () => {
     expect(readme).toContain("const durableHost: DurableBackgroundHost = {");
     expect(readme).toContain("transaction,");
   });
+
+  it("documents channel adapters as app-owned event projection", () => {
+    const readme = readRepoFile("packages/runtime/README.md");
+    const changeset = readRepoFile(
+      ".changeset/runtime-channel-adapter-contract.md"
+    );
+
+    expect(readme).toContain("projectChannelAssistantDelivery(event)");
+    expect(readme).toContain(
+      "agent.thread(inbound.threadKey).send(inbound.input)"
+    );
+    expect(readme).toContain("for await (const event of turn.events())");
+    expect(readme).toContain("type ChannelInboundMessage");
+    expect(changeset).toContain('"@minpeter/pss-runtime": patch');
+    expect(readme).not.toContain(["Channel", "Runtime"].join(""));
+    expect(readme).not.toContain(["Channel", "Loop"].join(""));
+    expect(readme).not.toContain(["run", "Channel"].join(""));
+  });
 });
