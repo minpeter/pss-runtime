@@ -71,6 +71,7 @@ export async function processQueuedInput({
 
   try {
     executionRun = await startThreadExecutionRun({
+      ...(item.executionRun ? { executionRun: item.executionRun } : {}),
       executionHost: execution.executionHost,
       threadKey,
       state,

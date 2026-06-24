@@ -4,6 +4,7 @@ import { attachInputMeta, userInputFromEvent } from "../input/input-meta";
 import { normalizeAgentInput } from "../input/input-normalization";
 import {
   addSteeringInput,
+  createQueuedInput,
   createRuntimeInputState,
   type QueuedInput,
   type QueuedRuntimeInput,
@@ -12,7 +13,11 @@ import {
 import type { AgentPlugin } from "../plugins/pipeline";
 import { type AgentTurn, BufferedAgentTurn } from "../protocol/turn";
 import { ThreadEventDispatcher } from "../runtime/events";
-import type { ThreadExecutionOptions } from "../runtime/execution";
+import {
+  cancelThreadExecutionRun,
+  precreateThreadExecutionRun,
+  type ThreadExecutionOptions,
+} from "../runtime/execution";
 import { closeKilledRuntimeInputs } from "../runtime/kill";
 import {
   type NotifyOptions,
@@ -45,6 +50,7 @@ export class AgentThread {
   #activeRun?: BufferedAgentTurn;
   #activeRuntimeInput?: RuntimeInputState;
   #deletePromise?: Promise<void>;
+  #killPromise?: Promise<void>;
   #killed = false;
   #running = false;
   #runToCloseOnKill?: BufferedAgentTurn;
@@ -67,15 +73,11 @@ export class AgentThread {
   }
 
   async send(input: AgentInput): Promise<AgentTurn> {
-    if (this.#killed || this.#deletePromise) {
-      throw threadTerminalError(this.#killed);
-    }
+    this.#throwIfTerminal();
 
     await this.#state.ensureLoaded();
 
-    if (this.#killed || this.#deletePromise) {
-      throw threadTerminalError(this.#killed);
-    }
+    this.#throwIfTerminal();
 
     const normalized = normalizeAgentInput(input);
     const acceptedInput =
@@ -89,27 +91,46 @@ export class AgentThread {
       return run;
     }
 
+    const precreatedRun = await precreateThreadExecutionRun({
+      executionHost: this.#execution.executionHost,
+      kind: "user-turn",
+      threadKey: this.#threadKey,
+    });
+    if (precreatedRun) {
+      run.bindRunId(precreatedRun.runId);
+    }
+    if (this.#killed || this.#deletePromise) {
+      const terminalError = threadTerminalError(this.#killed);
+      await cancelThreadExecutionRun({
+        executionHost: this.#execution.executionHost,
+        runId: precreatedRun?.runId,
+      });
+      run.emit({ type: "turn-error", message: terminalError.message });
+      run.close();
+      throw terminalError;
+    }
+
     const queuedInput = userInputFromEvent(
       emitted.type === "user-input" ? emitted : acceptedInput
     );
     const runtimeInput = createRuntimeInputState(
       this.#pendingRuntimeInputs.splice(0)
     );
-    this.#inputQueue.push({
-      initialEvents: [],
-      input: structuredClone(queuedInput),
-      preUserRuntimeInputs: this.#pendingOverlays.splice(0),
-      run,
-      runtimeInput,
-    });
+    this.#inputQueue.push(
+      createQueuedInput({
+        executionRun: precreatedRun,
+        input: structuredClone(queuedInput),
+        preUserRuntimeInputs: this.#pendingOverlays.splice(0),
+        run,
+        runtimeInput,
+      })
+    );
     startThreadQueueDrain(run, () => this.#drainInputQueue());
     return run;
   }
 
   overlay(input: AgentInput): this {
-    if (this.#killed || this.#deletePromise) {
-      throw threadTerminalError(this.#killed);
-    }
+    this.#throwIfTerminal();
 
     this.#pendingOverlays.push({
       canonical: false,
@@ -125,15 +146,11 @@ export class AgentThread {
     input: AgentInput | UserInput,
     options: NotifyOptions = {}
   ): Promise<AgentTurn> {
-    if (this.#killed || this.#deletePromise) {
-      throw threadTerminalError(this.#killed);
-    }
+    this.#throwIfTerminal();
 
     await this.#state.ensureLoaded();
 
-    if (this.#killed || this.#deletePromise) {
-      throw threadTerminalError(this.#killed);
-    }
+    this.#throwIfTerminal();
 
     return queueThreadNotification(input, options, {
       activeRun: this.#activeRun,
@@ -141,8 +158,11 @@ export class AgentThread {
       drain: () => this.#drainInputQueue(),
       emitObserverEvent: (run, event) =>
         this.#events.emitObserverEvent(run, event),
+      executionHost: this.#execution.executionHost,
       inputQueue: this.#inputQueue,
       pendingRuntimeInputs: this.#pendingRuntimeInputs,
+      throwIfTerminal: () => this.#throwIfTerminal(),
+      threadKey: this.#threadKey,
     });
   }
 
@@ -162,15 +182,11 @@ export class AgentThread {
   }
 
   async compact(input: ThreadCompactionInput): Promise<void> {
-    if (this.#killed || this.#deletePromise) {
-      throw threadTerminalError(this.#killed);
-    }
+    this.#throwIfTerminal();
 
     await this.#state.ensureLoaded();
 
-    if (this.#killed || this.#deletePromise) {
-      throw threadTerminalError(this.#killed);
-    }
+    this.#throwIfTerminal();
 
     await this.#state.compact(input);
   }
@@ -181,18 +197,19 @@ export class AgentThread {
 
   delete(): Promise<void> {
     if (!this.#deletePromise) {
-      this.kill();
-      this.#deletePromise = this.#state.delete().catch((error: unknown) => {
-        this.#deletePromise = undefined;
-        throw error;
-      });
+      this.#deletePromise = this.kill()
+        .then(() => this.#state.delete())
+        .catch((error: unknown) => {
+          this.#deletePromise = undefined;
+          throw error;
+        });
     }
     return this.#deletePromise;
   }
 
-  kill(): void {
+  kill(): Promise<void> {
     if (this.#killed) {
-      return;
+      return this.#killPromise ?? Promise.resolve();
     }
 
     this.#killed = true;
@@ -200,12 +217,20 @@ export class AgentThread {
     this.#pendingOverlays.length = 0;
     this.#pendingRuntimeInputs.length = 0;
     this.#activeAbort?.abort();
-    closeKilledRuntimeInputs({
+    this.#killPromise = closeKilledRuntimeInputs({
       activeRuntimeInput: this.#activeRuntimeInput,
+      executionHost: this.#execution.executionHost,
       inputQueue: this.#inputQueue,
       message: killedError.message,
       runToClose: this.#runToCloseOnKill ?? this.#activeRun,
     });
+    return this.#killPromise;
+  }
+
+  #throwIfTerminal(): void {
+    if (this.#killed || this.#deletePromise) {
+      throw threadTerminalError(this.#killed);
+    }
   }
 
   async #drainInputQueue(): Promise<void> {

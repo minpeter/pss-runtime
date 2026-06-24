@@ -43,4 +43,9 @@ export type {
   TurnStatus,
   TurnStore,
 } from "./host/types";
+export type {
+  DurableTurnInspectionResult,
+  DurableTurnInspectionSource,
+} from "./inspect/durable-turn";
+export { inspectDurableTurn } from "./inspect/durable-turn";
 export { createInMemoryExecutionHost } from "./memory";

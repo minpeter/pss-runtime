@@ -33,6 +33,7 @@ describe("stored AgentTurn events", () => {
       runId: "run-1",
     });
 
+    expect(run.runId).toBe("run-1");
     await expect(collectRunEvents(run)).resolves.toEqual([
       { type: "turn-end" },
     ]);

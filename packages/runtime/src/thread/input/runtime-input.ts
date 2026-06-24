@@ -1,3 +1,4 @@
+import type { TurnKind } from "../../execution/host/types";
 import type { AgentEvent, RuntimeInput } from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
 import type { AgentInput, UserInput } from "./input";
@@ -20,8 +21,23 @@ export interface RuntimeInputState {
   steerPlacement?: RuntimeInputPlacement;
 }
 
+export interface QueuedExecutionRun {
+  readonly kind: TurnKind;
+  readonly runId: string;
+}
+
 export interface QueuedInput {
+  readonly executionRun?: QueuedExecutionRun;
   readonly initialEvents: AgentEvent[];
+  readonly input?: UserInput;
+  readonly preUserRuntimeInputs: QueuedRuntimeInput[];
+  readonly run: BufferedAgentTurn;
+  readonly runtimeInput: RuntimeInputState;
+}
+
+export interface QueuedInputOptions {
+  readonly executionRun?: QueuedExecutionRun;
+  readonly initialEvents?: AgentEvent[];
   readonly input?: UserInput;
   readonly preUserRuntimeInputs: QueuedRuntimeInput[];
   readonly run: BufferedAgentTurn;
@@ -34,6 +50,24 @@ export function createRuntimeInputState(
   return {
     pending: Promise.resolve(),
     queue,
+  };
+}
+
+export function createQueuedInput({
+  executionRun,
+  initialEvents = [],
+  input,
+  preUserRuntimeInputs,
+  run,
+  runtimeInput,
+}: QueuedInputOptions): QueuedInput {
+  return {
+    ...(executionRun ? { executionRun } : {}),
+    initialEvents,
+    ...(input === undefined ? {} : { input }),
+    preUserRuntimeInputs,
+    run,
+    runtimeInput,
   };
 }
 

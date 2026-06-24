@@ -2,6 +2,7 @@ import { executionHost } from "../../execution/host/host";
 import type { AgentHost, NotificationRecord } from "../../execution/host/types";
 import { createInMemoryExecutionHost } from "../../execution/memory";
 import { type AgentInput, AgentThread } from "../../thread/handle/thread";
+import type { QueuedExecutionRun } from "../../thread/input/runtime-input";
 import type { AgentPlugin } from "../../thread/plugins/pipeline";
 import type { AgentTurn } from "../../thread/protocol/turn";
 import type { ThreadStore } from "../../thread/store/types";
@@ -102,8 +103,8 @@ export class Agent {
     return await resumeAgentTurn({
       host,
       ownerNamespace: this.#ownerNamespace,
-      resumeNotification: (notification) =>
-        this.#resumeNotification(notification),
+      resumeNotification: (notification, executionRun) =>
+        this.#resumeNotification(notification, executionRun),
       runId,
     });
   }
@@ -131,14 +132,12 @@ export class Agent {
     const publicHandle: ThreadHandle = {
       compact: (input) => thread.compact(input),
       delete: async () => {
-        thread.kill();
         this.#evictThreadHandle(key);
         await thread.delete();
       },
-      dispose: () => {
-        thread.kill();
+      dispose: async () => {
         this.#evictThreadHandle(key);
-        return Promise.resolve();
+        await thread.kill();
       },
       interrupt: () => thread.interrupt(),
       overlay: (input) => {
@@ -160,10 +159,14 @@ export class Agent {
     this.#threads.delete(key);
   }
 
-  #resumeNotification(notification: NotificationRecord): Promise<AgentTurn> {
+  #resumeNotification(
+    notification: NotificationRecord,
+    executionRun: QueuedExecutionRun
+  ): Promise<AgentTurn> {
     return this.#threadEntry(notification.threadKey).notify(
       notification.input,
       {
+        executionRun,
         observerEvents: notification.observerEvents,
         overlays: [
           ...(notification.overlays ?? []),

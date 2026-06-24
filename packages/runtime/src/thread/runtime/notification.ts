@@ -1,8 +1,10 @@
+import type { ExecutionHost } from "../../execution/host/types";
 import type { AgentInput, UserInput } from "../input/input";
 import { attachInputMeta } from "../input/input-meta";
 import { normalizeInternalAgentInput } from "../input/input-normalization";
 import {
   createRuntimeInputState,
+  type QueuedExecutionRun,
   type QueuedInput,
   type QueuedRuntimeInput,
   queueRuntimeInput,
@@ -11,9 +13,14 @@ import {
 import type { AgentEvent } from "../protocol/events";
 import { type AgentTurn, BufferedAgentTurn } from "../protocol/turn";
 import { errorMessage } from "../state/thread-errors";
+import {
+  cancelThreadExecutionRun,
+  precreateThreadExecutionRun,
+} from "./execution";
 
 export interface NotifyOptions {
   readonly deferWhenUnobserved?: boolean;
+  readonly executionRun?: QueuedExecutionRun;
   readonly observerEvents?: readonly AgentEvent[];
   readonly overlays?: readonly (AgentInput | UserInput)[];
 }
@@ -26,8 +33,11 @@ interface QueueThreadNotificationOptions {
     run: BufferedAgentTurn | undefined,
     event: AgentEvent
   ): Promise<void>;
+  readonly executionHost: ExecutionHost | undefined;
   readonly inputQueue: QueuedInput[];
   readonly pendingRuntimeInputs: QueuedRuntimeInput[];
+  readonly threadKey: string;
+  throwIfTerminal(): void;
 }
 
 export async function queueThreadNotification(
@@ -43,8 +53,9 @@ export async function queueThreadNotification(
   };
   const queuedOverlays = createNotificationOverlays(options.overlays ?? []);
   const observerEvents = cloneObserverEvents(options.observerEvents ?? []);
+  const needsDedicatedRun = options.executionRun !== undefined;
   const queuedTurn = state.inputQueue[0];
-  if (queuedTurn) {
+  if (queuedTurn && !needsDedicatedRun) {
     queuedTurn.initialEvents.push(...observerEvents);
     queuedTurn.preUserRuntimeInputs.push(...queuedOverlays, queuedRuntimeInput);
     return queuedTurn.run;
@@ -52,7 +63,12 @@ export async function queueThreadNotification(
 
   const activeRun = state.activeRun;
   const runtimeInput = state.activeRuntimeInput;
-  if (runtimeInput && activeRun && !runtimeInput.closedReason) {
+  if (
+    runtimeInput &&
+    activeRun &&
+    !runtimeInput.closedReason &&
+    !needsDedicatedRun
+  ) {
     for (const event of observerEvents) {
       await state.emitObserverEvent(activeRun, event);
     }
@@ -66,7 +82,7 @@ export async function queueThreadNotification(
     return activeRun;
   }
 
-  if (options.deferWhenUnobserved === true) {
+  if (options.deferWhenUnobserved === true && !needsDedicatedRun) {
     state.pendingRuntimeInputs.push(...queuedOverlays);
     state.pendingRuntimeInputs.push(queuedRuntimeInput);
     const deferredRun = new BufferedAgentTurn();
@@ -75,7 +91,36 @@ export async function queueThreadNotification(
   }
 
   const run = new BufferedAgentTurn();
+  const precreatedRun =
+    options.executionRun ??
+    (await precreateThreadExecutionRun({
+      executionHost: state.executionHost,
+      kind: "notification",
+      threadKey: state.threadKey,
+    }));
+  if (precreatedRun) {
+    run.bindRunId(precreatedRun.runId);
+  }
+  try {
+    state.throwIfTerminal();
+  } catch (error) {
+    await cancelThreadExecutionRun({
+      executionHost: state.executionHost,
+      runId: precreatedRun?.runId,
+    });
+    run.emit({ type: "turn-error", message: errorMessage(error) });
+    run.close();
+    throw error;
+  }
   state.inputQueue.push({
+    ...(precreatedRun
+      ? {
+          executionRun: {
+            kind: precreatedRun.kind,
+            runId: precreatedRun.runId,
+          },
+        }
+      : {}),
     initialEvents: observerEvents,
     preUserRuntimeInputs: queuedOverlays,
     run,

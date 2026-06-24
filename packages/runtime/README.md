@@ -284,6 +284,33 @@ or `agent.resume(runId)` for host-scheduled durable work.
 Each accepted call returns one `AgentTurn`. Drain that turn's `events()` stream to
 observe the turn; each `AgentTurn.events()` stream is single-consumer.
 
+### Durable Turn Inspection
+
+Accepted turns on an `ExecutionHost` expose a durable `turn.runId`. Import
+`inspectDurableTurn` from `@minpeter/pss-runtime/execution` to inspect that run
+without changing the normal `Agent` -> `Thread` -> `Turn` -> `events()` flow:
+
+```ts
+import { inspectDurableTurn } from "@minpeter/pss-runtime/execution";
+
+const turn = await thread.send("Start the workflow.");
+if (turn.runId) {
+  const report = await inspectDurableTurn(host, turn.runId);
+  console.log(report.state);
+}
+```
+
+Known durable runs expose the run identity and progress boundary:
+`{ runId, status, threadKey, checkpointVersion, latestCheckpoint, state }`.
+ThreadHost-only agents have no durable run id; inspecting a `ThreadHost` source
+returns `{ runId, state: "unsupported" }`.
+
+`dispatchAgentNotification` creates a durable notification run, returns its
+`runId`, and deduplicates idempotently by `idempotencyKey`.
+
+Checkpoints are committed rollback and progress boundaries. They are not a
+replay log, a task storage system, or an Eve/Flue app framework.
+
 Input APIs accept strings, arrays of strings, or multipart arrays such as
 `[{ type: "text", text: "hello" }, { type: "image", image }]`. The runtime
 normalizes accepted `send` input into `user-input` events. Active steering and

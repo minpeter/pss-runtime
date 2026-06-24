@@ -27,6 +27,20 @@ describe("AgentTurn", () => {
     ]);
   });
 
+  it("exposes an optional run id that can be bound once", () => {
+    const run = new BufferedAgentTurn();
+
+    expect(run.runId).toBeUndefined();
+
+    run.bindRunId("run-1");
+    run.bindRunId("run-1");
+
+    expect(run.runId).toBe("run-1");
+    expect(() => run.bindRunId("run-2")).toThrow(
+      "AgentTurn is already bound to run id run-1"
+    );
+  });
+
   it("delivers events emitted after events consumption starts", async () => {
     const run = new BufferedAgentTurn();
     const events: unknown[] = [];

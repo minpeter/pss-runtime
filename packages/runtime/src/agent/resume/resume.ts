@@ -3,13 +3,17 @@ import type {
   NotificationRecord,
   TurnRecord,
 } from "../../execution/host/types";
+import type { QueuedExecutionRun } from "../../thread/input/runtime-input";
 import type { AgentTurn } from "../../thread/protocol/turn";
 import { ownsAgentNamespace } from "../identity/namespace";
 
 interface ResumeAgentTurnInput {
   readonly host: ExecutionHost;
   readonly ownerNamespace: string;
-  resumeNotification(notification: NotificationRecord): Promise<AgentTurn>;
+  resumeNotification(
+    notification: NotificationRecord,
+    executionRun: QueuedExecutionRun
+  ): Promise<AgentTurn>;
   readonly runId: string;
 }
 
@@ -44,8 +48,13 @@ export async function resumeAgentTurn({
     }
 
     try {
-      const notificationRun = await resumeNotification(notification);
-      await completeNotificationRun(host, claimed.runId);
+      const notificationRun = await resumeNotification(notification, {
+        kind: "notification",
+        runId: claimed.runId,
+      });
+      if (notificationRun.runId !== claimed.runId) {
+        await completeNotificationRun(host, claimed.runId);
+      }
       return notificationRun;
     } catch (error) {
       await host.store.notifications.releaseByIdempotencyKey(idempotencyKey);
