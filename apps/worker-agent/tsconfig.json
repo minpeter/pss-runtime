@@ -8,6 +8,9 @@
       "@minpeter/pss-runtime/cloudflare": [
         "../../packages/runtime/src/platform/cloudflare/index.ts"
       ],
+      "@minpeter/pss-runtime/node": [
+        "../../packages/runtime/src/platform/node/index.ts"
+      ],
       "chat": ["./node_modules/chat"],
       "chat/*": ["./node_modules/chat/*"]
     }

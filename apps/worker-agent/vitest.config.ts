@@ -19,6 +19,20 @@ export default defineConfig({
           "../../packages/runtime/src/index.ts"
         ),
       },
+      {
+        find: /^@minpeter\/pss-runtime\/node$/,
+        replacement: resolve(
+          import.meta.dirname,
+          "../../packages/runtime/src/platform/node/index.ts"
+        ),
+      },
+      {
+        find: /^cloudflare:workers$/,
+        replacement: resolve(
+          import.meta.dirname,
+          "src/cloudflare-workers-test-shim.ts"
+        ),
+      },
     ],
     conditions: ["@minpeter/pss-source", "import", "module", "default"],
   },

@@ -1,17 +1,45 @@
-import { describe, expect, it } from "vitest";
+import { DurableObject } from "cloudflare:workers";
+import type { AgentEvent, AgentTurn } from "@minpeter/pss-runtime";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import {
+  AgentDurableObject,
+  deliverToolOnlyTurn,
+  inspectDurableThread,
+  parseAgentRequest,
+  TOOL_ONLY_DELIVERY_RECOVERY_PROMPT,
+  type WorkerAgentThreadSender,
+} from "./agent-do";
+import { type ChannelAddress, channelKey } from "./channel";
+import type { Env } from "./env";
+import { SEND_MESSAGE_TOOL_NAME } from "./tools";
 
-import { parseAgentRequest } from "./agent-do";
+describe("AgentDurableObject Cloudflare contract", () => {
+  it("declares the exported class as a DurableObject subclass", () => {
+    expectTypeOf<InstanceType<typeof AgentDurableObject>>().toExtend<
+      DurableObject<Env>
+    >();
+    expect(Object.getPrototypeOf(AgentDurableObject.prototype)).toBe(
+      DurableObject.prototype
+    );
+  });
+});
 
 describe("AgentDurableObject request parsing", () => {
   it("trims valid text payloads", async () => {
     await expect(
       parseAgentRequest(
         new Request("https://agent.internal/turn", {
-          body: JSON.stringify({ text: " hello " }),
+          body: JSON.stringify({
+            channel: { id: " chat-1 ", kind: "telegram" },
+            text: " hello ",
+          }),
           method: "POST",
         })
       )
-    ).resolves.toEqual({ text: "hello" });
+    ).resolves.toEqual({
+      channel: { id: "chat-1", kind: "telegram" },
+      text: "hello",
+    });
   });
 
   it("rejects invalid JSON as missing text", async () => {
@@ -29,10 +57,166 @@ describe("AgentDurableObject request parsing", () => {
     await expect(
       parseAgentRequest(
         new Request("https://agent.internal/turn", {
-          body: JSON.stringify({ text: 1 }),
+          body: JSON.stringify({
+            channel: { id: "chat-1", kind: "telegram" },
+            text: 1,
+          }),
+          method: "POST",
+        })
+      )
+    ).resolves.toBeUndefined();
+  });
+
+  it("rejects payloads without a channel id", async () => {
+    await expect(
+      parseAgentRequest(
+        new Request("https://agent.internal/turn", {
+          body: JSON.stringify({
+            channel: { id: " ", kind: "telegram" },
+            text: "hello",
+          }),
+          method: "POST",
+        })
+      )
+    ).resolves.toBeUndefined();
+  });
+
+  it("rejects unknown channel kinds", async () => {
+    await expect(
+      parseAgentRequest(
+        new Request("https://agent.internal/turn", {
+          body: JSON.stringify({
+            channel: { id: "chat-1", kind: "discord" },
+            text: "hello",
+          }),
           method: "POST",
         })
       )
     ).resolves.toBeUndefined();
   });
 });
+
+describe("channel thread keys", () => {
+  it("namespaces threads by channel kind and id", () => {
+    const channel: ChannelAddress = { id: "chat-1", kind: "telegram" };
+
+    expect(channelKey(channel)).toBe("telegram:chat-1");
+  });
+});
+
+describe("Durable Object thread inspection", () => {
+  it("inspects the default runtime thread inside a conversation object", async () => {
+    const inspectedKeys: string[] = [];
+    const inspection = {
+      compactionCount: 0,
+      compactions: [],
+      exists: true,
+      messageCount: 2,
+      summaryBytes: 0,
+      threadKey: "default",
+      version: "v1",
+    };
+
+    await expect(
+      inspectDurableThread({
+        thread: (key) => {
+          inspectedKeys.push(key);
+          return {
+            inspect: () => Promise.resolve(inspection),
+          };
+        },
+      })
+    ).resolves.toEqual(inspection);
+    expect(inspectedKeys).toEqual(["default"]);
+  });
+});
+
+describe("tool-only turn delivery", () => {
+  it("returns delivered when the first turn sends a tool message", async () => {
+    const { inputs, thread } = threadWithTurns([
+      runWithEvents([sendMessageEvent()]),
+    ]);
+
+    await expect(deliverToolOnlyTurn(thread, "hello")).resolves.toEqual({
+      delivered: true,
+    });
+    expect(inputs).toEqual(["hello"]);
+  });
+
+  it("runs one recovery turn when the first turn misses tool delivery", async () => {
+    const { inputs, thread } = threadWithTurns([
+      runWithEvents([{ text: "assistant-only", type: "assistant-output" }]),
+      runWithEvents([sendMessageEvent()]),
+    ]);
+
+    await expect(deliverToolOnlyTurn(thread, "hello")).resolves.toEqual({
+      delivered: true,
+    });
+    expect(inputs).toEqual(["hello", TOOL_ONLY_DELIVERY_RECOVERY_PROMPT]);
+  });
+
+  it("returns a missing-send error when recovery also misses tool delivery", async () => {
+    const { inputs, thread } = threadWithTurns([
+      runWithEvents([{ text: "assistant-only", type: "assistant-output" }]),
+      runWithEvents([
+        { text: "still assistant-only", type: "assistant-output" },
+      ]),
+    ]);
+
+    await expect(deliverToolOnlyTurn(thread, "hello")).resolves.toEqual({
+      delivered: false,
+      error: "missing_send_message",
+    });
+    expect(inputs).toEqual(["hello", TOOL_ONLY_DELIVERY_RECOVERY_PROMPT]);
+  });
+});
+
+function threadWithTurns(turns: readonly AgentTurn[]): {
+  readonly inputs: string[];
+  readonly thread: WorkerAgentThreadSender;
+} {
+  const inputs: string[] = [];
+  let nextTurnIndex = 0;
+  return {
+    inputs,
+    thread: {
+      send: (input) => {
+        inputs.push(input);
+        const turn = turns[nextTurnIndex];
+        nextTurnIndex += 1;
+        if (!turn) {
+          throw new Error("No test turn queued.");
+        }
+        return Promise.resolve(turn);
+      },
+    },
+  };
+}
+
+function sendMessageEvent(): AgentEvent {
+  return {
+    output: {
+      type: "json",
+      value: {
+        delivered: true,
+        messageId: "msg-1",
+        threadId: "chat-1",
+      },
+    },
+    toolCallId: "call-1",
+    toolName: SEND_MESSAGE_TOOL_NAME,
+    type: "tool-result",
+  };
+}
+
+function runWithEvents(events: readonly AgentEvent[]): AgentTurn {
+  return {
+    events: () => eventStream(events),
+  };
+}
+
+async function* eventStream(
+  events: readonly AgentEvent[]
+): AsyncIterable<AgentEvent> {
+  yield* events;
+}

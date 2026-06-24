@@ -6,6 +6,7 @@ import type {
 } from "../../thread/handle/thread";
 import type { AgentTurn } from "../../thread/protocol/turn";
 import { namespacePart } from "../identity/namespace";
+import type { ThreadInspection } from "./thread-inspection";
 
 export interface ThreadMetadata {
   readonly [key: string]: unknown;
@@ -23,6 +24,7 @@ export interface ThreadHandle {
   compact(input: ThreadCompactionInput): Promise<void>;
   delete(): Promise<void>;
   dispose(): Promise<void>;
+  inspect(): Promise<ThreadInspection>;
   interrupt(): void;
   overlay(input: AgentInput): ThreadHandle;
   send(input: AgentInput): Promise<AgentTurn>;

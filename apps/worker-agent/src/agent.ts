@@ -1,25 +1,46 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import {
   Agent,
+  type AgentAutoCompactionOptions,
   type AgentEvent,
   type AgentHost,
+  type AgentPlugin,
   type AgentTurn,
 } from "@minpeter/pss-runtime";
 import { drainAgentTurn } from "@minpeter/pss-runtime/cloudflare";
 
-import type { Env } from "./env";
+import type { EnvironmentName } from "./env";
+import { createTurnObservabilityPlugin } from "./observability";
+import {
+  createWorkerAgentTools,
+  isDeliveredSendMessageToolOutput,
+  SEND_MESSAGE_TOOL_NAME,
+  type WorkerAgentSendMessageToolOptions,
+} from "./tools";
 
 const DEFAULT_BASE_URL = "https://apis.opengateway.ai/v1";
 const DEFAULT_MODEL = "minimax/MiniMax-M2.7";
+
+export const WORKER_AGENT_AUTO_COMPACTION: AgentAutoCompactionOptions = {
+  minMessages: 48,
+  retainMessages: 16,
+};
 
 export const WORKER_AGENT_INSTRUCTIONS =
   `You are Apex, a direct messaging assistant built by Minpeter.
 
 Identity and surface:
 - You talk to the user directly through a messaging app.
-- The user only sees your final text reply.
+- The user sees only messages you send by calling send_message.
 - Speak as one coherent assistant. Do not mention internal agents, tools, or implementation details.
 - Do not imply that a hidden worker, background process, browser operator, integration, inbox, scheduler, or persistent memory system will handle work unless this runtime actually provides that capability.
+
+Messaging tool:
+- Every user-visible response must be sent with send_message.
+- Use send_message for progress updates, split long answers, and ordinary short replies.
+- A successful send_message call is the only user-visible delivery signal.
+- After send_message succeeds for the answer, do not repeat the same answer in assistant text.
+- Assistant text is internal only and is not delivered to the user.
 
 Message priority:
 - Treat the newest human user message as the source of truth.
@@ -60,22 +81,73 @@ Platform and product boundaries:
 - If the user asks about capabilities this worker does not have, be direct about the limitation instead of pretending to dispatch work elsewhere.
 - Do not claim to remember, retrieve, or store private context beyond what is present in the conversation.`.trim();
 
-export function createConfiguredAgent(env: Env, host: AgentHost): Agent {
+export interface WorkerAgentRuntimeOptions {
+  readonly sendMessage?: WorkerAgentSendMessageToolOptions;
+}
+
+export interface WorkerAgentModelEnv {
+  readonly AI_API_KEY: string;
+  readonly AI_BASE_URL?: string;
+  readonly AI_MODEL?: string;
+  readonly ENVIRONMENT: EnvironmentName;
+}
+
+export interface WorkerAgentTurnDelivery {
+  readonly deliveredByTool: boolean;
+}
+
+export interface CollectTurnDeliveryOptions {
+  readonly onAssistantOutput?: (text: string) => void;
+  readonly onEvent?: (event: AgentEvent) => void;
+}
+
+export function createConfiguredAgent(
+  env: WorkerAgentModelEnv,
+  host: AgentHost,
+  options: WorkerAgentRuntimeOptions = {}
+): Agent {
   const provider = createOpenAICompatible({
     apiKey: env.AI_API_KEY,
     baseURL: env.AI_BASE_URL?.trim() || DEFAULT_BASE_URL,
     name: "custom",
   });
 
+  const plugins: readonly AgentPlugin[] = [
+    createTurnObservabilityPlugin({ label: env.ENVIRONMENT }),
+  ];
+  const tools = options.sendMessage
+    ? createWorkerAgentTools(options.sendMessage)
+    : undefined;
+
   return new Agent({
+    autoCompaction: WORKER_AGENT_AUTO_COMPACTION,
     host,
     instructions: WORKER_AGENT_INSTRUCTIONS,
     model: provider(env.AI_MODEL?.trim() || DEFAULT_MODEL),
+    plugins,
+    ...(tools ? { tools } : {}),
   });
 }
 
-export async function collectAssistantOutput(run: AgentTurn): Promise<string> {
-  const events = await drainAgentTurn(run);
+export async function collectTurnDelivery(
+  run: AgentTurn,
+  options: CollectTurnDeliveryOptions = {}
+): Promise<WorkerAgentTurnDelivery> {
+  const onEvent = options.onEvent;
+  const onAssistantOutput = options.onAssistantOutput;
+  const events = await drainAgentTurn(
+    run,
+    onEvent || onAssistantOutput
+      ? {
+          onEvent: (event) => {
+            onEvent?.(event);
+            if (event.type === "assistant-output") {
+              onAssistantOutput?.(event.text);
+            }
+          },
+        }
+      : {}
+  );
   const turnError = events.find(
     (event): event is Extract<AgentEvent, { type: "turn-error" }> =>
       event.type === "turn-error"
@@ -85,12 +157,12 @@ export async function collectAssistantOutput(run: AgentTurn): Promise<string> {
     throw new Error(turnError.message);
   }
 
-  return events
-    .filter(
-      (event): event is Extract<AgentEvent, { type: "assistant-output" }> =>
-        event.type === "assistant-output"
-    )
-    .map((event) => event.text)
-    .join("\n")
-    .trim();
+  const deliveredByTool = events.some(
+    (event) =>
+      event.type === "tool-result" &&
+      event.toolName === SEND_MESSAGE_TOOL_NAME &&
+      isDeliveredSendMessageToolOutput(event.output)
+  );
+
+  return { deliveredByTool };
 }
