@@ -1,0 +1,107 @@
+import { fetchCloudflareDurableObject } from "@minpeter/pss-runtime/cloudflare";
+
+import type { WorkerAgentDeliveryResponse } from "./agent-do";
+import { channelKey } from "./channel";
+import { durableObjectName, type Env } from "./env";
+import {
+  ThreadInspectionSchema,
+  type TuiInspectInput,
+  type TuiInspectOutput,
+  type TuiTurnInput,
+  TuiTurnOutputSchema,
+} from "./tui-contract";
+
+export async function dispatchTuiTurn(
+  input: TuiTurnInput,
+  env: Env
+): Promise<WorkerAgentDeliveryResponse> {
+  const channelId = input.channel.id.trim();
+  const text = input.text.trim();
+  if (!(channelId && text)) {
+    throw new TuiServerBadRequestError("text and tui channel required");
+  }
+
+  switch (input.channel.kind) {
+    case "tui":
+      break;
+    case "telegram":
+      throw new TuiServerBadRequestError("text and tui channel required");
+    default:
+      return assertNever(input.channel.kind);
+  }
+  const payload = {
+    channel: { id: channelId, kind: "tui" },
+    text,
+  } satisfies TuiTurnInput;
+
+  const response = await fetchCloudflareDurableObject({
+    namespace: env.AGENT_DO,
+    objectName: durableObjectName(channelKey(payload.channel)),
+    request: new Request("https://agent.internal/turn", {
+      body: JSON.stringify(payload),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    }),
+  });
+
+  if (!response) {
+    throw new TuiServerUpstreamError("agent durable object unavailable");
+  }
+
+  const body: unknown = await response.json();
+  return TuiTurnOutputSchema.parse(body);
+}
+
+export async function dispatchTuiInspect(
+  input: TuiInspectInput,
+  env: Env
+): Promise<TuiInspectOutput> {
+  const conversationKey = input.conversationKey.trim();
+  if (!conversationKey) {
+    throw new TuiServerBadRequestError("conversationKey required");
+  }
+
+  const response = await fetchCloudflareDurableObject({
+    namespace: env.AGENT_DO,
+    objectName: durableObjectName(conversationKey),
+    request: new Request("https://agent.internal/inspect", {
+      body: JSON.stringify({ inspect: true }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    }),
+  });
+
+  if (!response) {
+    throw new TuiServerUpstreamError("agent durable object unavailable");
+  }
+
+  const inspection = ThreadInspectionSchema.parse(await response.json());
+  return { ...inspection, threadKey: conversationKey };
+}
+
+function assertNever(value: never): never {
+  throw new TuiServerInvariantError(
+    `Unexpected channel variant: ${String(value)}`
+  );
+}
+
+class TuiServerInvariantError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TuiServerInvariantError";
+  }
+}
+
+export class TuiServerBadRequestError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TuiServerBadRequestError";
+  }
+}
+
+export class TuiServerUpstreamError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TuiServerUpstreamError";
+  }
+}

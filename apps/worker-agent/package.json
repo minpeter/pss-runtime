@@ -7,6 +7,7 @@
     "pretypecheck": "pnpm -F @minpeter/pss-runtime build",
     "preship:worker": "pnpm -F @minpeter/pss-runtime build",
     "dev": "run-p dev:worker dev:relay",
+    "tui": "tsx --conditions=@minpeter/pss-source src/tui.ts",
     "dev:worker": "wrangler dev -e dev",
     "dev:relay": "tsx scripts/telegram.ts relay",
     "ship": "run-s ship:secrets ship:worker ship:webhook",
@@ -22,6 +23,8 @@
     "@chat-adapter/state-memory": "4.30.0",
     "@chat-adapter/telegram": "4.30.0",
     "@minpeter/pss-runtime": "workspace:*",
+    "@trpc/client": "11.18.0",
+    "@trpc/server": "11.18.0",
     "chat": "4.30.0",
     "zod": "^4.4.3"
   },

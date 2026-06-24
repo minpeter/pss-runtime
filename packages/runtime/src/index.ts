@@ -5,6 +5,8 @@ export {
   type ThreadAddress,
   type ThreadCompactionInput,
   type ThreadHandle,
+  type ThreadInspection,
+  type ThreadInspectionCompaction,
   type ThreadKey,
   type ThreadMetadata,
 } from "./agent/core/agent";

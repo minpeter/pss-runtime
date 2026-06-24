@@ -66,7 +66,10 @@ describe("telegram conversation handling", () => {
 
     await replyToThread({
       env,
-      fetchReply: (channelId, text) => Promise.resolve(`${channelId}:${text}`),
+      deliverTurn: (channelId, text) => {
+        posts.push(`${channelId}:${text}`);
+        return resolved;
+      },
       message: { text: "hello" },
       subscribe: true,
       thread: {
@@ -83,6 +86,52 @@ describe("telegram conversation handling", () => {
     expect(posts).toEqual(["🧪 DEVELOPMENT ENVIRONMENT", "channel-1:hello"]);
   });
 
+  it("does not post an assistant-output fallback after agent delivery", async () => {
+    const posts: string[] = [];
+
+    await replyToThread({
+      env,
+      deliverTurn: () => resolved,
+      message: { text: "hello" },
+      thread: {
+        channelId: "channel-1",
+        post: (text: string) => {
+          posts.push(text);
+          return resolved;
+        },
+        subscribe: () => resolved,
+      },
+    });
+
+    expect(posts).toEqual(["🧪 DEVELOPMENT ENVIRONMENT"]);
+  });
+
+  it("posts the generic failure reply when tool-only delivery fails", async () => {
+    const posts: string[] = [];
+
+    await replyToThread({
+      env,
+      deliverTurn: async () => {
+        await resolved;
+        throw new Error("missing send_message");
+      },
+      message: { text: "hello" },
+      thread: {
+        channelId: "channel-1",
+        post: (text: string) => {
+          posts.push(text);
+          return resolved;
+        },
+        subscribe: () => resolved,
+      },
+    });
+
+    expect(posts).toEqual([
+      "🧪 DEVELOPMENT ENVIRONMENT",
+      "처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+    ]);
+  });
+
   it("does not leak internal failures to the chat thread", async () => {
     const errorLog = vi
       .spyOn(console, "error")
@@ -92,7 +141,7 @@ describe("telegram conversation handling", () => {
 
     await replyToThread({
       env,
-      fetchReply: async () => {
+      deliverTurn: async () => {
         await resolved;
         throw error;
       },

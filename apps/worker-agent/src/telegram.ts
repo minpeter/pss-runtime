@@ -4,6 +4,7 @@ import { fetchCloudflareDurableObject } from "@minpeter/pss-runtime/cloudflare";
 import { Chat, type Message, type MessageContext, type Thread } from "chat";
 import { z } from "zod";
 
+import { type ChannelAddress, channelKey } from "./channel";
 import {
   durableObjectName,
   type Env,
@@ -14,13 +15,20 @@ import {
 const DEV_NOTICE = "🧪 DEVELOPMENT ENVIRONMENT";
 const FAILURE_REPLY =
   "처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
-const AgentReplySchema = z.object({
-  reply: z.string().optional(),
-});
+const MISSING_SEND_MESSAGE_ERROR = "missing_send_message";
+const AgentDeliverySchema = z.discriminatedUnion("delivered", [
+  z.object({ delivered: z.literal(true) }).strict(),
+  z
+    .object({
+      delivered: z.literal(false),
+      error: z.literal(MISSING_SEND_MESSAGE_ERROR),
+    })
+    .strict(),
+]);
 
 let cachedBot: CachedBot | undefined;
 
-type ReplyFetcher = (channelId: string, text: string) => Promise<string>;
+type TurnDeliverer = (channelId: string, text: string) => Promise<void>;
 
 interface ConversationEnv {
   readonly ENVIRONMENT: Env["ENVIRONMENT"];
@@ -77,7 +85,8 @@ function createBot(env: Env, config: BotConfig): Chat {
     replyToThread({
       env,
       context,
-      fetchReply: (channelId, text) => requestAgentReply(env, channelId, text),
+      deliverTurn: (channelId, text) =>
+        requestAgentDelivery(env, channelId, text),
       message,
       subscribe: options?.subscribe ?? false,
       thread,
@@ -108,15 +117,15 @@ export function collectTurnText(
 
 export async function replyToThread({
   context,
+  deliverTurn,
   env,
-  fetchReply,
   message,
   subscribe,
   thread,
 }: {
   readonly context?: MessageContext;
+  readonly deliverTurn: TurnDeliverer;
   readonly env: ConversationEnv;
-  readonly fetchReply: ReplyFetcher;
   readonly message: ConversationMessage;
   readonly subscribe?: boolean;
   readonly thread: ConversationThread;
@@ -134,8 +143,7 @@ export async function replyToThread({
       await thread.post(DEV_NOTICE);
     }
 
-    const reply = await fetchReply(thread.channelId, text);
-    await thread.post(reply);
+    await deliverTurn(thread.channelId, text);
   } catch (error) {
     console.error("telegram handler failed", normalizeError(error));
     await thread.post(FAILURE_REPLY);
@@ -149,16 +157,20 @@ function normalizeError(error: unknown): Error {
   return new Error(`Non-Error thrown: ${String(error)}`);
 }
 
-async function requestAgentReply(
+export async function requestAgentDelivery(
   env: Env,
   channelId: string,
   text: string
-): Promise<string> {
+): Promise<void> {
+  const channel: ChannelAddress = { id: channelId, kind: "telegram" };
   const response = await fetchCloudflareDurableObject({
     namespace: env.AGENT_DO,
-    objectName: durableObjectName(channelId),
+    objectName: durableObjectName(channelKey(channel)),
     request: new Request("https://agent.internal/turn", {
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({
+        channel,
+        text,
+      }),
       headers: { "content-type": "application/json" },
       method: "POST",
     }),
@@ -170,8 +182,12 @@ async function requestAgentReply(
     );
   }
 
-  const payload = AgentReplySchema.parse(await response.json());
-  return payload.reply?.trim() || "(no response)";
+  const payload = AgentDeliverySchema.parse(await response.json());
+  if (payload.delivered) {
+    return;
+  }
+
+  throw new Error("agent did not deliver a send_message result");
 }
 
 export function handleTelegramWebhook(
