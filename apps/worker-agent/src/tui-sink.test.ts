@@ -181,16 +181,6 @@ describe("TUI channel sink", () => {
                 },
               ],
             }),
-          inspect: () =>
-            Promise.resolve({
-              compactionCount: 0,
-              compactions: [],
-              exists: false,
-              messageCount: 0,
-              summaryBytes: 0,
-              threadKey: "tui:local",
-              version: null,
-            }),
         },
         output: { writeLine: (line) => lines.push(line) },
         text: " hello ",

@@ -30,6 +30,7 @@ export interface TuiOutput {
 }
 
 export interface DeliverTuiTurnOptions {
+  readonly onAssistantOutput?: (text: string) => void;
   readonly output: TuiOutput;
   readonly text: string;
   readonly thread: WorkerAgentThreadSender;
@@ -69,6 +70,7 @@ export function createTuiMessageSink(output: TuiOutput): ChannelMessageSink {
 }
 
 export async function deliverTuiTurn({
+  onAssistantOutput,
   output,
   text,
   thread,
@@ -80,6 +82,7 @@ export async function deliverTuiTurn({
 
   output.writeLine(`you: ${trimmedText}`);
   const delivery = await deliverToolOnlyTurn(thread, trimmedText, {
+    ...(onAssistantOutput ? { onAssistantOutput } : {}),
     onEvent: (event) => writeDebugEvent(output, event),
   });
   if (!delivery.delivered) {

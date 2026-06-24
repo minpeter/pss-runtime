@@ -23,7 +23,7 @@ export interface WorkerAgentSendMessageToolOptions {
   readonly sink: ChannelMessageSink;
 }
 
-type WorkerAgentToolSet = NonNullable<AgentOptions["tools"]>;
+export type WorkerAgentToolSet = NonNullable<AgentOptions["tools"]>;
 type SendMessageTool = WorkerAgentToolSet["send_message"] & {
   readonly retryPolicy: "manual-recovery";
 };

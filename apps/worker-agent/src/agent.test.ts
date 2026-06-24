@@ -53,6 +53,16 @@ describe("worker-agent instructions", () => {
       expect(WORKER_AGENT_INSTRUCTIONS).toContain(rule);
     }
 
+    const sessionSearchRules = [
+      "You can recall other recent conversations with list_sessions and search_sessions",
+      "call search_sessions with relevant keywords",
+      "Only state cross-conversation facts that a tool result actually returned",
+    ] as const;
+
+    for (const rule of sessionSearchRules) {
+      expect(WORKER_AGENT_INSTRUCTIONS).toContain(rule);
+    }
+
     const excludedSurfaces = [
       "sendmessageto_agent",
       "subagent",

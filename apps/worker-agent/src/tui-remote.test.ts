@@ -62,57 +62,6 @@ describe("remote TUI tRPC client", () => {
       text: "hello remote",
     });
   });
-
-  it("queries remote inspections with bearer auth", async () => {
-    const requests: CapturedRequest[] = [];
-    const server = await startServer(async (request) => {
-      requests.push({
-        authorization: request.headers.get("authorization"),
-        body: await request.text(),
-        pathname: new URL(request.url).pathname,
-        search: new URL(request.url).searchParams,
-      });
-
-      return Response.json({
-        result: {
-          data: {
-            compactionCount: 0,
-            compactions: [],
-            exists: true,
-            messageCount: 1,
-            summaryBytes: 0,
-            threadKey: "telegram:123",
-            version: "v1",
-          },
-        },
-      });
-    });
-    const client = createRemoteTuiDeliveryClient({
-      channel: { id: "local", kind: "tui" },
-      endpoint: `${server.origin}/trpc`,
-      token: "secret",
-    });
-
-    await expect(client.inspect("telegram:123")).resolves.toEqual({
-      compactionCount: 0,
-      compactions: [],
-      exists: true,
-      messageCount: 1,
-      summaryBytes: 0,
-      threadKey: "telegram:123",
-      version: "v1",
-    });
-
-    expect(requests).toHaveLength(1);
-    expect(requests[0]).toMatchObject({
-      authorization: "Bearer secret",
-      pathname: "/trpc/tui.inspect",
-    });
-    const input = requests[0]?.search.get("input") ?? "{}";
-    expect(JSON.parse(input)).toMatchObject({
-      conversationKey: "telegram:123",
-    });
-  });
 });
 
 interface CapturedRequest {

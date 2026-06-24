@@ -4,14 +4,18 @@ import { join, resolve } from "node:path";
 import { argv, env, stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { pathToFileURL } from "node:url";
-import type { AgentHost, ThreadInspection } from "@minpeter/pss-runtime";
+import type { AgentHost } from "@minpeter/pss-runtime";
 import { createNodeFileThreadHost } from "@minpeter/pss-runtime/node";
 import { z } from "zod";
 
 import { createConfiguredAgent, type WorkerAgentModelEnv } from "./agent";
 import type { WorkerAgentDeliveryResponse } from "./agent-do";
 import { type ChannelAddress, channelKey } from "./channel";
-import { deliverTuiInspect, isTuiInspectCommand } from "./tui-inspect";
+import {
+  createSessionIndexStore,
+  type SessionIndexStore,
+} from "./session-index";
+import { createFileSessionIndexRepository } from "./session-index-node";
 import { createRemoteTuiDeliveryClient } from "./tui-remote";
 import {
   createTuiMessageSink,
@@ -138,23 +142,6 @@ export async function startWorkerAgentTui(
       break;
     }
 
-    if (isTuiInspectCommand(text)) {
-      if (close.inspect) {
-        await deliverTuiInspect({
-          defaultKey: channelKey(config.channel),
-          inspect: close.inspect,
-          output,
-          text,
-        });
-      } else {
-        output.writeLine("inspect is only available in local TUI mode.");
-      }
-      if (!inputClosed) {
-        input.prompt();
-      }
-      continue;
-    }
-
     await close.deliver(text);
     if (!inputClosed) {
       input.prompt();
@@ -174,7 +161,6 @@ async function configureTuiTurnDelivery(
 ): Promise<{
   readonly deliver: (text: string) => Promise<WorkerAgentDeliveryResponse>;
   readonly dispose: () => Promise<void>;
-  readonly inspect?: (key: string) => Promise<ThreadInspection>;
 }> {
   switch (config.mode) {
     case "local": {
@@ -182,22 +168,43 @@ async function configureTuiTurnDelivery(
       const host =
         hostOverride ??
         createNodeFileThreadHost({ directory: config.directory });
+      const sessionIndex: SessionIndexStore = createSessionIndexStore(
+        createFileSessionIndexRepository(
+          join(config.directory, "session-index.json")
+        )
+      );
+      const conversationKey = channelKey(config.channel);
       const agent = createConfiguredAgent(config.env, host, {
         sendMessage: {
           channel: () => config.channel,
           sink: createTuiMessageSink(output),
         },
+        sessionTools: {
+          currentConversationKey: () => conversationKey,
+          reader: sessionIndex,
+        },
       });
       const thread = agent.thread(channelKey(config.channel));
       return {
-        deliver: (text) =>
-          deliverTuiTurn({
+        deliver: async (text) => {
+          const assistantText: string[] = [];
+          const delivery = await deliverTuiTurn({
+            onAssistantOutput: (line) => assistantText.push(line),
             output,
             text,
             thread,
-          }),
+          });
+          const trimmed = text.trim();
+          if (trimmed) {
+            await sessionIndex.upsert({
+              assistantText,
+              channel: config.channel,
+              userText: trimmed,
+            });
+          }
+          return delivery;
+        },
         dispose: () => thread.dispose(),
-        inspect: (key) => agent.inspectThread(key),
       };
     }
     case "remote": {
@@ -210,7 +217,6 @@ async function configureTuiTurnDelivery(
             text,
           }),
         dispose: () => Promise.resolve(),
-        inspect: (key) => client.inspect(key),
       };
     }
     default:

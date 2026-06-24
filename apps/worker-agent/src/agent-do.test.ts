@@ -4,7 +4,6 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   AgentDurableObject,
   deliverToolOnlyTurn,
-  inspectDurableThread,
   parseAgentRequest,
   TOOL_ONLY_DELIVERY_RECOVERY_PROMPT,
   type WorkerAgentThreadSender,
@@ -101,33 +100,6 @@ describe("channel thread keys", () => {
     const channel: ChannelAddress = { id: "chat-1", kind: "telegram" };
 
     expect(channelKey(channel)).toBe("telegram:chat-1");
-  });
-});
-
-describe("Durable Object thread inspection", () => {
-  it("inspects the default runtime thread inside a conversation object", async () => {
-    const inspectedKeys: string[] = [];
-    const inspection = {
-      compactionCount: 0,
-      compactions: [],
-      exists: true,
-      messageCount: 2,
-      summaryBytes: 0,
-      threadKey: "default",
-      version: "v1",
-    };
-
-    await expect(
-      inspectDurableThread({
-        thread: (key) => {
-          inspectedKeys.push(key);
-          return {
-            inspect: () => Promise.resolve(inspection),
-          };
-        },
-      })
-    ).resolves.toEqual(inspection);
-    expect(inspectedKeys).toEqual(["default"]);
   });
 });
 
