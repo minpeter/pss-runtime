@@ -58,11 +58,11 @@ const ReadSessionToolInputSchema = z
       .describe(
         "Read messages before this transcript cursor when paging older context."
       ),
-    conversationKey: z
+    channel: z
       .string()
       .min(1)
       .describe(
-        "The conversationKey returned by list_sessions or search_sessions."
+        "The channel value (kind:id) returned by list_sessions or search_sessions."
       ),
     limit: z
       .number()
@@ -76,7 +76,6 @@ const ReadSessionToolInputSchema = z
 
 export interface SessionToolEntry {
   readonly channel: string;
-  readonly conversationKey: string;
   readonly lastSeenAt: string;
   readonly snippet: string;
   readonly turnCount: number;
@@ -97,11 +96,11 @@ export interface SearchSessionsToolResult {
 
 export type ReadSessionToolResult =
   | {
-      readonly conversationKey: string;
+      readonly channel: string;
       readonly found: false;
     }
   | {
-      readonly conversationKey: string;
+      readonly channel: string;
       readonly found: true;
       readonly hasMore: boolean;
       readonly messageCount: number;
@@ -153,11 +152,11 @@ export function createSessionTools(
   if (options.transcriptReader) {
     tools[READ_SESSION_TOOL_NAME] = {
       description:
-        "Read a capped transcript from a specific conversationKey returned by list_sessions or search_sessions. Use this after selecting a likely prior conversation, before answering details from it.",
+        "Read a capped transcript from a specific channel returned by list_sessions or search_sessions. Use this after selecting a likely prior conversation, before answering details from it.",
       execute: async (input: unknown): Promise<ReadSessionToolResult> => {
         const parsed = ReadSessionToolInputSchema.parse(input);
         const transcript = await options.transcriptReader?.read(
-          parsed.conversationKey,
+          parsed.channel,
           {
             ...(parsed.before === undefined ? {} : { before: parsed.before }),
             ...(parsed.limit === undefined ? {} : { limit: parsed.limit }),
@@ -166,7 +165,7 @@ export function createSessionTools(
         return transcript
           ? toReadSessionResult(transcript)
           : {
-              conversationKey: parsed.conversationKey,
+              channel: parsed.channel,
               found: false,
             };
       },
@@ -187,7 +186,6 @@ function excludeCurrent(options: WorkerAgentSessionToolOptions): {
 function toToolEntry(summary: SessionSummary): SessionToolEntry {
   return {
     channel: channelKey(summary.channel),
-    conversationKey: summary.conversationKey,
     lastSeenAt: new Date(summary.lastSeenAt).toISOString(),
     snippet: summary.snippet,
     turnCount: summary.turnCount,
@@ -205,7 +203,7 @@ function toReadSessionResult(
   transcript: SessionTranscript
 ): ReadSessionToolResult {
   return {
-    conversationKey: transcript.conversationKey,
+    channel: transcript.conversationKey,
     found: true,
     hasMore: transcript.hasMore,
     messageCount: transcript.messageCount,

@@ -90,7 +90,7 @@ Session search tools:
 - When the user asks what you talked about before, or refers to another chat, call search_sessions with relevant keywords (or list_sessions for the most recent ones), then call read_session for the selected conversation before answering details.
 - Only state cross-conversation facts that a tool result actually returned. Do not invent or embellish past conversations.
 - If the tools return nothing relevant, say you do not have a record of that instead of guessing.
-- Do not expose raw conversationKey values, scores, cursors, or tool mechanics to the user; speak naturally about what was discussed.`.trim();
+- Do not expose raw channel keys, scores, cursors, or tool mechanics to the user; speak naturally about what was discussed.`.trim();
 
 export interface WorkerAgentRuntimeOptions {
   readonly sendMessage?: WorkerAgentSendMessageToolOptions;

@@ -51,10 +51,9 @@ describe("session search tools", () => {
       toolContext()
     )) as ListSessionsToolResult;
 
-    expect(result.sessions.map((session) => session.conversationKey)).toEqual([
+    expect(result.sessions.map((session) => session.channel)).toEqual([
       "telegram:a",
     ]);
-    expect(result.sessions[0]?.channel).toBe("telegram:a");
     expect(result.sessions[0]?.lastSeenAt).toBe("1970-01-01T00:00:00.010Z");
   });
 
@@ -72,7 +71,7 @@ describe("session search tools", () => {
 
     expect(result.query).toBe("database migration");
     expect(result.sessions).toHaveLength(1);
-    expect(result.sessions[0]?.conversationKey).toBe("telegram:a");
+    expect(result.sessions[0]?.channel).toBe("telegram:a");
     expect(result.sessions[0]?.score).toBeGreaterThan(0);
   });
 
@@ -96,12 +95,12 @@ describe("session search tools", () => {
     });
 
     const result = (await tools[READ_SESSION_TOOL_NAME]?.execute?.(
-      { conversationKey: "telegram:a" },
+      { channel: "telegram:a" },
       toolContext()
     )) as ReadSessionToolResult;
 
     expect(result).toEqual({
-      conversationKey: "telegram:a",
+      channel: "telegram:a",
       found: true,
       hasMore: false,
       messageCount: 2,
@@ -121,12 +120,12 @@ describe("session search tools", () => {
     });
 
     const result = (await tools[READ_SESSION_TOOL_NAME]?.execute?.(
-      { conversationKey: "telegram:missing" },
+      { channel: "telegram:missing" },
       toolContext()
     )) as ReadSessionToolResult;
 
     expect(result).toEqual({
-      conversationKey: "telegram:missing",
+      channel: "telegram:missing",
       found: false,
     });
   });
