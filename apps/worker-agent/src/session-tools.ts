@@ -1,5 +1,6 @@
 import type { AgentOptions } from "@minpeter/pss-runtime";
 import { z } from "zod";
+import { channelKey } from "./channel";
 import {
   DEFAULT_SESSION_LIST_LIMIT,
   DEFAULT_SESSION_SEARCH_LIMIT,
@@ -74,7 +75,7 @@ const ReadSessionToolInputSchema = z
   .strict();
 
 export interface SessionToolEntry {
-  readonly channel: SessionSummary["channel"];
+  readonly channel: string;
   readonly conversationKey: string;
   readonly lastSeenAt: string;
   readonly snippet: string;
@@ -185,7 +186,7 @@ function excludeCurrent(options: WorkerAgentSessionToolOptions): {
 
 function toToolEntry(summary: SessionSummary): SessionToolEntry {
   return {
-    channel: summary.channel,
+    channel: channelKey(summary.channel),
     conversationKey: summary.conversationKey,
     lastSeenAt: new Date(summary.lastSeenAt).toISOString(),
     snippet: summary.snippet,
