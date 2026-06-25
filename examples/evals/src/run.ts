@@ -2,6 +2,11 @@
 // global registry; runEvals() then drives each one against a real agent thread.
 //
 // Equivalent CLI: `pss-eval --dir evals` (needs a TypeScript-capable Node or tsx).
+//
+// Modes:
+//   pnpm eval            scripted model (deterministic, no API key needed)
+//   PSS_EVAL_REAL=1 pnpm eval   real model via .env
+import "../evals/regression.eval";
 import "../evals/safety.eval";
 import "../evals/weather.eval";
 import {
