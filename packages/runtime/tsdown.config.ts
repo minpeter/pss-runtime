@@ -4,11 +4,10 @@ export default defineConfig({
   entry: [
     "src/index.ts",
     "src/platform/cloudflare/index.ts",
-    "src/platform/node/index.ts",
+    "src/platform/file/index.ts",
     "src/platform/memory/index.ts",
     "src/execution/index.ts",
     "src/namespace.ts",
-    "src/thread/store/file.ts",
   ],
   unbundle: true,
   root: "src",

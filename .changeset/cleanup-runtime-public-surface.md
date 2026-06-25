@@ -31,8 +31,10 @@ Clean up the runtime public surface and tighten host/resume contracts.
   longer copy local namespace formatting helpers.
 - Move platform adapters to domain-first public subpaths:
   `@minpeter/pss-runtime/platform/cloudflare`,
-  `@minpeter/pss-runtime/platform/node`, and
+  `@minpeter/pss-runtime/platform/file`, and
   `@minpeter/pss-runtime/platform/memory`.
+- Remove the legacy `@minpeter/pss-runtime/thread-store/file` subpath; import
+  `FileThreadStore` from `@minpeter/pss-runtime/platform/file`.
 - Remove Cloudflare Durable Object non-SQLite store fallbacks and legacy session
   migration; `createCloudflareDurableObjectHost` now requires `storage.sql` and
   wires SQLite event/checkpoint/session stores directly. The exported

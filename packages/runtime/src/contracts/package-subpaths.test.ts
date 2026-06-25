@@ -25,12 +25,10 @@ describe("runtime package subpaths", () => {
     expect(packageJson.exports["./execution/memory"]).toBeUndefined();
   });
 
-  it("keeps the legacy file thread-store subpath without session aliases", async () => {
+  it("does not expose legacy store implementation subpaths", async () => {
     const packageJson = await readRuntimePackageJson();
 
-    expect(packageJson.exports["./thread-store/file"]).toMatchObject({
-      "@minpeter/pss-source": "./src/thread/store/file.ts",
-    });
+    expect(packageJson.exports["./thread-store/file"]).toBeUndefined();
     expect(packageJson.exports["./session-store/memory"]).toBeUndefined();
     expect(packageJson.exports["./session-store/file"]).toBeUndefined();
   });
@@ -46,14 +44,15 @@ describe("runtime package subpaths", () => {
     expect(packageJson.exports["./cloudflare"]).toBeUndefined();
   });
 
-  it("declares the Node adapter as a platform implementation subpath", async () => {
+  it("declares the file adapter as a platform implementation subpath", async () => {
     const packageJson = await readRuntimePackageJson();
 
-    expect(packageJson.exports["./platform/node"]).toMatchObject({
-      "@minpeter/pss-source": "./src/platform/node/index.ts",
-      import: "./dist/platform/node/index.js",
-      types: "./dist/platform/node/index.d.ts",
+    expect(packageJson.exports["./platform/file"]).toMatchObject({
+      "@minpeter/pss-source": "./src/platform/file/index.ts",
+      import: "./dist/platform/file/index.js",
+      types: "./dist/platform/file/index.d.ts",
     });
+    expect(packageJson.exports["./platform/node"]).toBeUndefined();
     expect(packageJson.exports["./node"]).toBeUndefined();
   });
 });

@@ -26,7 +26,7 @@ export const runtimeCloudflareDeclaration = [
   'export type { AgentTurnDrainResult, AgentTurnDrainStopReason, CloudflareAgentContext, CloudflareAgentContextFactoryOptions, CloudflareAgentContextOptions, CloudflareAgentContextPrefixOptions, CloudflareAgentTurnDrainOptions, CloudflareAlarmAgent, CloudflareAlarmDrainSummary, CloudflareDurableObjectFetchOptions, CloudflareDurableObjectId, CloudflareDurableObjectNamespace, CloudflareDurableObjectState, CloudflareDurableObjectStorage, CloudflareDurableObjectStub, CloudflareDurableObjectStubOptions, CloudflareScheduledThreadPrompt } from "./index";',
   "",
 ].join("\n");
-export const runtimeNodeDeclaration = [
+export const runtimeFileDeclaration = [
   'export { ackScheduledNodeRun, ackScheduledNodeThreadPrompt, appendScheduledNodeRun, appendScheduledNodeThreadPrompt, createNodeFileAgentContext, createNodeFileExecutionHost, createNodeFileScheduler, createNodeFileThreadHost, drainScheduledNodeWork, FileExecutionStore, FileThreadStore, listScheduledNodeRuns, listScheduledNodeThreadPrompts } from "./index";',
   'export type { NodeFileAgentContext, NodeFileAgentContextFactoryOptions, NodeFileAgentContextOptions, NodeFileExecutionHostOptions, NodeFileThreadHostOptions, NodeScheduledThreadPrompt, NodeScheduledWorkAppendOptions, NodeScheduledWorkDrainOptions, NodeScheduledWorkDrainResult, NodeScheduledWorkListOptions, NodeScheduledWorkRunContext } from "./index";',
   "",
@@ -147,7 +147,7 @@ function writeRuntimeDeclarationFixtures(cwd, packageName) {
     ),
     runtimeCloudflareDeclaration
   );
-  mkdirSync(join(cwd, "packages", packageName, "dist", "platform", "node"), {
+  mkdirSync(join(cwd, "packages", packageName, "dist", "platform", "file"), {
     recursive: true,
   });
   writeFileSync(
@@ -157,10 +157,10 @@ function writeRuntimeDeclarationFixtures(cwd, packageName) {
       packageName,
       "dist",
       "platform",
-      "node",
+      "file",
       "index.d.ts"
     ),
-    runtimeNodeDeclaration
+    runtimeFileDeclaration
   );
   writeFileSync(
     join(cwd, "packages", packageName, "dist", "llm.d.ts"),

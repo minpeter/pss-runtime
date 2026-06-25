@@ -1,6 +1,6 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { Agent } from "@minpeter/pss-runtime";
-import { createNodeFileExecutionHost } from "@minpeter/pss-runtime/platform/node";
+import { createNodeFileExecutionHost } from "@minpeter/pss-runtime/platform/file";
 import { createEnv } from "@t3-oss/env-core";
 import { config as loadEnv } from "dotenv";
 import { z } from "zod";

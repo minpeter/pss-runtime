@@ -63,7 +63,7 @@ const REQUIRED_RUNTIME_CLOUDFLARE_EXPORTS = [
   "listScheduledCloudflareThreadPrompts",
   "rescheduleCloudflareAlarm",
 ];
-const REQUIRED_RUNTIME_NODE_EXPORTS =
+const REQUIRED_RUNTIME_FILE_EXPORTS =
   "FileExecutionStore FileThreadStore NodeFileAgentContext NodeFileAgentContextFactoryOptions NodeFileAgentContextOptions NodeFileExecutionHostOptions NodeFileThreadHostOptions NodeScheduledThreadPrompt NodeScheduledWorkAppendOptions NodeScheduledWorkDrainOptions NodeScheduledWorkDrainResult NodeScheduledWorkListOptions NodeScheduledWorkRunContext ackScheduledNodeRun ackScheduledNodeThreadPrompt appendScheduledNodeRun appendScheduledNodeThreadPrompt createNodeFileAgentContext createNodeFileExecutionHost createNodeFileScheduler createNodeFileThreadHost drainScheduledNodeWork listScheduledNodeRuns listScheduledNodeThreadPrompts".split(
     " "
   );
@@ -182,11 +182,11 @@ export function findRuntimeDeclarationLeaks({ cwd, packages }) {
       file: join(
         packageDistPath(cwd, "runtime"),
         "platform",
-        "node",
+        "file",
         "index.d.ts"
       ),
-      requiredExports: REQUIRED_RUNTIME_NODE_EXPORTS,
-      surface: "node",
+      requiredExports: REQUIRED_RUNTIME_FILE_EXPORTS,
+      surface: "file",
     }),
     ...findRuntimePublicPatternLeaks({ cwd }),
   ];

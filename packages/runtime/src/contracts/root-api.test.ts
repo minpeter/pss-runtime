@@ -233,13 +233,13 @@ describe("runtime public exports", () => {
     expect(agentHost.kind).toBe("thread");
   });
 
-  it("exports Node file thread inspection from the Node adapter only", async () => {
+  it("exports Node file thread inspection from the file adapter only", async () => {
     const runtime = await import("../index");
-    const nodeAdapter = await import("../platform/node");
+    const fileAdapter = await import("../platform/file");
 
     expect(runtime).not.toHaveProperty("inspectNodeFileThread");
     expect(runtime).not.toHaveProperty("nodeFileThreadStorageFile");
-    expect(nodeAdapter).toHaveProperty("inspectNodeFileThread");
-    expect(nodeAdapter).toHaveProperty("nodeFileThreadStorageFile");
+    expect(fileAdapter).toHaveProperty("inspectNodeFileThread");
+    expect(fileAdapter).toHaveProperty("nodeFileThreadStorageFile");
   });
 });

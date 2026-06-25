@@ -11,11 +11,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./thread-store/file": {
-      "@minpeter/pss-source": "./src/thread/store/file.ts",
-      "types": "./dist/thread/store/file.d.ts",
-      "import": "./dist/thread/store/file.js"
-    },
     "./platform/memory": {
       "@minpeter/pss-source": "./src/platform/memory/index.ts",
       "types": "./dist/platform/memory/index.d.ts",
@@ -26,10 +21,10 @@
       "types": "./dist/platform/cloudflare/index.d.ts",
       "import": "./dist/platform/cloudflare/index.js"
     },
-    "./platform/node": {
-      "@minpeter/pss-source": "./src/platform/node/index.ts",
-      "types": "./dist/platform/node/index.d.ts",
-      "import": "./dist/platform/node/index.js"
+    "./platform/file": {
+      "@minpeter/pss-source": "./src/platform/file/index.ts",
+      "types": "./dist/platform/file/index.d.ts",
+      "import": "./dist/platform/file/index.js"
     },
     "./execution": {
       "@minpeter/pss-source": "./src/execution/index.ts",

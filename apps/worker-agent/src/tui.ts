@@ -4,7 +4,7 @@ import { argv, stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { pathToFileURL } from "node:url";
 import type { AgentHost } from "@minpeter/pss-runtime";
-import { createNodeFileThreadHost } from "@minpeter/pss-runtime/platform/node";
+import { createNodeFileThreadHost } from "@minpeter/pss-runtime/platform/file";
 import { createConfiguredAgent } from "./agent";
 import type { WorkerAgentDeliveryResponse } from "./agent-do-delivery";
 import { threadStoreForHost } from "./agent-host-thread-store";

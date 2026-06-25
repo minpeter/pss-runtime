@@ -20,10 +20,10 @@ export default defineConfig({
         ),
       },
       {
-        find: /^@minpeter\/pss-runtime\/platform\/node$/,
+        find: /^@minpeter\/pss-runtime\/platform\/file$/,
         replacement: resolve(
           import.meta.dirname,
-          "../../packages/runtime/src/platform/node/index.ts"
+          "../../packages/runtime/src/platform/file/index.ts"
         ),
       },
       {
