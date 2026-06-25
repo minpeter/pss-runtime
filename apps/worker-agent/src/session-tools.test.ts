@@ -8,6 +8,8 @@ import {
   createSessionTools,
   LIST_SESSIONS_TOOL_NAME,
   type ListSessionsToolResult,
+  READ_SESSION_TOOL_NAME,
+  type ReadSessionToolResult,
   SEARCH_SESSIONS_TOOL_NAME,
   type SearchSessionsToolResult,
 } from "./session-tools";
@@ -70,6 +72,61 @@ describe("session search tools", () => {
     expect(result.sessions).toHaveLength(1);
     expect(result.sessions[0]?.conversationKey).toBe("telegram:a");
     expect(result.sessions[0]?.score).toBeGreaterThan(0);
+  });
+
+  it("reads a selected session transcript by conversation key", async () => {
+    const reader = await seededReader();
+    const tools = createSessionTools({
+      currentConversationKey: () => "tui:current",
+      reader,
+      transcriptReader: {
+        read: (conversationKey) =>
+          Promise.resolve({
+            conversationKey,
+            hasMore: false,
+            messageCount: 2,
+            messages: [
+              { index: 0, role: "user", text: "old question" },
+              { index: 1, role: "assistant", text: "old answer" },
+            ],
+          }),
+      },
+    });
+
+    const result = (await tools[READ_SESSION_TOOL_NAME]?.execute?.(
+      { conversationKey: "telegram:a" },
+      toolContext()
+    )) as ReadSessionToolResult;
+
+    expect(result).toEqual({
+      conversationKey: "telegram:a",
+      found: true,
+      hasMore: false,
+      messageCount: 2,
+      messages: [
+        { index: 0, role: "user", text: "old question" },
+        { index: 1, role: "assistant", text: "old answer" },
+      ],
+    });
+  });
+
+  it("returns a not-found result when a selected session has no readable transcript", async () => {
+    const reader = await seededReader();
+    const tools = createSessionTools({
+      currentConversationKey: () => undefined,
+      reader,
+      transcriptReader: { read: () => Promise.resolve(undefined) },
+    });
+
+    const result = (await tools[READ_SESSION_TOOL_NAME]?.execute?.(
+      { conversationKey: "telegram:missing" },
+      toolContext()
+    )) as ReadSessionToolResult;
+
+    expect(result).toEqual({
+      conversationKey: "telegram:missing",
+      found: false,
+    });
   });
 
   it("rejects an empty search query", async () => {

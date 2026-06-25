@@ -1,6 +1,6 @@
 import { createTRPCClient, httpLink } from "@trpc/client";
 
-import type { WorkerAgentDeliveryResponse } from "./agent-do";
+import type { WorkerAgentDeliveryResponse } from "./agent-do-delivery";
 import type { ChannelAddress } from "./channel";
 import { TuiTurnOutputSchema } from "./tui-contract";
 import type { WorkerAgentRouter } from "./tui-rpc";

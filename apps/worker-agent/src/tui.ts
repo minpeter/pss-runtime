@@ -9,13 +9,15 @@ import { createNodeFileThreadHost } from "@minpeter/pss-runtime/node";
 import { z } from "zod";
 
 import { createConfiguredAgent, type WorkerAgentModelEnv } from "./agent";
-import type { WorkerAgentDeliveryResponse } from "./agent-do";
+import type { WorkerAgentDeliveryResponse } from "./agent-do-delivery";
+import { threadStoreForHost } from "./agent-host-thread-store";
 import { type ChannelAddress, channelKey } from "./channel";
 import {
   createSessionIndexStore,
   type SessionIndexStore,
 } from "./session-index";
 import { createFileSessionIndexRepository } from "./session-index-node";
+import { createThreadStoreSessionTranscriptReader } from "./session-transcript";
 import { createRemoteTuiDeliveryClient } from "./tui-remote";
 import {
   createTuiMessageSink,
@@ -182,6 +184,10 @@ async function configureTuiTurnDelivery(
         sessionTools: {
           currentConversationKey: () => conversationKey,
           reader: sessionIndex,
+          transcriptReader: createThreadStoreSessionTranscriptReader({
+            resolveThreadKey: (conversationKey) => conversationKey,
+            store: threadStoreForHost(host),
+          }),
         },
       });
       const thread = agent.thread(channelKey(config.channel));

@@ -1,4 +1,4 @@
-import type { WorkerAgentDeliveredMessage } from "./agent-do";
+import type { WorkerAgentDeliveredMessage } from "./agent-do-delivery";
 import type { ChannelMessageSink, ChannelSentMessage } from "./channel";
 import { channelKey } from "./channel";
 

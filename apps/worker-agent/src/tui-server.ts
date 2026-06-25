@@ -1,6 +1,6 @@
 import { fetchCloudflareDurableObject } from "@minpeter/pss-runtime/cloudflare";
 
-import type { WorkerAgentDeliveryResponse } from "./agent-do";
+import type { WorkerAgentDeliveryResponse } from "./agent-do-delivery";
 import { channelKey } from "./channel";
 import { durableObjectName, type Env } from "./env";
 import { type TuiTurnInput, TuiTurnOutputSchema } from "./tui-contract";

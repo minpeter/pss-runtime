@@ -3,8 +3,8 @@ import type { AgentEvent } from "@minpeter/pss-runtime";
 import type {
   WorkerAgentDeliveryResponse,
   WorkerAgentThreadSender,
-} from "./agent-do";
-import { deliverToolOnlyTurn } from "./agent-do";
+} from "./agent-do-delivery";
+import { deliverToolOnlyTurn } from "./agent-do-delivery";
 import type {
   ChannelAddress,
   ChannelMessageSink,

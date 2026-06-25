@@ -54,8 +54,8 @@ describe("worker-agent instructions", () => {
     }
 
     const sessionSearchRules = [
-      "You can recall other recent conversations with list_sessions and search_sessions",
-      "call search_sessions with relevant keywords",
+      "You can recall other recent conversations with list_sessions, search_sessions, and read_session",
+      "then call read_session for the selected conversation",
       "Only state cross-conversation facts that a tool result actually returned",
     ] as const;
 

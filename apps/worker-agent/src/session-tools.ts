@@ -1,6 +1,5 @@
 import type { AgentOptions } from "@minpeter/pss-runtime";
 import { z } from "zod";
-
 import {
   DEFAULT_SESSION_LIST_LIMIT,
   DEFAULT_SESSION_SEARCH_LIMIT,
@@ -9,9 +8,16 @@ import {
   type SessionSearchResult,
   type SessionSummary,
 } from "./session-index";
+import {
+  MAX_SESSION_READ_LIMIT,
+  type SessionTranscript,
+  type SessionTranscriptMessage,
+  type SessionTranscriptReader,
+} from "./session-transcript";
 
 export const LIST_SESSIONS_TOOL_NAME = "list_sessions";
 export const SEARCH_SESSIONS_TOOL_NAME = "search_sessions";
+export const READ_SESSION_TOOL_NAME = "read_session";
 
 const ListSessionsToolInputSchema = z
   .object({
@@ -41,6 +47,32 @@ const SearchSessionsToolInputSchema = z
   })
   .strict();
 
+const ReadSessionToolInputSchema = z
+  .object({
+    before: z
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe(
+        "Read messages before this transcript cursor when paging older context."
+      ),
+    conversationKey: z
+      .string()
+      .min(1)
+      .describe(
+        "The conversationKey returned by list_sessions or search_sessions."
+      ),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(MAX_SESSION_READ_LIMIT)
+      .optional()
+      .describe("Maximum number of transcript messages to return."),
+  })
+  .strict();
+
 export interface SessionToolEntry {
   readonly channel: SessionSummary["channel"];
   readonly conversationKey: string;
@@ -62,9 +94,24 @@ export interface SearchSessionsToolResult {
   readonly sessions: readonly SearchSessionsToolEntry[];
 }
 
+export type ReadSessionToolResult =
+  | {
+      readonly conversationKey: string;
+      readonly found: false;
+    }
+  | {
+      readonly conversationKey: string;
+      readonly found: true;
+      readonly hasMore: boolean;
+      readonly messageCount: number;
+      readonly messages: readonly SessionTranscriptMessage[];
+      readonly nextCursor?: number;
+    };
+
 export interface WorkerAgentSessionToolOptions {
   readonly currentConversationKey: () => string | undefined;
   readonly reader: SessionIndexReader;
+  readonly transcriptReader?: SessionTranscriptReader;
 }
 
 type WorkerAgentToolSet = NonNullable<AgentOptions["tools"]>;
@@ -72,7 +119,7 @@ type WorkerAgentToolSet = NonNullable<AgentOptions["tools"]>;
 export function createSessionTools(
   options: WorkerAgentSessionToolOptions
 ): WorkerAgentToolSet {
-  return {
+  const tools: WorkerAgentToolSet = {
     [LIST_SESSIONS_TOOL_NAME]: {
       description:
         "List other recent conversations (across messaging surfaces) with a short snippet. Use this to recall what you discussed elsewhere instead of guessing.",
@@ -101,6 +148,32 @@ export function createSessionTools(
       inputSchema: SearchSessionsToolInputSchema,
     },
   };
+
+  if (options.transcriptReader) {
+    tools[READ_SESSION_TOOL_NAME] = {
+      description:
+        "Read a capped transcript from a specific conversationKey returned by list_sessions or search_sessions. Use this after selecting a likely prior conversation, before answering details from it.",
+      execute: async (input: unknown): Promise<ReadSessionToolResult> => {
+        const parsed = ReadSessionToolInputSchema.parse(input);
+        const transcript = await options.transcriptReader?.read(
+          parsed.conversationKey,
+          {
+            ...(parsed.before === undefined ? {} : { before: parsed.before }),
+            ...(parsed.limit === undefined ? {} : { limit: parsed.limit }),
+          }
+        );
+        return transcript
+          ? toReadSessionResult(transcript)
+          : {
+              conversationKey: parsed.conversationKey,
+              found: false,
+            };
+      },
+      inputSchema: ReadSessionToolInputSchema,
+    };
+  }
+
+  return tools;
 }
 
 function excludeCurrent(options: WorkerAgentSessionToolOptions): {
@@ -124,5 +197,20 @@ function toSearchEntry(result: SessionSearchResult): SearchSessionsToolEntry {
   return {
     ...toToolEntry(result),
     score: result.score,
+  };
+}
+
+function toReadSessionResult(
+  transcript: SessionTranscript
+): ReadSessionToolResult {
+  return {
+    conversationKey: transcript.conversationKey,
+    found: true,
+    hasMore: transcript.hasMore,
+    messageCount: transcript.messageCount,
+    messages: transcript.messages,
+    ...(transcript.nextCursor === undefined
+      ? {}
+      : { nextCursor: transcript.nextCursor }),
   };
 }
