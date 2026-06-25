@@ -9,7 +9,6 @@ const REQUIRED_RUNTIME_ROOT_EXPORTS = [
 ];
 const REQUIRED_RUNTIME_EXECUTION_EXPORTS = [
   "CheckpointStore",
-  "createInMemoryExecutionHost",
   "DurableBackgroundHost",
   "EventStore",
   "ExecutionHost",
@@ -26,6 +25,10 @@ const REQUIRED_RUNTIME_EXECUTION_EXPORTS = [
   "RuntimeToolExecutionDecision",
   "RuntimeToolRetryPolicy",
   "ToolExecutionNeedsRecoveryError",
+];
+const REQUIRED_RUNTIME_MEMORY_EXPORTS = [
+  "createInMemoryExecutionHost",
+  "MemoryThreadStore",
 ];
 const REQUIRED_RUNTIME_CLOUDFLARE_EXPORTS = [
   "CloudflareAgentContext",
@@ -79,6 +82,7 @@ const FORBIDDEN_RUNTIME_ROOT_NAMES = [
     "ExecutionStoreTransaction ExecutionTransactionHost Llm LlmContext LlmOutput LlmOutputPart",
     "NotificationHost NotificationInbox NotificationRecord fetchCloudflareDurableObject",
     "getCloudflareDurableObjectStub InMemoryCloudflareDurableObjectStorage RunHost RunRecord",
+    "MemoryThreadStore",
     "RunInput RunStore RuntimeToolExecutionCheckpoint RuntimeToolExecutionContext",
     "RuntimeToolExecutionDecision RuntimeToolRetryPolicy",
     "FileExecutionStore FileThreadStore FileSessionStore NodeFileAgentContext",
@@ -150,6 +154,17 @@ export function findRuntimeDeclarationLeaks({ cwd, packages }) {
       file: join(packageDistPath(cwd, "runtime"), "execution", "index.d.ts"),
       requiredExports: REQUIRED_RUNTIME_EXECUTION_EXPORTS,
       surface: "execution",
+    }),
+    ...findRuntimeDeclarationExportLeaks({
+      cwd,
+      file: join(
+        packageDistPath(cwd, "runtime"),
+        "platform",
+        "memory",
+        "index.d.ts"
+      ),
+      requiredExports: REQUIRED_RUNTIME_MEMORY_EXPORTS,
+      surface: "memory",
     }),
     ...findRuntimeDeclarationExportLeaks({
       cwd,

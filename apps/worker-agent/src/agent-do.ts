@@ -3,7 +3,7 @@ import type { Agent } from "@minpeter/pss-runtime";
 import {
   type CloudflareAgentContext,
   createCloudflareAgentContext,
-} from "@minpeter/pss-runtime/cloudflare";
+} from "@minpeter/pss-runtime/platform/cloudflare";
 
 import { createConfiguredAgent } from "./agent";
 import { deliverToolOnlyTurn, withCapturedMessages } from "./agent-do-delivery";

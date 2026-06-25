@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import {
-  createInMemoryExecutionHost,
-  type DurableBackgroundHost,
-  type ExecutionHost,
-  type ExecutionScheduler,
-  type ThreadHost,
+import type {
+  DurableBackgroundHost,
+  ExecutionHost,
+  ExecutionScheduler,
+  ThreadHost,
 } from "../../execution";
+import { createInMemoryExecutionHost } from "../../platform/memory";
 import {
   createMockLanguageModelV4,
   mockLanguageModelV4Text,

@@ -1,9 +1,22 @@
-import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { describe, expect, expectTypeOf, it } from "vitest";
+import type {
+  CheckpointStore,
+  DurableBackgroundHost,
+  EventStore,
+  ExecutionHost,
+  ExecutionScheduler,
+  ExecutionStore,
+  ExecutionStoreTransaction,
+  NotificationInbox,
+  NotificationRecord,
+  ThreadHost,
+  TurnRecord,
+  TurnStore,
+} from "../execution";
 import type {
   AgentAutoCompactionOptions,
   AgentEvent,
+  AgentHost,
   AgentInput,
   AgentOptions,
   ControlAgentEvent,
@@ -23,6 +36,9 @@ import {
   threadStoreKey as runtimeThreadStoreKey,
 } from "../index";
 
+type EmptyHostIsRejected =
+  Record<string, never> extends AgentHost ? true : false;
+const emptyHostIsRejected: EmptyHostIsRejected = false;
 const forbiddenRuntimeSubagentExports = [
   ["Subagent", "Definition"].join(""),
   ["resume", "Background", "Child", "Run"].join(""),
@@ -65,6 +81,7 @@ describe("runtime public exports", () => {
     expect(runtime).not.toHaveProperty("BackgroundScheduler");
     expect(runtime).not.toHaveProperty("ToolExecutionNeedsRecoveryError");
     expect(runtime).not.toHaveProperty(runStreamExport);
+    expect(emptyHostIsRejected).toBe(false);
   });
 
   it("exports event classifiers from the package root", async () => {
@@ -164,58 +181,56 @@ describe("runtime public exports", () => {
     expect(compaction.startSeq).toBe(0);
   });
 
-  it("declares thread store package subpaths without session aliases", async () => {
-    const packageJson = JSON.parse(
-      await readFile(
-        fileURLToPath(new URL("../../package.json", import.meta.url)),
-        "utf8"
-      )
-    ) as {
-      exports: Record<string, { "@minpeter/pss-source": string }>;
-    };
-
-    expect(packageJson.exports["./thread-store/memory"]).toMatchObject({
-      "@minpeter/pss-source": "./src/thread/store/memory.ts",
-    });
-    expect(packageJson.exports["./thread-store/file"]).toMatchObject({
-      "@minpeter/pss-source": "./src/thread/store/file.ts",
-    });
-    expect(packageJson.exports["./session-store/memory"]).toBeUndefined();
-    expect(packageJson.exports["./session-store/file"]).toBeUndefined();
-  });
-
-  it("declares the Cloudflare adapter as a platform implementation subpath", async () => {
-    const packageJson = JSON.parse(
-      await readFile(
-        fileURLToPath(new URL("../../package.json", import.meta.url)),
-        "utf8"
-      )
-    ) as {
-      exports: Record<string, { "@minpeter/pss-source": string }>;
-    };
-
-    expect(packageJson.exports["./cloudflare"]).toMatchObject({
-      "@minpeter/pss-source": "./src/platform/cloudflare/index.ts",
-      import: "./dist/platform/cloudflare/index.js",
-      types: "./dist/platform/cloudflare/index.d.ts",
-    });
-  });
-
-  it("declares the Node adapter as a platform implementation subpath", async () => {
-    const packageJson = JSON.parse(
-      await readFile(
-        fileURLToPath(new URL("../../package.json", import.meta.url)),
-        "utf8"
-      )
-    ) as {
-      exports: Record<string, { "@minpeter/pss-source": string }>;
-    };
-
-    expect(packageJson.exports["./node"]).toMatchObject({
-      "@minpeter/pss-source": "./src/platform/node/index.ts",
-      import: "./dist/platform/node/index.js",
-      types: "./dist/platform/node/index.d.ts",
-    });
+  it("types advanced host contracts", () => {
+    expectTypeOf<
+      ExecutionHost["scheduler"]
+    >().toEqualTypeOf<ExecutionScheduler>();
+    expectTypeOf<ExecutionHost["store"]>().toEqualTypeOf<ExecutionStore>();
+    expectTypeOf<
+      ExecutionStore["notifications"]
+    >().toEqualTypeOf<NotificationInbox>();
+    expectTypeOf<ExecutionHost["kind"]>().toEqualTypeOf<"execution">();
+    expectTypeOf<ExecutionStore["turns"]>().toEqualTypeOf<TurnStore>();
+    expectTypeOf<
+      ExecutionStore["checkpoints"]
+    >().toEqualTypeOf<CheckpointStore>();
+    expectTypeOf<ExecutionStore["events"]>().toEqualTypeOf<EventStore>();
+    expectTypeOf<
+      Parameters<NotificationInbox["enqueue"]>[0]
+    >().toEqualTypeOf<NotificationRecord>();
+    expectTypeOf<
+      Awaited<ReturnType<TurnStore["get"]>>
+    >().toEqualTypeOf<TurnRecord | null>();
+    expectTypeOf<
+      ExecutionStoreTransaction["turns"]
+    >().toEqualTypeOf<TurnStore>();
+    expectTypeOf<
+      ExecutionStoreTransaction["notifications"]
+    >().toEqualTypeOf<NotificationInbox>();
+    const threadHost = {
+      kind: "thread",
+      threadStore: {} as ThreadHost["threadStore"],
+    } satisfies ThreadHost;
+    const agentHost = threadHost satisfies AgentHost;
+    expectTypeOf<
+      DurableBackgroundHost["turnStore"]
+    >().toEqualTypeOf<TurnStore>();
+    expectTypeOf<
+      DurableBackgroundHost["checkpointStore"]
+    >().toEqualTypeOf<CheckpointStore>();
+    expectTypeOf<
+      DurableBackgroundHost["eventStore"]
+    >().toEqualTypeOf<EventStore>();
+    expectTypeOf<
+      DurableBackgroundHost["notificationInbox"]
+    >().toEqualTypeOf<NotificationInbox>();
+    expectTypeOf<
+      DurableBackgroundHost["backgroundScheduler"]
+    >().toEqualTypeOf<ExecutionScheduler>();
+    expectTypeOf<DurableBackgroundHost["transaction"]>().toEqualTypeOf<
+      ExecutionStore["transaction"]
+    >();
+    expect(agentHost.kind).toBe("thread");
   });
 
   it("exports Node file thread inspection from the Node adapter only", async () => {

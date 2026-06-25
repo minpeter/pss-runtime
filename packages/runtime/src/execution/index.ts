@@ -43,4 +43,3 @@ export type {
   TurnStatus,
   TurnStore,
 } from "./host/types";
-export { createInMemoryExecutionHost } from "./memory";

@@ -1,7 +1,7 @@
 import {
   DurableObjectSqliteThreadStore,
   InMemoryCloudflareDurableObjectStorage,
-} from "@minpeter/pss-runtime/cloudflare";
+} from "@minpeter/pss-runtime/platform/cloudflare";
 import { describe, expect, it } from "vitest";
 
 import { AgentDurableObject } from "./agent-do";

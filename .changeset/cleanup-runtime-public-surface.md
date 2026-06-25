@@ -29,6 +29,10 @@ Clean up the runtime public surface and tighten host/resume contracts.
   (`parentSessionNamespace`, `defaultChildSessionKey`, `agentNamespace`,
   `namespacePart`, `randomAgentNamespace`) so app-owned delegation examples no
   longer copy local namespace formatting helpers.
+- Move platform adapters to domain-first public subpaths:
+  `@minpeter/pss-runtime/platform/cloudflare`,
+  `@minpeter/pss-runtime/platform/node`, and
+  `@minpeter/pss-runtime/platform/memory`.
 - Remove Cloudflare Durable Object non-SQLite store fallbacks and legacy session
   migration; `createCloudflareDurableObjectHost` now requires `storage.sql` and
   wires SQLite event/checkpoint/session stores directly. The exported

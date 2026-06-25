@@ -110,7 +110,7 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      `${runtimeRootDeclaration}export type { ExecutionHost, ExecutionScheduler, ExecutionStore, RuntimeToolExecutionContext } from "./execution";\nexport { ToolExecutionNeedsRecoveryError, createInMemoryExecutionHost } from "./execution";\n`
+      `${runtimeRootDeclaration}export type { ExecutionHost, ExecutionScheduler, ExecutionStore, RuntimeToolExecutionContext } from "./execution";\nexport { ToolExecutionNeedsRecoveryError, createInMemoryExecutionHost } from "./execution";\nexport { MemoryThreadStore } from "./platform/memory";\n`
     );
 
     expect(
@@ -120,6 +120,7 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ExecutionHost",
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ExecutionScheduler",
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ExecutionStore",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name MemoryThreadStore",
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name RuntimeToolExecutionContext",
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ToolExecutionNeedsRecoveryError",
     ]);
@@ -202,6 +203,15 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
     ]);
   });
 
+  it("requires the runtime memory declaration entrypoint", () => {
+    const cwd = createFixture();
+    rmSync(runtimeDistDeclaration(cwd, "platform", "memory"));
+
+    expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
+      "packages/runtime/dist/platform/memory/index.d.ts: missing memory runtime declaration",
+    ]);
+  });
+
   it("checks Cloudflare Worker helpers on the cloudflare declaration subpath", () => {
     const cwd = createFixture();
     writeFileSync(
@@ -253,7 +263,6 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
 
     expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export CheckpointStore",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export createInMemoryExecutionHost",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export DurableBackgroundHost",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export EventStore",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ExecutionHost",
@@ -270,6 +279,19 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RuntimeToolExecutionDecision",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RuntimeToolRetryPolicy",
       "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ToolExecutionNeedsRecoveryError",
+    ]);
+  });
+
+  it("checks memory helpers on the memory declaration subpath", () => {
+    const cwd = createFixture();
+    writeFileSync(
+      runtimeDistDeclaration(cwd, "platform", "memory"),
+      "export {};\n"
+    );
+
+    expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
+      "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export createInMemoryExecutionHost",
+      "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export MemoryThreadStore",
     ]);
   });
 });

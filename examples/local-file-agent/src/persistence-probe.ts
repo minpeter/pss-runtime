@@ -1,4 +1,4 @@
-import { createNodeFileThreadHost } from "@minpeter/pss-runtime/node";
+import { createNodeFileThreadHost } from "@minpeter/pss-runtime/platform/node";
 
 interface ProbeState {
   readonly history: readonly string[];

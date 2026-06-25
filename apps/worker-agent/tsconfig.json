@@ -5,10 +5,10 @@
     "noEmit": true,
     "paths": {
       "@minpeter/pss-runtime": ["../../packages/runtime/src/index.ts"],
-      "@minpeter/pss-runtime/cloudflare": [
+      "@minpeter/pss-runtime/platform/cloudflare": [
         "../../packages/runtime/src/platform/cloudflare/index.ts"
       ],
-      "@minpeter/pss-runtime/node": [
+      "@minpeter/pss-runtime/platform/node": [
         "../../packages/runtime/src/platform/node/index.ts"
       ],
       "chat": ["./node_modules/chat"],

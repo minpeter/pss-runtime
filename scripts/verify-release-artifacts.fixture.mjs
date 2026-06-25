@@ -11,11 +11,14 @@ export const runtimeRootDeclaration = [
   "",
 ].join("\n");
 export const runtimeExecutionDeclaration = [
-  'export { createInMemoryExecutionHost } from "./memory";',
   'export type { DurableBackgroundHost } from "./capabilities";',
   'export type { CheckpointStore, EventStore, ExecutionHost, ExecutionScheduler, ExecutionStore, ExecutionStoreTransaction, NotificationInbox, NotificationRecord, TurnRecord, TurnStatus, TurnStore } from "./types";',
   'export type { RuntimeToolExecutionCheckpoint, RuntimeToolExecutionContext, RuntimeToolExecutionDecision, RuntimeToolRetryPolicy } from "../llm-tool-execution";',
   'export { ToolExecutionNeedsRecoveryError } from "../llm-tool-execution";',
+  "",
+].join("\n");
+export const runtimeMemoryDeclaration = [
+  'export { createInMemoryExecutionHost, MemoryThreadStore } from "./index";',
   "",
 ].join("\n");
 export const runtimeCloudflareDeclaration = [
@@ -112,6 +115,21 @@ function writeRuntimeDeclarationFixtures(cwd, packageName) {
   writeFileSync(
     join(cwd, "packages", packageName, "dist", "execution", "index.d.ts"),
     runtimeExecutionDeclaration
+  );
+  mkdirSync(join(cwd, "packages", packageName, "dist", "platform", "memory"), {
+    recursive: true,
+  });
+  writeFileSync(
+    join(
+      cwd,
+      "packages",
+      packageName,
+      "dist",
+      "platform",
+      "memory",
+      "index.d.ts"
+    ),
+    runtimeMemoryDeclaration
   );
   mkdirSync(
     join(cwd, "packages", packageName, "dist", "platform", "cloudflare"),
