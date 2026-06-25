@@ -113,7 +113,7 @@ async function configureTuiTurnDelivery(
             resolveThreadKey: (conversationKey) =>
               conversationKey === binding.channelKey
                 ? binding.threadKey
-                : conversationKey,
+                : sessionIndex.resolveThreadKey(conversationKey),
             store: threadStoreForHost(host),
           }),
         },

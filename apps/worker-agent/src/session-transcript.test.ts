@@ -122,4 +122,27 @@ describe("session transcript reader", () => {
     expect(transcript?.hasMore).toBe(true);
     expect(transcript?.nextCursor).toBe(1);
   });
+
+  it("resolves the runtime thread key asynchronously before loading", async () => {
+    const store = new FakeThreadStore();
+    await commitHistory(store, "scope:channel%3Atui:thread:local", [
+      { role: "user", content: "stored under the bound thread key" },
+    ]);
+    const reader = createThreadStoreSessionTranscriptReader({
+      resolveThreadKey: (conversationKey) =>
+        Promise.resolve(
+          conversationKey === "tui:local"
+            ? "scope:channel%3Atui:thread:local"
+            : undefined
+        ),
+      store,
+    });
+
+    const transcript = await reader.read("tui:local");
+
+    expect(transcript?.conversationKey).toBe("tui:local");
+    expect(transcript?.messages[0]?.text).toBe(
+      "stored under the bound thread key"
+    );
+  });
 });

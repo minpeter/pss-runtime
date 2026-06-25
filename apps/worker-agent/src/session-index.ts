@@ -73,6 +73,7 @@ export interface SessionSearchOptions {
 
 export interface SessionIndexStore {
   list(options?: SessionListOptions): Promise<readonly SessionSummary[]>;
+  resolveThreadKey(conversationKey: string): Promise<string | undefined>;
   search(
     query: string,
     options?: SessionSearchOptions
@@ -137,6 +138,19 @@ export function createSessionIndexStore(
         .sort(byRecency)
         .slice(0, clampSessionLimit(options.limit, DEFAULT_SESSION_LIST_LIMIT))
         .map(summarizeSessionRecord);
+    },
+    resolveThreadKey: async (conversationKey) => {
+      const record = await repository.get(conversationKey);
+      if (!record) {
+        return;
+      }
+      return (
+        record.threadKey ??
+        legacyChannelThreadKey({
+          id: record.channelId,
+          kind: record.channelKind,
+        })
+      );
     },
     search: async (query, options = {}) => {
       const normalizedQuery = normalizeSearchText(query);

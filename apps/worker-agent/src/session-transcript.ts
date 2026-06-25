@@ -43,7 +43,9 @@ export interface SessionTranscriptReader {
 }
 
 export interface ThreadStoreSessionTranscriptReaderOptions {
-  readonly resolveThreadKey: (conversationKey: string) => string;
+  readonly resolveThreadKey: (
+    conversationKey: string
+  ) => string | undefined | Promise<string | undefined>;
   readonly store: ThreadStore;
 }
 
@@ -53,7 +55,9 @@ export function createThreadStoreSessionTranscriptReader({
 }: ThreadStoreSessionTranscriptReaderOptions): SessionTranscriptReader {
   return {
     read: async (conversationKey, options = {}) => {
-      const stored = await store.load(resolveThreadKey(conversationKey));
+      const threadKey =
+        (await resolveThreadKey(conversationKey)) ?? conversationKey;
+      const stored = await store.load(threadKey);
       if (!stored) {
         return;
       }

@@ -173,4 +173,23 @@ describe("session index store", () => {
 
     expect(await store.search("   ")).toEqual([]);
   });
+
+  it("resolves the stored runtime thread key for a conversation", async () => {
+    const store = createSessionIndexStore(createMemorySessionIndexRepository());
+    await store.upsert({
+      channel: { id: "local", kind: "tui" },
+      threadKey: "scope:channel%3Atui:thread:local",
+      userText: "remember this",
+    });
+
+    expect(await store.resolveThreadKey("tui:local")).toBe(
+      "scope:channel%3Atui:thread:local"
+    );
+  });
+
+  it("returns undefined when resolving an unknown conversation", async () => {
+    const store = createSessionIndexStore(createMemorySessionIndexRepository());
+
+    expect(await store.resolveThreadKey("tui:missing")).toBeUndefined();
+  });
 });
