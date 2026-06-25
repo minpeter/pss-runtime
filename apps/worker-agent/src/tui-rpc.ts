@@ -2,14 +2,8 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 
 import { type Env, isDevelopment } from "./env";
+import { TuiTurnInputSchema, TuiTurnOutputSchema } from "./tui-contract";
 import {
-  TuiInspectInputSchema,
-  TuiInspectOutputSchema,
-  TuiTurnInputSchema,
-  TuiTurnOutputSchema,
-} from "./tui-contract";
-import {
-  dispatchTuiInspect,
   dispatchTuiTurn,
   TuiServerBadRequestError,
   TuiServerUpstreamError,
@@ -38,28 +32,6 @@ const authorizedProcedure = trpc.procedure.use(({ ctx, next }) => {
 
 export const workerAgentRouter = trpc.router({
   tui: trpc.router({
-    inspect: authorizedProcedure
-      .input(TuiInspectInputSchema)
-      .output(TuiInspectOutputSchema)
-      .query(async ({ ctx, input }) => {
-        try {
-          return await dispatchTuiInspect(input, ctx.env);
-        } catch (error) {
-          if (error instanceof TuiServerBadRequestError) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: error.message,
-            });
-          }
-          if (error instanceof TuiServerUpstreamError) {
-            throw new TRPCError({
-              code: "BAD_GATEWAY",
-              message: error.message,
-            });
-          }
-          throw error;
-        }
-      }),
     turn: authorizedProcedure
       .input(TuiTurnInputSchema)
       .output(TuiTurnOutputSchema)

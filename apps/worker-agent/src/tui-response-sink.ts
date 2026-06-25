@@ -1,4 +1,4 @@
-import type { WorkerAgentDeliveredMessage } from "./agent-do";
+import type { WorkerAgentDeliveredMessage } from "./agent-do-delivery";
 import type { ChannelMessageSink, ChannelSentMessage } from "./channel";
 import { channelKey } from "./channel";
 
@@ -30,8 +30,8 @@ export function createTuiResponseMessageSink(): TuiResponseMessageSink {
         }
 
         const sent = {
+          channel: channelKey(channel),
           messageId: `tui-${messages.length + 1}`,
-          threadId: channelKey(channel),
         };
         messages.push({
           ...sent,

@@ -3,8 +3,8 @@ import type { AgentEvent } from "@minpeter/pss-runtime";
 import type {
   WorkerAgentDeliveryResponse,
   WorkerAgentThreadSender,
-} from "./agent-do";
-import { deliverToolOnlyTurn } from "./agent-do";
+} from "./agent-do-delivery";
+import { deliverToolOnlyTurn } from "./agent-do-delivery";
 import type {
   ChannelAddress,
   ChannelMessageSink,
@@ -30,6 +30,7 @@ export interface TuiOutput {
 }
 
 export interface DeliverTuiTurnOptions {
+  readonly onAssistantOutput?: (text: string) => void;
   readonly output: TuiOutput;
   readonly text: string;
   readonly thread: WorkerAgentThreadSender;
@@ -61,14 +62,15 @@ export function createTuiMessageSink(output: TuiOutput): ChannelMessageSink {
       nextMessageIndex += 1;
       output.writeLine(`apex: ${text}`);
       return Promise.resolve({
+        channel: channelKey(channel),
         messageId: `tui-${nextMessageIndex}`,
-        threadId: channelKey(channel),
       });
     },
   };
 }
 
 export async function deliverTuiTurn({
+  onAssistantOutput,
   output,
   text,
   thread,
@@ -80,6 +82,7 @@ export async function deliverTuiTurn({
 
   output.writeLine(`you: ${trimmedText}`);
   const delivery = await deliverToolOnlyTurn(thread, trimmedText, {
+    ...(onAssistantOutput ? { onAssistantOutput } : {}),
     onEvent: (event) => writeDebugEvent(output, event),
   });
   if (!delivery.delivered) {

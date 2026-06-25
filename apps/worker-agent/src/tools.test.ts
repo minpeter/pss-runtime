@@ -13,8 +13,8 @@ describe("send_message tool", () => {
       send: (channel, text) => {
         sent.push(`${channel.kind}:${channel.id}:${text}`);
         return Promise.resolve({
+          channel: `${channel.kind}:${channel.id}`,
           messageId: "msg-1",
-          threadId: `${channel.kind}:${channel.id}`,
         });
       },
     };
@@ -34,9 +34,9 @@ describe("send_message tool", () => {
         }
       )
     ).resolves.toEqual({
+      channel: "telegram:chat-1",
       delivered: true,
       messageId: "msg-1",
-      threadId: "telegram:chat-1",
     });
     expect(sent).toEqual(["telegram:chat-1:hello"]);
   });
@@ -72,8 +72,8 @@ describe("send_message tool", () => {
         send: (channel, text) => {
           sent.push(`${channel.kind}:${channel.id}:${text}`);
           return Promise.resolve({
+            channel: `${channel.kind}:${channel.id}`,
             messageId: "msg-1",
-            threadId: `${channel.kind}:${channel.id}`,
           });
         },
       },
@@ -101,8 +101,8 @@ describe("send_message tool", () => {
         send: (channel, text) => {
           sent.push(`${channel.kind}:${channel.id}:${text}`);
           return Promise.resolve({
+            channel: `${channel.kind}:${channel.id}`,
             messageId: "msg-1",
-            threadId: `${channel.kind}:${channel.id}`,
           });
         },
       },

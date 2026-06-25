@@ -23,7 +23,7 @@ describe("TUI channel sink", () => {
       sink.send({ id: "local", kind: "tui" }, "hello")
     ).resolves.toEqual({
       messageId: "tui-1",
-      threadId: "tui:local",
+      channel: "tui:local",
     });
     expect(lines).toEqual(["apex: hello"]);
   });
@@ -43,7 +43,7 @@ describe("TUI channel sink", () => {
     ).resolves.toEqual({ delivered: true });
     expect(lines).toEqual([
       "you: hello",
-      `${TUI_DEBUG_TOOL_RESULT_PREFIX} send_message {"delivered":true,"messageId":"msg-1","threadId":"tui:local"}`,
+      `${TUI_DEBUG_TOOL_RESULT_PREFIX} send_message {"channel":"tui:local","delivered":true,"messageId":"msg-1"}`,
       `${TUI_DEBUG_ASSISTANT_PREFIX} assistant fallback`,
     ]);
   });
@@ -66,7 +66,7 @@ describe("TUI channel sink", () => {
     expect(lines).toEqual([
       "you: hello",
       `${TUI_DEBUG_TOOL_CALL_PREFIX} send_message {"text":"visible answer"}`,
-      `${TUI_DEBUG_TOOL_RESULT_PREFIX} send_message {"delivered":true,"messageId":"msg-1","threadId":"tui:local"}`,
+      `${TUI_DEBUG_TOOL_RESULT_PREFIX} send_message {"channel":"tui:local","delivered":true,"messageId":"msg-1"}`,
     ]);
   });
 
@@ -86,7 +86,7 @@ describe("TUI channel sink", () => {
     expect(lines).toEqual([
       "you: hello",
       `${TUI_DEBUG_ASSISTANT_PREFIX} thinking out loud`,
-      `${TUI_DEBUG_TOOL_RESULT_PREFIX} send_message {"delivered":true,"messageId":"msg-1","threadId":"tui:local"}`,
+      `${TUI_DEBUG_TOOL_RESULT_PREFIX} send_message {"channel":"tui:local","delivered":true,"messageId":"msg-1"}`,
     ]);
   });
 
@@ -107,7 +107,7 @@ describe("TUI channel sink", () => {
       "you: hello",
       `${TUI_DEBUG_ASSISTANT_PREFIX} line one`,
       `${TUI_DEBUG_ASSISTANT_PREFIX} line two`,
-      `${TUI_DEBUG_TOOL_RESULT_PREFIX} send_message {"delivered":true,"messageId":"msg-1","threadId":"tui:local"}`,
+      `${TUI_DEBUG_TOOL_RESULT_PREFIX} send_message {"channel":"tui:local","delivered":true,"messageId":"msg-1"}`,
     ]);
   });
 
@@ -172,24 +172,14 @@ describe("TUI channel sink", () => {
                 {
                   messageId: "tui-1",
                   text: "first",
-                  threadId: "tui:local",
+                  channel: "tui:local",
                 },
                 {
                   messageId: "tui-2",
                   text: "second",
-                  threadId: "tui:local",
+                  channel: "tui:local",
                 },
               ],
-            }),
-          inspect: () =>
-            Promise.resolve({
-              compactionCount: 0,
-              compactions: [],
-              exists: false,
-              messageCount: 0,
-              summaryBytes: 0,
-              threadKey: "tui:local",
-              version: null,
             }),
         },
         output: { writeLine: (line) => lines.push(line) },
@@ -201,12 +191,12 @@ describe("TUI channel sink", () => {
         {
           messageId: "tui-1",
           text: "first",
-          threadId: "tui:local",
+          channel: "tui:local",
         },
         {
           messageId: "tui-2",
           text: "second",
-          threadId: "tui:local",
+          channel: "tui:local",
         },
       ],
     });
@@ -237,9 +227,9 @@ function sendMessageEvent(): AgentEvent {
     output: {
       type: "json",
       value: {
+        channel: "tui:local",
         delivered: true,
         messageId: "msg-1",
-        threadId: "tui:local",
       },
     },
     toolCallId: "call-1",

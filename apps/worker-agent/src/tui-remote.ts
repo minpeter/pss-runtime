@@ -1,16 +1,14 @@
-import type { ThreadInspection } from "@minpeter/pss-runtime";
 import { createTRPCClient, httpLink } from "@trpc/client";
 
-import type { WorkerAgentDeliveryResponse } from "./agent-do";
+import type { WorkerAgentDeliveryResponse } from "./agent-do-delivery";
 import type { ChannelAddress } from "./channel";
-import { TuiInspectOutputSchema, TuiTurnOutputSchema } from "./tui-contract";
+import { TuiTurnOutputSchema } from "./tui-contract";
 import type { WorkerAgentRouter } from "./tui-rpc";
 
 const REMOTE_TUI_TIMEOUT_MS = 120_000;
 
 export interface RemoteTuiDeliveryClient {
   deliver(text: string): Promise<WorkerAgentDeliveryResponse>;
-  inspect(conversationKey: string): Promise<ThreadInspection>;
 }
 
 export interface RemoteTuiDeliveryClientConfig {
@@ -34,8 +32,6 @@ export function createRemoteTuiDeliveryClient(
 
   return {
     deliver: (text) => requestRemoteTuiDelivery({ client, config, text }),
-    inspect: (conversationKey) =>
-      requestRemoteTuiInspect({ client, conversationKey }),
   };
 }
 
@@ -61,33 +57,8 @@ export async function requestRemoteTuiDelivery({
   }
 }
 
-export async function requestRemoteTuiInspect({
-  client,
-  conversationKey,
-}: RemoteTuiInspectRequest): Promise<ThreadInspection> {
-  const abort = new AbortController();
-  const timeout = setTimeout(() => abort.abort(), REMOTE_TUI_TIMEOUT_MS);
-  try {
-    const inspection = await client.tui.inspect.query(
-      {
-        conversationKey,
-      },
-      { signal: abort.signal }
-    );
-
-    return TuiInspectOutputSchema.parse(inspection);
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 interface RemoteTuiDeliveryRequest {
   readonly client: ReturnType<typeof createTRPCClient<WorkerAgentRouter>>;
   readonly config: RemoteTuiDeliveryClientConfig;
   readonly text: string;
-}
-
-interface RemoteTuiInspectRequest {
-  readonly client: ReturnType<typeof createTRPCClient<WorkerAgentRouter>>;
-  readonly conversationKey: string;
 }

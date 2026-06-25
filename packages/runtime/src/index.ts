@@ -5,11 +5,10 @@ export {
   type ThreadAddress,
   type ThreadCompactionInput,
   type ThreadHandle,
-  type ThreadInspection,
-  type ThreadInspectionCompaction,
   type ThreadKey,
   type ThreadMetadata,
 } from "./agent/core/agent";
+export { threadStoreKey } from "./agent/core/thread-entry";
 export type { AgentHost } from "./execution/host/types";
 export type { AgentToolChoice } from "./llm/llm";
 export { delegateUserInput } from "./thread/input/delegate-input";

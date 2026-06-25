@@ -59,9 +59,9 @@ describe("TUI worker tRPC route", () => {
         delivered: true,
         messages: [
           {
+            channel: "tui:local",
             messageId: "tui-1",
             text: "visible",
-            threadId: "tui:local",
           },
         ],
       })
@@ -78,9 +78,9 @@ describe("TUI worker tRPC route", () => {
       delivered: true,
       messages: [
         {
+          channel: "tui:local",
           messageId: "tui-1",
           text: "visible",
-          threadId: "tui:local",
         },
       ],
     });
@@ -164,40 +164,17 @@ describe("TUI worker tRPC route", () => {
     expect(durableObjectMock.requests).toEqual([]);
   });
 
-  it("inspects a known conversation key through the target Durable Object", async () => {
-    const env = createEnv({ ENVIRONMENT: "development" });
-    durableObjectMock.responses.push(
-      Response.json({
-        compactionCount: 0,
-        compactions: [],
-        exists: true,
-        messageCount: 3,
-        summaryBytes: 0,
-        threadKey: "default",
-        version: "v1",
-      })
+  it("does not expose known-key inspect over tRPC", async () => {
+    const response = await handleTuiRpcRequest(
+      new Request(
+        'https://worker.example.com/trpc/tui.inspect?input={"conversationKey":"telegram:123"}',
+        { method: "GET" }
+      ),
+      createEnv({ ENVIRONMENT: "development" })
     );
 
-    const client = createTuiRpcTestClient(env);
-
-    await expect(
-      client.tui.inspect.query({ conversationKey: "telegram:123" })
-    ).resolves.toEqual({
-      compactionCount: 0,
-      compactions: [],
-      exists: true,
-      messageCount: 3,
-      summaryBytes: 0,
-      threadKey: "telegram:123",
-      version: "v1",
-    });
-
-    const [request] = durableObjectMock.requests;
-    if (!request) {
-      throw new Error("Expected a Durable Object request.");
-    }
-    expect(request.objectName).toBe(durableObjectName("telegram:123"));
-    await expect(request.request.json()).resolves.toEqual({ inspect: true });
+    expect(response.status).toBe(404);
+    expect(durableObjectMock.requests).toEqual([]);
   });
 });
 

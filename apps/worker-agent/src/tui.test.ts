@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveWorkerAgentTuiConfig, WorkerAgentTuiConfigError } from "./tui";
+import {
+  resolveWorkerAgentTuiConfig,
+  WorkerAgentTuiConfigError,
+} from "./tui-config";
 
 describe("worker-agent TUI config", () => {
   it("resolves the default TUI channel and storage directory", () => {

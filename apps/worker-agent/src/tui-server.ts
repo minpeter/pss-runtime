@@ -1,15 +1,9 @@
 import { fetchCloudflareDurableObject } from "@minpeter/pss-runtime/cloudflare";
 
-import type { WorkerAgentDeliveryResponse } from "./agent-do";
+import type { WorkerAgentDeliveryResponse } from "./agent-do-delivery";
 import { channelKey } from "./channel";
 import { durableObjectName, type Env } from "./env";
-import {
-  ThreadInspectionSchema,
-  type TuiInspectInput,
-  type TuiInspectOutput,
-  type TuiTurnInput,
-  TuiTurnOutputSchema,
-} from "./tui-contract";
+import { type TuiTurnInput, TuiTurnOutputSchema } from "./tui-contract";
 
 export async function dispatchTuiTurn(
   input: TuiTurnInput,
@@ -50,33 +44,6 @@ export async function dispatchTuiTurn(
 
   const body: unknown = await response.json();
   return TuiTurnOutputSchema.parse(body);
-}
-
-export async function dispatchTuiInspect(
-  input: TuiInspectInput,
-  env: Env
-): Promise<TuiInspectOutput> {
-  const conversationKey = input.conversationKey.trim();
-  if (!conversationKey) {
-    throw new TuiServerBadRequestError("conversationKey required");
-  }
-
-  const response = await fetchCloudflareDurableObject({
-    namespace: env.AGENT_DO,
-    objectName: durableObjectName(conversationKey),
-    request: new Request("https://agent.internal/inspect", {
-      body: JSON.stringify({ inspect: true }),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-    }),
-  });
-
-  if (!response) {
-    throw new TuiServerUpstreamError("agent durable object unavailable");
-  }
-
-  const inspection = ThreadInspectionSchema.parse(await response.json());
-  return { ...inspection, threadKey: conversationKey };
 }
 
 function assertNever(value: never): never {

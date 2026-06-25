@@ -5,6 +5,7 @@ import type {
   ChannelMessageSink,
   ChannelSentMessage,
 } from "./channel";
+import { channelKey } from "./channel";
 
 export interface TelegramMessageSinkOptions {
   readonly botToken: string;
@@ -41,8 +42,8 @@ export function createTelegramMessageSink({
 
       const sent = await adapter.postChannelMessage(channel.id, text);
       return {
+        channel: channelKey(channel),
         messageId: sent.id,
-        threadId: sent.threadId,
       };
     },
   };

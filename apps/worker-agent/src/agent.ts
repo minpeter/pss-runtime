@@ -11,11 +11,14 @@ import { drainAgentTurn } from "@minpeter/pss-runtime/cloudflare";
 
 import type { EnvironmentName } from "./env";
 import { createTurnObservabilityPlugin } from "./observability";
+import type { WorkerAgentSessionToolOptions } from "./session-tools";
+import { createSessionTools } from "./session-tools";
 import {
   createWorkerAgentTools,
   isDeliveredSendMessageToolOutput,
   SEND_MESSAGE_TOOL_NAME,
   type WorkerAgentSendMessageToolOptions,
+  type WorkerAgentToolSet,
 } from "./tools";
 
 const DEFAULT_BASE_URL = "https://apis.opengateway.ai/v1";
@@ -79,10 +82,19 @@ Platform and product boundaries:
 - Some messaging platforms can make replies less natural because platform policies may restrict free-form bot messages. If the user asks about that, explain it plainly.
 - Do not invent product facts, security claims, launch details, prices, or URLs.
 - If the user asks about capabilities this worker does not have, be direct about the limitation instead of pretending to dispatch work elsewhere.
-- Do not claim to remember, retrieve, or store private context beyond what is present in the conversation.`.trim();
+- Do not claim to remember, retrieve, or store private context beyond what is present in the conversation.
+
+Session search tools:
+- You can recall other recent conversations with list_sessions, search_sessions, and read_session.
+- list_sessions and search_sessions discover likely conversations with short snippets; read_session reads a capped transcript after you choose a specific conversation.
+- When the user asks what you talked about before, or refers to another chat, call search_sessions with relevant keywords (or list_sessions for the most recent ones), then call read_session for the selected conversation before answering details.
+- Only state cross-conversation facts that a tool result actually returned. Do not invent or embellish past conversations.
+- If the tools return nothing relevant, say you do not have a record of that instead of guessing.
+- Do not expose raw channel keys, scores, cursors, or tool mechanics to the user; speak naturally about what was discussed.`.trim();
 
 export interface WorkerAgentRuntimeOptions {
   readonly sendMessage?: WorkerAgentSendMessageToolOptions;
+  readonly sessionTools?: WorkerAgentSessionToolOptions;
 }
 
 export interface WorkerAgentModelEnv {
@@ -115,9 +127,7 @@ export function createConfiguredAgent(
   const plugins: readonly AgentPlugin[] = [
     createTurnObservabilityPlugin({ label: env.ENVIRONMENT }),
   ];
-  const tools = options.sendMessage
-    ? createWorkerAgentTools(options.sendMessage)
-    : undefined;
+  const tools = createWorkerAgentToolSet(options);
 
   return new Agent({
     autoCompaction: WORKER_AGENT_AUTO_COMPACTION,
@@ -127,6 +137,18 @@ export function createConfiguredAgent(
     plugins,
     ...(tools ? { tools } : {}),
   });
+}
+
+function createWorkerAgentToolSet(
+  options: WorkerAgentRuntimeOptions
+): WorkerAgentToolSet | undefined {
+  if (!(options.sendMessage || options.sessionTools)) {
+    return;
+  }
+  return {
+    ...(options.sendMessage ? createWorkerAgentTools(options.sendMessage) : {}),
+    ...(options.sessionTools ? createSessionTools(options.sessionTools) : {}),
+  };
 }
 
 export async function collectTurnDelivery(

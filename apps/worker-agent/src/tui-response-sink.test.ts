@@ -9,15 +9,15 @@ describe("TUI response message sink", () => {
     await expect(
       responseSink.sink.send({ id: "local", kind: "tui" }, "hello")
     ).resolves.toEqual({
+      channel: "tui:local",
       messageId: "tui-1",
-      threadId: "tui:local",
     });
 
     expect(responseSink.messages()).toEqual([
       {
+        channel: "tui:local",
         messageId: "tui-1",
         text: "hello",
-        threadId: "tui:local",
       },
     ]);
   });

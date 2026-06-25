@@ -13,9 +13,9 @@ const SendMessageToolInputSchema = z
 export type SendMessageToolInput = z.infer<typeof SendMessageToolInputSchema>;
 
 export interface SendMessageToolResult {
+  readonly channel: string;
   readonly delivered: true;
   readonly messageId: string;
-  readonly threadId: string;
 }
 
 export interface WorkerAgentSendMessageToolOptions {
@@ -23,7 +23,7 @@ export interface WorkerAgentSendMessageToolOptions {
   readonly sink: ChannelMessageSink;
 }
 
-type WorkerAgentToolSet = NonNullable<AgentOptions["tools"]>;
+export type WorkerAgentToolSet = NonNullable<AgentOptions["tools"]>;
 type SendMessageTool = WorkerAgentToolSet["send_message"] & {
   readonly retryPolicy: "manual-recovery";
 };
@@ -71,9 +71,9 @@ export function createSendMessageTool(
 
       const sent = await options.sink.send(channel, text);
       return {
+        channel: sent.channel,
         delivered: true,
         messageId: sent.messageId,
-        threadId: sent.threadId,
       };
     },
     inputSchema: SendMessageToolInputSchema,
@@ -103,8 +103,8 @@ function isSendMessageToolResult(
     value.delivered === true &&
     "messageId" in value &&
     typeof value.messageId === "string" &&
-    "threadId" in value &&
-    typeof value.threadId === "string"
+    "channel" in value &&
+    typeof value.channel === "string"
   );
 }
 

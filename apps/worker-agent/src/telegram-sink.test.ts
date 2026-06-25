@@ -48,8 +48,8 @@ describe("Telegram channel sink", () => {
     await expect(
       sink.send({ id: "chat-1", kind: "telegram" }, "hello")
     ).resolves.toEqual({
+      channel: "telegram:chat-1",
       messageId: "tg-msg-1",
-      threadId: "chat-1",
     });
     expect(telegramMock.adapters).toEqual([
       { botToken: "token", mode: "webhook", userName: "bot" },

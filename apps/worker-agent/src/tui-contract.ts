@@ -2,36 +2,6 @@ import { z } from "zod";
 
 import { ChannelAddressSchema } from "./channel";
 
-export const ThreadInspectionSchema = z
-  .object({
-    compactionCount: z.number().int().nonnegative(),
-    compactions: z
-      .array(
-        z
-          .object({
-            endSeqExclusive: z.number().int().nonnegative(),
-            startSeq: z.number().int().nonnegative(),
-            summaryBytes: z.number().int().nonnegative(),
-          })
-          .strict()
-      )
-      .readonly(),
-    exists: z.boolean(),
-    messageCount: z.number().int().nonnegative(),
-    summaryBytes: z.number().int().nonnegative(),
-    threadKey: z.string(),
-    version: z.string().nullable(),
-  })
-  .strict();
-
-export const TuiInspectInputSchema = z
-  .object({
-    conversationKey: z.string(),
-  })
-  .strict();
-
-export const TuiInspectOutputSchema = ThreadInspectionSchema;
-
 export const TuiTurnInputSchema = z
   .object({
     channel: ChannelAddressSchema,
@@ -47,9 +17,9 @@ export const TuiTurnOutputSchema = z.discriminatedUnion("delivered", [
         .array(
           z
             .object({
+              channel: z.string(),
               messageId: z.string(),
               text: z.string(),
-              threadId: z.string(),
             })
             .strict()
         )
@@ -67,5 +37,3 @@ export const TuiTurnOutputSchema = z.discriminatedUnion("delivered", [
 
 export type TuiTurnInput = z.infer<typeof TuiTurnInputSchema>;
 export type TuiTurnOutput = z.infer<typeof TuiTurnOutputSchema>;
-export type TuiInspectInput = z.infer<typeof TuiInspectInputSchema>;
-export type TuiInspectOutput = z.infer<typeof TuiInspectOutputSchema>;

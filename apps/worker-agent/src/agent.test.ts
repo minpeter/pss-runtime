@@ -53,6 +53,16 @@ describe("worker-agent instructions", () => {
       expect(WORKER_AGENT_INSTRUCTIONS).toContain(rule);
     }
 
+    const sessionSearchRules = [
+      "You can recall other recent conversations with list_sessions, search_sessions, and read_session",
+      "then call read_session for the selected conversation",
+      "Only state cross-conversation facts that a tool result actually returned",
+    ] as const;
+
+    for (const rule of sessionSearchRules) {
+      expect(WORKER_AGENT_INSTRUCTIONS).toContain(rule);
+    }
+
     const excludedSurfaces = [
       "sendmessageto_agent",
       "subagent",
@@ -122,9 +132,9 @@ describe("collectTurnDelivery", () => {
             output: {
               type: "json",
               value: {
+                channel: "chat-1",
                 delivered: true,
                 messageId: "msg-1",
-                threadId: "chat-1",
               },
             },
             toolCallId: "call-1",
@@ -145,9 +155,9 @@ describe("collectTurnDelivery", () => {
             output: {
               type: "json",
               value: {
+                channel: "chat-1",
                 delivered: true,
                 messageId: "msg-1",
-                threadId: "chat-1",
               },
             },
             toolCallId: "call-1",

@@ -17,14 +17,10 @@ import {
 } from "./options";
 import {
   type AgentThreadEntry,
-  normalizeThreadKey,
   type ThreadHandle,
   type ThreadKey,
+  threadStoreKey,
 } from "./thread-entry";
-import {
-  inspectStoredThread,
-  type ThreadInspection,
-} from "./thread-inspection";
 
 export type { AgentHost } from "../../execution/host/types";
 export type { ThreadCompactionInput } from "../../thread/handle/thread";
@@ -35,10 +31,6 @@ export type {
   ThreadKey,
   ThreadMetadata,
 } from "./thread-entry";
-export type {
-  ThreadInspection,
-  ThreadInspectionCompaction,
-} from "./thread-inspection";
 
 export class Agent {
   readonly #modelOptions: AgentModelOptions;
@@ -117,14 +109,7 @@ export class Agent {
   }
 
   thread(thread: ThreadKey): ThreadHandle {
-    return this.#threadEntry(normalizeThreadKey(thread)).publicHandle;
-  }
-
-  inspectThread(thread: ThreadKey): Promise<ThreadInspection> {
-    return inspectStoredThread({
-      key: normalizeThreadKey(thread),
-      store: this.#store,
-    });
+    return this.#threadEntry(threadStoreKey(thread)).publicHandle;
   }
 
   #threadEntry(key: string): AgentThreadEntry {
@@ -155,7 +140,6 @@ export class Agent {
         this.#evictThreadHandle(key);
         return Promise.resolve();
       },
-      inspect: () => inspectStoredThread({ key, store: this.#store }),
       interrupt: () => thread.interrupt(),
       overlay: (input) => {
         thread.overlay(input);

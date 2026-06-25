@@ -6,7 +6,6 @@ import type {
 } from "../../thread/handle/thread";
 import type { AgentTurn } from "../../thread/protocol/turn";
 import { namespacePart } from "../identity/namespace";
-import type { ThreadInspection } from "./thread-inspection";
 
 export interface ThreadMetadata {
   readonly [key: string]: unknown;
@@ -24,7 +23,6 @@ export interface ThreadHandle {
   compact(input: ThreadCompactionInput): Promise<void>;
   delete(): Promise<void>;
   dispose(): Promise<void>;
-  inspect(): Promise<ThreadInspection>;
   interrupt(): void;
   overlay(input: AgentInput): ThreadHandle;
   send(input: AgentInput): Promise<AgentTurn>;
@@ -39,7 +37,7 @@ export interface AgentThreadEntry {
   readonly publicHandle: ThreadHandle;
 }
 
-export function normalizeThreadKey(thread: ThreadKey): string {
+export function threadStoreKey(thread: ThreadKey): string {
   if (typeof thread === "string") {
     return thread;
   }
@@ -52,3 +50,5 @@ export function normalizeThreadKey(thread: ThreadKey): string {
     thread.key
   )}`;
 }
+
+export const normalizeThreadKey = threadStoreKey;
