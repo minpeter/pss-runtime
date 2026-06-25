@@ -1,6 +1,6 @@
 import { createMemoryState } from "@chat-adapter/state-memory";
 import { createTelegramAdapter } from "@chat-adapter/telegram";
-import { fetchCloudflareDurableObject } from "@minpeter/pss-runtime/cloudflare";
+import { fetchCloudflareDurableObject } from "@minpeter/pss-runtime/platform/cloudflare";
 import { Chat, type Message, type MessageContext, type Thread } from "chat";
 import { z } from "zod";
 

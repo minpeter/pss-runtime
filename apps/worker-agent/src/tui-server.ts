@@ -1,4 +1,4 @@
-import { fetchCloudflareDurableObject } from "@minpeter/pss-runtime/cloudflare";
+import { fetchCloudflareDurableObject } from "@minpeter/pss-runtime/platform/cloudflare";
 
 import type { WorkerAgentDeliveryResponse } from "./agent-do-delivery";
 import { channelKey } from "./channel";

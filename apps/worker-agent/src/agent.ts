@@ -7,7 +7,7 @@ import {
   type AgentPlugin,
   type AgentTurn,
 } from "@minpeter/pss-runtime";
-import { drainAgentTurn } from "@minpeter/pss-runtime/cloudflare";
+import { drainAgentTurn } from "@minpeter/pss-runtime/platform/cloudflare";
 
 import type { EnvironmentName } from "./env";
 import { createTurnObservabilityPlugin } from "./observability";

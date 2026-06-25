@@ -3,7 +3,7 @@ import type {
   StoredThread,
   ThreadStore,
   ThreadStoreCommit,
-} from "./types";
+} from "../../../thread/store/types";
 
 export class MemoryThreadStore implements ThreadStore {
   readonly #threads = new Map<string, StoredThread>();

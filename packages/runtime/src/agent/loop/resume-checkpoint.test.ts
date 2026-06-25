@@ -1,10 +1,10 @@
 import type { ModelMessage } from "ai";
 import { jsonSchema, tool } from "ai";
 import { describe, expect, it } from "vitest";
-import { createInMemoryExecutionHost } from "../../execution/memory";
 import { resumeRun } from "../../execution/resume/resume";
 import type { RuntimeToolExecutionCheckpoint } from "../../llm/llm";
 import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution";
+import { createInMemoryExecutionHost } from "../../platform/memory";
 import {
   createCheckpointSpyHost,
   createQueuedUserTurnRun,

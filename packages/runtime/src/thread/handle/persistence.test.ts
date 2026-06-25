@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../../agent/core/agent";
+import { FileThreadStore } from "../../platform/file";
 import {
   createMockLanguageModelV4,
   mockLanguageModelV4Text,
@@ -17,7 +18,6 @@ import {
 } from "../../testing/test-fixtures";
 import type { AgentEvent } from "../protocol/events";
 import { userTextToModelMessage } from "../protocol/mapping";
-import { FileThreadStore } from "../store/file";
 import {
   ConflictOnCommitStore,
   ConflictOnceStore,

@@ -1,4 +1,4 @@
-import type { SqlStorage } from "@minpeter/pss-runtime/cloudflare";
+import type { SqlStorage } from "@minpeter/pss-runtime/platform/cloudflare";
 
 import { ChannelAddressSchema, legacyChannelThreadKey } from "./channel";
 import type {

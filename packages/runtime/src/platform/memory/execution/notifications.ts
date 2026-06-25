@@ -3,7 +3,7 @@ import type {
   NotificationInbox,
   NotificationRecord,
   NotificationWriteResult,
-} from "../host/types";
+} from "../../../execution/host/types";
 import type { ExecutionState } from "./state";
 
 export class InMemoryNotificationInbox implements NotificationInbox {

@@ -1,11 +1,3 @@
-import type { AgentEvent } from "../../thread/protocol/events";
-import type {
-  CommitResult,
-  ExpectedThreadVersion,
-  StoredThread,
-  ThreadStore,
-  ThreadStoreCommit,
-} from "../../thread/store/types";
 import type {
   Checkpoint,
   CheckpointStore,
@@ -17,7 +9,15 @@ import type {
   NotificationInbox,
   StoredAgentEvent,
   TurnStore,
-} from "../host/types";
+} from "../../../execution/host/types";
+import type { AgentEvent } from "../../../thread/protocol/events";
+import type {
+  CommitResult,
+  ExpectedThreadVersion,
+  StoredThread,
+  ThreadStore,
+  ThreadStoreCommit,
+} from "../../../thread/store/types";
 import { InMemoryNotificationInbox } from "./notifications";
 import { InMemoryRunStore } from "./runs";
 import type { ExecutionState } from "./state";

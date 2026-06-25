@@ -2,7 +2,7 @@ import type {
   ExecutionHost,
   ExecutionScheduler,
   ResumeThreadOptions,
-} from "../host/types";
+} from "../../../execution/host/types";
 import { InMemoryExecutionStore } from "./store";
 
 export function createInMemoryExecutionHost(): ExecutionHost {

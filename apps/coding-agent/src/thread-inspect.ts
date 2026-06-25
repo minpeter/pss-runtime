@@ -3,7 +3,7 @@ import {
   type NodeFileThreadInspection,
   type NodeFileThreadInspectionCompaction,
   nodeFileThreadStorageFile,
-} from "@minpeter/pss-runtime/node";
+} from "@minpeter/pss-runtime/platform/file";
 import type { CodingAgentThreadConfig } from "./thread-config";
 
 export type ThreadInspectionCompaction = NodeFileThreadInspectionCompaction;
