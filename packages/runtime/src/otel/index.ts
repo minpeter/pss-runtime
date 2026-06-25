@@ -1,3 +1,4 @@
+import type { AgentInstrumentation } from "../index";
 import type { AgentEvent } from "../thread/protocol/events";
 import type { AgentTurn } from "../thread/protocol/turn";
 import {
@@ -19,6 +20,15 @@ export type {
   TraceAgentTurnSpan,
   TraceAgentTurnTracer,
 } from "./types";
+
+export function openTelemetry(
+  options: TraceAgentTurnOptions = {}
+): AgentInstrumentation {
+  return {
+    name: "openTelemetry",
+    wrapTurn: (turn) => traceAgentTurn(turn, options),
+  };
+}
 
 export function traceAgentTurn(
   turn: AgentTurn,

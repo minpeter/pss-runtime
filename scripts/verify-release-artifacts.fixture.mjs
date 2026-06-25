@@ -7,6 +7,7 @@ export const cliBinReadFailurePattern =
 export const forbiddenModelName = ["Agent", "Model"].join("");
 export const runtimeRootDeclaration = [
   'export type { AgentHost } from "./execution/types";',
+  'export type { AgentInstrumentation, AgentInstrumentationContext, AgentInstrumentationOperation } from "./agent";',
   'export type { AgentTurn, RuntimeInput } from "./thread";',
   "",
 ].join("\n");
@@ -32,7 +33,7 @@ export const runtimeFileDeclaration = [
   "",
 ].join("\n");
 export const runtimeOtelDeclaration = [
-  'export { traceAgentTurn } from "./index";',
+  'export { openTelemetry, traceAgentTurn } from "./index";',
   'export type { TraceAgentTurnEventAttributes, TraceAgentTurnOptions, TraceAgentTurnSpan, TraceAgentTurnTracer } from "./index";',
   "",
 ].join("\n");

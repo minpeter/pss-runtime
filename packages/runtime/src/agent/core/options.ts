@@ -3,6 +3,10 @@ import type { AgentHost } from "../../execution/host/types";
 import type { AgentToolChoice } from "../../llm/llm";
 import type { AgentInput, UserInput } from "../../thread/input/input";
 import type { AgentPlugin } from "../../thread/plugins/pipeline";
+import {
+  type AgentInstrumentation,
+  normalizeAgentInstrumentations,
+} from "./instrumentation";
 
 export interface AgentAutoCompactionOptions {
   readonly minMessages: number;
@@ -13,6 +17,7 @@ export interface AgentOptions {
   readonly autoCompaction?: AgentAutoCompactionOptions | false;
   readonly host?: AgentHost;
   readonly instructions?: string;
+  readonly instrumentations?: readonly AgentInstrumentation[];
   readonly model: LanguageModel;
   readonly namespace?: string;
   readonly notificationOverlays?: readonly (AgentInput | UserInput)[];
@@ -45,8 +50,10 @@ export function assertAgentOptions(
 
   const candidate = options as {
     readonly autoCompaction?: AgentOptions["autoCompaction"];
+    readonly instrumentations?: AgentOptions["instrumentations"];
   };
   normalizeAgentAutoCompactionOptions(candidate.autoCompaction);
+  normalizeAgentInstrumentations(candidate.instrumentations);
 }
 
 export function normalizeAgentAutoCompactionOptions(

@@ -205,28 +205,40 @@ later plugins, so transforms chain sequentially.
 ## OpenTelemetry
 
 The OpenTelemetry adapter lives on its own subpath so the runtime root stays
-small:
+small. Add it to `AgentOptions.instrumentations` to trace every turn returned
+by the agent:
 
 ```ts
 import { Agent } from "@minpeter/pss-runtime";
-import { traceAgentTurn } from "@minpeter/pss-runtime/otel";
+import { openTelemetry } from "@minpeter/pss-runtime/otel";
 
-const agent = new Agent({ model });
+const agent = new Agent({
+  instrumentations: [
+    openTelemetry({
+      spanAttributes: { "app.agent": "support" },
+      tracerName: "my-app",
+    }),
+  ],
+  model,
+});
 const turn = await agent.send("Hello");
-const tracedTurn = traceAgentTurn(turn);
 
-for await (const event of tracedTurn.events()) {
+for await (const event of turn.events()) {
   if (event.type === "assistant-output") {
     process.stdout.write(event.text);
   }
 }
 ```
 
-`traceAgentTurn(turn)` returns an `AgentTurn` whose `events()` iterator yields
-the original `AgentEvent` objects while recording a `pss.runtime.turn` span with
-`pss.runtime.event` events. It closes the span on `turn-end`, marks `turn-error`
-as `ERROR` with a sanitized exception, and marks `turn-abort` as an aborted
-error span.
+`openTelemetry()` is an observe-only agent instrumentation. It wraps returned
+`AgentTurn` objects while preserving their `events()` iterator behavior and
+original `AgentEvent` objects. It records a `pss.runtime.turn` span with
+`pss.runtime.event` events, closes the span on `turn-end`, marks `turn-error` as
+`ERROR` with a sanitized exception, and marks `turn-abort` as an aborted error
+span.
+
+For a single turn, `traceAgentTurn(turn)` exposes the same adapter as a manual
+wrapper.
 
 The package depends only on `@opentelemetry/api`; applications still configure
 the OpenTelemetry SDK/exporter. By default, event attributes summarize

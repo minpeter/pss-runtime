@@ -32,6 +32,7 @@ describe("verifyReleaseArtifacts runtime OpenTelemetry declaration checks", () =
       "packages/runtime/dist/otel/index.d.ts: missing explicit otel runtime export TraceAgentTurnOptions",
       "packages/runtime/dist/otel/index.d.ts: missing explicit otel runtime export TraceAgentTurnSpan",
       "packages/runtime/dist/otel/index.d.ts: missing explicit otel runtime export TraceAgentTurnTracer",
+      "packages/runtime/dist/otel/index.d.ts: missing explicit otel runtime export openTelemetry",
       "packages/runtime/dist/otel/index.d.ts: missing explicit otel runtime export traceAgentTurn",
     ]);
   });

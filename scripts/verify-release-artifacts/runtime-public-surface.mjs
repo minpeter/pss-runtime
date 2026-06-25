@@ -1,5 +1,8 @@
 export const REQUIRED_RUNTIME_ROOT_EXPORTS = [
   "AgentHost",
+  "AgentInstrumentation",
+  "AgentInstrumentationContext",
+  "AgentInstrumentationOperation",
   "AgentTurn",
   "RuntimeInput",
 ];
@@ -69,7 +72,7 @@ export const REQUIRED_RUNTIME_FILE_EXPORTS =
   );
 
 export const REQUIRED_RUNTIME_OTEL_EXPORTS =
-  "TraceAgentTurnEventAttributes TraceAgentTurnOptions TraceAgentTurnSpan TraceAgentTurnTracer traceAgentTurn".split(
+  "TraceAgentTurnEventAttributes TraceAgentTurnOptions TraceAgentTurnSpan TraceAgentTurnTracer openTelemetry traceAgentTurn".split(
     " "
   );
 

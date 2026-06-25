@@ -4,11 +4,27 @@ import {
   createMockLanguageModelV4,
   mockLanguageModelV4Text,
 } from "../../testing/mock-language-model-v4-test-utils";
-import { Agent, type AgentOptions } from "./agent";
+import {
+  assistantMessage,
+  createCallbackModel,
+  createDeferred,
+} from "../../testing/test-fixtures";
+import {
+  Agent,
+  type AgentInstrumentation,
+  type AgentInstrumentationContext,
+  type AgentOptions,
+} from "./agent";
 import { threadStoreKey } from "./thread-entry";
 
 const fakeModel = createMockLanguageModelV4([mockLanguageModelV4Text("DONE")]);
 const functionModel = () => Promise.resolve([]);
+const invalidInstrumentationEntryPattern =
+  /options\.instrumentations entry must provide wrapTurn/;
+const invalidInstrumentationReturnPattern =
+  /wrapTurn\(\) must return an AgentTurn/;
+const invalidInstrumentationsArrayPattern =
+  /options\.instrumentations must be an array/;
 const invalidModelPattern = /invalid options\.model/;
 const missingModelPattern = /missing options\.model/;
 const missingOptionsPattern = /Agent options are required/;
@@ -25,6 +41,7 @@ const forbiddenAgentSubagentSurface = [
 
 const acceptsModelOptions: AgentOptions = {
   instructions: "Use the injected model.",
+  instrumentations: [],
   model: fakeModel,
   plugins: [],
   toolChoice: "auto",
@@ -114,6 +131,143 @@ describe("Agent", () => {
   it("uses the default thread for agent.send", async () => {
     const agent = new Agent({ model: fakeModel });
     await expect(agent.send("hello")).resolves.toBeDefined();
+  });
+
+  it("applies agent instrumentations to returned turns", async () => {
+    const contexts: AgentInstrumentationContext[] = [];
+    const observedTypes: string[] = [];
+    const instrumentation: AgentInstrumentation = {
+      name: "test",
+      wrapTurn: (turn, context) => {
+        contexts.push(context);
+        return {
+          async *events() {
+            for await (const event of turn.events()) {
+              observedTypes.push(event.type);
+              yield event;
+            }
+          },
+        };
+      },
+    };
+    const agent = new Agent({
+      instrumentations: [instrumentation],
+      model: fakeModel,
+      namespace: "tenant",
+    });
+
+    await collectRun(await agent.thread("observed").send("hello"));
+    await collectRun(await agent.thread("observed").steer("again"));
+
+    expect(contexts).toEqual([
+      {
+        namespace: "tenant",
+        operation: "send",
+        threadKey: "observed",
+      },
+      {
+        namespace: "tenant",
+        operation: "steer",
+        threadKey: "observed",
+      },
+    ]);
+    expect(observedTypes).toContain("assistant-output");
+    expect(observedTypes).toContain("turn-end");
+  });
+
+  it("applies fresh instrumentation context when live steer returns the active turn", async () => {
+    const contexts: AgentInstrumentationContext[] = [];
+    const modelGate = createDeferred();
+    const instrumentation: AgentInstrumentation = {
+      wrapTurn: (turn, context) => {
+        contexts.push(context);
+        return turn;
+      },
+    };
+    const agent = new Agent({
+      instrumentations: [instrumentation],
+      model: createCallbackModel(async () => {
+        await modelGate.promise;
+        return [assistantMessage("DONE")];
+      }),
+    });
+    const thread = agent.thread("active-steer");
+    const sendRun = await thread.send("initial");
+
+    await thread.steer("runtime input");
+    modelGate.resolve();
+    await collectRun(sendRun);
+
+    expect(contexts).toEqual([
+      {
+        operation: "send",
+        threadKey: "active-steer",
+      },
+      {
+        operation: "steer",
+        threadKey: "active-steer",
+      },
+    ]);
+  });
+
+  it("snapshots agent instrumentations at construction", async () => {
+    const observedNames: string[] = [];
+    const instrumentations: AgentInstrumentation[] = [
+      {
+        name: "initial",
+        wrapTurn: (turn) => {
+          observedNames.push("initial");
+          return turn;
+        },
+      },
+    ];
+    const agent = new Agent({ instrumentations, model: fakeModel });
+
+    instrumentations.push({
+      name: "late",
+      wrapTurn: (turn) => {
+        observedNames.push("late");
+        return turn;
+      },
+    });
+
+    await collectRun(await agent.send("hello"));
+
+    expect(observedNames).toEqual(["initial"]);
+  });
+
+  it("rejects malformed agent instrumentations with actionable errors", () => {
+    expect(() =>
+      Reflect.construct(Agent, [
+        {
+          instrumentations: {},
+          model: fakeModel,
+        },
+      ])
+    ).toThrow(invalidInstrumentationsArrayPattern);
+    expect(() =>
+      Reflect.construct(Agent, [
+        {
+          instrumentations: [{}],
+          model: fakeModel,
+        },
+      ])
+    ).toThrow(invalidInstrumentationEntryPattern);
+  });
+
+  it("rejects invalid turns returned by agent instrumentations", async () => {
+    const agent = new Agent({
+      instrumentations: [
+        {
+          wrapTurn: () => null as unknown as ReturnType<Agent["send"]>,
+        } as unknown as AgentInstrumentation,
+      ],
+      model: fakeModel,
+    });
+
+    await expect(agent.send("hello")).rejects.toThrow(
+      invalidInstrumentationReturnPattern
+    );
   });
 
   it("reuses handles for named threads", () => {

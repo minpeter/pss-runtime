@@ -1,6 +1,9 @@
 export {
   Agent,
   type AgentAutoCompactionOptions,
+  type AgentInstrumentation,
+  type AgentInstrumentationContext,
+  type AgentInstrumentationOperation,
   type AgentOptions,
   type ThreadAddress,
   type ThreadCompactionInput,

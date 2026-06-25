@@ -20,6 +20,8 @@ import type {
   AgentEvent,
   AgentHost,
   AgentInput,
+  AgentInstrumentation,
+  AgentInstrumentationOperation,
   AgentOptions,
   ControlAgentEvent,
   LifecycleAgentEvent,
@@ -150,8 +152,18 @@ describe("runtime public exports", () => {
       retainMessages: 4,
     } satisfies AgentAutoCompactionOptions;
     const model = {} as AgentOptions["model"];
+    const instrumentation = {
+      name: "test",
+      wrapTurn: (turn, context) => {
+        const operation =
+          context.operation satisfies AgentInstrumentationOperation;
+        expect(operation).toBe("send");
+        return turn;
+      },
+    } satisfies AgentInstrumentation;
     const enabledOptions = {
       autoCompaction,
+      instrumentations: [instrumentation],
       model,
       notificationOverlays: ["runtime context"],
     } satisfies AgentOptions;
@@ -179,6 +191,7 @@ describe("runtime public exports", () => {
       ReturnType<typeof runtimeThreadStoreKey>
     >().toEqualTypeOf<string>();
     expect(enabledOptions.autoCompaction).toEqual(autoCompaction);
+    expect(enabledOptions.instrumentations).toEqual([instrumentation]);
     expect(enabledOptions.notificationOverlays).toEqual(["runtime context"]);
     expect(disabledOptions.autoCompaction).toBe(false);
     expect(compaction.startSeq).toBe(0);
@@ -249,9 +262,11 @@ describe("runtime public exports", () => {
     };
 
     expect(runtime).not.toHaveProperty("traceAgentTurn");
+    expect(runtime).not.toHaveProperty("openTelemetry");
     expect(runtime).not.toHaveProperty("createOpenTelemetryPlugin");
     expect(runtime).not.toHaveProperty("recordAgentEvent");
     expect(runtime).not.toHaveProperty("agentEventAttributes");
+    expect(otel).toHaveProperty("openTelemetry");
     expect(otel).toHaveProperty("traceAgentTurn");
     expect(otel).not.toHaveProperty("createOpenTelemetryPlugin");
     expect(otel).not.toHaveProperty("recordAgentEvent");

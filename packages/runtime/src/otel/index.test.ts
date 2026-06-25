@@ -1,8 +1,13 @@
 import { SpanStatusCode } from "@opentelemetry/api";
 import { describe, expect, it } from "vitest";
+import { Agent } from "../agent/core/agent";
+import {
+  createMockLanguageModelV4,
+  mockLanguageModelV4Text,
+} from "../testing/mock-language-model-v4-test-utils";
 import type { AgentEvent } from "../thread/protocol/events";
 import type { AgentTurn } from "../thread/protocol/turn";
-import { traceAgentTurn } from "./index";
+import { openTelemetry, traceAgentTurn } from "./index";
 import {
   collectEvents,
   eventTypes,
@@ -11,6 +16,30 @@ import {
 } from "./test-support";
 
 describe("traceAgentTurn", () => {
+  it("creates an Agent instrumentation for constructor-level tracing", async () => {
+    const tracer = new RecordingTracer();
+    const agent = new Agent({
+      instrumentations: [
+        openTelemetry({
+          spanAttributes: { "test.case": "agent-instrumentation" },
+          tracer,
+        }),
+      ],
+      model: createMockLanguageModelV4([mockLanguageModelV4Text("DONE")]),
+    });
+
+    const collected = await collectEvents((await agent.send("hello")).events());
+
+    expect(collected.map((event) => event.type)).toContain("assistant-output");
+    expect(collected.map((event) => event.type)).toContain("turn-end");
+    expect(spanNamed(tracer, "pss.runtime.turn").spanAttributes).toMatchObject({
+      "pss.runtime.component": "@minpeter/pss-runtime",
+      "pss.runtime.span.kind": "turn",
+      "test.case": "agent-instrumentation",
+    });
+    expect(spanNamed(tracer, "pss.runtime.turn").ended).toBe(true);
+  });
+
   it("returns an AgentTurn that yields original events and records spans", async () => {
     const sourceEvents = [
       { meta: { source: "send" }, text: "private user", type: "user-input" },
