@@ -54,6 +54,7 @@ describe("session search tools", () => {
     expect(result.sessions.map((session) => session.conversationKey)).toEqual([
       "telegram:a",
     ]);
+    expect(result.sessions[0]?.lastSeenAt).toBe("1970-01-01T00:00:00.010Z");
   });
 
   it("searches sessions and returns compact scored entries", async () => {

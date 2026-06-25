@@ -76,7 +76,7 @@ const ReadSessionToolInputSchema = z
 export interface SessionToolEntry {
   readonly channel: SessionSummary["channel"];
   readonly conversationKey: string;
-  readonly lastSeenAt: number;
+  readonly lastSeenAt: string;
   readonly snippet: string;
   readonly turnCount: number;
 }
@@ -187,7 +187,7 @@ function toToolEntry(summary: SessionSummary): SessionToolEntry {
   return {
     channel: summary.channel,
     conversationKey: summary.conversationKey,
-    lastSeenAt: summary.lastSeenAt,
+    lastSeenAt: new Date(summary.lastSeenAt).toISOString(),
     snippet: summary.snippet,
     turnCount: summary.turnCount,
   };
