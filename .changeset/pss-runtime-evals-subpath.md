@@ -1,5 +1,5 @@
 ---
-"@minpeter/pss-runtime": minor
+"@minpeter/pss-runtime": patch
 ---
 
 Rework `./evals` into an eve-parity, record-based evaluation engine.
