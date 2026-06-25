@@ -8,6 +8,8 @@ export default defineConfig({
     "src/platform/memory/index.ts",
     "src/execution/index.ts",
     "src/namespace.ts",
+    "src/evals/index.ts",
+    "src/evals/cli-bin.ts",
   ],
   unbundle: true,
   root: "src",
