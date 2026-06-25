@@ -190,6 +190,34 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  examples/evals:
+    dependencies:
+      '@ai-sdk/openai-compatible':
+        specifier: 3.0.0-canary.56
+        version: 3.0.0-canary.56(zod@4.4.3)
+      '@minpeter/pss-runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+      '@t3-oss/env-core':
+        specifier: ^0.13.11
+        version: 0.13.11(typescript@6.0.3)(zod@4.4.3)
+      ai:
+        specifier: 7.0.0-canary.176
+        version: 7.0.0-canary.176(zod@4.4.3)
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   examples/local-file-agent:
     dependencies:
       '@ai-sdk/openai-compatible':

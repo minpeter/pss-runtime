@@ -35,7 +35,15 @@
       "@minpeter/pss-source": "./src/namespace.ts",
       "types": "./dist/namespace.d.ts",
       "import": "./dist/namespace.js"
+    },
+    "./evals": {
+      "@minpeter/pss-source": "./src/evals/index.ts",
+      "types": "./dist/evals/index.d.ts",
+      "import": "./dist/evals/index.js"
     }
+  },
+  "bin": {
+    "pss-eval": "./dist/evals/cli-bin.js"
   },
   "files": [
     "dist",
