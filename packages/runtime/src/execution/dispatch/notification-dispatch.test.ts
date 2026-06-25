@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { agentNamespace } from "../../agent/identity/namespace";
+import { createInMemoryExecutionHost } from "../../platform/memory";
 import type { ExecutionHost, TurnRecord, TurnStore } from "../host/types";
-import { createInMemoryExecutionHost } from "../memory";
 import { dispatchAgentNotification } from "./notification-dispatch";
 
 describe("dispatchAgentNotification", () => {

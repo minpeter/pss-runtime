@@ -17,4 +17,4 @@ write after tools such as `web_search`.
 storage (`storage.sql`) and wires these SQLite stores directly. Event cursors
 (1-based skip offsets), checkpoint `stale-version` optimistic checks, and
 `latest()` semantics are preserved. Both stores are re-exported from
-`@minpeter/pss-runtime/cloudflare`.
+`@minpeter/pss-runtime/platform/cloudflare`.

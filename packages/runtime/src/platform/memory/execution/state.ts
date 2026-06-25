@@ -1,10 +1,10 @@
-import type { StoredThread } from "../../thread/store/types";
 import type {
   Checkpoint,
   NotificationRecord,
   StoredAgentEvent,
   TurnRecord,
-} from "../host/types";
+} from "../../../execution/host/types";
+import type { StoredThread } from "../../../thread/store/types";
 
 export interface ExecutionState {
   readonly checkpoints: Map<string, Checkpoint[]>;

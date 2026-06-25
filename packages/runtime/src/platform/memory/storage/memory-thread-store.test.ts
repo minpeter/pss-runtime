@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { MemoryThreadStore } from "./memory";
-import type { ThreadStoreCommit } from "./types";
+import type { ThreadStoreCommit } from "../../../thread/store/types";
+import { MemoryThreadStore } from "./memory-thread-store";
 
 describe("MemoryThreadStore", () => {
   it("loads null for unknown threads", async () => {

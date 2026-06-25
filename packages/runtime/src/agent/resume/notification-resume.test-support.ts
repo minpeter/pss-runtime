@@ -1,6 +1,6 @@
 import { expect } from "vitest";
 import type { ExecutionHost, TurnRecord } from "../../execution/host/types";
-import { createInMemoryExecutionHost } from "../../execution/memory";
+import { createInMemoryExecutionHost } from "../../platform/memory";
 import type { AgentTurn } from "../../thread/protocol/turn";
 import { agentNamespace } from "../identity/namespace";
 

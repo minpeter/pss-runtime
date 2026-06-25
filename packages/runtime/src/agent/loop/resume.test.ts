@@ -1,8 +1,8 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import type { ExecutionHost } from "../../execution/host/types";
-import { createInMemoryExecutionHost } from "../../execution/memory";
 import { resumeRun } from "../../execution/resume/resume";
+import { createInMemoryExecutionHost } from "../../platform/memory";
 import { createQueuedUserTurnRun } from "../../testing/execution-checkpoint-test-support";
 import {
   createMockLanguageModelV4,

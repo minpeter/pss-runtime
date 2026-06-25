@@ -5,7 +5,7 @@ import type {
   TurnRecord,
   TurnStatus,
   TurnStore,
-} from "../host/types";
+} from "../../../execution/host/types";
 import type { ExecutionState } from "./state";
 
 const claimableStatuses = new Set<TurnStatus>([
