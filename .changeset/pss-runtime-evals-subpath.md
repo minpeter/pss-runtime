@@ -23,6 +23,13 @@ Tool matchers accept literal (partial-deep), RegExp, or predicate. The runner
 computes a gate-based verdict, tracks soft misses ("scored"), and the `pss-eval`
 CLI gains `--strict` (soft-threshold misses also fail).
 
+LLM judge (`t.judge.autoevals.closedQA / factuality / summarizes`): the only
+model-backed assertions, soft by default, graded via a resolved judge model
+(`judge: { model }` per-eval or per-call `{ model }`), never the agent under
+test. Judge assertions are declared synchronously during the test and resolved
+by the runner after the test function runs, so `.atLeast`/`.gate` chain without
+`await`. Calling `t.judge.*` with no judge model records a failed gate.
+
 This is a breaking change to the eval authoring API: cases now receive a
 recording scope (`t`) instead of `{ run }` + a throw-based `expect`. Multi-turn
 cases accumulate state across `t.run()` calls.

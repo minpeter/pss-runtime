@@ -40,6 +40,7 @@ export function defineEval(
   const definition: EvalDefinition = {
     cases,
     id,
+    judge: options.judge,
     tags: options.tags ? [...options.tags] : [],
     thread: options.thread,
   };

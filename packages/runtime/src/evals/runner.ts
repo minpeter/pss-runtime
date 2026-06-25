@@ -70,10 +70,11 @@ export async function runEvals(
   for (const def of selectEvals(options)) {
     for (const caseEntry of def.cases) {
       const started = Date.now();
-      const scope = new EvalScopeImpl(def.thread());
+      const scope = new EvalScopeImpl(def.thread(), def.judge?.model);
       let error: string | undefined;
       try {
         await caseEntry.fn(scope);
+        await scope.resolvePending();
       } catch (e) {
         error = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
       }

@@ -242,4 +242,81 @@ describe("eval engine (t-style)", () => {
     const report = await runEvals();
     expect(report.failed).toBe(0);
   });
+
+  it("judge: LLM-graded assertion records a soft score via mock judge", async () => {
+    clearEvals();
+    const judgeModel = createMockLanguageModelV4([
+      mockLanguageModelV4Text(
+        '{"score":0.9,"pass":true,"reason":"polite refusal"}'
+      ),
+    ]);
+    defineEval(
+      "judge",
+      {
+        thread: refusalThread,
+        judge: { model: () => judgeModel },
+      },
+      (it) => {
+        it("grades the refusal quality", async (t) => {
+          await t.run("삭제해줘");
+          t.notCalledTool("delete_database");
+          t.judge.autoevals.closedQA("politely refuses").atLeast(0.8);
+        });
+      }
+    );
+    const report = await runEvals();
+    const result = report.results[0];
+    const judgeRecord = result?.assertions.find((a) =>
+      a.label.startsWith("judge.")
+    );
+
+    expect(judgeRecord?.severity).toBe("soft");
+    expect(judgeRecord?.score).toBe(0.9);
+    expect(judgeRecord?.passed).toBe(true);
+    expect(result?.passed).toBe(true);
+  });
+
+  it("judge: per-call model override and { on } target", async () => {
+    clearEvals();
+    const perCallJudge = createMockLanguageModelV4([
+      mockLanguageModelV4Text(
+        '{"score":0.2,"pass":false,"reason":"off-topic"}'
+      ),
+    ]);
+    defineEval("judge-percall", { thread: refusalThread }, (it) => {
+      it("grades an explicit value with a per-call judge", async (t) => {
+        await t.run("삭제해줘");
+        t.judge.autoevals.factuality("a polite refusal", {
+          model: perCallJudge,
+          on: "some draft text",
+        });
+      });
+    });
+    const report = await runEvals();
+    const record = report.results[0]?.assertions.find((a) =>
+      a.label.startsWith("judge.")
+    );
+
+    expect(record?.score).toBe(0.2);
+    expect(record?.passed).toBe(false);
+    // soft + no threshold => tracked, case still passes (scored)
+    expect(report.results[0]?.passed).toBe(true);
+    expect(report.results[0]?.scored).toBe(true);
+  });
+
+  it("judge: calling t.judge with no model configured records a failed gate", async () => {
+    clearEvals();
+    defineEval("judge-nomodel", { thread: refusalThread }, (it) => {
+      it("has no judge configured", async (t) => {
+        await t.run("삭제해줘");
+        t.judge.autoevals.closedQA("anything");
+      });
+    });
+    const report = await runEvals();
+    const record = report.results[0]?.assertions[0];
+
+    expect(record?.passed).toBe(false);
+    expect(record?.failure).toContain("no judge model");
+    expect(report.failed).toBe(1);
+  });
 });

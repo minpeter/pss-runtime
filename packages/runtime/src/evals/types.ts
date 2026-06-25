@@ -1,3 +1,4 @@
+import type { LanguageModel } from "ai";
 import type { AgentEvent } from "../thread/protocol/events";
 import type { StandardSchemaV1 } from "./standard-schema";
 
@@ -46,6 +47,7 @@ export interface AgentTurnLike {
 export interface EvalDefinition {
   readonly cases: readonly EvalCase[];
   readonly id: string;
+  readonly judge?: { readonly model: () => LanguageModel };
   readonly tags: readonly string[];
   readonly thread: () => EvalThreadLike;
 }
@@ -58,6 +60,12 @@ export interface EvalCase {
 
 /** Options passed to {@link defineEval}. */
 export interface EvalOptions {
+  /**
+   * Per-eval judge model factory, used by `t.judge.*`. Resolved separately from
+   * the agent under test. Calling `t.judge.*` with no judge model records a
+   * failed gate.
+   */
+  readonly judge?: { readonly model: () => LanguageModel };
   /** Optional tags, selectable from the CLI with `--tag`. */
   readonly tags?: readonly string[];
   /**
@@ -163,6 +171,29 @@ export interface RunEvalsOptions {
   readonly tags?: readonly string[];
 }
 
+/** Options for a single judge call (per-call overrides). */
+export interface JudgeCallOptions {
+  /** Per-call judge model override. */
+  readonly model?: LanguageModel;
+  /** Value to grade; defaults to the scope's last reply. */
+  readonly on?: unknown;
+}
+
+/** The autoevals grader family, mirroring Braintrust autoevals. */
+export interface JudgeAutoevals {
+  /** Closed-QA: does the value meet the free-form `criterion`? */
+  closedQA(criterion: string, options?: JudgeCallOptions): AssertionHandle;
+  /** Factual consistency of the value against an expected reference answer. */
+  factuality(expected: string, options?: JudgeCallOptions): AssertionHandle;
+  /** How well the value summarizes the expected reference text. */
+  summarizes(expected: string, options?: JudgeCallOptions): AssertionHandle;
+}
+
+/** The `t.judge` surface: LLM-graded assertions (the only model-backed ones). */
+export interface JudgeSurface {
+  readonly autoevals: JudgeAutoevals;
+}
+
 /**
  * The recording scope handed to each case. Drive turns with `run`, then assert
  * against the aggregated run state. Assertions RECORD results rather than
@@ -188,6 +219,9 @@ export interface EvalScope {
   readonly events: readonly AgentEvent[];
   /** True if any turn errored. */
   readonly failed: boolean;
+
+  /** LLM-graded assertions (soft by default; resolved judge model, never the agent). */
+  readonly judge: JudgeSurface;
   /** At most `n` tool calls. */
   maxToolCalls(n: number): AssertionHandle;
   /** Joined assistant text (the last reply) contains `token` (string or RegExp). */

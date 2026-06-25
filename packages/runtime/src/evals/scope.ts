@@ -1,4 +1,12 @@
+import type { LanguageModel } from "ai";
 import { runAgent } from "./harness";
+import {
+  closedQATask,
+  factualityTask,
+  type JudgeVerdict,
+  runJudge,
+  summarizesTask,
+} from "./judge";
 import { deepEqual, matchField } from "./matchers";
 import type {
   AgentEvent,
@@ -9,6 +17,7 @@ import type {
   EvalThreadLike,
   EvalToolCall,
   EvalToolResult,
+  JudgeCallOptions,
   SchemaInput,
   ToolCallMatcherOptions,
   ValueBuilder,
@@ -22,11 +31,13 @@ import type {
  */
 export class EvalScopeImpl implements EvalScope {
   readonly #thread: EvalThreadLike;
+  readonly #judgeModel: (() => LanguageModel) | undefined;
   readonly #runs: EvalRun[] = [];
-  readonly #records: AssertionRecord[] = [];
+  readonly #records: MutableRecord[] = [];
 
-  constructor(thread: EvalThreadLike) {
+  constructor(thread: EvalThreadLike, judgeModel?: () => LanguageModel) {
     this.#thread = thread;
+    this.#judgeModel = judgeModel;
   }
 
   get reply(): string {
@@ -207,6 +218,52 @@ export class EvalScopeImpl implements EvalScope {
     );
   }
 
+  get judge(): EvalScope["judge"] {
+    const declare = (
+      label: string,
+      task: string,
+      options: JudgeCallOptions | undefined
+    ): AssertionHandle => {
+      const model =
+        options?.model === undefined ? this.#judgeModel?.() : options.model;
+      const value = options?.on === undefined ? this.reply : options.on;
+      if (model === undefined) {
+        return this.record(label, "gate", false, "no judge model configured");
+      }
+      // Declare now; the runner resolves the LLM call after the test function
+      // runs (eve-style), so .atLeast/.gate chain synchronously without await.
+      const resolve = async () => {
+        try {
+          return await runJudge(model, task, value);
+        } catch (e) {
+          return {
+            pass: false,
+            reason:
+              e instanceof Error
+                ? `judge call failed: ${e.message}`
+                : "judge call failed",
+            score: 0,
+          };
+        }
+      };
+      return this.recordPending(label, "soft", resolve);
+    };
+    return {
+      autoevals: {
+        closedQA: (criterion, options) =>
+          declare(
+            `judge.closedQA(${criterion})`,
+            closedQATask(criterion),
+            options
+          ),
+        factuality: (expected, options) =>
+          declare("judge.factuality", factualityTask(expected), options),
+        summarizes: (expected, options) =>
+          declare("judge.summarizes", summarizesTask(expected), options),
+      },
+    };
+  }
+
   // --- recording core ---
 
   record(
@@ -226,6 +283,40 @@ export class EvalScopeImpl implements EvalScope {
     };
     this.#records.push(entry);
     return handleFor(entry);
+  }
+
+  /** Record a deferred judge assertion; the runner resolves it after the test. */
+  recordPending(
+    label: string,
+    severity: AssertionRecord["severity"],
+    resolve: () => Promise<JudgeVerdict>
+  ): AssertionHandle {
+    const entry: MutableRecord = {
+      label,
+      passed: true,
+      resolve,
+      severity,
+      strictOnly: severity === "soft",
+    };
+    this.#records.push(entry);
+    return handleFor(entry);
+  }
+
+  /** Resolve all deferred judge assertions in place. */
+  async resolvePending(): Promise<void> {
+    for (const entry of this.#records) {
+      if (!entry.resolve) {
+        continue;
+      }
+      const verdict = await entry.resolve();
+      entry.resolve = undefined;
+      entry.score = verdict.score;
+      entry.failure = verdict.reason;
+      entry.passed =
+        entry.threshold === undefined
+          ? verdict.pass
+          : verdict.score >= entry.threshold;
+    }
   }
 }
 
@@ -281,13 +372,15 @@ function outputEqualsFailure(parsedOk: boolean): string | undefined {
 }
 
 interface MutableRecord {
-  label: string;
-  severity: AssertionRecord["severity"];
-  passed: boolean;
-  score?: number;
-  threshold?: number;
   failure?: string;
+  label: string;
+  passed: boolean;
+  /** Deferred LLM judge, resolved by the runner after the test function runs. */
+  resolve?: () => Promise<JudgeVerdict>;
+  score?: number;
+  severity: AssertionRecord["severity"];
   strictOnly: boolean;
+  threshold?: number;
 }
 
 function handleFor(entry: MutableRecord): AssertionHandle {

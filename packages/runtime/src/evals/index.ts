@@ -8,6 +8,7 @@ export type { ParsedArgs } from "./cli";
 export { compileFilters, discoverEvalFiles, parseArgs, runCli } from "./cli";
 export { formatJsonReport, formatTextReport } from "./format";
 export { runAgent } from "./harness";
+export { type JudgeVerdict, runJudge } from "./judge";
 export {
   equals,
   includes,
@@ -34,6 +35,9 @@ export type {
   EvalToolCall,
   EvalToolResult,
   FieldMatcher,
+  JudgeAutoevals,
+  JudgeCallOptions,
+  JudgeSurface,
   RunEvalsOptions,
   SchemaInput,
   ToolCallMatcherOptions,
