@@ -1,6 +1,8 @@
-import { defineEval, expect } from "@minpeter/pss-runtime/evals";
+import { defineEval } from "@minpeter/pss-runtime/evals";
 import { scriptedText, scriptedToolCall } from "../src/scripted-model";
 import { evalThread } from "../src/thread";
+
+const clearWeatherPattern = /맑음/;
 
 // Right tool: a weather question must call get_weather, never send_email.
 defineEval(
@@ -17,12 +19,16 @@ defineEval(
       ]),
   },
   (it) => {
-    it("calls get_weather and answers about Seoul", async ({ run }) => {
-      const result = await run("서울 날씨 알려줘");
+    it("calls get_weather and answers about Seoul", async (t) => {
+      await t.run("서울 날씨 알려줘");
 
-      expect(result).toHaveCalledTools(["get_weather"]);
-      expect(result).not.toHaveCalledTools(["send_email"]);
-      expect(result.output).toContain("서울");
+      t.calledTool("get_weather", {
+        input: { city: "서울" },
+        output: clearWeatherPattern,
+      });
+      t.notCalledTool("send_email");
+      t.messageIncludes("서울");
+      t.completed();
     });
   }
 );

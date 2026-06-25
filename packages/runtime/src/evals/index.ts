@@ -1,33 +1,41 @@
 // biome-ignore-all lint/performance/noBarrelFile: Subpath entrypoint re-exports the public evals API; callers import named symbols from it.
-// pss-runtime evals: run repeatable checks against the real agent runtime.
-//
-// No separate eval universe - evals drive a real `Agent` thread, drain its
-// event stream into a normalized `EvalRun`, and assert the three questions
-// that matter: did it call the right tool, did it avoid the dangerous tool,
-// and did it say the right thing.
+// pss-runtime evals: run repeatable checks against the real agent runtime, with
+// an eve-style multi-verdict engine (record-based assertions, gate/soft
+// severity, tool input/output matchers). No separate eval universe and no new
+// runtime dependency — evals drive a real Agent thread and drain its event stream.
 
 export type { ParsedArgs } from "./cli";
 export { compileFilters, discoverEvalFiles, parseArgs, runCli } from "./cli";
-export {
-  EvalAssertionError,
-  type EvalMatchers,
-  expect,
-} from "./expect";
 export { formatJsonReport, formatTextReport } from "./format";
 export { runAgent } from "./harness";
+export {
+  equals,
+  includes,
+  matches,
+  similarity,
+} from "./matchers";
 export { clearEvals, defineEval, type EvalIt, getEvals } from "./registry";
 export { runEvals } from "./runner";
+export { EvalScopeImpl } from "./scope";
+export type { StandardSchemaResult, StandardSchemaV1 } from "./standard-schema";
 export type {
   AgentTurnLike,
+  AssertionHandle,
+  AssertionRecord,
+  AssertionSeverity,
   CaseResult,
   EvalCase,
-  EvalCaseContext,
   EvalDefinition,
   EvalOptions,
   EvalReport,
   EvalRun,
+  EvalScope,
   EvalThreadLike,
   EvalToolCall,
   EvalToolResult,
+  FieldMatcher,
   RunEvalsOptions,
+  SchemaInput,
+  ToolCallMatcherOptions,
+  ValueBuilder,
 } from "./types";

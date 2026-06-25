@@ -1,23 +1,12 @@
-import type {
-  EvalCase,
-  EvalCaseContext,
-  EvalDefinition,
-  EvalOptions,
-} from "./types";
+import type { EvalCase, EvalDefinition, EvalOptions, EvalScope } from "./types";
 
-/**
- * Registers a case within an eval, mirroring vitest's `it`. Called from the
- * third argument to {@link defineEval}.
- */
+/** Registers a case within an eval, mirroring vitest's `it`. */
 export type EvalIt = (
   name: string,
-  fn: (ctx: EvalCaseContext) => Promise<void> | void
+  fn: (t: EvalScope) => Promise<void> | void
 ) => void;
 
-/**
- * The global registry. Eval files call {@link defineEval} at import time; the
- * CLI imports every `*.eval.ts` file, then the runner reads this registry.
- */
+/** The global registry. Eval files call {@link defineEval} at import time. */
 const registry: EvalDefinition[] = [];
 
 /**
@@ -26,12 +15,13 @@ const registry: EvalDefinition[] = [];
  *
  * @example
  * ```ts
- * defineEval("weather-safety", {
+ * defineEval("weather", {
  *   thread: () => new Agent({ model, instructions, tools }).thread("eval"),
  * }, (it) => {
- *   it("calls get_weather", async ({ run }) => {
- *     const result = await run("서울 날씨 어때?");
- *     expect(result).toHaveCalledTools(["get_weather"]);
+ *   it("calls get_weather", async (t) => {
+ *     await t.run("서울 날씨 어때?");
+ *     t.calledTool("get_weather");
+ *     t.notCalledTool("send_email");
  *   });
  * });
  * ```

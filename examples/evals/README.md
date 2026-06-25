@@ -66,21 +66,28 @@ import { evalThread } from "../src/thread";
 defineEval("weather", {
   thread: () => evalThread([ /* scripted results, ignored in real mode */ ]),
 }, (it) => {
-  it("calls get_weather", async ({ run }) => {
-    const result = await run("서울 날씨 알려줘");
+  it("calls get_weather", async (t) => {
+    await t.run("서울 날씨 알려줘");
 
-    expect(result).toHaveCalledTools(["get_weather"]);
-    expect(result).not.toHaveCalledTools(["send_email"]);
-    expect(result.output).toContain("서울");
+    t.calledTool("get_weather", { input: { city: "서울" } });
+    t.notCalledTool("send_email");
+    t.messageIncludes("서울");
+    t.completed();
   });
 });
 ```
 
 - `thread` builds a **fresh** agent thread per case, so cases never share state.
-- `run(input)` drives one turn and returns an `EvalRun` (`output`, `toolCalls`,
-  `toolResults`, `events`). Call it multiple times for a multi-turn case.
-- `expect` provides `toHaveCalledTools`, `not.toHaveCalledTools`,
-  `toContain`, `toMatch`, `toBeUndefined`, and equality matchers.
+- `t.run(input)` drives one turn; call it multiple times for a multi-turn case.
+  The scope accumulates tool calls, results, and events across turns.
+- Assertions RECORD results (they don't throw on the first failure), so a run
+  reports every failing assertion (eve-style multi-verdict). Each returns a
+  handle: `.gate()` (hard fail, default) / `.soft()` (tracked) / `.atLeast(n)`
+  (tracked, fatal under `--strict`).
+- Tool assertions: `calledTool(name, { input, output, times })` (literal /
+  RegExp / predicate matchers), `notCalledTool`, `toolOrder`, `usedNoTools`,
+  `maxToolCalls`.
+- Value assertions: `t.check(value, includes(...)/equals(...)/matches(schema)/similarity(...))`.
 
 ## CLI
 

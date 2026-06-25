@@ -1,15 +1,28 @@
 ---
-"@minpeter/pss-runtime": patch
+"@minpeter/pss-runtime": minor
 ---
 
-Add a `./evals` subpath for running repeatable checks against the real agent
-runtime. Evals drive a live `Agent` thread, drain its event stream into a
-normalized `EvalRun`, and assert the three questions that matter: did it call
-the right tool, did it avoid the dangerous tool, and did it say the right thing.
+Rework `./evals` into an eve-parity, record-based evaluation engine.
 
-There is no separate eval universe and no new runtime dependency — the layer
-reuses the existing `ai` runtime. `defineEval` registers suites, `expect()`
-provides `toHaveCalledTools` / `not.toHaveCalledTools` / `toContain` /
-`toMatch` matchers, and `runEvals()` produces a report. A `pss-eval` CLI
-discovers `*.eval.ts` files, runs them, prints a summary, and exits non-zero on
-failure.
+Evals drive a real `Agent` thread and drain its event stream — no separate eval
+universe, no new runtime dependency. The assertion model now records results
+rather than throwing on the first failure, so a single run reports every failing
+assertion (eve-style multi-verdict).
+
+New assertion surface on the per-case scope `t`:
+- run-level: `calledTool(name, { input, output, times })`,
+  `notCalledTool`, `toolOrder`, `usedNoTools`, `maxToolCalls`,
+  `messageIncludes`, `completed`, `didNotFail`, `noFailedActions`, `event`,
+  `outputEquals`, `outputMatches`
+- value assertions via `t.check(value, builder)` with `includes`, `equals`,
+  `matches` (Standard Schema / Zod), `similarity` (Levenshtein)
+- severity on every assertion: `.gate()` (hard, default), `.soft()`,
+  `.atLeast(threshold)` (tracked, fatal only under `--strict`)
+
+Tool matchers accept literal (partial-deep), RegExp, or predicate. The runner
+computes a gate-based verdict, tracks soft misses ("scored"), and the `pss-eval`
+CLI gains `--strict` (soft-threshold misses also fail).
+
+This is a breaking change to the eval authoring API: cases now receive a
+recording scope (`t`) instead of `{ run }` + a throw-based `expect`. Multi-turn
+cases accumulate state across `t.run()` calls.

@@ -16,6 +16,7 @@ Options:
   --dir <path>   discovery root (default: ./evals; repeatable)
   --tag <name>   only run evals carrying this tag (repeatable)
   --json         emit machine-readable JSON instead of the text summary
+  --strict       soft-threshold misses also fail (exit non-zero)
   --cwd <path>   working directory (default: process.cwd())
   -h, --help     show this help
 
@@ -30,6 +31,7 @@ export interface ParsedArgs {
   readonly dirs: readonly string[];
   readonly filters: readonly string[];
   readonly help: boolean;
+  readonly strict: boolean;
   readonly tags: readonly string[];
 }
 
@@ -40,6 +42,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   let cwd = process.cwd();
   let asJson = false;
   let help = false;
+  let strict = false;
 
   const args = [...argv];
   let i = 0;
@@ -52,6 +55,9 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
         break;
       case "--json":
         asJson = true;
+        break;
+      case "--strict":
+        strict = true;
         break;
       case "--cwd":
         cwd = args[i++] ?? cwd;
@@ -68,7 +74,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     }
   }
 
-  return { asJson, cwd, dirs, filters, help, tags };
+  return { asJson, cwd, dirs, filters, help, strict, tags };
 }
 
 /** Combine CLI filter fragments into a single id matcher. */
@@ -161,6 +167,7 @@ export async function runCli(argv: readonly string[]): Promise<number> {
 
   const report = await runEvals({
     filter: compileFilters(args.filters),
+    strict: args.strict,
     tags: args.tags,
   });
 
