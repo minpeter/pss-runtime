@@ -54,6 +54,7 @@ describe("session search tools", () => {
     expect(result.sessions.map((session) => session.channel)).toEqual([
       "telegram:a",
     ]);
+    expect(result.sessions[0]).not.toHaveProperty("conversationKey");
     expect(result.sessions[0]?.lastSeenAt).toBe("1970-01-01T00:00:00.010Z");
   });
 
@@ -72,6 +73,7 @@ describe("session search tools", () => {
     expect(result.query).toBe("database migration");
     expect(result.sessions).toHaveLength(1);
     expect(result.sessions[0]?.channel).toBe("telegram:a");
+    expect(result.sessions[0]).not.toHaveProperty("conversationKey");
     expect(result.sessions[0]?.score).toBeGreaterThan(0);
   });
 
@@ -128,6 +130,22 @@ describe("session search tools", () => {
       channel: "telegram:missing",
       found: false,
     });
+  });
+
+  it("rejects legacy conversationKey input when reading a session", async () => {
+    const reader = await seededReader();
+    const tools = createSessionTools({
+      currentConversationKey: () => undefined,
+      reader,
+      transcriptReader: { read: () => Promise.resolve(undefined) },
+    });
+
+    await expect(
+      tools[READ_SESSION_TOOL_NAME]?.execute?.(
+        { conversationKey: "telegram:a" },
+        toolContext()
+      )
+    ).rejects.toThrow();
   });
 
   it("rejects an empty search query", async () => {
