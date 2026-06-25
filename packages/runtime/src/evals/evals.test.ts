@@ -1,6 +1,5 @@
 import { jsonSchema, type ToolSet, tool } from "ai";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 import { Agent } from "../agent/core/agent";
 import {
   createMockLanguageModelV4,
@@ -14,6 +13,7 @@ import {
   getEvals,
   includes,
   runEvals,
+  type SchemaInput,
   similarity,
 } from "./index";
 
@@ -45,6 +45,29 @@ const tools = {
 const instructions = "You are a helpful assistant. Answer in Korean.";
 
 const clearWeatherPattern = /맑음/;
+
+// A dependency-free Standard Schema for outputMatches tests (the runtime
+// package does not depend on Zod).
+const weatherSchema: SchemaInput = {
+  "~standard": {
+    validate(value) {
+      const issues: { message: string }[] = [];
+      if (typeof value !== "object" || value === null) {
+        return { issues: [{ message: "not an object" }] };
+      }
+      const v = value as Record<string, unknown>;
+      if (typeof v.city !== "string") {
+        issues.push({ message: "city must be a string" });
+      }
+      if (typeof v.tempC !== "number") {
+        issues.push({ message: "tempC must be a number" });
+      }
+      return issues.length > 0 ? { issues } : { value };
+    },
+    vendor: "test",
+    version: 1,
+  },
+};
 
 function weatherThread() {
   return new Agent({
@@ -234,7 +257,7 @@ describe("eval engine (t-style)", () => {
       (it) => {
         it("validates structured reply", async (t) => {
           await t.run("weather as json");
-          t.outputMatches(z.object({ city: z.string(), tempC: z.number() }));
+          t.outputMatches(weatherSchema);
           t.outputEquals({ city: "서울", tempC: 21 });
         });
       }
