@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createInMemoryExecutionHost } from "../../platform/memory";
 import {
   checkpointedTool,
   createCheckpointSpyHost,
@@ -21,7 +22,6 @@ import {
 import { dispatchAgentNotification } from "../dispatch/notification-dispatch";
 import type { ThreadHost } from "../host/capabilities";
 import type { ExecutionStore, ExecutionStoreTransaction } from "../host/types";
-import { createInMemoryExecutionHost } from "../memory";
 import { inspectDurableTurn } from "./durable-turn";
 
 const generateTextMock = getGenerateTextMock();

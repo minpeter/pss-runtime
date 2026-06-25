@@ -2,6 +2,7 @@ import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../../agent/core/agent";
 import type { ModelStepOutput } from "../../llm/llm";
+import { MemoryThreadStore } from "../../platform/memory/storage/memory-thread-store";
 import {
   assistantMessage,
   createCallbackModel,
@@ -13,7 +14,6 @@ import {
 import type { AgentEvent } from "../protocol/events";
 import { userTextToModelMessage } from "../protocol/mapping";
 import type { AgentTurn } from "../protocol/turn";
-import { MemoryThreadStore } from "../store/memory";
 import { AgentThread } from "./thread";
 
 describe("AgentThread.notify", () => {

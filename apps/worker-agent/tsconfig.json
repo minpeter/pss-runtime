@@ -5,8 +5,11 @@
     "noEmit": true,
     "paths": {
       "@minpeter/pss-runtime": ["../../packages/runtime/src/index.ts"],
-      "@minpeter/pss-runtime/cloudflare": [
+      "@minpeter/pss-runtime/platform/cloudflare": [
         "../../packages/runtime/src/platform/cloudflare/index.ts"
+      ],
+      "@minpeter/pss-runtime/platform/file": [
+        "../../packages/runtime/src/platform/file/index.ts"
       ],
       "chat": ["./node_modules/chat"],
       "chat/*": ["./node_modules/chat/*"]

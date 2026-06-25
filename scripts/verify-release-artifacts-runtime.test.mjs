@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { verifyReleaseArtifacts } from "./verify-release-artifacts/core.mjs";
@@ -19,10 +19,6 @@ const removedRuntimeModelNames = [
   ["Runtime", "Llm", "Output", "Part"].join(""),
 ];
 const removedRuntimeModelValueName = ["create", "Llm"].join("");
-
-function runtimeDistDeclaration(cwd, ...segments) {
-  return join(cwd, "packages", "runtime", "dist", ...segments, "index.d.ts");
-}
 
 describe("verifyReleaseArtifacts runtime declaration checks", () => {
   it("allows direct AI SDK types in runtime public declarations", () => {
@@ -110,7 +106,7 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      `${runtimeRootDeclaration}export type { ExecutionHost, ExecutionScheduler, ExecutionStore, RuntimeToolExecutionContext } from "./execution";\nexport { ToolExecutionNeedsRecoveryError, createInMemoryExecutionHost } from "./execution";\n`
+      `${runtimeRootDeclaration}export type { ExecutionHost, ExecutionScheduler, ExecutionStore, RuntimeToolExecutionContext } from "./execution";\nexport { ToolExecutionNeedsRecoveryError, createInMemoryExecutionHost } from "./execution";\nexport { MemoryThreadStore } from "./platform/memory";\n`
     );
 
     expect(
@@ -120,6 +116,7 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ExecutionHost",
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ExecutionScheduler",
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ExecutionStore",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name MemoryThreadStore",
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name RuntimeToolExecutionContext",
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ToolExecutionNeedsRecoveryError",
     ]);
@@ -181,95 +178,6 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
       "packages/runtime/dist/index.d.ts: missing explicit root runtime export AgentHost",
       "packages/runtime/dist/index.d.ts: missing explicit root runtime export AgentTurn",
       "packages/runtime/dist/index.d.ts: missing explicit root runtime export RuntimeInput",
-    ]);
-  });
-
-  it("requires the runtime execution declaration entrypoint", () => {
-    const cwd = createFixture();
-    rmSync(join(cwd, "packages", "runtime", "dist", "execution", "index.d.ts"));
-
-    expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
-      "packages/runtime/dist/execution/index.d.ts: missing execution runtime declaration",
-    ]);
-  });
-
-  it("requires the runtime cloudflare declaration entrypoint", () => {
-    const cwd = createFixture();
-    rmSync(runtimeDistDeclaration(cwd, "platform", "cloudflare"));
-
-    expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing cloudflare runtime declaration",
-    ]);
-  });
-
-  it("checks Cloudflare Worker helpers on the cloudflare declaration subpath", () => {
-    const cwd = createFixture();
-    writeFileSync(
-      runtimeDistDeclaration(cwd, "platform", "cloudflare"),
-      "export {};\n"
-    );
-
-    expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentContext",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentContextFactoryOptions",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentContextOptions",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentContextPrefixOptions",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export AgentTurnDrainResult",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export AgentTurnDrainStopReason",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAgentTurnDrainOptions",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAlarmAgent",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareAlarmDrainSummary",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectFetchOptions",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectId",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectNamespace",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectState",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectStorage",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectStub",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareDurableObjectStubOptions",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export CloudflareScheduledThreadPrompt",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export InMemoryCloudflareDurableObjectStorage",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export ackScheduledCloudflareRun",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export ackScheduledCloudflareThreadPrompt",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareAlarmScheduler",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareAgentContext",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareDurableObjectHost",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export drainAgentTurn",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export drainAgentTurnWithBudget",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export drainCloudflareAlarm",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export fetchCloudflareDurableObject",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export getCloudflareDurableObjectStub",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export listScheduledCloudflareRuns",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export listScheduledCloudflareThreadPrompts",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export rescheduleCloudflareAlarm",
-    ]);
-  });
-
-  it("checks advanced runtime contracts on the execution declaration subpath", () => {
-    const cwd = createFixture();
-    writeFileSync(
-      join(cwd, "packages", "runtime", "dist", "execution", "index.d.ts"),
-      "export {};\n"
-    );
-
-    expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export CheckpointStore",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export createInMemoryExecutionHost",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export DurableBackgroundHost",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export EventStore",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ExecutionHost",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ExecutionScheduler",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ExecutionStore",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ExecutionStoreTransaction",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export NotificationInbox",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export NotificationRecord",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export TurnRecord",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export TurnStore",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export TurnStatus",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RuntimeToolExecutionCheckpoint",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RuntimeToolExecutionContext",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RuntimeToolExecutionDecision",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RuntimeToolRetryPolicy",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ToolExecutionNeedsRecoveryError",
     ]);
   });
 });

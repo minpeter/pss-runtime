@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createInMemoryExecutionHost } from "../../../execution";
+import { createInMemoryExecutionHost } from "../../memory";
 import {
   dispatchCloudflareAgentNotification,
   InMemoryCloudflareDurableObjectStorage,

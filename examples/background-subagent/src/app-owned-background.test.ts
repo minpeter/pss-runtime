@@ -1,13 +1,13 @@
 import type { Agent, AgentInput, AgentTurn } from "@minpeter/pss-runtime";
-import {
-  createInMemoryExecutionHost,
-  type ExecutionHost,
-  type ResumeThreadOptions,
+import type {
+  ExecutionHost,
+  ResumeThreadOptions,
 } from "@minpeter/pss-runtime/execution";
 import {
   defaultChildThreadKey,
   parentThreadNamespace,
 } from "@minpeter/pss-runtime/namespace";
+import { createInMemoryExecutionHost } from "@minpeter/pss-runtime/platform/memory";
 import { describe, expect, it } from "vitest";
 import { createAppAgent } from "./app-agent";
 import { launchDurableBackgroundDelegation } from "./background-delegation";

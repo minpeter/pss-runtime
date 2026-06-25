@@ -48,4 +48,3 @@ export type {
   DurableTurnInspectionSource,
 } from "./inspect/durable-turn";
 export { inspectDurableTurn } from "./inspect/durable-turn";
-export { createInMemoryExecutionHost } from "./memory";

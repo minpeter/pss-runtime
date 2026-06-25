@@ -20,6 +20,7 @@ export interface Env {
   readonly TELEGRAM_BOT_TOKEN: string;
   readonly TELEGRAM_BOT_USERNAME?: string;
   readonly TELEGRAM_WEBHOOK_SECRET_TOKEN: string;
+  readonly WORKER_AGENT_TUI_TOKEN?: string;
 }
 
 export function isDevelopment(env: {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { createInMemoryExecutionHost } from "../../platform/memory";
 import type { AgentEvent } from "../../thread/protocol/events";
-import { createInMemoryExecutionHost } from "../memory";
 import { StoredAgentTurn } from "./stored-agent-turn";
 
 async function collectRunEvents(run: StoredAgentTurn): Promise<AgentEvent[]> {

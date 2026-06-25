@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createInMemoryExecutionHost } from "../../platform/memory";
 import {
   collectRun,
   fakeModel,
@@ -6,7 +7,6 @@ import {
   loadAgent,
 } from "../../testing/llm-test-utils";
 import { assistantMessage } from "../../testing/test-fixtures";
-import { createInMemoryExecutionHost } from "../memory";
 import { inspectDurableTurn } from "./durable-turn";
 
 const generateTextMock = getGenerateTextMock();

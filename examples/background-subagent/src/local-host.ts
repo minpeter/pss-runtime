@@ -1,9 +1,9 @@
 import type { Agent, AgentTurn } from "@minpeter/pss-runtime";
-import {
-  createInMemoryExecutionHost,
-  type ExecutionHost,
-  type ResumeThreadOptions,
+import type {
+  ExecutionHost,
+  ResumeThreadOptions,
 } from "@minpeter/pss-runtime/execution";
+import { createInMemoryExecutionHost } from "@minpeter/pss-runtime/platform/memory";
 
 const defaultResumeTimeoutMs = 60_000;
 

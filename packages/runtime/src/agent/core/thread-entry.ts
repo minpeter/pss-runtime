@@ -37,7 +37,7 @@ export interface AgentThreadEntry {
   readonly publicHandle: ThreadHandle;
 }
 
-export function normalizeThreadKey(thread: ThreadKey): string {
+export function threadStoreKey(thread: ThreadKey): string {
   if (typeof thread === "string") {
     return thread;
   }
@@ -50,3 +50,5 @@ export function normalizeThreadKey(thread: ThreadKey): string {
     thread.key
   )}`;
 }
+
+export const normalizeThreadKey = threadStoreKey;

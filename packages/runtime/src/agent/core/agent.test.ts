@@ -5,6 +5,7 @@ import {
   mockLanguageModelV4Text,
 } from "../../testing/mock-language-model-v4-test-utils";
 import { Agent, type AgentOptions } from "./agent";
+import { threadStoreKey } from "./thread-entry";
 
 const fakeModel = createMockLanguageModelV4([mockLanguageModelV4Text("DONE")]);
 const functionModel = () => Promise.resolve([]);
@@ -129,6 +130,13 @@ describe("Agent", () => {
     );
     expect(agent.thread({ key: "a", scope: "user:1" })).not.toBe(
       agent.thread({ key: "a", scope: "user:2" })
+    );
+  });
+
+  it("exposes the stable thread-store key for host-level adapters", () => {
+    expect(threadStoreKey("plain")).toBe("plain");
+    expect(threadStoreKey({ key: "room/1", scope: "user:1" })).toBe(
+      "scope:user%3A1:thread:room%2F1"
     );
   });
 
