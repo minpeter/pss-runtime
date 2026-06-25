@@ -17,9 +17,9 @@ export const TuiTurnOutputSchema = z.discriminatedUnion("delivered", [
         .array(
           z
             .object({
+              channel: z.string(),
               messageId: z.string(),
               text: z.string(),
-              threadId: z.string(),
             })
             .strict()
         )

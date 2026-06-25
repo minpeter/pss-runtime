@@ -14,16 +14,19 @@ describe("sql session index repository", () => {
     await store.upsert({
       channel: { id: "a", kind: "telegram" },
       now: 10,
+      threadKey: "thread:telegram:a",
       userText: "first message about migrations",
     });
     await store.upsert({
       channel: { id: "a", kind: "telegram" },
       now: 20,
+      threadKey: "thread:telegram:a",
       userText: "second message about migrations",
     });
     await store.upsert({
       channel: { id: "b", kind: "tui" },
       now: 30,
+      threadKey: "thread:tui:b",
       userText: "unrelated weather chat",
     });
 
@@ -33,6 +36,7 @@ describe("sql session index repository", () => {
     const telegram = all.find(
       (record) => record.conversationKey === "telegram:a"
     );
+    expect(telegram?.threadKey).toBe("thread:telegram:a");
     expect(telegram?.turnCount).toBe(2);
     expect(telegram?.recentUserText).toEqual([
       "first message about migrations",

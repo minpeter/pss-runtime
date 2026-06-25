@@ -17,9 +17,9 @@ import {
 } from "./options";
 import {
   type AgentThreadEntry,
-  normalizeThreadKey,
   type ThreadHandle,
   type ThreadKey,
+  threadStoreKey,
 } from "./thread-entry";
 
 export type { AgentHost } from "../../execution/host/types";
@@ -109,7 +109,7 @@ export class Agent {
   }
 
   thread(thread: ThreadKey): ThreadHandle {
-    return this.#threadEntry(normalizeThreadKey(thread)).publicHandle;
+    return this.#threadEntry(threadStoreKey(thread)).publicHandle;
   }
 
   #threadEntry(key: string): AgentThreadEntry {

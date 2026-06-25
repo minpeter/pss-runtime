@@ -132,9 +132,9 @@ describe("collectTurnDelivery", () => {
             output: {
               type: "json",
               value: {
+                channel: "chat-1",
                 delivered: true,
                 messageId: "msg-1",
-                threadId: "chat-1",
               },
             },
             toolCallId: "call-1",
@@ -155,9 +155,9 @@ describe("collectTurnDelivery", () => {
             output: {
               type: "json",
               value: {
+                channel: "chat-1",
                 delivered: true,
                 messageId: "msg-1",
-                threadId: "chat-1",
               },
             },
             toolCallId: "call-1",

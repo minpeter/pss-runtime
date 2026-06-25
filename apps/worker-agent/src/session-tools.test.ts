@@ -28,11 +28,13 @@ async function seededReader() {
   await store.upsert({
     channel: { id: "a", kind: "telegram" },
     now: 10,
+    threadKey: "thread:telegram:a",
     userText: "we planned the database migration",
   });
   await store.upsert({
     channel: { id: "current", kind: "tui" },
     now: 20,
+    threadKey: "thread:tui:current",
     userText: "this is the active conversation",
   });
   return store;
@@ -55,6 +57,7 @@ describe("session search tools", () => {
       "telegram:a",
     ]);
     expect(result.sessions[0]).not.toHaveProperty("conversationKey");
+    expect(result.sessions[0]).not.toHaveProperty("threadKey");
     expect(result.sessions[0]?.lastSeenAt).toBe("1970-01-01T00:00:00.010Z");
   });
 
@@ -74,6 +77,7 @@ describe("session search tools", () => {
     expect(result.sessions).toHaveLength(1);
     expect(result.sessions[0]?.channel).toBe("telegram:a");
     expect(result.sessions[0]).not.toHaveProperty("conversationKey");
+    expect(result.sessions[0]).not.toHaveProperty("threadKey");
     expect(result.sessions[0]?.score).toBeGreaterThan(0);
   });
 

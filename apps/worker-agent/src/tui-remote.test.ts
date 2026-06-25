@@ -26,9 +26,9 @@ describe("remote TUI tRPC client", () => {
             delivered: true,
             messages: [
               {
+                channel: "tui:local",
                 messageId: "tui-1",
                 text: "remote ok",
-                threadId: "tui:local",
               },
             ],
           },
@@ -45,9 +45,9 @@ describe("remote TUI tRPC client", () => {
       delivered: true,
       messages: [
         {
+          channel: "tui:local",
           messageId: "tui-1",
           text: "remote ok",
-          threadId: "tui:local",
         },
       ],
     });

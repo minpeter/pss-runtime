@@ -59,9 +59,9 @@ describe("TUI worker tRPC route", () => {
         delivered: true,
         messages: [
           {
+            channel: "tui:local",
             messageId: "tui-1",
             text: "visible",
-            threadId: "tui:local",
           },
         ],
       })
@@ -78,9 +78,9 @@ describe("TUI worker tRPC route", () => {
       delivered: true,
       messages: [
         {
+          channel: "tui:local",
           messageId: "tui-1",
           text: "visible",
-          threadId: "tui:local",
         },
       ],
     });

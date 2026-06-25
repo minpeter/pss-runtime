@@ -8,7 +8,12 @@ import {
   type WorkerAgentThreadSender,
 } from "./agent-do-delivery";
 import { parseAgentRequest } from "./agent-do-request";
-import { type ChannelAddress, channelKey } from "./channel";
+import {
+  type ChannelAddress,
+  channelKey,
+  durableObjectChannelBinding,
+  localChannelBinding,
+} from "./channel";
 import type { Env } from "./env";
 import { SEND_MESSAGE_TOOL_NAME } from "./tools";
 
@@ -95,11 +100,30 @@ describe("AgentDurableObject request parsing", () => {
   });
 });
 
-describe("channel thread keys", () => {
-  it("namespaces threads by channel kind and id", () => {
+describe("channel runtime bindings", () => {
+  it("keeps the model-facing channel key readable", () => {
     const channel: ChannelAddress = { id: "chat-1", kind: "telegram" };
 
     expect(channelKey(channel)).toBe("telegram:chat-1");
+  });
+
+  it("uses a default runtime thread inside channel-scoped Durable Objects", () => {
+    const binding = durableObjectChannelBinding({
+      id: "chat-1",
+      kind: "telegram",
+    });
+
+    expect(binding.channelKey).toBe("telegram:chat-1");
+    expect(binding.thread).toBe("default");
+    expect(binding.threadKey).toBe("default");
+  });
+
+  it("uses a scoped runtime ThreadAddress for local multi-channel hosts", () => {
+    const binding = localChannelBinding({ id: "local", kind: "tui" });
+
+    expect(binding.channelKey).toBe("tui:local");
+    expect(binding.thread).toEqual({ key: "local", scope: "channel:tui" });
+    expect(binding.threadKey).toBe("scope:channel%3Atui:thread:local");
   });
 });
 
@@ -170,9 +194,9 @@ function sendMessageEvent(): AgentEvent {
     output: {
       type: "json",
       value: {
+        channel: "chat-1",
         delivered: true,
         messageId: "msg-1",
-        threadId: "chat-1",
       },
     },
     toolCallId: "call-1",

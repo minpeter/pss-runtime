@@ -62,8 +62,8 @@ export function createTuiMessageSink(output: TuiOutput): ChannelMessageSink {
       nextMessageIndex += 1;
       output.writeLine(`apex: ${text}`);
       return Promise.resolve({
+        channel: channelKey(channel),
         messageId: `tui-${nextMessageIndex}`,
-        threadId: channelKey(channel),
       });
     },
   };

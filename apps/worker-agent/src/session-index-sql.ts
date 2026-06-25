@@ -1,6 +1,6 @@
 import type { SqlStorage } from "@minpeter/pss-runtime/cloudflare";
 
-import { ChannelAddressSchema } from "./channel";
+import { ChannelAddressSchema, legacyChannelThreadKey } from "./channel";
 import type {
   SessionIndexRecord,
   SessionIndexRepository,
@@ -15,7 +15,12 @@ interface SessionIndexRow {
   readonly last_seen_at: number;
   readonly recent_assistant_text: string;
   readonly recent_user_text: string;
+  readonly thread_key: string | null;
   readonly turn_count: number;
+}
+
+interface TableInfoRow {
+  readonly name: string;
 }
 
 export function createSqlSessionIndexRepository(
@@ -32,12 +37,19 @@ export function createSqlSessionIndexRepository(
         conversation_key TEXT PRIMARY KEY,
         channel_kind TEXT NOT NULL,
         channel_id TEXT NOT NULL,
+        thread_key TEXT,
         last_seen_at INTEGER NOT NULL,
         turn_count INTEGER NOT NULL,
         recent_user_text TEXT NOT NULL,
         recent_assistant_text TEXT NOT NULL
       )`
     );
+    const columns = sql
+      .exec<TableInfoRow>(`PRAGMA table_info(${TABLE_NAME})`)
+      .toArray();
+    if (!columns.some((column) => column.name === "thread_key")) {
+      sql.exec(`ALTER TABLE ${TABLE_NAME} ADD COLUMN thread_key TEXT`);
+    }
     schemaReady = true;
   };
 
@@ -46,7 +58,7 @@ export function createSqlSessionIndexRepository(
       ensureSchema();
       const rows = sql
         .exec<SessionIndexRow>(
-          `SELECT conversation_key, channel_kind, channel_id, last_seen_at, turn_count, recent_user_text, recent_assistant_text FROM ${TABLE_NAME}`
+          `SELECT conversation_key, channel_kind, channel_id, thread_key, last_seen_at, turn_count, recent_user_text, recent_assistant_text FROM ${TABLE_NAME}`
         )
         .toArray();
       return Promise.resolve(rows.map(toRecord));
@@ -55,7 +67,7 @@ export function createSqlSessionIndexRepository(
       ensureSchema();
       const [row] = sql
         .exec<SessionIndexRow>(
-          `SELECT conversation_key, channel_kind, channel_id, last_seen_at, turn_count, recent_user_text, recent_assistant_text FROM ${TABLE_NAME} WHERE conversation_key = ?`,
+          `SELECT conversation_key, channel_kind, channel_id, thread_key, last_seen_at, turn_count, recent_user_text, recent_assistant_text FROM ${TABLE_NAME} WHERE conversation_key = ?`,
           key
         )
         .toArray();
@@ -64,11 +76,12 @@ export function createSqlSessionIndexRepository(
     put: (record) => {
       ensureSchema();
       sql.exec(
-        `INSERT INTO ${TABLE_NAME} (conversation_key, channel_kind, channel_id, last_seen_at, turn_count, recent_user_text, recent_assistant_text)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO ${TABLE_NAME} (conversation_key, channel_kind, channel_id, thread_key, last_seen_at, turn_count, recent_user_text, recent_assistant_text)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(conversation_key) DO UPDATE SET
            channel_kind = excluded.channel_kind,
            channel_id = excluded.channel_id,
+           thread_key = excluded.thread_key,
            last_seen_at = excluded.last_seen_at,
            turn_count = excluded.turn_count,
            recent_user_text = excluded.recent_user_text,
@@ -76,6 +89,11 @@ export function createSqlSessionIndexRepository(
         record.conversationKey,
         record.channelKind,
         record.channelId,
+        record.threadKey ??
+          legacyChannelThreadKey({
+            id: record.channelId,
+            kind: record.channelKind,
+          }),
         record.lastSeenAt,
         record.turnCount,
         JSON.stringify(record.recentUserText),
@@ -87,13 +105,18 @@ export function createSqlSessionIndexRepository(
 }
 
 function toRecord(row: SessionIndexRow): SessionIndexRecord {
+  const channelKind = ChannelAddressSchema.shape.kind.parse(row.channel_kind);
+  const channelId = row.channel_id;
   return {
-    channelId: row.channel_id,
-    channelKind: ChannelAddressSchema.shape.kind.parse(row.channel_kind),
+    channelId,
+    channelKind,
     conversationKey: row.conversation_key,
     lastSeenAt: Number(row.last_seen_at),
     recentAssistantText: parseStringArray(row.recent_assistant_text),
     recentUserText: parseStringArray(row.recent_user_text),
+    threadKey:
+      row.thread_key ??
+      legacyChannelThreadKey({ id: channelId, kind: channelKind }),
     turnCount: Number(row.turn_count),
   };
 }

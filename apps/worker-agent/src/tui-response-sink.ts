@@ -30,8 +30,8 @@ export function createTuiResponseMessageSink(): TuiResponseMessageSink {
         }
 
         const sent = {
+          channel: channelKey(channel),
           messageId: `tui-${messages.length + 1}`,
-          threadId: channelKey(channel),
         };
         messages.push({
           ...sent,

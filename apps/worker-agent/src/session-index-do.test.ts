@@ -79,12 +79,14 @@ describe("AgentDurableObject session-index routes", () => {
       indexRequest(SESSION_INDEX_UPSERT_PATH, {
         assistantText: ["sure, here is the migration plan"],
         channel: { id: "a", kind: "telegram" },
+        threadKey: "default",
         userText: "help me plan the database migration",
       })
     );
     await object.fetch(
       indexRequest(SESSION_INDEX_UPSERT_PATH, {
         channel: { id: "b", kind: "tui" },
+        threadKey: "default",
         userText: "what is the weather",
       })
     );

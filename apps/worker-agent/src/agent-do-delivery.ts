@@ -30,9 +30,9 @@ export type WorkerAgentDeliveryResponse =
     };
 
 export interface WorkerAgentDeliveredMessage {
+  readonly channel: string;
   readonly messageId: string;
   readonly text: string;
-  readonly threadId: string;
 }
 
 export function withCapturedMessages(

@@ -25,6 +25,7 @@ export const SessionIndexUpsertRequestSchema = z
       id: z.string(),
       kind: z.enum(["telegram", "tui"]),
     }),
+    threadKey: z.string().min(1),
     userText: z.string(),
   })
   .strict();
@@ -83,6 +84,7 @@ export function createSessionIndexClient(env: Env): SessionIndexClient {
       await postIndex(env, SESSION_INDEX_UPSERT_PATH, {
         assistantText: update.assistantText ? [...update.assistantText] : [],
         channel: update.channel,
+        threadKey: update.threadKey,
         userText: update.userText,
       });
     },

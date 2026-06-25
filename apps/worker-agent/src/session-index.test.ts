@@ -6,9 +6,9 @@ import {
   MAX_RECENT_USER_TEXT,
   mergeSessionRecord,
   type SessionIndexRecord,
-  scoreSessionRecord,
   summarizeSessionRecord,
 } from "./session-index";
+import { scoreSessionRecord } from "./session-index-search";
 
 describe("mergeSessionRecord", () => {
   it("creates a new record from the first turn", () => {
@@ -18,6 +18,7 @@ describe("mergeSessionRecord", () => {
         assistantText: ["hi there"],
         channel: { id: "123", kind: "telegram" },
         now: 1000,
+        threadKey: "thread:telegram:123",
         userText: " hello ",
       },
       "telegram:123"
@@ -30,6 +31,7 @@ describe("mergeSessionRecord", () => {
       lastSeenAt: 1000,
       recentAssistantText: ["hi there"],
       recentUserText: ["hello"],
+      threadKey: "thread:telegram:123",
       turnCount: 1,
     });
   });
@@ -42,6 +44,7 @@ describe("mergeSessionRecord", () => {
         {
           channel: { id: "123", kind: "telegram" },
           now: index,
+          threadKey: "thread:telegram:123",
           userText: `message-${index}`,
         },
         "telegram:123"
@@ -63,6 +66,7 @@ describe("mergeSessionRecord", () => {
         assistantText: ["   "],
         channel: { id: "local", kind: "tui" },
         now: 5,
+        threadKey: "thread:tui:local",
         userText: "   ",
       },
       "tui:local"
@@ -82,6 +86,7 @@ describe("scoreSessionRecord", () => {
     lastSeenAt: 1,
     recentAssistantText: ["the answer is forty two"],
     recentUserText: ["tell me about quantum computing"],
+    threadKey: "thread:telegram:123",
     turnCount: 1,
   };
 
@@ -105,11 +110,13 @@ describe("summarizeSessionRecord", () => {
       lastSeenAt: 1,
       recentAssistantText: ["assistant"],
       recentUserText: ["first", "latest user line"],
+      threadKey: "thread:telegram:123",
       turnCount: 2,
     });
 
     expect(summary.snippet).toBe("latest user line");
     expect(summary.channel).toEqual({ id: "123", kind: "telegram" });
+    expect(summary.threadKey).toBe("thread:telegram:123");
   });
 });
 
@@ -119,11 +126,13 @@ describe("session index store", () => {
     await store.upsert({
       channel: { id: "a", kind: "telegram" },
       now: 10,
+      threadKey: "thread:telegram:a",
       userText: "older",
     });
     await store.upsert({
       channel: { id: "b", kind: "telegram" },
       now: 20,
+      threadKey: "thread:telegram:b",
       userText: "newer",
     });
 
@@ -138,11 +147,13 @@ describe("session index store", () => {
     await store.upsert({
       channel: { id: "a", kind: "telegram" },
       now: 10,
+      threadKey: "thread:telegram:a",
       userText: "let us discuss the database migration plan",
     });
     await store.upsert({
       channel: { id: "b", kind: "tui" },
       now: 20,
+      threadKey: "thread:tui:b",
       userText: "weather is nice today",
     });
 
@@ -156,6 +167,7 @@ describe("session index store", () => {
     const store = createSessionIndexStore(createMemorySessionIndexRepository());
     await store.upsert({
       channel: { id: "a", kind: "telegram" },
+      threadKey: "thread:telegram:a",
       userText: "anything",
     });
 

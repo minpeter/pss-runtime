@@ -13,7 +13,11 @@ import {
   createSendMessageToolOptions,
   type SendMessageToolSetup,
 } from "./agent-do-send-message";
-import { type ChannelAddress, channelKey } from "./channel";
+import {
+  CHANNEL_DURABLE_OBJECT_THREAD_KEY,
+  type ChannelRuntimeBinding,
+  durableObjectChannelBinding,
+} from "./channel";
 import type { Env } from "./env";
 import {
   createSessionIndexStore,
@@ -41,7 +45,6 @@ import {
   SessionTranscriptReadRequestSchema,
 } from "./session-transcript-client";
 
-const SESSION_KEY = "default";
 export class AgentDurableObject extends DurableObject<Env> {
   readonly #context: CloudflareAgentContext<Agent>;
   readonly #env: Env;
@@ -88,23 +91,23 @@ export class AgentDurableObject extends DurableObject<Env> {
       this.#env,
       payload.channel
     );
-    const conversationKey = channelKey(payload.channel);
+    const binding = durableObjectChannelBinding(payload.channel);
     const agent = createConfiguredAgent(this.#env, this.#context.host(), {
       sendMessage: sendMessage.options,
       sessionTools: {
-        currentConversationKey: () => conversationKey,
+        currentConversationKey: () => binding.channelKey,
         reader: this.#sessionIndexClient,
         transcriptReader: this.#sessionTranscriptClient,
       },
     });
     const assistantMessages: string[] = [];
     const delivery = await deliverToolOnlyTurn(
-      agent.thread(SESSION_KEY),
+      agent.thread(binding.thread),
       payload.text,
       { onAssistantOutput: (text) => assistantMessages.push(text) }
     );
     await this.#indexTurn(
-      payload.channel,
+      binding,
       payload.text,
       sendMessage,
       assistantMessages
@@ -139,6 +142,7 @@ export class AgentDurableObject extends DurableObject<Env> {
       await store.upsert({
         assistantText: parsed.data.assistantText ?? [],
         channel: parsed.data.channel,
+        threadKey: parsed.data.threadKey,
         userText: parsed.data.userText,
       });
       return Response.json({ ok: true });
@@ -190,7 +194,7 @@ export class AgentDurableObject extends DurableObject<Env> {
     }
 
     const transcript = await createThreadStoreSessionTranscriptReader({
-      resolveThreadKey: () => SESSION_KEY,
+      resolveThreadKey: () => CHANNEL_DURABLE_OBJECT_THREAD_KEY,
       store: this.#context.host().store.threads,
     }).read(parsed.data.conversationKey, {
       ...(parsed.data.before === undefined
@@ -222,7 +226,7 @@ export class AgentDurableObject extends DurableObject<Env> {
   }
 
   async #indexTurn(
-    channel: ChannelAddress,
+    binding: ChannelRuntimeBinding,
     userText: string,
     sendMessage: SendMessageToolSetup,
     assistantMessages: readonly string[]
@@ -232,7 +236,8 @@ export class AgentDurableObject extends DurableObject<Env> {
     try {
       await this.#sessionIndexClient.upsert({
         assistantText,
-        channel,
+        channel: binding.channel,
+        threadKey: binding.threadKey,
         userText,
       });
     } catch (error) {

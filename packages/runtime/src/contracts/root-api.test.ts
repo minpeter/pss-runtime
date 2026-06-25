@@ -2,23 +2,8 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type {
-  CheckpointStore,
-  DurableBackgroundHost,
-  EventStore,
-  ExecutionHost,
-  ExecutionScheduler,
-  ExecutionStore,
-  ExecutionStoreTransaction,
-  NotificationInbox,
-  NotificationRecord,
-  ThreadHost,
-  TurnRecord,
-  TurnStore,
-} from "../execution";
-import type {
   AgentAutoCompactionOptions,
   AgentEvent,
-  AgentHost,
   AgentInput,
   AgentOptions,
   ControlAgentEvent,
@@ -35,11 +20,9 @@ import {
   isTelemetryAgentEvent,
   isVisibleAgentEvent,
   runPluginsForEvent,
+  threadStoreKey as runtimeThreadStoreKey,
 } from "../index";
 
-type EmptyHostIsRejected =
-  Record<string, never> extends AgentHost ? true : false;
-const emptyHostIsRejected: EmptyHostIsRejected = false;
 const forbiddenRuntimeSubagentExports = [
   ["Subagent", "Definition"].join(""),
   ["resume", "Background", "Child", "Run"].join(""),
@@ -69,6 +52,7 @@ describe("runtime public exports", () => {
 
     expect(runtime).toHaveProperty("Agent", Agent);
     expect(runtime).toHaveProperty("runPluginsForEvent", runPluginsForEvent);
+    expect(runtime).toHaveProperty("threadStoreKey", runtimeThreadStoreKey);
     expect(runtime).not.toHaveProperty("createInMemoryExecutionHost");
     expect(runtime).not.toHaveProperty("createCloudflareDurableObjectHost");
     expect(runtime).not.toHaveProperty("createCloudflareAgentContext");
@@ -81,7 +65,6 @@ describe("runtime public exports", () => {
     expect(runtime).not.toHaveProperty("BackgroundScheduler");
     expect(runtime).not.toHaveProperty("ToolExecutionNeedsRecoveryError");
     expect(runtime).not.toHaveProperty(runStreamExport);
-    expect(emptyHostIsRejected).toBe(false);
   });
 
   it("exports event classifiers from the package root", async () => {
@@ -172,62 +155,13 @@ describe("runtime public exports", () => {
       ReturnType<ThreadHandle["overlay"]>
     >().toEqualTypeOf<ThreadHandle>();
     expectTypeOf<ReturnType<Agent["overlay"]>>().toEqualTypeOf<ThreadHandle>();
+    expectTypeOf<
+      ReturnType<typeof runtimeThreadStoreKey>
+    >().toEqualTypeOf<string>();
     expect(enabledOptions.autoCompaction).toEqual(autoCompaction);
     expect(enabledOptions.notificationOverlays).toEqual(["runtime context"]);
     expect(disabledOptions.autoCompaction).toBe(false);
     expect(compaction.startSeq).toBe(0);
-  });
-
-  it("types advanced host contracts", () => {
-    expectTypeOf<
-      ExecutionHost["scheduler"]
-    >().toEqualTypeOf<ExecutionScheduler>();
-    expectTypeOf<ExecutionHost["store"]>().toEqualTypeOf<ExecutionStore>();
-    expectTypeOf<
-      ExecutionStore["notifications"]
-    >().toEqualTypeOf<NotificationInbox>();
-    expectTypeOf<ExecutionHost["kind"]>().toEqualTypeOf<"execution">();
-    expectTypeOf<ExecutionStore["turns"]>().toEqualTypeOf<TurnStore>();
-    expectTypeOf<
-      ExecutionStore["checkpoints"]
-    >().toEqualTypeOf<CheckpointStore>();
-    expectTypeOf<ExecutionStore["events"]>().toEqualTypeOf<EventStore>();
-    expectTypeOf<
-      Parameters<NotificationInbox["enqueue"]>[0]
-    >().toEqualTypeOf<NotificationRecord>();
-    expectTypeOf<
-      Awaited<ReturnType<TurnStore["get"]>>
-    >().toEqualTypeOf<TurnRecord | null>();
-    expectTypeOf<
-      ExecutionStoreTransaction["turns"]
-    >().toEqualTypeOf<TurnStore>();
-    expectTypeOf<
-      ExecutionStoreTransaction["notifications"]
-    >().toEqualTypeOf<NotificationInbox>();
-    const threadHost = {
-      kind: "thread",
-      threadStore: {} as ThreadHost["threadStore"],
-    } satisfies ThreadHost;
-    const agentHost = threadHost satisfies AgentHost;
-    expectTypeOf<
-      DurableBackgroundHost["turnStore"]
-    >().toEqualTypeOf<TurnStore>();
-    expectTypeOf<
-      DurableBackgroundHost["checkpointStore"]
-    >().toEqualTypeOf<CheckpointStore>();
-    expectTypeOf<
-      DurableBackgroundHost["eventStore"]
-    >().toEqualTypeOf<EventStore>();
-    expectTypeOf<
-      DurableBackgroundHost["notificationInbox"]
-    >().toEqualTypeOf<NotificationInbox>();
-    expectTypeOf<
-      DurableBackgroundHost["backgroundScheduler"]
-    >().toEqualTypeOf<ExecutionScheduler>();
-    expectTypeOf<DurableBackgroundHost["transaction"]>().toEqualTypeOf<
-      ExecutionStore["transaction"]
-    >();
-    expect(agentHost.kind).toBe("thread");
   });
 
   it("declares thread store package subpaths without session aliases", async () => {

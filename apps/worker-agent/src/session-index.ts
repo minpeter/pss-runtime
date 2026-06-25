@@ -4,7 +4,13 @@ import {
   type ChannelAddress,
   ChannelAddressSchema,
   channelKey,
+  legacyChannelThreadKey,
 } from "./channel";
+import {
+  normalizeSearchText,
+  scoreSessionRecord,
+  tokenizeSearchText,
+} from "./session-index-search";
 
 export const MAX_RECENT_USER_TEXT = 5;
 export const MAX_RECENT_ASSISTANT_TEXT = 3;
@@ -12,8 +18,6 @@ export const SESSION_SNIPPET_MAX_LENGTH = 160;
 export const MAX_SESSION_LIMIT = 50;
 export const DEFAULT_SESSION_LIST_LIMIT = 10;
 export const DEFAULT_SESSION_SEARCH_LIMIT = 10;
-
-const WHITESPACE_PATTERN = /\s+/u;
 
 export const SessionIndexRecordSchema = z
   .object({
@@ -23,6 +27,7 @@ export const SessionIndexRecordSchema = z
     lastSeenAt: z.number(),
     recentAssistantText: z.array(z.string()).readonly(),
     recentUserText: z.array(z.string()).readonly(),
+    threadKey: z.string().optional(),
     turnCount: z.number().int().nonnegative(),
   })
   .strict();
@@ -35,6 +40,7 @@ export const SessionSummarySchema = z
     conversationKey: z.string(),
     lastSeenAt: z.number(),
     snippet: z.string(),
+    threadKey: z.string(),
     turnCount: z.number().int().nonnegative(),
   })
   .strict();
@@ -51,6 +57,7 @@ export interface SessionTurnUpdate {
   readonly assistantText?: readonly string[];
   readonly channel: ChannelAddress;
   readonly now?: number;
+  readonly threadKey: string;
   readonly userText: string;
 }
 
@@ -81,82 +88,6 @@ export interface SessionIndexRepository {
   put(record: SessionIndexRecord): Promise<void>;
 }
 
-export function normalizeSearchText(value: string): string {
-  return value.normalize("NFKC").toLowerCase().trim();
-}
-
-export function tokenizeSearchText(normalized: string): readonly string[] {
-  return normalized.split(WHITESPACE_PATTERN).filter(Boolean);
-}
-
-export function mergeSessionRecord(
-  existing: SessionIndexRecord | undefined,
-  update: SessionTurnUpdate,
-  conversationKey: string
-): SessionIndexRecord {
-  const now = update.now ?? Date.now();
-  const userText = update.userText.trim();
-  const assistantText = (update.assistantText ?? [])
-    .map((text) => text.trim())
-    .filter(Boolean);
-
-  return {
-    channelId: update.channel.id,
-    channelKind: update.channel.kind,
-    conversationKey,
-    lastSeenAt: Math.max(existing?.lastSeenAt ?? 0, now),
-    recentAssistantText: appendRecent(
-      existing?.recentAssistantText ?? [],
-      assistantText,
-      MAX_RECENT_ASSISTANT_TEXT
-    ),
-    recentUserText: appendRecent(
-      existing?.recentUserText ?? [],
-      userText ? [userText] : [],
-      MAX_RECENT_USER_TEXT
-    ),
-    turnCount: (existing?.turnCount ?? 0) + 1,
-  };
-}
-
-export function scoreSessionRecord(
-  record: SessionIndexRecord,
-  tokens: readonly string[],
-  normalizedQuery: string
-): number {
-  if (!normalizedQuery) {
-    return 0;
-  }
-
-  const userHay = normalizeSearchText(record.recentUserText.join(" "));
-  const assistantHay = normalizeSearchText(
-    record.recentAssistantText.join(" ")
-  );
-  const channelHay = normalizeSearchText(record.conversationKey);
-
-  let score = 0;
-  for (const token of tokens) {
-    if (userHay.includes(token)) {
-      score += 3;
-    }
-    if (channelHay.includes(token)) {
-      score += 2;
-    }
-    if (assistantHay.includes(token)) {
-      score += 1;
-    }
-  }
-
-  if (userHay.includes(normalizedQuery)) {
-    score += 4;
-  }
-  if (assistantHay.includes(normalizedQuery)) {
-    score += 1;
-  }
-
-  return score;
-}
-
 export function summarizeSessionRecord(
   record: SessionIndexRecord
 ): SessionSummary {
@@ -165,6 +96,12 @@ export function summarizeSessionRecord(
     conversationKey: record.conversationKey,
     lastSeenAt: record.lastSeenAt,
     snippet: buildSessionSnippet(record),
+    threadKey:
+      record.threadKey ??
+      legacyChannelThreadKey({
+        id: record.channelId,
+        kind: record.channelKind,
+      }),
     turnCount: record.turnCount,
   };
 }
@@ -298,4 +235,35 @@ function byScoreThenRecency(
   right: { readonly record: SessionIndexRecord; readonly score: number }
 ): number {
   return right.score - left.score || byRecency(left.record, right.record);
+}
+
+export function mergeSessionRecord(
+  existing: SessionIndexRecord | undefined,
+  update: SessionTurnUpdate,
+  conversationKey: string
+): SessionIndexRecord {
+  const now = update.now ?? Date.now();
+  const userText = update.userText.trim();
+  const assistantText = (update.assistantText ?? [])
+    .map((text) => text.trim())
+    .filter(Boolean);
+
+  return {
+    channelId: update.channel.id,
+    channelKind: update.channel.kind,
+    conversationKey,
+    lastSeenAt: Math.max(existing?.lastSeenAt ?? 0, now),
+    recentAssistantText: appendRecent(
+      existing?.recentAssistantText ?? [],
+      assistantText,
+      MAX_RECENT_ASSISTANT_TEXT
+    ),
+    recentUserText: appendRecent(
+      existing?.recentUserText ?? [],
+      userText ? [userText] : [],
+      MAX_RECENT_USER_TEXT
+    ),
+    threadKey: update.threadKey,
+    turnCount: (existing?.turnCount ?? 0) + 1,
+  };
 }
