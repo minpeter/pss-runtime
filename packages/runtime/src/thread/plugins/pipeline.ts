@@ -77,6 +77,28 @@ function normalizeInterceptResult(
   return;
 }
 
+function eventForPluginHandler(event: AgentEvent): AgentEvent {
+  return isBeforeToolCall(event) ? structuredClone(event) : event;
+}
+
+function canInterceptEvent(event: AgentEvent, observeOnly: boolean): boolean {
+  if (observeOnly) {
+    return false;
+  }
+
+  return isInterceptableEvent(event) || isBeforeToolCall(event);
+}
+
+function beforeToolCallPipelineResult(
+  intercept: AgentPluginInterceptResult
+): PluginPipelineResult | undefined {
+  if (intercept.action === "needs-recovery") {
+    return { kind: "needs-recovery" };
+  }
+
+  return;
+}
+
 async function runPluginPipeline(
   plugins: readonly AgentPlugin[],
   context: AgentEventContext,
@@ -90,14 +112,11 @@ async function runPluginPipeline(
       continue;
     }
 
-    const eventForHandler = isBeforeToolCall(currentEvent)
-      ? structuredClone(currentEvent)
-      : currentEvent;
-    const result = await handler({ ...context, event: eventForHandler });
-    const shouldIntercept =
-      !observeOnly &&
-      (isInterceptableEvent(currentEvent) || isBeforeToolCall(currentEvent));
-    if (!shouldIntercept) {
+    const result = await handler({
+      ...context,
+      event: eventForPluginHandler(currentEvent),
+    });
+    if (!canInterceptEvent(currentEvent, observeOnly)) {
       continue;
     }
 
@@ -107,8 +126,9 @@ async function runPluginPipeline(
     }
 
     if (isBeforeToolCall(currentEvent)) {
-      if (intercept.action === "needs-recovery") {
-        return { kind: "needs-recovery" };
+      const resultForBeforeTool = beforeToolCallPipelineResult(intercept);
+      if (resultForBeforeTool) {
+        return resultForBeforeTool;
       }
 
       continue;
