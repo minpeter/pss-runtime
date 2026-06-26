@@ -101,7 +101,6 @@ describe("runPluginsForEvent", () => {
 describe("before-tool-call interception", () => {
   const beforeToolCall = {
     attempt: 1,
-    capabilities: [],
     idempotencyKey: "run-1:call_tool-1",
     input: { path: "/tmp/example.txt" },
     policy: "manual-recovery",

@@ -39,11 +39,6 @@ export type BeforeToolCallRetryPolicy =
   | "manual-recovery"
   | "pure";
 
-export interface BeforeToolCallCapability {
-  readonly kind: string;
-  readonly [metadata: string]: unknown;
-}
-
 /**
  * Plugin-only pre-execution tool event. The runtime synthesizes this after the
  * `before-tool` checkpoint and before tool `execute`; it is not emitted on
@@ -51,7 +46,6 @@ export interface BeforeToolCallCapability {
  */
 export interface BeforeToolCall {
   readonly attempt: number;
-  readonly capabilities: readonly BeforeToolCallCapability[];
   readonly idempotencyKey: string;
   readonly input: unknown;
   readonly policy: BeforeToolCallRetryPolicy;

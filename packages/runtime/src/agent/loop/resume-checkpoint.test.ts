@@ -89,7 +89,6 @@ describe("resumeRun checkpoint recovery", () => {
     const host = createInMemoryExecutionHost();
     const pendingToolCall: RuntimeToolExecutionCheckpoint = {
       attempt: 1,
-      capabilities: [],
       idempotencyKey: "run-1:call-tool-1",
       input: {},
       policy: "manual-recovery",

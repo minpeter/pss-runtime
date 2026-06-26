@@ -222,10 +222,7 @@ const approvalPlugin: AgentPlugin = {
       return;
     }
 
-    const writesFiles = event.capabilities.some(
-      (capability) => capability.kind === "filesystem"
-    );
-    if (writesFiles && event.toolName !== "approved_write") {
+    if (event.toolName === "write_file") {
       return { action: "needs-recovery" };
     }
     return { action: "continue" };
@@ -234,31 +231,11 @@ const approvalPlugin: AgentPlugin = {
 ```
 
 `before-tool-call` events carry `toolName`, `toolCallId`, `input`, `policy`,
-`attempt`, `idempotencyKey`, and normalized `capabilities`. Plugin handlers also
-receive current model-message `history` and `signal` through `AgentEventContext`.
-The runtime snapshots `before-tool-call` payloads before each plugin runs, so
-input or capability mutations do not affect later plugins or tool execution.
-`transform` and `handled` returns are ignored for `before-tool-call`.
-
-Tool definitions may declare top-level runtime metadata next to AI SDK tool
-fields:
-
-```ts
-const tools = {
-  write_file: {
-    ...tool({ execute: writeFile, inputSchema }),
-    capabilities: [
-      { kind: "filesystem", operations: ["write"], scope: "workspace" },
-      { kind: "human-approval", reason: "writes files" },
-    ],
-    retryPolicy: "manual-recovery",
-  },
-};
-```
-
-Capability metadata is treated as untrusted runtime metadata. The runtime only
-preserves arrays of objects with a string `kind`; malformed capability metadata
-normalizes to an empty list and is not persisted.
+`attempt`, and `idempotencyKey`. Plugin handlers also receive current
+model-message `history` and `signal` through `AgentEventContext`. The runtime
+snapshots `before-tool-call` payloads before each plugin runs, so input mutations
+do not affect later plugins or tool execution. `transform` and `handled` returns
+are ignored for `before-tool-call`.
 
 ### Input `meta.source`
 
@@ -581,9 +558,8 @@ checkpoint and may re-enter the operation.
 When `Agent` receives an `ExecutionHost`, high-level model turns create a
 `user-turn` run record and thread tool execution context into managed model
 calls. Tools are checkpointed before and after execution and receive stable
-`attempt`, `idempotencyKey`, `retryPolicy`, `signal`, public `toolCallId`, and
-normalized `capabilities` values. Non-empty valid capabilities are persisted
-with `pendingToolCall` checkpoint metadata. The `@minpeter/pss-runtime/execution`
+`attempt`, `idempotencyKey`, `retryPolicy`, `signal`, and public `toolCallId`
+values. The `@minpeter/pss-runtime/execution`
 entrypoint also exposes the same low-level tool execution checkpoint types for
 custom resume runners built directly on AI SDK `LanguageModel` objects.
 

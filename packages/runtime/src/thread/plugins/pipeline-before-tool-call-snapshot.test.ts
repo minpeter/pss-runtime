@@ -26,13 +26,9 @@ function isMutableToolInput(value: unknown): value is MutableToolInput {
   );
 }
 
-function beforeToolCallEvent(
-  input: unknown,
-  capabilities: BeforeToolCall["capabilities"]
-): BeforeToolCall {
+function beforeToolCallEvent(input: unknown): BeforeToolCall {
   return {
     attempt: 1,
-    capabilities,
     idempotencyKey: "run-1:call_tool-1",
     input,
     policy: "manual-recovery",
@@ -43,20 +39,12 @@ function beforeToolCallEvent(
 }
 
 describe("before-tool-call plugin snapshots", () => {
-  it("keeps plugin mutations out of the source event and later plugins", async () => {
+  it("keeps plugin input mutations out of the source event and later plugins", async () => {
     const input = {
       nested: { value: "original" },
       path: "/tmp/example.txt",
     };
-    const capabilities = [
-      {
-        kind: "filesystem",
-        scope: "workspace",
-      },
-    ];
-    let observedBySecond:
-      | Pick<BeforeToolCall, "capabilities" | "input">
-      | undefined;
+    let observedBySecond: Pick<BeforeToolCall, "input"> | undefined;
 
     const result = await runPluginsForEvent(
       [
@@ -70,11 +58,6 @@ describe("before-tool-call plugin snapshots", () => {
               event.input.path = "/tmp/mutated.txt";
               event.input.nested.value = "mutated";
             }
-
-            const capability = event.capabilities[0];
-            if (capability) {
-              Object.assign(capability, { kind: "network", scope: "global" });
-            }
           },
         },
         {
@@ -84,39 +67,26 @@ describe("before-tool-call plugin snapshots", () => {
             }
 
             observedBySecond = {
-              capabilities: event.capabilities,
               input: event.input,
             };
           },
         },
       ],
       {
-        event: beforeToolCallEvent(input, capabilities),
+        event: beforeToolCallEvent(input),
         history: emptyHistory,
       }
     );
 
     expect(result).toEqual({
       kind: "emit",
-      event: beforeToolCallEvent(input, capabilities),
+      event: beforeToolCallEvent(input),
     });
     expect(input).toEqual({
       nested: { value: "original" },
       path: "/tmp/example.txt",
     });
-    expect(capabilities).toEqual([
-      {
-        kind: "filesystem",
-        scope: "workspace",
-      },
-    ]);
     expect(observedBySecond).toEqual({
-      capabilities: [
-        {
-          kind: "filesystem",
-          scope: "workspace",
-        },
-      ],
       input: {
         nested: { value: "original" },
         path: "/tmp/example.txt",

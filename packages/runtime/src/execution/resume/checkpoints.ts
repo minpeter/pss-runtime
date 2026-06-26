@@ -1,8 +1,5 @@
 import type { RuntimeToolExecutionCheckpointMetadata } from "../../llm/llm";
-import {
-  normalizeRuntimeToolCapabilities,
-  ToolExecutionNeedsRecoveryError,
-} from "../../llm/tool-execution";
+import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution";
 import { createCheckpointId } from "../host/checkpoint-ids";
 import type { Checkpoint, CheckpointPhase, ExecutionHost } from "../host/types";
 import type { ResumeRunState } from "./types";
@@ -187,10 +184,6 @@ function runtimeToolCheckpoint(
 
   return {
     attempt: value.attempt,
-    capabilities:
-      "capabilities" in value
-        ? normalizeRuntimeToolCapabilities(value.capabilities)
-        : [],
     idempotencyKey: value.idempotencyKey,
     policy: value.policy,
     toolCallId: value.toolCallId,

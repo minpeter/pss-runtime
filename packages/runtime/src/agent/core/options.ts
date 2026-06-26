@@ -1,6 +1,6 @@
-import type { LanguageModel } from "ai";
+import type { LanguageModel, ToolSet } from "ai";
 import type { AgentHost } from "../../execution/host/types";
-import type { AgentToolChoice, RuntimeToolSet } from "../../llm/llm";
+import type { AgentToolChoice } from "../../llm/llm";
 import type { AgentInput, UserInput } from "../../thread/input/input";
 import type { AgentPlugin } from "../../thread/plugins/pipeline";
 
@@ -18,7 +18,7 @@ export interface AgentOptions {
   readonly notificationOverlays?: readonly (AgentInput | UserInput)[];
   readonly plugins?: readonly AgentPlugin[];
   readonly toolChoice?: AgentToolChoice;
-  readonly tools?: RuntimeToolSet;
+  readonly tools?: ToolSet;
 }
 
 export type AgentModelOptions = Pick<

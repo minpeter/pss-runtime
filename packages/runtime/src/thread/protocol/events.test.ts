@@ -43,7 +43,6 @@ describe("thread event protocol boundary", () => {
       { type: "turn-start" },
       {
         attempt: 1,
-        capabilities: [],
         idempotencyKey: "run-1:tool-1",
         input: { value: 1 },
         policy: "manual-recovery",

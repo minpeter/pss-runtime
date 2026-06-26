@@ -149,7 +149,6 @@ function beforeToolCallEvent(
 ): BeforeToolCall {
   return {
     attempt: checkpoint.attempt,
-    capabilities: checkpoint.capabilities,
     idempotencyKey: checkpoint.idempotencyKey,
     input: checkpoint.input,
     policy: checkpoint.policy,

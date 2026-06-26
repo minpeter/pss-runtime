@@ -9,13 +9,7 @@ export {
   type ThreadMetadata,
 } from "./agent/core/agent";
 export type { AgentHost } from "./execution/host/types";
-export type {
-  AgentToolChoice,
-  RuntimeToolCapability,
-  RuntimeToolDefinition,
-  RuntimeToolMetadata,
-  RuntimeToolSet,
-} from "./llm/llm";
+export type { AgentToolChoice } from "./llm/llm";
 export { delegateUserInput } from "./thread/input/delegate-input";
 export type { AgentInput, ThreadInput } from "./thread/input/input";
 export {
@@ -38,7 +32,6 @@ export type {
   AssistantOutput,
   AssistantReasoning,
   BeforeToolCall,
-  BeforeToolCallCapability,
   BeforeToolCallRetryPolicy,
   ControlAgentEvent,
   InputEventMeta,

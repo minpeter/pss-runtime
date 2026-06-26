@@ -106,18 +106,9 @@ describe("tool checkpointing through Agent", () => {
       host,
       model: fakeModel,
       tools: {
-        checkpointed_tool: {
-          ...checkpointedTool("idempotent", () => ({
-            ok: true,
-          })),
-          capabilities: [
-            {
-              kind: "filesystem",
-              operations: ["read"],
-              scope: "workspace",
-            },
-          ],
-        },
+        checkpointed_tool: checkpointedTool("idempotent", () => ({
+          ok: true,
+        })),
       },
     });
 
@@ -130,13 +121,6 @@ describe("tool checkpointing through Agent", () => {
     const [beforeTool, afterTool] = checkpoints;
     expect(beforeTool?.pendingToolCall).toMatchObject({
       idempotencyKey: `${beforeTool?.runId}:call_sdk-tool-call-1`,
-      capabilities: [
-        {
-          kind: "filesystem",
-          operations: ["read"],
-          scope: "workspace",
-        },
-      ],
       policy: "idempotent",
       toolName: "checkpointed_tool",
     });

@@ -25,8 +25,6 @@ import type {
   BeforeToolCall,
   ControlAgentEvent,
   LifecycleAgentEvent,
-  RuntimeToolCapability,
-  RuntimeToolMetadata,
   TelemetryAgentEvent,
   ThreadCompactionInput,
   ThreadHandle,
@@ -188,23 +186,9 @@ describe("runtime public exports", () => {
     expect(compaction.startSeq).toBe(0);
   });
 
-  it("types public runtime tool metadata and before-tool-call plugin results", () => {
-    const capabilities = [
-      {
-        kind: "filesystem",
-        operations: ["read", "write"],
-        scope: "workspace",
-      },
-      { kind: "network", hosts: ["api.example.test"] },
-      { kind: "human-approval", reason: "publishes externally" },
-    ] satisfies readonly RuntimeToolCapability[];
-    const metadata = {
-      capabilities,
-      retryPolicy: "manual-recovery",
-    } satisfies RuntimeToolMetadata;
+  it("types before-tool-call plugin interception results", () => {
     const event = {
       attempt: 1,
-      capabilities,
       idempotencyKey: "run-1:call_tool-1",
       input: { path: "README.md" },
       policy: "manual-recovery",
@@ -219,7 +203,6 @@ describe("runtime public exports", () => {
       action: "needs-recovery",
     } satisfies AgentPluginInterceptResult;
 
-    expect(metadata.capabilities).toEqual(capabilities);
     expect(event.toolName).toBe("write_file");
     expect(isBeforeToolCallEvent(event)).toBe(true);
     expect(continueResult.action).toBe("continue");
