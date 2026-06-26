@@ -5,6 +5,7 @@ import { durableObjectName, type Env } from "./env";
 import {
   type SessionIndexReader,
   type SessionListOptions,
+  type SessionReadAuthorizationOptions,
   type SessionSearchOptions,
   SessionSearchResultSchema,
   SessionSummarySchema,
@@ -15,6 +16,7 @@ export const SESSION_INDEX_OBJECT_NAME = "session-index:v1";
 export const SESSION_INDEX_UPSERT_PATH = "/session-index/upsert";
 export const SESSION_INDEX_LIST_PATH = "/session-index/list";
 export const SESSION_INDEX_SEARCH_PATH = "/session-index/search";
+export const SESSION_INDEX_CAN_READ_PATH = "/session-index/can-read";
 
 const SESSION_INDEX_ORIGIN = "https://session-index.internal";
 
@@ -25,6 +27,7 @@ export const SessionIndexUpsertRequestSchema = z
       id: z.string(),
       kind: z.enum(["telegram", "tui"]),
     }),
+    sessionScopeKey: z.string().optional(),
     threadKey: z.string().min(1),
     userText: z.string(),
   })
@@ -34,6 +37,7 @@ export const SessionIndexListRequestSchema = z
   .object({
     excludeKey: z.string().optional(),
     limit: z.number().int().positive().optional(),
+    sessionScopeKey: z.string().optional(),
   })
   .strict();
 
@@ -42,6 +46,15 @@ export const SessionIndexSearchRequestSchema = z
     excludeKey: z.string().optional(),
     limit: z.number().int().positive().optional(),
     query: z.string(),
+    sessionScopeKey: z.string().optional(),
+  })
+  .strict();
+
+export const SessionIndexCanReadRequestSchema = z
+  .object({
+    conversationKey: z.string().min(1),
+    excludeKey: z.string().optional(),
+    sessionScopeKey: z.string().optional(),
   })
   .strict();
 
@@ -50,6 +63,9 @@ const SessionIndexListResponseSchema = z
   .strict();
 const SessionIndexSearchResponseSchema = z
   .object({ sessions: z.array(SessionSearchResultSchema) })
+  .strict();
+const SessionIndexCanReadResponseSchema = z
+  .object({ canRead: z.boolean() })
   .strict();
 
 export class SessionIndexClientError extends Error {
@@ -65,10 +81,26 @@ export interface SessionIndexClient extends SessionIndexReader {
 
 export function createSessionIndexClient(env: Env): SessionIndexClient {
   return {
+    canRead: async (
+      conversationKey: string,
+      options: SessionReadAuthorizationOptions = {}
+    ) => {
+      const body = await postIndex(env, SESSION_INDEX_CAN_READ_PATH, {
+        conversationKey,
+        ...(options.excludeKey ? { excludeKey: options.excludeKey } : {}),
+        ...(options.sessionScopeKey
+          ? { sessionScopeKey: options.sessionScopeKey }
+          : {}),
+      });
+      return SessionIndexCanReadResponseSchema.parse(body).canRead;
+    },
     list: async (options: SessionListOptions = {}) => {
       const body = await postIndex(env, SESSION_INDEX_LIST_PATH, {
         ...(options.excludeKey ? { excludeKey: options.excludeKey } : {}),
         ...(options.limit === undefined ? {} : { limit: options.limit }),
+        ...(options.sessionScopeKey
+          ? { sessionScopeKey: options.sessionScopeKey }
+          : {}),
       });
       return SessionIndexListResponseSchema.parse(body).sessions;
     },
@@ -77,6 +109,9 @@ export function createSessionIndexClient(env: Env): SessionIndexClient {
         query,
         ...(options.excludeKey ? { excludeKey: options.excludeKey } : {}),
         ...(options.limit === undefined ? {} : { limit: options.limit }),
+        ...(options.sessionScopeKey
+          ? { sessionScopeKey: options.sessionScopeKey }
+          : {}),
       });
       return SessionIndexSearchResponseSchema.parse(body).sessions;
     },
@@ -84,6 +119,9 @@ export function createSessionIndexClient(env: Env): SessionIndexClient {
       await postIndex(env, SESSION_INDEX_UPSERT_PATH, {
         assistantText: update.assistantText ? [...update.assistantText] : [],
         channel: update.channel,
+        ...(update.sessionScopeKey
+          ? { sessionScopeKey: update.sessionScopeKey }
+          : {}),
         threadKey: update.threadKey,
         userText: update.userText,
       });
@@ -121,6 +159,7 @@ async function postIndex(
 
 export function isSessionIndexPath(pathname: string): boolean {
   return (
+    pathname === SESSION_INDEX_CAN_READ_PATH ||
     pathname === SESSION_INDEX_UPSERT_PATH ||
     pathname === SESSION_INDEX_LIST_PATH ||
     pathname === SESSION_INDEX_SEARCH_PATH

@@ -103,6 +103,8 @@ defineEval(
         sessionTools: {
           currentConversationKey: () => "tui:eval",
           reader: {
+            canRead: (conversationKey) =>
+              Promise.resolve(conversationKey === "telegram:previous"),
             list: () => Promise.resolve([sessionSummary]),
             search: () => Promise.resolve([sessionSearchResult]),
           },

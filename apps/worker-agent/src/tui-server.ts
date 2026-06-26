@@ -25,6 +25,9 @@ export async function dispatchTuiTurn(
   }
   const payload = {
     channel: { id: channelId, kind: "tui" },
+    ...(input.sessionScopeKey?.trim()
+      ? { sessionScopeKey: input.sessionScopeKey.trim() }
+      : {}),
     text,
   } satisfies TuiTurnInput;
 

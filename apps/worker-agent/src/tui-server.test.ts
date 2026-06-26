@@ -98,6 +98,29 @@ describe("TUI worker tRPC route", () => {
     });
   });
 
+  it("forwards an explicit TUI session scope to the channel Durable Object", async () => {
+    const env = createEnv({ ENVIRONMENT: "development" });
+    const client = createTuiRpcTestClient(env);
+
+    await expect(
+      client.tui.turn.mutate({
+        channel: { id: "local", kind: "tui" },
+        sessionScopeKey: " tui:local-user ",
+        text: "hello",
+      })
+    ).resolves.toMatchObject({ delivered: true });
+
+    const [request] = durableObjectMock.requests;
+    if (!request) {
+      throw new Error("Expected a Durable Object request.");
+    }
+    await expect(request.request.json()).resolves.toEqual({
+      channel: { id: "local", kind: "tui" },
+      sessionScopeKey: "tui:local-user",
+      text: "hello",
+    });
+  });
+
   it("rejects production TUI turns without the configured token", async () => {
     const env = createEnv({
       ENVIRONMENT: "production",

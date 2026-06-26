@@ -2,9 +2,12 @@ import { z } from "zod";
 
 import { ChannelAddressSchema } from "./channel";
 
+export const TUI_SESSION_SCOPE_KEY = "tui:local-user";
+
 export const TuiTurnInputSchema = z
   .object({
     channel: ChannelAddressSchema,
+    sessionScopeKey: z.string().optional(),
     text: z.string(),
   })
   .strict();

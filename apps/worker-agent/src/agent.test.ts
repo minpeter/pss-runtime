@@ -41,6 +41,7 @@ describe("worker-agent instructions", () => {
       "focus on what the user experienced",
       "Some messaging platforms can make replies less natural",
       "Do not invent product facts, security claims, launch details, prices, or URLs",
+      "If the user asks for future reminders, scheduled messages, or background follow-up, explicitly say this worker cannot schedule or send future reminders",
       "Do not mention internal agents, tools, or implementation details",
       "The user sees only messages you send by calling send_message",
       "Every user-visible response must be sent with send_message",

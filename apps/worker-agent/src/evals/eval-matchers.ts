@@ -87,6 +87,33 @@ export function textInputIndicatesUnavailableCapability(
   };
 }
 
+export function textInputIndicatesUnavailableCapabilityAbout(
+  ...topicTokens: readonly string[]
+) {
+  return (value: unknown): boolean => {
+    const text = readStringProperty(value, "text");
+    if (text === undefined) {
+      return false;
+    }
+    const normalizedText = normalizeComparable(text);
+    return (
+      normalizeTokens(topicTokens).some((token) =>
+        normalizedText.includes(token)
+      ) && includesUnavailableCapabilitySignal(normalizedText)
+    );
+  };
+}
+
+export function textInputIndicatesDeniedAccess() {
+  return (value: unknown): boolean => {
+    const text = readStringProperty(value, "text");
+    return (
+      text !== undefined &&
+      includesDeniedAccessSignal(normalizeComparable(text))
+    );
+  };
+}
+
 export function textInputExcludes(...tokens: readonly string[]) {
   return (value: unknown): boolean => {
     const text = readStringProperty(value, "text");
@@ -137,17 +164,48 @@ function includesUnavailableCapabilitySignal(text: string): boolean {
     "기능이없",
     "기능은없",
     "기능없",
+    "권한은없",
+    "권한이없",
+    "권한없",
     "불가",
+    "불가능",
     "지원하지",
     "제공하지",
     "제공되지",
+    "어려워",
+    "어렵",
+    "안돼",
+    "안되",
     "못해",
     "못하",
+    "못합",
+    "못합니다",
     "못써",
     "못쓰",
     "할수없",
     "수없",
     "수는없",
+  ] as const;
+  return signals.some((signal) => text.includes(signal));
+}
+
+function includesDeniedAccessSignal(text: string): boolean {
+  const signals = [
+    "권한없",
+    "권한이없",
+    "권한은없",
+    "접근할수없",
+    "읽을수없",
+    "읽을수는없",
+    "읽지못",
+    "확인할수없",
+    "확인되지",
+    "찾을수없",
+    "불러올수없",
+    "기록이없",
+    "기록은없",
+    "세션이없",
+    "세션은없",
   ] as const;
   return signals.some((signal) => text.includes(signal));
 }

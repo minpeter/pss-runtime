@@ -22,10 +22,8 @@ import {
   readInputMatcher,
   searchInputMatcher,
 } from "./session-case-input-matchers";
-import {
-  createEvalSessionTools,
-  projectZephyrRecord,
-} from "./session-fixtures";
+import { projectZephyrRecord } from "./session-fixture-records";
+import { createEvalSessionTools } from "./session-fixtures";
 import { isWorkerAgentEvalRealMode, workerEvalThread } from "./thread";
 
 export interface SessionCase {

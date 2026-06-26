@@ -9,6 +9,7 @@ import "./worker-behavior.eval";
 await import("./conversation-continuity.eval");
 await import("./delivery-cases.eval");
 await import("./session-list-cases.eval");
+await import("./session-privacy-cases.eval");
 await import("./session-recall-cases.eval");
 
 if (process.env.PSS_WORKER_AGENT_EVAL_REMOTE === "1") {

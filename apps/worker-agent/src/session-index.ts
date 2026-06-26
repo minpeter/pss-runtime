@@ -7,14 +7,19 @@ import {
   legacyChannelThreadKey,
 } from "./channel";
 import {
+  buildSessionSnippet,
+  byRecency,
+  byScoreThenRecency,
+  filterSessionRecords,
+  isSessionRecordVisible,
+  mergeSessionRecord,
+} from "./session-index-record";
+import {
   normalizeSearchText,
   scoreSessionRecord,
   tokenizeSearchText,
 } from "./session-index-search";
 
-export const MAX_RECENT_USER_TEXT = 5;
-export const MAX_RECENT_ASSISTANT_TEXT = 3;
-export const SESSION_SNIPPET_MAX_LENGTH = 160;
 export const MAX_SESSION_LIMIT = 50;
 export const DEFAULT_SESSION_LIST_LIMIT = 10;
 export const DEFAULT_SESSION_SEARCH_LIMIT = 10;
@@ -27,6 +32,7 @@ export const SessionIndexRecordSchema = z
     lastSeenAt: z.number(),
     recentAssistantText: z.array(z.string()).readonly(),
     recentUserText: z.array(z.string()).readonly(),
+    sessionScopeKey: z.string().optional(),
     threadKey: z.string().optional(),
     turnCount: z.number().int().nonnegative(),
   })
@@ -57,6 +63,7 @@ export interface SessionTurnUpdate {
   readonly assistantText?: readonly string[];
   readonly channel: ChannelAddress;
   readonly now?: number;
+  readonly sessionScopeKey?: string;
   readonly threadKey: string;
   readonly userText: string;
 }
@@ -64,14 +71,25 @@ export interface SessionTurnUpdate {
 export interface SessionListOptions {
   readonly excludeKey?: string;
   readonly limit?: number;
+  readonly sessionScopeKey?: string;
 }
 
 export interface SessionSearchOptions {
   readonly excludeKey?: string;
   readonly limit?: number;
+  readonly sessionScopeKey?: string;
+}
+
+export interface SessionReadAuthorizationOptions {
+  readonly excludeKey?: string;
+  readonly sessionScopeKey?: string;
 }
 
 export interface SessionIndexStore {
+  canRead(
+    conversationKey: string,
+    options?: SessionReadAuthorizationOptions
+  ): Promise<boolean>;
   list(options?: SessionListOptions): Promise<readonly SessionSummary[]>;
   resolveThreadKey(conversationKey: string): Promise<string | undefined>;
   search(
@@ -81,7 +99,10 @@ export interface SessionIndexStore {
   upsert(update: SessionTurnUpdate): Promise<void>;
 }
 
-export type SessionIndexReader = Pick<SessionIndexStore, "list" | "search">;
+export type SessionIndexReader = Pick<
+  SessionIndexStore,
+  "canRead" | "list" | "search"
+>;
 
 export interface SessionIndexRepository {
   all(): Promise<readonly SessionIndexRecord[]>;
@@ -128,11 +149,12 @@ export function createSessionIndexStore(
   repository: SessionIndexRepository
 ): SessionIndexStore {
   return {
+    canRead: async (conversationKey, options = {}) => {
+      const record = await repository.get(conversationKey);
+      return record ? isSessionRecordVisible(record, options) : false;
+    },
     list: async (options = {}) => {
-      const records = excludeConversation(
-        await repository.all(),
-        options.excludeKey
-      );
+      const records = filterSessionRecords(await repository.all(), options);
       return records
         .slice()
         .sort(byRecency)
@@ -158,10 +180,7 @@ export function createSessionIndexStore(
         return [];
       }
       const tokens = tokenizeSearchText(normalizedQuery);
-      const records = excludeConversation(
-        await repository.all(),
-        options.excludeKey
-      );
+      const records = filterSessionRecords(await repository.all(), options);
       return records
         .map((record) => ({
           record,
@@ -197,87 +216,5 @@ export function createMemorySessionIndexRepository(): SessionIndexRepository {
       records.set(record.conversationKey, record);
       return Promise.resolve();
     },
-  };
-}
-
-function appendRecent(
-  existing: readonly string[],
-  additions: readonly string[],
-  max: number
-): readonly string[] {
-  const next = [...existing];
-  for (const addition of additions) {
-    if (next.at(-1) !== addition) {
-      next.push(addition);
-    }
-  }
-  return next.slice(-max);
-}
-
-function buildSessionSnippet(record: SessionIndexRecord): string {
-  const source =
-    record.recentUserText.at(-1) ?? record.recentAssistantText.at(-1) ?? "";
-  const collapsed = source.replace(/\s+/gu, " ").trim();
-  if (collapsed.length <= SESSION_SNIPPET_MAX_LENGTH) {
-    return collapsed;
-  }
-  return `${collapsed.slice(0, SESSION_SNIPPET_MAX_LENGTH - 1).trimEnd()}…`;
-}
-
-function excludeConversation(
-  records: readonly SessionIndexRecord[],
-  excludeKey: string | undefined
-): readonly SessionIndexRecord[] {
-  if (!excludeKey) {
-    return records;
-  }
-  return records.filter((record) => record.conversationKey !== excludeKey);
-}
-
-function byRecency(
-  left: SessionIndexRecord,
-  right: SessionIndexRecord
-): number {
-  return (
-    right.lastSeenAt - left.lastSeenAt ||
-    left.conversationKey.localeCompare(right.conversationKey)
-  );
-}
-
-function byScoreThenRecency(
-  left: { readonly record: SessionIndexRecord; readonly score: number },
-  right: { readonly record: SessionIndexRecord; readonly score: number }
-): number {
-  return right.score - left.score || byRecency(left.record, right.record);
-}
-
-export function mergeSessionRecord(
-  existing: SessionIndexRecord | undefined,
-  update: SessionTurnUpdate,
-  conversationKey: string
-): SessionIndexRecord {
-  const now = update.now ?? Date.now();
-  const userText = update.userText.trim();
-  const assistantText = (update.assistantText ?? [])
-    .map((text) => text.trim())
-    .filter(Boolean);
-
-  return {
-    channelId: update.channel.id,
-    channelKind: update.channel.kind,
-    conversationKey,
-    lastSeenAt: Math.max(existing?.lastSeenAt ?? 0, now),
-    recentAssistantText: appendRecent(
-      existing?.recentAssistantText ?? [],
-      assistantText,
-      MAX_RECENT_ASSISTANT_TEXT
-    ),
-    recentUserText: appendRecent(
-      existing?.recentUserText ?? [],
-      userText ? [userText] : [],
-      MAX_RECENT_USER_TEXT
-    ),
-    threadKey: update.threadKey,
-    turnCount: (existing?.turnCount ?? 0) + 1,
   };
 }

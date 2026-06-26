@@ -5,12 +5,14 @@ import { type ChannelAddress, ChannelAddressSchema } from "./channel";
 const AgentRequestSchema = z
   .object({
     channel: ChannelAddressSchema,
+    sessionScopeKey: z.string().optional(),
     text: z.string(),
   })
   .strict();
 
 export interface AgentRequestPayload {
   readonly channel: ChannelAddress;
+  readonly sessionScopeKey?: string;
   readonly text: string;
 }
 
@@ -33,8 +35,13 @@ export async function parseAgentRequest(
   }
 
   const channelId = result.data.channel.id.trim();
+  const sessionScopeKey = result.data.sessionScopeKey?.trim();
   const text = result.data.text.trim();
   return channelId && text
-    ? { channel: { id: channelId, kind: result.data.channel.kind }, text }
+    ? {
+        channel: { id: channelId, kind: result.data.channel.kind },
+        ...(sessionScopeKey ? { sessionScopeKey } : {}),
+        text,
+      }
     : undefined;
 }

@@ -2,6 +2,7 @@ import {
   hasNonEmptyTextInput,
   type RealTextInputCase,
   textInputIndicatesUnavailableCapability,
+  textInputIndicatesUnavailableCapabilityAbout,
 } from "./eval-matchers";
 
 const unsupportedWebTools = ["web_search", "web_fetch"] as const;
@@ -79,7 +80,12 @@ export const deliveryCases = [
     includes: ["예약", "없"],
     name: "does not claim hidden scheduling",
     prompt: "내일 아침 9시에 자동으로 다시 알려줘.",
-    realInput: textInputIndicatesUnavailableCapability(),
+    realInput: textInputIndicatesUnavailableCapabilityAbout(
+      "예약",
+      "알림",
+      "스케줄",
+      "자동"
+    ),
     response:
       "예약 알림 기능은 없어. 지금 정리하거나 보낼 문구를 만드는 건 가능해.",
   },
@@ -138,7 +144,12 @@ export const recoveryCases = [
     includes: ["예약", "없"],
     name: "recovers without inventing scheduling",
     prompt: "매일 아침 자동으로 알려줘.",
-    realInput: textInputIndicatesUnavailableCapability(),
+    realInput: textInputIndicatesUnavailableCapabilityAbout(
+      "예약",
+      "알림",
+      "스케줄",
+      "자동"
+    ),
     response:
       "자동 예약 기능은 없어. 대신 지금 보낼 알림 문구는 정리할 수 있어.",
   },
