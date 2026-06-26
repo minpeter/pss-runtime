@@ -1,6 +1,6 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
-import { createInMemoryExecutionHost } from "../../execution/memory";
+import { createInMemoryExecutionHost } from "../../platform/memory";
 import {
   assistantMessage,
   createCallbackModel,

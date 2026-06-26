@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type {
   CheckpointStore,
@@ -38,6 +36,7 @@ import {
   isTelemetryAgentEvent,
   isVisibleAgentEvent,
   runPluginsForEvent,
+  threadStoreKey as runtimeThreadStoreKey,
 } from "../index";
 
 type EmptyHostIsRejected =
@@ -77,6 +76,7 @@ describe("runtime public exports", () => {
       isBeforeToolCallEvent
     );
     expect(runtime).not.toHaveProperty("runPluginsForToolCall");
+    expect(runtime).toHaveProperty("threadStoreKey", runtimeThreadStoreKey);
     expect(runtime).not.toHaveProperty("createInMemoryExecutionHost");
     expect(runtime).not.toHaveProperty("createCloudflareDurableObjectHost");
     expect(runtime).not.toHaveProperty("createCloudflareAgentContext");
@@ -180,6 +180,9 @@ describe("runtime public exports", () => {
       ReturnType<ThreadHandle["overlay"]>
     >().toEqualTypeOf<ThreadHandle>();
     expectTypeOf<ReturnType<Agent["overlay"]>>().toEqualTypeOf<ThreadHandle>();
+    expectTypeOf<
+      ReturnType<typeof runtimeThreadStoreKey>
+    >().toEqualTypeOf<string>();
     expect(enabledOptions.autoCompaction).toEqual(autoCompaction);
     expect(enabledOptions.notificationOverlays).toEqual(["runtime context"]);
     expect(disabledOptions.autoCompaction).toBe(false);
@@ -261,67 +264,13 @@ describe("runtime public exports", () => {
     expect(agentHost.kind).toBe("thread");
   });
 
-  it("declares thread store package subpaths without session aliases", async () => {
-    const packageJson = JSON.parse(
-      await readFile(
-        fileURLToPath(new URL("../../package.json", import.meta.url)),
-        "utf8"
-      )
-    ) as {
-      exports: Record<string, { "@minpeter/pss-source": string }>;
-    };
-
-    expect(packageJson.exports["./thread-store/memory"]).toMatchObject({
-      "@minpeter/pss-source": "./src/thread/store/memory.ts",
-    });
-    expect(packageJson.exports["./thread-store/file"]).toMatchObject({
-      "@minpeter/pss-source": "./src/thread/store/file.ts",
-    });
-    expect(packageJson.exports["./session-store/memory"]).toBeUndefined();
-    expect(packageJson.exports["./session-store/file"]).toBeUndefined();
-  });
-
-  it("declares the Cloudflare adapter as a platform implementation subpath", async () => {
-    const packageJson = JSON.parse(
-      await readFile(
-        fileURLToPath(new URL("../../package.json", import.meta.url)),
-        "utf8"
-      )
-    ) as {
-      exports: Record<string, { "@minpeter/pss-source": string }>;
-    };
-
-    expect(packageJson.exports["./cloudflare"]).toMatchObject({
-      "@minpeter/pss-source": "./src/platform/cloudflare/index.ts",
-      import: "./dist/platform/cloudflare/index.js",
-      types: "./dist/platform/cloudflare/index.d.ts",
-    });
-  });
-
-  it("declares the Node adapter as a platform implementation subpath", async () => {
-    const packageJson = JSON.parse(
-      await readFile(
-        fileURLToPath(new URL("../../package.json", import.meta.url)),
-        "utf8"
-      )
-    ) as {
-      exports: Record<string, { "@minpeter/pss-source": string }>;
-    };
-
-    expect(packageJson.exports["./node"]).toMatchObject({
-      "@minpeter/pss-source": "./src/platform/node/index.ts",
-      import: "./dist/platform/node/index.js",
-      types: "./dist/platform/node/index.d.ts",
-    });
-  });
-
-  it("exports Node file thread inspection from the Node adapter only", async () => {
+  it("exports Node file thread inspection from the file adapter only", async () => {
     const runtime = await import("../index");
-    const nodeAdapter = await import("../platform/node");
+    const fileAdapter = await import("../platform/file");
 
     expect(runtime).not.toHaveProperty("inspectNodeFileThread");
     expect(runtime).not.toHaveProperty("nodeFileThreadStorageFile");
-    expect(nodeAdapter).toHaveProperty("inspectNodeFileThread");
-    expect(nodeAdapter).toHaveProperty("nodeFileThreadStorageFile");
+    expect(fileAdapter).toHaveProperty("inspectNodeFileThread");
+    expect(fileAdapter).toHaveProperty("nodeFileThreadStorageFile");
   });
 });

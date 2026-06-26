@@ -10,9 +10,11 @@ const sourceFilesWithCurrentEdits = [
   "scripts/verify-release-artifacts/core.mjs",
   "scripts/verify-release-artifacts/package-checks.mjs",
   "scripts/verify-release-artifacts/runtime-checks.mjs",
+  "scripts/verify-release-artifacts/runtime-public-surface.mjs",
   "scripts/verify-release-artifacts/shared.mjs",
   "scripts/verify-release-artifacts-package.test.mjs",
   "scripts/verify-release-artifacts-runtime.test.mjs",
+  "scripts/verify-release-artifacts-runtime-subpaths.test.mjs",
 ];
 
 function pureLineCount(path) {

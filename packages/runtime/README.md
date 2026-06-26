@@ -377,7 +377,7 @@ new version to the runtime. `delete(key)` removes the persisted thread for that
 key.
 
 ```ts
-import { MemoryThreadStore } from "@minpeter/pss-runtime/thread-store/memory";
+import { MemoryThreadStore } from "@minpeter/pss-runtime/platform/memory";
 
 const agent = new Agent({
   host: {
@@ -389,12 +389,12 @@ const agent = new Agent({
 });
 ```
 
-For durable local Node threads, use the Node platform adapter. Set a stable `namespace` so
+For durable local Node threads, use the file platform adapter. Set a stable `namespace` so
 reconstructed agents map the same app-owned thread keys back to the same
 transcripts:
 
 ```ts
-import { createNodeFileThreadHost } from "@minpeter/pss-runtime/node";
+import { createNodeFileThreadHost } from "@minpeter/pss-runtime/platform/file";
 
 const agent = new Agent({
   host: createNodeFileThreadHost({ directory: ".pss/threads" }),
@@ -407,7 +407,7 @@ Use `inspectNodeFileThread` when local tooling needs to inspect the exact file
 runtime uses for a thread:
 
 ```ts
-import { inspectNodeFileThread } from "@minpeter/pss-runtime/node";
+import { inspectNodeFileThread } from "@minpeter/pss-runtime/platform/file";
 
 const report = await inspectNodeFileThread({
   directory: ".pss/threads",
@@ -435,11 +435,11 @@ thread persistence.
 
 ```ts
 import { Agent } from "@minpeter/pss-runtime";
-import {
-  createInMemoryExecutionHost,
-  type DurableBackgroundHost,
-  type ExecutionHost,
+import type {
+  DurableBackgroundHost,
+  ExecutionHost,
 } from "@minpeter/pss-runtime/execution";
+import { createInMemoryExecutionHost } from "@minpeter/pss-runtime/platform/memory";
 
 const host = createInMemoryExecutionHost();
 
@@ -469,12 +469,12 @@ reconstruct runtime objects between turns. The same public DX stays centered on
 behind the `host` boundary.
 
 Long-running Node.js can keep an `Agent` and `ThreadHandle` alive across turns.
-Use `@minpeter/pss-runtime/node` when a local process should persist thread
-snapshots on disk between restarts:
+Use `@minpeter/pss-runtime/platform/file` when a local process should persist
+thread snapshots on disk between restarts:
 
 ```ts
 import { Agent } from "@minpeter/pss-runtime";
-import { createNodeFileThreadHost } from "@minpeter/pss-runtime/node";
+import { createNodeFileThreadHost } from "@minpeter/pss-runtime/platform/file";
 
 const agent = new Agent({
   host: createNodeFileThreadHost({ directory: ".pss-local-threads" }),
@@ -482,15 +482,12 @@ const agent = new Agent({
 });
 ```
 
-The legacy `@minpeter/pss-runtime/thread-store/file` subpath still resolves for
-existing callers, but new Node/local code should import from the `node` platform
-subpath.
 App-owned background work still needs its own durable task/output storage if it
 must survive process restarts.
 
 Cloudflare Durable Objects and similar edge hosts should reconstruct `Agent`
 objects per turn and persist opaque thread state through a durable `threadStore`.
-Use `@minpeter/pss-runtime/cloudflare` for the packaged Cloudflare Durable
+Use `@minpeter/pss-runtime/platform/cloudflare` for the packaged Cloudflare Durable
 Object adapter. See the sync example package for blocking app-owned delegation
 and the background example package for durable background delegation in a local
 interactive CLI.
@@ -521,7 +518,7 @@ deduplicates by `idempotencyKey`, and schedules the Durable Object alarm:
 import {
   dispatchCloudflareAgentNotification,
   drainCloudflareAlarm,
-} from "@minpeter/pss-runtime/cloudflare";
+} from "@minpeter/pss-runtime/platform/cloudflare";
 
 await dispatchCloudflareAgentNotification({
   idempotencyKey: `reminder:${reminderId}`,

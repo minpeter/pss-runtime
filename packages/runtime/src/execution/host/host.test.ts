@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createInMemoryExecutionHost } from "../memory";
+import { createInMemoryExecutionHost } from "../../platform/memory";
 import type { DurableBackgroundHost } from "./capabilities";
 import { durableBackgroundHost, executionHost, threadHost } from "./host";
 

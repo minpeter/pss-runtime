@@ -5,7 +5,7 @@ import type {
   ExecutionHost,
   TurnRecord,
 } from "../execution/host/types";
-import { createInMemoryExecutionHost } from "../execution/memory";
+import { createInMemoryExecutionHost } from "../platform/memory";
 
 export interface GenerateTextToolOptions {
   readonly tools?: ToolSet;

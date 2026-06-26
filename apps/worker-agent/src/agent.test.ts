@@ -1,7 +1,24 @@
 import type { AgentEvent, AgentTurn } from "@minpeter/pss-runtime";
 import { describe, expect, it } from "vitest";
 
-import { collectAssistantOutput, WORKER_AGENT_INSTRUCTIONS } from "./agent";
+import {
+  collectTurnDelivery,
+  WORKER_AGENT_AUTO_COMPACTION,
+  WORKER_AGENT_INSTRUCTIONS,
+} from "./agent";
+import { SEND_MESSAGE_TOOL_NAME } from "./tools";
+
+describe("worker-agent auto compaction", () => {
+  it("retains fewer messages than the compaction trigger", () => {
+    expect(WORKER_AGENT_AUTO_COMPACTION.minMessages).toBeGreaterThan(
+      WORKER_AGENT_AUTO_COMPACTION.retainMessages
+    );
+    expect(WORKER_AGENT_AUTO_COMPACTION).toEqual({
+      minMessages: 48,
+      retainMessages: 16,
+    });
+  });
+});
 
 describe("worker-agent instructions", () => {
   it("uses Apex as the assistant name", () => {
@@ -25,10 +42,24 @@ describe("worker-agent instructions", () => {
       "Some messaging platforms can make replies less natural",
       "Do not invent product facts, security claims, launch details, prices, or URLs",
       "Do not mention internal agents, tools, or implementation details",
+      "The user sees only messages you send by calling send_message",
+      "Every user-visible response must be sent with send_message",
+      "A successful send_message call is the only user-visible delivery signal",
+      "Assistant text is internal only",
       "Avoid botty phrases",
     ] as const;
 
     for (const rule of requiredRules) {
+      expect(WORKER_AGENT_INSTRUCTIONS).toContain(rule);
+    }
+
+    const sessionSearchRules = [
+      "You can recall other recent conversations with list_sessions, search_sessions, and read_session",
+      "then call read_session for the selected conversation",
+      "Only state cross-conversation facts that a tool result actually returned",
+    ] as const;
+
+    for (const rule of sessionSearchRules) {
       expect(WORKER_AGENT_INSTRUCTIONS).toContain(rule);
     }
 
@@ -49,24 +80,34 @@ describe("worker-agent instructions", () => {
         surface.toLowerCase()
       );
     }
+
+    const hybridRules = [
+      "The user normally sees your final text reply after the turn ends",
+      "answering normally is fine",
+      "the worker will deliver the final text",
+    ] as const;
+
+    for (const rule of hybridRules) {
+      expect(WORKER_AGENT_INSTRUCTIONS).not.toContain(rule);
+    }
   });
 });
 
-describe("collectAssistantOutput", () => {
-  it("joins assistant text events", async () => {
+describe("collectTurnDelivery", () => {
+  it("does not treat assistant text as delivered output", async () => {
     await expect(
-      collectAssistantOutput(
+      collectTurnDelivery(
         runWithEvents([
           { type: "assistant-output", text: "first" },
           { type: "assistant-output", text: "second" },
         ])
       )
-    ).resolves.toBe("first\nsecond");
+    ).resolves.toEqual({ deliveredByTool: false });
   });
 
   it("rejects when the run contains a turn-error without assistant text", async () => {
     await expect(
-      collectAssistantOutput(
+      collectTurnDelivery(
         runWithEvents([{ type: "turn-error", message: "model unavailable" }])
       )
     ).rejects.toThrow("model unavailable");
@@ -74,13 +115,59 @@ describe("collectAssistantOutput", () => {
 
   it("rejects when a turn-error follows assistant text", async () => {
     await expect(
-      collectAssistantOutput(
+      collectTurnDelivery(
         runWithEvents([
           { type: "assistant-output", text: "partial" },
           { type: "turn-error", message: "tool failed" },
         ])
       )
     ).rejects.toThrow("tool failed");
+  });
+
+  it("suppresses fallback text when send_message delivered an answer", async () => {
+    await expect(
+      collectTurnDelivery(
+        runWithEvents([
+          {
+            output: {
+              type: "json",
+              value: {
+                channel: "chat-1",
+                delivered: true,
+                messageId: "msg-1",
+              },
+            },
+            toolCallId: "call-1",
+            toolName: SEND_MESSAGE_TOOL_NAME,
+            type: "tool-result",
+          },
+          { type: "assistant-output", text: "duplicate" },
+        ])
+      )
+    ).resolves.toEqual({ deliveredByTool: true });
+  });
+
+  it("treats any successful send_message result as delivered output", async () => {
+    await expect(
+      collectTurnDelivery(
+        runWithEvents([
+          {
+            output: {
+              type: "json",
+              value: {
+                channel: "chat-1",
+                delivered: true,
+                messageId: "msg-1",
+              },
+            },
+            toolCallId: "call-1",
+            toolName: SEND_MESSAGE_TOOL_NAME,
+            type: "tool-result",
+          },
+          { type: "assistant-output", text: "duplicate" },
+        ])
+      )
+    ).resolves.toEqual({ deliveredByTool: true });
   });
 });
 
