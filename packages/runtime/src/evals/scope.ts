@@ -8,7 +8,10 @@ import {
   parseReply,
   truncate,
 } from "./scope-output";
-import { handleFor, type MutableRecord } from "./scope-records";
+import {
+  AssertionRecorder,
+  type PendingRecordResolver,
+} from "./scope-recorder";
 import { isMatchingCall } from "./scope-tool-matching";
 import type {
   AgentEvent,
@@ -34,7 +37,7 @@ export class EvalScopeImpl implements EvalScope {
   readonly #thread: EvalThreadLike;
   readonly #judgeModel: (() => LanguageModel) | undefined;
   readonly #runs: EvalRun[] = [];
-  readonly #records: MutableRecord[] = [];
+  readonly #recorder = new AssertionRecorder();
 
   constructor(thread: EvalThreadLike, judgeModel?: () => LanguageModel) {
     this.#thread = thread;
@@ -62,7 +65,7 @@ export class EvalScopeImpl implements EvalScope {
   }
 
   get records(): readonly AssertionRecord[] {
-    return this.#records;
+    return this.#recorder.records;
   }
 
   get runs(): readonly EvalRun[] {
@@ -238,49 +241,20 @@ export class EvalScopeImpl implements EvalScope {
     failure?: string,
     score?: number
   ): AssertionHandle {
-    const entry: MutableRecord = {
-      failure: pass ? undefined : failure,
-      label,
-      passed: pass,
-      score,
-      severity,
-      strictOnly: severity === "soft",
-    };
-    this.#records.push(entry);
-    return handleFor(entry);
+    return this.#recorder.record(label, severity, pass, failure, score);
   }
 
   /** Record a deferred judge assertion; the runner resolves it after the test. */
   recordPending(
     label: string,
     severity: AssertionRecord["severity"],
-    resolve: NonNullable<MutableRecord["resolve"]>
+    resolve: PendingRecordResolver
   ): AssertionHandle {
-    const entry: MutableRecord = {
-      label,
-      passed: true,
-      resolve,
-      severity,
-      strictOnly: severity === "soft",
-    };
-    this.#records.push(entry);
-    return handleFor(entry);
+    return this.#recorder.recordPending(label, severity, resolve);
   }
 
   /** Resolve all deferred judge assertions in place. */
   async resolvePending(): Promise<void> {
-    for (const entry of this.#records) {
-      if (!entry.resolve) {
-        continue;
-      }
-      const verdict = await entry.resolve();
-      entry.resolve = undefined;
-      entry.score = verdict.score;
-      entry.failure = verdict.reason;
-      entry.passed =
-        entry.threshold === undefined
-          ? verdict.pass
-          : verdict.score >= entry.threshold;
-    }
+    await this.#recorder.resolvePending();
   }
 }
