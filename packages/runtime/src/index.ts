@@ -28,20 +28,18 @@ export type {
   AgentPlugin,
   AgentPluginInterceptResult,
   AgentPluginResult,
-  AgentToolCallContext,
-  AgentToolCallResult,
   InterceptableAgentEvent,
   PluginPipelineResult,
 } from "./thread/plugins/pipeline";
-export {
-  runPluginsForEvent,
-  runPluginsForToolCall,
-} from "./thread/plugins/pipeline";
+export { runPluginsForEvent } from "./thread/plugins/pipeline";
 export type {
   AgentEvent,
   AgentEventListener,
   AssistantOutput,
   AssistantReasoning,
+  BeforeToolCall,
+  BeforeToolCallCapability,
+  BeforeToolCallRetryPolicy,
   ControlAgentEvent,
   InputEventMeta,
   InputSource,
@@ -64,6 +62,7 @@ export type {
   VisibleAgentEvent,
 } from "./thread/protocol/events";
 export {
+  isBeforeToolCallEvent,
   isControlAgentEvent,
   isLifecycleAgentEvent,
   isTelemetryAgentEvent,

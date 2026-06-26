@@ -7,9 +7,8 @@ import {
   type AgentPlugin,
   type PluginPipelineResult,
   runPluginsForEvent,
-  runPluginsForToolCall,
 } from "../plugins/pipeline";
-import type { AgentEvent } from "../protocol/events";
+import type { AgentEvent, BeforeToolCall } from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
 
 interface ThreadEventDispatcherOptions {
@@ -107,33 +106,29 @@ export class ThreadEventDispatcher {
     return processed;
   }
 
+  async interceptBeforeToolCall(
+    checkpoint: RuntimeToolExecutionCheckpoint
+  ): Promise<RuntimeToolExecutionDecision> {
+    const pipeline = await this.#runInterceptPipeline(
+      beforeToolCallEvent(checkpoint)
+    );
+
+    return pipeline.kind === "needs-recovery"
+      ? { status: "needs-recovery" }
+      : undefined;
+  }
+
   async interceptEvent(event: AgentEvent): Promise<AgentEvent | "handled"> {
     const pipeline = await this.#runInterceptPipeline(event);
     if (pipeline.kind === "handled") {
       return "handled";
     }
 
+    if (pipeline.kind === "needs-recovery") {
+      return event;
+    }
+
     return pipeline.event;
-  }
-
-  async interceptToolCall(
-    checkpoint: RuntimeToolExecutionCheckpoint
-  ): Promise<RuntimeToolExecutionDecision> {
-    const result = await runPluginsForToolCall(this.#plugins, {
-      attempt: checkpoint.attempt,
-      capabilities: checkpoint.capabilities,
-      history: this.#history(),
-      idempotencyKey: checkpoint.idempotencyKey,
-      input: checkpoint.input,
-      policy: checkpoint.policy,
-      signal: this.#signal(),
-      toolCallId: checkpoint.toolCallId,
-      toolName: checkpoint.toolName,
-    });
-
-    return result.action === "needs-recovery"
-      ? { status: "needs-recovery" }
-      : undefined;
   }
 
   emitProcessedEvent(run: BufferedAgentTurn, event: AgentEvent): void {
@@ -147,4 +142,19 @@ export class ThreadEventDispatcher {
       signal: this.#signal(),
     });
   }
+}
+
+function beforeToolCallEvent(
+  checkpoint: RuntimeToolExecutionCheckpoint
+): BeforeToolCall {
+  return {
+    attempt: checkpoint.attempt,
+    capabilities: checkpoint.capabilities,
+    idempotencyKey: checkpoint.idempotencyKey,
+    input: checkpoint.input,
+    policy: checkpoint.policy,
+    toolCallId: checkpoint.toolCallId,
+    toolName: checkpoint.toolName,
+    type: "before-tool-call",
+  };
 }

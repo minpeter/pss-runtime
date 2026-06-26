@@ -257,8 +257,12 @@ describe("tool checkpointing through Agent", () => {
       model: fakeModel,
       plugins: [
         {
-          onToolCall: (context) => {
-            interceptedToolNames.push(context.toolName);
+          on: ({ event }) => {
+            if (event.type !== "before-tool-call") {
+              return;
+            }
+
+            interceptedToolNames.push(event.toolName);
             return { action: "needs-recovery" };
           },
         },

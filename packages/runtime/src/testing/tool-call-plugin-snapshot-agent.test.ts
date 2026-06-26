@@ -74,9 +74,13 @@ describe("tool-call plugin snapshots through Agent", () => {
       model: fakeModel,
       plugins: [
         {
-          onToolCall: (context) => {
-            if (isMutableNestedInput(context.input)) {
-              context.input.payload.path = "MUTATED.md";
+          on: ({ event }) => {
+            if (event.type !== "before-tool-call") {
+              return;
+            }
+
+            if (isMutableNestedInput(event.input)) {
+              event.input.payload.path = "MUTATED.md";
             }
           },
         },

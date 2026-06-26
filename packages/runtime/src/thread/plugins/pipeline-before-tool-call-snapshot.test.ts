@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { AgentEventContext, AgentToolCallContext } from "./pipeline";
-import { runPluginsForToolCall } from "./pipeline";
+import type { BeforeToolCall } from "../protocol/events";
+import type { AgentEventContext } from "./pipeline";
+import { runPluginsForEvent } from "./pipeline";
 
 const emptyHistory: AgentEventContext["history"] = [];
 
@@ -25,8 +26,24 @@ function isMutableToolInput(value: unknown): value is MutableToolInput {
   );
 }
 
-describe("runPluginsForToolCall snapshots", () => {
-  it("keeps plugin mutations out of the source context and later plugins", async () => {
+function beforeToolCallEvent(
+  input: unknown,
+  capabilities: BeforeToolCall["capabilities"]
+): BeforeToolCall {
+  return {
+    attempt: 1,
+    capabilities,
+    idempotencyKey: "run-1:call_tool-1",
+    input,
+    policy: "manual-recovery",
+    toolCallId: "call_tool-1",
+    toolName: "write_file",
+    type: "before-tool-call",
+  };
+}
+
+describe("before-tool-call plugin snapshots", () => {
+  it("keeps plugin mutations out of the source event and later plugins", async () => {
     const input = {
       nested: { value: "original" },
       path: "/tmp/example.txt",
@@ -38,46 +55,51 @@ describe("runPluginsForToolCall snapshots", () => {
       },
     ];
     let observedBySecond:
-      | Pick<AgentToolCallContext, "capabilities" | "input">
+      | Pick<BeforeToolCall, "capabilities" | "input">
       | undefined;
 
-    const result = await runPluginsForToolCall(
+    const result = await runPluginsForEvent(
       [
         {
-          onToolCall: (context) => {
-            if (isMutableToolInput(context.input)) {
-              context.input.path = "/tmp/mutated.txt";
-              context.input.nested.value = "mutated";
+          on: ({ event }) => {
+            if (event.type !== "before-tool-call") {
+              return;
             }
 
-            const capability = context.capabilities[0];
+            if (isMutableToolInput(event.input)) {
+              event.input.path = "/tmp/mutated.txt";
+              event.input.nested.value = "mutated";
+            }
+
+            const capability = event.capabilities[0];
             if (capability) {
               Object.assign(capability, { kind: "network", scope: "global" });
             }
           },
         },
         {
-          onToolCall: (context) => {
+          on: ({ event }) => {
+            if (event.type !== "before-tool-call") {
+              return;
+            }
+
             observedBySecond = {
-              capabilities: context.capabilities,
-              input: context.input,
+              capabilities: event.capabilities,
+              input: event.input,
             };
           },
         },
       ],
       {
-        attempt: 1,
-        capabilities,
+        event: beforeToolCallEvent(input, capabilities),
         history: emptyHistory,
-        idempotencyKey: "run-1:call_tool-1",
-        input,
-        policy: "manual-recovery",
-        toolCallId: "call_tool-1",
-        toolName: "write_file",
       }
     );
 
-    expect(result).toEqual({ action: "continue" });
+    expect(result).toEqual({
+      kind: "emit",
+      event: beforeToolCallEvent(input, capabilities),
+    });
     expect(input).toEqual({
       nested: { value: "original" },
       path: "/tmp/example.txt",

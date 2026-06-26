@@ -21,8 +21,8 @@ import type {
   AgentHost,
   AgentInput,
   AgentOptions,
-  AgentToolCallContext,
-  AgentToolCallResult,
+  AgentPluginInterceptResult,
+  BeforeToolCall,
   ControlAgentEvent,
   LifecycleAgentEvent,
   RuntimeToolCapability,
@@ -34,12 +34,12 @@ import type {
 } from "../index";
 import {
   Agent,
+  isBeforeToolCallEvent,
   isControlAgentEvent,
   isLifecycleAgentEvent,
   isTelemetryAgentEvent,
   isVisibleAgentEvent,
   runPluginsForEvent,
-  runPluginsForToolCall,
 } from "../index";
 
 type EmptyHostIsRejected =
@@ -75,9 +75,10 @@ describe("runtime public exports", () => {
     expect(runtime).toHaveProperty("Agent", Agent);
     expect(runtime).toHaveProperty("runPluginsForEvent", runPluginsForEvent);
     expect(runtime).toHaveProperty(
-      "runPluginsForToolCall",
-      runPluginsForToolCall
+      "isBeforeToolCallEvent",
+      isBeforeToolCallEvent
     );
+    expect(runtime).not.toHaveProperty("runPluginsForToolCall");
     expect(runtime).not.toHaveProperty("createInMemoryExecutionHost");
     expect(runtime).not.toHaveProperty("createCloudflareDurableObjectHost");
     expect(runtime).not.toHaveProperty("createCloudflareAgentContext");
@@ -187,7 +188,7 @@ describe("runtime public exports", () => {
     expect(compaction.startSeq).toBe(0);
   });
 
-  it("types public runtime tool metadata and tool-call plugin results", () => {
+  it("types public runtime tool metadata and before-tool-call plugin results", () => {
     const capabilities = [
       {
         kind: "filesystem",
@@ -201,25 +202,26 @@ describe("runtime public exports", () => {
       capabilities,
       retryPolicy: "manual-recovery",
     } satisfies RuntimeToolMetadata;
-    const context = {
+    const event = {
       attempt: 1,
       capabilities,
-      history: [],
       idempotencyKey: "run-1:call_tool-1",
       input: { path: "README.md" },
       policy: "manual-recovery",
       toolCallId: "call_tool-1",
       toolName: "write_file",
-    } satisfies AgentToolCallContext;
+      type: "before-tool-call",
+    } satisfies BeforeToolCall;
     const continueResult = {
       action: "continue",
-    } satisfies AgentToolCallResult;
+    } satisfies AgentPluginInterceptResult;
     const recoveryResult = {
       action: "needs-recovery",
-    } satisfies AgentToolCallResult;
+    } satisfies AgentPluginInterceptResult;
 
     expect(metadata.capabilities).toEqual(capabilities);
-    expect(context.toolName).toBe("write_file");
+    expect(event.toolName).toBe("write_file");
+    expect(isBeforeToolCallEvent(event)).toBe(true);
     expect(continueResult.action).toBe("continue");
     expect(recoveryResult.action).toBe("needs-recovery");
   });

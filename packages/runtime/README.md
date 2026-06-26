@@ -187,37 +187,45 @@ const agent = new Agent({
 For most events, `on` is observe-only: return nothing (or `{ action: "continue" }`)
 and the runtime emits the event unchanged.
 
-Two input event types support intercept returns:
+Three event types support intercept returns:
 
 - `user-input`
 - `runtime-input`
+- `before-tool-call` (plugin-only; synthesized after the `before-tool`
+  checkpoint and before tool `execute`, not emitted on `turn.events()`)
 
 Return one of:
 
 - `{ action: "continue" }` — emit the current event (default when omitted)
-- `{ action: "transform", event }` — emit a replacement input event
+- `{ action: "transform", event }` — emit a replacement input event (`user-input`
+  and `runtime-input` only)
 - `{ action: "handled" }` — skip emit; for `thread.send`, close the run without
-  starting a turn
+  starting a turn (`user-input` and `runtime-input` only)
+- `{ action: "needs-recovery" }` — stop before real tool execution and mark the
+  durable run for manual recovery (`before-tool-call` only)
 
 Plugins run in registration order. Each `transform` updates the event seen by
 later plugins, so transforms chain sequentially.
 
 ### Tool-call interception
 
-Plugins can also expose `onToolCall` to inspect a tool call after the runtime
-writes the `before-tool` checkpoint and before the tool's `execute` function
-runs:
+Handle `before-tool-call` in the same `on` handler after the runtime writes the
+`before-tool` checkpoint and before the tool's `execute` function runs:
 
 ```ts
 import type { AgentPlugin } from "@minpeter/pss-runtime";
 
 const approvalPlugin: AgentPlugin = {
   name: "approval",
-  onToolCall: ({ capabilities, toolName }) => {
-    const writesFiles = capabilities.some(
+  on: ({ event }) => {
+    if (event.type !== "before-tool-call") {
+      return;
+    }
+
+    const writesFiles = event.capabilities.some(
       (capability) => capability.kind === "filesystem"
     );
-    if (writesFiles && toolName !== "approved_write") {
+    if (writesFiles && event.toolName !== "approved_write") {
       return { action: "needs-recovery" };
     }
     return { action: "continue" };
@@ -225,12 +233,12 @@ const approvalPlugin: AgentPlugin = {
 };
 ```
 
-`onToolCall` receives `toolName`, `toolCallId`, `input`, `policy`, `attempt`,
-`idempotencyKey`, normalized `capabilities`, current model-message `history`,
-and `signal`. Returning `{ action: "needs-recovery" }` stops before real tool
-execution and marks the durable run for manual recovery. Returning
-`{ action: "continue" }`, returning nothing, or returning an invalid value lets
-execution continue. The hook does not transform inputs or inject outputs.
+`before-tool-call` events carry `toolName`, `toolCallId`, `input`, `policy`,
+`attempt`, `idempotencyKey`, and normalized `capabilities`. Plugin handlers also
+receive current model-message `history` and `signal` through `AgentEventContext`.
+The runtime snapshots `before-tool-call` payloads before each plugin runs, so
+input or capability mutations do not affect later plugins or tool execution.
+`transform` and `handled` returns are ignored for `before-tool-call`.
 
 Tool definitions may declare top-level runtime metadata next to AI SDK tool
 fields:

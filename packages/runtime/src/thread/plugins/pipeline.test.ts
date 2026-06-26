@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { AgentEventContext, AgentToolCallContext } from "./pipeline";
-import {
-  type AgentPlugin,
-  runPluginsForEvent,
-  runPluginsForToolCall,
-} from "./pipeline";
+import type { BeforeToolCall } from "../protocol/events";
+import type { AgentEventContext } from "./pipeline";
+import { type AgentPlugin, runPluginsForEvent } from "./pipeline";
 
 const emptyHistory: AgentEventContext["history"] = [];
 
@@ -101,45 +98,48 @@ describe("runPluginsForEvent", () => {
   });
 });
 
-describe("runPluginsForToolCall", () => {
-  const toolContext = {
+describe("before-tool-call interception", () => {
+  const beforeToolCall = {
     attempt: 1,
     capabilities: [],
-    history: emptyHistory,
     idempotencyKey: "run-1:call_tool-1",
     input: { path: "/tmp/example.txt" },
     policy: "manual-recovery",
     toolCallId: "call_tool-1",
     toolName: "write_file",
-  } satisfies AgentToolCallContext;
+    type: "before-tool-call",
+  } satisfies BeforeToolCall;
 
   it("stops at the first plugin that requests recovery", async () => {
     const calls: string[] = [];
-    const result = await runPluginsForToolCall(
+    const result = await runPluginsForEvent(
       [
         {
-          onToolCall: () => {
+          on: () => {
             calls.push("first");
             return { action: "continue" };
           },
         },
         {
-          onToolCall: () => {
+          on: () => {
             calls.push("second");
             return { action: "needs-recovery" };
           },
         },
         {
-          onToolCall: () => {
+          on: () => {
             calls.push("third");
             return { action: "continue" };
           },
         },
       ],
-      toolContext
+      {
+        event: beforeToolCall,
+        history: emptyHistory,
+      }
     );
 
-    expect(result).toEqual({ action: "needs-recovery" });
+    expect(result).toEqual({ kind: "needs-recovery" });
     expect(calls).toEqual(["first", "second"]);
   });
 
@@ -147,21 +147,24 @@ describe("runPluginsForToolCall", () => {
     const calls: string[] = [];
     const invalidReturns: unknown[] = [null, false, 0, "needs-recovery", {}];
     const plugins: AgentPlugin[] = invalidReturns.map((value, index) => ({
-      onToolCall: () => {
+      on: () => {
         calls.push(`invalid-${index}`);
-        return value as ReturnType<NonNullable<AgentPlugin["onToolCall"]>>;
+        return value as ReturnType<NonNullable<AgentPlugin["on"]>>;
       },
     }));
     plugins.push({
-      onToolCall: () => {
+      on: () => {
         calls.push("continue");
         return { action: "continue" };
       },
     });
 
-    const result = await runPluginsForToolCall(plugins, toolContext);
+    const result = await runPluginsForEvent(plugins, {
+      event: beforeToolCall,
+      history: emptyHistory,
+    });
 
-    expect(result).toEqual({ action: "continue" });
+    expect(result).toEqual({ kind: "emit", event: beforeToolCall });
     expect(calls).toEqual([
       "invalid-0",
       "invalid-1",
@@ -170,5 +173,24 @@ describe("runPluginsForToolCall", () => {
       "invalid-4",
       "continue",
     ]);
+  });
+
+  it("ignores transform returns on before-tool-call", async () => {
+    const result = await runPluginsForEvent(
+      [
+        {
+          on: () => ({
+            action: "transform",
+            event: { type: "user-input", text: "should-not-apply" },
+          }),
+        },
+      ],
+      {
+        event: beforeToolCall,
+        history: emptyHistory,
+      }
+    );
+
+    expect(result).toEqual({ kind: "emit", event: beforeToolCall });
   });
 });
