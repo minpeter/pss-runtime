@@ -41,19 +41,33 @@ export class EvalScopeImpl implements EvalScope {
     this.#judgeModel = judgeModel;
   }
 
-  get reply(): string { return this.#runs.at(-1)?.output ?? ""; }
+  get reply(): string {
+    return this.#runs.at(-1)?.output ?? "";
+  }
 
-  get events(): readonly AgentEvent[] { return this.#runs.flatMap((r) => r.events); }
+  get events(): readonly AgentEvent[] {
+    return this.#runs.flatMap((r) => r.events);
+  }
 
-  get toolCalls(): readonly EvalToolCall[] { return this.#runs.flatMap((r) => r.toolCalls); }
+  get toolCalls(): readonly EvalToolCall[] {
+    return this.#runs.flatMap((r) => r.toolCalls);
+  }
 
-  get toolResults(): readonly EvalToolResult[] { return this.#runs.flatMap((r) => r.toolResults); }
+  get toolResults(): readonly EvalToolResult[] {
+    return this.#runs.flatMap((r) => r.toolResults);
+  }
 
-  get failed(): boolean { return this.#runs.some((r) => r.error !== undefined); }
+  get failed(): boolean {
+    return this.#runs.some((r) => r.error !== undefined);
+  }
 
-  get records(): readonly AssertionRecord[] { return this.#records; }
+  get records(): readonly AssertionRecord[] {
+    return this.#records;
+  }
 
-  get runs(): readonly EvalRun[] { return this.#runs; }
+  get runs(): readonly EvalRun[] {
+    return this.#runs;
+  }
 
   async run(input: string): Promise<EvalRun> {
     const result = await runAgent(this.#thread, input);

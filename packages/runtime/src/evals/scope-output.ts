@@ -20,5 +20,7 @@ export function isPromise(value: unknown): value is Promise<unknown> {
 }
 
 export function outputEqualsFailure(parsedOk: boolean): string | undefined {
-  return parsedOk ? "parsed reply did not equal expected" : "reply was not JSON";
+  return parsedOk
+    ? "parsed reply did not equal expected"
+    : "reply was not JSON";
 }

@@ -1,12 +1,12 @@
 import type { LanguageModel } from "ai";
-import type { AssertionHandle, EvalScope, JudgeCallOptions } from "./types";
 import {
   closedQATask,
   factualityTask,
+  type JudgeVerdict,
   runJudge,
   summarizesTask,
-  type JudgeVerdict,
 } from "./judge";
+import type { AssertionHandle, EvalScope, JudgeCallOptions } from "./types";
 
 interface JudgeScopeOptions {
   readonly judgeModel?: () => LanguageModel;
@@ -28,8 +28,7 @@ export function createJudgeScope({
     task: string,
     options: JudgeCallOptions | undefined
   ): AssertionHandle => {
-    const model =
-      options?.model === undefined ? judgeModel?.() : options.model;
+    const model = options?.model === undefined ? judgeModel?.() : options.model;
     const value = options?.on === undefined ? reply() : options.on;
     if (model === undefined) {
       return recordPending(label, "gate", () =>
@@ -47,7 +46,9 @@ export function createJudgeScope({
         return {
           pass: false,
           reason:
-            e instanceof Error ? `judge call failed: ${e.message}` : "judge call failed",
+            e instanceof Error
+              ? `judge call failed: ${e.message}`
+              : "judge call failed",
           score: 0,
         };
       }
@@ -57,7 +58,11 @@ export function createJudgeScope({
   return {
     autoevals: {
       closedQA: (criterion, options) =>
-        declare(`judge.closedQA(${criterion})`, closedQATask(criterion), options),
+        declare(
+          `judge.closedQA(${criterion})`,
+          closedQATask(criterion),
+          options
+        ),
       factuality: (expected, options) =>
         declare("judge.factuality", factualityTask(expected), options),
       summarizes: (expected, options) =>

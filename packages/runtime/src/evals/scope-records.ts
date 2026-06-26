@@ -1,5 +1,5 @@
-import type { AssertionHandle, AssertionRecord } from "./types";
 import type { JudgeVerdict } from "./judge";
+import type { AssertionHandle, AssertionRecord } from "./types";
 
 export interface MutableRecord {
   failure?: string;
