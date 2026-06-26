@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Checkpoint, ExecutionHost } from "../execution";
+import { throwIfManualToolRecoveryRequired } from "../execution/resume/checkpoints";
+import { ToolExecutionNeedsRecoveryError } from "../llm/tool-execution";
 import { InMemorySqlStorage } from "../platform/cloudflare/sql/node-test/node-sqlite-storage";
 import { InMemoryCloudflareDurableObjectStorage } from "../platform/cloudflare/storage/durable-object/durable-object-storage";
 import { DurableObjectExecutionStore } from "../platform/cloudflare/storage/execution/store";
@@ -276,5 +278,59 @@ describe("tool checkpointing through Agent", () => {
     ).resolves.toMatchObject({
       status: "needs-recovery",
     });
+  });
+
+  it("persists plugin-forced recovery so idempotent tools cannot replay on resume", async () => {
+    const Agent = await loadAgent();
+    const { checkpoints, host } = createCheckpointSpyHost();
+    const signal = new AbortController().signal;
+    let executions = 0;
+
+    generateTextMock.mockImplementationOnce(
+      async (options: GenerateTextToolOptions) => {
+        await executableTool(options.tools ?? {}, "dangerous_tool").execute?.(
+          {},
+          toolOptions("call_sdk-tool-call-1", signal)
+        );
+
+        return {
+          responseMessages: [assistantMessage("SHOULD NOT FINISH")],
+        };
+      }
+    );
+
+    const agent = new Agent({
+      host,
+      model: fakeModel,
+      plugins: [
+        {
+          on: ({ event }) =>
+            event.type === "before-tool-call"
+              ? { action: "needs-recovery" }
+              : undefined,
+        },
+      ],
+      tools: {
+        dangerous_tool: checkpointedTool("idempotent", () => {
+          executions += 1;
+          return { ok: true };
+        }),
+      },
+    });
+
+    const events = await collectRun(await agent.send("use the tool"));
+    const latestCheckpoint = await host.store.checkpoints.latest(
+      checkpoints[0]?.runId ?? ""
+    );
+
+    expect(executions).toBe(0);
+    expect(events.map((event) => event.type)).toContain("turn-error");
+    expect(checkpoints.at(-1)?.pendingToolCall).toMatchObject({
+      policy: "manual-recovery",
+      toolName: "dangerous_tool",
+    });
+    expect(() => throwIfManualToolRecoveryRequired(latestCheckpoint)).toThrow(
+      ToolExecutionNeedsRecoveryError
+    );
   });
 });

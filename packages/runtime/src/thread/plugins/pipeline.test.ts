@@ -142,6 +142,33 @@ describe("before-tool-call interception", () => {
     expect(calls).toEqual(["first", "second"]);
   });
 
+  it("continues after handled returns on before-tool-call", async () => {
+    const calls: string[] = [];
+    const result = await runPluginsForEvent(
+      [
+        {
+          on: () => {
+            calls.push("handled");
+            return { action: "handled" };
+          },
+        },
+        {
+          on: () => {
+            calls.push("recovery");
+            return { action: "needs-recovery" };
+          },
+        },
+      ],
+      {
+        event: beforeToolCall,
+        history: emptyHistory,
+      }
+    );
+
+    expect(result).toEqual({ kind: "needs-recovery" });
+    expect(calls).toEqual(["handled", "recovery"]);
+  });
+
   it("ignores invalid JavaScript returns and continues in registration order", async () => {
     const calls: string[] = [];
     const invalidReturns: unknown[] = [null, false, 0, "needs-recovery", {}];

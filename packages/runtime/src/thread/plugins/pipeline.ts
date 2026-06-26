@@ -106,11 +106,12 @@ async function runPluginPipeline(
       continue;
     }
 
-    if (
-      intercept.action === "needs-recovery" &&
-      isBeforeToolCall(currentEvent)
-    ) {
-      return { kind: "needs-recovery" };
+    if (isBeforeToolCall(currentEvent)) {
+      if (intercept.action === "needs-recovery") {
+        return { kind: "needs-recovery" };
+      }
+
+      continue;
     }
 
     if (intercept.action === "handled") {

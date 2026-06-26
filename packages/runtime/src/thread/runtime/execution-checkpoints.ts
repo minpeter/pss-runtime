@@ -55,7 +55,20 @@ export function createThreadToolExecutionContext({
         state,
         toolCall: checkpoint,
       });
-      return interceptToolCall?.(checkpoint);
+      const decision = await interceptToolCall?.(checkpoint);
+      if (
+        decision?.status === "needs-recovery" &&
+        checkpoint.policy !== "manual-recovery"
+      ) {
+        await appendThreadToolExecutionCheckpoint({
+          executionHost,
+          phase: "before-tool",
+          runId,
+          state,
+          toolCall: { ...checkpoint, policy: "manual-recovery" },
+        });
+      }
+      return decision;
     },
     runId,
   };
