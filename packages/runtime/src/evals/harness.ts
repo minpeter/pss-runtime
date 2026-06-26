@@ -54,6 +54,7 @@ export async function runAgent(
   return {
     error,
     events,
+    input,
     output: output.join(""),
     toolCalls,
     toolResults,

@@ -1,13 +1,15 @@
 import type { LanguageModel } from "ai";
 import { runAgent } from "./harness";
+import { deepEqual } from "./matchers";
+import { createJudgeScope } from "./scope-judge";
 import {
-  closedQATask,
-  factualityTask,
-  type JudgeVerdict,
-  runJudge,
-  summarizesTask,
-} from "./judge";
-import { deepEqual, matchField } from "./matchers";
+  isPromise,
+  outputEqualsFailure,
+  parseReply,
+  truncate,
+} from "./scope-output";
+import { handleFor, type MutableRecord } from "./scope-records";
+import { isMatchingCall } from "./scope-tool-matching";
 import type {
   AgentEvent,
   AssertionHandle,
@@ -17,7 +19,6 @@ import type {
   EvalThreadLike,
   EvalToolCall,
   EvalToolResult,
-  JudgeCallOptions,
   SchemaInput,
   ToolCallMatcherOptions,
   ValueBuilder,
@@ -40,36 +41,24 @@ export class EvalScopeImpl implements EvalScope {
     this.#judgeModel = judgeModel;
   }
 
-  get reply(): string {
-    return this.#runs.at(-1)?.output ?? "";
-  }
+  get reply(): string { return this.#runs.at(-1)?.output ?? ""; }
 
-  get events(): readonly AgentEvent[] {
-    return this.#runs.flatMap((r) => r.events);
-  }
+  get events(): readonly AgentEvent[] { return this.#runs.flatMap((r) => r.events); }
 
-  get toolCalls(): readonly EvalToolCall[] {
-    return this.#runs.flatMap((r) => r.toolCalls);
-  }
+  get toolCalls(): readonly EvalToolCall[] { return this.#runs.flatMap((r) => r.toolCalls); }
 
-  get toolResults(): readonly EvalToolResult[] {
-    return this.#runs.flatMap((r) => r.toolResults);
-  }
+  get toolResults(): readonly EvalToolResult[] { return this.#runs.flatMap((r) => r.toolResults); }
 
-  get failed(): boolean {
-    return this.#runs.some((r) => r.error !== undefined);
-  }
+  get failed(): boolean { return this.#runs.some((r) => r.error !== undefined); }
 
-  get records(): readonly AssertionRecord[] {
-    return this.#records;
-  }
+  get records(): readonly AssertionRecord[] { return this.#records; }
 
-  run(input: string): Promise<EvalRun> {
-    const run = runAgent(this.#thread, input).then((result) => {
-      this.#runs.push(result);
-      return result;
-    });
-    return run;
+  get runs(): readonly EvalRun[] { return this.#runs; }
+
+  async run(input: string): Promise<EvalRun> {
+    const result = await runAgent(this.#thread, input);
+    this.#runs.push(result);
+    return result;
   }
 
   // --- run-level assertions ---
@@ -173,8 +162,7 @@ export class EvalScopeImpl implements EvalScope {
     predicate: (events: readonly AgentEvent[]) => boolean,
     label: string
   ): AssertionHandle {
-    const pass = predicate(this.events);
-    return this.record(`event(${label})`, "gate", pass);
+    return this.record(`event(${label})`, "gate", predicate(this.events));
   }
 
   outputEquals(value: unknown): AssertionHandle {
@@ -219,49 +207,12 @@ export class EvalScopeImpl implements EvalScope {
   }
 
   get judge(): EvalScope["judge"] {
-    const declare = (
-      label: string,
-      task: string,
-      options: JudgeCallOptions | undefined
-    ): AssertionHandle => {
-      const model =
-        options?.model === undefined ? this.#judgeModel?.() : options.model;
-      const value = options?.on === undefined ? this.reply : options.on;
-      if (model === undefined) {
-        return this.record(label, "gate", false, "no judge model configured");
-      }
-      // Declare now; the runner resolves the LLM call after the test function
-      // runs (eve-style), so .atLeast/.gate chain synchronously without await.
-      const resolve = async () => {
-        try {
-          return await runJudge(model, task, value);
-        } catch (e) {
-          return {
-            pass: false,
-            reason:
-              e instanceof Error
-                ? `judge call failed: ${e.message}`
-                : "judge call failed",
-            score: 0,
-          };
-        }
-      };
-      return this.recordPending(label, "soft", resolve);
-    };
-    return {
-      autoevals: {
-        closedQA: (criterion, options) =>
-          declare(
-            `judge.closedQA(${criterion})`,
-            closedQATask(criterion),
-            options
-          ),
-        factuality: (expected, options) =>
-          declare("judge.factuality", factualityTask(expected), options),
-        summarizes: (expected, options) =>
-          declare("judge.summarizes", summarizesTask(expected), options),
-      },
-    };
+    return createJudgeScope({
+      judgeModel: this.#judgeModel,
+      recordPending: (label, severity, resolve) =>
+        this.recordPending(label, severity, resolve),
+      reply: () => this.reply,
+    });
   }
 
   // --- recording core ---
@@ -289,7 +240,7 @@ export class EvalScopeImpl implements EvalScope {
   recordPending(
     label: string,
     severity: AssertionRecord["severity"],
-    resolve: () => Promise<JudgeVerdict>
+    resolve: NonNullable<MutableRecord["resolve"]>
   ): AssertionHandle {
     const entry: MutableRecord = {
       label,
@@ -318,93 +269,4 @@ export class EvalScopeImpl implements EvalScope {
           : verdict.score >= entry.threshold;
     }
   }
-}
-
-function isMatchingCall(
-  call: EvalToolCall,
-  runs: readonly EvalRun[],
-  name: string,
-  options: ToolCallMatcherOptions
-): boolean {
-  if (call.toolName !== name) {
-    return false;
-  }
-  if (options.input !== undefined && !matchField(options.input, call.input)) {
-    return false;
-  }
-  if (options.output !== undefined) {
-    const result = runs
-      .flatMap((r) => r.toolResults)
-      .find((r) => r.toolCallId === call.toolCallId);
-    if (!(result && matchField(options.output, result.output))) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function parseReply(
-  reply: string
-): { ok: true; value: unknown } | { ok: false } {
-  if (reply.length === 0) {
-    return { ok: false };
-  }
-  try {
-    return { ok: true, value: JSON.parse(reply) };
-  } catch {
-    return { ok: false };
-  }
-}
-
-function truncate(value: string): string {
-  return value.length > 60 ? `${value.slice(0, 57)}...` : value;
-}
-
-function isPromise(value: unknown): value is Promise<unknown> {
-  return typeof value === "object" && value !== null && "then" in value;
-}
-
-function outputEqualsFailure(parsedOk: boolean): string | undefined {
-  if (parsedOk) {
-    return "parsed reply did not equal expected";
-  }
-  return "reply was not JSON";
-}
-
-interface MutableRecord {
-  failure?: string;
-  label: string;
-  passed: boolean;
-  /** Deferred LLM judge, resolved by the runner after the test function runs. */
-  resolve?: () => Promise<JudgeVerdict>;
-  score?: number;
-  severity: AssertionRecord["severity"];
-  strictOnly: boolean;
-  threshold?: number;
-}
-
-function handleFor(entry: MutableRecord): AssertionHandle {
-  const build = (): AssertionHandle => ({
-    gate: () => {
-      entry.severity = "gate";
-      entry.strictOnly = false;
-      return build();
-    },
-    soft: (threshold) => {
-      entry.severity = "soft";
-      entry.strictOnly = true;
-      entry.threshold = threshold;
-      entry.passed =
-        threshold === undefined ? true : (entry.score ?? 0) >= threshold;
-      return build();
-    },
-    atLeast: (threshold) => {
-      entry.severity = "soft";
-      entry.strictOnly = true;
-      entry.threshold = threshold;
-      entry.passed = (entry.score ?? 0) >= threshold;
-      return build();
-    },
-  });
-  return build();
 }

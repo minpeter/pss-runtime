@@ -14,6 +14,8 @@ export interface EvalRun {
   readonly error?: string;
   /** The raw runtime events, for advanced assertions or debugging. */
   readonly events: readonly AgentEvent[];
+  /** User input that drove this turn. */
+  readonly input: string;
   /** Visible assistant text, concatenated across the turn. */
   readonly output: string;
   /** Every tool the model requested, in call order. */
@@ -147,6 +149,8 @@ export interface CaseResult {
   readonly name: string;
   /** Gate-based pass (plus strict softs when run under `--strict`). */
   readonly passed: boolean;
+  /** Per-`t.run()` traces, suitable for JSON report inspection. */
+  readonly runs: readonly EvalRun[];
   /** True when a soft assertion missed its bar (tracked, non-fatal unless strict). */
   readonly scored: boolean;
 }

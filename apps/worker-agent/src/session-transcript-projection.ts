@@ -3,55 +3,41 @@ import { z } from "zod";
 import type { SessionTranscriptMessage } from "./session-transcript";
 import { SEND_MESSAGE_TOOL_NAME } from "./tools";
 
-const TextContentPartSchema = z
-  .object({
+const TextContentPartSchema = z.looseObject({
+  text: z.string(),
+  type: z.literal("text"),
+});
+
+const SendMessageToolCallPartSchema = z.looseObject({
+  input: z.looseObject({
     text: z.string(),
-    type: z.literal("text"),
-  })
-  .passthrough();
+  }),
+  toolName: z.literal(SEND_MESSAGE_TOOL_NAME),
+  type: z.literal("tool-call"),
+});
 
-const SendMessageToolCallPartSchema = z
-  .object({
-    input: z
-      .object({
-        text: z.string(),
-      })
-      .passthrough(),
-    toolName: z.literal(SEND_MESSAGE_TOOL_NAME),
-    type: z.literal("tool-call"),
-  })
-  .passthrough();
+const ModelMessageSchema = z.looseObject({
+  content: z.unknown(),
+  role: z.enum(["assistant", "system", "tool", "user"]),
+});
 
-const ModelMessageSchema = z
-  .object({
-    content: z.unknown(),
-    role: z.enum(["assistant", "system", "tool", "user"]),
-  })
-  .passthrough();
-
-const ThreadCompactionSchema = z
-  .object({
-    endSeqExclusive: z.number().int().positive(),
-    schemaVersion: z.literal(1),
-    startSeq: z.number().int().nonnegative(),
-    summary: ModelMessageSchema,
-  })
-  .passthrough();
+const ThreadCompactionSchema = z.looseObject({
+  endSeqExclusive: z.number().int().positive(),
+  schemaVersion: z.literal(1),
+  startSeq: z.number().int().nonnegative(),
+  summary: ModelMessageSchema,
+});
 
 const ThreadSnapshotSchema = z.discriminatedUnion("schemaVersion", [
-  z
-    .object({
-      history: z.array(ModelMessageSchema).readonly(),
-      schemaVersion: z.literal(1),
-    })
-    .passthrough(),
-  z
-    .object({
-      compactions: z.array(ThreadCompactionSchema).readonly(),
-      history: z.array(ModelMessageSchema).readonly(),
-      schemaVersion: z.literal(2),
-    })
-    .passthrough(),
+  z.looseObject({
+    history: z.array(ModelMessageSchema).readonly(),
+    schemaVersion: z.literal(1),
+  }),
+  z.looseObject({
+    compactions: z.array(ThreadCompactionSchema).readonly(),
+    history: z.array(ModelMessageSchema).readonly(),
+    schemaVersion: z.literal(2),
+  }),
 ]);
 
 export function extractSessionTranscriptMessages(
