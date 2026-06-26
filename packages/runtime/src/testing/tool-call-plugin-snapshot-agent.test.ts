@@ -99,4 +99,54 @@ describe("tool-call plugin snapshots through Agent", () => {
       payload: { path: "README.md" },
     });
   });
+
+  it("keeps before-tool-call events out of public turn events", async () => {
+    const Agent = await loadAgent();
+    const { host } = createCheckpointSpyHost();
+    const signal = new AbortController().signal;
+    const interceptedToolNames: string[] = [];
+
+    generateTextMock
+      .mockImplementationOnce(async (options: GenerateTextToolOptions) => {
+        const toolCall = toolCallPart("call_sdk-tool-call-1", "checked_tool");
+        await executableTool(options.tools ?? {}, "checked_tool").execute?.(
+          { payload: { path: "README.md" } },
+          toolOptions("call_sdk-tool-call-1", signal)
+        );
+
+        return {
+          responseMessages: [
+            assistantMessage([toolCall]),
+            toolResultFor(toolCall),
+          ],
+        };
+      })
+      .mockImplementationOnce(async () => ({
+        responseMessages: [assistantMessage("DONE")],
+      }));
+
+    const agent = new Agent({
+      host,
+      model: fakeModel,
+      plugins: [
+        {
+          on: ({ event }) => {
+            if (event.type !== "before-tool-call") {
+              return;
+            }
+
+            interceptedToolNames.push(event.toolName);
+          },
+        },
+      ],
+      tools: {
+        checked_tool: checkpointedTool("idempotent", () => ({ ok: true })),
+      },
+    });
+
+    const events = await collectRun(await agent.send("use the tool"));
+
+    expect(interceptedToolNames).toEqual(["checked_tool"]);
+    expect(events.map((event) => event.type)).not.toContain("before-tool-call");
+  });
 });

@@ -234,8 +234,10 @@ const approvalPlugin: AgentPlugin = {
 `attempt`, and `idempotencyKey`. Plugin handlers also receive current
 model-message `history` and `signal` through `AgentEventContext`. The runtime
 snapshots `before-tool-call` payloads before each plugin runs, so input mutations
-do not affect later plugins or tool execution. `transform` and `handled` returns
-are ignored for `before-tool-call`.
+do not affect later plugins or tool execution. Keep tool inputs
+structured-cloneable and reasonably sized, because the runtime clones the input
+once per plugin before tool execution. `transform` and `handled` returns are
+ignored for `before-tool-call`.
 
 ### Input `meta.source`
 
