@@ -187,20 +187,57 @@ const agent = new Agent({
 For most events, `on` is observe-only: return nothing (or `{ action: "continue" }`)
 and the runtime emits the event unchanged.
 
-Two input event types support intercept returns:
+Three event types support intercept returns:
 
 - `user-input`
 - `runtime-input`
+- `before-tool-call` (plugin-only; synthesized after the `before-tool`
+  checkpoint and before tool `execute`, not emitted on `turn.events()`)
 
 Return one of:
 
 - `{ action: "continue" }` — emit the current event (default when omitted)
-- `{ action: "transform", event }` — emit a replacement input event
+- `{ action: "transform", event }` — emit a replacement input event (`user-input`
+  and `runtime-input` only)
 - `{ action: "handled" }` — skip emit; for `thread.send`, close the run without
-  starting a turn
+  starting a turn (`user-input` and `runtime-input` only)
+- `{ action: "needs-recovery" }` — stop before real tool execution and mark the
+  durable run for manual recovery (`before-tool-call` only)
 
 Plugins run in registration order. Each `transform` updates the event seen by
 later plugins, so transforms chain sequentially.
+
+### Tool-call interception
+
+Handle `before-tool-call` in the same `on` handler after the runtime writes the
+`before-tool` checkpoint and before the tool's `execute` function runs:
+
+```ts
+import type { AgentPlugin } from "@minpeter/pss-runtime";
+
+const approvalPlugin: AgentPlugin = {
+  name: "approval",
+  on: ({ event }) => {
+    if (event.type !== "before-tool-call") {
+      return;
+    }
+
+    if (event.toolName === "write_file") {
+      return { action: "needs-recovery" };
+    }
+    return { action: "continue" };
+  },
+};
+```
+
+`before-tool-call` events carry `toolName`, `toolCallId`, `input`, `policy`,
+`attempt`, and `idempotencyKey`. Plugin handlers also receive current
+model-message `history` and `signal` through `AgentEventContext`. The runtime
+snapshots `before-tool-call` payloads before each plugin runs, so input mutations
+do not affect later plugins or tool execution. Keep tool inputs
+structured-cloneable and reasonably sized, because the runtime clones the input
+once per plugin before tool execution. `transform` and `handled` returns are
+ignored for `before-tool-call`.
 
 ### Input `meta.source`
 
@@ -521,9 +558,9 @@ When `Agent` receives an `ExecutionHost`, high-level model turns create a
 `user-turn` run record and thread tool execution context into managed model
 calls. Tools are checkpointed before and after execution and receive stable
 `attempt`, `idempotencyKey`, `retryPolicy`, `signal`, and public `toolCallId`
-values. The `@minpeter/pss-runtime/execution` entrypoint also exposes the same
-low-level tool execution checkpoint types for custom resume runners built
-directly on AI SDK `LanguageModel` objects.
+values. The `@minpeter/pss-runtime/execution`
+entrypoint also exposes the same low-level tool execution checkpoint types for
+custom resume runners built directly on AI SDK `LanguageModel` objects.
 
 These checkpoints are rollback boundaries, not a complete host adapter by
 themselves. Edge hosts still need durable scheduling, leases, resume workers,

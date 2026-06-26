@@ -6,7 +6,10 @@ import type {
 import type { RuntimeToolExecutionContext } from "../../llm/llm";
 import type { ThreadState } from "../state/thread-state";
 import type { ThreadAutoCompactionOptions } from "./auto-compaction";
-import { createThreadToolExecutionContext } from "./execution-checkpoints";
+import {
+  createThreadToolExecutionContext,
+  type ThreadToolCallInterceptor,
+} from "./execution-checkpoints";
 
 export interface ThreadExecutionOptions {
   readonly autoCompaction?: ThreadAutoCompactionOptions;
@@ -26,11 +29,13 @@ export type ThreadExecutionTerminalStatus = Extract<
 
 export async function startThreadExecutionRun({
   executionHost,
+  interceptToolCall,
   threadKey,
   state,
   turnId,
 }: {
   readonly executionHost?: ExecutionHost;
+  readonly interceptToolCall?: ThreadToolCallInterceptor;
   readonly threadKey: string;
   readonly state: ThreadState;
   readonly turnId: string;
@@ -57,6 +62,7 @@ export async function startThreadExecutionRun({
     runId,
     toolExecution: createThreadToolExecutionContext({
       executionHost,
+      interceptToolCall,
       runId,
       state,
     }),

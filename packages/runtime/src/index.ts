@@ -32,6 +32,8 @@ export type {
   AgentEventListener,
   AssistantOutput,
   AssistantReasoning,
+  BeforeToolCall,
+  BeforeToolCallRetryPolicy,
   ControlAgentEvent,
   InputEventMeta,
   InputSource,
@@ -54,6 +56,7 @@ export type {
   VisibleAgentEvent,
 } from "./thread/protocol/events";
 export {
+  isBeforeToolCallEvent,
   isControlAgentEvent,
   isLifecycleAgentEvent,
   isTelemetryAgentEvent,

@@ -72,6 +72,8 @@ export async function processQueuedInput({
   try {
     executionRun = await startThreadExecutionRun({
       executionHost: execution.executionHost,
+      interceptToolCall: (checkpoint) =>
+        events.interceptBeforeToolCall(checkpoint),
       threadKey,
       state,
       turnId,

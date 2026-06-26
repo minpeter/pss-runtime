@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import {
   type AgentEvent,
+  isBeforeToolCallEvent,
   isControlAgentEvent,
   isLifecycleAgentEvent,
   isTelemetryAgentEvent,
@@ -41,6 +42,15 @@ describe("thread event protocol boundary", () => {
       { text: "shown", type: "assistant-output" },
       { type: "turn-start" },
       {
+        attempt: 1,
+        idempotencyKey: "run-1:tool-1",
+        input: { value: 1 },
+        policy: "manual-recovery",
+        toolCallId: "tool-1",
+        toolName: "lookup",
+        type: "before-tool-call",
+      },
+      {
         input: { value: 1 },
         toolCallId: "tool-1",
         toolName: "lookup",
@@ -54,8 +64,9 @@ describe("thread event protocol boundary", () => {
 
     expect(events.filter(isVisibleAgentEvent)).toEqual([events[0]]);
     expect(events.filter(isLifecycleAgentEvent)).toEqual([events[1]]);
-    expect(events.filter(isToolAgentEvent)).toEqual([events[2]]);
-    expect(events.filter(isTelemetryAgentEvent)).toEqual([events[3]]);
+    expect(events.filter(isToolAgentEvent)).toEqual([events[2], events[3]]);
+    expect(events.filter(isBeforeToolCallEvent)).toEqual([events[2]]);
+    expect(events.filter(isTelemetryAgentEvent)).toEqual([events[4]]);
     expect(events.filter(isControlAgentEvent)).toEqual(events.slice(1));
   });
 });

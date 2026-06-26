@@ -15,23 +15,14 @@ import type {
 } from "../execution";
 import type {
   AgentAutoCompactionOptions,
-  AgentEvent,
   AgentHost,
   AgentInput,
   AgentOptions,
-  ControlAgentEvent,
-  LifecycleAgentEvent,
-  TelemetryAgentEvent,
   ThreadCompactionInput,
   ThreadHandle,
-  VisibleAgentEvent,
 } from "../index";
 import {
   Agent,
-  isControlAgentEvent,
-  isLifecycleAgentEvent,
-  isTelemetryAgentEvent,
-  isVisibleAgentEvent,
   runPluginsForEvent,
   threadStoreKey as runtimeThreadStoreKey,
 } from "../index";
@@ -68,6 +59,7 @@ describe("runtime public exports", () => {
 
     expect(runtime).toHaveProperty("Agent", Agent);
     expect(runtime).toHaveProperty("runPluginsForEvent", runPluginsForEvent);
+    expect(runtime).not.toHaveProperty("runPluginsForToolCall");
     expect(runtime).toHaveProperty("threadStoreKey", runtimeThreadStoreKey);
     expect(runtime).not.toHaveProperty("createInMemoryExecutionHost");
     expect(runtime).not.toHaveProperty("createCloudflareDurableObjectHost");
@@ -84,21 +76,6 @@ describe("runtime public exports", () => {
     expect(emptyHostIsRejected).toBe(false);
   });
 
-  it("exports event classifiers from the package root", async () => {
-    const runtime = await import("../index");
-
-    expect(runtime).toHaveProperty("isVisibleAgentEvent", isVisibleAgentEvent);
-    expect(runtime).toHaveProperty(
-      "isLifecycleAgentEvent",
-      isLifecycleAgentEvent
-    );
-    expect(runtime).toHaveProperty(
-      "isTelemetryAgentEvent",
-      isTelemetryAgentEvent
-    );
-    expect(runtime).toHaveProperty("isControlAgentEvent", isControlAgentEvent);
-  });
-
   it("does not expose runtime-owned subagent helpers from the package root", async () => {
     const runtime = await import("../index");
 
@@ -113,32 +90,6 @@ describe("runtime public exports", () => {
     for (const forbiddenName of forbiddenModelAdapterRootExports) {
       expect(runtime).not.toHaveProperty(forbiddenName);
     }
-  });
-
-  it("types event classifier exports from the package root", () => {
-    const visible = {
-      text: "hello",
-      type: "assistant-output",
-    } satisfies VisibleAgentEvent;
-    const lifecycle = { type: "turn-start" } satisfies LifecycleAgentEvent;
-    const telemetry = {
-      text: "thinking",
-      type: "assistant-reasoning",
-    } satisfies TelemetryAgentEvent;
-    const control = lifecycle satisfies ControlAgentEvent;
-    const events = [visible, lifecycle, telemetry, control] satisfies readonly [
-      VisibleAgentEvent,
-      LifecycleAgentEvent,
-      TelemetryAgentEvent,
-      Exclude<AgentEvent, VisibleAgentEvent>,
-    ];
-
-    expect(events.map((event) => event.type)).toEqual([
-      "assistant-output",
-      "turn-start",
-      "assistant-reasoning",
-      "turn-start",
-    ]);
   });
 
   it("types public thread compaction options from the package root", () => {
