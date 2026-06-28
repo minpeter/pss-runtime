@@ -15,11 +15,13 @@
     "edge-dispatch-alarm-context",
     "fix-cloudflare-notification-retries",
     "local-node-thread-host",
+    "modern-dependency-refresh",
     "order-subagent-events",
     "pss-runtime-evals-subpath",
     "remove-coding-agent-tools",
     "remove-runtime-llm",
     "runtime-auto-compaction",
+    "runtime-before-tool-call",
     "runtime-cloudflare-adapter",
     "runtime-node-thread-inspection",
     "runtime-plugin-constructor",
@@ -38,6 +40,7 @@
     "sqlite-session-store",
     "sync-main-dependencies",
     "thread-api-replaces-session",
-    "thread-sqlite-run-rows"
+    "thread-sqlite-run-rows",
+    "worker-agent-eval-runs"
   ]
 }

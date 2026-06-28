@@ -1,5 +1,15 @@
 # @minpeter/pss-coding-agent
 
+## 0.0.11-next.5
+
+### Patch Changes
+
+- 617b9f9: Refresh dependencies across the v0.1 workspace, including AI SDK 7 latest.
+- Updated dependencies [617b9f9]
+- Updated dependencies [7346750]
+- Updated dependencies [11dd14d]
+  - @minpeter/pss-runtime@0.1.0-next.24
+
 ## 0.0.11-next.4
 
 ### Patch Changes
