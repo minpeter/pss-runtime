@@ -69,10 +69,10 @@
     "lint": "ultracite check ."
   },
   "dependencies": {
-    "ai": "7.0.0-canary.176"
+    "ai": "7.0.4"
   },
   "devDependencies": {
-    "tsdown": "^0.22.2",
+    "tsdown": "^0.22.3",
     "vitest": "^4.1.9"
   }
 }

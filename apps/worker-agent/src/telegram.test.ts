@@ -46,6 +46,30 @@ const env = {
   ENVIRONMENT: "development",
 } as const;
 
+class TestSpan {
+  get isTraced(): boolean {
+    return false;
+  }
+
+  end() {
+    return;
+  }
+
+  setAttribute(_key: string, _value?: boolean | number | string) {
+    return;
+  }
+}
+
+const testTracing: Tracing = {
+  enterSpan(_name, callback, ...args) {
+    return callback(new TestSpan(), ...args);
+  },
+  Span: TestSpan,
+  startActiveSpan(_name, callback, ...args) {
+    return callback(new TestSpan(), ...args);
+  },
+};
+
 describe("telegram conversation handling", () => {
   beforeEach(() => {
     chatConstructors.length = 0;
@@ -202,6 +226,7 @@ function createExecutionContext(): ExecutionContext {
       return;
     },
     props: undefined,
+    tracing: testTracing,
     waitUntil(_promise: Promise<unknown>) {
       return;
     },
