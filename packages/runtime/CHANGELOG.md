@@ -1,5 +1,16 @@
 # @minpeter/pss-runtime
 
+## 0.1.0-next.24
+
+### Minor Changes
+
+- 7346750: Add plugin-only `before-tool-call` interception so policies can request manual recovery before tool execution.
+
+### Patch Changes
+
+- 617b9f9: Refresh dependencies across the v0.1 workspace, including AI SDK 7 latest.
+- 11dd14d: Expose per-run eval traces in case reports so multi-turn evals can inspect each input, event stream, tool call, and visible output.
+
 ## 0.1.0-next.23
 
 ### Patch Changes

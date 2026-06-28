@@ -1,6 +1,6 @@
 {
   "name": "@minpeter/pss-coding-agent",
-  "version": "0.0.11-next.4",
+  "version": "0.0.11-next.5",
   "description": "Coding-agent model and TUI wiring for pss-next.",
   "type": "module",
   "main": "./dist/index.js",
