@@ -2,7 +2,7 @@ import { createTRPCClient, httpLink } from "@trpc/client";
 
 import type { WorkerAgentDeliveryResponse } from "./agent-do-delivery";
 import type { ChannelAddress } from "./channel";
-import { TuiTurnOutputSchema } from "./tui-contract";
+import { TUI_SESSION_SCOPE_KEY, TuiTurnOutputSchema } from "./tui-contract";
 import type { WorkerAgentRouter } from "./tui-rpc";
 
 const REMOTE_TUI_TIMEOUT_MS = 120_000;
@@ -46,6 +46,7 @@ export async function requestRemoteTuiDelivery({
     const delivery = await client.tui.turn.mutate(
       {
         channel: config.channel,
+        sessionScopeKey: TUI_SESSION_SCOPE_KEY,
         text,
       },
       { signal: abort.signal }

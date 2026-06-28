@@ -90,6 +90,7 @@ export async function runEvals(
         evalId: def.id,
         name: caseEntry.name,
         passed,
+        runs: scope.runs,
         scored,
       });
     }

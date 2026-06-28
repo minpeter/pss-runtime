@@ -59,6 +59,7 @@ describe("remote TUI tRPC client", () => {
     });
     expect(JSON.parse(requests[0]?.body ?? "{}")).toMatchObject({
       channel: { id: "local", kind: "tui" },
+      sessionScopeKey: "tui:local-user",
       text: "hello remote",
     });
   });

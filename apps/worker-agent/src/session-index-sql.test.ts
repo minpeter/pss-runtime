@@ -53,4 +53,46 @@ describe("sql session index repository", () => {
       "telegram:a",
     ]);
   });
+
+  it("defaults legacy rows without session_scope_key to their conversation key", async () => {
+    const sql = createNodeTestSqlStorage();
+    sql.exec(
+      `CREATE TABLE pss_worker_session_index (
+        conversation_key TEXT PRIMARY KEY,
+        channel_kind TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        thread_key TEXT,
+        last_seen_at INTEGER NOT NULL,
+        turn_count INTEGER NOT NULL,
+        recent_user_text TEXT NOT NULL,
+        recent_assistant_text TEXT NOT NULL
+      )`
+    );
+    sql.exec(
+      `INSERT INTO pss_worker_session_index (
+        conversation_key,
+        channel_kind,
+        channel_id,
+        thread_key,
+        last_seen_at,
+        turn_count,
+        recent_user_text,
+        recent_assistant_text
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      "telegram:legacy",
+      "telegram",
+      "legacy",
+      "thread:telegram:legacy",
+      10,
+      1,
+      JSON.stringify(["legacy text"]),
+      JSON.stringify([])
+    );
+    const repository = createSqlSessionIndexRepository(sql);
+
+    const [record] = await repository.all();
+
+    expect(record?.conversationKey).toBe("telegram:legacy");
+    expect(record?.sessionScopeKey).toBe("telegram:legacy");
+  });
 });

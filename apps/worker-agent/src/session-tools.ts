@@ -110,6 +110,7 @@ export type ReadSessionToolResult =
 
 export interface WorkerAgentSessionToolOptions {
   readonly currentConversationKey: () => string | undefined;
+  readonly currentSessionScopeKey?: () => string | undefined;
   readonly reader: SessionIndexReader;
   readonly transcriptReader?: SessionTranscriptReader;
 }
@@ -127,7 +128,7 @@ export function createSessionTools(
         const parsed = ListSessionsToolInputSchema.parse(input);
         const summaries = await options.reader.list({
           limit: parsed.limit ?? DEFAULT_SESSION_LIST_LIMIT,
-          ...excludeCurrent(options),
+          ...sessionFilter(options),
         });
         return { sessions: summaries.map(toToolEntry) };
       },
@@ -141,7 +142,7 @@ export function createSessionTools(
         const query = parsed.query.trim();
         const results = await options.reader.search(query, {
           limit: parsed.limit ?? DEFAULT_SESSION_SEARCH_LIMIT,
-          ...excludeCurrent(options),
+          ...sessionFilter(options),
         });
         return { query, sessions: results.map(toSearchEntry) };
       },
@@ -155,6 +156,13 @@ export function createSessionTools(
         "Read a capped transcript from a specific channel returned by list_sessions or search_sessions. Use this after selecting a likely prior conversation, before answering details from it.",
       execute: async (input: unknown): Promise<ReadSessionToolResult> => {
         const parsed = ReadSessionToolInputSchema.parse(input);
+        const canRead = await options.reader.canRead(
+          parsed.channel,
+          sessionFilter(options)
+        );
+        if (!canRead) {
+          return { channel: parsed.channel, found: false };
+        }
         const transcript = await options.transcriptReader?.read(
           parsed.channel,
           {
@@ -176,11 +184,16 @@ export function createSessionTools(
   return tools;
 }
 
-function excludeCurrent(options: WorkerAgentSessionToolOptions): {
+function sessionFilter(options: WorkerAgentSessionToolOptions): {
   readonly excludeKey?: string;
+  readonly sessionScopeKey?: string;
 } {
   const current = options.currentConversationKey();
-  return current ? { excludeKey: current } : {};
+  const sessionScopeKey = options.currentSessionScopeKey?.();
+  return {
+    ...(current ? { excludeKey: current } : {}),
+    ...(sessionScopeKey ? { sessionScopeKey } : {}),
+  };
 }
 
 function toToolEntry(summary: SessionSummary): SessionToolEntry {

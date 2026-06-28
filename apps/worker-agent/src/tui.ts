@@ -20,6 +20,7 @@ import {
   type WorkerAgentTuiConfig,
   WorkerAgentTuiConfigError,
 } from "./tui-config";
+import { TUI_SESSION_SCOPE_KEY } from "./tui-contract";
 import { createRemoteTuiDeliveryClient } from "./tui-remote";
 import {
   createTuiMessageSink,
@@ -101,6 +102,7 @@ async function configureTuiTurnDelivery(
         )
       );
       const binding = localChannelBinding(config.channel);
+      const sessionScopeKey = TUI_SESSION_SCOPE_KEY;
       const agent = createConfiguredAgent(config.env, host, {
         sendMessage: {
           channel: () => config.channel,
@@ -108,6 +110,7 @@ async function configureTuiTurnDelivery(
         },
         sessionTools: {
           currentConversationKey: () => binding.channelKey,
+          currentSessionScopeKey: () => sessionScopeKey,
           reader: sessionIndex,
           transcriptReader: createThreadStoreSessionTranscriptReader({
             resolveThreadKey: (conversationKey) =>
@@ -133,6 +136,7 @@ async function configureTuiTurnDelivery(
             await sessionIndex.upsert({
               assistantText,
               channel: binding.channel,
+              sessionScopeKey,
               threadKey: binding.threadKey,
               userText: trimmed,
             });

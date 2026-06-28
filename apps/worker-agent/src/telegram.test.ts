@@ -62,15 +62,17 @@ describe("telegram conversation handling", () => {
 
   it("subscribes mention threads and posts development notice before replies", async () => {
     const posts: string[] = [];
+    const scopes: Array<string | undefined> = [];
     const subscribe = vi.fn<() => Promise<void>>(() => resolved);
 
     await replyToThread({
       env,
-      deliverTurn: (channelId, text) => {
+      deliverTurn: (channelId, text, options) => {
         posts.push(`${channelId}:${text}`);
+        scopes.push(options?.sessionScopeKey);
         return resolved;
       },
-      message: { text: "hello" },
+      message: { author: { userId: " user-1 " }, text: "hello" },
       subscribe: true,
       thread: {
         channelId: "channel-1",
@@ -84,6 +86,7 @@ describe("telegram conversation handling", () => {
 
     expect(subscribe).toHaveBeenCalledOnce();
     expect(posts).toEqual(["🧪 DEVELOPMENT ENVIRONMENT", "channel-1:hello"]);
+    expect(scopes).toEqual(["telegram:user:user-1"]);
   });
 
   it("does not post an assistant-output fallback after agent delivery", async () => {

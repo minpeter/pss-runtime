@@ -26,14 +26,9 @@ import {
 import {
   createSessionIndexClient,
   isSessionIndexPath,
-  SESSION_INDEX_LIST_PATH,
-  SESSION_INDEX_SEARCH_PATH,
-  SESSION_INDEX_UPSERT_PATH,
   type SessionIndexClient,
-  SessionIndexListRequestSchema,
-  SessionIndexSearchRequestSchema,
-  SessionIndexUpsertRequestSchema,
 } from "./session-index-client";
+import { handleSessionIndexRequest } from "./session-index-routes";
 import { createSqlSessionIndexRepository } from "./session-index-sql";
 import {
   createThreadStoreSessionTranscriptReader,
@@ -76,7 +71,11 @@ export class AgentDurableObject extends DurableObject<Env> {
 
     const pathname = new URL(request.url).pathname;
     if (isSessionIndexPath(pathname)) {
-      return await this.#handleSessionIndexRequest(pathname, request);
+      return await handleSessionIndexRequest({
+        pathname,
+        request,
+        store: this.#sessionIndex(),
+      });
     }
     if (isSessionTranscriptPath(pathname)) {
       return await this.#handleSessionTranscriptRequest(request);
@@ -92,10 +91,12 @@ export class AgentDurableObject extends DurableObject<Env> {
       payload.channel
     );
     const binding = durableObjectChannelBinding(payload.channel);
+    const sessionScopeKey = payload.sessionScopeKey;
     const agent = createConfiguredAgent(this.#env, this.#context.host(), {
       sendMessage: sendMessage.options,
       sessionTools: {
         currentConversationKey: () => binding.channelKey,
+        currentSessionScopeKey: () => sessionScopeKey,
         reader: this.#sessionIndexClient,
         transcriptReader: this.#sessionTranscriptClient,
       },
@@ -110,7 +111,8 @@ export class AgentDurableObject extends DurableObject<Env> {
       binding,
       payload.text,
       sendMessage,
-      assistantMessages
+      assistantMessages,
+      sessionScopeKey
     );
 
     return Response.json(
@@ -120,64 +122,6 @@ export class AgentDurableObject extends DurableObject<Env> {
 
   async alarm(): Promise<void> {
     await this.#context.drainAlarm();
-  }
-
-  async #handleSessionIndexRequest(
-    pathname: string,
-    request: Request
-  ): Promise<Response> {
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      return new Response("invalid json", { status: 400 });
-    }
-
-    const store = this.#sessionIndex();
-    if (pathname === SESSION_INDEX_UPSERT_PATH) {
-      const parsed = SessionIndexUpsertRequestSchema.safeParse(body);
-      if (!parsed.success) {
-        return new Response("invalid upsert", { status: 400 });
-      }
-      await store.upsert({
-        assistantText: parsed.data.assistantText ?? [],
-        channel: parsed.data.channel,
-        threadKey: parsed.data.threadKey,
-        userText: parsed.data.userText,
-      });
-      return Response.json({ ok: true });
-    }
-    if (pathname === SESSION_INDEX_LIST_PATH) {
-      const parsed = SessionIndexListRequestSchema.safeParse(body);
-      if (!parsed.success) {
-        return new Response("invalid list", { status: 400 });
-      }
-      const sessions = await store.list({
-        ...(parsed.data.excludeKey
-          ? { excludeKey: parsed.data.excludeKey }
-          : {}),
-        ...(parsed.data.limit === undefined
-          ? {}
-          : { limit: parsed.data.limit }),
-      });
-      return Response.json({ sessions });
-    }
-    if (pathname === SESSION_INDEX_SEARCH_PATH) {
-      const parsed = SessionIndexSearchRequestSchema.safeParse(body);
-      if (!parsed.success) {
-        return new Response("invalid search", { status: 400 });
-      }
-      const sessions = await store.search(parsed.data.query, {
-        ...(parsed.data.excludeKey
-          ? { excludeKey: parsed.data.excludeKey }
-          : {}),
-        ...(parsed.data.limit === undefined
-          ? {}
-          : { limit: parsed.data.limit }),
-      });
-      return Response.json({ sessions });
-    }
-    return new Response("not found", { status: 404 });
   }
 
   async #handleSessionTranscriptRequest(request: Request): Promise<Response> {
@@ -229,7 +173,8 @@ export class AgentDurableObject extends DurableObject<Env> {
     binding: ChannelRuntimeBinding,
     userText: string,
     sendMessage: SendMessageToolSetup,
-    assistantMessages: readonly string[]
+    assistantMessages: readonly string[],
+    sessionScopeKey: string | undefined
   ): Promise<void> {
     const delivered = sendMessage.messages().map((message) => message.text);
     const assistantText = delivered.length > 0 ? delivered : assistantMessages;
@@ -237,6 +182,7 @@ export class AgentDurableObject extends DurableObject<Env> {
       await this.#sessionIndexClient.upsert({
         assistantText,
         channel: binding.channel,
+        ...(sessionScopeKey ? { sessionScopeKey } : {}),
         threadKey: binding.threadKey,
         userText,
       });

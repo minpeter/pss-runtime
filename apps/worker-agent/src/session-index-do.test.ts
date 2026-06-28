@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { AgentDurableObject } from "./agent-do";
 import type { Env } from "./env";
 import {
+  SESSION_INDEX_CAN_READ_PATH,
   SESSION_INDEX_LIST_PATH,
   SESSION_INDEX_SEARCH_PATH,
   SESSION_INDEX_UPSERT_PATH,
@@ -108,6 +109,60 @@ describe("AgentDurableObject session-index routes", () => {
     };
     expect(searchBody.sessions).toHaveLength(1);
     expect(searchBody.sessions[0]?.conversationKey).toBe("telegram:a");
+  });
+
+  it("filters indexed sessions and read authorization by requester scope", async () => {
+    const object = createIndexDurableObject();
+
+    await object.fetch(
+      indexRequest(SESSION_INDEX_UPSERT_PATH, {
+        channel: { id: "a", kind: "telegram" },
+        sessionScopeKey: "requester:one",
+        threadKey: "default",
+        userText: "Project Zephyr launches Friday",
+      })
+    );
+    await object.fetch(
+      indexRequest(SESSION_INDEX_UPSERT_PATH, {
+        channel: { id: "b", kind: "telegram" },
+        sessionScopeKey: "requester:two",
+        threadKey: "default",
+        userText: "Project Zephyr launches Tuesday",
+      })
+    );
+
+    const listResponse = await object.fetch(
+      indexRequest(SESSION_INDEX_LIST_PATH, {
+        sessionScopeKey: "requester:one",
+      })
+    );
+    const listBody = (await listResponse.json()) as {
+      sessions: { conversationKey: string }[];
+    };
+    expect(listBody.sessions.map((session) => session.conversationKey)).toEqual(
+      ["telegram:a"]
+    );
+
+    const searchResponse = await object.fetch(
+      indexRequest(SESSION_INDEX_SEARCH_PATH, {
+        query: "Project Zephyr",
+        sessionScopeKey: "requester:one",
+      })
+    );
+    const searchBody = (await searchResponse.json()) as {
+      sessions: { conversationKey: string }[];
+    };
+    expect(
+      searchBody.sessions.map((session) => session.conversationKey)
+    ).toEqual(["telegram:a"]);
+
+    const canReadResponse = await object.fetch(
+      indexRequest(SESSION_INDEX_CAN_READ_PATH, {
+        conversationKey: "telegram:b",
+        sessionScopeKey: "requester:one",
+      })
+    );
+    await expect(canReadResponse.json()).resolves.toEqual({ canRead: false });
   });
 
   it("rejects malformed index payloads", async () => {

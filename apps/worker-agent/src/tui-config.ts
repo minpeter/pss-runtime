@@ -7,17 +7,15 @@ import type { WorkerAgentModelEnv } from "./agent";
 import type { ChannelAddress } from "./channel";
 import { WORKER_AGENT_TUI_CHANNEL } from "./tui-sink";
 
-const TuiEnvironmentSchema = z
-  .object({
-    AI_API_KEY: z.string().optional(),
-    AI_BASE_URL: z.string().optional(),
-    AI_MODEL: z.string().optional(),
-    WORKER_AGENT_TUI_CHANNEL_ID: z.string().optional(),
-    WORKER_AGENT_TUI_DIR: z.string().optional(),
-    WORKER_AGENT_TUI_ENDPOINT: z.string().url().optional(),
-    WORKER_AGENT_TUI_TOKEN: z.string().optional(),
-  })
-  .passthrough();
+const TuiEnvironmentSchema = z.looseObject({
+  AI_API_KEY: z.string().optional(),
+  AI_BASE_URL: z.string().optional(),
+  AI_MODEL: z.string().optional(),
+  WORKER_AGENT_TUI_CHANNEL_ID: z.string().optional(),
+  WORKER_AGENT_TUI_DIR: z.string().optional(),
+  WORKER_AGENT_TUI_ENDPOINT: z.url().trim().optional(),
+  WORKER_AGENT_TUI_TOKEN: z.string().optional(),
+});
 
 export type WorkerAgentTuiConfig =
   | WorkerAgentLocalTuiConfig

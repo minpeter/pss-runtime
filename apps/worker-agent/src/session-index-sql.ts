@@ -15,6 +15,7 @@ interface SessionIndexRow {
   readonly last_seen_at: number;
   readonly recent_assistant_text: string;
   readonly recent_user_text: string;
+  readonly session_scope_key: string | null;
   readonly thread_key: string | null;
   readonly turn_count: number;
 }
@@ -38,6 +39,7 @@ export function createSqlSessionIndexRepository(
         channel_kind TEXT NOT NULL,
         channel_id TEXT NOT NULL,
         thread_key TEXT,
+        session_scope_key TEXT,
         last_seen_at INTEGER NOT NULL,
         turn_count INTEGER NOT NULL,
         recent_user_text TEXT NOT NULL,
@@ -50,6 +52,9 @@ export function createSqlSessionIndexRepository(
     if (!columns.some((column) => column.name === "thread_key")) {
       sql.exec(`ALTER TABLE ${TABLE_NAME} ADD COLUMN thread_key TEXT`);
     }
+    if (!columns.some((column) => column.name === "session_scope_key")) {
+      sql.exec(`ALTER TABLE ${TABLE_NAME} ADD COLUMN session_scope_key TEXT`);
+    }
     schemaReady = true;
   };
 
@@ -58,7 +63,7 @@ export function createSqlSessionIndexRepository(
       ensureSchema();
       const rows = sql
         .exec<SessionIndexRow>(
-          `SELECT conversation_key, channel_kind, channel_id, thread_key, last_seen_at, turn_count, recent_user_text, recent_assistant_text FROM ${TABLE_NAME}`
+          `SELECT conversation_key, channel_kind, channel_id, thread_key, session_scope_key, last_seen_at, turn_count, recent_user_text, recent_assistant_text FROM ${TABLE_NAME}`
         )
         .toArray();
       return Promise.resolve(rows.map(toRecord));
@@ -67,7 +72,7 @@ export function createSqlSessionIndexRepository(
       ensureSchema();
       const [row] = sql
         .exec<SessionIndexRow>(
-          `SELECT conversation_key, channel_kind, channel_id, thread_key, last_seen_at, turn_count, recent_user_text, recent_assistant_text FROM ${TABLE_NAME} WHERE conversation_key = ?`,
+          `SELECT conversation_key, channel_kind, channel_id, thread_key, session_scope_key, last_seen_at, turn_count, recent_user_text, recent_assistant_text FROM ${TABLE_NAME} WHERE conversation_key = ?`,
           key
         )
         .toArray();
@@ -76,12 +81,13 @@ export function createSqlSessionIndexRepository(
     put: (record) => {
       ensureSchema();
       sql.exec(
-        `INSERT INTO ${TABLE_NAME} (conversation_key, channel_kind, channel_id, thread_key, last_seen_at, turn_count, recent_user_text, recent_assistant_text)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO ${TABLE_NAME} (conversation_key, channel_kind, channel_id, thread_key, session_scope_key, last_seen_at, turn_count, recent_user_text, recent_assistant_text)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(conversation_key) DO UPDATE SET
            channel_kind = excluded.channel_kind,
            channel_id = excluded.channel_id,
            thread_key = excluded.thread_key,
+           session_scope_key = excluded.session_scope_key,
            last_seen_at = excluded.last_seen_at,
            turn_count = excluded.turn_count,
            recent_user_text = excluded.recent_user_text,
@@ -94,6 +100,7 @@ export function createSqlSessionIndexRepository(
             id: record.channelId,
             kind: record.channelKind,
           }),
+        record.sessionScopeKey ?? record.conversationKey,
         record.lastSeenAt,
         record.turnCount,
         JSON.stringify(record.recentUserText),
@@ -114,6 +121,7 @@ function toRecord(row: SessionIndexRow): SessionIndexRecord {
     lastSeenAt: Number(row.last_seen_at),
     recentAssistantText: parseStringArray(row.recent_assistant_text),
     recentUserText: parseStringArray(row.recent_user_text),
+    sessionScopeKey: row.session_scope_key ?? row.conversation_key,
     threadKey:
       row.thread_key ??
       legacyChannelThreadKey({ id: channelId, kind: channelKind }),

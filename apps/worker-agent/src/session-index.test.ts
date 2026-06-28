@@ -3,11 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   createMemorySessionIndexRepository,
   createSessionIndexStore,
-  MAX_RECENT_USER_TEXT,
-  mergeSessionRecord,
   type SessionIndexRecord,
   summarizeSessionRecord,
 } from "./session-index";
+import {
+  MAX_RECENT_USER_TEXT,
+  mergeSessionRecord,
+} from "./session-index-record";
 import { scoreSessionRecord } from "./session-index-search";
 
 describe("mergeSessionRecord", () => {
@@ -31,6 +33,7 @@ describe("mergeSessionRecord", () => {
       lastSeenAt: 1000,
       recentAssistantText: ["hi there"],
       recentUserText: ["hello"],
+      sessionScopeKey: "telegram:123",
       threadKey: "thread:telegram:123",
       turnCount: 1,
     });
@@ -57,6 +60,22 @@ describe("mergeSessionRecord", () => {
       `message-${MAX_RECENT_USER_TEXT + 2}`
     );
     expect(record?.lastSeenAt).toBe(MAX_RECENT_USER_TEXT + 2);
+  });
+
+  it("preserves the requester scope for new turns", () => {
+    const record = mergeSessionRecord(
+      undefined,
+      {
+        channel: { id: "123", kind: "telegram" },
+        now: 1000,
+        sessionScopeKey: "requester:alpha",
+        threadKey: "thread:telegram:123",
+        userText: "hello",
+      },
+      "telegram:123"
+    );
+
+    expect(record.sessionScopeKey).toBe("requester:alpha");
   });
 
   it("ignores blank user and assistant text without losing the turn count", () => {
@@ -86,6 +105,7 @@ describe("scoreSessionRecord", () => {
     lastSeenAt: 1,
     recentAssistantText: ["the answer is forty two"],
     recentUserText: ["tell me about quantum computing"],
+    sessionScopeKey: "telegram:123",
     threadKey: "thread:telegram:123",
     turnCount: 1,
   };
@@ -110,6 +130,7 @@ describe("summarizeSessionRecord", () => {
       lastSeenAt: 1,
       recentAssistantText: ["assistant"],
       recentUserText: ["first", "latest user line"],
+      sessionScopeKey: "telegram:123",
       threadKey: "thread:telegram:123",
       turnCount: 2,
     });
@@ -161,6 +182,42 @@ describe("session index store", () => {
     expect(results).toHaveLength(1);
     expect(results[0]?.conversationKey).toBe("telegram:a");
     expect(results[0]?.score).toBeGreaterThan(0);
+  });
+
+  it("filters list, search, and read authorization by requester scope", async () => {
+    const store = createSessionIndexStore(createMemorySessionIndexRepository());
+    await store.upsert({
+      channel: { id: "a", kind: "telegram" },
+      now: 10,
+      sessionScopeKey: "requester:one",
+      threadKey: "thread:telegram:a",
+      userText: "Project Zephyr launches Friday",
+    });
+    await store.upsert({
+      channel: { id: "b", kind: "telegram" },
+      now: 20,
+      sessionScopeKey: "requester:two",
+      threadKey: "thread:telegram:b",
+      userText: "Project Zephyr launches Tuesday",
+    });
+
+    const list = await store.list({ sessionScopeKey: "requester:one" });
+    const search = await store.search("Project Zephyr", {
+      sessionScopeKey: "requester:one",
+    });
+
+    expect(list.map((session) => session.conversationKey)).toEqual([
+      "telegram:a",
+    ]);
+    expect(search.map((session) => session.conversationKey)).toEqual([
+      "telegram:a",
+    ]);
+    await expect(
+      store.canRead("telegram:a", { sessionScopeKey: "requester:one" })
+    ).resolves.toBe(true);
+    await expect(
+      store.canRead("telegram:b", { sessionScopeKey: "requester:one" })
+    ).resolves.toBe(false);
   });
 
   it("returns nothing for a blank query", async () => {

@@ -117,6 +117,113 @@ describe("session search tools", () => {
     });
   });
 
+  it("keeps list, search, and read_session inside the current requester scope", async () => {
+    const store = createSessionIndexStore(createMemorySessionIndexRepository());
+    await store.upsert({
+      channel: { id: "own", kind: "telegram" },
+      now: 10,
+      sessionScopeKey: "requester:one",
+      threadKey: "thread:telegram:own",
+      userText: "Project Zephyr launches Friday",
+    });
+    await store.upsert({
+      channel: { id: "other", kind: "telegram" },
+      now: 20,
+      sessionScopeKey: "requester:two",
+      threadKey: "thread:telegram:other",
+      userText: "Project Zephyr launches Tuesday",
+    });
+    const transcriptReads: string[] = [];
+    const tools = createSessionTools({
+      currentConversationKey: () => "tui:current",
+      currentSessionScopeKey: () => "requester:one",
+      reader: store,
+      transcriptReader: {
+        read: (conversationKey) => {
+          transcriptReads.push(conversationKey);
+          return Promise.resolve({
+            conversationKey,
+            hasMore: false,
+            messageCount: 1,
+            messages: [{ index: 0, role: "user", text: "old question" }],
+          });
+        },
+      },
+    });
+
+    const list = (await tools[LIST_SESSIONS_TOOL_NAME]?.execute?.(
+      {},
+      toolContext()
+    )) as ListSessionsToolResult;
+    const search = (await tools[SEARCH_SESSIONS_TOOL_NAME]?.execute?.(
+      { query: "Project Zephyr" },
+      toolContext()
+    )) as SearchSessionsToolResult;
+    const denied = (await tools[READ_SESSION_TOOL_NAME]?.execute?.(
+      { channel: "telegram:other" },
+      toolContext()
+    )) as ReadSessionToolResult;
+
+    expect(list.sessions.map((session) => session.channel)).toEqual([
+      "telegram:own",
+    ]);
+    expect(search.sessions.map((session) => session.channel)).toEqual([
+      "telegram:own",
+    ]);
+    expect(denied).toEqual({ channel: "telegram:other", found: false });
+    expect(transcriptReads).toEqual([]);
+  });
+
+  it("does not scope production recall to the current conversation when no requester scope exists", async () => {
+    const store = createSessionIndexStore(createMemorySessionIndexRepository());
+    await store.upsert({
+      channel: { id: "current", kind: "telegram" },
+      now: 10,
+      threadKey: "thread:telegram:current",
+      userText: "active Project Orion thread",
+    });
+    await store.upsert({
+      channel: { id: "other", kind: "telegram" },
+      now: 20,
+      threadKey: "thread:telegram:other",
+      userText: "Project Orion status moved to Friday",
+    });
+    const tools = createSessionTools({
+      currentConversationKey: () => "telegram:current",
+      reader: store,
+      transcriptReader: {
+        read: (conversationKey) =>
+          Promise.resolve({
+            conversationKey,
+            hasMore: false,
+            messageCount: 1,
+            messages: [{ index: 0, role: "user", text: "old question" }],
+          }),
+      },
+    });
+
+    const list = (await tools[LIST_SESSIONS_TOOL_NAME]?.execute?.(
+      {},
+      toolContext()
+    )) as ListSessionsToolResult;
+    const search = (await tools[SEARCH_SESSIONS_TOOL_NAME]?.execute?.(
+      { query: "Project Orion" },
+      toolContext()
+    )) as SearchSessionsToolResult;
+    const read = (await tools[READ_SESSION_TOOL_NAME]?.execute?.(
+      { channel: "telegram:other" },
+      toolContext()
+    )) as ReadSessionToolResult;
+
+    expect(list.sessions.map((session) => session.channel)).toEqual([
+      "telegram:other",
+    ]);
+    expect(search.sessions.map((session) => session.channel)).toEqual([
+      "telegram:other",
+    ]);
+    expect(read.found).toBe(true);
+  });
+
   it("returns a not-found result when a selected session has no readable transcript", async () => {
     const reader = await seededReader();
     const tools = createSessionTools({

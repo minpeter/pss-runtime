@@ -28,13 +28,24 @@ const AgentDeliverySchema = z.discriminatedUnion("delivered", [
 
 let cachedBot: CachedBot | undefined;
 
-type TurnDeliverer = (channelId: string, text: string) => Promise<void>;
+interface TurnDeliveryOptions {
+  readonly sessionScopeKey?: string;
+}
+
+type TurnDeliverer = (
+  channelId: string,
+  text: string,
+  options?: TurnDeliveryOptions
+) => Promise<void>;
 
 interface ConversationEnv {
   readonly ENVIRONMENT: Env["ENVIRONMENT"];
 }
 
 interface ConversationMessage {
+  readonly author?: {
+    readonly userId?: string;
+  };
   readonly text?: string;
 }
 
@@ -85,8 +96,8 @@ function createBot(env: Env, config: BotConfig): Chat {
     replyToThread({
       env,
       context,
-      deliverTurn: (channelId, text) =>
-        requestAgentDelivery(env, channelId, text),
+      deliverTurn: (channelId, text, options) =>
+        requestAgentDelivery(env, channelId, text, options),
       message,
       subscribe: options?.subscribe ?? false,
       thread,
@@ -143,7 +154,9 @@ export async function replyToThread({
       await thread.post(DEV_NOTICE);
     }
 
-    await deliverTurn(thread.channelId, text);
+    await deliverTurn(thread.channelId, text, {
+      sessionScopeKey: telegramSessionScopeKey(message),
+    });
   } catch (error) {
     console.error("telegram handler failed", normalizeError(error));
     await thread.post(FAILURE_REPLY);
@@ -160,15 +173,18 @@ function normalizeError(error: unknown): Error {
 export async function requestAgentDelivery(
   env: Env,
   channelId: string,
-  text: string
+  text: string,
+  options: TurnDeliveryOptions = {}
 ): Promise<void> {
   const channel: ChannelAddress = { id: channelId, kind: "telegram" };
+  const sessionScopeKey = options.sessionScopeKey?.trim();
   const response = await fetchCloudflareDurableObject({
     namespace: env.AGENT_DO,
     objectName: durableObjectName(channelKey(channel)),
     request: new Request("https://agent.internal/turn", {
       body: JSON.stringify({
         channel,
+        ...(sessionScopeKey ? { sessionScopeKey } : {}),
         text,
       }),
       headers: { "content-type": "application/json" },
@@ -188,6 +204,13 @@ export async function requestAgentDelivery(
   }
 
   throw new Error("agent did not deliver a send_message result");
+}
+
+function telegramSessionScopeKey(
+  message: ConversationMessage
+): string | undefined {
+  const userId = message.author?.userId?.trim();
+  return userId ? `telegram:user:${userId}` : undefined;
 }
 
 export function handleTelegramWebhook(

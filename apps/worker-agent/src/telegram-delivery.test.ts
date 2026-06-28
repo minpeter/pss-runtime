@@ -69,6 +69,27 @@ describe("agent delivery request", () => {
     });
   });
 
+  it("includes an explicit requester scope when available", async () => {
+    const webhookEnv = createWebhookEnv(createDurableObjectNamespace("agent"));
+    durableObjectMock.responses.push(Response.json({ delivered: true }));
+
+    await expect(
+      requestAgentDelivery(webhookEnv, "channel-1", "hello", {
+        sessionScopeKey: "telegram:user:user-1",
+      })
+    ).resolves.toBeUndefined();
+
+    const [request] = durableObjectMock.requests;
+    if (!request) {
+      throw new Error("Expected a Durable Object request.");
+    }
+    await expect(request.json()).resolves.toEqual({
+      channel: { id: "channel-1", kind: "telegram" },
+      sessionScopeKey: "telegram:user:user-1",
+      text: "hello",
+    });
+  });
+
   it("rejects when the agent Durable Object reports missing tool delivery", async () => {
     const webhookEnv = createWebhookEnv(createDurableObjectNamespace("agent"));
     durableObjectMock.responses.push(
