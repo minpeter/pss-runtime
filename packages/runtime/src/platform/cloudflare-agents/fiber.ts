@@ -59,6 +59,7 @@ export async function startCloudflareAgentsResumeFiber({
   resume,
   storage,
 }: StartCloudflareAgentsResumeFiberOptions): Promise<CloudflareAgentsStartFiberResult> {
+  const idempotencyKey = cloudflareAgentsFiberIdempotencyKey(payload);
   return await cloudflareAgent.startFiber(
     cloudflareAgentsFiberName(payload),
     async (ctx) => {
@@ -75,7 +76,7 @@ export async function startCloudflareAgentsResumeFiber({
       }
     },
     {
-      idempotencyKey: cloudflareAgentsFiberIdempotencyKey(payload),
+      idempotencyKey,
       metadata: cloudflareAgentsFiberMetadata(payload),
     }
   );

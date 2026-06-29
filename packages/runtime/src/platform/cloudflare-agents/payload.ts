@@ -1,6 +1,15 @@
-const payloadVersion = 1;
-const maxIdLength = 1024;
-const maxPrefixLength = 256;
+import {
+  assertOptionalPayloadAttempt,
+  assertOptionalPayloadString,
+  assertPayloadString,
+  hasRunPayloadStrings,
+  hasThreadPayloadStrings,
+  isRecord,
+  maxIdLength,
+  maxPrefixLength,
+} from "./payload-validation";
+
+export const payloadVersion = 1;
 
 export const defaultCloudflareAgentsDelayedResumeCallback =
   "resumePssRuntimeFiber";
@@ -209,100 +218,6 @@ function threadIdempotencyPart(
 
 function keyWithAttempt(key: string, attempt: number | undefined): string {
   return attempt === undefined ? key : `${key}:attempt:${attempt}`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object";
-}
-
-function hasRunPayloadStrings(value: Record<string, unknown>): value is Record<
-  string,
-  unknown
-> & {
-  attempt?: number;
-  prefix: string;
-  runId: string;
-} {
-  return (
-    isOptionalPayloadAttempt(value.attempt) &&
-    isPayloadString(value.prefix, maxPrefixLength) &&
-    isPayloadString(value.runId, maxIdLength)
-  );
-}
-
-function hasThreadPayloadStrings(
-  value: Record<string, unknown>
-): value is Record<string, unknown> & {
-  attempt?: number;
-  idempotencyKey?: string;
-  notificationId?: string;
-  prefix: string;
-  runId: string;
-  threadKey: string;
-} {
-  return (
-    isOptionalPayloadAttempt(value.attempt) &&
-    isOptionalPayloadString(value.idempotencyKey, maxIdLength) &&
-    isOptionalPayloadString(value.notificationId, maxIdLength) &&
-    isPayloadString(value.prefix, maxPrefixLength) &&
-    isPayloadString(value.runId, maxIdLength) &&
-    isPayloadString(value.threadKey, maxIdLength)
-  );
-}
-
-function isPayloadString(value: unknown, maxLength: number): value is string {
-  return (
-    typeof value === "string" && value.length > 0 && value.length <= maxLength
-  );
-}
-
-function isOptionalPayloadString(
-  value: unknown,
-  maxLength: number
-): value is string | undefined {
-  return value === undefined || isPayloadString(value, maxLength);
-}
-
-function isOptionalPayloadAttempt(value: unknown): value is number | undefined {
-  return (
-    value === undefined ||
-    (typeof value === "number" && Number.isSafeInteger(value) && value >= 0)
-  );
-}
-
-function assertPayloadString(
-  name: string,
-  value: string,
-  maxLength: number
-): void {
-  if (!isPayloadString(value, maxLength)) {
-    throw new TypeError(
-      `Cloudflare Agents payload ${name} must be a non-empty string up to ${maxLength} characters`
-    );
-  }
-}
-
-function assertOptionalPayloadString(
-  name: string,
-  value: string | undefined,
-  maxLength: number
-): void {
-  if (!isOptionalPayloadString(value, maxLength)) {
-    throw new TypeError(
-      `Cloudflare Agents payload ${name} must be a non-empty string up to ${maxLength} characters when provided`
-    );
-  }
-}
-
-function assertOptionalPayloadAttempt(
-  name: string,
-  value: number | undefined
-): void {
-  if (!isOptionalPayloadAttempt(value)) {
-    throw new TypeError(
-      `Cloudflare Agents payload ${name} must be a non-negative safe integer when provided`
-    );
-  }
 }
 
 function assertNeverPayload(payload: never): never {
