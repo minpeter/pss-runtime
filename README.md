@@ -3,19 +3,37 @@
 Small agent runtime workspace.
 
 - `@minpeter/pss-runtime`: runtime, sessions, model loop.
-- `@minpeter/pss-coding-agent`: web tools, model wiring, and the `pss` TUI.
+- `@minpeter/pss-coding-agent`: model wiring and the `pss` TUI. It ships no
+  built-in tools; pass your own tool set when needed.
 
 ## Use
 
 ```ts
-import { tools } from "@minpeter/pss-coding-agent";
-import { createCodingLanguageModel } from "@minpeter/pss-coding-agent/model";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { Agent } from "@minpeter/pss-runtime";
+import { createEnv } from "@t3-oss/env-core";
+import { config as loadEnv } from "dotenv";
+import { z } from "zod";
 
-const agent = await Agent.create({
+loadEnv({ path: ".env", quiet: true, override: true });
+const env = createEnv({
+  runtimeEnv: process.env,
+  server: {
+    AI_API_KEY: z.string().trim().min(1),
+    AI_BASE_URL: z.url().trim().default("https://apis.opengateway.ai/v1"),
+    AI_MODEL: z.string().trim().min(1).default("minimax/MiniMax-M2.7"),
+  },
+});
+
+const provider = createOpenAICompatible({
+  name: "custom",
+  apiKey: env.AI_API_KEY,
+  baseURL: env.AI_BASE_URL,
+});
+
+const agent = new Agent({
   instructions: "Keep every answer under 3 lines.",
-  model: createCodingLanguageModel(),
-  tools,
+  model: provider(env.AI_MODEL),
 });
 const run = await agent.send("Hello");
 for await (const event of run.events()) {
@@ -96,10 +114,11 @@ Copy `.env.example` to `.env`.
 AI_API_KEY=...
 AI_BASE_URL=...
 AI_MODEL=...
-TINYFISH_API_KEY=...
 ```
 
-`TINYFISH_API_KEY` may contain semicolon-delimited tokens.
+The `pss` TUI enables OpenSearch-backed `web_search` and `web_fetch` tools by
+default. Applications can still provide their own tools explicitly to the runtime
+or TUI entrypoint.
 
 The `pss` TUI stores sessions in `~/.pss/sessions` by default. Override with
 `PSS_SESSION_DIR` and `PSS_SESSION_KEY` when you want repo-local storage or a

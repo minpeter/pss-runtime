@@ -1,35 +1,46 @@
 export {
   Agent,
+  type AgentAutoCompactionOptions,
   type AgentOptions,
-  type AgentSessionOptions,
-  type SessionHandle,
-} from "./agent";
+  type ThreadAddress,
+  type ThreadCompactionInput,
+  type ThreadHandle,
+  type ThreadKey,
+  type ThreadMetadata,
+} from "./agent/core/agent";
+export { threadStoreKey } from "./agent/core/thread-entry";
+export type { AgentHost } from "./execution/host/types";
+export type { AgentToolChoice } from "./llm/llm";
+export { delegateUserInput } from "./thread/input/delegate-input";
+export type { AgentInput, ThreadInput } from "./thread/input/input";
+export {
+  attachInputMeta,
+  stripInputMeta,
+  userInputFromEvent,
+} from "./thread/input/input-meta";
 export type {
-  AgentAfterStepContext,
-  AgentAfterTurnContext,
-  AgentBeforeStepContext,
-  AgentBeforeTurnContext,
-  AgentHooks,
-  AgentStepResult,
-  AgentTurnResult,
-} from "./hooks";
-export type {
-  AgentToolChoice,
-  AgentToolExecute,
-  AgentToolExecutionOptions,
-  LlmOutputPart,
-  RuntimeCreateLlmOptions,
-  RuntimeLlm,
-  RuntimeLlmContext,
-  RuntimeLlmOutput,
-} from "./llm";
-export { createLlm } from "./llm";
+  AgentEventContext,
+  AgentPlugin,
+  AgentPluginInterceptResult,
+  AgentPluginResult,
+  InterceptableAgentEvent,
+  PluginPipelineResult,
+} from "./thread/plugins/pipeline";
+export { runPluginsForEvent } from "./thread/plugins/pipeline";
 export type {
   AgentEvent,
   AgentEventListener,
+  AssistantOutput,
   AssistantReasoning,
-  AssistantText,
+  BeforeToolCall,
+  BeforeToolCallRetryPolicy,
+  ControlAgentEvent,
+  InputEventMeta,
+  InputSource,
+  LifecycleAgentEvent,
   RuntimeInput,
+  TelemetryAgentEvent,
+  ToolAgentEvent,
   ToolCall,
   ToolResult,
   UserInput,
@@ -42,13 +53,21 @@ export type {
   UserMessageTextPart,
   UserText,
   UserTextContent,
-} from "./session/events";
-export type { AgentInput, SessionInput } from "./session/input";
-export type { AgentRun } from "./session/run";
+  VisibleAgentEvent,
+} from "./thread/protocol/events";
+export {
+  isBeforeToolCallEvent,
+  isControlAgentEvent,
+  isLifecycleAgentEvent,
+  isTelemetryAgentEvent,
+  isToolAgentEvent,
+  isVisibleAgentEvent,
+} from "./thread/protocol/events";
+export type { AgentTurn } from "./thread/protocol/turn";
 export type {
   CommitResult,
-  ExpectedSessionVersion,
-  SessionStore,
-  SessionStoreCommit,
-  StoredSession,
-} from "./session/store/types";
+  ExpectedThreadVersion,
+  StoredThread,
+  ThreadStore,
+  ThreadStoreCommit,
+} from "./thread/store/types";

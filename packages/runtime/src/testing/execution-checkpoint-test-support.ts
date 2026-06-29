@@ -1,0 +1,76 @@
+import type { Tool, ToolSet } from "ai";
+import { jsonSchema, tool } from "ai";
+import type {
+  Checkpoint,
+  ExecutionHost,
+  TurnRecord,
+} from "../execution/host/types";
+import { createInMemoryExecutionHost } from "../platform/memory";
+
+export interface GenerateTextToolOptions {
+  readonly tools?: ToolSet;
+}
+
+export const createQueuedUserTurnRun = (runId = "run-1"): TurnRecord => ({
+  checkpointVersion: 0,
+  kind: "user-turn",
+  rootRunId: runId,
+  runId,
+  threadKey: "thread-1",
+  status: "queued",
+});
+
+export function checkpointedTool(
+  retryPolicy: "idempotent" | "manual-recovery" | "pure",
+  execute: (input: unknown, options: unknown) => unknown
+): Tool & { readonly retryPolicy: "idempotent" | "manual-recovery" | "pure" } {
+  return {
+    ...tool({
+      execute,
+      inputSchema: jsonSchema({
+        additionalProperties: false,
+        properties: {},
+        type: "object",
+      }),
+    }),
+    retryPolicy,
+  };
+}
+
+export function toolOptions(toolCallId: string, signal: AbortSignal) {
+  return {
+    abortSignal: signal,
+    context: undefined,
+    messages: [],
+    toolCallId,
+  };
+}
+
+export function createCheckpointSpyHost(): {
+  readonly checkpoints: Checkpoint[];
+  readonly host: ExecutionHost;
+} {
+  const baseHost = createInMemoryExecutionHost();
+  const checkpoints: Checkpoint[] = [];
+  return {
+    checkpoints,
+    host: {
+      kind: "execution",
+      scheduler: baseHost.scheduler,
+      store: {
+        checkpoints: {
+          append: async (checkpoint, options) => {
+            checkpoints.push(checkpoint);
+            return await baseHost.store.checkpoints.append(checkpoint, options);
+          },
+          latest: (runId) => baseHost.store.checkpoints.latest(runId),
+        },
+        events: baseHost.store.events,
+        notifications: baseHost.store.notifications,
+        turns: baseHost.store.turns,
+        threads: baseHost.store.threads,
+        transaction: (fn) => baseHost.store.transaction(fn),
+      },
+    },
+  };
+}

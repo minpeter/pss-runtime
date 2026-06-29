@@ -1,0 +1,346 @@
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { ModelMessage } from "ai";
+import { describe, expect, it } from "vitest";
+import { Agent } from "../../agent/core/agent";
+import { FileThreadStore } from "../../platform/file";
+import {
+  createMockLanguageModelV4,
+  mockLanguageModelV4Text,
+} from "../../testing/mock-language-model-v4-test-utils";
+import {
+  assistantMessage,
+  createCallbackModel,
+  createDeferred,
+  eventTypes,
+  userText,
+} from "../../testing/test-fixtures";
+import type { AgentEvent } from "../protocol/events";
+import { userTextToModelMessage } from "../protocol/mapping";
+import {
+  ConflictOnCommitStore,
+  ConflictOnceStore,
+  collect,
+  SpyStore,
+} from "./test-support";
+
+const storedAssistantOutput = (text: string): ModelMessage => ({
+  content: [{ providerOptions: undefined, text, type: "text" }],
+  role: "assistant",
+});
+
+describe("Agent thread persistence", () => {
+  it("file thread store preserves image content parts across reload", async () => {
+    const input = [
+      { type: "text", text: "remember this image" },
+      {
+        type: "image",
+        image: "data:image/png;base64,ZmFrZQ==",
+        mediaType: "image/png",
+      },
+      {
+        type: "file",
+        data: { type: "text", text: "inline note" },
+        filename: "note.txt",
+        mediaType: "text/plain",
+      },
+    ] as const;
+    const directory = await mkdtemp(join(tmpdir(), "pss-runtime-image-store-"));
+    const store = new FileThreadStore(directory);
+
+    const first = new Agent({
+      host: { kind: "thread", threadStore: store },
+      model: createMockLanguageModelV4([mockLanguageModelV4Text("stored")]),
+    });
+    await collect(await first.thread("images").send(input));
+
+    const secondModel = createMockLanguageModelV4([
+      mockLanguageModelV4Text("DONE"),
+    ]);
+    const second = new Agent({
+      host: { kind: "thread", threadStore: store },
+      model: secondModel,
+    });
+
+    await collect(await second.thread("images").send("next"));
+
+    expect(JSON.stringify(secondModel.doGenerateCalls[0]?.prompt)).toContain(
+      "remember this image"
+    );
+    expect(JSON.stringify(secondModel.doGenerateCalls[0]?.prompt)).toContain(
+      "next"
+    );
+  });
+
+  it("emits and propagates runtime input commit conflicts without using the conflicted snapshot", async () => {
+    const store = new ConflictOnCommitStore();
+    store.conflictOnCommit = 2;
+    const seenHistory: ModelMessage[][] = [];
+    const thread = new Agent({
+      host: { kind: "thread", threadStore: store },
+      model: createCallbackModel(({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      }),
+    }).thread("runtime-conflict");
+    const run = await thread.send("initial");
+    const events: AgentEvent[] = [];
+    let runtimeAdd: Promise<void> | undefined;
+
+    for await (const event of run.events()) {
+      events.push(event);
+      if (event.type === "turn-start" && !runtimeAdd) {
+        runtimeAdd = thread.steer("conflicting runtime").then(() => undefined);
+      }
+    }
+
+    await expect(runtimeAdd).resolves.toBeUndefined();
+    expect(events).toContainEqual({
+      type: "turn-error",
+      message: 'Thread "runtime-conflict" commit conflict',
+    });
+    expect(seenHistory).toEqual([]);
+  });
+
+  it("uses default and explicit default thread state interchangeably", async () => {
+    const seenHistory: ModelMessage[][] = [];
+    const agent = new Agent({
+      model: createCallbackModel(({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      }),
+    });
+
+    await collect(await agent.send("first"));
+    await collect(await agent.thread("default").send("second"));
+
+    expect(seenHistory[1]).toEqual([
+      userTextToModelMessage(userText("first")),
+      assistantMessage("DONE"),
+      userTextToModelMessage(userText("second")),
+    ]);
+  });
+
+  it("keeps overlay visible to one turn without persisting it", async () => {
+    const store = new SpyStore();
+    const seenHistory: ModelMessage[][] = [];
+    const agent = new Agent({
+      host: { kind: "thread", threadStore: store },
+      model: createCallbackModel(({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([
+          assistantMessage(`DONE ${seenHistory.length}`),
+        ]);
+      }),
+    });
+    const thread = agent.thread("overlay");
+
+    await collect(await thread.overlay("volatile context").send("first"));
+    await collect(await thread.send("second"));
+
+    expect(seenHistory).toEqual([
+      [
+        userTextToModelMessage(userText("volatile context")),
+        userTextToModelMessage(userText("first")),
+      ],
+      [
+        userTextToModelMessage(userText("first")),
+        assistantMessage("DONE 1"),
+        userTextToModelMessage(userText("second")),
+      ],
+    ]);
+    expect(JSON.stringify(store.threads.get("overlay")?.state)).not.toContain(
+      "volatile context"
+    );
+  });
+
+  it("isolates named thread keys and resumes same-key state", async () => {
+    const seenHistory: Record<string, ModelMessage[][]> = { a: [], b: [] };
+    let currentKey = "a";
+    const agent = new Agent({
+      model: createCallbackModel(({ history }) => {
+        seenHistory[currentKey]?.push([...history]);
+        return Promise.resolve([assistantMessage(`DONE ${currentKey}`)]);
+      }),
+    });
+
+    currentKey = "a";
+    await collect(await agent.thread("a").send("first a"));
+    currentKey = "b";
+    await collect(await agent.thread("b").send("first b"));
+    currentKey = "a";
+    await collect(await agent.thread("a").send("second a"));
+
+    expect(seenHistory.a[1]).toEqual([
+      userTextToModelMessage(userText("first a")),
+      assistantMessage("DONE a"),
+      userTextToModelMessage(userText("second a")),
+    ]);
+    expect(seenHistory.b[0]).toEqual([
+      userTextToModelMessage(userText("first b")),
+    ]);
+  });
+
+  it("serializes concurrent sends to the same key deterministically", async () => {
+    const firstLlmCall = createDeferred();
+    const seenHistory: ModelMessage[][] = [];
+    let calls = 0;
+    const agent = new Agent({
+      model: createCallbackModel(async ({ history }) => {
+        calls += 1;
+        seenHistory.push([...history]);
+        if (calls === 1) {
+          await firstLlmCall.promise;
+        }
+        return [assistantMessage(`DONE ${calls}`)];
+      }),
+    });
+
+    const firstRun = await agent.thread("same").send("first");
+    const secondRun = await agent.thread("same").send("second");
+    const firstEvents = collect(firstRun);
+    const secondEvents = collect(secondRun);
+    firstLlmCall.resolve();
+
+    await Promise.all([firstEvents, secondEvents]);
+
+    expect(seenHistory).toEqual([
+      [userTextToModelMessage(userText("first"))],
+      [
+        userTextToModelMessage(userText("first")),
+        assistantMessage("DONE 1"),
+        userTextToModelMessage(userText("second")),
+      ],
+    ]);
+  });
+
+  it("shares the initial store load across concurrent first sends", async () => {
+    const loadGate = createDeferred();
+    const seenHistory: ModelMessage[][] = [];
+    const store = new SpyStore();
+    store.loadGate = loadGate.promise;
+    const agent = new Agent({
+      host: { kind: "thread", threadStore: store },
+      model: createCallbackModel(({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([
+          assistantMessage(`DONE ${seenHistory.length}`),
+        ]);
+      }),
+    });
+    const thread = agent.thread("race");
+
+    const firstRun = thread.send("first");
+    const secondRun = thread.send("second");
+    expect(store.loadCount).toBe(1);
+    loadGate.resolve();
+    await Promise.all([collect(await firstRun), collect(await secondRun)]);
+
+    expect(store.loadCount).toBe(1);
+    expect(seenHistory).toEqual([
+      [userTextToModelMessage(userText("first"))],
+      [
+        userTextToModelMessage(userText("first")),
+        assistantMessage("DONE 1"),
+        userTextToModelMessage(userText("second")),
+      ],
+    ]);
+  });
+
+  it("persists versioned runtime-owned thread snapshots through ThreadStore", async () => {
+    const store = new SpyStore();
+    const agent = new Agent({
+      host: { kind: "thread", threadStore: store },
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
+    });
+
+    await collect(await agent.thread("spy").send("hello"));
+
+    expect(store.commits.length).toBeGreaterThanOrEqual(1);
+    const finalCommit = store.commits.at(-1);
+    expect(finalCommit?.key).toBe("spy");
+    expect(finalCommit?.next.state).toEqual(
+      expect.objectContaining({ history: expect.any(Array), schemaVersion: 1 })
+    );
+    expect(finalCommit?.next.state).not.toBeInstanceOf(Array);
+    expect(finalCommit?.next).not.toHaveProperty("version");
+    expect(store.commits[0]?.expectedVersion).toBeNull();
+  });
+
+  it("compacts model context without dropping full stored history", async () => {
+    const store = new SpyStore();
+    const seenHistory: ModelMessage[][] = [];
+    const agent = new Agent({
+      host: { kind: "thread", threadStore: store },
+      model: createCallbackModel(({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([
+          assistantMessage(`DONE ${seenHistory.length}`),
+        ]);
+      }),
+    });
+    const thread = agent.thread("compact");
+
+    await collect(await thread.send("old"));
+    await thread.compact({
+      endSeqExclusive: 2,
+      startSeq: 0,
+      summary: "old exchange summarized",
+    });
+    await collect(await thread.send("tail"));
+
+    expect(seenHistory[1]).toEqual([
+      { content: "old exchange summarized", role: "system" },
+      userTextToModelMessage(userText("tail")),
+    ]);
+    expect(store.threads.get("compact")?.state).toEqual({
+      compactions: [
+        {
+          endSeqExclusive: 2,
+          schemaVersion: 1,
+          startSeq: 0,
+          summary: { content: "old exchange summarized", role: "system" },
+        },
+      ],
+      history: [
+        userTextToModelMessage(userText("old")),
+        storedAssistantOutput("DONE 1"),
+        userTextToModelMessage(userText("tail")),
+        storedAssistantOutput("DONE 2"),
+      ],
+      schemaVersion: 2,
+    });
+  });
+
+  it("refreshes stored state after commit conflicts so the handle can recover", async () => {
+    const remoteHistory = [
+      userTextToModelMessage(userText("remote")),
+      assistantMessage("REMOTE"),
+    ];
+    const seenHistory: ModelMessage[][] = [];
+    const store = new ConflictOnceStore();
+    store.threads.set("shared", {
+      state: { history: remoteHistory, schemaVersion: 1 },
+      version: "1",
+    });
+    const thread = new Agent({
+      host: { kind: "thread", threadStore: store },
+      model: createCallbackModel(({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      }),
+    }).thread("shared");
+
+    expect(eventTypes(await collect(await thread.send("loses")))).toContain(
+      "turn-error"
+    );
+    await collect(await thread.send("recovers"));
+
+    expect(seenHistory).toEqual([
+      [...remoteHistory, userTextToModelMessage(userText("recovers"))],
+    ]);
+  });
+});
