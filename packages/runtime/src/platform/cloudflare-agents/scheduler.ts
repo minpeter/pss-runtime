@@ -7,6 +7,7 @@ import {
 import { startCloudflareAgentsResumeFiber } from "./fiber";
 import {
   type CloudflareAgentsFiberPayload,
+  type CloudflareAgentsThreadFiberPayload,
   cloudflareAgentsRunPayload,
   cloudflareAgentsThreadPayload,
   defaultCloudflareAgentsDelayedResumeCallback,
@@ -135,6 +136,13 @@ export function createCloudflareAgentsFiberRetryScheduler<
     ) {
       return false;
     }
+    const retryPayload = nextRetryPayload(payload);
+    await cloudflareAgent.schedule(
+      delaySeconds(retryRunAfterMs),
+      callback,
+      retryPayload,
+      { idempotent: true }
+    );
     if (
       !(await prepareScheduledNotificationRetry(
         storage,
@@ -144,12 +152,6 @@ export function createCloudflareAgentsFiberRetryScheduler<
     ) {
       return false;
     }
-    await cloudflareAgent.schedule(
-      delaySeconds(retryRunAfterMs),
-      callback,
-      payload,
-      { idempotent: true }
-    );
     return true;
   };
 }
@@ -197,6 +199,38 @@ function delaySeconds(runAfterMs: number): number {
   return Math.max(1, Math.ceil(runAfterMs / 1000));
 }
 
+function nextRetryPayload(
+  payload: CloudflareAgentsFiberPayload
+): CloudflareAgentsFiberPayload {
+  const attempt = (payload.attempt ?? 0) + 1;
+  switch (payload.kind) {
+    case "run":
+      return cloudflareAgentsRunPayload({
+        attempt,
+        prefix: payload.prefix,
+        runId: payload.runId,
+      });
+    case "thread":
+      return nextThreadRetryPayload(payload, attempt);
+    default:
+      return assertNeverPayload(payload);
+  }
+}
+
+function nextThreadRetryPayload(
+  payload: CloudflareAgentsThreadFiberPayload,
+  attempt: number
+): CloudflareAgentsThreadFiberPayload {
+  return cloudflareAgentsThreadPayload({
+    attempt,
+    idempotencyKey: payload.idempotencyKey,
+    notificationId: payload.notificationId,
+    prefix: payload.prefix,
+    runId: payload.runId,
+    threadKey: payload.threadKey,
+  });
+}
+
 function mergeDrainOptions({
   deadlineMs,
   drain,
@@ -230,4 +264,8 @@ function delayedCallbackName<TAgent extends CloudflareAgentsDefaultResumeAgent>(
     return options.delayedResumeCallback;
   }
   return defaultCloudflareAgentsDelayedResumeCallback as CloudflareAgentsCallbackName<TAgent>;
+}
+
+function assertNeverPayload(payload: never): never {
+  throw new TypeError(`Unsupported Cloudflare Agents payload: ${payload}`);
 }

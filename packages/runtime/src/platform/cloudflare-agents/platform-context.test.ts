@@ -158,6 +158,7 @@ describe("Cloudflare Agents platform context", () => {
         callback: "resumePssRuntimeFiber",
         idempotent: true,
         payload: {
+          attempt: 1,
           kind: "run",
           prefix: "scheduled-prefix",
           runId: "background:bg_retry_scheduled",
