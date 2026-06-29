@@ -1,13 +1,11 @@
 import type { ExecutionHost } from "../../execution";
-import {
-  recoverCloudflareAgentsFiber,
-  resumeScheduledCloudflareAgentsFiber,
-} from "./fiber";
+import { recoverCloudflareAgentsFiber } from "./fiber";
 import {
   type CloudflareAgentsExecutionHostOptions,
   createCloudflareAgentsExecutionHost,
 } from "./host";
 import { createCloudflareAgentsFiberRetryScheduler } from "./retry-scheduler";
+import { resumeScheduledCloudflareAgentsFiber } from "./scheduled-fiber";
 import type {
   CloudflareAgentsPayloadTrustOptions,
   CloudflareAgentsPrefixGuardOptions,

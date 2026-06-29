@@ -1,11 +1,18 @@
 import {
+  ackScheduledCloudflareRun,
+  ackScheduledCloudflareThreadPrompt,
   type CloudflareDurableObjectStorage,
-  createCloudflareAlarmScheduler,
+  listScheduledCloudflareRuns,
+  listScheduledCloudflareThreadPrompts,
 } from "../cloudflare";
 import {
   claimScheduledCloudflareRun,
   claimScheduledCloudflareThreadPrompt,
 } from "../cloudflare/host/durable-object-host";
+import {
+  appendScheduledRun,
+  appendScheduledThreadPrompt,
+} from "../cloudflare/host/scheduled-work-queue";
 import type {
   CloudflareAgentsFiberPayload,
   CloudflareAgentsThreadFiberPayload,
@@ -13,7 +20,6 @@ import type {
 
 export async function mirrorCloudflareAgentsScheduledPayload({
   payload,
-  runAfterMs,
   storage,
 }: {
   readonly payload: CloudflareAgentsFiberPayload;
@@ -23,20 +29,16 @@ export async function mirrorCloudflareAgentsScheduledPayload({
   if (storage === undefined) {
     return;
   }
-  const scheduler = createCloudflareAlarmScheduler({
-    prefix: payload.prefix,
-    storage,
-  });
   switch (payload.kind) {
     case "run":
-      await scheduler.enqueueRun(payload.runId, { runAfterMs });
+      await appendScheduledRun(storage, payload.prefix, payload.runId);
       return;
     case "thread":
-      await scheduler.resumeThread(payload.threadKey, {
-        idempotencyKey: payload.idempotencyKey,
-        notificationId: payload.notificationId,
-        runId: payload.runId,
-      });
+      await appendScheduledThreadPrompt(
+        storage,
+        payload.prefix,
+        threadPromptForPayload(payload)
+      );
       return;
     default:
       return assertNeverPayload(payload);
@@ -57,6 +59,50 @@ export async function claimCloudflareAgentsScheduledPayload(
   }
 }
 
+export async function removeCloudflareAgentsScheduledPayload(
+  storage: CloudflareDurableObjectStorage,
+  payload: CloudflareAgentsFiberPayload
+): Promise<void> {
+  switch (payload.kind) {
+    case "run":
+      await ackScheduledCloudflareRun(storage, payload.runId, {
+        prefix: payload.prefix,
+      });
+      return;
+    case "thread":
+      await ackScheduledCloudflareThreadPrompt(
+        storage,
+        threadPromptForPayload(payload),
+        { prefix: payload.prefix }
+      );
+      return;
+    default:
+      return assertNeverPayload(payload);
+  }
+}
+
+export async function hasCloudflareAgentsScheduledPayload(
+  storage: CloudflareDurableObjectStorage,
+  payload: CloudflareAgentsFiberPayload
+): Promise<boolean> {
+  switch (payload.kind) {
+    case "run":
+      return (
+        await listScheduledCloudflareRuns(storage, {
+          prefix: payload.prefix,
+        })
+      ).includes(payload.runId);
+    case "thread":
+      return (
+        await listScheduledCloudflareThreadPrompts(storage, {
+          prefix: payload.prefix,
+        })
+      ).some((prompt) => scheduledThreadPromptMatchesPayload(prompt, payload));
+    default:
+      return assertNeverPayload(payload);
+  }
+}
+
 async function claimRun(
   storage: CloudflareDurableObjectStorage,
   prefix: string,
@@ -69,15 +115,42 @@ async function claimThreadPrompt(
   storage: CloudflareDurableObjectStorage,
   payload: CloudflareAgentsThreadFiberPayload
 ): Promise<boolean> {
-  const prompt = {
+  return await claimScheduledCloudflareThreadPrompt(
+    storage,
+    threadPromptForPayload(payload),
+    { prefix: payload.prefix }
+  );
+}
+
+function scheduledThreadPromptMatchesPayload(
+  prompt: {
+    readonly idempotencyKey?: string;
+    readonly notificationId?: string;
+    readonly runId?: string;
+    readonly threadKey: string;
+  },
+  payload: CloudflareAgentsThreadFiberPayload
+): boolean {
+  return (
+    prompt.threadKey === payload.threadKey &&
+    prompt.runId === payload.runId &&
+    prompt.idempotencyKey === payload.idempotencyKey &&
+    prompt.notificationId === payload.notificationId
+  );
+}
+
+function threadPromptForPayload(payload: CloudflareAgentsThreadFiberPayload): {
+  readonly idempotencyKey?: string;
+  readonly notificationId?: string;
+  readonly runId?: string;
+  readonly threadKey: string;
+} {
+  return {
     idempotencyKey: payload.idempotencyKey,
     notificationId: payload.notificationId,
     runId: payload.runId,
     threadKey: payload.threadKey,
   };
-  return await claimScheduledCloudflareThreadPrompt(storage, prompt, {
-    prefix: payload.prefix,
-  });
 }
 
 function assertNeverPayload(payload: never): never {

@@ -7,7 +7,10 @@ import {
   cloudflareAgentsThreadPayload,
   defaultCloudflareAgentsDelayedResumeCallback,
 } from "./payload";
-import { mirrorCloudflareAgentsScheduledPayload } from "./scheduled-work";
+import {
+  mirrorCloudflareAgentsScheduledPayload,
+  removeCloudflareAgentsScheduledPayload,
+} from "./scheduled-work";
 import type {
   CloudflareAgentsCallbackName,
   CloudflareAgentsDefaultResumeAgent,
@@ -129,17 +132,24 @@ async function startOrSchedulePayload<
   runAfterMs?: number
 ): Promise<void> {
   if (runAfterMs !== undefined && runAfterMs > 0) {
-    await cloudflareAgent.schedule(
-      delaySeconds(runAfterMs),
-      delayedResumeCallback,
-      payload,
-      { idempotent: true }
-    );
     await mirrorCloudflareAgentsScheduledPayload({
       payload,
       runAfterMs,
       storage,
     });
+    try {
+      await cloudflareAgent.schedule(
+        delaySeconds(runAfterMs),
+        delayedResumeCallback,
+        payload,
+        { idempotent: true }
+      );
+    } catch (error) {
+      if (storage !== undefined) {
+        await removeCloudflareAgentsScheduledPayload(storage, payload);
+      }
+      throw error;
+    }
     return;
   }
 

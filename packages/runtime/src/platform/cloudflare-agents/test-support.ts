@@ -5,6 +5,7 @@ import type {
   CloudflareAgentsDurableObjectContext,
   CloudflareAgentsFiberPayload,
   CloudflareAgentsPlatformAgent,
+  CloudflareAgentsStartFiberResult,
 } from "./index";
 
 interface StartedFiber {
@@ -30,6 +31,10 @@ export interface FakeCloudflareAgent extends CloudflareAgentsPlatformAgent {
 export function createFakeCloudflareAgent(): FakeCloudflareAgent {
   const scheduled: ScheduledFiber[] = [];
   const started: StartedFiber[] = [];
+  const fibersByIdempotencyKey = new Map<
+    string,
+    Promise<CloudflareAgentsStartFiberResult>
+  >();
   const durableObjectContext: CloudflareAgentsDurableObjectContext = {
     storage: new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
@@ -56,34 +61,54 @@ export function createFakeCloudflareAgent(): FakeCloudflareAgent {
       });
     },
     scheduled,
-    startFiber: async (name, fn, options) => {
-      const fiberId = `fiber-${started.length + 1}`;
-      let snapshot: unknown;
-      await fn({
-        id: fiberId,
-        signal: new AbortController().signal,
-        snapshot: null,
-        stash: (value) => {
-          snapshot = value;
-        },
-      });
-      started.push({
-        idempotencyKey: options?.idempotencyKey,
-        name,
-        snapshot,
-      });
-      return {
-        accepted: true,
-        createdAt: Date.now(),
-        fiberId,
-        idempotencyKey: options?.idempotencyKey,
-        metadata: options?.metadata,
-        name,
-        snapshot,
-        status: "completed",
-      };
+    startFiber: (name, fn, options) => {
+      const idempotencyKey = options?.idempotencyKey;
+      if (idempotencyKey !== undefined) {
+        const existing = fibersByIdempotencyKey.get(idempotencyKey);
+        if (existing) {
+          return existing.then((result) => ({ ...result, accepted: false }));
+        }
+      }
+      const result = startFakeFiber(name, fn, options, started);
+      if (idempotencyKey !== undefined) {
+        fibersByIdempotencyKey.set(idempotencyKey, result);
+      }
+      return result;
     },
     started,
+  };
+}
+
+async function startFakeFiber(
+  name: string,
+  fn: Parameters<CloudflareAgentsPlatformAgent["startFiber"]>[1],
+  options: Parameters<CloudflareAgentsPlatformAgent["startFiber"]>[2],
+  started: StartedFiber[]
+): Promise<CloudflareAgentsStartFiberResult> {
+  const fiberId = `fiber-${started.length + 1}`;
+  let snapshot: unknown;
+  await fn({
+    id: fiberId,
+    signal: new AbortController().signal,
+    snapshot: null,
+    stash: (value) => {
+      snapshot = value;
+    },
+  });
+  started.push({
+    idempotencyKey: options?.idempotencyKey,
+    name,
+    snapshot,
+  });
+  return {
+    accepted: true,
+    createdAt: Date.now(),
+    fiberId,
+    idempotencyKey: options?.idempotencyKey,
+    metadata: options?.metadata,
+    name,
+    snapshot,
+    status: "completed",
   };
 }
 

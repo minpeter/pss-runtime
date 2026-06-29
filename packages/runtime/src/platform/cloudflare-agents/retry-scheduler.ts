@@ -10,7 +10,10 @@ import {
   cloudflareAgentsThreadPayload,
   defaultCloudflareAgentsDelayedResumeCallback,
 } from "./payload";
-import { mirrorCloudflareAgentsScheduledPayload } from "./scheduled-work";
+import {
+  mirrorCloudflareAgentsScheduledPayload,
+  removeCloudflareAgentsScheduledPayload,
+} from "./scheduled-work";
 import type {
   CloudflareAgentsCallbackName,
   CloudflareAgentsDefaultResumeAgent,
@@ -58,17 +61,22 @@ export function createCloudflareAgentsFiberRetryScheduler<
       return false;
     }
     const retryPayload = nextRetryPayload(payload);
-    await cloudflareAgent.schedule(
-      delaySeconds(retryRunAfterMs),
-      callback,
-      retryPayload,
-      { idempotent: true }
-    );
     await mirrorCloudflareAgentsScheduledPayload({
       payload: retryPayload,
       runAfterMs: retryRunAfterMs,
       storage,
     });
+    try {
+      await cloudflareAgent.schedule(
+        delaySeconds(retryRunAfterMs),
+        callback,
+        retryPayload,
+        { idempotent: true }
+      );
+    } catch (error) {
+      await removeCloudflareAgentsScheduledPayload(storage, retryPayload);
+      throw error;
+    }
     const preparedNotification = await prepareScheduledNotificationRetry(
       storage,
       payload.prefix,

@@ -3,6 +3,7 @@ import type { ExecutionHost, TurnStatus } from "../../execution";
 import {
   type CloudflareAgentsResumeRun,
   createCloudflareAgentsExecutionHost,
+  listScheduledCloudflareAgentsRuns,
 } from "./index";
 import type { FakeCloudflareAgent } from "./test-support";
 
@@ -104,6 +105,15 @@ export async function expectRetryScheduled({
   const notification = await host.store.notifications.getByIdempotencyKey(
     dedupeKeyFor(runId)
   );
+  await expect(
+    listScheduledCloudflareAgentsRuns(
+      cloudflareAgent.durableObjectContext.storage,
+      { prefix: "tenant-a" }
+    )
+  ).resolves.toEqual([runId]);
+  expect(storageAlarmTime(cloudflareAgent.durableObjectContext.storage)).toBe(
+    undefined
+  );
   expect(run).toMatchObject({ runId, status: "queued" });
   expect(run?.lease).toBeUndefined();
   expect(notification).toMatchObject({ runId, status: "pending" });
@@ -123,4 +133,14 @@ export async function expectCompletedNotification(
 
 function dedupeKeyFor(runId: string): string {
   return `dedupe:${runId}`;
+}
+
+function storageAlarmTime(storage: unknown): number | undefined {
+  if (typeof storage !== "object" || storage === null) {
+    return;
+  }
+  if (!("alarmTime" in storage) || typeof storage.alarmTime !== "function") {
+    return;
+  }
+  return storage.alarmTime();
 }

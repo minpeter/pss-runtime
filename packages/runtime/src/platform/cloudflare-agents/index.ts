@@ -11,9 +11,7 @@ export {
 } from "./context";
 export {
   type RecoverCloudflareAgentsFiberOptions,
-  type ResumeScheduledCloudflareAgentsFiberOptions,
   recoverCloudflareAgentsFiber,
-  resumeScheduledCloudflareAgentsFiber,
   type StartCloudflareAgentsResumeFiberOptions,
   startCloudflareAgentsResumeFiber,
 } from "./fiber";
@@ -51,6 +49,10 @@ export {
   type CloudflareAgentsFiberRetrySchedulerOptions,
   createCloudflareAgentsFiberRetryScheduler,
 } from "./retry-scheduler";
+export {
+  type ResumeScheduledCloudflareAgentsFiberOptions,
+  resumeScheduledCloudflareAgentsFiber,
+} from "./scheduled-fiber";
 export {
   type CloudflareAgentsFiberSchedulerOptions,
   createCloudflareAgentsFiberScheduler,

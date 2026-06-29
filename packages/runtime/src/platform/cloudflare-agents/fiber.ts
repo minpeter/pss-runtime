@@ -10,14 +10,11 @@ import {
   cloudflareAgentsFiberName,
   parseCloudflareAgentsFiberPayload,
 } from "./payload";
-import { claimCloudflareAgentsScheduledPayload } from "./scheduled-work";
 import {
   areCloudflareAgentsPayloadsEquivalent,
   type CloudflareAgentsPayloadTrustOptions,
-  cloudflareAgentsTrustFailureReason,
   isCloudflareAgentsPayloadTrusted,
   isCloudflareAgentsRecoveryContextTrusted,
-  rejectedCloudflareAgentsFiberResult,
 } from "./trust";
 import type {
   CloudflareAgentsFiberRecoveryContext,
@@ -37,12 +34,6 @@ export interface StartCloudflareAgentsResumeFiberOptions {
   readonly retry?: CloudflareAgentsRetryFiber;
   readonly storage?: CloudflareDurableObjectStorage;
 }
-export interface ResumeScheduledCloudflareAgentsFiberOptions
-  extends Omit<StartCloudflareAgentsResumeFiberOptions, "payload">,
-    CloudflareAgentsPayloadTrustOptions {
-  readonly payload: unknown;
-}
-
 export interface RecoverCloudflareAgentsFiberOptions
   extends CloudflareAgentsPayloadTrustOptions {
   readonly ctx: CloudflareAgentsFiberRecoveryContext;
@@ -80,30 +71,6 @@ export async function startCloudflareAgentsResumeFiber({
       metadata: cloudflareAgentsFiberMetadata(payload),
     }
   );
-}
-export async function resumeScheduledCloudflareAgentsFiber(
-  options: ResumeScheduledCloudflareAgentsFiberOptions
-): Promise<CloudflareAgentsStartFiberResult> {
-  const payload = parseCloudflareAgentsFiberPayload(options.payload);
-  if (!payload) {
-    return rejectedCloudflareAgentsFiberResult(
-      cloudflareAgentsTrustFailureReason()
-    );
-  }
-  if (!(await isCloudflareAgentsPayloadTrusted(payload, options))) {
-    return rejectedCloudflareAgentsFiberResult(
-      cloudflareAgentsTrustFailureReason()
-    );
-  }
-  if (
-    options.storage !== undefined &&
-    !(await claimCloudflareAgentsScheduledPayload(options.storage, payload))
-  ) {
-    return rejectedCloudflareAgentsFiberResult(
-      "Cloudflare Agents scheduled payload was not pending in the PSS Runtime queue"
-    );
-  }
-  return await startCloudflareAgentsResumeFiber({ ...options, payload });
 }
 export async function recoverCloudflareAgentsFiber({
   ctx,
