@@ -47,17 +47,20 @@ export function createFakeCloudflareAgent(): FakeCloudflareAgent {
         when,
       });
       return Promise.resolve({
-        callback,
+        callback: String(callback),
+        delayInSeconds: typeof when === "number" ? when : 0,
         id: `schedule-${scheduled.length}`,
         payload,
+        time: Date.now(),
         type: "delayed",
       });
     },
     scheduled,
     startFiber: async (name, fn, options) => {
+      const fiberId = `fiber-${started.length + 1}`;
       let snapshot: unknown;
       await fn({
-        id: `fiber-${started.length + 1}`,
+        id: fiberId,
         signal: new AbortController().signal,
         snapshot: null,
         stash: (value) => {
@@ -69,7 +72,16 @@ export function createFakeCloudflareAgent(): FakeCloudflareAgent {
         name,
         snapshot,
       });
-      return { accepted: true, status: "completed" };
+      return {
+        accepted: true,
+        createdAt: Date.now(),
+        fiberId,
+        idempotencyKey: options?.idempotencyKey,
+        metadata: options?.metadata,
+        name,
+        snapshot,
+        status: "completed",
+      };
     },
     started,
   };

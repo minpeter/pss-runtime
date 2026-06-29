@@ -29,11 +29,22 @@ export interface CloudflareAgentsFiberRecoveryContext {
   readonly status?: CloudflareAgentsFiberStatus;
 }
 
-export interface CloudflareAgentsFiberRecoveryResult {
-  readonly error?: string;
-  readonly snapshot?: unknown;
-  readonly status: "aborted" | "completed" | "error" | "interrupted";
-}
+export type CloudflareAgentsFiberRecoveryResult =
+  | {
+      readonly metadata?: Record<string, unknown>;
+      readonly snapshot?: unknown;
+      readonly status: "completed";
+    }
+  | {
+      readonly error?: unknown;
+      readonly snapshot?: unknown;
+      readonly status: "error";
+    }
+  | {
+      readonly reason?: string;
+      readonly snapshot?: unknown;
+      readonly status: "aborted" | "interrupted";
+    };
 
 export interface CloudflareAgentsStartFiberOptions {
   readonly idempotencyKey?: string;
@@ -41,24 +52,62 @@ export interface CloudflareAgentsStartFiberOptions {
   readonly waitForCompletion?: boolean;
 }
 
-export interface CloudflareAgentsStartFiberResult {
+export interface CloudflareAgentsFiberInspection {
+  readonly createdAt: number;
+  readonly error?: string;
+  readonly fiberId: string;
+  readonly idempotencyKey?: string;
+  readonly metadata?: Record<string, unknown>;
+  readonly name: string;
+  readonly settledAt?: number;
+  readonly snapshot?: unknown;
+  readonly startedAt?: number;
+  readonly status: CloudflareAgentsFiberStatus;
+}
+
+export interface CloudflareAgentsStartFiberResult
+  extends CloudflareAgentsFiberInspection {
   readonly accepted: boolean;
-  readonly error?: unknown;
-  readonly fiberId?: string;
-  readonly status?: CloudflareAgentsFiberStatus;
+}
+
+export interface CloudflareAgentsScheduleRetryOptions {
+  readonly baseDelayMs?: number;
+  readonly maxAttempts?: number;
+  readonly maxDelayMs?: number;
 }
 
 export interface CloudflareAgentsScheduleOptions {
   readonly idempotent?: boolean;
-  readonly retry?: unknown;
+  readonly retry?: CloudflareAgentsScheduleRetryOptions;
 }
 
-export interface CloudflareAgentsSchedule<TPayload> {
+interface CloudflareAgentsScheduleBase<TPayload> {
   readonly callback: string;
   readonly id: string;
   readonly payload: TPayload;
-  readonly type: "cron" | "delayed" | "interval" | "scheduled";
+  readonly retry?: CloudflareAgentsScheduleRetryOptions;
 }
+
+export type CloudflareAgentsSchedule<TPayload> =
+  | (CloudflareAgentsScheduleBase<TPayload> & {
+      readonly time: number;
+      readonly type: "scheduled";
+    })
+  | (CloudflareAgentsScheduleBase<TPayload> & {
+      readonly delayInSeconds: number;
+      readonly time: number;
+      readonly type: "delayed";
+    })
+  | (CloudflareAgentsScheduleBase<TPayload> & {
+      readonly cron: string;
+      readonly time: number;
+      readonly type: "cron";
+    })
+  | (CloudflareAgentsScheduleBase<TPayload> & {
+      readonly intervalSeconds: number;
+      readonly time: number;
+      readonly type: "interval";
+    });
 
 export interface CloudflareAgentsDurableObjectContext {
   readonly storage: CloudflareDurableObjectStorage;
@@ -68,6 +117,11 @@ export interface CloudflareAgentsDurableObjectContext {
 export type CloudflareAgentsCallbackName<
   TAgent extends CloudflareAgentsPlatformAgent = CloudflareAgentsPlatformAgent,
 > = Extract<keyof TAgent, string>;
+
+export interface CloudflareAgentsDefaultResumeAgent
+  extends CloudflareAgentsPlatformAgent {
+  resumePssRuntimeFiber(payload: unknown): Promise<void>;
+}
 
 export interface CloudflareAgentsPlatformAgent {
   schedule<TPayload extends CloudflareAgentsFiberPayload>(
@@ -92,3 +146,14 @@ export interface CloudflareAgentsTurnDrainOptions {
 export type CloudflareAgentsResumeRun = (
   payload: CloudflareAgentsFiberPayload
 ) => Promise<AgentTurn | null>;
+
+export type CloudflareAgentsRetryReason =
+  | "deadline"
+  | "error"
+  | "event-budget"
+  | "not-claimable";
+
+export type CloudflareAgentsRetryFiber = (
+  payload: CloudflareAgentsFiberPayload,
+  reason: CloudflareAgentsRetryReason
+) => Promise<boolean>;

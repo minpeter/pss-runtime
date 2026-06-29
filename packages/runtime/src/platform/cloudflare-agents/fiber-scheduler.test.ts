@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { AgentEvent } from "../../index";
 import {
+  cloudflareAgentsFiberIdempotencyKey,
+  cloudflareAgentsRunPayload,
+  cloudflareAgentsThreadPayload,
   createCloudflareAgentsExecutionHost,
   createCloudflareAgentsFiberScheduler,
   resumeScheduledCloudflareAgentsFiber,
@@ -32,7 +35,7 @@ describe("Cloudflare Agents fiber platform adapter", () => {
     ]);
     expect(cloudflareAgent.started).toEqual([
       {
-        idempotencyKey: "pss-runtime:tenant-a:run:background:bg_immediate",
+        idempotencyKey: runFiberKey("tenant-a", "background:bg_immediate"),
         name: "pss-runtime:resume-run",
         snapshot: {
           kind: "run",
@@ -81,14 +84,14 @@ describe("Cloudflare Agents fiber platform adapter", () => {
       payload: cloudflareAgent.scheduled[0]?.payload,
       resume: (payload) => {
         resumed.push(`${payload.kind}:${payload.runId}`);
-        return Promise.resolve(null);
+        return Promise.resolve(runWithText(payload.runId));
       },
     });
 
     expect(resumed).toEqual(["run:background:bg_delayed"]);
     expect(cloudflareAgent.started).toEqual([
       {
-        idempotencyKey: "pss-runtime:tenant-a:run:background:bg_delayed",
+        idempotencyKey: runFiberKey("tenant-a", "background:bg_delayed"),
         name: "pss-runtime:resume-run",
         snapshot: {
           kind: "run",
@@ -163,7 +166,7 @@ describe("Cloudflare Agents fiber platform adapter", () => {
           throw new TypeError("Expected thread payload");
         }
         resumed.push(`${payload.kind}:${payload.runId}:${payload.threadKey}`);
-        return Promise.resolve(null);
+        return Promise.resolve(runWithText(payload.runId));
       },
     });
 
@@ -176,7 +179,7 @@ describe("Cloudflare Agents fiber platform adapter", () => {
     expect(resumed).toEqual(["thread:background:bg_thread:thread-a"]);
     expect(cloudflareAgent.started).toEqual([
       {
-        idempotencyKey: "pss-runtime:tenant-a:thread:notification:1",
+        idempotencyKey: threadFiberKey("tenant-a", "notification:1"),
         name: "pss-runtime:resume-thread",
         snapshot: {
           idempotencyKey: "notification:1",
@@ -197,7 +200,7 @@ describe("Cloudflare Agents fiber platform adapter", () => {
       cloudflareAgent,
       durableObjectContext: cloudflareAgent.durableObjectContext,
       prefix: "tenant-a",
-      resume: () => Promise.resolve(null),
+      resume: (payload) => Promise.resolve(runWithText(payload.runId)),
     });
 
     await host.store.turns.create({
@@ -219,3 +222,20 @@ describe("Cloudflare Agents fiber platform adapter", () => {
     expect(cloudflareAgent.started).toHaveLength(1);
   });
 });
+
+function runFiberKey(prefix: string, runId: string): string {
+  return cloudflareAgentsFiberIdempotencyKey(
+    cloudflareAgentsRunPayload({ prefix, runId })
+  );
+}
+
+function threadFiberKey(prefix: string, idempotencyKey: string): string {
+  return cloudflareAgentsFiberIdempotencyKey(
+    cloudflareAgentsThreadPayload({
+      idempotencyKey,
+      prefix,
+      runId: "background:bg_thread",
+      threadKey: "thread-a",
+    })
+  );
+}

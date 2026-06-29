@@ -87,11 +87,13 @@ export function cloudflareAgentsFiberIdempotencyKey(
 ): string {
   switch (payload.kind) {
     case "run":
-      return `pss-runtime:${payload.prefix}:run:${payload.runId}`;
+      return `pss-runtime:run:${idempotencyKeyPart(
+        payload.prefix
+      )}:${idempotencyKeyPart(payload.runId)}`;
     case "thread":
-      return `pss-runtime:${payload.prefix}:thread:${
-        payload.idempotencyKey ?? payload.runId
-      }`;
+      return `pss-runtime:thread:${idempotencyKeyPart(
+        payload.prefix
+      )}:${idempotencyKeyPart(payload.idempotencyKey ?? payload.runId)}`;
     default:
       return assertNeverPayload(payload);
   }
@@ -223,4 +225,8 @@ function assertOptionalPayloadString(
 
 function assertNeverPayload(payload: never): never {
   throw new TypeError(`Unsupported Cloudflare Agents payload: ${payload}`);
+}
+
+function idempotencyKeyPart(value: string): string {
+  return `${value.length}:${value}`;
 }

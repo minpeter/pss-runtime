@@ -36,7 +36,9 @@ export {
   pssThreadFiberName,
 } from "./payload";
 export {
+  type CloudflareAgentsFiberRetrySchedulerOptions,
   type CloudflareAgentsFiberSchedulerOptions,
+  createCloudflareAgentsFiberRetryScheduler,
   createCloudflareAgentsFiberScheduler,
 } from "./scheduler";
 export {
@@ -51,15 +53,20 @@ export {
 } from "./trust";
 export type {
   CloudflareAgentsCallbackName,
+  CloudflareAgentsDefaultResumeAgent,
   CloudflareAgentsDurableObjectContext,
   CloudflareAgentsFiberContext,
+  CloudflareAgentsFiberInspection,
   CloudflareAgentsFiberRecoveryContext,
   CloudflareAgentsFiberRecoveryResult,
   CloudflareAgentsFiberStatus,
   CloudflareAgentsPlatformAgent,
   CloudflareAgentsResumeRun,
+  CloudflareAgentsRetryFiber,
+  CloudflareAgentsRetryReason,
   CloudflareAgentsSchedule,
   CloudflareAgentsScheduleOptions,
+  CloudflareAgentsScheduleRetryOptions,
   CloudflareAgentsStartFiberOptions,
   CloudflareAgentsStartFiberResult,
   CloudflareAgentsTurnDrainOptions,

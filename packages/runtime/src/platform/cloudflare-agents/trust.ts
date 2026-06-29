@@ -87,7 +87,10 @@ export function rejectedCloudflareAgentsFiberResult(
 ): CloudflareAgentsStartFiberResult {
   return {
     accepted: false,
-    error: new TypeError(reason),
+    createdAt: Date.now(),
+    error: reason,
+    fiberId: "pss-runtime:rejected",
+    name: defaultCloudflareAgentsDelayedResumeCallback,
     status: "aborted",
   };
 }

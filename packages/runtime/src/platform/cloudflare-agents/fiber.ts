@@ -1,4 +1,4 @@
-import { drainAgentTurn } from "../cloudflare";
+import { drainAgentTurnWithBudget } from "../cloudflare";
 import {
   type CloudflareAgentsFiberPayload,
   cloudflareAgentsFiberIdempotencyKey,
@@ -19,6 +19,8 @@ import type {
   CloudflareAgentsFiberRecoveryResult,
   CloudflareAgentsPlatformAgent,
   CloudflareAgentsResumeRun,
+  CloudflareAgentsRetryFiber,
+  CloudflareAgentsRetryReason,
   CloudflareAgentsStartFiberResult,
   CloudflareAgentsTurnDrainOptions,
 } from "./types";
@@ -28,6 +30,7 @@ export interface StartCloudflareAgentsResumeFiberOptions {
   readonly drain?: CloudflareAgentsTurnDrainOptions;
   readonly payload: CloudflareAgentsFiberPayload;
   readonly resume: CloudflareAgentsResumeRun;
+  readonly retry?: CloudflareAgentsRetryFiber;
 }
 
 export interface ResumeScheduledCloudflareAgentsFiberOptions
@@ -41,19 +44,24 @@ export interface RecoverCloudflareAgentsFiberOptions
   readonly ctx: CloudflareAgentsFiberRecoveryContext;
   readonly drain?: CloudflareAgentsTurnDrainOptions;
   readonly resume: CloudflareAgentsResumeRun;
+  readonly retry?: CloudflareAgentsRetryFiber;
 }
 
 export async function startCloudflareAgentsResumeFiber({
   cloudflareAgent,
   drain,
   payload,
+  retry,
   resume,
 }: StartCloudflareAgentsResumeFiberOptions): Promise<CloudflareAgentsStartFiberResult> {
   return await cloudflareAgent.startFiber(
     cloudflareAgentsFiberName(payload),
     async (ctx) => {
       ctx.stash(payload);
-      await resumeAndDrain({ drain, payload, resume });
+      const result = await resumeAndDrain({ drain, payload, retry, resume });
+      if (!(result.completed || result.rescheduled)) {
+        throw new Error(`PSS Runtime fiber interrupted: ${result.reason}`);
+      }
     },
     {
       idempotencyKey: cloudflareAgentsFiberIdempotencyKey(payload),
@@ -82,6 +90,7 @@ export async function resumeScheduledCloudflareAgentsFiber(
 export async function recoverCloudflareAgentsFiber({
   ctx,
   drain,
+  retry,
   resume,
   ...trust
 }: RecoverCloudflareAgentsFiberOptions): Promise<
@@ -107,29 +116,106 @@ export async function recoverCloudflareAgentsFiber({
     return false;
   }
 
-  const resumed = await resumeAndDrain({ drain, payload, resume });
+  const result = await resumeAndDrain({ drain, payload, retry, resume });
+  const snapshot = {
+    ...cloudflareAgentsFiberMetadata(payload),
+    resumed: result.resumed,
+    rescheduled: result.rescheduled,
+    retryReason: result.reason,
+  };
+  if (!result.completed) {
+    return {
+      reason: result.reason,
+      snapshot,
+      status: "interrupted",
+    };
+  }
   return {
-    snapshot: {
-      ...cloudflareAgentsFiberMetadata(payload),
-      resumed,
-    },
+    snapshot,
     status: "completed",
   };
 }
 
+type ResumeAndDrainResult =
+  | {
+      readonly completed: true;
+      readonly reason?: never;
+      readonly rescheduled: false;
+      readonly resumed: true;
+    }
+  | {
+      readonly completed: false;
+      readonly reason: CloudflareAgentsRetryReason;
+      readonly rescheduled: boolean;
+      readonly resumed: boolean;
+    };
+
 async function resumeAndDrain({
   drain,
   payload,
+  retry,
   resume,
 }: {
   readonly drain?: CloudflareAgentsTurnDrainOptions;
   readonly payload: CloudflareAgentsFiberPayload;
+  readonly retry?: CloudflareAgentsRetryFiber;
   readonly resume: CloudflareAgentsResumeRun;
-}): Promise<boolean> {
-  const turn = await resume(payload);
-  if (!turn) {
-    return false;
+}): Promise<ResumeAndDrainResult> {
+  let resumed = false;
+  try {
+    const turn = await resume(payload);
+    if (!turn) {
+      return await retryInterrupted({
+        payload,
+        reason: "not-claimable",
+        retry,
+        resumed,
+      });
+    }
+    resumed = true;
+    const drainResult = await drainAgentTurnWithBudget(turn, drain);
+    if (drainResult.stoppedReason) {
+      return await retryInterrupted({
+        payload,
+        reason: drainResult.stoppedReason,
+        retry,
+        resumed,
+      });
+    }
+    return {
+      completed: true,
+      rescheduled: false,
+      resumed,
+    };
+  } catch (error) {
+    const result = await retryInterrupted({
+      payload,
+      reason: "error",
+      retry,
+      resumed,
+    });
+    if (result.rescheduled) {
+      return result;
+    }
+    throw error;
   }
-  await drainAgentTurn(turn, drain);
-  return true;
+}
+
+async function retryInterrupted({
+  payload,
+  reason,
+  retry,
+  resumed,
+}: {
+  readonly payload: CloudflareAgentsFiberPayload;
+  readonly reason: CloudflareAgentsRetryReason;
+  readonly retry?: CloudflareAgentsRetryFiber;
+  readonly resumed: boolean;
+}): Promise<ResumeAndDrainResult> {
+  return {
+    completed: false,
+    reason,
+    rescheduled: retry ? await retry(payload, reason) : false,
+    resumed,
+  };
 }

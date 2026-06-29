@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
+import type { ExecutionHost, TurnStatus } from "../../execution";
 import {
   type CloudflareAgentsResumeRun,
+  cloudflareAgentsFiberIdempotencyKey,
+  cloudflareAgentsRunPayload,
   createCloudflareAgentsPlatformContext,
 } from "./index";
-import { createFakeCloudflareAgent } from "./test-support";
+import { createFakeCloudflareAgent, runWithText } from "./test-support";
 
 describe("Cloudflare Agents platform context", () => {
   it("resumes delayed callbacks with an allowed scheduled payload prefix", async () => {
@@ -13,7 +16,7 @@ describe("Cloudflare Agents platform context", () => {
     const resume: CloudflareAgentsResumeRun = (payload) => {
       prefixes.push(payload.prefix);
       runIds.push(payload.runId);
-      return Promise.resolve(null);
+      return Promise.resolve(runWithText(payload.runId));
     };
     const context = createCloudflareAgentsPlatformContext({
       cloudflareAgent,
@@ -45,8 +48,10 @@ describe("Cloudflare Agents platform context", () => {
     expect(runIds).toEqual(["background:bg_scheduled"]);
     expect(cloudflareAgent.started).toEqual([
       {
-        idempotencyKey:
-          "pss-runtime:scheduled-prefix:run:background:bg_scheduled",
+        idempotencyKey: runFiberKey(
+          "scheduled-prefix",
+          "background:bg_scheduled"
+        ),
         name: "pss-runtime:resume-run",
         snapshot: {
           kind: "run",
@@ -67,7 +72,7 @@ describe("Cloudflare Agents platform context", () => {
         prefix,
         resume: (runId: string) => {
           resumed.push(`${prefix}:${runId}`);
-          return Promise.resolve(null);
+          return Promise.resolve(runWithText(runId));
         },
       }),
       defaultPrefix: "current-prefix",
@@ -100,7 +105,7 @@ describe("Cloudflare Agents platform context", () => {
         prefix,
         resume: (runId: string) => {
           resumed.push(`${prefix}:${runId}`);
-          return Promise.resolve(null);
+          return Promise.resolve(runWithText(runId));
         },
       }),
       defaultPrefix: "current-prefix",
@@ -121,4 +126,101 @@ describe("Cloudflare Agents platform context", () => {
     });
     expect(resumed).toEqual(["tenant-a:background:bg_allowed"]);
   });
+
+  it("reschedules allowed scheduled payloads using the payload prefix", async () => {
+    const cloudflareAgent = createFakeCloudflareAgent();
+    const context = createCloudflareAgentsPlatformContext({
+      cloudflareAgent,
+      createAgent: ({ prefix }) => ({
+        prefix,
+        resume: () => Promise.resolve(null),
+      }),
+      allowedPrefixes: ["scheduled-prefix"],
+      defaultPrefix: "current-prefix",
+      durableObjectContext: cloudflareAgent.durableObjectContext,
+      env: {},
+    });
+    const scheduledHost = context.host("scheduled-prefix");
+
+    await seedRetryableNotification(
+      scheduledHost,
+      "background:bg_retry_scheduled"
+    );
+    await context.resumeScheduledFiber({
+      kind: "run",
+      prefix: "scheduled-prefix",
+      runId: "background:bg_retry_scheduled",
+      version: 1,
+    });
+
+    expect(cloudflareAgent.scheduled).toEqual([
+      {
+        callback: "resumePssRuntimeFiber",
+        idempotent: true,
+        payload: {
+          kind: "run",
+          prefix: "scheduled-prefix",
+          runId: "background:bg_retry_scheduled",
+          version: 1,
+        },
+        when: 1,
+      },
+    ]);
+    const run = await scheduledHost.store.turns.get(
+      "background:bg_retry_scheduled"
+    );
+    const notification =
+      await scheduledHost.store.notifications.getByIdempotencyKey(
+        dedupeKeyFor("background:bg_retry_scheduled")
+      );
+    expect(run).toMatchObject({
+      runId: "background:bg_retry_scheduled",
+      status: "queued",
+    });
+    expect(run?.lease).toBeUndefined();
+    expect(notification).toMatchObject({
+      runId: "background:bg_retry_scheduled",
+      status: "pending",
+    });
+  });
 });
+
+function runFiberKey(prefix: string, runId: string): string {
+  return cloudflareAgentsFiberIdempotencyKey(
+    cloudflareAgentsRunPayload({ prefix, runId })
+  );
+}
+
+async function seedRetryableNotification(
+  host: ExecutionHost,
+  runId: string,
+  status: TurnStatus = "leased"
+): Promise<void> {
+  const dedupeKey = dedupeKeyFor(runId);
+  await host.store.turns.create({
+    checkpointVersion: 0,
+    dedupeKey,
+    kind: "notification",
+    lease: {
+      attempt: 1,
+      leaseId: `lease:${runId}`,
+      leaseUntilMs: Date.now() + 60_000,
+    },
+    rootRunId: runId,
+    runId,
+    status,
+    threadKey: "thread-a",
+  });
+  await host.store.notifications.enqueue({
+    idempotencyKey: dedupeKey,
+    input: { text: "retry", type: "user-input" },
+    notificationId: `notification:${runId}`,
+    runId,
+    status: "acked",
+    threadKey: "thread-a",
+  });
+}
+
+function dedupeKeyFor(runId: string): string {
+  return `dedupe:${runId}`;
+}

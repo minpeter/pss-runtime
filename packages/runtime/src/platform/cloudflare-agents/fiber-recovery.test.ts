@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   type CloudflareAgentsFiberPayload,
+  cloudflareAgentsFiberIdempotencyKey,
   cloudflareAgentsFiberMetadata,
   recoverCloudflareAgentsFiber,
 } from "./index";
@@ -15,7 +16,7 @@ describe("Cloudflare Agents fiber recovery", () => {
       ctx: {
         createdAt: Date.now(),
         id: "fiber-1",
-        idempotencyKey: "pss-runtime:tenant-a:run:background:bg_recovered",
+        idempotencyKey: cloudflareAgentsFiberIdempotencyKey(payload),
         metadata: cloudflareAgentsFiberMetadata(payload),
         name: "pss-runtime:resume-run",
         recoveryReason: "interrupted",
@@ -33,10 +34,13 @@ describe("Cloudflare Agents fiber recovery", () => {
         kind: "run",
         prefix: "tenant-a",
         resumed: false,
+        rescheduled: false,
         runId: "background:bg_recovered",
+        retryReason: "not-claimable",
         version: 1,
       },
-      status: "completed",
+      reason: "not-claimable",
+      status: "interrupted",
     });
   });
 
@@ -65,7 +69,7 @@ describe("Cloudflare Agents fiber recovery", () => {
         ctx: {
           createdAt: Date.now(),
           id: "fiber-1",
-          idempotencyKey: "pss-runtime:tenant-a:run:background:bg_wrong_fiber",
+          idempotencyKey: cloudflareAgentsFiberIdempotencyKey(payload),
           name: "other-fiber",
           recoveryReason: "interrupted",
           snapshot: payload,
@@ -89,7 +93,7 @@ describe("Cloudflare Agents fiber recovery", () => {
         ctx: {
           createdAt: Date.now(),
           id: "fiber-1",
-          idempotencyKey: "pss-runtime:tenant-a:run:other",
+          idempotencyKey: "pss-runtime:run:8:tenant-a:5:other",
           name: "pss-runtime:resume-run",
           recoveryReason: "interrupted",
           snapshot: payload,
@@ -136,7 +140,7 @@ describe("Cloudflare Agents fiber recovery", () => {
         ctx: {
           createdAt: Date.now(),
           id: "fiber-1",
-          idempotencyKey: "pss-runtime:tenant-b:run:background:bg_foreign",
+          idempotencyKey: cloudflareAgentsFiberIdempotencyKey(payload),
           name: "pss-runtime:resume-run",
           recoveryReason: "interrupted",
           snapshot: payload,

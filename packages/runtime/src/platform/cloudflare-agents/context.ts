@@ -3,12 +3,17 @@ import {
   recoverCloudflareAgentsFiber,
   resumeScheduledCloudflareAgentsFiber,
 } from "./fiber";
-import { createCloudflareAgentsExecutionHost } from "./host";
+import {
+  type CloudflareAgentsExecutionHostOptions,
+  createCloudflareAgentsExecutionHost,
+} from "./host";
+import { createCloudflareAgentsFiberRetryScheduler } from "./scheduler";
 import type {
   CloudflareAgentsPayloadTrustOptions,
   CloudflareAgentsPrefixGuardOptions,
 } from "./trust";
 import type {
+  CloudflareAgentsDefaultResumeAgent,
   CloudflareAgentsDurableObjectContext,
   CloudflareAgentsFiberRecoveryContext,
   CloudflareAgentsFiberRecoveryResult,
@@ -22,30 +27,43 @@ const defaultPrefix = "pss-runtime";
 
 type MaybePromise<T> = Promise<T> | T;
 
-export interface CloudflareAgentsPlatformFactoryOptions<Env> {
-  readonly cloudflareAgent: CloudflareAgentsPlatformAgent;
+export interface CloudflareAgentsPlatformFactoryOptions<
+  Env,
+  TAgent extends
+    CloudflareAgentsDefaultResumeAgent = CloudflareAgentsDefaultResumeAgent,
+> {
+  readonly cloudflareAgent: TAgent;
   readonly durableObjectContext: CloudflareAgentsDurableObjectContext;
   readonly env: Env;
   readonly host: ExecutionHost;
   readonly prefix: string;
 }
 
-export interface CloudflareAgentsPlatformContextOptions<
+interface CloudflareAgentsPlatformContextBaseOptions<
   Env,
   CreatedAgent extends CloudflareAgentsResumableAgent,
+  TAgent extends CloudflareAgentsDefaultResumeAgent,
 > {
   readonly allowedPrefixes?: readonly string[];
   readonly allowPrefix?: CloudflareAgentsPlatformPrefixGuard<Env>;
-  readonly cloudflareAgent: CloudflareAgentsPlatformAgent;
+  readonly cloudflareAgent: TAgent;
   readonly createAgent: (
-    options: CloudflareAgentsPlatformFactoryOptions<Env>
+    options: CloudflareAgentsPlatformFactoryOptions<Env, TAgent>
   ) => CreatedAgent;
   readonly defaultPrefix?: string;
-  readonly delayedResumeCallback?: string;
   readonly drain?: CloudflareAgentsTurnDrainOptions;
   readonly durableObjectContext: CloudflareAgentsDurableObjectContext;
   readonly env: Env;
+  readonly retryRunAfterMs?: number;
 }
+
+export type CloudflareAgentsPlatformContextOptions<
+  Env,
+  CreatedAgent extends CloudflareAgentsResumableAgent,
+  TAgent extends
+    CloudflareAgentsDefaultResumeAgent = CloudflareAgentsDefaultResumeAgent,
+> = CloudflareAgentsPlatformContextBaseOptions<Env, CreatedAgent, TAgent> &
+  Pick<CloudflareAgentsExecutionHostOptions<TAgent>, "delayedResumeCallback">;
 
 export interface CloudflareAgentsPlatformContext<
   CreatedAgent extends CloudflareAgentsResumableAgent,
@@ -78,6 +96,8 @@ export interface CloudflareAgentsPlatformPrefixGuardOptions<Env>
 export function createCloudflareAgentsPlatformContext<
   Env,
   CreatedAgent extends CloudflareAgentsResumableAgent,
+  TAgent extends
+    CloudflareAgentsDefaultResumeAgent = CloudflareAgentsDefaultResumeAgent,
 >({
   allowPrefix,
   allowedPrefixes,
@@ -88,10 +108,18 @@ export function createCloudflareAgentsPlatformContext<
   drain,
   durableObjectContext,
   env,
+  retryRunAfterMs,
 }: CloudflareAgentsPlatformContextOptions<
   Env,
-  CreatedAgent
+  CreatedAgent,
+  TAgent
 >): CloudflareAgentsPlatformContext<CreatedAgent> {
+  const retry = createCloudflareAgentsFiberRetryScheduler({
+    cloudflareAgent,
+    delayedResumeCallback,
+    retryRunAfterMs,
+    storage: durableObjectContext.storage,
+  });
   const createHost = (prefix = contextDefaultPrefix): ExecutionHost =>
     createCloudflareAgentsExecutionHost({
       cloudflareAgent,
@@ -99,6 +127,7 @@ export function createCloudflareAgentsPlatformContext<
       drain,
       durableObjectContext,
       prefix,
+      retryRunAfterMs,
       resume: async (payload): ReturnType<CloudflareAgentsResumeRun> =>
         await createContextAgent(payload.prefix).resume(payload.runId),
     });
@@ -131,6 +160,7 @@ export function createCloudflareAgentsPlatformContext<
       await recoverCloudflareAgentsFiber({
         ctx,
         drain,
+        retry,
         resume: async (payload): ReturnType<CloudflareAgentsResumeRun> =>
           await createContextAgent(payload.prefix).resume(payload.runId),
         ...trust,
@@ -140,6 +170,7 @@ export function createCloudflareAgentsPlatformContext<
         cloudflareAgent,
         drain,
         payload,
+        retry,
         resume: async (payload): ReturnType<CloudflareAgentsResumeRun> =>
           await createContextAgent(payload.prefix).resume(payload.runId),
         ...trust,
