@@ -21,6 +21,8 @@ import type {
 } from "./types";
 
 const defaultRetryRunAfterMs = 1000;
+const defaultRetryMaxAttempts = 5;
+const defaultRetryMaxRunAfterMs = 60_000;
 
 interface CloudflareAgentsDelayedCallbackOption<
   TAgent extends CloudflareAgentsDefaultResumeAgent,
@@ -33,6 +35,8 @@ export type CloudflareAgentsFiberRetrySchedulerOptions<
     CloudflareAgentsDefaultResumeAgent = CloudflareAgentsDefaultResumeAgent,
 > = {
   readonly cloudflareAgent: TAgent;
+  readonly retryMaxAttempts?: number;
+  readonly retryMaxRunAfterMs?: number;
   readonly retryRunAfterMs?: number;
   readonly storage: CloudflareDurableObjectStorage;
 } & CloudflareAgentsDelayedCallbackOption<TAgent>;
@@ -46,6 +50,8 @@ export function createCloudflareAgentsFiberRetryScheduler<
   const callback = delayedCallbackName(options);
   const {
     cloudflareAgent,
+    retryMaxAttempts = defaultRetryMaxAttempts,
+    retryMaxRunAfterMs = defaultRetryMaxRunAfterMs,
     retryRunAfterMs = defaultRetryRunAfterMs,
     storage,
   } = options;
@@ -61,14 +67,22 @@ export function createCloudflareAgentsFiberRetryScheduler<
       return false;
     }
     const retryPayload = nextRetryPayload(payload);
+    if ((retryPayload.attempt ?? 0) > Math.max(0, retryMaxAttempts)) {
+      return false;
+    }
+    const runAfterMs = retryDelayMs({
+      attempt: retryPayload.attempt,
+      maxRunAfterMs: retryMaxRunAfterMs,
+      runAfterMs: retryRunAfterMs,
+    });
     await mirrorCloudflareAgentsScheduledPayload({
       payload: retryPayload,
-      runAfterMs: retryRunAfterMs,
+      runAfterMs,
       storage,
     });
     try {
       await cloudflareAgent.schedule(
-        delaySeconds(retryRunAfterMs),
+        delaySeconds(runAfterMs),
         callback,
         retryPayload,
         { idempotent: true }
@@ -87,6 +101,22 @@ export function createCloudflareAgentsFiberRetryScheduler<
     }
     return true;
   };
+}
+
+function retryDelayMs({
+  attempt,
+  maxRunAfterMs,
+  runAfterMs,
+}: {
+  readonly attempt: number | undefined;
+  readonly maxRunAfterMs: number;
+  readonly runAfterMs: number;
+}): number {
+  const exponent = Math.max(0, (attempt ?? 1) - 1);
+  return Math.min(
+    Math.max(1, maxRunAfterMs),
+    Math.max(1, runAfterMs) * 2 ** exponent
+  );
 }
 
 function delaySeconds(runAfterMs: number): number {

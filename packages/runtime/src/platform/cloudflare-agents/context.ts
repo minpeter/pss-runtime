@@ -52,6 +52,8 @@ interface CloudflareAgentsPlatformContextBaseOptions<
   readonly drain?: CloudflareAgentsTurnDrainOptions;
   readonly durableObjectContext: CloudflareAgentsDurableObjectContext;
   readonly env: Env;
+  readonly retryMaxAttempts?: number;
+  readonly retryMaxRunAfterMs?: number;
   readonly retryRunAfterMs?: number;
 }
 
@@ -106,6 +108,8 @@ export function createCloudflareAgentsPlatformContext<
   drain,
   durableObjectContext,
   env,
+  retryMaxAttempts,
+  retryMaxRunAfterMs,
   retryRunAfterMs,
 }: CloudflareAgentsPlatformContextOptions<
   Env,
@@ -115,6 +119,8 @@ export function createCloudflareAgentsPlatformContext<
   const retry = createCloudflareAgentsFiberRetryScheduler({
     cloudflareAgent,
     delayedResumeCallback,
+    retryMaxAttempts,
+    retryMaxRunAfterMs,
     retryRunAfterMs,
     storage: durableObjectContext.storage,
   });
@@ -125,6 +131,8 @@ export function createCloudflareAgentsPlatformContext<
       drain,
       durableObjectContext,
       prefix,
+      retryMaxAttempts,
+      retryMaxRunAfterMs,
       retryRunAfterMs,
       resume: async (payload): ReturnType<CloudflareAgentsResumeRun> =>
         await createContextAgent(payload.prefix).resume(payload.runId),

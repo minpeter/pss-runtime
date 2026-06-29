@@ -46,7 +46,7 @@ export async function resumeScheduledCloudflareAgentsFiber(
     ...options,
     payload,
   });
-  if (storage !== undefined) {
+  if (storage !== undefined && result.accepted) {
     await claimCloudflareAgentsScheduledPayload(storage, payload);
   }
   return result;

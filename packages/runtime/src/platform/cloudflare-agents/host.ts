@@ -24,6 +24,8 @@ interface CloudflareAgentsExecutionHostBaseOptions<
   readonly maxPayloadBytes?: number;
   readonly prefix?: string;
   readonly resume: CloudflareAgentsResumeRun;
+  readonly retryMaxAttempts?: number;
+  readonly retryMaxRunAfterMs?: number;
   readonly retryRunAfterMs?: number;
   readonly threadStore?: ThreadStore;
 }
@@ -44,6 +46,8 @@ export function createCloudflareAgentsExecutionHost<
   durableObjectContext,
   maxPayloadBytes,
   prefix = defaultPrefix,
+  retryMaxAttempts,
+  retryMaxRunAfterMs,
   retryRunAfterMs,
   resume,
   threadStore,
@@ -51,6 +55,8 @@ export function createCloudflareAgentsExecutionHost<
   const retry = createCloudflareAgentsFiberRetryScheduler({
     cloudflareAgent,
     delayedResumeCallback,
+    retryMaxAttempts,
+    retryMaxRunAfterMs,
     retryRunAfterMs,
     storage: durableObjectContext.storage,
   });

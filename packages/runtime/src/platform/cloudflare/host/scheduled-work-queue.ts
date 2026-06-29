@@ -23,16 +23,23 @@ export async function appendScheduledRun(
   prefix: string,
   runId: string
 ): Promise<void> {
-  await insertScheduledWork(
+  await appendScheduledRunWork(
     storage,
     prefix,
-    "run",
     runScheduledWorkId(runId),
-    runId,
-    {
-      runId,
-    }
+    runId
   );
+}
+
+export async function appendScheduledRunWork(
+  storage: CloudflareDurableObjectStorage,
+  prefix: string,
+  workId: string,
+  runId: string
+): Promise<void> {
+  await insertScheduledWork(storage, prefix, "run", workId, runId, {
+    runId,
+  });
 }
 
 export async function appendScheduledThreadPrompt(
@@ -40,17 +47,24 @@ export async function appendScheduledThreadPrompt(
   prefix: string,
   prompt: CloudflareScheduledThreadPrompt
 ): Promise<void> {
-  await insertScheduledWork(
+  await appendScheduledThreadPromptWork(
     storage,
     prefix,
-    "thread-prompt",
     threadPromptScheduledWorkId(prompt),
-    prompt,
-    {
-      runId: prompt.runId,
-      threadKey: prompt.threadKey,
-    }
+    prompt
   );
+}
+
+export async function appendScheduledThreadPromptWork(
+  storage: CloudflareDurableObjectStorage,
+  prefix: string,
+  workId: string,
+  prompt: CloudflareScheduledThreadPrompt
+): Promise<void> {
+  await insertScheduledWork(storage, prefix, "thread-prompt", workId, prompt, {
+    runId: prompt.runId,
+    threadKey: prompt.threadKey,
+  });
 }
 
 export function listScheduledRuns(
@@ -66,6 +80,26 @@ export function listScheduledRuns(
   );
 }
 
+export function hasScheduledRunWork(
+  storage: CloudflareDurableObjectStorage,
+  prefix: string,
+  workId: string
+): boolean {
+  return selectScheduledWork(storage, prefix, "run").some(
+    (row) => row.work_id === workId
+  );
+}
+
+export function hasScheduledThreadPromptWork(
+  storage: CloudflareDurableObjectStorage,
+  prefix: string,
+  workId: string
+): boolean {
+  return selectScheduledWork(storage, prefix, "thread-prompt").some(
+    (row) => row.work_id === workId
+  );
+}
+
 export function ackScheduledRun(
   storage: CloudflareDurableObjectStorage,
   runId: string,
@@ -73,7 +107,15 @@ export function ackScheduledRun(
   defaultPrefix: string
 ): Promise<void> {
   const prefix = options.prefix ?? defaultPrefix;
-  return deleteScheduledWork(storage, prefix, "run", runScheduledWorkId(runId));
+  return ackScheduledRunWork(storage, prefix, runScheduledWorkId(runId));
+}
+
+export function ackScheduledRunWork(
+  storage: CloudflareDurableObjectStorage,
+  prefix: string,
+  workId: string
+): Promise<void> {
+  return deleteScheduledWork(storage, prefix, "run", workId);
 }
 
 export async function claimScheduledRun(
@@ -83,12 +125,19 @@ export async function claimScheduledRun(
   defaultPrefix: string
 ): Promise<boolean> {
   const prefix = options.prefix ?? defaultPrefix;
-  return await claimScheduledWork(
+  return await claimScheduledRunWork(
     storage,
     prefix,
-    "run",
     runScheduledWorkId(runId)
   );
+}
+
+export async function claimScheduledRunWork(
+  storage: CloudflareDurableObjectStorage,
+  prefix: string,
+  workId: string
+): Promise<boolean> {
+  return await claimScheduledWork(storage, prefix, "run", workId);
 }
 
 export function listScheduledThreadPrompts(
@@ -111,12 +160,19 @@ export function ackScheduledThreadPrompt(
   defaultPrefix: string
 ): Promise<void> {
   const prefix = options.prefix ?? defaultPrefix;
-  return deleteScheduledWork(
+  return ackScheduledThreadPromptWork(
     storage,
     prefix,
-    "thread-prompt",
     threadPromptScheduledWorkId(prompt)
   );
+}
+
+export function ackScheduledThreadPromptWork(
+  storage: CloudflareDurableObjectStorage,
+  prefix: string,
+  workId: string
+): Promise<void> {
+  return deleteScheduledWork(storage, prefix, "thread-prompt", workId);
 }
 
 export async function claimScheduledThreadPrompt(
@@ -126,12 +182,19 @@ export async function claimScheduledThreadPrompt(
   defaultPrefix: string
 ): Promise<boolean> {
   const prefix = options.prefix ?? defaultPrefix;
-  return await claimScheduledWork(
+  return await claimScheduledThreadPromptWork(
     storage,
     prefix,
-    "thread-prompt",
     threadPromptScheduledWorkId(prompt)
   );
+}
+
+export async function claimScheduledThreadPromptWork(
+  storage: CloudflareDurableObjectStorage,
+  prefix: string,
+  workId: string
+): Promise<boolean> {
+  return await claimScheduledWork(storage, prefix, "thread-prompt", workId);
 }
 
 function runScheduledWorkId(runId: string): string {
