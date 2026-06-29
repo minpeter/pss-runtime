@@ -1,5 +1,69 @@
 # @minpeter/pss-coding-agent
 
+## 0.0.12
+
+### Patch Changes
+
+- bf07086: Add `help`/`--help`/`-h` to the `pss` CLI and make unknown commands print usage and exit with code 1 instead of throwing.
+- 4c50311: Add local thread compaction configuration and inspection support to the coding
+  agent CLI.
+
+  The TUI now shows the active thread key and auto-compaction policy, accepts
+  `PSS_THREAD_*` storage settings with legacy `PSS_SESSION_*` aliases, and can
+  enable runtime auto-compaction through `PSS_AUTO_COMPACTION_MIN_MESSAGES` plus
+  `PSS_AUTO_COMPACTION_RETAIN_MESSAGES`. The CLI also adds `pss inspect-thread`
+  for checking the configured local thread file without starting the TUI. The
+  coding agent now uses the runtime Node platform host and runtime-owned file
+  thread inspection helper for local thread storage.
+
+- 617b9f9: Refresh dependencies across the v0.1 workspace, including AI SDK 7 latest.
+- e8bd679: Remove the built-in web tools from the coding-agent package and TUI. Callers can still pass their own tools through `@minpeter/pss-runtime`.
+- Sync dependency updates from main into the v0.1 prerelease line.
+- 1dd09de: Replace the public `agent.session(key)` entrypoint with `agent.thread(key)`.
+  Threads are the app-facing conversation unit; runtime session state remains an
+  internal storage concern behind the thread handle. `agent.thread({ key, scope })`
+  now provides an optional scoped address for multi-user integrations while
+  preserving opaque session storage under the host boundary.
+
+  Rename execution, Cloudflare scheduling, and notification APIs from
+  `sessionKey`/`resumeSession`/scheduled session prompts to
+  `threadKey`/`resumeThread`/scheduled thread prompts so edge apps can model
+  linear conversation history without leaking storage-session terminology.
+
+- Updated dependencies [e989f88]
+- Updated dependencies [5cc6285]
+- Updated dependencies [4a2ab2b]
+- Updated dependencies [d1c015c]
+- Updated dependencies [74dc8de]
+- Updated dependencies [320c01c]
+- Updated dependencies [617b9f9]
+- Updated dependencies [b03d3ac]
+- Updated dependencies [836a1c4]
+- Updated dependencies [1f3a46c]
+- Updated dependencies [41736e7]
+- Updated dependencies [7346750]
+- Updated dependencies [b21c318]
+- Updated dependencies [fedd6be]
+- Updated dependencies [b03d3ac]
+- Updated dependencies [0ffe9e7]
+- Updated dependencies [515b089]
+- Updated dependencies [c8bf377]
+- Updated dependencies [a5418f0]
+- Updated dependencies [ae58a13]
+- Updated dependencies [f3c4461]
+- Updated dependencies [d1e0186]
+- Updated dependencies [ae8de0e]
+- Updated dependencies [641ccbf]
+- Updated dependencies [8c3e696]
+- Updated dependencies [307f8fd]
+- Updated dependencies [0a1f556]
+- Updated dependencies [b687931]
+- Updated dependencies
+- Updated dependencies [1dd09de]
+- Updated dependencies [a58c756]
+- Updated dependencies [11dd14d]
+  - @minpeter/pss-runtime@0.1.0
+
 ## 0.0.11-next.5
 
 ### Patch Changes
