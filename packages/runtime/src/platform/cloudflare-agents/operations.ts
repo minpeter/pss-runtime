@@ -5,8 +5,6 @@ import {
 } from "../../execution";
 import type { AgentEvent, UserInput } from "../../thread/protocol/events";
 import {
-  ackScheduledCloudflareRun,
-  ackScheduledCloudflareThreadPrompt,
   type CloudflareDurableObjectStorage,
   type CloudflareScheduledThreadPrompt,
   listScheduledCloudflareRuns,
@@ -18,6 +16,10 @@ import {
   type CloudflareAgentsExecutionHostOptions,
   createCloudflareAgentsExecutionHost,
 } from "./host";
+import {
+  ackListedCloudflareAgentsScheduledRun,
+  ackListedCloudflareAgentsScheduledThreadPrompt,
+} from "./scheduled-work";
 import type { CloudflareAgentsDefaultResumeAgent } from "./types";
 
 export type CloudflareAgentsScheduledThreadPrompt =
@@ -57,7 +59,7 @@ export function ackScheduledCloudflareAgentsRun(
   runId: string,
   options: { readonly prefix?: string } = {}
 ): Promise<void> {
-  return ackScheduledCloudflareRun(storage, runId, options);
+  return ackListedCloudflareAgentsScheduledRun(storage, runId, options);
 }
 
 export function listScheduledCloudflareAgentsThreadPrompts(
@@ -72,7 +74,11 @@ export function ackScheduledCloudflareAgentsThreadPrompt(
   prompt: CloudflareAgentsScheduledThreadPrompt,
   options: { readonly prefix?: string } = {}
 ): Promise<void> {
-  return ackScheduledCloudflareThreadPrompt(storage, prompt, options);
+  return ackListedCloudflareAgentsScheduledThreadPrompt(
+    storage,
+    prompt,
+    options
+  );
 }
 
 export function rescheduleCloudflareAgentsSchedule(

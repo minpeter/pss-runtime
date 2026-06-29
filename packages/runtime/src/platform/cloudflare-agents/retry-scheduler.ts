@@ -71,6 +71,16 @@ export function createCloudflareAgentsFiberRetryScheduler<
     if ((retryPayload.attempt ?? 0) > Math.max(0, retryMaxAttempts)) {
       return false;
     }
+    if (reason === "not-claimable") {
+      const preparedNotification = await prepareScheduledNotificationRetry(
+        storage,
+        payload.prefix,
+        payload.runId
+      );
+      if (!preparedNotification) {
+        return false;
+      }
+    }
     const runAfterMs = retryDelayMs({
       attempt: retryPayload.attempt,
       maxRunAfterMs: retryMaxRunAfterMs,
@@ -96,13 +106,12 @@ export function createCloudflareAgentsFiberRetryScheduler<
       await removeCloudflareAgentsScheduledPayload(storage, retryPayload);
       throw error;
     }
-    const preparedNotification = await prepareScheduledNotificationRetry(
-      storage,
-      payload.prefix,
-      payload.runId
-    );
-    if (reason === "not-claimable" && !preparedNotification) {
-      return false;
+    if (reason !== "not-claimable") {
+      await prepareScheduledNotificationRetry(
+        storage,
+        payload.prefix,
+        payload.runId
+      );
     }
     return true;
   };
