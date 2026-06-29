@@ -2,4 +2,4 @@
 "@minpeter/pss-runtime": patch
 ---
 
-Clarify the Cloudflare Workers and Durable Objects substrate stance for future Cloudflare Agents SDK adapter work.
+Add a Cloudflare Agents platform adapter that maps PSS runtime scheduling onto Agents SDK fibers, delayed schedules, and fiber recovery hooks.

@@ -26,6 +26,11 @@ export const runtimeCloudflareDeclaration = [
   'export type { AgentTurnDrainResult, AgentTurnDrainStopReason, CloudflareAgentContext, CloudflareAgentContextFactoryOptions, CloudflareAgentContextOptions, CloudflareAgentContextPrefixOptions, CloudflareAgentTurnDrainOptions, CloudflareAlarmAgent, CloudflareAlarmDrainSummary, CloudflareDurableObjectFetchOptions, CloudflareDurableObjectId, CloudflareDurableObjectNamespace, CloudflareDurableObjectState, CloudflareDurableObjectStorage, CloudflareDurableObjectStub, CloudflareDurableObjectStubOptions, CloudflareScheduledThreadPrompt } from "./index";',
   "",
 ].join("\n");
+export const runtimeCloudflareAgentsDeclaration = [
+  'export { areCloudflareAgentsPayloadsEquivalent, cloudflareAgentsFiberIdempotencyKey, cloudflareAgentsFiberMetadata, cloudflareAgentsFiberName, cloudflareAgentsRunPayload, cloudflareAgentsThreadPayload, cloudflareAgentsTrustFailureReason, createCloudflareAgentsExecutionHost, createCloudflareAgentsFiberScheduler, createCloudflareAgentsPlatformContext, defaultCloudflareAgentsDelayedResumeCallback, isCloudflareAgentsPayloadTrusted, isCloudflareAgentsRecoveryContextTrusted, parseCloudflareAgentsFiberPayload, pssRunFiberName, pssThreadFiberName, recoverCloudflareAgentsFiber, rejectedCloudflareAgentsFiberResult, resumeScheduledCloudflareAgentsFiber, startCloudflareAgentsResumeFiber } from "./index";',
+  'export type { CloudflareAgentsCallbackName, CloudflareAgentsDurableObjectContext, CloudflareAgentsExecutionHostOptions, CloudflareAgentsFiberContext, CloudflareAgentsFiberPayload, CloudflareAgentsFiberRecoveryContext, CloudflareAgentsFiberRecoveryResult, CloudflareAgentsFiberSchedulerOptions, CloudflareAgentsFiberStatus, CloudflareAgentsPayloadTrustOptions, CloudflareAgentsPlatformAgent, CloudflareAgentsPlatformContext, CloudflareAgentsPlatformContextOptions, CloudflareAgentsPlatformFactoryOptions, CloudflareAgentsPlatformPrefixGuard, CloudflareAgentsPlatformPrefixGuardOptions, CloudflareAgentsPrefixGuard, CloudflareAgentsPrefixGuardOptions, CloudflareAgentsResumeRun, CloudflareAgentsResumableAgent, CloudflareAgentsRunFiberPayload, CloudflareAgentsSchedule, CloudflareAgentsScheduleOptions, CloudflareAgentsStartFiberOptions, CloudflareAgentsStartFiberResult, CloudflareAgentsThreadFiberPayload, CloudflareAgentsTurnDrainOptions, RecoverCloudflareAgentsFiberOptions, ResumeScheduledCloudflareAgentsFiberOptions, StartCloudflareAgentsResumeFiberOptions } from "./index";',
+  "",
+].join("\n");
 export const runtimeFileDeclaration = [
   'export { ackScheduledNodeRun, ackScheduledNodeThreadPrompt, appendScheduledNodeRun, appendScheduledNodeThreadPrompt, createNodeFileAgentContext, createNodeFileExecutionHost, createNodeFileScheduler, createNodeFileThreadHost, drainScheduledNodeWork, FileExecutionStore, FileThreadStore, listScheduledNodeRuns, listScheduledNodeThreadPrompts } from "./index";',
   'export type { NodeFileAgentContext, NodeFileAgentContextFactoryOptions, NodeFileAgentContextOptions, NodeFileExecutionHostOptions, NodeFileThreadHostOptions, NodeScheduledThreadPrompt, NodeScheduledWorkAppendOptions, NodeScheduledWorkDrainOptions, NodeScheduledWorkDrainResult, NodeScheduledWorkListOptions, NodeScheduledWorkRunContext } from "./index";',
@@ -146,6 +151,22 @@ function writeRuntimeDeclarationFixtures(cwd, packageName) {
       "index.d.ts"
     ),
     runtimeCloudflareDeclaration
+  );
+  mkdirSync(
+    join(cwd, "packages", packageName, "dist", "platform", "cloudflare-agents"),
+    { recursive: true }
+  );
+  writeFileSync(
+    join(
+      cwd,
+      "packages",
+      packageName,
+      "dist",
+      "platform",
+      "cloudflare-agents",
+      "index.d.ts"
+    ),
+    runtimeCloudflareAgentsDeclaration
   );
   mkdirSync(join(cwd, "packages", packageName, "dist", "platform", "file"), {
     recursive: true,

@@ -500,15 +500,17 @@ Cloudflare Agents SDK, `cloudflare:agents`, or other Cloudflare SDK packages fro
 core runtime code. The existing `@minpeter/pss-runtime/platform/cloudflare`
 subpath remains the current Durable Object storage, alarm, and resume adapter.
 
-Future Cloudflare Agents SDK support should land as an optional
-`platform/cloudflare-agents` adapter or companion package only after the SDK API
-surface is pinned and contract-tested. That adapter should map PSS host ports
-such as thread persistence, events, checkpoints, notifications, and scheduling
-onto Cloudflare primitives rather than moving those semantics into core. Treat
-`runFiber()`, `stash()`, `onFiberRecovered()`, Workflows,
-`@cloudflare/codemode`, and `@cloudflare/shell` as investigation targets, not
-implemented runtime support. The `worker-agent` app still owns session, channel,
-webhook, and prompt-routing behavior.
+Use `@minpeter/pss-runtime/platform/cloudflare-agents` when the Worker is already
+implemented as a Cloudflare Agents SDK `Agent`. That adapter reuses the existing
+Durable Object storage host, maps immediate PSS run and thread resumes onto
+Agents SDK `startFiber()` calls, maps delayed resumes onto SDK `schedule()`, and
+provides recovery helpers for `onFiberRecovered()`. Create it from inside the
+Cloudflare `Agent` subclass and pass `durableObjectContext: this.ctx`; the
+adapter does not require `ctx` to be public. Scheduled callback and recovery
+payloads are prefix-guarded by default; pass `allowedPrefixes` or `allowPrefix`
+when a single Cloudflare Agents Worker intentionally serves multiple PSS runtime
+namespaces. The `worker-agent` app still owns session, channel, webhook, and
+prompt-routing behavior.
 
 The same core API supports room/user/thread routing through stable thread keys.
 
