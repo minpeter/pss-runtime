@@ -157,10 +157,7 @@ describe("Cloudflare Agents fiber platform adapter", () => {
       },
     });
 
-    expect(result).toMatchObject({
-      accepted: false,
-      status: "aborted",
-    });
+    expect(result).toMatchObject({ accepted: false, status: "aborted" });
     expect(resumed).toEqual([]);
     expect(cloudflareAgent.started).toEqual([]);
   });
@@ -183,10 +180,7 @@ describe("Cloudflare Agents fiber platform adapter", () => {
       },
     });
 
-    expect(result).toMatchObject({
-      accepted: false,
-      status: "aborted",
-    });
+    expect(result).toMatchObject({ accepted: false, status: "aborted" });
     expect(resumed).toEqual([]);
     expect(cloudflareAgent.started).toEqual([]);
   });
