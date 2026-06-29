@@ -12,7 +12,7 @@ function readRepoFile(path) {
 describe("runtime docs", () => {
   it("keeps raw turn.events as the public control loop", () => {
     const readme = readRepoFile("packages/runtime/README.md");
-    const changeset = readRepoFile(".changeset/runtime-plugin-sessions.md");
+    const changelog = readRepoFile("packages/runtime/CHANGELOG.md");
     const turnSource = readRepoFile(
       "packages/runtime/src/thread/protocol/turn.ts"
     );
@@ -20,8 +20,8 @@ describe("runtime docs", () => {
     expect(readme).toContain("for await (const event of turn.events())");
     expect(readme).toContain("thread.steer");
     expect(readme).not.toContain("consumeRunEvents");
-    expect(changeset).toContain('"@minpeter/pss-runtime": patch');
-    expect(changeset).not.toContain("consumeRunEvents");
+    expect(changelog).toContain("## 0.1.0");
+    expect(changelog).not.toContain("consumeRunEvents");
     expect(turnSource).not.toContain("consumeRunEvents");
     expect(turnSource).not.toContain("AgentRunEventListener");
   });
