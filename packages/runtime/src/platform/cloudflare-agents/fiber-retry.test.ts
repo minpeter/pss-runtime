@@ -25,6 +25,20 @@ describe("Cloudflare Agents fiber retries", () => {
     });
   });
 
+  it("does not reschedule completed notifications when resume cannot claim a run", async () => {
+    const cloudflareAgent = createFakeCloudflareAgent();
+    const host = createRetryHost(cloudflareAgent, () => Promise.resolve(null));
+    const runId = "background:bg_completed_not_claimable";
+
+    await seedRetryableNotification(host, runId, "completed");
+
+    await expect(host.scheduler.enqueueRun(runId)).rejects.toThrow(
+      "PSS Runtime fiber interrupted: not-claimable"
+    );
+    expect(cloudflareAgent.scheduled).toEqual([]);
+    await expectCompletedNotification(host, runId);
+  });
+
   it("reschedules retryable notifications when draining hits the event budget", async () => {
     const cloudflareAgent = createFakeCloudflareAgent();
     const host = createRetryHost(
@@ -40,6 +54,39 @@ describe("Cloudflare Agents fiber retries", () => {
       cloudflareAgent,
       host,
       runId: "background:bg_event_budget",
+    });
+  });
+
+  it("reschedules notifications completed before drain when draining hits the event budget", async () => {
+    const cloudflareAgent = createFakeCloudflareAgent();
+    let host: ExecutionHost;
+    host = createRetryHost(
+      cloudflareAgent,
+      async (payload) => {
+        const run = await host.store.turns.get(payload.runId);
+        if (!run) {
+          throw new Error(`missing run: ${payload.runId}`);
+        }
+        const { lease: _lease, ...runWithoutLease } = run;
+        await host.store.turns.update({
+          ...runWithoutLease,
+          status: "completed",
+        });
+        return runWithText(payload.runId);
+      },
+      { maxEvents: 0 }
+    );
+
+    await seedRetryableNotification(
+      host,
+      "background:bg_completed_event_budget"
+    );
+    await host.scheduler.enqueueRun("background:bg_completed_event_budget");
+
+    await expectRetryScheduled({
+      cloudflareAgent,
+      host,
+      runId: "background:bg_completed_event_budget",
     });
   });
 
@@ -134,6 +181,18 @@ async function expectRetryScheduled({
   expect(run).toMatchObject({ runId, status: "queued" });
   expect(run?.lease).toBeUndefined();
   expect(notification).toMatchObject({ runId, status: "pending" });
+}
+
+async function expectCompletedNotification(
+  host: ExecutionHost,
+  runId: string
+): Promise<void> {
+  const run = await host.store.turns.get(runId);
+  const notification = await host.store.notifications.getByIdempotencyKey(
+    dedupeKeyFor(runId)
+  );
+  expect(run).toMatchObject({ runId, status: "completed" });
+  expect(notification).toMatchObject({ runId, status: "acked" });
 }
 
 function dedupeKeyFor(runId: string): string {

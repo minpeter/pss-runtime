@@ -128,8 +128,9 @@ export function createCloudflareAgentsFiberRetryScheduler<
     retryRunAfterMs = defaultRetryRunAfterMs,
     storage,
   } = options;
-  return async (payload) => {
+  return async (payload, reason) => {
     if (
+      reason === "not-claimable" &&
       !(await shouldRetryScheduledRun(storage, payload.prefix, payload.runId))
     ) {
       return false;
