@@ -69,7 +69,7 @@
     "lint": "ultracite check ."
   },
   "dependencies": {
-    "ai": "7.0.0-beta.187"
+    "ai": "7.0.4"
   },
   "devDependencies": {
     "tsdown": "^0.22.3",
