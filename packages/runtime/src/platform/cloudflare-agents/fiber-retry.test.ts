@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ExecutionHost } from "../../execution";
 import {
   createRetryHost,
+  expectActiveLeasedNotification,
   expectCompletedNotification,
   expectRetryScheduled,
   seedRetryableNotification,
@@ -13,18 +14,25 @@ import {
 import { createFakeCloudflareAgent, runWithText } from "./test-support";
 
 describe("Cloudflare Agents fiber retries", () => {
-  it("reschedules retryable notifications when resume cannot claim a run", async () => {
+  it("does not reschedule active leased notifications when resume cannot claim a run", async () => {
     const cloudflareAgent = createFakeCloudflareAgent();
     const host = createRetryHost(cloudflareAgent, () => Promise.resolve(null));
+    const runId = "background:bg_active_lease_not_claimable";
+    const leaseUntilMs = Date.now() + 60_000;
 
-    await seedRetryableNotification(host, "background:bg_not_claimable");
-    await host.scheduler.enqueueRun("background:bg_not_claimable");
+    await seedRetryableNotification(host, runId, { leaseUntilMs });
 
-    await expectRetryScheduled({
-      cloudflareAgent,
-      host,
-      runId: "background:bg_not_claimable",
-    });
+    await expect(host.scheduler.enqueueRun(runId)).rejects.toThrow(
+      "PSS Runtime fiber interrupted: not-claimable"
+    );
+    expect(cloudflareAgent.scheduled).toEqual([]);
+    await expect(
+      listScheduledCloudflareAgentsRuns(
+        cloudflareAgent.durableObjectContext.storage,
+        { prefix: "tenant-a" }
+      )
+    ).resolves.toEqual([]);
+    await expectActiveLeasedNotification(host, runId, leaseUntilMs);
   });
 
   it("does not reschedule completed notifications when resume cannot claim a run", async () => {
@@ -32,7 +40,7 @@ describe("Cloudflare Agents fiber retries", () => {
     const host = createRetryHost(cloudflareAgent, () => Promise.resolve(null));
     const runId = "background:bg_completed_not_claimable";
 
-    await seedRetryableNotification(host, runId, "completed");
+    await seedRetryableNotification(host, runId, { status: "completed" });
 
     await expect(host.scheduler.enqueueRun(runId)).rejects.toThrow(
       "PSS Runtime fiber interrupted: not-claimable"

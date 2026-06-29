@@ -53,6 +53,22 @@ export async function shouldRetryScheduledRun(
   return run?.kind === "notification" && isRetryableRunStatus(run.status);
 }
 
+export async function shouldRetryNotClaimableScheduledRun(
+  storage: CloudflareDurableObjectStorage,
+  prefix: string,
+  runId: string
+): Promise<boolean> {
+  const run = await createCloudflareDurableObjectHost({
+    prefix,
+    storage,
+  }).store.turns.get(runId);
+  return (
+    run?.kind === "notification" &&
+    isRetryableRunStatus(run.status) &&
+    !hasActiveLease(run)
+  );
+}
+
 export async function shouldRetryScheduledThreadPrompt(
   storage: CloudflareDurableObjectStorage,
   prefix: string,
@@ -114,6 +130,10 @@ function isRetryableRunStatus(status: TurnStatus | undefined): boolean {
     status === "running" ||
     status === "suspended"
   );
+}
+
+function hasActiveLease(run: TurnRecord): boolean {
+  return run.lease !== undefined && run.lease.leaseUntilMs > Date.now();
 }
 
 function retryableNotificationRun(run: TurnRecord): TurnRecord {

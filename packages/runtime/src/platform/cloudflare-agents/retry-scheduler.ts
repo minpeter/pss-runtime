@@ -1,7 +1,7 @@
 import type { CloudflareDurableObjectStorage } from "../cloudflare";
 import {
   prepareScheduledNotificationRetry,
-  shouldRetryScheduledRun,
+  shouldRetryNotClaimableScheduledRun,
 } from "../cloudflare/alarm/scheduled-work-context";
 import {
   type CloudflareAgentsFiberPayload,
@@ -49,7 +49,11 @@ export function createCloudflareAgentsFiberRetryScheduler<
   return async (payload, reason) => {
     if (
       reason === "not-claimable" &&
-      !(await shouldRetryScheduledRun(storage, payload.prefix, payload.runId))
+      !(await shouldRetryNotClaimableScheduledRun(
+        storage,
+        payload.prefix,
+        payload.runId
+      ))
     ) {
       return false;
     }

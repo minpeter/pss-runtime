@@ -20,12 +20,18 @@ export function createRetryHost(
   });
 }
 
+export interface SeedRetryableNotificationOptions {
+  readonly leaseUntilMs?: number;
+  readonly status?: TurnStatus;
+}
+
 export async function seedRetryableNotification(
   host: ExecutionHost,
   runId: string,
-  status: TurnStatus = "leased"
+  options: SeedRetryableNotificationOptions = {}
 ): Promise<void> {
   const dedupeKey = dedupeKeyFor(runId);
+  const { leaseUntilMs = Date.now() + 60_000, status = "leased" } = options;
   await host.store.turns.create({
     checkpointVersion: 0,
     dedupeKey,
@@ -33,7 +39,7 @@ export async function seedRetryableNotification(
     lease: {
       attempt: 1,
       leaseId: `lease:${runId}`,
-      leaseUntilMs: Date.now() + 60_000,
+      leaseUntilMs,
     },
     rootRunId: runId,
     runId,
@@ -48,6 +54,27 @@ export async function seedRetryableNotification(
     status: "acked",
     threadKey: "thread-a",
   });
+}
+
+export async function expectActiveLeasedNotification(
+  host: ExecutionHost,
+  runId: string,
+  leaseUntilMs: number
+): Promise<void> {
+  const run = await host.store.turns.get(runId);
+  const notification = await host.store.notifications.getByIdempotencyKey(
+    dedupeKeyFor(runId)
+  );
+  expect(run).toMatchObject({
+    lease: {
+      attempt: 1,
+      leaseId: `lease:${runId}`,
+      leaseUntilMs,
+    },
+    runId,
+    status: "leased",
+  });
+  expect(notification).toMatchObject({ runId, status: "acked" });
 }
 
 export async function expectRetryScheduled({

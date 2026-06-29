@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ExecutionHost, TurnStatus } from "../../execution";
+import type { ExecutionHost } from "../../execution";
 import {
   type CloudflareAgentsResumeRun,
   cloudflareAgentsFiberIdempotencyKey,
@@ -201,22 +201,16 @@ function runFiberKey(prefix: string, runId: string): string {
 
 async function seedRetryableNotification(
   host: ExecutionHost,
-  runId: string,
-  status: TurnStatus = "leased"
+  runId: string
 ): Promise<void> {
   const dedupeKey = dedupeKeyFor(runId);
   await host.store.turns.create({
     checkpointVersion: 0,
     dedupeKey,
     kind: "notification",
-    lease: {
-      attempt: 1,
-      leaseId: `lease:${runId}`,
-      leaseUntilMs: Date.now() + 60_000,
-    },
     rootRunId: runId,
     runId,
-    status,
+    status: "queued",
     threadKey: "thread-a",
   });
   await host.store.notifications.enqueue({
