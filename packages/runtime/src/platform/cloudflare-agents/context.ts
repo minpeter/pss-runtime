@@ -7,7 +7,7 @@ import {
   type CloudflareAgentsExecutionHostOptions,
   createCloudflareAgentsExecutionHost,
 } from "./host";
-import { createCloudflareAgentsFiberRetryScheduler } from "./scheduler";
+import { createCloudflareAgentsFiberRetryScheduler } from "./retry-scheduler";
 import type {
   CloudflareAgentsPayloadTrustOptions,
   CloudflareAgentsPrefixGuardOptions,
@@ -163,6 +163,7 @@ export function createCloudflareAgentsPlatformContext<
         retry,
         resume: async (payload): ReturnType<CloudflareAgentsResumeRun> =>
           await createContextAgent(payload.prefix).resume(payload.runId),
+        storage: durableObjectContext.storage,
         ...trust,
       }),
     resumeScheduledFiber: async (payload) =>
@@ -173,6 +174,7 @@ export function createCloudflareAgentsPlatformContext<
         retry,
         resume: async (payload): ReturnType<CloudflareAgentsResumeRun> =>
           await createContextAgent(payload.prefix).resume(payload.runId),
+        storage: durableObjectContext.storage,
         ...trust,
       }),
   };

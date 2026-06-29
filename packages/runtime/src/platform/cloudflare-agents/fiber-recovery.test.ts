@@ -44,6 +44,43 @@ describe("Cloudflare Agents fiber recovery", () => {
     });
   });
 
+  it("marks rescheduled recovery work as completed", async () => {
+    const payload = runPayload("tenant-a", "background:bg_rescheduled");
+    const retried: string[] = [];
+
+    const result = await recoverCloudflareAgentsFiber({
+      allowedPrefixes: ["tenant-a"],
+      ctx: {
+        createdAt: Date.now(),
+        id: "fiber-1",
+        idempotencyKey: cloudflareAgentsFiberIdempotencyKey(payload),
+        metadata: cloudflareAgentsFiberMetadata(payload),
+        name: "pss-runtime:resume-run",
+        recoveryReason: "interrupted",
+        snapshot: null,
+      },
+      resume: () => Promise.resolve(null),
+      retry: (payload, reason) => {
+        retried.push(`${payload.kind}:${payload.runId}:${reason}`);
+        return Promise.resolve(true);
+      },
+    });
+
+    expect(retried).toEqual(["run:background:bg_rescheduled:not-claimable"]);
+    expect(result).toEqual({
+      snapshot: {
+        kind: "run",
+        prefix: "tenant-a",
+        resumed: false,
+        rescheduled: true,
+        runId: "background:bg_rescheduled",
+        retryReason: "not-claimable",
+        version: 1,
+      },
+      status: "completed",
+    });
+  });
+
   it("ignores non-PSS Cloudflare Agents fiber recovery hooks", async () => {
     await expect(
       recoverCloudflareAgentsFiber({

@@ -1,9 +1,9 @@
 import type { ExecutionHost } from "../../execution";
 import type { ThreadStore } from "../../thread/store/types";
 import { createCloudflareDurableObjectHost } from "../cloudflare";
+import { createCloudflareAgentsFiberRetryScheduler } from "./retry-scheduler";
 import {
   type CloudflareAgentsFiberSchedulerOptions,
-  createCloudflareAgentsFiberRetryScheduler,
   createCloudflareAgentsFiberScheduler,
 } from "./scheduler";
 import type {
@@ -64,6 +64,7 @@ export function createCloudflareAgentsExecutionHost<
       prefix,
       retry,
       resume,
+      storage: durableObjectContext.storage,
     }),
     storage: durableObjectContext.storage,
     threadStore,

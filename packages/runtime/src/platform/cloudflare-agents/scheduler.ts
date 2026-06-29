@@ -1,17 +1,13 @@
 import type { ExecutionScheduler } from "../../execution";
 import type { CloudflareDurableObjectStorage } from "../cloudflare";
-import {
-  prepareScheduledNotificationRetry,
-  shouldRetryScheduledRun,
-} from "../cloudflare/alarm/scheduled-work-context";
 import { startCloudflareAgentsResumeFiber } from "./fiber";
 import {
   type CloudflareAgentsFiberPayload,
-  type CloudflareAgentsThreadFiberPayload,
   cloudflareAgentsRunPayload,
   cloudflareAgentsThreadPayload,
   defaultCloudflareAgentsDelayedResumeCallback,
 } from "./payload";
+import { mirrorCloudflareAgentsScheduledPayload } from "./scheduled-work";
 import type {
   CloudflareAgentsCallbackName,
   CloudflareAgentsDefaultResumeAgent,
@@ -21,7 +17,6 @@ import type {
 } from "./types";
 
 const defaultPrefix = "pss-runtime";
-const defaultRetryRunAfterMs = 1000;
 
 interface CloudflareAgentsFiberSchedulerBaseOptions<
   TAgent extends CloudflareAgentsDefaultResumeAgent,
@@ -34,6 +29,7 @@ interface CloudflareAgentsFiberSchedulerBaseOptions<
   readonly prefix?: string;
   readonly resume: CloudflareAgentsResumeRun;
   readonly retry?: CloudflareAgentsRetryFiber;
+  readonly storage?: CloudflareDurableObjectStorage;
 }
 
 interface CloudflareAgentsDelayedCallbackOption<
@@ -48,15 +44,6 @@ export type CloudflareAgentsFiberSchedulerOptions<
 > = CloudflareAgentsFiberSchedulerBaseOptions<TAgent> &
   CloudflareAgentsDelayedCallbackOption<TAgent>;
 
-export type CloudflareAgentsFiberRetrySchedulerOptions<
-  TAgent extends
-    CloudflareAgentsDefaultResumeAgent = CloudflareAgentsDefaultResumeAgent,
-> = {
-  readonly cloudflareAgent: TAgent;
-  readonly retryRunAfterMs?: number;
-  readonly storage: CloudflareDurableObjectStorage;
-} & CloudflareAgentsDelayedCallbackOption<TAgent>;
-
 export function createCloudflareAgentsFiberScheduler<
   TAgent extends
     CloudflareAgentsDefaultResumeAgent = CloudflareAgentsDefaultResumeAgent,
@@ -70,6 +57,7 @@ export function createCloudflareAgentsFiberScheduler<
     prefix = defaultPrefix,
     retry,
     resume,
+    storage,
   } = options;
   const delayedResumeCallback = delayedCallbackName(options);
   const drainOptions = mergeDrainOptions({
@@ -90,6 +78,7 @@ export function createCloudflareAgentsFiberScheduler<
         payload,
         retry,
         resume,
+        storage,
       },
       runAfterMs
     );
@@ -117,45 +106,6 @@ export function createCloudflareAgentsFiberScheduler<
   };
 }
 
-export function createCloudflareAgentsFiberRetryScheduler<
-  TAgent extends
-    CloudflareAgentsDefaultResumeAgent = CloudflareAgentsDefaultResumeAgent,
->(
-  options: CloudflareAgentsFiberRetrySchedulerOptions<TAgent>
-): CloudflareAgentsRetryFiber {
-  const callback = delayedCallbackName(options);
-  const {
-    cloudflareAgent,
-    retryRunAfterMs = defaultRetryRunAfterMs,
-    storage,
-  } = options;
-  return async (payload, reason) => {
-    if (
-      reason === "not-claimable" &&
-      !(await shouldRetryScheduledRun(storage, payload.prefix, payload.runId))
-    ) {
-      return false;
-    }
-    const retryPayload = nextRetryPayload(payload);
-    await cloudflareAgent.schedule(
-      delaySeconds(retryRunAfterMs),
-      callback,
-      retryPayload,
-      { idempotent: true }
-    );
-    if (
-      !(await prepareScheduledNotificationRetry(
-        storage,
-        payload.prefix,
-        payload.runId
-      ))
-    ) {
-      return false;
-    }
-    return true;
-  };
-}
-
 async function startOrSchedulePayload<
   TAgent extends CloudflareAgentsDefaultResumeAgent,
 >(
@@ -166,6 +116,7 @@ async function startOrSchedulePayload<
     payload,
     retry,
     resume,
+    storage,
   }: {
     readonly cloudflareAgent: TAgent;
     readonly delayedResumeCallback: CloudflareAgentsCallbackName<TAgent>;
@@ -173,6 +124,7 @@ async function startOrSchedulePayload<
     readonly payload: CloudflareAgentsFiberPayload;
     readonly retry?: CloudflareAgentsRetryFiber;
     readonly resume: CloudflareAgentsResumeRun;
+    readonly storage?: CloudflareDurableObjectStorage;
   },
   runAfterMs?: number
 ): Promise<void> {
@@ -183,6 +135,11 @@ async function startOrSchedulePayload<
       payload,
       { idempotent: true }
     );
+    await mirrorCloudflareAgentsScheduledPayload({
+      payload,
+      runAfterMs,
+      storage,
+    });
     return;
   }
 
@@ -192,43 +149,12 @@ async function startOrSchedulePayload<
     payload,
     retry,
     resume,
+    storage,
   });
 }
 
 function delaySeconds(runAfterMs: number): number {
   return Math.max(1, Math.ceil(runAfterMs / 1000));
-}
-
-function nextRetryPayload(
-  payload: CloudflareAgentsFiberPayload
-): CloudflareAgentsFiberPayload {
-  const attempt = (payload.attempt ?? 0) + 1;
-  switch (payload.kind) {
-    case "run":
-      return cloudflareAgentsRunPayload({
-        attempt,
-        prefix: payload.prefix,
-        runId: payload.runId,
-      });
-    case "thread":
-      return nextThreadRetryPayload(payload, attempt);
-    default:
-      return assertNeverPayload(payload);
-  }
-}
-
-function nextThreadRetryPayload(
-  payload: CloudflareAgentsThreadFiberPayload,
-  attempt: number
-): CloudflareAgentsThreadFiberPayload {
-  return cloudflareAgentsThreadPayload({
-    attempt,
-    idempotencyKey: payload.idempotencyKey,
-    notificationId: payload.notificationId,
-    prefix: payload.prefix,
-    runId: payload.runId,
-    threadKey: payload.threadKey,
-  });
 }
 
 function mergeDrainOptions({
@@ -263,9 +189,5 @@ function delayedCallbackName<TAgent extends CloudflareAgentsDefaultResumeAgent>(
   if (options.delayedResumeCallback !== undefined) {
     return options.delayedResumeCallback;
   }
-  return defaultCloudflareAgentsDelayedResumeCallback as CloudflareAgentsCallbackName<TAgent>;
-}
-
-function assertNeverPayload(payload: never): never {
-  throw new TypeError(`Unsupported Cloudflare Agents payload: ${payload}`);
+  return defaultCloudflareAgentsDelayedResumeCallback;
 }

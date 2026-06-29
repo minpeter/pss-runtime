@@ -22,6 +22,18 @@ export {
   createCloudflareAgentsExecutionHost,
 } from "./host";
 export {
+  ackScheduledCloudflareAgentsRun,
+  ackScheduledCloudflareAgentsThreadPrompt,
+  type CloudflareAgentsScheduledThreadPrompt,
+  type DispatchCloudflareAgentsNotificationInput,
+  dispatchCloudflareAgentsNotification,
+  listScheduledCloudflareAgentsRuns,
+  listScheduledCloudflareAgentsThreadPrompts,
+  rescheduleCloudflareAgentsSchedule,
+  type SourceCloudflareAgentsNotificationIdempotencyKeyInput,
+  sourceCloudflareAgentsNotificationIdempotencyKey,
+} from "./operations";
+export {
   type CloudflareAgentsFiberPayload,
   type CloudflareAgentsRunFiberPayload,
   type CloudflareAgentsThreadFiberPayload,
@@ -37,8 +49,10 @@ export {
 } from "./payload";
 export {
   type CloudflareAgentsFiberRetrySchedulerOptions,
-  type CloudflareAgentsFiberSchedulerOptions,
   createCloudflareAgentsFiberRetryScheduler,
+} from "./retry-scheduler";
+export {
+  type CloudflareAgentsFiberSchedulerOptions,
   createCloudflareAgentsFiberScheduler,
 } from "./scheduler";
 export {
@@ -55,6 +69,7 @@ export type {
   CloudflareAgentsCallbackName,
   CloudflareAgentsDefaultResumeAgent,
   CloudflareAgentsDurableObjectContext,
+  CloudflareAgentsEventHandler,
   CloudflareAgentsFiberContext,
   CloudflareAgentsFiberInspection,
   CloudflareAgentsFiberRecoveryContext,
@@ -64,10 +79,14 @@ export type {
   CloudflareAgentsResumeRun,
   CloudflareAgentsRetryFiber,
   CloudflareAgentsRetryReason,
+  CloudflareAgentsRunContext,
+  CloudflareAgentsRunSource,
   CloudflareAgentsSchedule,
+  CloudflareAgentsScheduledRunContext,
   CloudflareAgentsScheduleOptions,
   CloudflareAgentsScheduleRetryOptions,
   CloudflareAgentsStartFiberOptions,
   CloudflareAgentsStartFiberResult,
+  CloudflareAgentsThreadPromptContext,
   CloudflareAgentsTurnDrainOptions,
 } from "./types";

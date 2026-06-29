@@ -114,9 +114,38 @@ export interface CloudflareAgentsDurableObjectContext {
   waitUntil?(promise: Promise<unknown>): void;
 }
 
+export type CloudflareAgentsRunSource = "scheduled-run" | "thread-prompt";
+
+export interface CloudflareAgentsScheduledRunContext {
+  readonly kind: "run";
+  readonly prefix: string;
+  readonly runId: string;
+  readonly source: "scheduled-run";
+  readonly threadKey?: string;
+}
+
+export interface CloudflareAgentsThreadPromptContext {
+  readonly idempotencyKey: string | undefined;
+  readonly kind: "thread";
+  readonly notificationId: string | undefined;
+  readonly prefix: string;
+  readonly runId: string;
+  readonly source: "thread-prompt";
+  readonly threadKey: string;
+}
+
+export type CloudflareAgentsRunContext =
+  | CloudflareAgentsScheduledRunContext
+  | CloudflareAgentsThreadPromptContext;
+
+export type CloudflareAgentsEventHandler = (
+  event: AgentEvent,
+  context: CloudflareAgentsRunContext
+) => Promise<void> | void;
+
 export type CloudflareAgentsCallbackName<
   TAgent extends CloudflareAgentsPlatformAgent = CloudflareAgentsPlatformAgent,
-> = Extract<keyof TAgent, string>;
+> = Extract<keyof TAgent, string> | "resumePssRuntimeFiber";
 
 export interface CloudflareAgentsDefaultResumeAgent
   extends CloudflareAgentsPlatformAgent {
@@ -140,7 +169,7 @@ export interface CloudflareAgentsPlatformAgent {
 export interface CloudflareAgentsTurnDrainOptions {
   readonly deadlineMs?: number;
   readonly maxEvents?: number;
-  readonly onEvent?: (event: AgentEvent) => Promise<void> | void;
+  readonly onEvent?: CloudflareAgentsEventHandler;
 }
 
 export type CloudflareAgentsResumeRun = (

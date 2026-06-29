@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
-import type { ExecutionHost, TurnStatus } from "../../execution";
+import type { ExecutionHost } from "../../execution";
 import {
-  type CloudflareAgentsResumeRun,
-  createCloudflareAgentsExecutionHost,
+  createRetryHost,
+  expectCompletedNotification,
+  expectRetryScheduled,
+  seedRetryableNotification,
+} from "./fiber-retry-test-support";
+import {
+  listScheduledCloudflareAgentsRuns,
   resumeScheduledCloudflareAgentsFiber,
 } from "./index";
-import {
-  createFakeCloudflareAgent,
-  type FakeCloudflareAgent,
-  runWithText,
-} from "./test-support";
+import { createFakeCloudflareAgent, runWithText } from "./test-support";
 
 describe("Cloudflare Agents fiber retries", () => {
   it("reschedules retryable notifications when resume cannot claim a run", async () => {
@@ -56,6 +57,44 @@ describe("Cloudflare Agents fiber retries", () => {
       host,
       runId: "background:bg_event_budget",
     });
+  });
+
+  it("reschedules non-notification runs when draining hits the event budget", async () => {
+    const cloudflareAgent = createFakeCloudflareAgent();
+    const runId = "background:bg_user_event_budget";
+    let host: ExecutionHost;
+    host = createRetryHost(
+      cloudflareAgent,
+      async (payload) => {
+        await host.store.turns.create({
+          checkpointVersion: 0,
+          kind: "user-turn",
+          rootRunId: payload.runId,
+          runId: payload.runId,
+          status: "running",
+          threadKey: "thread-a",
+        });
+        return runWithText(payload.runId);
+      },
+      { maxEvents: 0 }
+    );
+
+    await host.scheduler.enqueueRun(runId);
+
+    expect(cloudflareAgent.scheduled).toEqual([
+      {
+        callback: "resumePssRuntimeFiber",
+        idempotent: true,
+        payload: {
+          attempt: 1,
+          kind: "run",
+          prefix: "tenant-a",
+          runId,
+          version: 1,
+        },
+        when: 1,
+      },
+    ]);
   });
 
   it("reschedules notifications completed before drain when draining hits the event budget", async () => {
@@ -146,6 +185,12 @@ describe("Cloudflare Agents fiber retries", () => {
     await expect(host.scheduler.enqueueRun(runId)).rejects.toThrow(
       "schedule failed"
     );
+    await expect(
+      listScheduledCloudflareAgentsRuns(
+        cloudflareAgent.durableObjectContext.storage,
+        { prefix: "tenant-a" }
+      )
+    ).resolves.toEqual([]);
     await expectCompletedNotification(host, runId);
   });
 
@@ -166,95 +211,3 @@ describe("Cloudflare Agents fiber retries", () => {
     });
   });
 });
-
-function createRetryHost(
-  cloudflareAgent: FakeCloudflareAgent,
-  resume: CloudflareAgentsResumeRun,
-  drain?: { readonly maxEvents?: number }
-): ExecutionHost {
-  return createCloudflareAgentsExecutionHost({
-    cloudflareAgent,
-    drain,
-    durableObjectContext: cloudflareAgent.durableObjectContext,
-    prefix: "tenant-a",
-    resume,
-  });
-}
-
-async function seedRetryableNotification(
-  host: ExecutionHost,
-  runId: string,
-  status: TurnStatus = "leased"
-): Promise<void> {
-  const dedupeKey = dedupeKeyFor(runId);
-  await host.store.turns.create({
-    checkpointVersion: 0,
-    dedupeKey,
-    kind: "notification",
-    lease: {
-      attempt: 1,
-      leaseId: `lease:${runId}`,
-      leaseUntilMs: Date.now() + 60_000,
-    },
-    rootRunId: runId,
-    runId,
-    status,
-    threadKey: "thread-a",
-  });
-  await host.store.notifications.enqueue({
-    idempotencyKey: dedupeKey,
-    input: { text: "retry", type: "user-input" },
-    notificationId: `notification:${runId}`,
-    runId,
-    status: "acked",
-    threadKey: "thread-a",
-  });
-}
-
-async function expectRetryScheduled({
-  cloudflareAgent,
-  host,
-  runId,
-}: {
-  readonly cloudflareAgent: FakeCloudflareAgent;
-  readonly host: ExecutionHost;
-  readonly runId: string;
-}): Promise<void> {
-  expect(cloudflareAgent.scheduled).toEqual([
-    {
-      callback: "resumePssRuntimeFiber",
-      idempotent: true,
-      payload: {
-        attempt: 1,
-        kind: "run",
-        prefix: "tenant-a",
-        runId,
-        version: 1,
-      },
-      when: 1,
-    },
-  ]);
-  const run = await host.store.turns.get(runId);
-  const notification = await host.store.notifications.getByIdempotencyKey(
-    dedupeKeyFor(runId)
-  );
-  expect(run).toMatchObject({ runId, status: "queued" });
-  expect(run?.lease).toBeUndefined();
-  expect(notification).toMatchObject({ runId, status: "pending" });
-}
-
-async function expectCompletedNotification(
-  host: ExecutionHost,
-  runId: string
-): Promise<void> {
-  const run = await host.store.turns.get(runId);
-  const notification = await host.store.notifications.getByIdempotencyKey(
-    dedupeKeyFor(runId)
-  );
-  expect(run).toMatchObject({ runId, status: "completed" });
-  expect(notification).toMatchObject({ runId, status: "acked" });
-}
-
-function dedupeKeyFor(runId: string): string {
-  return `dedupe:${runId}`;
-}

@@ -36,13 +36,12 @@ describe("Cloudflare Agents platform context", () => {
       durableObjectContext: cloudflareAgent.durableObjectContext,
       env: {},
     });
+    const scheduledHost = context.host("scheduled-prefix");
 
-    await context.resumeScheduledFiber({
-      kind: "run",
-      prefix: "scheduled-prefix",
-      runId: "background:bg_scheduled",
-      version: 1,
+    await scheduledHost.scheduler.enqueueRun("background:bg_scheduled", {
+      runAfterMs: 1000,
     });
+    await context.resumeScheduledFiber(cloudflareAgent.scheduled[0]?.payload);
 
     expect(prefixes).toEqual(["scheduled-prefix"]);
     expect(runIds).toEqual(["background:bg_scheduled"]);
@@ -112,14 +111,13 @@ describe("Cloudflare Agents platform context", () => {
       durableObjectContext: cloudflareAgent.durableObjectContext,
       env: {},
     });
+    const tenantHost = context.host("tenant-a");
 
+    await tenantHost.scheduler.enqueueRun("background:bg_allowed", {
+      runAfterMs: 1000,
+    });
     await expect(
-      context.resumeScheduledFiber({
-        kind: "run",
-        prefix: "tenant-a",
-        runId: "background:bg_allowed",
-        version: 1,
-      })
+      context.resumeScheduledFiber(cloudflareAgent.scheduled[0]?.payload)
     ).resolves.toMatchObject({
       accepted: true,
       status: "completed",
@@ -146,14 +144,23 @@ describe("Cloudflare Agents platform context", () => {
       scheduledHost,
       "background:bg_retry_scheduled"
     );
-    await context.resumeScheduledFiber({
-      kind: "run",
-      prefix: "scheduled-prefix",
-      runId: "background:bg_retry_scheduled",
-      version: 1,
+    await scheduledHost.scheduler.enqueueRun("background:bg_retry_scheduled", {
+      runAfterMs: 1000,
     });
+    await context.resumeScheduledFiber(cloudflareAgent.scheduled[0]?.payload);
 
     expect(cloudflareAgent.scheduled).toEqual([
+      {
+        callback: "resumePssRuntimeFiber",
+        idempotent: true,
+        payload: {
+          kind: "run",
+          prefix: "scheduled-prefix",
+          runId: "background:bg_retry_scheduled",
+          version: 1,
+        },
+        when: 1,
+      },
       {
         callback: "resumePssRuntimeFiber",
         idempotent: true,
