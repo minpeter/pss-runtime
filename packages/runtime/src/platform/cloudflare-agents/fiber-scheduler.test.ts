@@ -72,6 +72,7 @@ describe("Cloudflare Agents fiber platform adapter", () => {
           kind: "run",
           prefix: "tenant-a",
           runId: "background:bg_delayed",
+          scheduleDelaySeconds: 2,
           version: 1,
         },
         when: 2,
@@ -99,6 +100,41 @@ describe("Cloudflare Agents fiber platform adapter", () => {
           runId: "background:bg_delayed",
           version: 1,
         },
+      },
+    ]);
+  });
+
+  it("separates idempotent delayed schedules when their delay changes", async () => {
+    const cloudflareAgent = createFakeCloudflareAgent();
+    const scheduler = createCloudflareAgentsFiberScheduler({
+      cloudflareAgent,
+      prefix: "tenant-a",
+      resume: () => Promise.resolve(null),
+    });
+
+    await scheduler.enqueueRun("background:bg_delay_changed", {
+      runAfterMs: 5000,
+    });
+    await scheduler.enqueueRun("background:bg_delay_changed", {
+      runAfterMs: 1000,
+    });
+
+    expect(cloudflareAgent.scheduled).toMatchObject([
+      {
+        payload: {
+          kind: "run",
+          runId: "background:bg_delay_changed",
+          scheduleDelaySeconds: 5,
+        },
+        when: 5,
+      },
+      {
+        payload: {
+          kind: "run",
+          runId: "background:bg_delay_changed",
+          scheduleDelaySeconds: 1,
+        },
+        when: 1,
       },
     ]);
   });

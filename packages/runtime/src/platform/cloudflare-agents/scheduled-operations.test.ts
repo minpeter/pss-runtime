@@ -52,7 +52,7 @@ describe("Cloudflare Agents scheduled operations parity", () => {
       runAfterMs: 1000,
     });
     await rescheduleCloudflareAgentsSchedule(storage, { runAfterMs: 5000 });
-    expect(storageAlarmTime(storage)).toEqual(expect.any(Number));
+    expect(storageAlarmTime(storage)).toBeUndefined();
     const consumedResult = await resumeScheduledCloudflareAgentsFiber({
       allowedPrefixes: ["tenant-a"],
       cloudflareAgent,
@@ -171,6 +171,7 @@ describe("Cloudflare Agents scheduled operations parity", () => {
           kind: "thread",
           prefix: "tenant-a",
           runId: "background:bg_thread_retry",
+          scheduleDelaySeconds: 5,
           threadKey: "thread-a",
         },
         when: 5,

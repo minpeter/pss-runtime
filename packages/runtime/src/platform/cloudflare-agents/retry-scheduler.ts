@@ -10,6 +10,7 @@ import {
   cloudflareAgentsThreadPayload,
   defaultCloudflareAgentsDelayedResumeCallback,
 } from "./payload";
+import { cloudflareAgentsDelayedSchedulePayload } from "./schedule-payload";
 import {
   mirrorCloudflareAgentsScheduledPayload,
   removeCloudflareAgentsScheduledPayload,
@@ -80,11 +81,15 @@ export function createCloudflareAgentsFiberRetryScheduler<
       runAfterMs,
       storage,
     });
+    const scheduleDelaySeconds = delaySeconds(runAfterMs);
     try {
       await cloudflareAgent.schedule(
-        delaySeconds(runAfterMs),
+        scheduleDelaySeconds,
         callback,
-        retryPayload,
+        cloudflareAgentsDelayedSchedulePayload(
+          retryPayload,
+          scheduleDelaySeconds
+        ),
         { idempotent: true }
       );
     } catch (error) {

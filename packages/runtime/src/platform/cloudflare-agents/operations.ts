@@ -11,7 +11,6 @@ import {
   type CloudflareScheduledThreadPrompt,
   listScheduledCloudflareRuns,
   listScheduledCloudflareThreadPrompts,
-  rescheduleCloudflareAlarm,
   type SourceCloudflareAgentNotificationIdempotencyKeyInput,
   sourceCloudflareAgentNotificationIdempotencyKey,
 } from "../cloudflare";
@@ -77,10 +76,10 @@ export function ackScheduledCloudflareAgentsThreadPrompt(
 }
 
 export function rescheduleCloudflareAgentsSchedule(
-  storage: CloudflareDurableObjectStorage,
-  options: { readonly runAfterMs?: number } = {}
+  _storage: CloudflareDurableObjectStorage,
+  _options: { readonly runAfterMs?: number } = {}
 ): Promise<void> {
-  return rescheduleCloudflareAlarm(storage, options);
+  return Promise.resolve();
 }
 
 export function dispatchCloudflareAgentsNotification<

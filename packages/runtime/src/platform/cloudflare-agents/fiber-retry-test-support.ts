@@ -96,6 +96,7 @@ export async function expectRetryScheduled({
         kind: "run",
         prefix: "tenant-a",
         runId,
+        scheduleDelaySeconds: 1,
         version: 1,
       },
       when: 1,

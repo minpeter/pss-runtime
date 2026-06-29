@@ -137,6 +137,7 @@ describe("Cloudflare Agents scheduled lifecycle", () => {
           attempt: 2,
           kind: "run",
           runId: "background:bg_retry_cap",
+          scheduleDelaySeconds: 2,
         },
         when: 2,
       },

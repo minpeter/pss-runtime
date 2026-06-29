@@ -5,6 +5,7 @@ import type {
   CloudflareAgentsDurableObjectContext,
   CloudflareAgentsFiberPayload,
   CloudflareAgentsPlatformAgent,
+  CloudflareAgentsSchedule,
   CloudflareAgentsStartFiberResult,
 } from "./index";
 
@@ -45,20 +46,47 @@ export function createFakeCloudflareAgent(): FakeCloudflareAgent {
     durableObjectContext,
     resumePssRuntimeFiber: () => Promise.resolve(),
     schedule: (when, callback, payload, options) => {
+      const callbackName = String(callback);
+      const existing =
+        options?.idempotent === true
+          ? scheduled.findIndex(
+              (schedule) =>
+                schedule.callback === callbackName &&
+                JSON.stringify(schedule.payload) === JSON.stringify(payload)
+            )
+          : -1;
+      if (existing >= 0) {
+        const schedule = scheduled.at(existing);
+        if (schedule === undefined) {
+          throw new Error("Missing idempotent Cloudflare Agents schedule.");
+        }
+        return Promise.resolve(
+          scheduleResult({
+            callback: schedule.callback,
+            index: existing,
+            payload,
+            when: schedule.when,
+          })
+        );
+      }
       scheduled.push({
-        callback: String(callback),
+        callback: callbackName,
         idempotent: options?.idempotent,
         payload,
         when,
       });
-      return Promise.resolve({
-        callback: String(callback),
-        delayInSeconds: typeof when === "number" ? when : 0,
-        id: `schedule-${scheduled.length}`,
-        payload,
-        time: Date.now(),
-        type: "delayed",
-      });
+      const schedule = scheduled.at(-1);
+      if (schedule === undefined) {
+        throw new Error("Missing scheduled Cloudflare Agents fiber.");
+      }
+      return Promise.resolve(
+        scheduleResult({
+          callback: schedule.callback,
+          index: scheduled.length - 1,
+          payload,
+          when: schedule.when,
+        })
+      );
     },
     scheduled,
     startFiber: (name, fn, options) => {
@@ -76,6 +104,27 @@ export function createFakeCloudflareAgent(): FakeCloudflareAgent {
       return result;
     },
     started,
+  };
+}
+
+function scheduleResult<TPayload extends CloudflareAgentsFiberPayload>({
+  callback,
+  index,
+  payload,
+  when,
+}: {
+  readonly callback: string;
+  readonly index: number;
+  readonly payload: TPayload;
+  readonly when: Date | number | string;
+}): CloudflareAgentsSchedule<TPayload> {
+  return {
+    callback,
+    delayInSeconds: typeof when === "number" ? when : 0,
+    id: `schedule-${index + 1}`,
+    payload,
+    time: Date.now(),
+    type: "delayed",
   };
 }
 
