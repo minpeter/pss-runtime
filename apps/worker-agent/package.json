@@ -1,0 +1,46 @@
+{
+  "name": "@minpeter/pss-worker-agent",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "predev": "pnpm -F @minpeter/pss-runtime build",
+    "pretypecheck": "pnpm -F @minpeter/pss-runtime build",
+    "preship:worker": "pnpm -F @minpeter/pss-runtime build",
+    "dev": "run-p dev:worker dev:relay",
+    "eval": "PSS_WORKER_AGENT_EVAL_REAL=1 tsx --conditions=@minpeter/pss-source src/evals/run.ts",
+    "eval:json": "PSS_WORKER_AGENT_EVAL_REAL=1 tsx --conditions=@minpeter/pss-source src/evals/run.ts --json",
+    "eval:real": "PSS_WORKER_AGENT_EVAL_REAL=1 tsx --conditions=@minpeter/pss-source src/evals/run.ts",
+    "eval:scripted": "PSS_WORKER_AGENT_EVAL_REAL=0 tsx --conditions=@minpeter/pss-source src/evals/run.ts",
+    "eval:scripted:json": "PSS_WORKER_AGENT_EVAL_REAL=0 tsx --conditions=@minpeter/pss-source src/evals/run.ts --json",
+    "eval:remote": "PSS_WORKER_AGENT_EVAL_REMOTE=1 tsx --conditions=@minpeter/pss-source src/evals/run.ts",
+    "tui": "tsx --conditions=@minpeter/pss-source src/tui.ts",
+    "dev:worker": "wrangler dev -e dev",
+    "dev:relay": "tsx scripts/telegram.ts relay",
+    "ship": "run-s ship:secrets ship:worker ship:webhook",
+    "ship:secrets": "wrangler secret bulk .dev.vars --env=\"\"",
+    "ship:worker": "wrangler deploy --env=\"\"",
+    "ship:webhook": "tsx scripts/telegram.ts webhook",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "ultracite check ."
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "3.0.1",
+    "@chat-adapter/state-memory": "4.31.0",
+    "@chat-adapter/telegram": "4.31.0",
+    "@minpeter/pss-runtime": "workspace:*",
+    "@trpc/client": "11.18.0",
+    "@trpc/server": "11.18.0",
+    "chat": "4.31.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260628.1",
+    "@types/node": "^26.0.1",
+    "npm-run-all": "^4.1.5",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9",
+    "wrangler": "^4.105.0"
+  }
+}

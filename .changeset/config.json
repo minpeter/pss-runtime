@@ -7,5 +7,11 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": []
+  "ignore": [
+    "@minpeter/pss-worker-agent",
+    "@minpeter/pss-example-basic",
+    "@minpeter/pss-example-plugin",
+    "@minpeter/pss-example-sync-subagent",
+    "@minpeter/pss-example-background-subagent"
+  ]
 }

@@ -23,8 +23,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
-        with:
-          version: 10.0.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -81,10 +79,10 @@ jobs:
           # and workflow filename release.yml; do not add NPM_TOKEN.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create next release pull request or publish
+      - name: Create v0.1 release pull request or publish
         if: github.ref_name == 'v0.1'
         uses: changesets/action@v1
         with:
-          publish: pnpm release:next
+          publish: pnpm release:v0.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

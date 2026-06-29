@@ -1,8 +1,14 @@
 node_modules
 .DS_Store
 dist
+AGENTS.md
+**/AGENTS.md
 .env
 .env.*
 !.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
 .turbo
 packages/*/.turbo
+.wrangler

@@ -4,5 +4,10 @@
     "noEmit": true,
     "customConditions": ["@minpeter/pss-source"]
   },
-  "include": ["examples/**/*.ts"]
+  "include": [
+    "apps/*/src/**/*.ts",
+    "apps/*/types/**/*.d.ts",
+    "examples/*/src/**/*.ts"
+  ],
+  "exclude": ["apps/bori-agent-backend/**"]
 }

@@ -1,0 +1,23 @@
+{
+  "name": "@minpeter/pss-example-background-subagent",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx --conditions=@minpeter/pss-source src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "3.0.1",
+    "@minpeter/pss-runtime": "workspace:*",
+    "@t3-oss/env-core": "^0.13.11",
+    "ai": "7.0.4",
+    "dotenv": "^17.4.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}

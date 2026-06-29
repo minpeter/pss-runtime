@@ -1,0 +1,11 @@
+# pnpm ship → wrangler secret bulk .dev.vars (whole file)
+AI_API_KEY=...
+AI_BASE_URL=https://apis.opengateway.ai/v1
+AI_MODEL=minimax/MiniMax-M2.7
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_BOT_USERNAME=your_bot
+# Separate from TELEGRAM_BOT_TOKEN. Allowed: A-Z a-z 0-9 _ -
+# Generate: openssl rand -hex 32
+TELEGRAM_WEBHOOK_SECRET_TOKEN=...
+LOCAL_WEBHOOK_URL=http://127.0.0.1:8792/
+WORKER_PUBLIC_URL=https://pss-worker-agent.<account>.workers.dev
