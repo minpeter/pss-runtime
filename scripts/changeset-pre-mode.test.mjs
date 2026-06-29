@@ -2,11 +2,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("changeset release mode", () => {
-  it("keeps the v0.1 branch in stable release mode", () => {
+  it("keeps the default release branch in stable release mode", () => {
     const config = JSON.parse(readFileSync(".changeset/config.json", "utf8"));
 
     expect(existsSync(".changeset/pre.json")).toBe(false);
-    expect(config.baseBranch).toBe("v0.1");
+    expect(config.baseBranch).toBe("main");
   });
 
   it("ignores private and external packages for release status", () => {
