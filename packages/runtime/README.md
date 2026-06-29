@@ -494,6 +494,22 @@ Object adapter. See the sync example package for blocking app-owned delegation
 and the background example package for durable background delegation in a local
 interactive CLI.
 
+Cloudflare is the preferred substrate when deploying PSS Runtime on Workers and
+Durable Objects, but runtime core stays platform-agnostic. Do not import the
+Cloudflare Agents SDK, `cloudflare:agents`, or other Cloudflare SDK packages from
+core runtime code. The existing `@minpeter/pss-runtime/platform/cloudflare`
+subpath remains the current Durable Object storage, alarm, and resume adapter.
+
+Future Cloudflare Agents SDK support should land as an optional
+`platform/cloudflare-agents` adapter or companion package only after the SDK API
+surface is pinned and contract-tested. That adapter should map PSS host ports
+such as thread persistence, events, checkpoints, notifications, and scheduling
+onto Cloudflare primitives rather than moving those semantics into core. Treat
+`runFiber()`, `stash()`, `onFiberRecovered()`, Workflows,
+`@cloudflare/codemode`, and `@cloudflare/shell` as investigation targets, not
+implemented runtime support. The `worker-agent` app still owns session, channel,
+webhook, and prompt-routing behavior.
+
 The same core API supports room/user/thread routing through stable thread keys.
 
 Recommended key patterns:
