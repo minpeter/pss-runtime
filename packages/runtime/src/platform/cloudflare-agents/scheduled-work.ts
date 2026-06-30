@@ -158,9 +158,12 @@ export async function ackListedCloudflareAgentsScheduledThreadPrompt(
 function scheduledRunPayloadWorkId(
   payload: Extract<CloudflareAgentsFiberPayload, { readonly kind: "run" }>
 ): string {
-  return payload.attempt === undefined
-    ? payload.runId
-    : `${payload.runId}|attempt:${payload.attempt}`;
+  return [
+    payload.runId,
+    payload.attempt === undefined ? "" : String(payload.attempt),
+  ]
+    .map(scheduledWorkIdPart)
+    .join("|");
 }
 
 function scheduledThreadPayloadWorkId(

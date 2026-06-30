@@ -13,6 +13,7 @@ import {
   resumeScheduledCloudflareAgentsFiber,
 } from "./index";
 import {
+  ackListedCloudflareAgentsScheduledRun,
   claimCloudflareAgentsScheduledPayload,
   hasCloudflareAgentsScheduledPayload,
   mirrorCloudflareAgentsScheduledPayload,
@@ -145,6 +146,47 @@ describe("Cloudflare Agents scheduled lifecycle", () => {
     await expect(
       listScheduledCloudflareAgentsRuns(storage, { prefix: "tenant-a" })
     ).resolves.toEqual(["background:bg_retry_cap"]);
+  });
+
+  it("keeps run retry rows distinct from delimiter-like original run ids", async () => {
+    const cloudflareAgent = createFakeCloudflareAgent();
+    const storage = cloudflareAgent.durableObjectContext.storage;
+    const originalPayload = cloudflareAgentsRunPayload({
+      prefix: "tenant-a",
+      runId: "run|attempt:1",
+    });
+    const retryPayload = cloudflareAgentsRunPayload({
+      attempt: 1,
+      prefix: "tenant-a",
+      runId: "run",
+    });
+
+    await mirrorCloudflareAgentsScheduledPayload({
+      payload: originalPayload,
+      runAfterMs: 1000,
+      storage,
+    });
+    await mirrorCloudflareAgentsScheduledPayload({
+      payload: retryPayload,
+      runAfterMs: 1000,
+      storage,
+    });
+
+    await expect(
+      listScheduledCloudflareAgentsRuns(storage, { prefix: "tenant-a" })
+    ).resolves.toEqual(["run|attempt:1", "run"]);
+    await expect(
+      claimCloudflareAgentsScheduledPayload(storage, retryPayload)
+    ).resolves.toBe(true);
+    await expect(
+      hasCloudflareAgentsScheduledPayload(storage, originalPayload)
+    ).resolves.toBe(true);
+    await ackListedCloudflareAgentsScheduledRun(storage, "run|attempt:1", {
+      prefix: "tenant-a",
+    });
+    await expect(
+      listScheduledCloudflareAgentsRuns(storage, { prefix: "tenant-a" })
+    ).resolves.toEqual([]);
   });
 
   it("keeps thread retry rows distinct from original delayed callbacks", async () => {
