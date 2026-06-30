@@ -1,5 +1,15 @@
 import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import {
+  applyListLimit,
+  isDefined,
+  isLegacyRunWork,
+  isLegacyThreadPromptWork,
+  parseScheduledRunPayload,
+  parseScheduledThreadPromptPayload,
+  runScheduledWorkId,
+  threadPromptScheduledWorkId,
+} from "./scheduled-work-codec";
+import {
   claimScheduledWork,
   deleteScheduledWork,
   insertScheduledWork,
@@ -74,8 +84,12 @@ export function listScheduledRuns(
 ): Promise<readonly string[]> {
   const prefix = options.prefix ?? defaultPrefix;
   return Promise.resolve(
-    selectScheduledWork(storage, prefix, "run", options.limit).map(
-      (row) => JSON.parse(row.payload) as string
+    applyListLimit(
+      selectScheduledWork(storage, prefix, "run")
+        .filter(isLegacyRunWork)
+        .map((row) => parseScheduledRunPayload(row.payload))
+        .filter(isDefined),
+      options.limit
     )
   );
 }
@@ -147,8 +161,12 @@ export function listScheduledThreadPrompts(
 ): Promise<readonly CloudflareScheduledThreadPrompt[]> {
   const prefix = options.prefix ?? defaultPrefix;
   return Promise.resolve(
-    selectScheduledWork(storage, prefix, "thread-prompt", options.limit).map(
-      (row) => JSON.parse(row.payload) as CloudflareScheduledThreadPrompt
+    applyListLimit(
+      selectScheduledWork(storage, prefix, "thread-prompt")
+        .filter(isLegacyThreadPromptWork)
+        .map((row) => parseScheduledThreadPromptPayload(row.payload))
+        .filter(isDefined),
+      options.limit
     )
   );
 }
@@ -195,20 +213,4 @@ export async function claimScheduledThreadPromptWork(
   workId: string
 ): Promise<boolean> {
   return await claimScheduledWork(storage, prefix, "thread-prompt", workId);
-}
-
-function runScheduledWorkId(runId: string): string {
-  return runId;
-}
-
-function threadPromptScheduledWorkId(
-  prompt: CloudflareScheduledThreadPrompt
-): string {
-  return [prompt.threadKey, prompt.idempotencyKey ?? "", prompt.runId ?? ""]
-    .map(scheduledWorkIdPart)
-    .join("|");
-}
-
-function scheduledWorkIdPart(value: string): string {
-  return `${value.length}:${value}`;
 }

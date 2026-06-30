@@ -5,7 +5,11 @@ import {
   withSqlStorage,
 } from "../storage/durable-object/durable-object-storage";
 
-export type ScheduledWorkKind = "run" | "thread-prompt";
+export type ScheduledWorkKind =
+  | "agents-run"
+  | "agents-thread-prompt"
+  | "run"
+  | "thread-prompt";
 
 export interface ScheduledWorkRow {
   readonly payload: string;

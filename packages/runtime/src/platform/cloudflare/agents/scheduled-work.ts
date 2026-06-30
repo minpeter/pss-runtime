@@ -1,13 +1,8 @@
-import type {
-  CloudflareDurableObjectStorage,
-  CloudflareScheduledThreadPrompt,
-} from "../host/durable-object-host";
+import type { CloudflareDurableObjectStorage } from "../host/durable-object-host";
 import {
-  appendScheduledRunWork,
-  appendScheduledThreadPromptWork,
-} from "../host/scheduled-work-queue";
-import {
+  claimScheduledWork,
   deleteScheduledWork,
+  insertScheduledWork,
   type ScheduledWorkKind,
   selectScheduledWork,
 } from "../host/scheduled-work-table";
@@ -29,8 +24,12 @@ import {
   scheduledRunPayloadWorkId,
   scheduledThreadPayloadWorkId,
 } from "./scheduled-work-ids";
+import { agentsRunKind, agentsThreadPromptKind } from "./scheduled-work-kinds";
 
-const defaultPrefix = "pss-runtime";
+type CloudflareAgentsRunFiberPayload = Extract<
+  CloudflareAgentsFiberPayload,
+  { readonly kind: "run" }
+>;
 
 export async function mirrorCloudflareAgentsScheduledPayload({
   payload,
@@ -45,19 +44,23 @@ export async function mirrorCloudflareAgentsScheduledPayload({
   }
   switch (payload.kind) {
     case "run":
-      await appendScheduledRunWork(
+      await insertScheduledWork(
         storage,
         payload.prefix,
+        agentsRunKind,
         scheduledRunPayloadWorkId(payload),
-        payload.runId
+        payload.runId,
+        { runId: payload.runId }
       );
       return;
     case "thread":
-      await appendScheduledThreadPromptWork(
+      await insertScheduledWork(
         storage,
         payload.prefix,
+        agentsThreadPromptKind,
         scheduledThreadPayloadWorkId(payload),
-        threadPromptForPayload(payload)
+        threadPromptForPayload(payload),
+        { runId: payload.runId, threadKey: payload.threadKey }
       );
       return;
     default:
@@ -71,9 +74,12 @@ export async function claimCloudflareAgentsScheduledPayload(
 ): Promise<boolean> {
   switch (payload.kind) {
     case "run":
-      return await claimScheduledRunPayload(storage, payload);
+      return await claimCloudflareAgentsScheduledRunPayload(storage, payload);
     case "thread":
-      return await claimScheduledThreadPayload(storage, payload);
+      return await claimCloudflareAgentsScheduledThreadPayload(
+        storage,
+        payload
+      );
     default:
       return assertNeverPayload(payload);
   }
@@ -85,9 +91,21 @@ export async function removeCloudflareAgentsScheduledPayload(
 ): Promise<void> {
   switch (payload.kind) {
     case "run":
+      await deleteScheduledWork(
+        storage,
+        payload.prefix,
+        agentsRunKind,
+        scheduledRunPayloadWorkId(payload)
+      );
       await removeScheduledRunPayload(storage, payload);
       return;
     case "thread":
+      await deleteScheduledWork(
+        storage,
+        payload.prefix,
+        agentsThreadPromptKind,
+        scheduledThreadPayloadWorkId(payload)
+      );
       await removeScheduledThreadPayload(storage, payload);
       return;
     default:
@@ -101,38 +119,16 @@ export function hasCloudflareAgentsScheduledPayload(
 ): Promise<boolean> {
   switch (payload.kind) {
     case "run":
-      return Promise.resolve(hasScheduledRunPayload(storage, payload));
+      return Promise.resolve(
+        hasCloudflareAgentsScheduledRunPayload(storage, payload)
+      );
     case "thread":
-      return Promise.resolve(hasScheduledThreadPayload(storage, payload));
+      return Promise.resolve(
+        hasCloudflareAgentsScheduledThreadPayload(storage, payload)
+      );
     default:
       return assertNeverPayload(payload);
   }
-}
-
-export async function ackListedCloudflareAgentsScheduledRun(
-  storage: CloudflareDurableObjectStorage,
-  runId: string,
-  options: { readonly prefix?: string } = {}
-): Promise<void> {
-  await deleteMatchingScheduledWork({
-    kind: "run",
-    matches: (payload) => parseScheduledRunPayload(payload) === runId,
-    prefix: options.prefix ?? defaultPrefix,
-    storage,
-  });
-}
-
-export async function ackListedCloudflareAgentsScheduledThreadPrompt(
-  storage: CloudflareDurableObjectStorage,
-  prompt: CloudflareScheduledThreadPrompt,
-  options: { readonly prefix?: string } = {}
-): Promise<void> {
-  await deleteMatchingScheduledWork({
-    kind: "thread-prompt",
-    matches: (payload) => matchesScheduledThreadPromptPayload(payload, prompt),
-    prefix: options.prefix ?? defaultPrefix,
-    storage,
-  });
 }
 
 function threadPromptForPayload(payload: CloudflareAgentsThreadFiberPayload): {
@@ -149,67 +145,81 @@ function threadPromptForPayload(payload: CloudflareAgentsThreadFiberPayload): {
   };
 }
 
+async function claimCloudflareAgentsScheduledRunPayload(
+  storage: CloudflareDurableObjectStorage,
+  payload: CloudflareAgentsRunFiberPayload
+): Promise<boolean> {
+  if (
+    await claimScheduledWork(
+      storage,
+      payload.prefix,
+      agentsRunKind,
+      scheduledRunPayloadWorkId(payload)
+    )
+  ) {
+    await removeScheduledRunPayload(storage, payload);
+    return true;
+  }
+  return await claimScheduledRunPayload(storage, payload);
+}
+
+async function claimCloudflareAgentsScheduledThreadPayload(
+  storage: CloudflareDurableObjectStorage,
+  payload: CloudflareAgentsThreadFiberPayload
+): Promise<boolean> {
+  if (
+    await claimScheduledWork(
+      storage,
+      payload.prefix,
+      agentsThreadPromptKind,
+      scheduledThreadPayloadWorkId(payload)
+    )
+  ) {
+    await removeScheduledThreadPayload(storage, payload);
+    return true;
+  }
+  return await claimScheduledThreadPayload(storage, payload);
+}
+
+function hasCloudflareAgentsScheduledRunPayload(
+  storage: CloudflareDurableObjectStorage,
+  payload: CloudflareAgentsRunFiberPayload
+): boolean {
+  return (
+    hasScheduledWork(
+      storage,
+      payload.prefix,
+      agentsRunKind,
+      scheduledRunPayloadWorkId(payload)
+    ) || hasScheduledRunPayload(storage, payload)
+  );
+}
+
+function hasCloudflareAgentsScheduledThreadPayload(
+  storage: CloudflareDurableObjectStorage,
+  payload: CloudflareAgentsThreadFiberPayload
+): boolean {
+  return (
+    hasScheduledWork(
+      storage,
+      payload.prefix,
+      agentsThreadPromptKind,
+      scheduledThreadPayloadWorkId(payload)
+    ) || hasScheduledThreadPayload(storage, payload)
+  );
+}
+
 function assertNeverPayload(payload: never): never {
   throw new TypeError(`Unsupported Cloudflare Agents payload: ${payload}`);
 }
 
-async function deleteMatchingScheduledWork({
-  kind,
-  matches,
-  prefix,
-  storage,
-}: {
-  readonly kind: ScheduledWorkKind;
-  readonly matches: (payload: string) => boolean;
-  readonly prefix: string;
-  readonly storage: CloudflareDurableObjectStorage;
-}): Promise<void> {
-  const rows = selectScheduledWork(storage, prefix, kind);
-  await Promise.all(
-    rows
-      .filter((row) => matches(row.payload))
-      .map((row) => deleteScheduledWork(storage, prefix, kind, row.work_id))
-  );
-}
-
-function parseScheduledRunPayload(payload: string): string | undefined {
-  const value: unknown = JSON.parse(payload);
-  return typeof value === "string" ? value : undefined;
-}
-
-function matchesScheduledThreadPromptPayload(
-  payload: string,
-  prompt: CloudflareScheduledThreadPrompt
+function hasScheduledWork(
+  storage: CloudflareDurableObjectStorage,
+  prefix: string,
+  kind: ScheduledWorkKind,
+  workId: string
 ): boolean {
-  const value: unknown = JSON.parse(payload);
-  if (!isScheduledThreadPrompt(value)) {
-    return false;
-  }
-  return (
-    value.threadKey === prompt.threadKey &&
-    value.idempotencyKey === prompt.idempotencyKey &&
-    value.notificationId === prompt.notificationId &&
-    value.runId === prompt.runId
+  return selectScheduledWork(storage, prefix, kind).some(
+    (row) => row.work_id === workId
   );
-}
-
-function isScheduledThreadPrompt(
-  value: unknown
-): value is CloudflareScheduledThreadPrompt {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-  if (!("threadKey" in value) || typeof value.threadKey !== "string") {
-    return false;
-  }
-  if ("idempotencyKey" in value && typeof value.idempotencyKey !== "string") {
-    return false;
-  }
-  if ("notificationId" in value && typeof value.notificationId !== "string") {
-    return false;
-  }
-  if ("runId" in value && typeof value.runId !== "string") {
-    return false;
-  }
-  return true;
 }

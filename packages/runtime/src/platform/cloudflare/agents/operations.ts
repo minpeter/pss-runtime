@@ -8,11 +8,9 @@ import {
   type SourceCloudflareAgentNotificationIdempotencyKeyInput,
   sourceCloudflareAgentNotificationIdempotencyKey,
 } from "../dispatch/notification-dispatch";
-import {
-  type CloudflareDurableObjectStorage,
-  type CloudflareScheduledThreadPrompt,
-  listScheduledCloudflareRuns,
-  listScheduledCloudflareThreadPrompts,
+import type {
+  CloudflareDurableObjectStorage,
+  CloudflareScheduledThreadPrompt,
 } from "../host/durable-object-host";
 import {
   type CloudflareAgentsExecutionHostOptions,
@@ -21,7 +19,9 @@ import {
 import {
   ackListedCloudflareAgentsScheduledRun,
   ackListedCloudflareAgentsScheduledThreadPrompt,
-} from "./scheduled-work";
+  listCloudflareAgentsScheduledRuns,
+  listCloudflareAgentsScheduledThreadPrompts,
+} from "./scheduled-work-list";
 import type { CloudflareAgentsDefaultResumeAgent } from "./types";
 
 export type CloudflareAgentsScheduledThreadPrompt =
@@ -53,7 +53,7 @@ export function listScheduledCloudflareAgentsRuns(
   storage: CloudflareDurableObjectStorage,
   options: { readonly limit?: number; readonly prefix?: string } = {}
 ): Promise<readonly string[]> {
-  return listScheduledCloudflareRuns(storage, options);
+  return listCloudflareAgentsScheduledRuns(storage, options);
 }
 
 export function ackScheduledCloudflareAgentsRun(
@@ -68,7 +68,7 @@ export function listScheduledCloudflareAgentsThreadPrompts(
   storage: CloudflareDurableObjectStorage,
   options: { readonly limit?: number; readonly prefix?: string } = {}
 ): Promise<readonly CloudflareAgentsScheduledThreadPrompt[]> {
-  return listScheduledCloudflareThreadPrompts(storage, options);
+  return listCloudflareAgentsScheduledThreadPrompts(storage, options);
 }
 
 export function ackScheduledCloudflareAgentsThreadPrompt(

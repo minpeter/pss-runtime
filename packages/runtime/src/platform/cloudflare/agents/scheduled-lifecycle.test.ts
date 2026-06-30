@@ -13,11 +13,11 @@ import {
   resumeScheduledCloudflareAgentsFiber,
 } from "./index";
 import {
-  ackListedCloudflareAgentsScheduledRun,
   claimCloudflareAgentsScheduledPayload,
   hasCloudflareAgentsScheduledPayload,
   mirrorCloudflareAgentsScheduledPayload,
 } from "./scheduled-work";
+import { ackListedCloudflareAgentsScheduledRun } from "./scheduled-work-list";
 import { createFakeCloudflareAgent, runWithText } from "./test-support";
 
 describe("Cloudflare Agents scheduled lifecycle", () => {
