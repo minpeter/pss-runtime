@@ -12,7 +12,7 @@ import {
 import type {
   CloudflareAlarmAgentForRun,
   CloudflareAlarmEventHandler,
-} from "./drainer";
+} from "./run-context";
 import {
   type AgentTurnDrainResult,
   drainAgentTurnWithBudget,
@@ -85,7 +85,10 @@ export async function resumeScheduledRun({
     }
     await ackScheduledCloudflareRun(storage, runId, { prefix });
   } catch (error) {
-    state.failedRuns.push({ error: describeError(error), id: runId });
+    state.failedRuns.push({
+      error: error instanceof Error ? error.message : String(error),
+      id: runId,
+    });
   }
 }
 
@@ -174,14 +177,10 @@ export async function resumeScheduledThreadPrompt({
     await ackScheduledCloudflareThreadPrompt(storage, prompt, { prefix });
   } catch (error) {
     state.failedThreadPrompts.push({
-      error: describeError(error),
+      error: error instanceof Error ? error.message : String(error),
       id: threadPromptId(prompt),
     });
   }
-}
-
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function appendRunDrainEvents(

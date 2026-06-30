@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentTurn } from "../../../index";
+import type { AgentEvent } from "../../../thread/protocol/events";
 import {
   type CloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
@@ -16,6 +16,11 @@ import {
   shouldStopRuns,
   shouldStopThreadPrompts,
 } from "./budget";
+import type {
+  CloudflareAlarmAgent,
+  CloudflareAlarmAgentForRun,
+  CloudflareAlarmEventHandler,
+} from "./run-context";
 import {
   resumeScheduledRun,
   resumeScheduledThreadPrompt,
@@ -26,6 +31,13 @@ export type {
   CloudflareAlarmDrainBudget,
   FailedScheduledWork,
 } from "./budget";
+export type {
+  CloudflareAlarmAgent,
+  CloudflareAlarmAgentForRun,
+  CloudflareAlarmEventHandler,
+  CloudflareAlarmRunContext,
+  CloudflareAlarmRunSource,
+} from "./run-context";
 
 export interface CloudflareAlarmDrainSummary {
   readonly consumedThreadPrompts: readonly string[];
@@ -40,29 +52,6 @@ export interface CloudflareAlarmDrainSummary {
   readonly remainingThreadPrompts: number;
   readonly resumedRuns: readonly string[];
 }
-
-export interface CloudflareAlarmAgent {
-  resume(runId: string): Promise<AgentTurn | null>;
-}
-
-export type CloudflareAlarmRunSource = "scheduled-run" | "thread-prompt";
-
-export interface CloudflareAlarmRunContext {
-  readonly idempotencyKey?: string;
-  readonly notificationId?: string;
-  readonly runId: string;
-  readonly source: CloudflareAlarmRunSource;
-  readonly threadKey: string;
-}
-
-export type CloudflareAlarmAgentForRun = (
-  context: CloudflareAlarmRunContext
-) => CloudflareAlarmAgent | Promise<CloudflareAlarmAgent>;
-
-export type CloudflareAlarmEventHandler = (
-  context: CloudflareAlarmRunContext,
-  event: AgentEvent
-) => Promise<void> | void;
 
 type CloudflareAlarmAgentSource =
   | {

@@ -4,7 +4,7 @@ import {
   type CloudflareScheduledThreadPrompt,
   createCloudflareDurableObjectHost,
 } from "../host/durable-object-host";
-import type { CloudflareAlarmRunContext } from "./drainer";
+import type { CloudflareAlarmRunContext } from "./run-context";
 
 export async function scheduledRunContext(
   storage: CloudflareDurableObjectStorage,
