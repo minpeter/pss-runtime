@@ -1,6 +1,6 @@
-import type { AgentEvent } from "../../thread/protocol/events";
-import type { AgentTurn } from "../../thread/protocol/turn";
-import type { CloudflareDurableObjectStorage } from "../cloudflare/host/durable-object-host";
+import type { AgentEvent } from "../../../thread/protocol/events";
+import type { AgentTurn } from "../../../thread/protocol/turn";
+import type { CloudflareDurableObjectStorage } from "../host/durable-object-host";
 import type { CloudflareAgentsFiberPayload } from "./payload";
 
 export type CloudflareAgentsFiberStatus =

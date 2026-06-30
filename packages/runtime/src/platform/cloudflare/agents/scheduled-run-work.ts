@@ -1,13 +1,13 @@
-import type { CloudflareDurableObjectStorage } from "../cloudflare/host/durable-object-host";
+import type { CloudflareDurableObjectStorage } from "../host/durable-object-host";
 import {
   ackScheduledRunWork,
   claimScheduledRunWork,
   hasScheduledRunWork,
-} from "../cloudflare/host/scheduled-work-queue";
+} from "../host/scheduled-work-queue";
 import {
   deleteScheduledWork,
   selectScheduledWork,
-} from "../cloudflare/host/scheduled-work-table";
+} from "../host/scheduled-work-table";
 import type { CloudflareAgentsFiberPayload } from "./payload";
 import {
   legacyScheduledRunPayloadWorkId,

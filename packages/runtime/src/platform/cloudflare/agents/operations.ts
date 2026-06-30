@@ -2,18 +2,18 @@ import {
   type DispatchedAgentNotification,
   dispatchAgentNotification,
   type ExecutionHost,
-} from "../../execution";
-import type { AgentEvent, UserInput } from "../../thread/protocol/events";
+} from "../../../execution";
+import type { AgentEvent, UserInput } from "../../../thread/protocol/events";
 import {
   type SourceCloudflareAgentNotificationIdempotencyKeyInput,
   sourceCloudflareAgentNotificationIdempotencyKey,
-} from "../cloudflare/dispatch/notification-dispatch";
+} from "../dispatch/notification-dispatch";
 import {
   type CloudflareDurableObjectStorage,
   type CloudflareScheduledThreadPrompt,
   listScheduledCloudflareRuns,
   listScheduledCloudflareThreadPrompts,
-} from "../cloudflare/host/durable-object-host";
+} from "../host/durable-object-host";
 import {
   type CloudflareAgentsExecutionHostOptions,
   createCloudflareAgentsExecutionHost,

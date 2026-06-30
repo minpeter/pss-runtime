@@ -1,16 +1,16 @@
 import type {
   CloudflareDurableObjectStorage,
   CloudflareScheduledThreadPrompt,
-} from "../cloudflare/host/durable-object-host";
+} from "../host/durable-object-host";
 import {
   appendScheduledRunWork,
   appendScheduledThreadPromptWork,
-} from "../cloudflare/host/scheduled-work-queue";
+} from "../host/scheduled-work-queue";
 import {
   deleteScheduledWork,
   type ScheduledWorkKind,
   selectScheduledWork,
-} from "../cloudflare/host/scheduled-work-table";
+} from "../host/scheduled-work-table";
 import type {
   CloudflareAgentsFiberPayload,
   CloudflareAgentsThreadFiberPayload,

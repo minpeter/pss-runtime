@@ -41,11 +41,7 @@ describe("runtime package subpaths", () => {
       import: "./dist/platform/cloudflare/index.js",
       types: "./dist/platform/cloudflare/index.d.ts",
     });
-    expect(packageJson.exports["./platform/cloudflare-agents"]).toMatchObject({
-      "@minpeter/pss-source": "./src/platform/cloudflare-agents/index.ts",
-      import: "./dist/platform/cloudflare-agents/index.js",
-      types: "./dist/platform/cloudflare-agents/index.d.ts",
-    });
+    expect(packageJson.exports["./platform/cloudflare-agents"]).toBeUndefined();
     expect(packageJson.exports["./cloudflare"]).toBeUndefined();
     expect(packageJson.exports["./cloudflare-agents"]).toBeUndefined();
   });

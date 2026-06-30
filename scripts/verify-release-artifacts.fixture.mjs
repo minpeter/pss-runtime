@@ -156,22 +156,6 @@ function writeRuntimeDeclarationFixtures(cwd, packageName) {
     ),
     runtimeCloudflareDeclaration
   );
-  mkdirSync(
-    join(cwd, "packages", packageName, "dist", "platform", "cloudflare-agents"),
-    { recursive: true }
-  );
-  writeFileSync(
-    join(
-      cwd,
-      "packages",
-      packageName,
-      "dist",
-      "platform",
-      "cloudflare-agents",
-      "index.d.ts"
-    ),
-    runtimeCloudflareAgentsDeclaration
-  );
   mkdirSync(join(cwd, "packages", packageName, "dist", "platform", "file"), {
     recursive: true,
   });

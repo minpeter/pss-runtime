@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ExecutionHost } from "../../execution";
+import type { ExecutionHost } from "../../../execution";
 import {
   type CloudflareAgentsResumeRun,
   cloudflareAgentsFiberIdempotencyKey,

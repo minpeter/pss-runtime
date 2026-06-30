@@ -8,17 +8,17 @@ export {
   type CloudflareAgentsPlatformPrefixGuardOptions,
   type CloudflareAgentsResumableAgent,
   createCloudflareAgentsPlatformContext,
-} from "../cloudflare-agents/context";
+} from "./agents/context";
 export {
   type RecoverCloudflareAgentsFiberOptions,
   recoverCloudflareAgentsFiber,
   type StartCloudflareAgentsResumeFiberOptions,
   startCloudflareAgentsResumeFiber,
-} from "../cloudflare-agents/fiber";
+} from "./agents/fiber";
 export {
   type CloudflareAgentsExecutionHostOptions,
   createCloudflareAgentsExecutionHost,
-} from "../cloudflare-agents/host";
+} from "./agents/host";
 export {
   ackScheduledCloudflareAgentsRun,
   ackScheduledCloudflareAgentsThreadPrompt,
@@ -30,7 +30,7 @@ export {
   rescheduleCloudflareAgentsSchedule,
   type SourceCloudflareAgentsNotificationIdempotencyKeyInput,
   sourceCloudflareAgentsNotificationIdempotencyKey,
-} from "../cloudflare-agents/operations";
+} from "./agents/operations";
 export {
   type CloudflareAgentsFiberPayload,
   type CloudflareAgentsRunFiberPayload,
@@ -44,19 +44,19 @@ export {
   parseCloudflareAgentsFiberPayload,
   pssRunFiberName,
   pssThreadFiberName,
-} from "../cloudflare-agents/payload";
+} from "./agents/payload";
 export {
   type CloudflareAgentsFiberRetrySchedulerOptions,
   createCloudflareAgentsFiberRetryScheduler,
-} from "../cloudflare-agents/retry-scheduler";
+} from "./agents/retry-scheduler";
 export {
   type ResumeScheduledCloudflareAgentsFiberOptions,
   resumeScheduledCloudflareAgentsFiber,
-} from "../cloudflare-agents/scheduled-fiber";
+} from "./agents/scheduled-fiber";
 export {
   type CloudflareAgentsFiberSchedulerOptions,
   createCloudflareAgentsFiberScheduler,
-} from "../cloudflare-agents/scheduler";
+} from "./agents/scheduler";
 export {
   areCloudflareAgentsPayloadsEquivalent,
   type CloudflareAgentsPayloadTrustOptions,
@@ -66,7 +66,7 @@ export {
   isCloudflareAgentsPayloadTrusted,
   isCloudflareAgentsRecoveryContextTrusted,
   rejectedCloudflareAgentsFiberResult,
-} from "../cloudflare-agents/trust";
+} from "./agents/trust";
 export type {
   CloudflareAgentsCallbackName,
   CloudflareAgentsDefaultResumeAgent,
@@ -91,7 +91,7 @@ export type {
   CloudflareAgentsStartFiberResult,
   CloudflareAgentsThreadPromptContext,
   CloudflareAgentsTurnDrainOptions,
-} from "../cloudflare-agents/types";
+} from "./agents/types";
 export type {
   CloudflareAlarmContinuationReason,
   CloudflareAlarmDrainBudget,

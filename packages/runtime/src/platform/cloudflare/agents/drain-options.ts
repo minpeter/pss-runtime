@@ -1,8 +1,8 @@
-import type { CloudflareAgentTurnDrainOptions } from "../cloudflare/alarm/run-drain";
+import type { CloudflareAgentTurnDrainOptions } from "../alarm/run-drain";
 import {
   type CloudflareDurableObjectStorage,
   createCloudflareDurableObjectHost,
-} from "../cloudflare/host/durable-object-host";
+} from "../host/durable-object-host";
 import type {
   CloudflareAgentsFiberPayload,
   CloudflareAgentsRunFiberPayload,

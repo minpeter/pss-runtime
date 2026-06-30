@@ -5,7 +5,6 @@ import {
   FORBIDDEN_RUNTIME_PUBLIC_PATTERNS,
   FORBIDDEN_RUNTIME_ROOT_NAMES,
   FORBIDDEN_RUNTIME_SUBAGENT_NAMES,
-  REQUIRED_RUNTIME_CLOUDFLARE_AGENTS_EXPORTS,
   REQUIRED_RUNTIME_CLOUDFLARE_EXPORTS,
   REQUIRED_RUNTIME_EXECUTION_EXPORTS,
   REQUIRED_RUNTIME_FILE_EXPORTS,
@@ -55,17 +54,6 @@ export function findRuntimeDeclarationLeaks({ cwd, packages }) {
       ),
       requiredExports: REQUIRED_RUNTIME_CLOUDFLARE_EXPORTS,
       surface: "cloudflare",
-    }),
-    ...findRuntimeDeclarationExportLeaks({
-      cwd,
-      file: join(
-        packageDistPath(cwd, "runtime"),
-        "platform",
-        "cloudflare-agents",
-        "index.d.ts"
-      ),
-      requiredExports: REQUIRED_RUNTIME_CLOUDFLARE_AGENTS_EXPORTS,
-      surface: "cloudflare-agents",
     }),
     ...findRuntimeDeclarationExportLeaks({
       cwd,

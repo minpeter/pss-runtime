@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   appendScheduledRunWork,
   appendScheduledThreadPromptWork,
-} from "../cloudflare/host/scheduled-work-queue";
+} from "../host/scheduled-work-queue";
 import type { CloudflareAgentsFiberPayload } from "./index";
 import {
   cloudflareAgentsRunPayload,

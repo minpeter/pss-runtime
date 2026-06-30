@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentEvent } from "../../index";
+import type { AgentEvent } from "../../../index";
 import type { CloudflareAgentsFiberPayload } from "./index";
 import {
   createCloudflareAgentsFiberScheduler,

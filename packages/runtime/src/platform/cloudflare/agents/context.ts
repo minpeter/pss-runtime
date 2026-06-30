@@ -1,4 +1,4 @@
-import type { ExecutionHost } from "../../execution";
+import type { ExecutionHost } from "../../../execution";
 import { recoverCloudflareAgentsFiber } from "./fiber";
 import {
   type CloudflareAgentsExecutionHostOptions,

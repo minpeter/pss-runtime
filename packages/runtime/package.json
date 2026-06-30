@@ -21,11 +21,6 @@
       "types": "./dist/platform/cloudflare/index.d.ts",
       "import": "./dist/platform/cloudflare/index.js"
     },
-    "./platform/cloudflare-agents": {
-      "@minpeter/pss-source": "./src/platform/cloudflare-agents/index.ts",
-      "types": "./dist/platform/cloudflare-agents/index.d.ts",
-      "import": "./dist/platform/cloudflare-agents/index.js"
-    },
     "./platform/file": {
       "@minpeter/pss-source": "./src/platform/file/index.ts",
       "types": "./dist/platform/file/index.d.ts",

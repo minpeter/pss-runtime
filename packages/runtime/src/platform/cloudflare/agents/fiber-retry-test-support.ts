@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import type { ExecutionHost, TurnStatus } from "../../execution";
+import type { ExecutionHost, TurnStatus } from "../../../execution";
 import {
   type CloudflareAgentsResumeRun,
   createCloudflareAgentsExecutionHost,

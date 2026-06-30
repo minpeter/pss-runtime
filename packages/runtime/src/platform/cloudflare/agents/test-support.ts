@@ -1,6 +1,6 @@
-import type { AgentEvent, AgentTurn } from "../../index";
-import { InMemoryCloudflareDurableObjectStorage } from "../cloudflare/host/durable-object-host";
-import { InMemorySqlStorage } from "../cloudflare/sql/node-test/node-sqlite-storage";
+import type { AgentEvent, AgentTurn } from "../../../index";
+import { InMemoryCloudflareDurableObjectStorage } from "../host/durable-object-host";
+import { InMemorySqlStorage } from "../sql/node-test/node-sqlite-storage";
 import type {
   CloudflareAgentsDurableObjectContext,
   CloudflareAgentsFiberPayload,

@@ -509,11 +509,10 @@ public. It maps immediate PSS run and thread resumes onto Agents SDK
 recovery helpers for `onFiberRecovered()`. Scheduled callback and recovery
 payloads are prefix-guarded by default; pass `allowedPrefixes` or `allowPrefix`
 when a single Cloudflare Agents Worker intentionally serves multiple PSS runtime
-namespaces. The `@minpeter/pss-runtime/platform/cloudflare-agents` subpath remains
-available for compatibility and preview use in this release, but new Cloudflare
-integrations should start from `@minpeter/pss-runtime/platform/cloudflare`. The
-`worker-agent` app still owns session, channel, webhook, and prompt-routing
-behavior.
+namespaces. Cloudflare Agents helpers are exported from the canonical
+`@minpeter/pss-runtime/platform/cloudflare` adapter rather than a separate
+platform subpath. The `worker-agent` app still owns session, channel, webhook,
+and prompt-routing behavior.
 
 The same core API supports room/user/thread routing through stable thread keys.
 

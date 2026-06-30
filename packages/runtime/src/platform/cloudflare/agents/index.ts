@@ -1,4 +1,4 @@
-// biome-ignore-all lint/performance/noBarrelFile: Public package subpath entrypoint required by package exports.
+// biome-ignore-all lint/performance/noBarrelFile: Internal Cloudflare Agents barrel for the canonical Cloudflare adapter.
 
 export {
   type CloudflareAgentsPlatformContext,

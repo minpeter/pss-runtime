@@ -34,15 +34,6 @@ describe("verifyReleaseArtifacts runtime subpath checks", () => {
     ]);
   });
 
-  it("requires the runtime cloudflare-agents declaration entrypoint", () => {
-    const cwd = createFixture();
-    rmSync(runtimeDistDeclaration(cwd, "platform", "cloudflare-agents"));
-
-    expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing cloudflare-agents runtime declaration",
-    ]);
-  });
-
   it("requires the runtime memory declaration entrypoint", () => {
     const cwd = createFixture();
     rmSync(runtimeDistDeclaration(cwd, "platform", "memory"));
@@ -111,84 +102,6 @@ describe("verifyReleaseArtifacts runtime subpath checks", () => {
           `packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export ${name}`
       )
     );
-  });
-
-  it("checks Cloudflare Agents helpers on the cloudflare-agents declaration subpath", () => {
-    const cwd = createFixture();
-    writeFileSync(
-      runtimeDistDeclaration(cwd, "platform", "cloudflare-agents"),
-      "export {};\n"
-    );
-
-    expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsCallbackName",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsDurableObjectContext",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsEventHandler",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsExecutionHostOptions",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsFiberContext",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsFiberPayload",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsFiberRecoveryContext",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsFiberRecoveryResult",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsFiberRetrySchedulerOptions",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsFiberSchedulerOptions",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsFiberStatus",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsPayloadTrustOptions",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsPlatformAgent",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsPlatformContext",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsPlatformContextOptions",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsPlatformFactoryOptions",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsPlatformPrefixGuard",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsPlatformPrefixGuardOptions",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsPrefixGuard",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsPrefixGuardOptions",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsResumeRun",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsResumableAgent",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsRunFiberPayload",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsRunContext",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsRunSource",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsSchedule",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsScheduleOptions",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsScheduledRunContext",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsScheduledThreadPrompt",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsStartFiberOptions",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsStartFiberResult",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsThreadFiberPayload",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsThreadPromptContext",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export CloudflareAgentsTurnDrainOptions",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export DispatchCloudflareAgentsNotificationInput",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export RecoverCloudflareAgentsFiberOptions",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export ResumeScheduledCloudflareAgentsFiberOptions",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export SourceCloudflareAgentsNotificationIdempotencyKeyInput",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export StartCloudflareAgentsResumeFiberOptions",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export ackScheduledCloudflareAgentsRun",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export ackScheduledCloudflareAgentsThreadPrompt",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export areCloudflareAgentsPayloadsEquivalent",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export cloudflareAgentsFiberIdempotencyKey",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export cloudflareAgentsFiberMetadata",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export cloudflareAgentsFiberName",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export cloudflareAgentsRunPayload",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export cloudflareAgentsThreadPayload",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export cloudflareAgentsTrustFailureReason",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export createCloudflareAgentsExecutionHost",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export createCloudflareAgentsFiberScheduler",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export createCloudflareAgentsFiberRetryScheduler",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export createCloudflareAgentsPlatformContext",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export defaultCloudflareAgentsDelayedResumeCallback",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export dispatchCloudflareAgentsNotification",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export isCloudflareAgentsPayloadTrusted",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export isCloudflareAgentsRecoveryContextTrusted",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export listScheduledCloudflareAgentsRuns",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export listScheduledCloudflareAgentsThreadPrompts",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export parseCloudflareAgentsFiberPayload",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export pssRunFiberName",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export pssThreadFiberName",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export recoverCloudflareAgentsFiber",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export rejectedCloudflareAgentsFiberResult",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export rescheduleCloudflareAgentsSchedule",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export resumeScheduledCloudflareAgentsFiber",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export sourceCloudflareAgentsNotificationIdempotencyKey",
-      "packages/runtime/dist/platform/cloudflare-agents/index.d.ts: missing explicit cloudflare-agents runtime export startCloudflareAgentsResumeFiber",
-    ]);
   });
 
   it("checks advanced runtime contracts on the execution declaration subpath", () => {
