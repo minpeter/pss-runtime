@@ -3,13 +3,10 @@ import type {
   CloudflareScheduledThreadPrompt,
 } from "../cloudflare/host/durable-object-host";
 import {
-  ackScheduledRunWork,
   ackScheduledThreadPromptWork,
   appendScheduledRunWork,
   appendScheduledThreadPromptWork,
-  claimScheduledRunWork,
   claimScheduledThreadPromptWork,
-  hasScheduledRunWork,
   hasScheduledThreadPromptWork,
 } from "../cloudflare/host/scheduled-work-queue";
 import {
@@ -21,6 +18,15 @@ import type {
   CloudflareAgentsFiberPayload,
   CloudflareAgentsThreadFiberPayload,
 } from "./payload";
+import {
+  claimScheduledRunPayload,
+  hasScheduledRunPayload,
+  removeScheduledRunPayload,
+} from "./scheduled-run-work";
+import {
+  scheduledRunPayloadWorkId,
+  scheduledThreadPayloadWorkId,
+} from "./scheduled-work-ids";
 
 const defaultPrefix = "pss-runtime";
 
@@ -63,11 +69,7 @@ export async function claimCloudflareAgentsScheduledPayload(
 ): Promise<boolean> {
   switch (payload.kind) {
     case "run":
-      return await claimScheduledRunWork(
-        storage,
-        payload.prefix,
-        scheduledRunPayloadWorkId(payload)
-      );
+      return await claimScheduledRunPayload(storage, payload);
     case "thread":
       return await claimScheduledThreadPromptWork(
         storage,
@@ -85,11 +87,7 @@ export async function removeCloudflareAgentsScheduledPayload(
 ): Promise<void> {
   switch (payload.kind) {
     case "run":
-      await ackScheduledRunWork(
-        storage,
-        payload.prefix,
-        scheduledRunPayloadWorkId(payload)
-      );
+      await removeScheduledRunPayload(storage, payload);
       return;
     case "thread":
       await ackScheduledThreadPromptWork(
@@ -109,13 +107,7 @@ export function hasCloudflareAgentsScheduledPayload(
 ): Promise<boolean> {
   switch (payload.kind) {
     case "run":
-      return Promise.resolve(
-        hasScheduledRunWork(
-          storage,
-          payload.prefix,
-          scheduledRunPayloadWorkId(payload)
-        )
-      );
+      return Promise.resolve(hasScheduledRunPayload(storage, payload));
     case "thread":
       return Promise.resolve(
         hasScheduledThreadPromptWork(
@@ -155,31 +147,6 @@ export async function ackListedCloudflareAgentsScheduledThreadPrompt(
   });
 }
 
-function scheduledRunPayloadWorkId(
-  payload: Extract<CloudflareAgentsFiberPayload, { readonly kind: "run" }>
-): string {
-  return [
-    payload.runId,
-    payload.attempt === undefined ? "" : String(payload.attempt),
-  ]
-    .map(scheduledWorkIdPart)
-    .join("|");
-}
-
-function scheduledThreadPayloadWorkId(
-  payload: CloudflareAgentsThreadFiberPayload
-): string {
-  return [
-    payload.threadKey,
-    payload.idempotencyKey ?? "",
-    payload.runId,
-    payload.notificationId ?? "",
-    payload.attempt === undefined ? "" : String(payload.attempt),
-  ]
-    .map(scheduledWorkIdPart)
-    .join("|");
-}
-
 function threadPromptForPayload(payload: CloudflareAgentsThreadFiberPayload): {
   readonly idempotencyKey?: string;
   readonly notificationId?: string;
@@ -196,10 +163,6 @@ function threadPromptForPayload(payload: CloudflareAgentsThreadFiberPayload): {
 
 function assertNeverPayload(payload: never): never {
   throw new TypeError(`Unsupported Cloudflare Agents payload: ${payload}`);
-}
-
-function scheduledWorkIdPart(value: string): string {
-  return `${value.length}:${value}`;
 }
 
 async function deleteMatchingScheduledWork({
