@@ -1,7 +1,7 @@
 import type {
   CloudflareDurableObjectStorage,
   CloudflareScheduledThreadPrompt,
-} from "../cloudflare";
+} from "../cloudflare/host/durable-object-host";
 import {
   ackScheduledRunWork,
   ackScheduledThreadPromptWork,

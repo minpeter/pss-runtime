@@ -5,13 +5,15 @@ import {
 } from "../../execution";
 import type { AgentEvent, UserInput } from "../../thread/protocol/events";
 import {
+  type SourceCloudflareAgentNotificationIdempotencyKeyInput,
+  sourceCloudflareAgentNotificationIdempotencyKey,
+} from "../cloudflare/dispatch/notification-dispatch";
+import {
   type CloudflareDurableObjectStorage,
   type CloudflareScheduledThreadPrompt,
   listScheduledCloudflareRuns,
   listScheduledCloudflareThreadPrompts,
-  type SourceCloudflareAgentNotificationIdempotencyKeyInput,
-  sourceCloudflareAgentNotificationIdempotencyKey,
-} from "../cloudflare";
+} from "../cloudflare/host/durable-object-host";
 import {
   type CloudflareAgentsExecutionHostOptions,
   createCloudflareAgentsExecutionHost,

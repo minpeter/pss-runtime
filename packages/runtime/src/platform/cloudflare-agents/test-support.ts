@@ -1,5 +1,5 @@
 import type { AgentEvent, AgentTurn } from "../../index";
-import { InMemoryCloudflareDurableObjectStorage } from "../cloudflare";
+import { InMemoryCloudflareDurableObjectStorage } from "../cloudflare/host/durable-object-host";
 import { InMemorySqlStorage } from "../cloudflare/sql/node-test/node-sqlite-storage";
 import type {
   CloudflareAgentsDurableObjectContext,

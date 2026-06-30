@@ -1,8 +1,8 @@
-import type { CloudflareDurableObjectStorage } from "../cloudflare";
 import {
   prepareScheduledNotificationRetry,
   shouldRetryNotClaimableScheduledRun,
 } from "../cloudflare/alarm/scheduled-work-context";
+import type { CloudflareDurableObjectStorage } from "../cloudflare/host/durable-object-host";
 import {
   type CloudflareAgentsFiberPayload,
   type CloudflareAgentsThreadFiberPayload,
