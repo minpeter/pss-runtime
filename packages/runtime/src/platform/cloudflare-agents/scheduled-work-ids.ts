@@ -41,6 +41,14 @@ export function scheduledThreadPayloadWorkId(
     .join("|");
 }
 
+export function legacyScheduledThreadPayloadWorkId(
+  payload: CloudflareAgentsThreadFiberPayload
+): string {
+  return [payload.threadKey, payload.idempotencyKey ?? "", payload.runId]
+    .map(scheduledWorkIdPart)
+    .join("|");
+}
+
 function scheduledWorkIdPart(value: string): string {
   return `${value.length}:${value}`;
 }

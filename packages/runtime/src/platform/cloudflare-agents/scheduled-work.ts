@@ -3,11 +3,8 @@ import type {
   CloudflareScheduledThreadPrompt,
 } from "../cloudflare/host/durable-object-host";
 import {
-  ackScheduledThreadPromptWork,
   appendScheduledRunWork,
   appendScheduledThreadPromptWork,
-  claimScheduledThreadPromptWork,
-  hasScheduledThreadPromptWork,
 } from "../cloudflare/host/scheduled-work-queue";
 import {
   deleteScheduledWork,
@@ -23,6 +20,11 @@ import {
   hasScheduledRunPayload,
   removeScheduledRunPayload,
 } from "./scheduled-run-work";
+import {
+  claimScheduledThreadPayload,
+  hasScheduledThreadPayload,
+  removeScheduledThreadPayload,
+} from "./scheduled-thread-work";
 import {
   scheduledRunPayloadWorkId,
   scheduledThreadPayloadWorkId,
@@ -71,11 +73,7 @@ export async function claimCloudflareAgentsScheduledPayload(
     case "run":
       return await claimScheduledRunPayload(storage, payload);
     case "thread":
-      return await claimScheduledThreadPromptWork(
-        storage,
-        payload.prefix,
-        scheduledThreadPayloadWorkId(payload)
-      );
+      return await claimScheduledThreadPayload(storage, payload);
     default:
       return assertNeverPayload(payload);
   }
@@ -90,11 +88,7 @@ export async function removeCloudflareAgentsScheduledPayload(
       await removeScheduledRunPayload(storage, payload);
       return;
     case "thread":
-      await ackScheduledThreadPromptWork(
-        storage,
-        payload.prefix,
-        scheduledThreadPayloadWorkId(payload)
-      );
+      await removeScheduledThreadPayload(storage, payload);
       return;
     default:
       return assertNeverPayload(payload);
@@ -109,13 +103,7 @@ export function hasCloudflareAgentsScheduledPayload(
     case "run":
       return Promise.resolve(hasScheduledRunPayload(storage, payload));
     case "thread":
-      return Promise.resolve(
-        hasScheduledThreadPromptWork(
-          storage,
-          payload.prefix,
-          scheduledThreadPayloadWorkId(payload)
-        )
-      );
+      return Promise.resolve(hasScheduledThreadPayload(storage, payload));
     default:
       return assertNeverPayload(payload);
   }
