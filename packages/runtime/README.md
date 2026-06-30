@@ -497,20 +497,23 @@ interactive CLI.
 Cloudflare is the preferred substrate when deploying PSS Runtime on Workers and
 Durable Objects, but runtime core stays platform-agnostic. Do not import the
 Cloudflare Agents SDK, `cloudflare:agents`, or other Cloudflare SDK packages from
-core runtime code. The existing `@minpeter/pss-runtime/platform/cloudflare`
-subpath remains the current Durable Object storage, alarm, and resume adapter.
+core runtime code. Use `@minpeter/pss-runtime/platform/cloudflare` as the
+canonical Cloudflare adapter for Durable Object storage, alarms, dispatch, and
+Cloudflare Agents SDK fiber, schedule, recovery, and context helpers.
 
-Use `@minpeter/pss-runtime/platform/cloudflare-agents` when the Worker is already
-implemented as a Cloudflare Agents SDK `Agent`. That adapter reuses the existing
-Durable Object storage host, maps immediate PSS run and thread resumes onto
-Agents SDK `startFiber()` calls, maps delayed resumes onto SDK `schedule()`, and
-provides recovery helpers for `onFiberRecovered()`. Create it from inside the
-Cloudflare `Agent` subclass and pass `durableObjectContext: this.ctx`; the
-adapter does not require `ctx` to be public. Scheduled callback and recovery
+When the Worker is implemented as a Cloudflare Agents SDK `Agent`, create the
+Cloudflare adapter from inside the Cloudflare `Agent` subclass and pass
+`durableObjectContext: this.ctx`; the adapter does not require `ctx` to be
+public. It maps immediate PSS run and thread resumes onto Agents SDK
+`startFiber()` calls, maps delayed resumes onto SDK `schedule()`, and provides
+recovery helpers for `onFiberRecovered()`. Scheduled callback and recovery
 payloads are prefix-guarded by default; pass `allowedPrefixes` or `allowPrefix`
 when a single Cloudflare Agents Worker intentionally serves multiple PSS runtime
-namespaces. The `worker-agent` app still owns session, channel, webhook, and
-prompt-routing behavior.
+namespaces. The `@minpeter/pss-runtime/platform/cloudflare-agents` subpath remains
+available for compatibility and preview use in this release, but new Cloudflare
+integrations should start from `@minpeter/pss-runtime/platform/cloudflare`. The
+`worker-agent` app still owns session, channel, webhook, and prompt-routing
+behavior.
 
 The same core API supports room/user/thread routing through stable thread keys.
 
