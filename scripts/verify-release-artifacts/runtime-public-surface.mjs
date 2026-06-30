@@ -29,7 +29,7 @@ export const REQUIRED_RUNTIME_MEMORY_EXPORTS = [
   "MemoryThreadStore",
 ];
 
-export const REQUIRED_RUNTIME_CLOUDFLARE_EXPORTS = [
+const REQUIRED_RUNTIME_CLOUDFLARE_WORKER_EXPORTS = [
   "CloudflareAgentContext",
   "CloudflareAgentContextFactoryOptions",
   "CloudflareAgentContextOptions",
@@ -131,6 +131,11 @@ export const REQUIRED_RUNTIME_CLOUDFLARE_AGENTS_EXPORTS = [
   "resumeScheduledCloudflareAgentsFiber",
   "sourceCloudflareAgentsNotificationIdempotencyKey",
   "startCloudflareAgentsResumeFiber",
+];
+
+export const REQUIRED_RUNTIME_CLOUDFLARE_EXPORTS = [
+  ...REQUIRED_RUNTIME_CLOUDFLARE_WORKER_EXPORTS,
+  ...REQUIRED_RUNTIME_CLOUDFLARE_AGENTS_EXPORTS,
 ];
 
 export const REQUIRED_RUNTIME_FILE_EXPORTS =
