@@ -514,6 +514,24 @@ namespaces. Cloudflare Agents helpers are exported from the canonical
 platform subpath. The `worker-agent` app still owns session, channel, webhook,
 and prompt-routing behavior.
 
+### Platform adapter parity
+
+Every platform adapter implements the same core ports — `ExecutionStore`
+(turns, checkpoints, events, notifications, threads) and `ExecutionScheduler`
+(run enqueueing and thread resumes) — and each is verified by shared in-repo
+contract test suites (internal, not part of the published API).
+Platform-neutral scheduled-work semantics (work-id derivation, thread-prompt
+validation, list limits) live in runtime core; adapters only bind storage and
+timers.
+
+| Capability                            | memory            | file                     | cloudflare                    |
+| ------------------------------------- | ----------------- | ------------------------ | ----------------------------- |
+| Thread + execution stores             | yes               | yes                      | yes                           |
+| Scheduled runs and thread prompts     | list/ack, deduped | list/ack, deduped        | list/ack/claim, deduped       |
+| Delayed runs (`runAfterMs`)           | due-time filtered | due-time filtered        | Durable Object alarm          |
+| Drain helper                          | app-driven        | `drainScheduledNodeWork` | `drainCloudflareAlarm`        |
+| Scheduled fiber retry backoff         | —                 | —                        | Cloudflare Agents SDK adapter |
+
 The same core API supports room/user/thread routing through stable thread keys.
 
 Recommended key patterns:
