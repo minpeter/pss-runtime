@@ -83,13 +83,6 @@ export function ackScheduledCloudflareAgentsThreadPrompt(
   );
 }
 
-export function rescheduleCloudflareAgentsSchedule(
-  _storage: CloudflareDurableObjectStorage,
-  _options: { readonly runAfterMs?: number } = {}
-): Promise<void> {
-  return Promise.resolve();
-}
-
 export function dispatchCloudflareAgentsNotification<
   TAgent extends
     CloudflareAgentsDefaultResumeAgent = CloudflareAgentsDefaultResumeAgent,

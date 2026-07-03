@@ -7,7 +7,6 @@ import {
   createCloudflareAgentsFiberScheduler,
   listScheduledCloudflareAgentsRuns,
   listScheduledCloudflareAgentsThreadPrompts,
-  rescheduleCloudflareAgentsSchedule,
   resumeScheduledCloudflareAgentsFiber,
 } from "./index";
 import { createFakeCloudflareAgent, runWithText } from "./test-support";
@@ -51,8 +50,6 @@ describe("Cloudflare Agents scheduled operations parity", () => {
     await scheduler.enqueueRun("background:bg_rescheduled", {
       runAfterMs: 1000,
     });
-    await rescheduleCloudflareAgentsSchedule(storage, { runAfterMs: 5000 });
-    expect(storageAlarmTime(storage)).toBeUndefined();
     const consumedResult = await resumeScheduledCloudflareAgentsFiber({
       allowedPrefixes: ["tenant-a"],
       cloudflareAgent,

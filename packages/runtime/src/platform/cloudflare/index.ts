@@ -27,7 +27,6 @@ export {
   dispatchCloudflareAgentsNotification,
   listScheduledCloudflareAgentsRuns,
   listScheduledCloudflareAgentsThreadPrompts,
-  rescheduleCloudflareAgentsSchedule,
   type SourceCloudflareAgentsNotificationIdempotencyKeyInput,
   sourceCloudflareAgentsNotificationIdempotencyKey,
 } from "./agents/operations";

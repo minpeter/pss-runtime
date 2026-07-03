@@ -127,7 +127,6 @@ export const REQUIRED_RUNTIME_CLOUDFLARE_AGENTS_EXPORTS = [
   "pssThreadFiberName",
   "recoverCloudflareAgentsFiber",
   "rejectedCloudflareAgentsFiberResult",
-  "rescheduleCloudflareAgentsSchedule",
   "resumeScheduledCloudflareAgentsFiber",
   "sourceCloudflareAgentsNotificationIdempotencyKey",
   "startCloudflareAgentsResumeFiber",
