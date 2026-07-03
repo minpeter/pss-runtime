@@ -4,14 +4,8 @@ import {
   type ExecutionHost,
 } from "../../../execution";
 import type { AgentEvent, UserInput } from "../../../thread/protocol/events";
-import {
-  type SourceCloudflareAgentNotificationIdempotencyKeyInput,
-  sourceCloudflareAgentNotificationIdempotencyKey,
-} from "../dispatch/notification-dispatch";
-import type {
-  CloudflareDurableObjectStorage,
-  CloudflareScheduledThreadPrompt,
-} from "../host/durable-object-host";
+import type { CloudflareScheduledThreadPrompt } from "../host/scheduled-work-queue";
+import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import {
   type CloudflareAgentsExecutionHostOptions,
   createCloudflareAgentsExecutionHost,
@@ -26,8 +20,6 @@ import type { CloudflareAgentsDefaultResumeAgent } from "./types";
 
 export type CloudflareAgentsScheduledThreadPrompt =
   CloudflareScheduledThreadPrompt;
-export type SourceCloudflareAgentsNotificationIdempotencyKeyInput =
-  SourceCloudflareAgentNotificationIdempotencyKeyInput;
 
 interface DispatchCloudflareAgentsNotificationBase {
   readonly idempotencyKey: string;
@@ -98,12 +90,6 @@ export function dispatchCloudflareAgentsNotification<
     overlays: input.overlays,
     threadKey: input.threadKey,
   });
-}
-
-export function sourceCloudflareAgentsNotificationIdempotencyKey(
-  input: SourceCloudflareAgentsNotificationIdempotencyKeyInput
-): string | undefined {
-  return sourceCloudflareAgentNotificationIdempotencyKey(input);
 }
 
 function dispatchHost<TAgent extends CloudflareAgentsDefaultResumeAgent>(

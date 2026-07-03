@@ -2,7 +2,7 @@ import {
   prepareScheduledNotificationRetry,
   shouldRetryNotClaimableScheduledRun,
 } from "../alarm/scheduled-work-context";
-import type { CloudflareDurableObjectStorage } from "../host/durable-object-host";
+import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import {
   assertNeverPayload,
   type CloudflareAgentsFiberPayload,

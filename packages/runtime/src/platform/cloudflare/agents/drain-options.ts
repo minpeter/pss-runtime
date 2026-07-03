@@ -1,8 +1,6 @@
 import type { CloudflareAgentTurnDrainOptions } from "../alarm/run-drain";
-import {
-  type CloudflareDurableObjectStorage,
-  createCloudflareDurableObjectHost,
-} from "../host/durable-object-host";
+import { createCloudflareDurableObjectHost } from "../host/durable-object-host";
+import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import {
   assertNeverPayload,
   type CloudflareAgentsFiberPayload,
@@ -38,7 +36,7 @@ export async function cloudflareAgentsDrainOptionsForPayload({
     deadlineMs: drain.deadlineMs,
     maxEvents: drain.maxEvents,
     onEvent: async (event) => {
-      await onEvent(event, context);
+      await onEvent(context, event);
     },
   };
 }

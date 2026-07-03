@@ -5,12 +5,12 @@ import type {
   NotificationWriteResult,
 } from "../../../../execution";
 import type { CloudflareDurableObjectStorage } from "../durable-object/durable-object-storage";
+import { withTransaction } from "../durable-object/sql-access";
 import {
   resolveStoragePayloadMaxBytes,
   type StoragePayloadBudgetOptions,
 } from "../payload-guard";
 import { getNotification, putNotification } from "./notification-records";
-import { withTransaction } from "./records";
 
 export class DurableObjectNotificationInbox implements NotificationInbox {
   readonly #maxPayloadBytes: number;

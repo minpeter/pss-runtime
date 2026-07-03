@@ -1,6 +1,7 @@
 import type { NotificationRecord } from "../../../../execution";
 import type { SqlStorage } from "../../sql/ports/storage-port";
 import type { CloudflareDurableObjectTransactionStorage } from "../durable-object/durable-object-storage";
+import { requiredSqlStorage } from "../durable-object/sql-access";
 import {
   resolveStoragePayloadMaxBytes,
   type StoragePayloadBudgetOptions,
@@ -20,7 +21,7 @@ export function getNotification(
   prefix: string,
   idempotencyKey: string
 ): Promise<NotificationRecord | null> {
-  const sql = requiredSqlStorage(storage);
+  const sql = requiredSqlStorage(storage, "DurableObjectNotificationInbox");
   const row = selectNotificationRow(sql, prefix, idempotencyKey);
   return Promise.resolve(
     row ? parseStoredNotificationRecord(sql, prefix, idempotencyKey, row) : null
@@ -34,7 +35,7 @@ export function putNotification(
   options: StoragePayloadBudgetOptions = {}
 ): Promise<void> {
   putSqlNotification(
-    requiredSqlStorage(storage),
+    requiredSqlStorage(storage, "DurableObjectNotificationInbox"),
     prefix,
     record,
     resolveStoragePayloadMaxBytes(options)
@@ -55,25 +56,6 @@ function selectNotificationRow(
       idempotencyKey
     )
     .toArray()[0];
-}
-
-function requiredSqlStorage(
-  storage: CloudflareDurableObjectTransactionStorage
-): SqlStorage {
-  const sql = storage.sql;
-  if (isSqlStorage(sql)) {
-    return sql;
-  }
-  throw new Error("DurableObjectNotificationInbox requires SQLite storage.");
-}
-
-function isSqlStorage(value: unknown): value is SqlStorage {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "exec" in value &&
-    typeof value.exec === "function"
-  );
 }
 
 function ensureNotificationSchema(sql: SqlStorage): void {

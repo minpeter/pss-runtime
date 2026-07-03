@@ -6,18 +6,18 @@ import {
 } from "../../../execution/scheduled-work";
 import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import {
+  claimScheduledWork,
+  deleteScheduledWork,
+  insertScheduledWork,
+  selectScheduledWork,
+} from "../storage/sqlite/scheduled-work-table";
+import {
   isCanonicalRunWork,
   isCanonicalThreadPromptWork,
   parseScheduledRunPayload,
   parseScheduledThreadPromptPayload,
   runScheduledWorkId,
 } from "./scheduled-work-codec";
-import {
-  claimScheduledWork,
-  deleteScheduledWork,
-  insertScheduledWork,
-  selectScheduledWork,
-} from "./scheduled-work-table";
 
 export type CloudflareScheduledThreadPrompt = ScheduledThreadPrompt;
 

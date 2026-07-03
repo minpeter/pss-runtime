@@ -5,10 +5,8 @@ import type {
   CloudflareAlarmDrainSummary,
 } from "../alarm/drainer";
 import { drainCloudflareAlarm } from "../alarm/drainer";
-import {
-  type CloudflareDurableObjectStorage,
-  createCloudflareDurableObjectHost,
-} from "./durable-object-host";
+import { createCloudflareDurableObjectHost } from "../host/durable-object-host";
+import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 
 const defaultContextPrefix = "pss-runtime";
 

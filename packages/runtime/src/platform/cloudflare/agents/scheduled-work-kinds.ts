@@ -1,4 +1,4 @@
-import type { ScheduledWorkKind } from "../host/scheduled-work-table";
+import type { ScheduledWorkKind } from "../storage/sqlite/scheduled-work-table";
 
 export const agentsRunKind = "agents-run" satisfies ScheduledWorkKind;
 export const agentsThreadPromptKind =

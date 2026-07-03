@@ -1,9 +1,9 @@
 import {
   ackScheduledCloudflareRun,
   ackScheduledCloudflareThreadPrompt,
-  type CloudflareDurableObjectStorage,
-  type CloudflareScheduledThreadPrompt,
 } from "../host/durable-object-host";
+import type { CloudflareScheduledThreadPrompt } from "../host/scheduled-work-queue";
+import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import {
   type AlarmDrainState,
   eventSlotsRemaining,

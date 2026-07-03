@@ -1,31 +1,29 @@
-import type { CloudflareDurableObjectStorage } from "../host/durable-object-host";
+import { isScheduledThreadPrompt } from "../../../execution/scheduled-work";
+import { parseScheduledRunPayload } from "../host/scheduled-work-codec";
+import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import {
-  claimScheduledWork,
-  deleteScheduledWork,
+  deleteScheduledWorkGroup,
+  hasScheduledWorkGroup,
   insertScheduledWork,
-  type ScheduledWorkKind,
-  selectScheduledWork,
-} from "../host/scheduled-work-table";
+  type ScheduledWorkTarget,
+} from "../storage/sqlite/scheduled-work-table";
 import {
   assertNeverPayload,
   type CloudflareAgentsFiberPayload,
   type CloudflareAgentsThreadFiberPayload,
 } from "./payload";
 import {
-  claimAlarmScheduledRun,
-  hasAlarmScheduledRun,
-  removeAlarmScheduledRun,
-} from "./scheduled-run-work";
-import {
-  claimAlarmScheduledThreadPrompt,
-  hasAlarmScheduledThreadPrompt,
-  removeAlarmScheduledThreadPrompt,
-} from "./scheduled-thread-work";
-import {
+  alarmScheduledRunWorkId,
+  alarmScheduledThreadPromptWorkId,
   scheduledRunPayloadWorkId,
   scheduledThreadPayloadWorkId,
 } from "./scheduled-work-ids";
-import { agentsRunKind, agentsThreadPromptKind } from "./scheduled-work-kinds";
+import {
+  agentsRunKind,
+  agentsThreadPromptKind,
+  alarmRunKind,
+  alarmThreadPromptKind,
+} from "./scheduled-work-kinds";
 
 type CloudflareAgentsRunFiberPayload = Extract<
   CloudflareAgentsFiberPayload,
@@ -69,67 +67,100 @@ export async function mirrorCloudflareAgentsScheduledPayload({
   }
 }
 
-export async function claimCloudflareAgentsScheduledPayload(
+export function claimCloudflareAgentsScheduledPayload(
   storage: CloudflareDurableObjectStorage,
   payload: CloudflareAgentsFiberPayload
 ): Promise<boolean> {
-  switch (payload.kind) {
-    case "run":
-      return await claimCloudflareAgentsScheduledRunPayload(storage, payload);
-    case "thread":
-      return await claimCloudflareAgentsScheduledThreadPayload(
-        storage,
-        payload
-      );
-    default:
-      return assertNeverPayload(payload);
-  }
+  return deleteScheduledWorkGroup(
+    storage,
+    payload.prefix,
+    scheduledPayloadTargets(payload)
+  );
 }
 
 export async function removeCloudflareAgentsScheduledPayload(
   storage: CloudflareDurableObjectStorage,
   payload: CloudflareAgentsFiberPayload
 ): Promise<void> {
-  switch (payload.kind) {
-    case "run":
-      await deleteScheduledWork(
-        storage,
-        payload.prefix,
-        agentsRunKind,
-        scheduledRunPayloadWorkId(payload)
-      );
-      await removeAlarmScheduledRun(storage, payload);
-      return;
-    case "thread":
-      await deleteScheduledWork(
-        storage,
-        payload.prefix,
-        agentsThreadPromptKind,
-        scheduledThreadPayloadWorkId(payload)
-      );
-      await removeAlarmScheduledThreadPrompt(storage, payload);
-      return;
-    default:
-      return assertNeverPayload(payload);
-  }
+  await deleteScheduledWorkGroup(
+    storage,
+    payload.prefix,
+    scheduledPayloadTargets(payload)
+  );
 }
 
 export function hasCloudflareAgentsScheduledPayload(
   storage: CloudflareDurableObjectStorage,
   payload: CloudflareAgentsFiberPayload
 ): Promise<boolean> {
+  return Promise.resolve(
+    hasScheduledWorkGroup(
+      storage,
+      payload.prefix,
+      scheduledPayloadTargets(payload)
+    )
+  );
+}
+
+// Each payload maps to its agents-kind row plus the alarm scheduler's
+// interop row; claiming or removing sweeps both in one transaction.
+function scheduledPayloadTargets(
+  payload: CloudflareAgentsFiberPayload
+): ScheduledWorkTarget[] {
   switch (payload.kind) {
     case "run":
-      return Promise.resolve(
-        hasCloudflareAgentsScheduledRunPayload(storage, payload)
-      );
+      return runPayloadTargets(payload);
     case "thread":
-      return Promise.resolve(
-        hasCloudflareAgentsScheduledThreadPayload(storage, payload)
-      );
+      return threadPayloadTargets(payload);
     default:
       return assertNeverPayload(payload);
   }
+}
+
+function runPayloadTargets(
+  payload: CloudflareAgentsRunFiberPayload
+): ScheduledWorkTarget[] {
+  return [
+    { kind: agentsRunKind, workId: scheduledRunPayloadWorkId(payload) },
+    {
+      kind: alarmRunKind,
+      matchesPayload: (stored) =>
+        parseScheduledRunPayload(stored) === payload.runId,
+      workId: alarmScheduledRunWorkId(payload),
+    },
+  ];
+}
+
+function threadPayloadTargets(
+  payload: CloudflareAgentsThreadFiberPayload
+): ScheduledWorkTarget[] {
+  return [
+    {
+      kind: agentsThreadPromptKind,
+      workId: scheduledThreadPayloadWorkId(payload),
+    },
+    {
+      kind: alarmThreadPromptKind,
+      matchesPayload: (stored) =>
+        matchesScheduledThreadPayload(stored, payload),
+      workId: alarmScheduledThreadPromptWorkId(payload),
+    },
+  ];
+}
+
+function matchesScheduledThreadPayload(
+  storedPayload: string,
+  payload: CloudflareAgentsThreadFiberPayload
+): boolean {
+  const value: unknown = JSON.parse(storedPayload);
+  if (!isScheduledThreadPrompt(value)) {
+    return false;
+  }
+  return (
+    value.threadKey === payload.threadKey &&
+    value.idempotencyKey === payload.idempotencyKey &&
+    value.runId === payload.runId
+  );
 }
 
 function threadPromptForPayload(payload: CloudflareAgentsThreadFiberPayload): {
@@ -144,79 +175,4 @@ function threadPromptForPayload(payload: CloudflareAgentsThreadFiberPayload): {
     runId: payload.runId,
     threadKey: payload.threadKey,
   };
-}
-
-async function claimCloudflareAgentsScheduledRunPayload(
-  storage: CloudflareDurableObjectStorage,
-  payload: CloudflareAgentsRunFiberPayload
-): Promise<boolean> {
-  if (
-    await claimScheduledWork(
-      storage,
-      payload.prefix,
-      agentsRunKind,
-      scheduledRunPayloadWorkId(payload)
-    )
-  ) {
-    await removeAlarmScheduledRun(storage, payload);
-    return true;
-  }
-  return await claimAlarmScheduledRun(storage, payload);
-}
-
-async function claimCloudflareAgentsScheduledThreadPayload(
-  storage: CloudflareDurableObjectStorage,
-  payload: CloudflareAgentsThreadFiberPayload
-): Promise<boolean> {
-  if (
-    await claimScheduledWork(
-      storage,
-      payload.prefix,
-      agentsThreadPromptKind,
-      scheduledThreadPayloadWorkId(payload)
-    )
-  ) {
-    await removeAlarmScheduledThreadPrompt(storage, payload);
-    return true;
-  }
-  return await claimAlarmScheduledThreadPrompt(storage, payload);
-}
-
-function hasCloudflareAgentsScheduledRunPayload(
-  storage: CloudflareDurableObjectStorage,
-  payload: CloudflareAgentsRunFiberPayload
-): boolean {
-  return (
-    hasScheduledWork(
-      storage,
-      payload.prefix,
-      agentsRunKind,
-      scheduledRunPayloadWorkId(payload)
-    ) || hasAlarmScheduledRun(storage, payload)
-  );
-}
-
-function hasCloudflareAgentsScheduledThreadPayload(
-  storage: CloudflareDurableObjectStorage,
-  payload: CloudflareAgentsThreadFiberPayload
-): boolean {
-  return (
-    hasScheduledWork(
-      storage,
-      payload.prefix,
-      agentsThreadPromptKind,
-      scheduledThreadPayloadWorkId(payload)
-    ) || hasAlarmScheduledThreadPrompt(storage, payload)
-  );
-}
-
-function hasScheduledWork(
-  storage: CloudflareDurableObjectStorage,
-  prefix: string,
-  kind: ScheduledWorkKind,
-  workId: string
-): boolean {
-  return selectScheduledWork(storage, prefix, kind).some(
-    (row) => row.work_id === workId
-  );
 }

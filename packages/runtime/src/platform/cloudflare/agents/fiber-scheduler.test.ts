@@ -17,7 +17,7 @@ describe("Cloudflare Agents fiber platform adapter", () => {
     const events: AgentEvent[] = [];
     const scheduler = createCloudflareAgentsFiberScheduler({
       cloudflareAgent,
-      onEvent: (event) => {
+      onEvent: (_context, event) => {
         events.push(event);
       },
       prefix: "tenant-a",

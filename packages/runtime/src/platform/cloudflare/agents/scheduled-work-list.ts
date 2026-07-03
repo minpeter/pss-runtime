@@ -1,20 +1,18 @@
 import { isDefined } from "../../../execution/scheduled-work";
-import type {
-  CloudflareDurableObjectStorage,
-  CloudflareScheduledThreadPrompt,
-} from "../host/durable-object-host";
 import {
   isCanonicalRunWork,
   isCanonicalThreadPromptWork,
   parseScheduledRunPayload,
   parseScheduledThreadPromptPayload,
 } from "../host/scheduled-work-codec";
+import type { CloudflareScheduledThreadPrompt } from "../host/scheduled-work-queue";
+import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import {
   deleteScheduledWork,
   type ScheduledWorkKind,
   type ScheduledWorkRow,
   selectScheduledWork,
-} from "../host/scheduled-work-table";
+} from "../storage/sqlite/scheduled-work-table";
 import {
   agentsRunKind,
   agentsThreadPromptKind,

@@ -1,13 +1,16 @@
 import {
   normalizedListLimit,
   type ScheduledWorkKind as SharedScheduledWorkKind,
-} from "../../../execution/scheduled-work";
-import type { SqlStorage } from "../sql/ports/storage-port";
+} from "../../../../execution/scheduled-work";
+import type { SqlStorage } from "../../sql/ports/storage-port";
+import type {
+  CloudflareDurableObjectStorage,
+  CloudflareDurableObjectTransactionStorage,
+} from "../durable-object/durable-object-storage";
 import {
-  type CloudflareDurableObjectStorage,
-  type CloudflareDurableObjectTransactionStorage,
-  withSqlStorage,
-} from "../storage/durable-object/durable-object-storage";
+  requiredSqlStorage,
+  withTransaction,
+} from "../durable-object/sql-access";
 
 export type ScheduledWorkKind =
   | "agents-run"
@@ -36,7 +39,7 @@ export async function insertScheduledWork(
 ): Promise<void> {
   await withTransaction(storage, (tx) => {
     insertScheduledWorkRow(
-      requiredScheduledWorkSql(tx),
+      requiredScheduledWorkTableSql(tx),
       prefix,
       kind,
       workId,
@@ -53,7 +56,7 @@ export function selectScheduledWork(
   kind: ScheduledWorkKind,
   limit?: number
 ): ScheduledWorkRow[] {
-  const sql = requiredScheduledWorkSql(storage);
+  const sql = requiredScheduledWorkTableSql(storage);
   ensureScheduledWorkSchema(sql);
   if (limit !== undefined) {
     return sql
@@ -81,7 +84,7 @@ export function deleteScheduledWork(
   workId: string
 ): Promise<void> {
   deleteScheduledWorkRow(
-    requiredScheduledWorkSql(storage),
+    requiredScheduledWorkTableSql(storage),
     prefix,
     kind,
     workId
@@ -98,6 +101,65 @@ export async function claimScheduledWork(
   return await withTransaction(storage, (tx) =>
     Promise.resolve(claimScheduledWorkRow(tx, prefix, kind, workId))
   );
+}
+
+export interface ScheduledWorkTarget {
+  readonly kind: ScheduledWorkKind;
+  readonly matchesPayload?: (payload: string) => boolean;
+  readonly workId: string;
+}
+
+// Deletes every row matching any target in ONE transaction, so a claim that
+// spans two kinds (an agents row plus its alarm-interop counterpart) cannot
+// be split by a crash. Returns whether at least one row was deleted.
+export async function deleteScheduledWorkGroup(
+  storage: CloudflareDurableObjectStorage,
+  prefix: string,
+  targets: readonly ScheduledWorkTarget[]
+): Promise<boolean> {
+  return await withTransaction(storage, (tx) => {
+    const sql = requiredScheduledWorkTableSql(tx);
+    ensureScheduledWorkSchema(sql);
+    let deleted = false;
+    for (const target of targets) {
+      for (const row of matchingScheduledWorkRows(sql, prefix, target)) {
+        deleteScheduledWorkRow(sql, prefix, target.kind, row.work_id);
+        deleted = true;
+      }
+    }
+    return Promise.resolve(deleted);
+  });
+}
+
+export function hasScheduledWorkGroup(
+  storage: CloudflareDurableObjectStorage,
+  prefix: string,
+  targets: readonly ScheduledWorkTarget[]
+): boolean {
+  const sql = requiredScheduledWorkTableSql(storage);
+  ensureScheduledWorkSchema(sql);
+  return targets.some(
+    (target) => matchingScheduledWorkRows(sql, prefix, target).length > 0
+  );
+}
+
+function matchingScheduledWorkRows(
+  sql: SqlStorage,
+  prefix: string,
+  target: ScheduledWorkTarget
+): ScheduledWorkRow[] {
+  const rows = sql
+    .exec<ScheduledWorkRow>(
+      "SELECT work_id, payload FROM pss_scheduled_work WHERE prefix = ? AND kind = ? AND work_id = ?",
+      prefix,
+      target.kind,
+      target.workId
+    )
+    .toArray();
+  const matches = target.matchesPayload;
+  return matches === undefined
+    ? rows
+    : rows.filter((row) => matches(row.payload));
 }
 
 function insertScheduledWorkRow(
@@ -138,7 +200,7 @@ function claimScheduledWorkRow(
   kind: ScheduledWorkKind,
   workId: string
 ): boolean {
-  const sql = requiredScheduledWorkSql(storage);
+  const sql = requiredScheduledWorkTableSql(storage);
   ensureScheduledWorkSchema(sql);
   const existing = sql
     .exec<ScheduledWorkRow>(
@@ -204,36 +266,8 @@ function isDuplicateColumnError(error: unknown): boolean {
   );
 }
 
-async function withTransaction<T>(
-  storage: CloudflareDurableObjectStorage,
-  fn: (storage: CloudflareDurableObjectTransactionStorage) => Promise<T>
-): Promise<T> {
-  if (!storage.transaction) {
-    return await fn(storage);
-  }
-  return await storage.transaction(
-    async (tx) => await fn(withTransactionSqlStorage(tx, storage.sql))
-  );
-}
-
-function withTransactionSqlStorage(
-  storage: CloudflareDurableObjectTransactionStorage,
-  sql: unknown
-): CloudflareDurableObjectTransactionStorage {
-  return storage.sql === undefined ? withSqlStorage(storage, sql) : storage;
-}
-
-function requiredScheduledWorkSql(
+function requiredScheduledWorkTableSql(
   storage: CloudflareDurableObjectTransactionStorage
 ): SqlStorage {
-  const sql = storage.sql;
-  if (
-    typeof sql === "object" &&
-    sql !== null &&
-    "exec" in sql &&
-    typeof sql.exec === "function"
-  ) {
-    return sql as SqlStorage;
-  }
-  throw new Error("Cloudflare scheduled work queue requires SQLite storage.");
+  return requiredSqlStorage(storage, "Cloudflare scheduled work queue");
 }

@@ -1,9 +1,7 @@
 import type { TurnRecord, TurnStatus } from "../../../execution";
-import {
-  type CloudflareDurableObjectStorage,
-  type CloudflareScheduledThreadPrompt,
-  createCloudflareDurableObjectHost,
-} from "../host/durable-object-host";
+import { createCloudflareDurableObjectHost } from "../host/durable-object-host";
+import type { CloudflareScheduledThreadPrompt } from "../host/scheduled-work-queue";
+import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import type { CloudflareAlarmRunContext } from "./run-context";
 
 export async function scheduledRunContext(

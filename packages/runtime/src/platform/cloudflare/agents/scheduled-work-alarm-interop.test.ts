@@ -3,12 +3,12 @@ import {
   appendScheduledRun,
   appendScheduledThreadPrompt,
 } from "../host/scheduled-work-queue";
-import { insertScheduledWork } from "../host/scheduled-work-table";
 import {
   drainCloudflareAlarm,
   listScheduledCloudflareRuns,
   listScheduledCloudflareThreadPrompts,
 } from "../index";
+import { insertScheduledWork } from "../storage/sqlite/scheduled-work-table";
 import type { CloudflareAgentsFiberPayload } from "./index";
 import {
   cloudflareAgentsRunPayload,

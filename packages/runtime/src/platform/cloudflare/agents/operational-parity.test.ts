@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { AgentEvent } from "../../../index";
+import { sourceCloudflareAgentNotificationIdempotencyKey } from "../dispatch/notification-dispatch";
 import type { CloudflareAgentsFiberPayload } from "./index";
 import {
   createCloudflareAgentsFiberScheduler,
   dispatchCloudflareAgentsNotification,
   listScheduledCloudflareAgentsThreadPrompts,
-  sourceCloudflareAgentsNotificationIdempotencyKey,
 } from "./index";
 import { createFakeCloudflareAgent, runWithText } from "./test-support";
 
@@ -34,7 +34,7 @@ describe("Cloudflare Agents operational parity", () => {
     const observedEvents: string[] = [];
     const scheduler = createCloudflareAgentsFiberScheduler({
       cloudflareAgent,
-      onEvent: (event: AgentEvent, context: CloudflareAgentsEventContext) => {
+      onEvent: (context: CloudflareAgentsEventContext, event: AgentEvent) => {
         if (event.type !== "assistant-output") {
           return;
         }
@@ -86,7 +86,7 @@ describe("Cloudflare Agents operational parity", () => {
     const observedContexts: CloudflareAgentsEventContext[] = [];
     const scheduler = createCloudflareAgentsFiberScheduler({
       cloudflareAgent,
-      onEvent: (event: AgentEvent, context: CloudflareAgentsEventContext) => {
+      onEvent: (context: CloudflareAgentsEventContext, event: AgentEvent) => {
         if (event.type === "assistant-output") {
           observedContexts.push(context);
         }
@@ -142,7 +142,7 @@ describe("Cloudflare Agents operational parity", () => {
       )
     ).resolves.toEqual([]);
     expect(
-      sourceCloudflareAgentsNotificationIdempotencyKey({
+      sourceCloudflareAgentNotificationIdempotencyKey({
         idempotencyKey: snapshotIdempotencyKey(
           cloudflareAgent.started[0]?.snapshot
         ),

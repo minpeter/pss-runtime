@@ -1,10 +1,10 @@
 import type { AgentEvent } from "../../../thread/protocol/events";
 import {
-  type CloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
   listScheduledCloudflareThreadPrompts,
   rescheduleCloudflareAlarm,
 } from "../host/durable-object-host";
+import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import {
   type AlarmDrainState,
   type CloudflareAlarmContinuationReason,

@@ -1,6 +1,6 @@
 import type { AgentEvent } from "../../../thread/protocol/events";
 import type { AgentTurn } from "../../../thread/protocol/turn";
-import type { CloudflareDurableObjectStorage } from "../host/durable-object-host";
+import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import type { CloudflareAgentsFiberPayload } from "./payload";
 
 export type CloudflareAgentsFiberStatus =
@@ -139,8 +139,8 @@ export type CloudflareAgentsRunContext =
   | CloudflareAgentsThreadPromptContext;
 
 export type CloudflareAgentsEventHandler = (
-  event: AgentEvent,
-  context: CloudflareAgentsRunContext
+  context: CloudflareAgentsRunContext,
+  event: AgentEvent
 ) => Promise<void> | void;
 
 export type CloudflareAgentsCallbackName<

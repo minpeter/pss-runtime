@@ -105,7 +105,6 @@ export const REQUIRED_RUNTIME_CLOUDFLARE_AGENTS_EXPORTS = [
   "DispatchCloudflareAgentsNotificationInput",
   "RecoverCloudflareAgentsFiberOptions",
   "ResumeScheduledCloudflareAgentsFiberOptions",
-  "SourceCloudflareAgentsNotificationIdempotencyKeyInput",
   "StartCloudflareAgentsResumeFiberOptions",
   "ackScheduledCloudflareAgentsRun",
   "ackScheduledCloudflareAgentsThreadPrompt",
@@ -132,7 +131,6 @@ export const REQUIRED_RUNTIME_CLOUDFLARE_AGENTS_EXPORTS = [
   "recoverCloudflareAgentsFiber",
   "rejectedCloudflareAgentsFiberResult",
   "resumeScheduledCloudflareAgentsFiber",
-  "sourceCloudflareAgentsNotificationIdempotencyKey",
   "startCloudflareAgentsResumeFiber",
 ];
 

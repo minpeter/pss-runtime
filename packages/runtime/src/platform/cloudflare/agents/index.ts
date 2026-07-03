@@ -27,8 +27,6 @@ export {
   dispatchCloudflareAgentsNotification,
   listScheduledCloudflareAgentsRuns,
   listScheduledCloudflareAgentsThreadPrompts,
-  type SourceCloudflareAgentsNotificationIdempotencyKeyInput,
-  sourceCloudflareAgentsNotificationIdempotencyKey,
 } from "./operations";
 export {
   type CloudflareAgentsFiberPayload,

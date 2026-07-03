@@ -1,5 +1,5 @@
 import type { ExecutionScheduler } from "../../../execution";
-import type { CloudflareDurableObjectStorage } from "../host/durable-object-host";
+import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import { startCloudflareAgentsResumeFiber } from "./fiber";
 import {
   type CloudflareAgentsFiberPayload,

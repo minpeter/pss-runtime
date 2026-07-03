@@ -27,8 +27,6 @@ export {
   dispatchCloudflareAgentsNotification,
   listScheduledCloudflareAgentsRuns,
   listScheduledCloudflareAgentsThreadPrompts,
-  type SourceCloudflareAgentsNotificationIdempotencyKeyInput,
-  sourceCloudflareAgentsNotificationIdempotencyKey,
 } from "./agents/operations";
 export {
   type CloudflareAgentsFiberPayload,
@@ -115,6 +113,13 @@ export type {
 } from "./alarm/run-drain";
 export { drainAgentTurn, drainAgentTurnWithBudget } from "./alarm/run-drain";
 export type {
+  CloudflareAgentContext,
+  CloudflareAgentContextFactoryOptions,
+  CloudflareAgentContextOptions,
+  CloudflareAgentContextPrefixOptions,
+} from "./context/agent-context";
+export { createCloudflareAgentContext } from "./context/agent-context";
+export type {
   DispatchCloudflareAgentNotificationInput,
   SourceCloudflareAgentNotificationIdempotencyKeyInput,
 } from "./dispatch/notification-dispatch";
@@ -122,13 +127,6 @@ export {
   dispatchCloudflareAgentNotification,
   sourceCloudflareAgentNotificationIdempotencyKey,
 } from "./dispatch/notification-dispatch";
-export type {
-  CloudflareAgentContext,
-  CloudflareAgentContextFactoryOptions,
-  CloudflareAgentContextOptions,
-  CloudflareAgentContextPrefixOptions,
-} from "./host/agent-context";
-export { createCloudflareAgentContext } from "./host/agent-context";
 export type {
   CloudflareDurableObjectFetchOptions,
   CloudflareDurableObjectStubOptions,
