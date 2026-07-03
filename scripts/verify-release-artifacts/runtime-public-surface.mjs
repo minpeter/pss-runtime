@@ -26,6 +26,10 @@ export const REQUIRED_RUNTIME_EXECUTION_EXPORTS = [
 
 export const REQUIRED_RUNTIME_MEMORY_EXPORTS = [
   "createInMemoryExecutionHost",
+  "InMemoryExecutionHost",
+  "InMemoryExecutionScheduler",
+  "MemoryScheduledThreadPrompt",
+  "MemoryScheduledWorkListOptions",
   "MemoryThreadStore",
 ];
 
@@ -158,7 +162,7 @@ export const FORBIDDEN_RUNTIME_ROOT_NAMES = [
     "ExecutionStoreTransaction ExecutionTransactionHost Llm LlmContext LlmOutput LlmOutputPart",
     "NotificationHost NotificationInbox NotificationRecord fetchCloudflareDurableObject",
     "getCloudflareDurableObjectStub InMemoryCloudflareDurableObjectStorage RunHost RunRecord",
-    "MemoryThreadStore",
+    "InMemoryExecutionHost InMemoryExecutionScheduler MemoryScheduledThreadPrompt MemoryScheduledWorkListOptions MemoryThreadStore",
     "RunInput RunStore RuntimeToolExecutionCheckpoint RuntimeToolExecutionContext",
     "RuntimeToolExecutionDecision RuntimeToolRetryPolicy",
     "FileExecutionStore FileThreadStore FileSessionStore NodeFileAgentContext",

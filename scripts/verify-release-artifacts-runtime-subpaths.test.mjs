@@ -132,6 +132,22 @@ describe("verifyReleaseArtifacts runtime subpath checks", () => {
     ]);
   });
 
+  it("reports required exports whose names are substrings of present exports", () => {
+    const cwd = createFixture();
+    writeFileSync(
+      runtimeDistDeclaration(cwd, "platform", "memory"),
+      'export { createInMemoryExecutionHost } from "./index";\n'
+    );
+
+    expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
+      "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export InMemoryExecutionHost",
+      "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export InMemoryExecutionScheduler",
+      "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export MemoryScheduledThreadPrompt",
+      "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export MemoryScheduledWorkListOptions",
+      "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export MemoryThreadStore",
+    ]);
+  });
+
   it("checks memory helpers on the memory declaration subpath", () => {
     const cwd = createFixture();
     writeFileSync(
@@ -141,6 +157,10 @@ describe("verifyReleaseArtifacts runtime subpath checks", () => {
 
     expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
       "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export createInMemoryExecutionHost",
+      "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export InMemoryExecutionHost",
+      "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export InMemoryExecutionScheduler",
+      "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export MemoryScheduledThreadPrompt",
+      "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export MemoryScheduledWorkListOptions",
       "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export MemoryThreadStore",
     ]);
   });
