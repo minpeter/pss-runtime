@@ -16,7 +16,7 @@ import {
 } from "./test-support";
 
 describe("Cloudflare Agents scheduled work alarm isolation", () => {
-  it("keeps delayed run callbacks out of the legacy alarm drain", async () => {
+  it("keeps delayed run callbacks out of the alarm drain", async () => {
     const cloudflareAgent = createFakeCloudflareAgent();
     const storage = cloudflareAgent.durableObjectContext.storage;
     const scheduler = createCloudflareAgentsFiberScheduler({
@@ -49,7 +49,7 @@ describe("Cloudflare Agents scheduled work alarm isolation", () => {
     ).toEqual([]);
   });
 
-  it("keeps delayed thread retries out of the legacy alarm drain", async () => {
+  it("keeps delayed thread retries out of the alarm drain", async () => {
     const cloudflareAgent = createFakeCloudflareAgent();
     const storage = cloudflareAgent.durableObjectContext.storage;
     const retry = createCloudflareAgentsFiberRetryScheduler({

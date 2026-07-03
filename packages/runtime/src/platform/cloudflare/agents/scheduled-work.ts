@@ -12,14 +12,14 @@ import {
   type CloudflareAgentsThreadFiberPayload,
 } from "./payload";
 import {
-  claimScheduledRunPayload,
-  hasScheduledRunPayload,
-  removeScheduledRunPayload,
+  claimAlarmScheduledRun,
+  hasAlarmScheduledRun,
+  removeAlarmScheduledRun,
 } from "./scheduled-run-work";
 import {
-  claimScheduledThreadPayload,
-  hasScheduledThreadPayload,
-  removeScheduledThreadPayload,
+  claimAlarmScheduledThreadPrompt,
+  hasAlarmScheduledThreadPrompt,
+  removeAlarmScheduledThreadPrompt,
 } from "./scheduled-thread-work";
 import {
   scheduledRunPayloadWorkId,
@@ -98,7 +98,7 @@ export async function removeCloudflareAgentsScheduledPayload(
         agentsRunKind,
         scheduledRunPayloadWorkId(payload)
       );
-      await removeScheduledRunPayload(storage, payload);
+      await removeAlarmScheduledRun(storage, payload);
       return;
     case "thread":
       await deleteScheduledWork(
@@ -107,7 +107,7 @@ export async function removeCloudflareAgentsScheduledPayload(
         agentsThreadPromptKind,
         scheduledThreadPayloadWorkId(payload)
       );
-      await removeScheduledThreadPayload(storage, payload);
+      await removeAlarmScheduledThreadPrompt(storage, payload);
       return;
     default:
       return assertNeverPayload(payload);
@@ -158,10 +158,10 @@ async function claimCloudflareAgentsScheduledRunPayload(
       scheduledRunPayloadWorkId(payload)
     )
   ) {
-    await removeScheduledRunPayload(storage, payload);
+    await removeAlarmScheduledRun(storage, payload);
     return true;
   }
-  return await claimScheduledRunPayload(storage, payload);
+  return await claimAlarmScheduledRun(storage, payload);
 }
 
 async function claimCloudflareAgentsScheduledThreadPayload(
@@ -176,10 +176,10 @@ async function claimCloudflareAgentsScheduledThreadPayload(
       scheduledThreadPayloadWorkId(payload)
     )
   ) {
-    await removeScheduledThreadPayload(storage, payload);
+    await removeAlarmScheduledThreadPrompt(storage, payload);
     return true;
   }
-  return await claimScheduledThreadPayload(storage, payload);
+  return await claimAlarmScheduledThreadPrompt(storage, payload);
 }
 
 function hasCloudflareAgentsScheduledRunPayload(
@@ -192,7 +192,7 @@ function hasCloudflareAgentsScheduledRunPayload(
       payload.prefix,
       agentsRunKind,
       scheduledRunPayloadWorkId(payload)
-    ) || hasScheduledRunPayload(storage, payload)
+    ) || hasAlarmScheduledRun(storage, payload)
   );
 }
 
@@ -206,7 +206,7 @@ function hasCloudflareAgentsScheduledThreadPayload(
       payload.prefix,
       agentsThreadPromptKind,
       scheduledThreadPayloadWorkId(payload)
-    ) || hasScheduledThreadPayload(storage, payload)
+    ) || hasAlarmScheduledThreadPrompt(storage, payload)
   );
 }
 

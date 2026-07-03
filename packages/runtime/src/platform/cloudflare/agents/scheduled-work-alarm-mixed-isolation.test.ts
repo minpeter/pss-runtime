@@ -21,10 +21,10 @@ import {
 } from "./test-support";
 
 describe("Cloudflare Agents scheduled work mixed alarm isolation", () => {
-  it("drains only a legacy run when the same prefix also has a delayed Agents run", async () => {
+  it("drains only an alarm-scheduled run when the same prefix also has a delayed Agents run", async () => {
     const cloudflareAgent = createFakeCloudflareAgent();
     const storage = cloudflareAgent.durableObjectContext.storage;
-    const legacyHost = createCloudflareDurableObjectHost({
+    const alarmHost = createCloudflareDurableObjectHost({
       prefix: "tenant-a",
       storage,
     });
@@ -36,23 +36,23 @@ describe("Cloudflare Agents scheduled work mixed alarm isolation", () => {
     });
     const resumedRuns: string[] = [];
 
-    await legacyHost.store.turns.create({
+    await alarmHost.store.turns.create({
       checkpointVersion: 0,
       kind: "notification",
-      rootRunId: "legacy-due-run",
-      runId: "legacy-due-run",
+      rootRunId: "alarm-due-run",
+      runId: "alarm-due-run",
       status: "queued",
-      threadKey: "legacy-thread",
+      threadKey: "alarm-thread",
     });
-    await legacyHost.scheduler.enqueueRun("legacy-due-run");
+    await alarmHost.scheduler.enqueueRun("alarm-due-run");
     await scheduler.enqueueRun("agents-delayed-run", { runAfterMs: 60_000 });
 
     expect(
       await listScheduledCloudflareRuns(storage, { prefix: "tenant-a" })
-    ).toEqual(["legacy-due-run"]);
+    ).toEqual(["alarm-due-run"]);
     expect(
       await listScheduledCloudflareAgentsRuns(storage, { prefix: "tenant-a" })
-    ).toEqual(["agents-delayed-run", "legacy-due-run"]);
+    ).toEqual(["agents-delayed-run", "alarm-due-run"]);
 
     const summary = await drainCloudflareAlarm({
       agent: agentRecordingRuns(resumedRuns),
@@ -60,8 +60,8 @@ describe("Cloudflare Agents scheduled work mixed alarm isolation", () => {
       storage,
     });
 
-    expect(resumedRuns).toEqual(["legacy-due-run"]);
-    expect(summary.resumedRuns).toEqual(["legacy-due-run"]);
+    expect(resumedRuns).toEqual(["alarm-due-run"]);
+    expect(summary.resumedRuns).toEqual(["alarm-due-run"]);
     expect(summary.remainingRuns).toBe(0);
     expect(
       await listScheduledCloudflareRuns(storage, { prefix: "tenant-a" })
@@ -73,16 +73,16 @@ describe("Cloudflare Agents scheduled work mixed alarm isolation", () => {
     await expect(
       resumeFirstScheduledAgent(cloudflareAgent, resumedRuns)
     ).resolves.toMatchObject({ accepted: true, status: "completed" });
-    expect(resumedRuns).toEqual(["legacy-due-run", "agents-delayed-run"]);
+    expect(resumedRuns).toEqual(["alarm-due-run", "agents-delayed-run"]);
     expect(
       await listScheduledCloudflareAgentsRuns(storage, { prefix: "tenant-a" })
     ).toEqual([]);
   });
 
-  it("drains only a legacy thread prompt when the same prefix also has a delayed Agents thread retry", async () => {
+  it("drains only an alarm-scheduled thread prompt when the same prefix also has a delayed Agents thread retry", async () => {
     const cloudflareAgent = createFakeCloudflareAgent();
     const storage = cloudflareAgent.durableObjectContext.storage;
-    const legacyHost = createCloudflareDurableObjectHost({
+    const alarmHost = createCloudflareDurableObjectHost({
       prefix: "tenant-a",
       storage,
     });
@@ -99,8 +99,8 @@ describe("Cloudflare Agents scheduled work mixed alarm isolation", () => {
     };
     const resumedRuns: string[] = [];
 
-    await legacyHost.scheduler.resumeThread("legacy-thread", {
-      runId: "legacy-thread-run",
+    await alarmHost.scheduler.resumeThread("alarm-thread", {
+      runId: "alarm-thread-run",
     });
     await retry(
       cloudflareAgentsThreadPayload({
@@ -117,14 +117,14 @@ describe("Cloudflare Agents scheduled work mixed alarm isolation", () => {
       await listScheduledCloudflareThreadPrompts(storage, {
         prefix: "tenant-a",
       })
-    ).toEqual([{ runId: "legacy-thread-run", threadKey: "legacy-thread" }]);
+    ).toEqual([{ runId: "alarm-thread-run", threadKey: "alarm-thread" }]);
     expect(
       await listScheduledCloudflareAgentsThreadPrompts(storage, {
         prefix: "tenant-a",
       })
     ).toEqual([
       agentsPrompt,
-      { runId: "legacy-thread-run", threadKey: "legacy-thread" },
+      { runId: "alarm-thread-run", threadKey: "alarm-thread" },
     ]);
 
     const summary = await drainCloudflareAlarm({
@@ -133,8 +133,8 @@ describe("Cloudflare Agents scheduled work mixed alarm isolation", () => {
       storage,
     });
 
-    expect(resumedRuns).toEqual(["legacy-thread-run"]);
-    expect(summary.consumedThreadPrompts).toEqual(["legacy-thread-run"]);
+    expect(resumedRuns).toEqual(["alarm-thread-run"]);
+    expect(summary.consumedThreadPrompts).toEqual(["alarm-thread-run"]);
     expect(summary.remainingThreadPrompts).toBe(0);
     expect(
       await listScheduledCloudflareThreadPrompts(storage, {
@@ -150,7 +150,7 @@ describe("Cloudflare Agents scheduled work mixed alarm isolation", () => {
     await expect(
       resumeFirstScheduledAgent(cloudflareAgent, resumedRuns)
     ).resolves.toMatchObject({ accepted: true, status: "completed" });
-    expect(resumedRuns).toEqual(["legacy-thread-run", "agents-thread-run"]);
+    expect(resumedRuns).toEqual(["alarm-thread-run", "agents-thread-run"]);
     expect(
       await listScheduledCloudflareAgentsThreadPrompts(storage, {
         prefix: "tenant-a",

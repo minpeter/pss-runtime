@@ -1,112 +1,64 @@
 import { isScheduledThreadPrompt } from "../../../execution/scheduled-work";
 import type { CloudflareDurableObjectStorage } from "../host/durable-object-host";
 import {
-  ackScheduledThreadPromptWork,
-  claimScheduledThreadPromptWork,
-  hasScheduledThreadPromptWork,
-} from "../host/scheduled-work-queue";
-import {
   deleteScheduledWork,
   selectScheduledWork,
 } from "../host/scheduled-work-table";
 import type { CloudflareAgentsFiberPayload } from "./payload";
-import {
-  legacyScheduledThreadPayloadWorkId,
-  scheduledThreadPayloadWorkId,
-} from "./scheduled-work-ids";
+import { alarmScheduledThreadPromptWorkId } from "./scheduled-work-ids";
+import { alarmThreadPromptKind } from "./scheduled-work-kinds";
 
 type CloudflareAgentsThreadFiberPayload = Extract<
   CloudflareAgentsFiberPayload,
   { readonly kind: "thread" }
 >;
 
-export async function claimScheduledThreadPayload(
+export async function claimAlarmScheduledThreadPrompt(
   storage: CloudflareDurableObjectStorage,
   payload: CloudflareAgentsThreadFiberPayload
 ): Promise<boolean> {
-  // See claimScheduledRunPayload: a row can land in the shared legacy
-  // "thread-prompt" kind under either id format, so the current format is
-  // tried first before falling back to the plain legacy id.
-  if (
-    await claimScheduledThreadPromptWork(
-      storage,
-      payload.prefix,
-      scheduledThreadPayloadWorkId(payload)
-    )
-  ) {
-    await deleteLegacyScheduledThreadPayload(storage, payload);
-    return true;
-  }
-  return await claimLegacyScheduledThreadPayload(storage, payload);
-}
-
-export async function removeScheduledThreadPayload(
-  storage: CloudflareDurableObjectStorage,
-  payload: CloudflareAgentsThreadFiberPayload
-): Promise<void> {
-  await ackScheduledThreadPromptWork(
-    storage,
-    payload.prefix,
-    scheduledThreadPayloadWorkId(payload)
-  );
-  await deleteLegacyScheduledThreadPayload(storage, payload);
-}
-
-export function hasScheduledThreadPayload(
-  storage: CloudflareDurableObjectStorage,
-  payload: CloudflareAgentsThreadFiberPayload
-): boolean {
-  return (
-    hasScheduledThreadPromptWork(
-      storage,
-      payload.prefix,
-      scheduledThreadPayloadWorkId(payload)
-    ) || hasLegacyScheduledThreadPayload(storage, payload)
-  );
-}
-
-async function claimLegacyScheduledThreadPayload(
-  storage: CloudflareDurableObjectStorage,
-  payload: CloudflareAgentsThreadFiberPayload
-): Promise<boolean> {
-  if (!hasLegacyScheduledThreadPayload(storage, payload)) {
+  if (!hasAlarmScheduledThreadPrompt(storage, payload)) {
     return false;
   }
-  await deleteLegacyScheduledThreadPayload(storage, payload);
+  await removeAlarmScheduledThreadPrompt(storage, payload);
   return true;
 }
 
-async function deleteLegacyScheduledThreadPayload(
+export async function removeAlarmScheduledThreadPrompt(
   storage: CloudflareDurableObjectStorage,
   payload: CloudflareAgentsThreadFiberPayload
 ): Promise<void> {
-  const legacyWorkId = legacyScheduledThreadPayloadWorkId(payload);
+  const workId = alarmScheduledThreadPromptWorkId(payload);
   await Promise.all(
-    selectScheduledWork(storage, payload.prefix, "thread-prompt")
+    selectScheduledWork(storage, payload.prefix, alarmThreadPromptKind)
       .filter(
         (row) =>
-          row.work_id === legacyWorkId &&
+          row.work_id === workId &&
           matchesScheduledThreadPayload(row.payload, payload)
       )
       .map((row) =>
         deleteScheduledWork(
           storage,
           payload.prefix,
-          "thread-prompt",
+          alarmThreadPromptKind,
           row.work_id
         )
       )
   );
 }
 
-function hasLegacyScheduledThreadPayload(
+export function hasAlarmScheduledThreadPrompt(
   storage: CloudflareDurableObjectStorage,
   payload: CloudflareAgentsThreadFiberPayload
 ): boolean {
-  const legacyWorkId = legacyScheduledThreadPayloadWorkId(payload);
-  return selectScheduledWork(storage, payload.prefix, "thread-prompt").some(
+  const workId = alarmScheduledThreadPromptWorkId(payload);
+  return selectScheduledWork(
+    storage,
+    payload.prefix,
+    alarmThreadPromptKind
+  ).some(
     (row) =>
-      row.work_id === legacyWorkId &&
+      row.work_id === workId &&
       matchesScheduledThreadPayload(row.payload, payload)
   );
 }
@@ -122,7 +74,6 @@ function matchesScheduledThreadPayload(
   return (
     value.threadKey === payload.threadKey &&
     value.idempotencyKey === payload.idempotencyKey &&
-    value.notificationId === payload.notificationId &&
     value.runId === payload.runId
   );
 }

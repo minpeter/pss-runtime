@@ -1,4 +1,7 @@
-import { scheduledWorkIdPart } from "../../../execution/scheduled-work";
+import {
+  scheduledWorkIdPart,
+  threadPromptScheduledWorkId,
+} from "../../../execution/scheduled-work";
 import type {
   CloudflareAgentsFiberPayload,
   CloudflareAgentsThreadFiberPayload,
@@ -20,14 +23,6 @@ export function scheduledRunPayloadWorkId(
     .join("|");
 }
 
-export function legacyScheduledRunPayloadWorkId(
-  payload: CloudflareAgentsRunFiberPayload
-): string {
-  return payload.attempt === undefined
-    ? payload.runId
-    : `${payload.runId}|attempt:${payload.attempt}`;
-}
-
 export function scheduledThreadPayloadWorkId(
   payload: CloudflareAgentsThreadFiberPayload
 ): string {
@@ -42,10 +37,20 @@ export function scheduledThreadPayloadWorkId(
     .join("|");
 }
 
-export function legacyScheduledThreadPayloadWorkId(
+// The alarm scheduler stores runs under the plain run id. Any Agents resume
+// attempt for that run may consume the alarm row, so the id ignores attempt.
+export function alarmScheduledRunWorkId(
+  payload: CloudflareAgentsRunFiberPayload
+): string {
+  return payload.runId;
+}
+
+export function alarmScheduledThreadPromptWorkId(
   payload: CloudflareAgentsThreadFiberPayload
 ): string {
-  return [payload.threadKey, payload.idempotencyKey ?? "", payload.runId]
-    .map(scheduledWorkIdPart)
-    .join("|");
+  return threadPromptScheduledWorkId({
+    idempotencyKey: payload.idempotencyKey,
+    runId: payload.runId,
+    threadKey: payload.threadKey,
+  });
 }

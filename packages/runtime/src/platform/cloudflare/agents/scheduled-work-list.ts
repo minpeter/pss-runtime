@@ -4,19 +4,22 @@ import type {
   CloudflareScheduledThreadPrompt,
 } from "../host/durable-object-host";
 import {
+  isCanonicalRunWork,
+  isCanonicalThreadPromptWork,
   parseScheduledRunPayload,
   parseScheduledThreadPromptPayload,
 } from "../host/scheduled-work-codec";
 import {
   deleteScheduledWork,
   type ScheduledWorkKind,
+  type ScheduledWorkRow,
   selectScheduledWork,
 } from "../host/scheduled-work-table";
 import {
   agentsRunKind,
   agentsThreadPromptKind,
-  legacyRunKind,
-  legacyThreadPromptKind,
+  alarmRunKind,
+  alarmThreadPromptKind,
 } from "./scheduled-work-kinds";
 
 const defaultPrefix = "pss-runtime";
@@ -27,14 +30,9 @@ export function listCloudflareAgentsScheduledRuns(
 ): Promise<readonly string[]> {
   const prefix = options.prefix ?? defaultPrefix;
   return Promise.resolve(
-    selectScheduledWorkByKinds(
-      storage,
-      prefix,
-      [agentsRunKind, legacyRunKind],
-      {
-        limit: options.limit,
-      }
-    )
+    selectScheduledWorkByKinds(storage, prefix, runKindSelections, {
+      limit: options.limit,
+    })
       .map((row) => parseScheduledRunPayload(row.payload))
       .filter(isDefined)
   );
@@ -46,12 +44,9 @@ export function listCloudflareAgentsScheduledThreadPrompts(
 ): Promise<readonly CloudflareScheduledThreadPrompt[]> {
   const prefix = options.prefix ?? defaultPrefix;
   return Promise.resolve(
-    selectScheduledWorkByKinds(
-      storage,
-      prefix,
-      [agentsThreadPromptKind, legacyThreadPromptKind],
-      { limit: options.limit }
-    )
+    selectScheduledWorkByKinds(storage, prefix, threadPromptKindSelections, {
+      limit: options.limit,
+    })
       .map((row) => parseScheduledThreadPromptPayload(row.payload))
       .filter(isDefined)
   );
@@ -63,7 +58,7 @@ export async function ackListedCloudflareAgentsScheduledRun(
   options: { readonly prefix?: string } = {}
 ): Promise<void> {
   await deleteMatchingScheduledWorkKinds({
-    kinds: [agentsRunKind, legacyRunKind],
+    kinds: [agentsRunKind, alarmRunKind],
     matches: (payload) => parseScheduledRunPayload(payload) === runId,
     prefix: options.prefix ?? defaultPrefix,
     storage,
@@ -76,7 +71,7 @@ export async function ackListedCloudflareAgentsScheduledThreadPrompt(
   options: { readonly prefix?: string } = {}
 ): Promise<void> {
   await deleteMatchingScheduledWorkKinds({
-    kinds: [agentsThreadPromptKind, legacyThreadPromptKind],
+    kinds: [agentsThreadPromptKind, alarmThreadPromptKind],
     matches: (payload) => {
       const value = parseScheduledThreadPromptPayload(payload);
       return (
@@ -112,19 +107,41 @@ async function deleteMatchingScheduledWorkKinds({
   );
 }
 
+interface ScheduledWorkKindSelection {
+  readonly kind: ScheduledWorkKind;
+  readonly rowFilter?: (row: ScheduledWorkRow) => boolean;
+}
+
+// Alarm-kind rows must round-trip the alarm scheduler's canonical work id;
+// rows in any other format cannot be claimed and must stay invisible here.
+const runKindSelections: readonly ScheduledWorkKindSelection[] = [
+  { kind: agentsRunKind },
+  { kind: alarmRunKind, rowFilter: isCanonicalRunWork },
+];
+
+const threadPromptKindSelections: readonly ScheduledWorkKindSelection[] = [
+  { kind: agentsThreadPromptKind },
+  { kind: alarmThreadPromptKind, rowFilter: isCanonicalThreadPromptWork },
+];
+
 function selectScheduledWorkByKinds(
   storage: CloudflareDurableObjectStorage,
   prefix: string,
-  kinds: readonly ScheduledWorkKind[],
+  selections: readonly ScheduledWorkKindSelection[],
   options: { readonly limit?: number }
-): ReturnType<typeof selectScheduledWork> {
-  const rows: ReturnType<typeof selectScheduledWork> = [];
-  for (const kind of kinds) {
+): ScheduledWorkRow[] {
+  const rows: ScheduledWorkRow[] = [];
+  for (const { kind, rowFilter } of selections) {
     const remaining = remainingListLimit(options.limit, rows.length);
     if (remaining === 0) {
       break;
     }
-    rows.push(...selectScheduledWork(storage, prefix, kind, remaining));
+    const selected = selectScheduledWork(storage, prefix, kind);
+    const matching =
+      rowFilter === undefined ? selected : selected.filter(rowFilter);
+    rows.push(
+      ...(remaining === undefined ? matching : matching.slice(0, remaining))
+    );
   }
   return rows;
 }
