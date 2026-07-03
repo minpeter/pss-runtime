@@ -72,6 +72,6 @@ export function isDefined<T>(value: T | undefined): value is T {
   return value !== undefined;
 }
 
-function scheduledWorkIdPart(value: string): string {
+export function scheduledWorkIdPart(value: string): string {
   return `${value.length}:${value}`;
 }

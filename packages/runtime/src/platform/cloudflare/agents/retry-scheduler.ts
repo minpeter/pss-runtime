@@ -4,19 +4,23 @@ import {
 } from "../alarm/scheduled-work-context";
 import type { CloudflareDurableObjectStorage } from "../host/durable-object-host";
 import {
+  assertNeverPayload,
   type CloudflareAgentsFiberPayload,
   type CloudflareAgentsThreadFiberPayload,
   cloudflareAgentsRunPayload,
   cloudflareAgentsThreadPayload,
-  defaultCloudflareAgentsDelayedResumeCallback,
 } from "./payload";
-import { cloudflareAgentsDelayedSchedulePayload } from "./schedule-payload";
+import {
+  type CloudflareAgentsDelayedCallbackOption,
+  cloudflareAgentsDelayedSchedulePayload,
+  delayedCallbackName,
+  delaySeconds,
+} from "./schedule-payload";
 import {
   mirrorCloudflareAgentsScheduledPayload,
   removeCloudflareAgentsScheduledPayload,
 } from "./scheduled-work";
 import type {
-  CloudflareAgentsCallbackName,
   CloudflareAgentsDefaultResumeAgent,
   CloudflareAgentsRetryFiber,
 } from "./types";
@@ -24,12 +28,6 @@ import type {
 const defaultRetryRunAfterMs = 1000;
 const defaultRetryMaxAttempts = 5;
 const defaultRetryMaxRunAfterMs = 60_000;
-
-interface CloudflareAgentsDelayedCallbackOption<
-  TAgent extends CloudflareAgentsDefaultResumeAgent,
-> {
-  readonly delayedResumeCallback?: CloudflareAgentsCallbackName<TAgent>;
-}
 
 export type CloudflareAgentsFiberRetrySchedulerOptions<
   TAgent extends
@@ -133,10 +131,6 @@ function retryDelayMs({
   );
 }
 
-function delaySeconds(runAfterMs: number): number {
-  return Math.max(1, Math.ceil(runAfterMs / 1000));
-}
-
 function nextRetryPayload(
   payload: CloudflareAgentsFiberPayload
 ): CloudflareAgentsFiberPayload {
@@ -167,17 +161,4 @@ function nextThreadRetryPayload(
     runId: payload.runId,
     threadKey: payload.threadKey,
   });
-}
-
-function delayedCallbackName<TAgent extends CloudflareAgentsDefaultResumeAgent>(
-  options: CloudflareAgentsDelayedCallbackOption<TAgent>
-): CloudflareAgentsCallbackName<TAgent> {
-  if (options.delayedResumeCallback !== undefined) {
-    return options.delayedResumeCallback;
-  }
-  return defaultCloudflareAgentsDelayedResumeCallback;
-}
-
-function assertNeverPayload(payload: never): never {
-  throw new TypeError(`Unsupported Cloudflare Agents payload: ${payload}`);
 }

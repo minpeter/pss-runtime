@@ -23,6 +23,10 @@ export async function claimScheduledRunPayload(
   storage: CloudflareDurableObjectStorage,
   payload: CloudflareAgentsRunFiberPayload
 ): Promise<boolean> {
+  // A row can land in the shared legacy "run" kind under either id format:
+  // the plain legacy id, or the current (length-prefixed) one, if it was
+  // never mirrored into agentsRunKind. Try the current format first so
+  // such rows still resolve here instead of only via agentsRunKind.
   if (
     await claimScheduledRunWork(
       storage,

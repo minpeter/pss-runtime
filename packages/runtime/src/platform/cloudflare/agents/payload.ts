@@ -1,3 +1,4 @@
+import { scheduledWorkIdPart } from "../host/scheduled-work-codec";
 import {
   assertOptionalPayloadAttempt,
   assertOptionalPayloadString,
@@ -112,14 +113,14 @@ export function cloudflareAgentsFiberIdempotencyKey(
   switch (payload.kind) {
     case "run":
       return keyWithAttempt(
-        `pss-runtime:run:${idempotencyKeyPart(
+        `pss-runtime:run:${scheduledWorkIdPart(
           payload.prefix
-        )}:${idempotencyKeyPart(payload.runId)}`,
+        )}:${scheduledWorkIdPart(payload.runId)}`,
         payload.attempt
       );
     case "thread":
       return keyWithAttempt(
-        `pss-runtime:thread:${idempotencyKeyPart(
+        `pss-runtime:thread:${scheduledWorkIdPart(
           payload.prefix
         )}:${threadIdempotencyPart(payload)}`,
         payload.attempt
@@ -209,9 +210,9 @@ function threadIdempotencyPart(
   payload: CloudflareAgentsThreadFiberPayload
 ): string {
   if (payload.idempotencyKey !== undefined) {
-    return idempotencyKeyPart(payload.idempotencyKey);
+    return scheduledWorkIdPart(payload.idempotencyKey);
   }
-  return `${idempotencyKeyPart(payload.runId)}:${idempotencyKeyPart(
+  return `${scheduledWorkIdPart(payload.runId)}:${scheduledWorkIdPart(
     payload.threadKey
   )}`;
 }
@@ -220,10 +221,6 @@ function keyWithAttempt(key: string, attempt: number | undefined): string {
   return attempt === undefined ? key : `${key}:attempt:${attempt}`;
 }
 
-function assertNeverPayload(payload: never): never {
+export function assertNeverPayload(payload: never): never {
   throw new TypeError(`Unsupported Cloudflare Agents payload: ${payload}`);
-}
-
-function idempotencyKeyPart(value: string): string {
-  return `${value.length}:${value}`;
 }

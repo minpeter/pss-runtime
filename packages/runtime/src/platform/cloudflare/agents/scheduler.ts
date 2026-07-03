@@ -5,9 +5,13 @@ import {
   type CloudflareAgentsFiberPayload,
   cloudflareAgentsRunPayload,
   cloudflareAgentsThreadPayload,
-  defaultCloudflareAgentsDelayedResumeCallback,
 } from "./payload";
-import { cloudflareAgentsDelayedSchedulePayload } from "./schedule-payload";
+import {
+  type CloudflareAgentsDelayedCallbackOption,
+  cloudflareAgentsDelayedSchedulePayload,
+  delayedCallbackName,
+  delaySeconds,
+} from "./schedule-payload";
 import {
   mirrorCloudflareAgentsScheduledPayload,
   removeCloudflareAgentsScheduledPayload,
@@ -34,12 +38,6 @@ interface CloudflareAgentsFiberSchedulerBaseOptions<
   readonly resume: CloudflareAgentsResumeRun;
   readonly retry?: CloudflareAgentsRetryFiber;
   readonly storage?: CloudflareDurableObjectStorage;
-}
-
-interface CloudflareAgentsDelayedCallbackOption<
-  TAgent extends CloudflareAgentsDefaultResumeAgent,
-> {
-  readonly delayedResumeCallback?: CloudflareAgentsCallbackName<TAgent>;
 }
 
 export type CloudflareAgentsFiberSchedulerOptions<
@@ -165,10 +163,6 @@ async function startOrSchedulePayload<
   });
 }
 
-function delaySeconds(runAfterMs: number): number {
-  return Math.max(1, Math.ceil(runAfterMs / 1000));
-}
-
 function mergeDrainOptions({
   deadlineMs,
   drain,
@@ -193,13 +187,4 @@ function mergeDrainOptions({
     maxEvents: maxEvents ?? drain?.maxEvents,
     onEvent: onEvent ?? drain?.onEvent,
   };
-}
-
-function delayedCallbackName<TAgent extends CloudflareAgentsDefaultResumeAgent>(
-  options: CloudflareAgentsDelayedCallbackOption<TAgent>
-): CloudflareAgentsCallbackName<TAgent> {
-  if (options.delayedResumeCallback !== undefined) {
-    return options.delayedResumeCallback;
-  }
-  return defaultCloudflareAgentsDelayedResumeCallback;
 }

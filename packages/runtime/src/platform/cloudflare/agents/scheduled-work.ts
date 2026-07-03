@@ -6,9 +6,10 @@ import {
   type ScheduledWorkKind,
   selectScheduledWork,
 } from "../host/scheduled-work-table";
-import type {
-  CloudflareAgentsFiberPayload,
-  CloudflareAgentsThreadFiberPayload,
+import {
+  assertNeverPayload,
+  type CloudflareAgentsFiberPayload,
+  type CloudflareAgentsThreadFiberPayload,
 } from "./payload";
 import {
   claimScheduledRunPayload,
@@ -207,10 +208,6 @@ function hasCloudflareAgentsScheduledThreadPayload(
       scheduledThreadPayloadWorkId(payload)
     ) || hasScheduledThreadPayload(storage, payload)
   );
-}
-
-function assertNeverPayload(payload: never): never {
-  throw new TypeError(`Unsupported Cloudflare Agents payload: ${payload}`);
 }
 
 function hasScheduledWork(

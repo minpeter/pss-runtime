@@ -1,3 +1,4 @@
+import { scheduledWorkIdPart } from "../host/scheduled-work-codec";
 import type {
   CloudflareAgentsFiberPayload,
   CloudflareAgentsThreadFiberPayload,
@@ -47,8 +48,4 @@ export function legacyScheduledThreadPayloadWorkId(
   return [payload.threadKey, payload.idempotencyKey ?? "", payload.runId]
     .map(scheduledWorkIdPart)
     .join("|");
-}
-
-function scheduledWorkIdPart(value: string): string {
-  return `${value.length}:${value}`;
 }

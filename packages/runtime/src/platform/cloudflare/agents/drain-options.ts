@@ -3,10 +3,11 @@ import {
   type CloudflareDurableObjectStorage,
   createCloudflareDurableObjectHost,
 } from "../host/durable-object-host";
-import type {
-  CloudflareAgentsFiberPayload,
-  CloudflareAgentsRunFiberPayload,
-  CloudflareAgentsThreadFiberPayload,
+import {
+  assertNeverPayload,
+  type CloudflareAgentsFiberPayload,
+  type CloudflareAgentsRunFiberPayload,
+  type CloudflareAgentsThreadFiberPayload,
 } from "./payload";
 import type {
   CloudflareAgentsRunContext,
@@ -90,8 +91,4 @@ function threadPromptPayloadContext(
     source: "thread-prompt",
     threadKey: payload.threadKey,
   };
-}
-
-function assertNeverPayload(payload: never): never {
-  throw new TypeError(`Unsupported Cloudflare Agents payload: ${payload}`);
 }

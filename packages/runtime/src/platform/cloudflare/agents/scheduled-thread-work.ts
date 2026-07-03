@@ -26,6 +26,9 @@ export async function claimScheduledThreadPayload(
   storage: CloudflareDurableObjectStorage,
   payload: CloudflareAgentsThreadFiberPayload
 ): Promise<boolean> {
+  // See claimScheduledRunPayload: a row can land in the shared legacy
+  // "thread-prompt" kind under either id format, so the current format is
+  // tried first before falling back to the plain legacy id.
   if (
     await claimScheduledThreadPromptWork(
       storage,
