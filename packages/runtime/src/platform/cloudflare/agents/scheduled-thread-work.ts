@@ -1,7 +1,5 @@
-import type {
-  CloudflareDurableObjectStorage,
-  CloudflareScheduledThreadPrompt,
-} from "../host/durable-object-host";
+import { isScheduledThreadPrompt } from "../../../execution/scheduled-work";
+import type { CloudflareDurableObjectStorage } from "../host/durable-object-host";
 import {
   ackScheduledThreadPromptWork,
   claimScheduledThreadPromptWork,
@@ -127,25 +125,4 @@ function matchesScheduledThreadPayload(
     value.notificationId === payload.notificationId &&
     value.runId === payload.runId
   );
-}
-
-function isScheduledThreadPrompt(
-  value: unknown
-): value is CloudflareScheduledThreadPrompt {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-  if (!("threadKey" in value) || typeof value.threadKey !== "string") {
-    return false;
-  }
-  if ("idempotencyKey" in value && typeof value.idempotencyKey !== "string") {
-    return false;
-  }
-  if ("notificationId" in value && typeof value.notificationId !== "string") {
-    return false;
-  }
-  if ("runId" in value && typeof value.runId !== "string") {
-    return false;
-  }
-  return true;
 }

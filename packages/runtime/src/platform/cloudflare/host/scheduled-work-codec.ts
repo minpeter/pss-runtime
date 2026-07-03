@@ -1,16 +1,12 @@
+import {
+  isScheduledThreadPrompt,
+  threadPromptScheduledWorkId,
+} from "../../../execution/scheduled-work";
 import type { CloudflareScheduledThreadPrompt } from "./scheduled-work-queue";
 import type { ScheduledWorkRow } from "./scheduled-work-table";
 
 export function runScheduledWorkId(runId: string): string {
   return runId;
-}
-
-export function threadPromptScheduledWorkId(
-  prompt: CloudflareScheduledThreadPrompt
-): string {
-  return [prompt.threadKey, prompt.idempotencyKey ?? "", prompt.runId ?? ""]
-    .map(scheduledWorkIdPart)
-    .join("|");
 }
 
 export function isLegacyRunWork(row: ScheduledWorkRow): boolean {
@@ -35,43 +31,4 @@ export function parseScheduledThreadPromptPayload(
 ): CloudflareScheduledThreadPrompt | undefined {
   const value: unknown = JSON.parse(payload);
   return isScheduledThreadPrompt(value) ? value : undefined;
-}
-
-export function isScheduledThreadPrompt(
-  value: unknown
-): value is CloudflareScheduledThreadPrompt {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-  if (!("threadKey" in value) || typeof value.threadKey !== "string") {
-    return false;
-  }
-  if ("idempotencyKey" in value && typeof value.idempotencyKey !== "string") {
-    return false;
-  }
-  if ("notificationId" in value && typeof value.notificationId !== "string") {
-    return false;
-  }
-  if ("runId" in value && typeof value.runId !== "string") {
-    return false;
-  }
-  return true;
-}
-
-export function applyListLimit<T>(
-  values: readonly T[],
-  limit: number | undefined
-): T[] {
-  if (limit === undefined) {
-    return [...values];
-  }
-  return values.slice(0, Math.max(0, Math.floor(limit)));
-}
-
-export function isDefined<T>(value: T | undefined): value is T {
-  return value !== undefined;
-}
-
-export function scheduledWorkIdPart(value: string): string {
-  return `${value.length}:${value}`;
 }

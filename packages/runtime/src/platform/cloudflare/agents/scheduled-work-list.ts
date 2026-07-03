@@ -1,9 +1,9 @@
+import { isDefined } from "../../../execution/scheduled-work";
 import type {
   CloudflareDurableObjectStorage,
   CloudflareScheduledThreadPrompt,
 } from "../host/durable-object-host";
 import {
-  isDefined,
   parseScheduledRunPayload,
   parseScheduledThreadPromptPayload,
 } from "../host/scheduled-work-codec";

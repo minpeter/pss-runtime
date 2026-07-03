@@ -1,4 +1,4 @@
-import { scheduledWorkIdPart } from "../host/scheduled-work-codec";
+import { scheduledWorkIdPart } from "../../../execution/scheduled-work";
 import type {
   CloudflareAgentsFiberPayload,
   CloudflareAgentsThreadFiberPayload,

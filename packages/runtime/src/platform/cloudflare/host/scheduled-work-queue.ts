@@ -1,13 +1,16 @@
-import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import {
   applyListLimit,
   isDefined,
+  type ScheduledThreadPrompt,
+  threadPromptScheduledWorkId,
+} from "../../../execution/scheduled-work";
+import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
+import {
   isLegacyRunWork,
   isLegacyThreadPromptWork,
   parseScheduledRunPayload,
   parseScheduledThreadPromptPayload,
   runScheduledWorkId,
-  threadPromptScheduledWorkId,
 } from "./scheduled-work-codec";
 import {
   claimScheduledWork,
@@ -16,12 +19,7 @@ import {
   selectScheduledWork,
 } from "./scheduled-work-table";
 
-export interface CloudflareScheduledThreadPrompt {
-  readonly idempotencyKey?: string;
-  readonly notificationId?: string;
-  readonly runId?: string;
-  readonly threadKey: string;
-}
+export type CloudflareScheduledThreadPrompt = ScheduledThreadPrompt;
 
 export interface ScheduledWorkListOptions {
   readonly limit?: number;

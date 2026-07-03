@@ -1,3 +1,7 @@
+import {
+  normalizedListLimit,
+  type ScheduledWorkKind as SharedScheduledWorkKind,
+} from "../../../execution/scheduled-work";
 import type { SqlStorage } from "../sql/ports/storage-port";
 import {
   type CloudflareDurableObjectStorage,
@@ -8,8 +12,7 @@ import {
 export type ScheduledWorkKind =
   | "agents-run"
   | "agents-thread-prompt"
-  | "run"
-  | "thread-prompt";
+  | SharedScheduledWorkKind;
 
 export interface ScheduledWorkRow {
   readonly payload: string;
@@ -233,8 +236,4 @@ function requiredScheduledWorkSql(
     return sql as SqlStorage;
   }
   throw new Error("Cloudflare scheduled work queue requires SQLite storage.");
-}
-
-function normalizedListLimit(limit: number | undefined): number | undefined {
-  return limit === undefined ? undefined : Math.max(0, Math.floor(limit));
 }

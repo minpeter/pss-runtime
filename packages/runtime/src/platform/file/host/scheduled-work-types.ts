@@ -1,12 +1,11 @@
 import type { Agent } from "../../../agent/core/agent";
+import type {
+  ScheduledThreadPrompt,
+  ScheduledWorkKind as SharedScheduledWorkKind,
+} from "../../../execution/scheduled-work";
 import type { AgentEvent } from "../../../thread/protocol/events";
 
-export interface NodeScheduledThreadPrompt {
-  readonly idempotencyKey?: string;
-  readonly notificationId?: string;
-  readonly runId?: string;
-  readonly threadKey: string;
-}
+export type NodeScheduledThreadPrompt = ScheduledThreadPrompt;
 
 export interface NodeScheduledWorkListOptions {
   readonly limit?: number;
@@ -51,7 +50,7 @@ export type NodeScheduledWorkRunContext =
       readonly threadKey: string;
     };
 
-export type ScheduledWorkKind = "run" | "thread-prompt";
+export type ScheduledWorkKind = SharedScheduledWorkKind;
 
 export interface StoredScheduledWork<T> {
   readonly createdAt: number;
