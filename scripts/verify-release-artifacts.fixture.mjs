@@ -18,7 +18,8 @@ export const runtimeExecutionDeclaration = [
   "",
 ].join("\n");
 export const runtimeMemoryDeclaration = [
-  'export { createInMemoryExecutionHost, MemoryThreadStore } from "./index";',
+  'export { createInMemoryExecutionHost, InMemoryExecutionScheduler, MemoryThreadStore } from "./index";',
+  'export type { InMemoryExecutionHost, MemoryScheduledThreadPrompt, MemoryScheduledWorkListOptions } from "./index";',
   "",
 ].join("\n");
 export const runtimeCloudflareWorkerDeclaration = [
