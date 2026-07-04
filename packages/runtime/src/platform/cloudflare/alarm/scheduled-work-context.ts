@@ -62,6 +62,8 @@ export async function shouldRetryNotClaimableScheduledRun(
   }).store.turns.get(runId);
   return (
     run?.kind === "notification" &&
+    run.dedupeKey !== undefined &&
+    run.dedupeKey.length > 0 &&
     isRetryableRunStatus(run.status) &&
     !hasActiveLease(run)
   );

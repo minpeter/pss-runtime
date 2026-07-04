@@ -10,11 +10,19 @@ export async function withTransaction<T>(
   storage: CloudflareDurableObjectStorage,
   fn: (storage: CloudflareDurableObjectTransactionStorage) => Promise<T>
 ): Promise<T> {
-  return storage.transaction
-    ? await storage.transaction((tx) =>
-        fn(tx.sql === undefined ? withSqlStorage(tx, storage.sql) : tx)
-      )
-    : await fn(storage);
+  if (storage.transaction === undefined) {
+    throw new MissingCloudflareTransactionError();
+  }
+  return await storage.transaction((tx) =>
+    fn(tx.sql === undefined ? withSqlStorage(tx, storage.sql) : tx)
+  );
+}
+
+export class MissingCloudflareTransactionError extends Error {
+  constructor() {
+    super("Cloudflare Durable Object storage transaction() is required.");
+    this.name = "MissingCloudflareTransactionError";
+  }
 }
 
 export function requiredSqlStorage(

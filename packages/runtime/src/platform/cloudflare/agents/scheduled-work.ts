@@ -1,5 +1,7 @@
-import { isScheduledThreadPrompt } from "../../../execution/scheduled-work";
-import { parseScheduledRunPayload } from "../host/scheduled-work-codec";
+import {
+  parseScheduledRunPayload,
+  parseScheduledThreadPromptPayload,
+} from "../host/scheduled-work-codec";
 import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import {
   deleteScheduledWorkGroup,
@@ -152,8 +154,8 @@ function matchesScheduledThreadPayload(
   storedPayload: string,
   payload: CloudflareAgentsThreadFiberPayload
 ): boolean {
-  const value: unknown = JSON.parse(storedPayload);
-  if (!isScheduledThreadPrompt(value)) {
+  const value = parseScheduledThreadPromptPayload(storedPayload);
+  if (value === undefined) {
     return false;
   }
   return (

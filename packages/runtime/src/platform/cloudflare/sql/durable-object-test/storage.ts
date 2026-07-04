@@ -1,4 +1,9 @@
 import type { SqlStorage, SqlStorageCursorLike } from "../ports/storage-port";
+import {
+  isScheduledWorkOffsetQuery,
+  scheduledWorkTableInfoRows,
+  selectScheduledWorkRowsWithOffset,
+} from "./scheduled-work-select";
 import { selectSqlRows } from "./select";
 import {
   cloneInMemoryDurableObjectSqlState,
@@ -17,6 +22,16 @@ export class InMemoryDurableObjectSqlStorage implements SqlStorage {
     const normalized = normalizeSql(query);
     if (isSchemaStatement(normalized) || isTransactionStatement(normalized)) {
       return toCursor<T>([]);
+    }
+
+    if (normalized === "pragma table_info(pss_scheduled_work)") {
+      return toCursor<T>(scheduledWorkTableInfoRows());
+    }
+
+    if (isScheduledWorkOffsetQuery(normalized)) {
+      return toCursor<T>(
+        selectScheduledWorkRowsWithOffset(this.#state, normalized, bindings)
+      );
     }
 
     if (normalized.startsWith("select ")) {

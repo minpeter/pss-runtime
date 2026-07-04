@@ -1,6 +1,6 @@
 import {
-  applyListLimit,
   isDefined,
+  normalizedListLimit,
   type ScheduledThreadPrompt,
   threadPromptScheduledWorkId,
 } from "../../../execution/scheduled-work";
@@ -63,13 +63,16 @@ export function listScheduledRuns(
 ): Promise<readonly string[]> {
   const prefix = options.prefix ?? defaultPrefix;
   return Promise.resolve(
-    applyListLimit(
-      selectScheduledWork(storage, prefix, "run")
-        .filter(isCanonicalRunWork)
-        .map((row) => parseScheduledRunPayload(row.payload))
-        .filter(isDefined),
-      options.limit
-    )
+    selectCanonicalScheduledWork({
+      kind: "run",
+      limit: options.limit,
+      parse: (row) =>
+        isCanonicalRunWork(row)
+          ? parseScheduledRunPayload(row.payload)
+          : undefined,
+      prefix,
+      storage,
+    })
   );
 }
 
@@ -105,14 +108,55 @@ export function listScheduledThreadPrompts(
 ): Promise<readonly CloudflareScheduledThreadPrompt[]> {
   const prefix = options.prefix ?? defaultPrefix;
   return Promise.resolve(
-    applyListLimit(
-      selectScheduledWork(storage, prefix, "thread-prompt")
-        .filter(isCanonicalThreadPromptWork)
-        .map((row) => parseScheduledThreadPromptPayload(row.payload))
-        .filter(isDefined),
-      options.limit
-    )
+    selectCanonicalScheduledWork({
+      kind: "thread-prompt",
+      limit: options.limit,
+      parse: (row) =>
+        isCanonicalThreadPromptWork(row)
+          ? parseScheduledThreadPromptPayload(row.payload)
+          : undefined,
+      prefix,
+      storage,
+    })
   );
+}
+
+function selectCanonicalScheduledWork<T>({
+  kind,
+  limit,
+  parse,
+  prefix,
+  storage,
+}: {
+  readonly kind: "run" | "thread-prompt";
+  readonly limit?: number;
+  readonly parse: (
+    row: ReturnType<typeof selectScheduledWork>[number]
+  ) => T | undefined;
+  readonly prefix: string;
+  readonly storage: CloudflareDurableObjectStorage;
+}): T[] {
+  const normalized = normalizedListLimit(limit);
+  if (normalized === 0) {
+    return [];
+  }
+  if (normalized === undefined) {
+    return selectScheduledWork(storage, prefix, kind)
+      .map(parse)
+      .filter(isDefined);
+  }
+
+  const values: T[] = [];
+  let offset = 0;
+  while (values.length < normalized) {
+    const rows = selectScheduledWork(storage, prefix, kind, normalized, offset);
+    if (rows.length === 0) {
+      return values;
+    }
+    values.push(...rows.map(parse).filter(isDefined));
+    offset += rows.length;
+  }
+  return values.slice(0, normalized);
 }
 
 export function ackScheduledThreadPrompt(

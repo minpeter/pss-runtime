@@ -134,7 +134,10 @@ function selectScheduledWorkByKinds(
     if (remaining === 0) {
       break;
     }
-    const selected = selectScheduledWork(storage, prefix, kind);
+    const selected =
+      rowFilter === undefined
+        ? selectScheduledWork(storage, prefix, kind, remaining)
+        : selectScheduledWork(storage, prefix, kind);
     const matching =
       rowFilter === undefined ? selected : selected.filter(rowFilter);
     rows.push(

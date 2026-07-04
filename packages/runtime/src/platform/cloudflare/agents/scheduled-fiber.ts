@@ -3,7 +3,7 @@ import { startCloudflareAgentsResumeFiber } from "./fiber";
 import { parseCloudflareAgentsFiberPayload } from "./payload";
 import {
   claimCloudflareAgentsScheduledPayload,
-  hasCloudflareAgentsScheduledPayload,
+  mirrorCloudflareAgentsScheduledPayload,
 } from "./scheduled-work";
 import {
   type CloudflareAgentsPayloadTrustOptions,
@@ -34,20 +34,28 @@ export async function resumeScheduledCloudflareAgentsFiber(
       cloudflareAgentsTrustFailureReason()
     );
   }
-  if (
-    storage !== undefined &&
-    !(await hasCloudflareAgentsScheduledPayload(storage, payload))
-  ) {
+  if (storage === undefined) {
+    return await startCloudflareAgentsResumeFiber({
+      ...options,
+      payload,
+    });
+  }
+  if (!(await claimCloudflareAgentsScheduledPayload(storage, payload))) {
     return rejectedCloudflareAgentsFiberResult(
       "Cloudflare Agents scheduled payload was not pending in the PSS Runtime queue"
     );
   }
-  const result = await startCloudflareAgentsResumeFiber({
-    ...options,
-    payload,
-  });
-  if (storage !== undefined && result.accepted) {
-    await claimCloudflareAgentsScheduledPayload(storage, payload);
+  try {
+    return await startCloudflareAgentsResumeFiber({
+      ...options,
+      payload,
+    });
+  } catch (error) {
+    await mirrorCloudflareAgentsScheduledPayload({
+      payload,
+      runAfterMs: 0,
+      storage,
+    });
+    throw error;
   }
-  return result;
 }

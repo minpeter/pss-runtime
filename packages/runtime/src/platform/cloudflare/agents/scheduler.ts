@@ -1,5 +1,6 @@
 import type { ExecutionScheduler } from "../../../execution";
 import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
+import { scheduleCloudflareAgentsDelayedPayload } from "./delayed-schedule";
 import { startCloudflareAgentsResumeFiber } from "./fiber";
 import {
   type CloudflareAgentsFiberPayload,
@@ -8,14 +9,8 @@ import {
 } from "./payload";
 import {
   type CloudflareAgentsDelayedCallbackOption,
-  cloudflareAgentsDelayedSchedulePayload,
   delayedCallbackName,
-  delaySeconds,
 } from "./schedule-payload";
-import {
-  mirrorCloudflareAgentsScheduledPayload,
-  removeCloudflareAgentsScheduledPayload,
-} from "./scheduled-work";
 import type {
   CloudflareAgentsCallbackName,
   CloudflareAgentsDefaultResumeAgent,
@@ -131,25 +126,13 @@ async function startOrSchedulePayload<
   runAfterMs?: number
 ): Promise<void> {
   if (runAfterMs !== undefined && runAfterMs > 0) {
-    const scheduleDelaySeconds = delaySeconds(runAfterMs);
-    await mirrorCloudflareAgentsScheduledPayload({
+    await scheduleCloudflareAgentsDelayedPayload({
+      callback: delayedResumeCallback,
+      cloudflareAgent,
       payload,
       runAfterMs,
       storage,
     });
-    try {
-      await cloudflareAgent.schedule(
-        scheduleDelaySeconds,
-        delayedResumeCallback,
-        cloudflareAgentsDelayedSchedulePayload(payload, scheduleDelaySeconds),
-        { idempotent: true }
-      );
-    } catch (error) {
-      if (storage !== undefined) {
-        await removeCloudflareAgentsScheduledPayload(storage, payload);
-      }
-      throw error;
-    }
     return;
   }
 

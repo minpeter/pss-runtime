@@ -203,6 +203,29 @@ describe("Cloudflare Agents fiber retries", () => {
     await expectCompletedNotification(host, runId);
   });
 
+  it("does not clear expired leases before not-claimable retry scheduling succeeds", async () => {
+    const cloudflareAgent = createFakeCloudflareAgent();
+    cloudflareAgent.schedule = () =>
+      Promise.reject(new Error("schedule failed"));
+    const host = createRetryHost(cloudflareAgent, () => Promise.resolve(null));
+    const runId = "background:bg_not_claimable_schedule_failure";
+    const leaseUntilMs = Date.now() - 1000;
+
+    await seedRetryableNotification(host, runId, { leaseUntilMs });
+
+    await expect(host.scheduler.enqueueRun(runId)).rejects.toThrow(
+      "schedule failed"
+    );
+    expect(cloudflareAgent.scheduled).toEqual([]);
+    await expect(
+      listScheduledCloudflareAgentsRuns(
+        cloudflareAgent.durableObjectContext.storage,
+        { prefix: "tenant-a" }
+      )
+    ).resolves.toEqual([]);
+    await expectActiveLeasedNotification(host, runId, leaseUntilMs);
+  });
+
   it("reschedules retryable notifications when resume work throws", async () => {
     const cloudflareAgent = createFakeCloudflareAgent();
     const host = createRetryHost(cloudflareAgent, async () => {

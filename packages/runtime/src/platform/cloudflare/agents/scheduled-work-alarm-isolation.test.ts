@@ -1,19 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { drainCloudflareAlarm } from "../alarm/drainer";
-import type { CloudflareAgentsFiberPayload } from "./index";
 import {
   cloudflareAgentsThreadPayload,
   createCloudflareAgentsFiberRetryScheduler,
   createCloudflareAgentsFiberScheduler,
   listScheduledCloudflareAgentsRuns,
   listScheduledCloudflareAgentsThreadPrompts,
-  resumeScheduledCloudflareAgentsFiber,
 } from "./index";
 import {
-  createFakeCloudflareAgent,
-  type FakeCloudflareAgent,
-  runWithText,
-} from "./test-support";
+  agentRecordingRuns,
+  resumeFirstScheduledAgent,
+} from "./scheduled-work-alarm-test-support";
+import { createFakeCloudflareAgent, runWithText } from "./test-support";
 
 describe("Cloudflare Agents scheduled work alarm isolation", () => {
   it("keeps delayed run callbacks out of the alarm drain", async () => {
@@ -99,32 +97,3 @@ describe("Cloudflare Agents scheduled work alarm isolation", () => {
     ).toEqual([]);
   });
 });
-
-function agentRecordingRuns(resumedRuns: string[]) {
-  return {
-    resume: (runId: string) => {
-      resumedRuns.push(runId);
-      return Promise.resolve(runWithText(runId));
-    },
-  };
-}
-
-function resumeRecordingAgentsPayload(resumedRuns: string[]) {
-  return (payload: CloudflareAgentsFiberPayload) => {
-    resumedRuns.push(payload.runId);
-    return Promise.resolve(runWithText(payload.runId));
-  };
-}
-
-function resumeFirstScheduledAgent(
-  cloudflareAgent: FakeCloudflareAgent,
-  resumedRuns: string[]
-) {
-  return resumeScheduledCloudflareAgentsFiber({
-    allowedPrefixes: ["tenant-a"],
-    cloudflareAgent,
-    payload: cloudflareAgent.scheduled.at(0)?.payload,
-    resume: resumeRecordingAgentsPayload(resumedRuns),
-    storage: cloudflareAgent.durableObjectContext.storage,
-  });
-}

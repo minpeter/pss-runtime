@@ -11,6 +11,7 @@ import {
   requiredSqlStorage,
   withTransaction,
 } from "../durable-object/sql-access";
+import { hasScheduledWorkColumn } from "./scheduled-work-table-schema";
 
 export type ScheduledWorkKind =
   | "agents-run"
@@ -54,17 +55,19 @@ export function selectScheduledWork(
   storage: CloudflareDurableObjectStorage,
   prefix: string,
   kind: ScheduledWorkKind,
-  limit?: number
+  limit?: number,
+  offset = 0
 ): ScheduledWorkRow[] {
   const sql = requiredScheduledWorkTableSql(storage);
   ensureScheduledWorkSchema(sql);
   if (limit !== undefined) {
     return sql
       .exec<ScheduledWorkRow>(
-        "SELECT work_id, payload FROM pss_scheduled_work WHERE prefix = ? AND kind = ? ORDER BY created_at, rowid LIMIT ?",
+        "SELECT work_id, payload FROM pss_scheduled_work WHERE prefix = ? AND kind = ? ORDER BY created_at, rowid LIMIT ? OFFSET ?",
         prefix,
         kind,
-        normalizedListLimit(limit)
+        normalizedListLimit(limit),
+        Math.max(0, Math.floor(offset))
       )
       .toArray();
   }
@@ -250,20 +253,10 @@ function ensureScheduledWorkSchema(sql: SqlStorage): void {
 }
 
 function ensureScheduledWorkColumn(sql: SqlStorage, column: string): void {
-  try {
-    sql.exec(`ALTER TABLE pss_scheduled_work ADD COLUMN ${column} TEXT`);
-  } catch (error) {
-    if (!isDuplicateColumnError(error)) {
-      throw error;
-    }
+  if (hasScheduledWorkColumn(sql, column)) {
+    return;
   }
-}
-
-function isDuplicateColumnError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    error.message.toLowerCase().includes("duplicate column")
-  );
+  sql.exec(`ALTER TABLE pss_scheduled_work ADD COLUMN ${column} TEXT`);
 }
 
 function requiredScheduledWorkTableSql(

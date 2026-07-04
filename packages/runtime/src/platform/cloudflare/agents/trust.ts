@@ -2,7 +2,6 @@ import {
   type CloudflareAgentsFiberPayload,
   cloudflareAgentsFiberIdempotencyKey,
   cloudflareAgentsFiberName,
-  defaultCloudflareAgentsDelayedResumeCallback,
 } from "./payload";
 import type {
   CloudflareAgentsFiberRecoveryContext,
@@ -90,11 +89,11 @@ export function rejectedCloudflareAgentsFiberResult(
     createdAt: Date.now(),
     error: reason,
     fiberId: "pss-runtime:rejected",
-    name: defaultCloudflareAgentsDelayedResumeCallback,
+    name: "pss-runtime:rejected",
     status: "aborted",
   };
 }
 
 export function cloudflareAgentsTrustFailureReason(): string {
-  return `Cloudflare Agents ${defaultCloudflareAgentsDelayedResumeCallback} rejected an untrusted PSS Runtime payload`;
+  return "Cloudflare Agents rejected an untrusted PSS Runtime payload";
 }

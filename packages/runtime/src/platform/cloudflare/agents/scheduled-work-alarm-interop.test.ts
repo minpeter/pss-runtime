@@ -8,6 +8,7 @@ import {
   listScheduledCloudflareRuns,
   listScheduledCloudflareThreadPrompts,
 } from "../index";
+import { requiredSqlStorage } from "../storage/durable-object/sql-access";
 import { insertScheduledWork } from "../storage/sqlite/scheduled-work-table";
 import type { CloudflareAgentsFiberPayload } from "./index";
 import {
@@ -175,5 +176,58 @@ describe("Cloudflare Agents alarm scheduler interop", () => {
     expect(resumedRuns).toEqual([]);
     expect(summary.remainingRuns).toBe(0);
     expect(summary.remainingThreadPrompts).toBe(0);
+  });
+
+  it("treats malformed shared-kind payloads as non-matching work", async () => {
+    const cloudflareAgent = createFakeCloudflareAgent();
+    const storage = cloudflareAgent.durableObjectContext.storage;
+    const sql = requiredSqlStorage(storage, "malformed scheduled work test");
+    const threadPayload = cloudflareAgentsThreadPayload({
+      idempotencyKey: "bad-json-key",
+      notificationId: "bad-json-notification",
+      prefix: "tenant-a",
+      runId: "bad-json-run",
+      threadKey: "bad-json-thread",
+    });
+
+    await appendScheduledRun(storage, "tenant-a", "bad-json-run");
+    await appendScheduledThreadPrompt(storage, "tenant-a", {
+      idempotencyKey: "bad-json-key",
+      notificationId: "bad-json-notification",
+      runId: "bad-json-run",
+      threadKey: "bad-json-thread",
+    });
+    sql.exec(
+      "UPDATE pss_scheduled_work SET payload = ? WHERE prefix = ? AND kind IN (?, ?)",
+      "{",
+      "tenant-a",
+      "run",
+      "thread-prompt"
+    );
+
+    await expect(
+      listScheduledCloudflareRuns(storage, { prefix: "tenant-a" })
+    ).resolves.toEqual([]);
+    await expect(
+      listScheduledCloudflareThreadPrompts(storage, { prefix: "tenant-a" })
+    ).resolves.toEqual([]);
+    await expect(
+      listScheduledCloudflareAgentsRuns(storage, { prefix: "tenant-a" })
+    ).resolves.toEqual([]);
+    await expect(
+      listScheduledCloudflareAgentsThreadPrompts(storage, {
+        prefix: "tenant-a",
+      })
+    ).resolves.toEqual([]);
+    await expect(
+      resumeScheduledCloudflareAgentsFiber({
+        allowedPrefixes: ["tenant-a"],
+        cloudflareAgent,
+        payload: threadPayload,
+        resume: (payload: CloudflareAgentsFiberPayload) =>
+          Promise.resolve(runWithText(payload.runId)),
+        storage,
+      })
+    ).resolves.toMatchObject({ accepted: false, status: "aborted" });
   });
 });

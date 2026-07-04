@@ -69,7 +69,7 @@ describe("Cloudflare Agents scheduled lifecycle", () => {
     ).resolves.toEqual([]);
   });
 
-  it("preserves delayed rows when startFiber returns an existing receipt", async () => {
+  it("consumes delayed rows before checking existing fiber receipts", async () => {
     const cloudflareAgent = createFakeCloudflareAgent();
     const storage = cloudflareAgent.durableObjectContext.storage;
     cloudflareAgent.startFiber = (name, _fn, options) =>
@@ -97,7 +97,7 @@ describe("Cloudflare Agents scheduled lifecycle", () => {
 
     await expect(
       listScheduledCloudflareAgentsRuns(storage, { prefix: "tenant-a" })
-    ).resolves.toEqual(["background:bg_existing_receipt"]);
+    ).resolves.toEqual([]);
   });
 
   it("backs off retries and stops at the configured max attempt", async () => {

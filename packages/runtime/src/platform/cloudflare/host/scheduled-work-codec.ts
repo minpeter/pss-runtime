@@ -27,13 +27,21 @@ export function isCanonicalThreadPromptWork(row: ScheduledWorkRow): boolean {
 }
 
 export function parseScheduledRunPayload(payload: string): string | undefined {
-  const value: unknown = JSON.parse(payload);
+  const value = parseJson(payload);
   return typeof value === "string" ? value : undefined;
 }
 
 export function parseScheduledThreadPromptPayload(
   payload: string
 ): CloudflareScheduledThreadPrompt | undefined {
-  const value: unknown = JSON.parse(payload);
+  const value = parseJson(payload);
   return isScheduledThreadPrompt(value) ? value : undefined;
+}
+
+function parseJson(payload: string): unknown {
+  try {
+    return JSON.parse(payload);
+  } catch {
+    return;
+  }
 }

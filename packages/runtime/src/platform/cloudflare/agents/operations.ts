@@ -35,11 +35,17 @@ export type DispatchCloudflareAgentsNotificationInput<
     CloudflareAgentsDefaultResumeAgent = CloudflareAgentsDefaultResumeAgent,
 > = DispatchCloudflareAgentsNotificationBase &
   (
-    | {
+    | ({
         readonly host: ExecutionHost;
-      }
+      } & ForbiddenCloudflareAgentsExecutionHostOptions<TAgent>)
     | ({ readonly host?: never } & CloudflareAgentsExecutionHostOptions<TAgent>)
   );
+
+type ForbiddenCloudflareAgentsExecutionHostOptions<
+  TAgent extends CloudflareAgentsDefaultResumeAgent,
+> = {
+  readonly [Key in keyof CloudflareAgentsExecutionHostOptions<TAgent>]?: never;
+};
 
 export function listScheduledCloudflareAgentsRuns(
   storage: CloudflareDurableObjectStorage,
