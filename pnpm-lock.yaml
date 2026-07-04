@@ -13,8 +13,8 @@ importers:
   .:
     devDependencies:
       '@ai-sdk/openai-compatible':
-        specifier: 3.0.1
-        version: 3.0.1(zod@4.4.3)
+        specifier: 3.0.2
+        version: 3.0.2(zod@4.4.3)
       '@biomejs/biome':
         specifier: 2.5.1
         version: 2.5.1
@@ -58,8 +58,8 @@ importers:
   apps/coding-agent:
     dependencies:
       '@ai-sdk/openai-compatible':
-        specifier: 3.0.1
-        version: 3.0.1(zod@4.4.3)
+        specifier: 3.0.2
+        version: 3.0.2(zod@4.4.3)
       '@earendil-works/pi-tui':
         specifier: ^0.80.2
         version: 0.80.2
@@ -92,8 +92,8 @@ importers:
   apps/worker-agent:
     dependencies:
       '@ai-sdk/openai-compatible':
-        specifier: 3.0.1
-        version: 3.0.1(zod@4.4.3)
+        specifier: 3.0.2
+        version: 3.0.2(zod@4.4.3)
       '@chat-adapter/state-memory':
         specifier: 4.31.0
         version: 4.31.0(ai@6.0.198(zod@4.4.3))(zod@4.4.3)
@@ -141,8 +141,8 @@ importers:
   examples/background-subagent:
     dependencies:
       '@ai-sdk/openai-compatible':
-        specifier: 3.0.1
-        version: 3.0.1(zod@4.4.3)
+        specifier: 3.0.2
+        version: 3.0.2(zod@4.4.3)
       '@minpeter/pss-runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -172,8 +172,8 @@ importers:
   examples/basic:
     dependencies:
       '@ai-sdk/openai-compatible':
-        specifier: 3.0.1
-        version: 3.0.1(zod@4.4.3)
+        specifier: 3.0.2
+        version: 3.0.2(zod@4.4.3)
       '@minpeter/pss-runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -197,8 +197,8 @@ importers:
   examples/evals:
     dependencies:
       '@ai-sdk/openai-compatible':
-        specifier: 3.0.1
-        version: 3.0.1(zod@4.4.3)
+        specifier: 3.0.2
+        version: 3.0.2(zod@4.4.3)
       '@minpeter/pss-runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -225,8 +225,8 @@ importers:
   examples/local-file-agent:
     dependencies:
       '@ai-sdk/openai-compatible':
-        specifier: 3.0.1
-        version: 3.0.1(zod@4.4.3)
+        specifier: 3.0.2
+        version: 3.0.2(zod@4.4.3)
       '@minpeter/pss-runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -250,8 +250,8 @@ importers:
   examples/plugin:
     dependencies:
       '@ai-sdk/openai-compatible':
-        specifier: 3.0.1
-        version: 3.0.1(zod@4.4.3)
+        specifier: 3.0.2
+        version: 3.0.2(zod@4.4.3)
       '@minpeter/pss-runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -275,8 +275,8 @@ importers:
   examples/sync-subagent:
     dependencies:
       '@ai-sdk/openai-compatible':
-        specifier: 3.0.1
-        version: 3.0.1(zod@4.4.3)
+        specifier: 3.0.2
+        version: 3.0.2(zod@4.4.3)
       '@minpeter/pss-runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -330,8 +330,8 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/openai-compatible@3.0.1':
-    resolution: {integrity: sha512-nUbQoGzdFZspb1cr6GUy+nR8Uvdi4/lCwTkdE9qKe+Qr2OVPsIKRIpyC9ewJ2uqUfl+1JlkWhPfR5l8bokNs4Q==}
+  '@ai-sdk/openai-compatible@3.0.2':
+    resolution: {integrity: sha512-C6qUMe+qSMn7HVr1a0v5H9BXYKhsT5uO4Q2VYVHYdT7johzx+d1gYgFMhkRIoheBpCl5NPhljR4I4sHMWWfz6w==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -348,12 +348,22 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/provider-utils@5.0.2':
+    resolution: {integrity: sha512-EcmdjJb7yggsZPCbS3MFBpvAUnKaPW+QvanU5GzF00XCq0bqqAmvJ3MN19ejlmOETbW8sJNiq6qam48wTcbUNw==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/provider@3.0.10':
     resolution: {integrity: sha512-Q3BZ27qfpYqnCYGvE3vt+Qi6LGOF9R5Nmzn+9JoM1lCRsD9mYaIhfJLkSunN48nfGXJ6n+XNV0J/XVpqGQl7Dw==}
     engines: {node: '>=18'}
 
   '@ai-sdk/provider@4.0.0':
     resolution: {integrity: sha512-fr9Gs89prDWiuox/T+kCA+i2cJkHpxU5S+tr4megjTzRC27ZsvFhwjU/+XrqqMbvBUlfmXxTOYWy8ng45dsjIg==}
+    engines: {node: '>=22'}
+
+  '@ai-sdk/provider@4.0.1':
+    resolution: {integrity: sha512-6p3C/vGqVIjcptBu1DnVd/BZJ2wWmV9TUv9192vT6ZvT9KNED8EwRTqyqFpoQZKgSbMDSvBSq3dqR524Nt/Crw==}
     engines: {node: '>=22'}
 
   '@asamuzakjp/css-color@5.1.11':
@@ -3596,10 +3606,10 @@ snapshots:
       '@vercel/oidc': 3.2.0
       zod: 4.4.3
 
-  '@ai-sdk/openai-compatible@3.0.1(zod@4.4.3)':
+  '@ai-sdk/openai-compatible@3.0.2(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/provider': 4.0.0
-      '@ai-sdk/provider-utils': 5.0.1(zod@4.4.3)
+      '@ai-sdk/provider': 4.0.1
+      '@ai-sdk/provider-utils': 5.0.2(zod@4.4.3)
       zod: 4.4.3
 
   '@ai-sdk/provider-utils@4.0.27(zod@4.4.3)':
@@ -3618,12 +3628,24 @@ snapshots:
       eventsource-parser: 3.1.0
       zod: 4.4.3
 
+  '@ai-sdk/provider-utils@5.0.2(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.1
+      '@standard-schema/spec': 1.1.0
+      '@workflow/serde': 4.1.0
+      eventsource-parser: 3.1.0
+      zod: 4.4.3
+
   '@ai-sdk/provider@3.0.10':
     dependencies:
       json-schema: 0.4.0
     optional: true
 
   '@ai-sdk/provider@4.0.0':
+    dependencies:
+      json-schema: 0.4.0
+
+  '@ai-sdk/provider@4.0.1':
     dependencies:
       json-schema: 0.4.0
 
