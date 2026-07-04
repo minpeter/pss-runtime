@@ -73,7 +73,7 @@
     "@minpeter/opensearch": "0.0.4",
     "@minpeter/pss-runtime": "workspace:^",
     "@t3-oss/env-core": "^0.13.11",
-    "ai": "7.0.4",
+    "ai": "7.0.14",
     "dotenv": "^17.4.2",
     "zod": "^4.4.3"
   },
