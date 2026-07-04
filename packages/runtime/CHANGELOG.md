@@ -1,5 +1,12 @@
 # @minpeter/pss-runtime
 
+## 0.1.1
+
+### Patch Changes
+
+- 8c0f020: Add a Cloudflare Agents platform adapter that maps PSS runtime scheduling onto Agents SDK fibers, delayed schedules, and fiber recovery hooks.
+- 357a6bb: Align scheduled-work semantics across platform adapters: shared work-id derivation, thread-prompt validation, and list limits now live in one platform-neutral module consumed by the memory, file, and cloudflare adapters. The in-memory scheduler now honors `runAfterMs`, dedupes runs and thread prompts like the durable adapters, and exposes `listScheduledRuns` / `listScheduledThreadPrompts` / ack APIs. A new ExecutionScheduler contract test suite runs against all three platforms.
+
 ## 0.1.0
 
 ### Minor Changes
