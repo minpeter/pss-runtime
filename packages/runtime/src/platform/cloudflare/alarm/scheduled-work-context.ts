@@ -1,10 +1,8 @@
 import type { TurnRecord, TurnStatus } from "../../../execution";
-import {
-  type CloudflareDurableObjectStorage,
-  type CloudflareScheduledThreadPrompt,
-  createCloudflareDurableObjectHost,
-} from "../host/durable-object-host";
-import type { CloudflareAlarmRunContext } from "./drainer";
+import { createCloudflareDurableObjectHost } from "../host/durable-object-host";
+import type { CloudflareScheduledThreadPrompt } from "../host/scheduled-work-queue";
+import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
+import type { CloudflareAlarmRunContext } from "./run-context";
 
 export async function scheduledRunContext(
   storage: CloudflareDurableObjectStorage,
@@ -51,6 +49,24 @@ export async function shouldRetryScheduledRun(
     storage,
   }).store.turns.get(runId);
   return run?.kind === "notification" && isRetryableRunStatus(run.status);
+}
+
+export async function shouldRetryNotClaimableScheduledRun(
+  storage: CloudflareDurableObjectStorage,
+  prefix: string,
+  runId: string
+): Promise<boolean> {
+  const run = await createCloudflareDurableObjectHost({
+    prefix,
+    storage,
+  }).store.turns.get(runId);
+  return (
+    run?.kind === "notification" &&
+    run.dedupeKey !== undefined &&
+    run.dedupeKey.length > 0 &&
+    isRetryableRunStatus(run.status) &&
+    !hasActiveLease(run)
+  );
 }
 
 export async function shouldRetryScheduledThreadPrompt(
@@ -114,6 +130,10 @@ function isRetryableRunStatus(status: TurnStatus | undefined): boolean {
     status === "running" ||
     status === "suspended"
   );
+}
+
+function hasActiveLease(run: TurnRecord): boolean {
+  return run.lease !== undefined && run.lease.leaseUntilMs > Date.now();
 }
 
 function retryableNotificationRun(run: TurnRecord): TurnRecord {

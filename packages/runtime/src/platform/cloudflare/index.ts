@@ -1,5 +1,94 @@
 // biome-ignore-all lint/performance/noBarrelFile: Public package subpath entrypoint required by package exports.
 
+export {
+  type CloudflareAgentsPlatformContext,
+  type CloudflareAgentsPlatformContextOptions,
+  type CloudflareAgentsPlatformFactoryOptions,
+  type CloudflareAgentsPlatformPrefixGuard,
+  type CloudflareAgentsPlatformPrefixGuardOptions,
+  type CloudflareAgentsResumableAgent,
+  createCloudflareAgentsPlatformContext,
+} from "./agents/context";
+export {
+  type RecoverCloudflareAgentsFiberOptions,
+  recoverCloudflareAgentsFiber,
+  type StartCloudflareAgentsResumeFiberOptions,
+  startCloudflareAgentsResumeFiber,
+} from "./agents/fiber";
+export {
+  type CloudflareAgentsExecutionHostOptions,
+  createCloudflareAgentsExecutionHost,
+} from "./agents/host";
+export {
+  ackScheduledCloudflareAgentsRun,
+  ackScheduledCloudflareAgentsThreadPrompt,
+  type CloudflareAgentsScheduledThreadPrompt,
+  type DispatchCloudflareAgentsNotificationInput,
+  dispatchCloudflareAgentsNotification,
+  listScheduledCloudflareAgentsRuns,
+  listScheduledCloudflareAgentsThreadPrompts,
+} from "./agents/operations";
+export {
+  type CloudflareAgentsFiberPayload,
+  type CloudflareAgentsRunFiberPayload,
+  type CloudflareAgentsThreadFiberPayload,
+  cloudflareAgentsFiberIdempotencyKey,
+  cloudflareAgentsFiberMetadata,
+  cloudflareAgentsFiberName,
+  cloudflareAgentsRunPayload,
+  cloudflareAgentsThreadPayload,
+  defaultCloudflareAgentsDelayedResumeCallback,
+  parseCloudflareAgentsFiberPayload,
+  pssRunFiberName,
+  pssThreadFiberName,
+} from "./agents/payload";
+export {
+  type CloudflareAgentsFiberRetrySchedulerOptions,
+  createCloudflareAgentsFiberRetryScheduler,
+} from "./agents/retry-scheduler";
+export {
+  type ResumeScheduledCloudflareAgentsFiberOptions,
+  resumeScheduledCloudflareAgentsFiber,
+} from "./agents/scheduled-fiber";
+export {
+  type CloudflareAgentsFiberSchedulerOptions,
+  createCloudflareAgentsFiberScheduler,
+} from "./agents/scheduler";
+export {
+  areCloudflareAgentsPayloadsEquivalent,
+  type CloudflareAgentsPayloadTrustOptions,
+  type CloudflareAgentsPrefixGuard,
+  type CloudflareAgentsPrefixGuardOptions,
+  cloudflareAgentsTrustFailureReason,
+  isCloudflareAgentsPayloadTrusted,
+  isCloudflareAgentsRecoveryContextTrusted,
+  rejectedCloudflareAgentsFiberResult,
+} from "./agents/trust";
+export type {
+  CloudflareAgentsCallbackName,
+  CloudflareAgentsDefaultResumeAgent,
+  CloudflareAgentsDurableObjectContext,
+  CloudflareAgentsEventHandler,
+  CloudflareAgentsFiberContext,
+  CloudflareAgentsFiberInspection,
+  CloudflareAgentsFiberRecoveryContext,
+  CloudflareAgentsFiberRecoveryResult,
+  CloudflareAgentsFiberStatus,
+  CloudflareAgentsPlatformAgent,
+  CloudflareAgentsResumeRun,
+  CloudflareAgentsRetryFiber,
+  CloudflareAgentsRetryReason,
+  CloudflareAgentsRunContext,
+  CloudflareAgentsRunSource,
+  CloudflareAgentsSchedule,
+  CloudflareAgentsScheduledRunContext,
+  CloudflareAgentsScheduleOptions,
+  CloudflareAgentsScheduleRetryOptions,
+  CloudflareAgentsStartFiberOptions,
+  CloudflareAgentsStartFiberResult,
+  CloudflareAgentsThreadPromptContext,
+  CloudflareAgentsTurnDrainOptions,
+} from "./agents/types";
 export type {
   CloudflareAlarmContinuationReason,
   CloudflareAlarmDrainBudget,
@@ -24,6 +113,13 @@ export type {
 } from "./alarm/run-drain";
 export { drainAgentTurn, drainAgentTurnWithBudget } from "./alarm/run-drain";
 export type {
+  CloudflareAgentContext,
+  CloudflareAgentContextFactoryOptions,
+  CloudflareAgentContextOptions,
+  CloudflareAgentContextPrefixOptions,
+} from "./context/agent-context";
+export { createCloudflareAgentContext } from "./context/agent-context";
+export type {
   DispatchCloudflareAgentNotificationInput,
   SourceCloudflareAgentNotificationIdempotencyKeyInput,
 } from "./dispatch/notification-dispatch";
@@ -31,13 +127,6 @@ export {
   dispatchCloudflareAgentNotification,
   sourceCloudflareAgentNotificationIdempotencyKey,
 } from "./dispatch/notification-dispatch";
-export type {
-  CloudflareAgentContext,
-  CloudflareAgentContextFactoryOptions,
-  CloudflareAgentContextOptions,
-  CloudflareAgentContextPrefixOptions,
-} from "./host/agent-context";
-export { createCloudflareAgentContext } from "./host/agent-context";
 export type {
   CloudflareDurableObjectFetchOptions,
   CloudflareDurableObjectStubOptions,

@@ -1,8 +1,9 @@
 import type { Agent } from "../../../agent/core/agent";
 import { executionHost } from "../../../execution/host/host";
 import type { TurnStatus } from "../../../execution/host/types";
+import { normalizedListLimit } from "../../../execution/scheduled-work";
 import type { AgentEvent } from "../../../thread/protocol/events";
-import { decrementLimit, normalizedListLimit } from "./scheduled-work-codec";
+import { decrementLimit } from "./scheduled-work-codec";
 import {
   ackScheduledNodeRun,
   ackScheduledNodeThreadPrompt,

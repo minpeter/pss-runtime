@@ -220,7 +220,7 @@ function isTransactionalSyncSqlStorage(
   );
 }
 
-function isSqlStorage(value: unknown): value is SqlStorage {
+export function isSqlStorage(value: unknown): value is SqlStorage {
   return (
     typeof value === "object" &&
     value !== null &&

@@ -41,7 +41,27 @@ describe("runtime package subpaths", () => {
       import: "./dist/platform/cloudflare/index.js",
       types: "./dist/platform/cloudflare/index.d.ts",
     });
+    expect(packageJson.exports["./platform/cloudflare-agents"]).toBeUndefined();
     expect(packageJson.exports["./cloudflare"]).toBeUndefined();
+    expect(packageJson.exports["./cloudflare-agents"]).toBeUndefined();
+  });
+
+  it("exports the combined Cloudflare platform facade from the canonical subpath", async () => {
+    const cloudflarePlatform = await import("../platform/cloudflare");
+    const canonicalAgentsExports = [
+      "createCloudflareAgentsExecutionHost",
+      "createCloudflareAgentsFiberScheduler",
+      "recoverCloudflareAgentsFiber",
+      "startCloudflareAgentsResumeFiber",
+    ] as const;
+
+    expect(cloudflarePlatform).toHaveProperty(
+      "createCloudflareDurableObjectHost"
+    );
+    expect(cloudflarePlatform).toHaveProperty("drainCloudflareAlarm");
+    for (const exportName of canonicalAgentsExports) {
+      expect(cloudflarePlatform).toHaveProperty(exportName);
+    }
   });
 
   it("declares the file adapter as a platform implementation subpath", async () => {

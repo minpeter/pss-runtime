@@ -7,11 +7,11 @@ import type {
   TurnStore,
 } from "../../../../execution";
 import type { CloudflareDurableObjectStorage } from "../durable-object/durable-object-storage";
+import { withTransaction } from "../durable-object/sql-access";
 import {
   resolveStoragePayloadMaxBytes,
   type StoragePayloadBudgetOptions,
 } from "../payload-guard";
-import { withTransaction } from "./records";
 import {
   getRun,
   getRunByDedupeKey,

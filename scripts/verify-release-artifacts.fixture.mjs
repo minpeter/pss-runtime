@@ -18,14 +18,24 @@ export const runtimeExecutionDeclaration = [
   "",
 ].join("\n");
 export const runtimeMemoryDeclaration = [
-  'export { createInMemoryExecutionHost, MemoryThreadStore } from "./index";',
+  'export { createInMemoryExecutionHost, InMemoryExecutionScheduler, MemoryThreadStore } from "./index";',
+  'export type { InMemoryExecutionHost, MemoryScheduledThreadPrompt, MemoryScheduledWorkListOptions } from "./index";',
   "",
 ].join("\n");
-export const runtimeCloudflareDeclaration = [
+export const runtimeCloudflareWorkerDeclaration = [
   'export { ackScheduledCloudflareRun, ackScheduledCloudflareThreadPrompt, createCloudflareAlarmScheduler, createCloudflareAgentContext, createCloudflareDurableObjectHost, drainAgentTurn, drainAgentTurnWithBudget, drainCloudflareAlarm, fetchCloudflareDurableObject, getCloudflareDurableObjectStub, InMemoryCloudflareDurableObjectStorage, listScheduledCloudflareRuns, listScheduledCloudflareThreadPrompts, rescheduleCloudflareAlarm } from "./index";',
   'export type { AgentTurnDrainResult, AgentTurnDrainStopReason, CloudflareAgentContext, CloudflareAgentContextFactoryOptions, CloudflareAgentContextOptions, CloudflareAgentContextPrefixOptions, CloudflareAgentTurnDrainOptions, CloudflareAlarmAgent, CloudflareAlarmDrainSummary, CloudflareDurableObjectFetchOptions, CloudflareDurableObjectId, CloudflareDurableObjectNamespace, CloudflareDurableObjectState, CloudflareDurableObjectStorage, CloudflareDurableObjectStub, CloudflareDurableObjectStubOptions, CloudflareScheduledThreadPrompt } from "./index";',
   "",
 ].join("\n");
+export const runtimeCloudflareAgentsDeclaration = [
+  'export { ackScheduledCloudflareAgentsRun, ackScheduledCloudflareAgentsThreadPrompt, areCloudflareAgentsPayloadsEquivalent, cloudflareAgentsFiberIdempotencyKey, cloudflareAgentsFiberMetadata, cloudflareAgentsFiberName, cloudflareAgentsRunPayload, cloudflareAgentsThreadPayload, cloudflareAgentsTrustFailureReason, createCloudflareAgentsExecutionHost, createCloudflareAgentsFiberScheduler, createCloudflareAgentsFiberRetryScheduler, createCloudflareAgentsPlatformContext, defaultCloudflareAgentsDelayedResumeCallback, dispatchCloudflareAgentsNotification, isCloudflareAgentsPayloadTrusted, isCloudflareAgentsRecoveryContextTrusted, listScheduledCloudflareAgentsRuns, listScheduledCloudflareAgentsThreadPrompts, parseCloudflareAgentsFiberPayload, pssRunFiberName, pssThreadFiberName, recoverCloudflareAgentsFiber, rejectedCloudflareAgentsFiberResult, resumeScheduledCloudflareAgentsFiber, startCloudflareAgentsResumeFiber } from "./index";',
+  'export type { CloudflareAgentsCallbackName, CloudflareAgentsDurableObjectContext, CloudflareAgentsEventHandler, CloudflareAgentsExecutionHostOptions, CloudflareAgentsFiberContext, CloudflareAgentsFiberPayload, CloudflareAgentsFiberRecoveryContext, CloudflareAgentsFiberRecoveryResult, CloudflareAgentsFiberRetrySchedulerOptions, CloudflareAgentsFiberSchedulerOptions, CloudflareAgentsFiberStatus, CloudflareAgentsPayloadTrustOptions, CloudflareAgentsPlatformAgent, CloudflareAgentsPlatformContext, CloudflareAgentsPlatformContextOptions, CloudflareAgentsPlatformFactoryOptions, CloudflareAgentsPlatformPrefixGuard, CloudflareAgentsPlatformPrefixGuardOptions, CloudflareAgentsPrefixGuard, CloudflareAgentsPrefixGuardOptions, CloudflareAgentsResumeRun, CloudflareAgentsResumableAgent, CloudflareAgentsRunFiberPayload, CloudflareAgentsRunContext, CloudflareAgentsRunSource, CloudflareAgentsSchedule, CloudflareAgentsScheduleOptions, CloudflareAgentsScheduledRunContext, CloudflareAgentsScheduledThreadPrompt, CloudflareAgentsStartFiberOptions, CloudflareAgentsStartFiberResult, CloudflareAgentsThreadFiberPayload, CloudflareAgentsThreadPromptContext, CloudflareAgentsTurnDrainOptions, DispatchCloudflareAgentsNotificationInput, RecoverCloudflareAgentsFiberOptions, ResumeScheduledCloudflareAgentsFiberOptions, StartCloudflareAgentsResumeFiberOptions } from "./index";',
+  "",
+].join("\n");
+export const runtimeCloudflareDeclaration = [
+  runtimeCloudflareWorkerDeclaration,
+  runtimeCloudflareAgentsDeclaration,
+].join("");
 export const runtimeFileDeclaration = [
   'export { ackScheduledNodeRun, ackScheduledNodeThreadPrompt, appendScheduledNodeRun, appendScheduledNodeThreadPrompt, createNodeFileAgentContext, createNodeFileExecutionHost, createNodeFileScheduler, createNodeFileThreadHost, drainScheduledNodeWork, FileExecutionStore, FileThreadStore, listScheduledNodeRuns, listScheduledNodeThreadPrompts } from "./index";',
   'export type { NodeFileAgentContext, NodeFileAgentContextFactoryOptions, NodeFileAgentContextOptions, NodeFileExecutionHostOptions, NodeFileThreadHostOptions, NodeScheduledThreadPrompt, NodeScheduledWorkAppendOptions, NodeScheduledWorkDrainOptions, NodeScheduledWorkDrainResult, NodeScheduledWorkListOptions, NodeScheduledWorkRunContext } from "./index";',

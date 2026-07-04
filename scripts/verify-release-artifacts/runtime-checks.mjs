@@ -131,7 +131,7 @@ function findRuntimeDeclarationExportLeaks({
   }
 
   for (const name of requiredExports) {
-    if (!text.includes(name)) {
+    if (!hasDeclarationToken(text, name)) {
       errors.push(
         `${relativeToCwd(cwd, file)}: missing explicit ${surface} runtime export ${name}`
       );

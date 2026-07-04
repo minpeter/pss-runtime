@@ -1,6 +1,7 @@
 import type { TurnRecord } from "../../../../execution";
 import type { SqlStorage } from "../../sql/ports/storage-port";
 import type { CloudflareDurableObjectTransactionStorage } from "../durable-object/durable-object-storage";
+import { requiredSqlStorage } from "../durable-object/sql-access";
 import {
   assertJsonPayloadWithinBudget,
   resolveStoragePayloadMaxBytes,
@@ -16,7 +17,11 @@ export function getRun(
   prefix: string,
   runId: string
 ): Promise<TurnRecord | null> {
-  const row = selectRunRow(requiredSqlStorage(storage), prefix, runId);
+  const row = selectRunRow(
+    requiredSqlStorage(storage, "DurableObjectRunStore"),
+    prefix,
+    runId
+  );
   return Promise.resolve(row ? parseRunRecord(row) : null);
 }
 
@@ -25,7 +30,7 @@ export function getRunByDedupeKey(
   prefix: string,
   dedupeKey: string
 ): Promise<TurnRecord | null> {
-  const sql = requiredSqlStorage(storage);
+  const sql = requiredSqlStorage(storage, "DurableObjectRunStore");
   ensureRunSchema(sql);
   const row = sql
     .exec<RunRow>(
@@ -42,7 +47,7 @@ export function listRunsByParentRunId(
   prefix: string,
   parentRunId: string
 ): Promise<readonly TurnRecord[]> {
-  const sql = requiredSqlStorage(storage);
+  const sql = requiredSqlStorage(storage, "DurableObjectRunStore");
   ensureRunSchema(sql);
   return Promise.resolve(
     sql
@@ -67,7 +72,11 @@ export function putRun(
     record,
     resolveStoragePayloadMaxBytes(options)
   );
-  putSqlRun(requiredSqlStorage(storage), prefix, record);
+  putSqlRun(
+    requiredSqlStorage(storage, "DurableObjectRunStore"),
+    prefix,
+    record
+  );
   return Promise.resolve();
 }
 
@@ -82,7 +91,11 @@ export function insertRun(
     record,
     resolveStoragePayloadMaxBytes(options)
   );
-  insertSqlRun(requiredSqlStorage(storage), prefix, record);
+  insertSqlRun(
+    requiredSqlStorage(storage, "DurableObjectRunStore"),
+    prefix,
+    record
+  );
   return Promise.resolve();
 }
 
@@ -103,25 +116,6 @@ function selectRunRow(
 
 function parseRunRecord(row: RunRow): TurnRecord {
   return JSON.parse(row.record) as TurnRecord;
-}
-
-function requiredSqlStorage(
-  storage: CloudflareDurableObjectTransactionStorage
-): SqlStorage {
-  const sql = storage.sql;
-  if (isSqlStorage(sql)) {
-    return sql;
-  }
-  throw new Error("DurableObjectRunStore requires SQLite storage.");
-}
-
-function isSqlStorage(value: unknown): value is SqlStorage {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "exec" in value &&
-    typeof value.exec === "function"
-  );
 }
 
 function ensureRunSchema(sql: SqlStorage): void {

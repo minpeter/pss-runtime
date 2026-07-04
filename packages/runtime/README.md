@@ -494,6 +494,44 @@ Object adapter. See the sync example package for blocking app-owned delegation
 and the background example package for durable background delegation in a local
 interactive CLI.
 
+Cloudflare is the preferred substrate when deploying PSS Runtime on Workers and
+Durable Objects, but runtime core stays platform-agnostic. Do not import the
+Cloudflare Agents SDK, `cloudflare:agents`, or other Cloudflare SDK packages from
+core runtime code. Use `@minpeter/pss-runtime/platform/cloudflare` as the
+canonical Cloudflare adapter for Durable Object storage, alarms, dispatch, and
+Cloudflare Agents SDK fiber, schedule, recovery, and context helpers.
+
+When the Worker is implemented as a Cloudflare Agents SDK `Agent`, create the
+Cloudflare adapter from inside the Cloudflare `Agent` subclass and pass
+`durableObjectContext: this.ctx`; the adapter does not require `ctx` to be
+public. It maps immediate PSS run and thread resumes onto Agents SDK
+`startFiber()` calls, maps delayed resumes onto SDK `schedule()`, and provides
+recovery helpers for `onFiberRecovered()`. Scheduled callback and recovery
+payloads are prefix-guarded by default; pass `allowedPrefixes` or `allowPrefix`
+when a single Cloudflare Agents Worker intentionally serves multiple PSS runtime
+namespaces. Cloudflare Agents helpers are exported from the canonical
+`@minpeter/pss-runtime/platform/cloudflare` adapter rather than a separate
+platform subpath. The `worker-agent` app still owns session, channel, webhook,
+and prompt-routing behavior.
+
+### Platform adapter parity
+
+Every platform adapter implements the same core ports — `ExecutionStore`
+(turns, checkpoints, events, notifications, threads) and `ExecutionScheduler`
+(run enqueueing and thread resumes) — and each is verified by shared in-repo
+contract test suites (internal, not part of the published API).
+Platform-neutral scheduled-work semantics (work-id derivation, thread-prompt
+validation, list limits) live in runtime core; adapters only bind storage and
+timers.
+
+| Capability                            | memory            | file                     | cloudflare                    |
+| ------------------------------------- | ----------------- | ------------------------ | ----------------------------- |
+| Thread + execution stores             | yes               | yes                      | yes                           |
+| Scheduled runs and thread prompts     | list/ack, deduped | list/ack, deduped        | list/ack/claim, deduped       |
+| Delayed runs (`runAfterMs`)           | due-time filtered | due-time filtered        | Durable Object alarm          |
+| Drain helper                          | app-driven        | `drainScheduledNodeWork` | `drainCloudflareAlarm`        |
+| Scheduled fiber retry backoff         | —                 | —                        | Cloudflare Agents SDK adapter |
+
 The same core API supports room/user/thread routing through stable thread keys.
 
 Recommended key patterns:

@@ -11,6 +11,8 @@ import {
   ackScheduledThreadPrompt,
   appendScheduledRun,
   appendScheduledThreadPrompt,
+  claimScheduledRun,
+  claimScheduledThreadPrompt,
   listScheduledRuns,
   listScheduledThreadPrompts,
 } from "./scheduled-work-queue";
@@ -105,6 +107,14 @@ export async function ackScheduledCloudflareRun(
   await ackScheduledRun(storage, runId, options, defaultPrefix);
 }
 
+export async function claimScheduledCloudflareRun(
+  storage: CloudflareDurableObjectStorage,
+  runId: string,
+  options: { readonly prefix?: string } = {}
+): Promise<boolean> {
+  return await claimScheduledRun(storage, runId, options, defaultPrefix);
+}
+
 export async function listScheduledCloudflareThreadPrompts(
   storage: CloudflareDurableObjectStorage,
   options: { readonly limit?: number; readonly prefix?: string } = {}
@@ -118,6 +128,19 @@ export async function ackScheduledCloudflareThreadPrompt(
   options: { readonly prefix?: string } = {}
 ): Promise<void> {
   await ackScheduledThreadPrompt(storage, prompt, options, defaultPrefix);
+}
+
+export async function claimScheduledCloudflareThreadPrompt(
+  storage: CloudflareDurableObjectStorage,
+  prompt: CloudflareScheduledThreadPrompt,
+  options: { readonly prefix?: string } = {}
+): Promise<boolean> {
+  return await claimScheduledThreadPrompt(
+    storage,
+    prompt,
+    options,
+    defaultPrefix
+  );
 }
 
 export async function rescheduleCloudflareAlarm(

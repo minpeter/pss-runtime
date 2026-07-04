@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { isScheduledThreadPrompt } from "../../../execution/scheduled-work";
 import type {
-  NodeScheduledThreadPrompt,
   ScheduledWorkKind,
   StoredScheduledRunWork,
   StoredScheduledThreadPromptWork,
@@ -29,7 +29,7 @@ export function parseStoredScheduledThreadPromptWork(
   file: string
 ): StoredScheduledThreadPromptWork {
   const record = parseStoredScheduledWork(value, file);
-  if (!isNodeScheduledThreadPrompt(record.payload)) {
+  if (!isScheduledThreadPrompt(record.payload)) {
     throw invalidScheduledWorkFile(file, "expected thread prompt payload");
   }
   return {
@@ -65,20 +65,6 @@ export function decrementLimit(limit: { value: number | undefined }): void {
   if (limit.value !== undefined) {
     limit.value = Math.max(0, limit.value - 1);
   }
-}
-
-function isNodeScheduledThreadPrompt(
-  value: unknown
-): value is NodeScheduledThreadPrompt {
-  return (
-    isRecord(value) &&
-    typeof value.threadKey === "string" &&
-    (value.idempotencyKey === undefined ||
-      typeof value.idempotencyKey === "string") &&
-    (value.notificationId === undefined ||
-      typeof value.notificationId === "string") &&
-    (value.runId === undefined || typeof value.runId === "string")
-  );
 }
 
 function invalidScheduledWorkFile(file: string, message: string): Error {
@@ -136,24 +122,6 @@ export function fileForScheduledWork(
     kind,
     `${Buffer.from(workId).toString("base64url")}.json`
   );
-}
-
-export function threadPromptScheduledWorkId(
-  prompt: NodeScheduledThreadPrompt
-): string {
-  return [prompt.threadKey, prompt.idempotencyKey ?? "", prompt.runId ?? ""]
-    .map(scheduledWorkIdPart)
-    .join("|");
-}
-
-export function normalizedListLimit(
-  limit: number | undefined
-): number | undefined {
-  return limit === undefined ? undefined : Math.max(0, Math.floor(limit));
-}
-
-function scheduledWorkIdPart(value: string): string {
-  return `${value.length}:${value}`;
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
