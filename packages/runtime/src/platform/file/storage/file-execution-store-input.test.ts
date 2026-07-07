@@ -72,6 +72,56 @@ describe("FileExecutionStore thread inputs", () => {
     ).resolves.toBeNull();
   });
 
+  it("preserves and updates file-backed thread inputs in committed transactions", async () => {
+    const directory = await tempDir();
+    const store = new FileExecutionStore(directory);
+    await store.inputs.admit({
+      admittedAtMs: 10,
+      input: { text: "transactional input", type: "user-input" },
+      kind: "send",
+      messageId: "input:transaction",
+      threadKey: "thread:transaction",
+    });
+    const claimed = await store.inputs.claimNext(
+      "thread:transaction",
+      "turn-idle"
+    );
+    if (!claimed) {
+      throw new Error("Expected file-backed thread input claim.");
+    }
+
+    await store.transaction(async (tx) => {
+      const promoted = await tx.inputs.markPromoted(claimed);
+      expect(promoted).toMatchObject({
+        messageId: "input:transaction",
+        status: "promoted",
+      });
+      if (!promoted) {
+        throw new Error("Expected promoted thread input.");
+      }
+
+      await expect(tx.inputs.ack(promoted)).resolves.toMatchObject({
+        messageId: "input:transaction",
+        status: "acked",
+      });
+    });
+
+    await expect(
+      store.inputs.claimNext("thread:transaction", "turn-idle")
+    ).resolves.toBeNull();
+    const dataDirectory = await currentDataDirectory(directory);
+    await expect(
+      readFile(
+        join(
+          dataDirectory,
+          "inputs",
+          `${base64Url("thread:transaction")}.json`
+        ),
+        "utf8"
+      )
+    ).resolves.toContain('"status": "acked"');
+  });
+
   it("rejects malformed persisted thread input records", async () => {
     const directory = await tempDir();
     const store = new FileExecutionStore(directory);
