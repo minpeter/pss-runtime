@@ -1,4 +1,10 @@
 import type { ModelGenerationOptions } from "../../llm/llm";
+import {
+  RuntimeAttachmentSecurityError,
+  RuntimeAttachmentStagingError,
+  userInputContainsRuntimeAttachmentRefs,
+  userInputRequiresAttachmentStaging,
+} from "../input/attachments";
 import type { AgentInput, UserInput } from "../input/input";
 import { attachInputMeta } from "../input/input-meta";
 import { normalizeAgentInput } from "../input/input-normalization";
@@ -67,6 +73,7 @@ export class AgentThread {
     this.#threadKey = persistence.key;
     this.#state = new ThreadState(persistence);
     this.#events = new ThreadEventDispatcher({
+      attachmentStore: model.attachmentStore,
       history: () => this.#state.modelSnapshot(),
       plugins,
       signal: () => this.#activeAbort?.signal,
@@ -97,6 +104,7 @@ export class AgentThread {
       drain: () => this.#drainInputQueue(),
       events: this.#events,
       executionHost: this.#execution.executionHost,
+      attachmentStore: this.#model.attachmentStore,
       input,
       inputQueue: this.#inputQueue,
       pendingOverlays: this.#pendingOverlays,
@@ -109,11 +117,23 @@ export class AgentThread {
   overlay(input: AgentInput): this {
     this.#assertOpen();
 
+    const normalized = attachInputMeta(normalizeAgentInput(input), {
+      source: "overlay",
+    });
+    if (userInputContainsRuntimeAttachmentRefs(normalized)) {
+      throw new RuntimeAttachmentSecurityError(
+        "External input cannot contain runtime attachment refs."
+      );
+    }
+    if (userInputRequiresAttachmentStaging(normalized)) {
+      throw new RuntimeAttachmentStagingError(
+        "thread.overlay() cannot accept inline file bytes because overlay() is synchronous."
+      );
+    }
+
     this.#pendingOverlays.push({
       canonical: false,
-      input: attachInputMeta(normalizeAgentInput(input), {
-        source: "overlay",
-      }),
+      input: normalized,
       placement: "turn-start",
     });
     return this;
@@ -133,6 +153,7 @@ export class AgentThread {
     return queueThreadNotification(input, options, {
       activeRun: this.#activeRun,
       activeRuntimeInput: this.#activeRuntimeInput,
+      attachmentStore: this.#model.attachmentStore,
       drain: () => this.#drainInputQueue(),
       emitObserverEvent: (run, event) =>
         this.#events.emitObserverEvent(run, event),
@@ -152,6 +173,7 @@ export class AgentThread {
 
     await addDurableSteeringInput({
       executionHost: this.#execution.executionHost,
+      attachmentStore: this.#model.attachmentStore,
       input,
       runtimeInput,
       threadKey: this.#threadKey,

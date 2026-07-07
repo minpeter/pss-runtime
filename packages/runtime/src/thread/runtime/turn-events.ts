@@ -1,4 +1,5 @@
 import type { ExecutionHost } from "../../execution/host/types";
+import type { RuntimeAttachmentStore } from "../input/attachments";
 import {
   type RuntimeInputState,
   withRuntimeInputWindow,
@@ -13,6 +14,7 @@ export async function emitTurnEvent({
   event,
   events,
   executionHost,
+  attachmentStore,
   awaitBoundaries,
   run,
   runtimeInput,
@@ -20,6 +22,7 @@ export async function emitTurnEvent({
   threadKey,
 }: {
   readonly event: AgentEvent;
+  readonly attachmentStore: RuntimeAttachmentStore | undefined;
   readonly awaitBoundaries: boolean;
   readonly events: ThreadEventDispatcher;
   readonly executionHost: ExecutionHost | undefined;
@@ -39,6 +42,7 @@ export async function emitTurnEvent({
     });
   });
   const runtimeInputAdded = await drainRuntimeInput({
+    attachmentStore,
     events,
     executionHost,
     placement: event.type,

@@ -127,12 +127,19 @@ function isUserMessageFileData(data: unknown): boolean {
     return true;
   }
 
+  if (isBinaryFileData(data)) {
+    return true;
+  }
+
   if (data === null || typeof data !== "object" || !("type" in data)) {
     return false;
   }
 
   if (data.type === "data") {
-    return "data" in data && typeof data.data === "string";
+    return (
+      "data" in data &&
+      (typeof data.data === "string" || isBinaryFileData(data.data))
+    );
   }
 
   if (data.type === "reference") {
@@ -153,6 +160,10 @@ function isUserMessageFileData(data: unknown): boolean {
   }
 
   return false;
+}
+
+function isBinaryFileData(data: unknown): data is ArrayBuffer | Uint8Array {
+  return data instanceof ArrayBuffer || data instanceof Uint8Array;
 }
 
 function hasDenseItems<T>(

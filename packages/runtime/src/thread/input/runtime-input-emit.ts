@@ -2,6 +2,10 @@ import type { AgentEvent, RuntimeInput } from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
 import type { ThreadEventDispatcher } from "../runtime/events";
 import type { ThreadState } from "../state/thread-state";
+import {
+  type RuntimeAttachmentStore,
+  stageUserInputAttachments,
+} from "./attachments";
 import type { UserInput } from "./input";
 import { stripInputMeta } from "./input-meta";
 import type { QueuedRuntimeInput } from "./runtime-input";
@@ -20,7 +24,8 @@ export function runtimeInputEventFromQueued(
 export async function commitPreUserRuntimeInputs(
   events: ThreadEventDispatcher,
   state: ThreadState,
-  runtimeInputs: readonly QueuedRuntimeInput[]
+  runtimeInputs: readonly QueuedRuntimeInput[],
+  attachmentStore: RuntimeAttachmentStore | undefined
 ): Promise<readonly AgentEvent[]> {
   const committed: AgentEvent[] = [];
   for (const queued of runtimeInputs) {
@@ -32,7 +37,11 @@ export async function commitPreUserRuntimeInputs(
     }
 
     committed.push(processed);
-    const input = runtimeInputHistoryFromEvent(processed, queued);
+    const input = await stageUserInputAttachments(
+      runtimeInputHistoryFromEvent(processed, queued),
+      attachmentStore,
+      { trustRuntimeAttachmentRefs: true }
+    );
     if (queued.canonical === false) {
       state.appendTransientUserInput(input);
     } else {
@@ -60,6 +69,7 @@ export async function emitRuntimeInputEvent(
   state: ThreadState,
   queued: QueuedRuntimeInput,
   options: {
+    readonly attachmentStore?: RuntimeAttachmentStore;
     readonly commit?: () => Promise<void>;
     readonly onHandled?: () => Promise<void>;
   } = {}
@@ -73,7 +83,13 @@ export async function emitRuntimeInputEvent(
   }
 
   events.emitProcessedEvent(run, processed);
-  state.appendUserInput(runtimeInputHistoryFromEvent(processed, queued));
+  state.appendUserInput(
+    await stageUserInputAttachments(
+      runtimeInputHistoryFromEvent(processed, queued),
+      options.attachmentStore,
+      { trustRuntimeAttachmentRefs: true }
+    )
+  );
   await (options.commit ?? (() => state.commit()))();
   return true;
 }

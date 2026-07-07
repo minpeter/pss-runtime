@@ -9,9 +9,14 @@ export function threadHost(host: AgentHost): ThreadHost {
     case "thread":
       return host;
     case "durable-background":
-      return { kind: "thread", threadStore: host.threadStore };
+      return {
+        attachmentStore: host.attachmentStore,
+        kind: "thread",
+        threadStore: host.threadStore,
+      };
     case "execution":
       return {
+        attachmentStore: host.attachmentStore,
         kind: "thread",
         threadStore: threadStoreFromExecutionStore(host.store),
       };
@@ -50,6 +55,7 @@ function durableBackgroundHostFromExecutionHost(
   host: ExecutionHost
 ): DurableBackgroundHost {
   return {
+    attachmentStore: host.attachmentStore,
     backgroundScheduler: host.scheduler,
     checkpointStore: host.store.checkpoints,
     eventStore: host.store.events,
@@ -66,6 +72,7 @@ function executionHostFromDurableBackgroundHost(
 ): ExecutionHost {
   const threadStore = host.threadStore;
   return {
+    attachmentStore: host.attachmentStore,
     kind: "execution",
     scheduler: host.backgroundScheduler,
     store: {

@@ -1,4 +1,5 @@
 import type { ExecutionHost, ExecutionScheduler } from "../../../execution";
+import { FileAttachmentStore } from "../storage/file-attachment-store";
 import { FileExecutionStore } from "../storage/file-execution-store";
 import {
   appendScheduledNodeRun,
@@ -13,6 +14,7 @@ export function createNodeFileExecutionHost({
   directory,
 }: NodeFileExecutionHostOptions): ExecutionHost {
   return {
+    attachmentStore: new FileAttachmentStore(directory),
     kind: "execution",
     scheduler: createNodeFileScheduler({ directory }),
     store: new FileExecutionStore(directory),

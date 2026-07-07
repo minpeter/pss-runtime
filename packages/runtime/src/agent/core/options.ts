@@ -1,6 +1,7 @@
 import type { LanguageModel, ToolSet } from "ai";
 import type { AgentHost } from "../../execution/host/types";
 import type { AgentToolChoice } from "../../llm/llm";
+import type { RuntimeAttachmentStore } from "../../thread/input/attachments";
 import type { AgentInput, UserInput } from "../../thread/input/input";
 import type { AgentPlugin } from "../../thread/plugins/pipeline";
 
@@ -10,6 +11,7 @@ export interface AgentAutoCompactionOptions {
 }
 
 export interface AgentOptions {
+  readonly attachmentStore?: RuntimeAttachmentStore;
   readonly autoCompaction?: AgentAutoCompactionOptions | false;
   readonly host?: AgentHost;
   readonly instructions?: string;
@@ -23,7 +25,7 @@ export interface AgentOptions {
 
 export type AgentModelOptions = Pick<
   AgentOptions,
-  "instructions" | "model" | "toolChoice" | "tools"
+  "attachmentStore" | "instructions" | "model" | "toolChoice" | "tools"
 >;
 
 export function assertAgentOptions(

@@ -157,6 +157,7 @@ export type {
   SqlStorage,
   SqlStorageCursorLike,
 } from "./sql/ports/storage-port";
+export { CloudflareAttachmentStore } from "./storage/attachment-store";
 export type {
   ResolvedStoragePayloadPolicy,
   StorageCompactionMode,

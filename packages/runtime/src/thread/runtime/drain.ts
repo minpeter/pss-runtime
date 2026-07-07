@@ -1,4 +1,5 @@
 import type { ExecutionHost } from "../../execution/host/types";
+import type { RuntimeAttachmentStore } from "../input/attachments";
 import {
   type RuntimeInputPlacement,
   type RuntimeInputState,
@@ -23,7 +24,9 @@ export async function drainRuntimeInput({
   runtimeInput,
   state,
   threadKey,
+  attachmentStore,
 }: {
+  readonly attachmentStore: RuntimeAttachmentStore | undefined;
   readonly events: ThreadEventDispatcher;
   readonly executionHost?: ExecutionHost;
   readonly placement: RuntimeInputPlacement;
@@ -35,7 +38,9 @@ export async function drainRuntimeInput({
   let added = false;
   let next = shiftRuntimeInput(runtimeInput, placement);
   while (next) {
-    if (await emitRuntimeInputEvent(events, run, state, next)) {
+    if (
+      await emitRuntimeInputEvent(events, run, state, next, { attachmentStore })
+    ) {
       added = true;
     }
     next = shiftRuntimeInput(runtimeInput, placement);
@@ -45,6 +50,7 @@ export async function drainRuntimeInput({
     (await drainDurableRuntimeInput({
       events,
       executionHost,
+      attachmentStore,
       placement,
       run,
       state,
@@ -56,6 +62,7 @@ export async function drainRuntimeInput({
 async function drainDurableRuntimeInput({
   events,
   executionHost,
+  attachmentStore,
   placement,
   run,
   state,
@@ -63,6 +70,7 @@ async function drainDurableRuntimeInput({
 }: {
   readonly events: ThreadEventDispatcher;
   readonly executionHost?: ExecutionHost;
+  readonly attachmentStore: RuntimeAttachmentStore | undefined;
   readonly placement: RuntimeInputPlacement;
   readonly run: BufferedAgentTurn;
   readonly state: ThreadState;
@@ -90,6 +98,7 @@ async function drainDurableRuntimeInput({
           placement,
         },
         {
+          attachmentStore,
           commit: () =>
             commitAndAckDurableThreadInput({
               executionHost,

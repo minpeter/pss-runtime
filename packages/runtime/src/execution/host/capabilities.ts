@@ -1,3 +1,4 @@
+import type { RuntimeAttachmentStore } from "../../thread/input/attachments";
 import type { ThreadStore } from "../../thread/store/types";
 import type {
   CheckpointStore,
@@ -9,6 +10,7 @@ import type {
 } from "./types";
 
 export interface ThreadHost {
+  readonly attachmentStore?: RuntimeAttachmentStore;
   readonly kind: "thread";
   readonly threadStore: ThreadStore;
 }
@@ -47,5 +49,6 @@ export type DurableBackgroundHost = BackgroundSchedulerHost &
   NotificationHost &
   CheckpointHost &
   ThreadStoreHost & {
+    readonly attachmentStore?: RuntimeAttachmentStore;
     readonly kind: "durable-background";
   } & TurnHost;
