@@ -18,7 +18,6 @@ import type {
   UserInput,
   UserMessageContentPart,
   UserMessageFileData,
-  UserMessageFilePart,
 } from "./input";
 
 export async function stageUserInputAttachments(
@@ -34,11 +33,6 @@ export async function stageUserInputAttachments(
   for (const part of input.content) {
     if (part.type === "text") {
       content.push(structuredClone(part));
-      continue;
-    }
-
-    if (part.type === "image") {
-      content.push(await stageImagePart(part, store, options));
       continue;
     }
 
@@ -88,13 +82,9 @@ export function userInputRequiresAttachmentStaging(input: UserInput): boolean {
     return false;
   }
 
-  return input.content.some((part) => {
-    if (part.type === "file") {
-      return fileDataRequiresStaging(part.data);
-    }
-
-    return part.type === "image" && !isRemoteUrl(part.image);
-  });
+  return input.content.some(
+    (part) => part.type === "file" && fileDataRequiresStaging(part.data)
+  );
 }
 
 export function userInputRequiresAttachmentProcessing(
@@ -115,10 +105,6 @@ export function userInputContainsRuntimeAttachmentRefs(
   }
 
   return input.content.some((part) => {
-    if (part.type === "image") {
-      return isRuntimeAttachmentData(part.image);
-    }
-
     return (
       part.type === "file" && runtimeAttachmentDataRef(part.data) !== undefined
     );
@@ -179,10 +165,6 @@ function runtimeAttachmentRefsForUserInput(
 
   const refs: RuntimeAttachmentReference[] = [];
   for (const part of input.content) {
-    if (part.type === "image" && isRuntimeAttachmentData(part.image)) {
-      refs.push(decodeRuntimeAttachmentData(part.image));
-    }
-
     if (part.type === "file") {
       const ref = runtimeAttachmentDataRef(part.data);
       if (ref) {
@@ -227,49 +209,6 @@ async function stageFileData(
   });
   options.stagedRefs?.push(ref);
   return encodeRuntimeAttachmentData(ref);
-}
-
-async function stageImagePart(
-  part: {
-    readonly image: string;
-    readonly mediaType?: string;
-    readonly type: "image";
-  },
-  store: RuntimeAttachmentStore | undefined,
-  options: RuntimeAttachmentStagingOptions
-): Promise<UserMessageFilePart> {
-  if (isRuntimeAttachmentData(part.image)) {
-    if (options.trustRuntimeAttachmentRefs === true) {
-      return {
-        data: part.image,
-        mediaType: part.mediaType ?? "image",
-        type: "file",
-      };
-    }
-    throw new RuntimeAttachmentSecurityError(
-      "External input cannot contain runtime attachment refs."
-    );
-  }
-
-  const mediaType = part.mediaType ?? "image";
-  if (isRemoteUrl(part.image)) {
-    return {
-      data: part.image,
-      mediaType,
-      type: "file",
-    };
-  }
-
-  return {
-    data: await stageFileData(
-      { data: part.image, type: "data" },
-      { mediaType },
-      store,
-      options
-    ),
-    mediaType,
-    type: "file",
-  };
 }
 
 function fileDataBytes(data: UserMessageFileData): Uint8Array | undefined {

@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
+import { createNoopTool } from "../../testing/llm-test-utils";
 import {
   createMockLanguageModelV4,
   mockLanguageModelV4Text,
@@ -165,6 +166,22 @@ describe("Agent", () => {
     expect(() => Reflect.construct(Agent, [{ model: "not-a-model" }])).toThrow(
       invalidModelPattern
     );
+  });
+
+  it("rejects tools using AI SDK tool approval", () => {
+    const tools = {
+      risky: {
+        ...createNoopTool(),
+        needsApproval: true,
+      },
+    } satisfies NonNullable<AgentOptions["tools"]>;
+
+    expect(() =>
+      new Agent({
+        model: fakeModel,
+        tools,
+      })
+    ).toThrow(/needsApproval.*not supported/);
   });
 
   it("does not implement legacy llm configuration", () => {

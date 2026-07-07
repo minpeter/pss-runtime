@@ -106,12 +106,6 @@ function isUserMessageContentPart(
   if (value.type === "text") {
     return typeof value.text === "string";
   }
-  if (value.type === "image") {
-    return (
-      typeof value.image === "string" &&
-      (value.mediaType === undefined || typeof value.mediaType === "string")
-    );
-  }
   return (
     value.type === "file" &&
     isUserMessageFileData(value.data) &&

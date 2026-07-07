@@ -8,7 +8,6 @@ export type {
   UserMessageContentPart,
   UserMessageFileData,
   UserMessageFilePart,
-  UserMessageImagePart,
   UserMessageTextPart,
   UserText,
   UserTextContent,

@@ -68,7 +68,7 @@ describe("Agent thread API", () => {
 
     const input = [
       { type: "text", text: "describe this" },
-      { type: "image", image: "iVBORw0KGgo=", mediaType: "image/png" },
+      { type: "file", data: "iVBORw0KGgo=", mediaType: "image/png" },
       {
         type: "file",
         data: { type: "text", text: "inline document" },
@@ -112,12 +112,12 @@ describe("Agent thread API", () => {
     if (acceptedInput?.type !== "user-input" || !("content" in acceptedInput)) {
       throw new Error("expected multipart user-input event");
     }
-    const imagePart = acceptedInput.content[1];
-    expect(imagePart?.type).toBe("file");
-    if (imagePart?.type !== "file") {
+    const imageFilePart = acceptedInput.content[1];
+    expect(imageFilePart?.type).toBe("file");
+    if (imageFilePart?.type !== "file") {
       throw new Error("expected staged image file part");
     }
-    expect(isRuntimeAttachmentData(imagePart.data)).toBe(true);
+    expect(isRuntimeAttachmentData(imageFilePart.data)).toBe(true);
     expect(acceptedInput.content[2]).toEqual(input[2]);
   });
 
@@ -131,7 +131,7 @@ describe("Agent thread API", () => {
     await expect(
       agent.send([{ type: "image", mediaType: "image/png" }] as never)
     ).rejects.toThrow(
-      'Agent input content parts must be { type: "text", text }, { type: "image", image }, or { type: "file", data, mediaType }.'
+      'Agent input content parts must be { type: "text", text } or { type: "file", data, mediaType }.'
     );
   });
 
@@ -144,7 +144,7 @@ describe("Agent thread API", () => {
     });
 
     await expect(agent.send(sparseInput)).rejects.toThrow(
-      'Agent input content parts must be { type: "text", text }, { type: "image", image }, or { type: "file", data, mediaType }.'
+      'Agent input content parts must be { type: "text", text } or { type: "file", data, mediaType }.'
     );
   });
 
@@ -158,7 +158,7 @@ describe("Agent thread API", () => {
     await expect(
       agent.send([{ type: "file", data: "abc" }] as never)
     ).rejects.toThrow(
-      'Agent input content parts must be { type: "text", text }, { type: "image", image }, or { type: "file", data, mediaType }.'
+      'Agent input content parts must be { type: "text", text } or { type: "file", data, mediaType }.'
     );
   });
 
@@ -191,7 +191,7 @@ describe("Agent thread API", () => {
     await collect(
       await agent.thread("custom").send([
         { type: "text", text: "summarize" },
-        { type: "image", image: "iVBORw0KGgo=" },
+        { type: "file", data: "iVBORw0KGgo=", mediaType: "image/png" },
       ])
     );
 

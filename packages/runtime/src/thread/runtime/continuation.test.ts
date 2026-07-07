@@ -60,7 +60,7 @@ describe("Agent thread runtime input continuation", () => {
     ]);
   });
 
-  it("normalizes multipart image and file thread.steer input like thread.send", async () => {
+  it("normalizes multipart image file thread.steer input like thread.send", async () => {
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
       model: createCallbackModel(({ history }) => {
@@ -70,7 +70,7 @@ describe("Agent thread runtime input continuation", () => {
     });
     const input = [
       { type: "text", text: "describe this" },
-      { type: "image", image: "iVBORw0KGgo=", mediaType: "image/png" },
+      { type: "file", data: "iVBORw0KGgo=", mediaType: "image/png" },
       {
         type: "file",
         data: { type: "text", text: "inline document" },
@@ -109,12 +109,12 @@ describe("Agent thread runtime input continuation", () => {
       text: "describe this",
       type: "text",
     });
-    const runtimeImagePart = runtimeInput.input.content[1];
-    expect(runtimeImagePart?.type).toBe("file");
-    if (runtimeImagePart?.type !== "file") {
+    const runtimeImageFilePart = runtimeInput.input.content[1];
+    expect(runtimeImageFilePart?.type).toBe("file");
+    if (runtimeImageFilePart?.type !== "file") {
       throw new Error("expected staged file part");
     }
-    expect(isRuntimeAttachmentData(runtimeImagePart.data)).toBe(true);
+    expect(isRuntimeAttachmentData(runtimeImageFilePart.data)).toBe(true);
     expect(seenHistory).toEqual([
       [
         userTextToModelMessage(userText("initial")),

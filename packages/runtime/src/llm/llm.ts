@@ -9,6 +9,7 @@ import {
   normalizeToolCallIds,
   rewriteMessageToolCallIds,
 } from "./tool-execution";
+import { assertNoUnsupportedToolApproval } from "./tool-approval";
 
 export type {
   RuntimePersistedToolExecutionCheckpoint,
@@ -102,6 +103,7 @@ export async function generateModelStep({
     instructions: prompt.instructions,
     messages,
   });
+  assertNoUnsupportedToolApproval(tools);
   const { responseMessages } = await generateText({
     abortSignal: signal,
     instructions: prompt.instructions,

@@ -1,6 +1,7 @@
 import type { LanguageModel, ToolSet } from "ai";
 import type { AgentHost } from "../../execution/host/types";
 import type { AgentToolChoice, ModelContextGateOptions } from "../../llm/llm";
+import { assertNoUnsupportedToolApproval } from "../../llm/tool-approval";
 import type { RuntimeAttachmentStore } from "../../thread/input/attachments";
 import type { AgentInput, UserInput } from "../../thread/input/input";
 import type { AgentPlugin } from "../../thread/plugins/pipeline";
@@ -53,7 +54,9 @@ export function assertAgentOptions(
 
   const candidate = options as {
     readonly autoCompaction?: AgentOptions["autoCompaction"];
+    readonly tools?: AgentOptions["tools"];
   };
+  assertNoUnsupportedToolApproval(candidate.tools);
   normalizeAgentAutoCompactionOptions(candidate.autoCompaction);
 }
 

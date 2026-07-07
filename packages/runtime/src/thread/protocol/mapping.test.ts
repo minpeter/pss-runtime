@@ -55,14 +55,14 @@ describe("thread mapping", () => {
     });
   });
 
-  it("maps user image input to a serializable AI SDK file part", () => {
+  it("maps user image file input to a serializable AI SDK file part", () => {
     expect(
       userMessageToModelMessage(
         userMessage([
           { type: "text", text: "describe this" },
           {
-            type: "image",
-            image: "iVBORw0KGgo=",
+            type: "file",
+            data: "iVBORw0KGgo=",
             mediaType: "image/png",
           },
         ])
