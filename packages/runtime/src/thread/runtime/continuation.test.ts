@@ -6,9 +6,9 @@ import {
   createCallbackModel,
   sentUserText,
   steerRuntimeInput,
-  steerRuntimeInputMessage,
   userText,
 } from "../../testing/test-fixtures";
+import { isRuntimeAttachmentData } from "../input/attachments";
 import type { AgentEvent } from "../protocol/events";
 import { userTextToModelMessage } from "../protocol/mapping";
 
@@ -93,24 +93,55 @@ describe("Agent thread runtime input continuation", () => {
       }
     }
 
-    expect(runtimeInputs).toEqual([
-      steerRuntimeInputMessage(input, "step-start"),
-    ]);
+    const runtimeInput = runtimeInputs[0];
+    if (runtimeInput?.type !== "runtime-input") {
+      throw new Error("expected runtime input event");
+    }
+    expect(runtimeInput.placement).toBe("step-start");
+    expect(runtimeInput.meta).toEqual({
+      source: "steer",
+      streaming: "steer",
+    });
+    if (!("content" in runtimeInput.input)) {
+      throw new Error("expected multipart runtime input");
+    }
+    expect(runtimeInput.input.content[0]).toEqual({
+      text: "describe this",
+      type: "text",
+    });
+    const runtimeImagePart = runtimeInput.input.content[1];
+    expect(runtimeImagePart?.type).toBe("file");
+    if (runtimeImagePart?.type !== "file") {
+      throw new Error("expected staged file part");
+    }
+    expect(isRuntimeAttachmentData(runtimeImagePart.data)).toBe(true);
     expect(seenHistory).toEqual([
       [
         userTextToModelMessage(userText("initial")),
         {
-          role: "user",
           content: [
-            { type: "text", text: "describe this" },
-            { type: "file", data: "iVBORw0KGgo=", mediaType: "image/png" },
             {
+              providerOptions: undefined,
+              text: "describe this",
+              type: "text",
+            },
+            {
+              data: new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+              filename: undefined,
+              mediaType: "image/png",
+              providerOptions: undefined,
               type: "file",
+            },
+            {
               data: { type: "text", text: "inline document" },
               filename: "note.txt",
               mediaType: "text/plain",
+              providerOptions: undefined,
+              type: "file",
             },
           ],
+          providerOptions: undefined,
+          role: "user",
         },
       ],
     ]);

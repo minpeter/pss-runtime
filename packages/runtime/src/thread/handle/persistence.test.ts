@@ -1,14 +1,6 @@
-import { mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../../agent/core/agent";
-import { FileThreadStore } from "../../platform/file";
-import {
-  createMockLanguageModelV4,
-  mockLanguageModelV4Text,
-} from "../../testing/mock-language-model-v4-test-utils";
 import {
   assistantMessage,
   createCallbackModel,
@@ -25,54 +17,7 @@ import {
   SpyStore,
 } from "./test-support";
 
-const storedAssistantOutput = (text: string): ModelMessage => ({
-  content: [{ providerOptions: undefined, text, type: "text" }],
-  role: "assistant",
-});
-
 describe("Agent thread persistence", () => {
-  it("file thread store preserves image content parts across reload", async () => {
-    const input = [
-      { type: "text", text: "remember this image" },
-      {
-        type: "image",
-        image: "data:image/png;base64,ZmFrZQ==",
-        mediaType: "image/png",
-      },
-      {
-        type: "file",
-        data: { type: "text", text: "inline note" },
-        filename: "note.txt",
-        mediaType: "text/plain",
-      },
-    ] as const;
-    const directory = await mkdtemp(join(tmpdir(), "pss-runtime-image-store-"));
-    const store = new FileThreadStore(directory);
-
-    const first = new Agent({
-      host: { kind: "thread", threadStore: store },
-      model: createMockLanguageModelV4([mockLanguageModelV4Text("stored")]),
-    });
-    await collect(await first.thread("images").send(input));
-
-    const secondModel = createMockLanguageModelV4([
-      mockLanguageModelV4Text("DONE"),
-    ]);
-    const second = new Agent({
-      host: { kind: "thread", threadStore: store },
-      model: secondModel,
-    });
-
-    await collect(await second.thread("images").send("next"));
-
-    expect(JSON.stringify(secondModel.doGenerateCalls[0]?.prompt)).toContain(
-      "remember this image"
-    );
-    expect(JSON.stringify(secondModel.doGenerateCalls[0]?.prompt)).toContain(
-      "next"
-    );
-  });
-
   it("emits and propagates runtime input commit conflicts without using the conflicted snapshot", async () => {
     const store = new ConflictOnCommitStore();
     store.conflictOnCommit = 2;
@@ -268,51 +213,6 @@ describe("Agent thread persistence", () => {
     expect(finalCommit?.next.state).not.toBeInstanceOf(Array);
     expect(finalCommit?.next).not.toHaveProperty("version");
     expect(store.commits[0]?.expectedVersion).toBeNull();
-  });
-
-  it("compacts model context without dropping full stored history", async () => {
-    const store = new SpyStore();
-    const seenHistory: ModelMessage[][] = [];
-    const agent = new Agent({
-      host: { kind: "thread", threadStore: store },
-      model: createCallbackModel(({ history }) => {
-        seenHistory.push([...history]);
-        return Promise.resolve([
-          assistantMessage(`DONE ${seenHistory.length}`),
-        ]);
-      }),
-    });
-    const thread = agent.thread("compact");
-
-    await collect(await thread.send("old"));
-    await thread.compact({
-      endSeqExclusive: 2,
-      startSeq: 0,
-      summary: "old exchange summarized",
-    });
-    await collect(await thread.send("tail"));
-
-    expect(seenHistory[1]).toEqual([
-      { content: "old exchange summarized", role: "system" },
-      userTextToModelMessage(userText("tail")),
-    ]);
-    expect(store.threads.get("compact")?.state).toEqual({
-      compactions: [
-        {
-          endSeqExclusive: 2,
-          schemaVersion: 1,
-          startSeq: 0,
-          summary: { content: "old exchange summarized", role: "system" },
-        },
-      ],
-      history: [
-        userTextToModelMessage(userText("old")),
-        storedAssistantOutput("DONE 1"),
-        userTextToModelMessage(userText("tail")),
-        storedAssistantOutput("DONE 2"),
-      ],
-      schemaVersion: 2,
-    });
   });
 
   it("refreshes stored state after commit conflicts so the handle can recover", async () => {

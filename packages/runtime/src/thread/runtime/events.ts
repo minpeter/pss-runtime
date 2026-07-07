@@ -4,6 +4,10 @@ import type {
   RuntimeToolExecutionDecision,
 } from "../../llm/llm";
 import {
+  type RuntimeAttachmentStore,
+  stageAgentEventAttachments,
+} from "../input/attachments";
+import {
   type AgentPlugin,
   type PluginPipelineResult,
   runPluginsForEvent,
@@ -12,18 +16,21 @@ import type { AgentEvent, BeforeToolCall } from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
 
 interface ThreadEventDispatcherOptions {
+  readonly attachmentStore?: RuntimeAttachmentStore;
   readonly history: () => readonly ModelMessage[];
   readonly plugins: readonly AgentPlugin[];
   readonly signal: () => AbortSignal | undefined;
 }
 
 export class ThreadEventDispatcher {
+  readonly #attachmentStore: RuntimeAttachmentStore | undefined;
   readonly #history: () => readonly ModelMessage[];
   #observerEventBuffer?: AgentEvent[];
   readonly #plugins: readonly AgentPlugin[];
   readonly #signal: () => AbortSignal | undefined;
 
   constructor(options: ThreadEventDispatcherOptions) {
+    this.#attachmentStore = options.attachmentStore;
     this.#history = options.history;
     this.#plugins = options.plugins;
     this.#signal = options.signal;
@@ -134,7 +141,9 @@ export class ThreadEventDispatcher {
       return event;
     }
 
-    return pipeline.event;
+    return stageAgentEventAttachments(pipeline.event, this.#attachmentStore, {
+      trustRuntimeAttachmentRefs: true,
+    });
   }
 
   emitProcessedEvent(run: BufferedAgentTurn, event: AgentEvent): void {

@@ -13,7 +13,7 @@ import type {
   TurnRecord,
   TurnStore,
 } from "../execution";
-import type { AgentHost } from "../index";
+import type { AgentHost, RuntimeAttachmentStore } from "../index";
 
 describe("runtime host public contracts", () => {
   it("types advanced host contracts", () => {
@@ -25,6 +25,9 @@ describe("runtime host public contracts", () => {
       ExecutionStore["notifications"]
     >().toEqualTypeOf<NotificationInbox>();
     expectTypeOf<ExecutionHost["kind"]>().toEqualTypeOf<"execution">();
+    expectTypeOf<ExecutionHost["attachmentStore"]>().toEqualTypeOf<
+      RuntimeAttachmentStore | undefined
+    >();
     expectTypeOf<ExecutionStore["turns"]>().toEqualTypeOf<TurnStore>();
     expectTypeOf<
       ExecutionStore["checkpoints"]
@@ -43,10 +46,14 @@ describe("runtime host public contracts", () => {
       ExecutionStoreTransaction["notifications"]
     >().toEqualTypeOf<NotificationInbox>();
     const threadHost = {
+      attachmentStore: {} as RuntimeAttachmentStore,
       kind: "thread",
       threadStore: {} as ThreadHost["threadStore"],
     } satisfies ThreadHost;
     const agentHost = threadHost satisfies AgentHost;
+    expectTypeOf<ThreadHost["attachmentStore"]>().toEqualTypeOf<
+      RuntimeAttachmentStore | undefined
+    >();
     expectTypeOf<
       DurableBackgroundHost["turnStore"]
     >().toEqualTypeOf<TurnStore>();
@@ -64,6 +71,9 @@ describe("runtime host public contracts", () => {
     >().toEqualTypeOf<ExecutionScheduler>();
     expectTypeOf<DurableBackgroundHost["transaction"]>().toEqualTypeOf<
       ExecutionStore["transaction"]
+    >();
+    expectTypeOf<DurableBackgroundHost["attachmentStore"]>().toEqualTypeOf<
+      RuntimeAttachmentStore | undefined
     >();
     expect(agentHost.kind).toBe("thread");
   });

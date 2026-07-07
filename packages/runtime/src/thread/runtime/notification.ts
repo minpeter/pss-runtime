@@ -1,3 +1,8 @@
+import {
+  type RuntimeAttachmentStore,
+  stageAgentEventsAttachments,
+  stageUserInputAttachments,
+} from "../input/attachments";
 import type { AgentInput, UserInput } from "../input/input";
 import { attachInputMeta } from "../input/input-meta";
 import { normalizeInternalAgentInput } from "../input/input-normalization";
@@ -21,6 +26,7 @@ export interface NotifyOptions {
 interface QueueThreadNotificationOptions {
   readonly activeRun: BufferedAgentTurn | undefined;
   readonly activeRuntimeInput: RuntimeInputState | undefined;
+  readonly attachmentStore: RuntimeAttachmentStore | undefined;
   readonly drain: () => Promise<void>;
   emitObserverEvent(
     run: BufferedAgentTurn | undefined,
@@ -35,14 +41,26 @@ export async function queueThreadNotification(
   options: NotifyOptions,
   state: QueueThreadNotificationOptions
 ): Promise<AgentTurn> {
+  const attachmentStore = state.attachmentStore;
   const queuedRuntimeInput: QueuedRuntimeInput = {
-    input: attachInputMeta(normalizeInternalAgentInput(input), {
-      source: "notify",
-    }),
+    input: await stageUserInputAttachments(
+      attachInputMeta(normalizeInternalAgentInput(input), {
+        source: "notify",
+      }),
+      attachmentStore,
+      { trustRuntimeAttachmentRefs: true }
+    ),
     placement: "turn-start",
   };
-  const queuedOverlays = createNotificationOverlays(options.overlays ?? []);
-  const observerEvents = cloneObserverEvents(options.observerEvents ?? []);
+  const queuedOverlays = await createNotificationOverlays(
+    options.overlays ?? [],
+    attachmentStore
+  );
+  const observerEvents = await stageAgentEventsAttachments(
+    options.observerEvents ?? [],
+    attachmentStore,
+    { trustRuntimeAttachmentRefs: true }
+  );
   const queuedTurn = state.inputQueue[0];
   if (queuedTurn) {
     queuedTurn.initialEvents.push(...observerEvents);
@@ -95,18 +113,23 @@ export function startThreadQueueDrain(
   });
 }
 
-function cloneObserverEvents(events: readonly AgentEvent[]): AgentEvent[] {
-  return events.map((event) => structuredClone(event));
-}
-
-function createNotificationOverlays(
-  overlays: readonly (AgentInput | UserInput)[]
-): QueuedRuntimeInput[] {
-  return overlays.map((input) => ({
-    canonical: false,
-    input: attachInputMeta(normalizeInternalAgentInput(input), {
-      source: "overlay",
-    }),
-    placement: "turn-start",
-  }));
+async function createNotificationOverlays(
+  overlays: readonly (AgentInput | UserInput)[],
+  attachmentStore: RuntimeAttachmentStore | undefined
+): Promise<QueuedRuntimeInput[]> {
+  const queued: QueuedRuntimeInput[] = [];
+  for (const input of overlays) {
+    queued.push({
+      canonical: false,
+      input: await stageUserInputAttachments(
+        attachInputMeta(normalizeInternalAgentInput(input), {
+          source: "overlay",
+        }),
+        attachmentStore,
+        { trustRuntimeAttachmentRefs: true }
+      ),
+      placement: "turn-start" as const,
+    });
+  }
+  return queued;
 }

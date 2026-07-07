@@ -1,4 +1,9 @@
 import type { ExecutionHost } from "../../execution/host/types";
+import {
+  type RuntimeAttachmentStore,
+  stageUserInputAttachments,
+  userInputRequiresAttachmentProcessing,
+} from "../input/attachments";
 import type { AgentInput } from "../input/input";
 import { attachInputMeta, userInputFromEvent } from "../input/input-meta";
 import { normalizeAgentInput } from "../input/input-normalization";
@@ -27,6 +32,7 @@ export class DurableInputRecoveryState {
 
 export async function admitThreadSendInput({
   awaitBoundaries,
+  attachmentStore,
   drain,
   events,
   executionHost,
@@ -38,6 +44,7 @@ export async function admitThreadSendInput({
   threadKey,
 }: {
   readonly awaitBoundaries: boolean;
+  readonly attachmentStore: RuntimeAttachmentStore | undefined;
   readonly drain: () => Promise<void>;
   readonly events: ThreadEventDispatcher;
   readonly executionHost: ExecutionHost | undefined;
@@ -50,6 +57,7 @@ export async function admitThreadSendInput({
 }): Promise<void> {
   const queued = await createQueuedSendInput({
     awaitBoundaries,
+    attachmentStore,
     events,
     executionHost,
     input,
@@ -102,6 +110,7 @@ type QueuedSendInputResult =
 
 export async function createQueuedSendInput({
   awaitBoundaries,
+  attachmentStore,
   events,
   executionHost,
   input,
@@ -111,6 +120,7 @@ export async function createQueuedSendInput({
   threadKey,
 }: {
   readonly awaitBoundaries: boolean;
+  readonly attachmentStore: RuntimeAttachmentStore | undefined;
   readonly events: ThreadEventDispatcher;
   readonly executionHost: ExecutionHost | undefined;
   readonly input: AgentInput;
@@ -124,14 +134,22 @@ export async function createQueuedSendInput({
     normalized.meta === undefined
       ? attachInputMeta(normalized, { source: "send" })
       : normalized;
-  const processed = await events.interceptEvent(acceptedInput);
+  const stagedAcceptedInput = await stageUserInputAttachments(
+    acceptedInput,
+    attachmentStore
+  );
+  const processed = await events.interceptEvent(stagedAcceptedInput);
   if (processed === "handled") {
     run.close();
     return { kind: "handled" };
   }
 
-  const queuedInput = userInputFromEvent(
-    processed.type === "user-input" ? processed : acceptedInput
+  const queuedInput = await stageUserInputAttachments(
+    userInputFromEvent(
+      processed.type === "user-input" ? processed : stagedAcceptedInput
+    ),
+    attachmentStore,
+    { trustRuntimeAttachmentRefs: true }
   );
   const admission = await admitDurableThreadInput({
     executionHost,
@@ -162,26 +180,32 @@ export async function createQueuedSendInput({
 }
 
 export async function addDurableSteeringInput({
+  attachmentStore,
   executionHost,
   input,
   runtimeInput,
   threadKey,
 }: {
+  readonly attachmentStore: RuntimeAttachmentStore | undefined;
   readonly executionHost: ExecutionHost | undefined;
   readonly input: AgentInput;
   readonly runtimeInput: RuntimeInputState;
   readonly threadKey: string;
 }): Promise<void> {
+  const placement = currentSteeringPlacement(runtimeInput);
   const next = runtimeInput.pending.then(async () => {
     assertRuntimeInputOpen(runtimeInput);
     const acceptedInput = attachInputMeta(normalizeAgentInput(input), {
       source: "steer",
       streaming: "steer",
     });
-    const placement = currentSteeringPlacement(runtimeInput);
+    const stagedInput = userInputRequiresAttachmentProcessing(acceptedInput)
+      ? await stageUserInputAttachments(acceptedInput, attachmentStore)
+      : acceptedInput;
+    assertRuntimeInputOpen(runtimeInput);
     const admission = await admitDurableThreadInput({
       executionHost,
-      input: acceptedInput,
+      input: stagedInput,
       kind: "steer",
       placement,
       threadKey,
@@ -190,8 +214,9 @@ export async function addDurableSteeringInput({
       return;
     }
 
+    assertRuntimeInputOpen(runtimeInput);
     queueRuntimeInput(runtimeInput, {
-      input: acceptedInput,
+      input: stagedInput,
       placement,
     });
   });

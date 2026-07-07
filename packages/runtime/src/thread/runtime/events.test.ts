@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest";
+import { MemoryAttachmentStore } from "../../platform/memory";
+import {
+  decodeRuntimeAttachmentData,
+  isRuntimeAttachmentData,
+} from "../input/attachments";
 import type { AgentPlugin } from "../plugins/pipeline";
 import { BufferedAgentTurn } from "../protocol/turn";
 import { ThreadEventDispatcher } from "./events";
 
 function createDispatcher(
-  plugins: readonly AgentPlugin[]
+  plugins: readonly AgentPlugin[],
+  attachmentStore?: MemoryAttachmentStore
 ): ThreadEventDispatcher {
   return new ThreadEventDispatcher({
+    attachmentStore,
     history: () => [],
     plugins,
     signal: () => undefined,
@@ -45,6 +52,110 @@ describe("ThreadEventDispatcher.emitRunEvent", () => {
       text: "TAG:hello",
     });
     await iterator.return?.();
+  });
+
+  it("stages plugin-transformed file bytes before emitting user-input", async () => {
+    const attachmentStore = new MemoryAttachmentStore();
+    const transformPlugin: AgentPlugin = {
+      on: ({ event }) => {
+        if (event.type !== "user-input") {
+          return;
+        }
+        return {
+          action: "transform",
+          event: {
+            content: [
+              {
+                data: new Uint8Array([1, 2, 3]),
+                mediaType: "application/octet-stream",
+                type: "file",
+              },
+            ],
+            type: "user-input",
+          },
+        };
+      },
+    };
+    const dispatcher = createDispatcher([transformPlugin], attachmentStore);
+    const run = new BufferedAgentTurn();
+
+    const emitted = await dispatcher.emitRunEvent(run, {
+      type: "user-input",
+      text: "hello",
+    });
+
+    if (emitted === "handled" || !("content" in emitted)) {
+      throw new Error("expected emitted multipart user-input");
+    }
+    const part = emitted.content[0];
+    expect(part?.type).toBe("file");
+    if (part?.type !== "file") {
+      throw new Error("expected emitted file part");
+    }
+    const ref = part.data;
+    if (!isRuntimeAttachmentData(ref)) {
+      throw new Error("expected runtime attachment data");
+    }
+    const blob = await attachmentStore.get(decodeRuntimeAttachmentData(ref));
+    expect(blob?.bytes).toEqual(new Uint8Array([1, 2, 3]));
+
+    const iterator = run.events()[Symbol.asyncIterator]();
+    expect((await iterator.next()).value).toEqual(emitted);
+    await iterator.return?.();
+  });
+
+  it("stages plugin-transformed file bytes before returning runtime-input", async () => {
+    const attachmentStore = new MemoryAttachmentStore();
+    const transformPlugin: AgentPlugin = {
+      on: ({ event }) => {
+        if (event.type !== "runtime-input") {
+          return;
+        }
+        return {
+          action: "transform",
+          event: {
+            input: {
+              content: [
+                {
+                  data: new Uint8Array([4, 5, 6]),
+                  mediaType: "application/octet-stream",
+                  type: "file",
+                },
+              ],
+              type: "user-input",
+            },
+            placement: event.placement,
+            type: "runtime-input",
+          },
+        };
+      },
+    };
+    const dispatcher = createDispatcher([transformPlugin], attachmentStore);
+
+    const emitted = await dispatcher.interceptEvent({
+      input: { text: "hint", type: "user-input" },
+      placement: "step-start",
+      type: "runtime-input",
+    });
+
+    if (
+      emitted === "handled" ||
+      emitted.type !== "runtime-input" ||
+      !("content" in emitted.input)
+    ) {
+      throw new Error("expected emitted multipart runtime-input");
+    }
+    const part = emitted.input.content[0];
+    expect(part?.type).toBe("file");
+    if (part?.type !== "file") {
+      throw new Error("expected emitted runtime-input file part");
+    }
+    const ref = part.data;
+    if (!isRuntimeAttachmentData(ref)) {
+      throw new Error("expected runtime attachment data");
+    }
+    const blob = await attachmentStore.get(decodeRuntimeAttachmentData(ref));
+    expect(blob?.bytes).toEqual(new Uint8Array([4, 5, 6]));
   });
 
   it("returns handled without emitting user-input to the run", async () => {

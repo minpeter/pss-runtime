@@ -96,6 +96,10 @@ function userMessageFileDataToFileData(
     return data;
   }
 
+  if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
+    return data;
+  }
+
   if (data.type === "url") {
     return data.url;
   }

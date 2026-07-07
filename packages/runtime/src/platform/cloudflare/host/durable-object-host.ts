@@ -1,5 +1,6 @@
 import type { ExecutionHost, ExecutionScheduler } from "../../../execution";
 import type { ThreadStore } from "../../../index";
+import { CloudflareAttachmentStore } from "../storage/attachment-store";
 import {
   InMemoryCloudflareDurableObjectStorage as BaseInMemoryCloudflareDurableObjectStorage,
   type CloudflareDurableObjectStorage as DurableObjectStoragePort,
@@ -62,6 +63,7 @@ export function createCloudflareDurableObjectHost({
     storage,
   });
   return {
+    attachmentStore: new CloudflareAttachmentStore({ prefix, storage }),
     kind: "execution",
     scheduler,
     store: threadStore ? executionStoreWithThreads(store, threadStore) : store,

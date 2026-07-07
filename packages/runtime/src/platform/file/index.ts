@@ -32,6 +32,7 @@ export type {
   NodeScheduledWorkListOptions,
   NodeScheduledWorkRunContext,
 } from "./host/scheduled-work-types";
+export { FileAttachmentStore } from "./storage/file-attachment-store";
 export { FileExecutionStore } from "./storage/file-execution-store";
 export {
   inspectNodeFileThread,
