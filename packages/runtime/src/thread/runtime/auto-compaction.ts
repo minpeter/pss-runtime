@@ -55,39 +55,71 @@ async function compactThreadInBackground({
   readonly state: ThreadState;
 }): Promise<void> {
   try {
-    for (;;) {
-      const history = state.modelSnapshot();
-      const compactions = state.compactionSnapshot();
-      const range = selectAutoCompactionRange({
-        compactions,
-        history,
-        policy,
-      });
-      if (!range) {
-        return;
-      }
-
-      const summary = await summarizeCompactionRange({
-        history: summaryHistoryForRange({ compactions, history, range }),
-        model,
-      });
-      if (summary.length === 0) {
-        return;
-      }
-
-      const latestRange = selectAutoCompactionRange({
-        compactions: state.compactionSnapshot(),
-        history: state.modelSnapshot(),
-        policy,
-      });
-      if (!sameRange(range, latestRange)) {
-        continue;
-      }
-
-      await state.compact({ ...range, summary });
+    let compacted = await compactThreadOnce({ model, policy, state });
+    while (compacted) {
+      compacted = await compactThreadOnce({ model, policy, state });
     }
   } catch {
     return;
+  }
+}
+
+export async function compactThreadBlocking({
+  model,
+  policy,
+  state,
+}: {
+  readonly model: ModelGenerationOptions;
+  readonly policy?: ThreadAutoCompactionOptions;
+  readonly state: ThreadState;
+}): Promise<boolean> {
+  if (!policy) {
+    return false;
+  }
+
+  return await compactThreadOnce({ model, policy, state });
+}
+
+async function compactThreadOnce({
+  model,
+  policy,
+  state,
+}: {
+  readonly model: ModelGenerationOptions;
+  readonly policy: ThreadAutoCompactionOptions;
+  readonly state: ThreadState;
+}): Promise<boolean> {
+  for (;;) {
+    const history = state.modelSnapshot();
+    const compactions = state.compactionSnapshot();
+    const range = selectAutoCompactionRange({
+      compactions,
+      history,
+      policy,
+    });
+    if (!range) {
+      return false;
+    }
+
+    const summary = await summarizeCompactionRange({
+      history: summaryHistoryForRange({ compactions, history, range }),
+      model,
+    });
+    if (summary.length === 0) {
+      return false;
+    }
+
+    const latestRange = selectAutoCompactionRange({
+      compactions: state.compactionSnapshot(),
+      history: state.modelSnapshot(),
+      policy,
+    });
+    if (!sameRange(range, latestRange)) {
+      continue;
+    }
+
+    await state.compact({ ...range, summary });
+    return true;
   }
 }
 

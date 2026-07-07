@@ -1,13 +1,11 @@
 import type { ModelGenerationOptions } from "../../llm/llm";
 import type { AgentInput, UserInput } from "../input/input";
-import { attachInputMeta, userInputFromEvent } from "../input/input-meta";
+import { attachInputMeta } from "../input/input-meta";
 import { normalizeAgentInput } from "../input/input-normalization";
-import {
-  addSteeringInput,
-  createRuntimeInputState,
-  type QueuedInput,
-  type QueuedRuntimeInput,
-  type RuntimeInputState,
+import type {
+  QueuedInput,
+  QueuedRuntimeInput,
+  RuntimeInputState,
 } from "../input/runtime-input";
 import type { AgentPlugin } from "../plugins/pipeline";
 import { type AgentTurn, BufferedAgentTurn } from "../protocol/turn";
@@ -17,15 +15,21 @@ import { closeKilledRuntimeInputs } from "../runtime/kill";
 import {
   type NotifyOptions,
   queueThreadNotification,
-  startThreadQueueDrain,
 } from "../runtime/notification";
-import { processQueuedInput } from "../runtime/turn-processor";
 import { threadKilledError, threadTerminalError } from "../state/thread-errors";
 import {
   type ThreadCompactionInput,
   type ThreadPersistenceOptions,
   ThreadState,
 } from "../state/thread-state";
+import {
+  addDurableSteeringInput,
+  admitThreadSendInput,
+  consumeRecoveredDurableInput,
+  DurableInputRecoveryState,
+  recoverThreadDurableInputClaims,
+} from "./durable-queue";
+import { runThreadInputDrainLoop } from "./thread-drain";
 
 export type { AgentInput, ThreadInput, UserInput } from "../input/input";
 export type { AgentTurn } from "../protocol/turn";
@@ -38,6 +42,7 @@ export class AgentThread {
   readonly #inputQueue: QueuedInput[] = [];
   readonly #model: ModelGenerationOptions;
   readonly #pendingOverlays: QueuedRuntimeInput[] = [];
+  readonly #durableInputRecovery = new DurableInputRecoveryState();
   readonly #pendingRuntimeInputs: QueuedRuntimeInput[] = [];
   readonly #threadKey: string;
   readonly #state: ThreadState;
@@ -45,6 +50,9 @@ export class AgentThread {
   #activeRun?: BufferedAgentTurn;
   #activeRuntimeInput?: RuntimeInputState;
   #deletePromise?: Promise<void>;
+  #drainPromise?: Promise<void>;
+  #drainRequested = false;
+  #inputAdmissionQueue: Promise<void> = Promise.resolve();
   #killed = false;
   #running = false;
   #runToCloseOnKill?: BufferedAgentTurn;
@@ -67,49 +75,40 @@ export class AgentThread {
   }
 
   async send(input: AgentInput): Promise<AgentTurn> {
-    if (this.#killed || this.#deletePromise) {
-      throw threadTerminalError(this.#killed);
-    }
+    this.#assertOpen();
 
-    await this.#state.ensureLoaded();
-
-    if (this.#killed || this.#deletePromise) {
-      throw threadTerminalError(this.#killed);
-    }
-
-    const normalized = normalizeAgentInput(input);
-    const acceptedInput =
-      normalized.meta === undefined
-        ? attachInputMeta(normalized, { source: "send" })
-        : normalized;
     const run = new BufferedAgentTurn();
-    const emitted = await this.#events.emitRunEvent(run, acceptedInput);
-    if (emitted === "handled") {
-      run.close();
-      return run;
-    }
-
-    const queuedInput = userInputFromEvent(
-      emitted.type === "user-input" ? emitted : acceptedInput
-    );
-    const runtimeInput = createRuntimeInputState(
-      this.#pendingRuntimeInputs.splice(0)
-    );
-    this.#inputQueue.push({
-      initialEvents: [],
-      input: structuredClone(queuedInput),
-      preUserRuntimeInputs: this.#pendingOverlays.splice(0),
-      run,
-      runtimeInput,
+    const loaded = this.#state.ensureLoaded();
+    await this.#enqueueInputAdmission(async () => {
+      await loaded;
+      await this.#admitSend(input, run);
     });
-    startThreadQueueDrain(run, () => this.#drainInputQueue());
     return run;
   }
 
+  async #admitSend(input: AgentInput, run: BufferedAgentTurn): Promise<void> {
+    this.#assertOpen();
+
+    await this.#recoverDurableInputClaims();
+
+    this.#assertOpen();
+
+    await admitThreadSendInput({
+      awaitBoundaries: !(this.#running && !this.#activeRun),
+      drain: () => this.#drainInputQueue(),
+      events: this.#events,
+      executionHost: this.#execution.executionHost,
+      input,
+      inputQueue: this.#inputQueue,
+      pendingOverlays: this.#pendingOverlays,
+      pendingRuntimeInputs: this.#pendingRuntimeInputs,
+      run,
+      threadKey: this.#threadKey,
+    });
+  }
+
   overlay(input: AgentInput): this {
-    if (this.#killed || this.#deletePromise) {
-      throw threadTerminalError(this.#killed);
-    }
+    this.#assertOpen();
 
     this.#pendingOverlays.push({
       canonical: false,
@@ -125,15 +124,12 @@ export class AgentThread {
     input: AgentInput | UserInput,
     options: NotifyOptions = {}
   ): Promise<AgentTurn> {
-    if (this.#killed || this.#deletePromise) {
-      throw threadTerminalError(this.#killed);
-    }
+    this.#assertOpen();
 
     await this.#state.ensureLoaded();
+    await this.#recoverDurableInputClaims();
 
-    if (this.#killed || this.#deletePromise) {
-      throw threadTerminalError(this.#killed);
-    }
+    this.#assertOpen();
 
     return queueThreadNotification(input, options, {
       activeRun: this.#activeRun,
@@ -147,9 +143,7 @@ export class AgentThread {
   }
 
   async steer(input: AgentInput): Promise<AgentTurn> {
-    if (this.#killed || this.#deletePromise) {
-      throw threadTerminalError(this.#killed);
-    }
+    this.#assertOpen();
 
     const runtimeInput = this.#activeRuntimeInput;
     const run = this.#activeRun;
@@ -157,26 +151,34 @@ export class AgentThread {
       return this.send(input);
     }
 
-    await addSteeringInput(runtimeInput, input);
+    await addDurableSteeringInput({
+      executionHost: this.#execution.executionHost,
+      input,
+      runtimeInput,
+      threadKey: this.#threadKey,
+    });
     return run;
   }
 
   async compact(input: ThreadCompactionInput): Promise<void> {
-    if (this.#killed || this.#deletePromise) {
-      throw threadTerminalError(this.#killed);
-    }
+    this.#assertOpen();
 
     await this.#state.ensureLoaded();
+    await this.#recoverDurableInputClaims();
 
-    if (this.#killed || this.#deletePromise) {
-      throw threadTerminalError(this.#killed);
-    }
+    this.#assertOpen();
 
     await this.#state.compact(input);
   }
 
   interrupt(): void {
     this.#activeAbort?.abort();
+  }
+
+  #assertOpen(): void {
+    if (this.#killed || this.#deletePromise) {
+      throw threadTerminalError(this.#killed);
+    }
   }
 
   delete(): Promise<void> {
@@ -210,42 +212,69 @@ export class AgentThread {
 
   async #drainInputQueue(): Promise<void> {
     if (this.#running) {
-      return;
+      this.#drainRequested = true;
+      return await (this.#drainPromise ?? Promise.resolve());
     }
 
     this.#running = true;
+    this.#drainRequested = false;
+    const claimRecoveredDurableInput = consumeRecoveredDurableInput(
+      this.#durableInputRecovery
+    );
+    const drain = runThreadInputDrainLoop({
+      activate: ({ abort, run, runtimeInput }) => {
+        this.#activeAbort = abort;
+        this.#activeRun = run;
+        this.#activeRuntimeInput = runtimeInput;
+        this.#runToCloseOnKill = run;
+      },
+      claimRecoveredDurableInput,
+      continueDraining: () => !(this.#killed || this.#drainRequested),
+      deactivateRun: () => {
+        this.#activeRun = undefined;
+        this.#activeRuntimeInput = undefined;
+      },
+      events: this.#events,
+      execution: this.#execution,
+      inputQueue: this.#inputQueue,
+      model: this.#model,
+      release: () => {
+        this.#activeAbort = undefined;
+        this.#activeRun = undefined;
+        this.#activeRuntimeInput = undefined;
+        this.#runToCloseOnKill = undefined;
+      },
+      state: this.#state,
+      threadKey: this.#threadKey,
+    });
+    this.#drainPromise = drain;
     try {
-      while (!this.#killed && this.#inputQueue.length > 0) {
-        const item = this.#inputQueue.shift();
-        if (item) {
-          await processQueuedInput({
-            activate: ({ abort, run, runtimeInput }) => {
-              this.#activeAbort = abort;
-              this.#activeRun = run;
-              this.#activeRuntimeInput = runtimeInput;
-              this.#runToCloseOnKill = run;
-            },
-            deactivateRun: () => {
-              this.#activeRun = undefined;
-              this.#activeRuntimeInput = undefined;
-            },
-            events: this.#events,
-            execution: this.#execution,
-            item,
-            model: this.#model,
-            release: () => {
-              this.#activeAbort = undefined;
-              this.#activeRun = undefined;
-              this.#activeRuntimeInput = undefined;
-              this.#runToCloseOnKill = undefined;
-            },
-            threadKey: this.#threadKey,
-            state: this.#state,
-          });
-        }
-      }
+      await drain;
     } finally {
+      const shouldRestart = this.#drainRequested && !this.#killed;
       this.#running = false;
+      this.#drainPromise = undefined;
+      if (shouldRestart) {
+        this.#drainRequested = false;
+        await this.#drainInputQueue();
+      }
     }
+  }
+
+  async #enqueueInputAdmission<T>(operation: () => Promise<T>): Promise<T> {
+    const next = this.#inputAdmissionQueue.then(operation, operation);
+    this.#inputAdmissionQueue = next.then(
+      () => undefined,
+      () => undefined
+    );
+    return await next;
+  }
+
+  async #recoverDurableInputClaims(): Promise<void> {
+    await recoverThreadDurableInputClaims({
+      executionHost: this.#execution.executionHost,
+      state: this.#durableInputRecovery,
+      threadKey: this.#threadKey,
+    });
   }
 }

@@ -1,6 +1,7 @@
 import type {
   AdmitReceipt,
   ClaimedThreadInput,
+  RecoverThreadInputClaimsResult,
   ThreadInputInbox,
   ThreadInputRecord,
 } from "./types";
@@ -27,6 +28,10 @@ export class UnsupportedThreadInputInbox implements ThreadInputInbox {
   }
 
   markPromoted(): Promise<ThreadInputRecord | null> {
+    return Promise.reject(new ThreadInputInboxUnavailableError());
+  }
+
+  recoverClaims(): Promise<RecoverThreadInputClaimsResult> {
     return Promise.reject(new ThreadInputInboxUnavailableError());
   }
 

@@ -6,10 +6,13 @@ import {
   promoteThreadInputClaim,
   releaseThreadInputClaim,
 } from "../../../../execution/host/thread-input-inbox";
+import { recoverThreadInputClaims } from "../../../../execution/host/thread-input-recovery";
 import type {
   AdmitReceipt,
   AdmitThreadInput,
   ClaimedThreadInput,
+  ClaimThreadInputOptions,
+  RecoverThreadInputClaimsResult,
   ThreadInputBoundary,
   ThreadInputInbox,
   ThreadInputRecord,
@@ -56,7 +59,8 @@ export class DurableObjectThreadInputInbox implements ThreadInputInbox {
 
   async claimNext(
     threadKey: string,
-    boundary: ThreadInputBoundary
+    boundary: ThreadInputBoundary,
+    options: ClaimThreadInputOptions = {}
   ): Promise<ClaimedThreadInput | null> {
     return await withTransaction(this.#storage, async (storage) => {
       const current = await listThreadInputRecords(
@@ -68,7 +72,8 @@ export class DurableObjectThreadInputInbox implements ThreadInputInbox {
         current,
         threadKey,
         boundary,
-        randomUUID()
+        randomUUID(),
+        options
       );
       if (transition.record) {
         await putThreadInputRecords(storage, this.#prefix, transition.records, {
@@ -131,6 +136,28 @@ export class DurableObjectThreadInputInbox implements ThreadInputInbox {
         });
       }
       return transition.record ? structuredClone(transition.record) : null;
+    });
+  }
+
+  async recoverClaims(
+    threadKey: string
+  ): Promise<RecoverThreadInputClaimsResult> {
+    return await withTransaction(this.#storage, async (storage) => {
+      const current = await listThreadInputRecords(
+        storage,
+        this.#prefix,
+        threadKey
+      );
+      const transition = recoverThreadInputClaims(current, threadKey);
+      if (transition.acked.length > 0 || transition.released.length > 0) {
+        await putThreadInputRecords(storage, this.#prefix, transition.records, {
+          maxPayloadBytes: this.#maxPayloadBytes,
+        });
+      }
+      return {
+        acked: transition.acked.map((record) => structuredClone(record)),
+        released: transition.released.map((record) => structuredClone(record)),
+      };
     });
   }
 }

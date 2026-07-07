@@ -1,12 +1,14 @@
-import type {
-  AdmitReceipt,
-  AdmitThreadInput,
-  ClaimedThreadInput,
-  ThreadInputBoundary,
-  ThreadInputPlacement,
-  ThreadInputRecord,
+import { recordWithoutClaimId } from "./thread-input-recovery";
+import {
+  type AdmitReceipt,
+  type AdmitThreadInput,
+  type ClaimedThreadInput,
+  type ClaimThreadInputOptions,
+  type ThreadInputBoundary,
+  ThreadInputDuplicateConflictError,
+  type ThreadInputPlacement,
+  type ThreadInputRecord,
 } from "./types";
-import { ThreadInputDuplicateConflictError } from "./types";
 
 export interface ThreadInputAdmitTransition {
   readonly receipt: AdmitReceipt;
@@ -50,13 +52,15 @@ export function claimNextThreadInput(
   records: readonly ThreadInputRecord[],
   threadKey: string,
   boundary: ThreadInputBoundary,
-  claimId: string
+  claimId: string,
+  options: ClaimThreadInputOptions = {}
 ): ThreadInputClaimTransition {
   const candidate = [...records]
     .filter(
       (record) =>
         record.threadKey === threadKey &&
         record.status === "pending" &&
+        (!options.messageId || record.messageId === options.messageId) &&
         isClaimableAtBoundary(record, boundary)
     )
     .sort((left, right) => left.admittedSeq - right.admittedSeq)
@@ -245,14 +249,6 @@ function replaceThreadInputRecord(
       ? replacement
       : record
   );
-}
-
-function recordWithoutClaimId(
-  record: ThreadInputRecord,
-  status: "acked" | "pending"
-): ThreadInputRecord {
-  const { claimId: _claimId, ...rest } = record;
-  return { ...rest, status };
 }
 
 function stableJson(value: unknown): string {

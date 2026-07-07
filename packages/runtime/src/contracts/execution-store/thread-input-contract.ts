@@ -4,6 +4,7 @@ import {
   type ExecutionStore,
   ThreadInputDuplicateConflictError,
 } from "../../execution";
+import { describeThreadInputInboxRecoveryContract } from "./thread-input-recovery-contract";
 
 export interface ThreadInputInboxContractOptions {
   readonly createStore: () => ExecutionStore;
@@ -155,6 +156,8 @@ export function describeThreadInputInboxContract({
         status: "claiming",
       });
     });
+
+    describeThreadInputInboxRecoveryContract({ createStore });
 
     it("releases and reclaims thread input claims with a fresh claim id", async () => {
       const store = createStore();

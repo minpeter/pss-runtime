@@ -6,10 +6,13 @@ import {
   promoteThreadInputClaim,
   releaseThreadInputClaim,
 } from "../../../execution/host/thread-input-inbox";
+import { recoverThreadInputClaims } from "../../../execution/host/thread-input-recovery";
 import type {
   AdmitReceipt,
   AdmitThreadInput,
   ClaimedThreadInput,
+  ClaimThreadInputOptions,
+  RecoverThreadInputClaimsResult,
   ThreadInputBoundary,
   ThreadInputInbox,
   ThreadInputRecord,
@@ -41,7 +44,8 @@ export class InMemoryThreadInputInbox implements ThreadInputInbox {
 
   claimNext(
     threadKey: string,
-    boundary: ThreadInputBoundary
+    boundary: ThreadInputBoundary,
+    options: ClaimThreadInputOptions = {}
   ): Promise<ClaimedThreadInput | null> {
     const state = this.#state();
     const current = state.inputsByThread.get(threadKey) ?? [];
@@ -49,7 +53,8 @@ export class InMemoryThreadInputInbox implements ThreadInputInbox {
       current,
       threadKey,
       boundary,
-      randomUUID()
+      randomUUID(),
+      options
     );
     state.inputsByThread.set(
       threadKey,
@@ -97,5 +102,19 @@ export class InMemoryThreadInputInbox implements ThreadInputInbox {
     return Promise.resolve(
       transition.record ? structuredClone(transition.record) : null
     );
+  }
+
+  recoverClaims(threadKey: string): Promise<RecoverThreadInputClaimsResult> {
+    const state = this.#state();
+    const current = state.inputsByThread.get(threadKey) ?? [];
+    const transition = recoverThreadInputClaims(current, threadKey);
+    state.inputsByThread.set(
+      threadKey,
+      transition.records.map((record) => structuredClone(record))
+    );
+    return Promise.resolve({
+      acked: transition.acked.map((record) => structuredClone(record)),
+      released: transition.released.map((record) => structuredClone(record)),
+    });
   }
 }

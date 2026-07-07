@@ -226,14 +226,25 @@ export interface ClaimedThreadInput extends ThreadInputRecord {
   readonly status: "claiming";
 }
 
+export interface RecoverThreadInputClaimsResult {
+  readonly acked: readonly ThreadInputRecord[];
+  readonly released: readonly ThreadInputRecord[];
+}
+
+export interface ClaimThreadInputOptions {
+  readonly messageId?: string;
+}
+
 export interface ThreadInputInbox {
   ack(record: ThreadInputRecord): Promise<ThreadInputRecord | null>;
   admit(input: AdmitThreadInput): Promise<AdmitReceipt>;
   claimNext(
     threadKey: string,
-    boundary: ThreadInputBoundary
+    boundary: ThreadInputBoundary,
+    options?: ClaimThreadInputOptions
   ): Promise<ClaimedThreadInput | null>;
   markPromoted(record: ClaimedThreadInput): Promise<ThreadInputRecord | null>;
+  recoverClaims(threadKey: string): Promise<RecoverThreadInputClaimsResult>;
   releaseClaim(record: ClaimedThreadInput): Promise<ThreadInputRecord | null>;
 }
 

@@ -7,10 +7,13 @@ import {
   promoteThreadInputClaim,
   releaseThreadInputClaim,
 } from "../../../../execution/host/thread-input-inbox";
+import { recoverThreadInputClaims } from "../../../../execution/host/thread-input-recovery";
 import type {
   AdmitReceipt,
   AdmitThreadInput,
   ClaimedThreadInput,
+  ClaimThreadInputOptions,
+  RecoverThreadInputClaimsResult,
   ThreadInputBoundary,
   ThreadInputInbox,
   ThreadInputRecord,
@@ -43,7 +46,8 @@ export class FileThreadInputInbox implements ThreadInputInbox {
 
   async claimNext(
     threadKey: string,
-    boundary: ThreadInputBoundary
+    boundary: ThreadInputBoundary,
+    options: ClaimThreadInputOptions = {}
   ): Promise<ClaimedThreadInput | null> {
     return await this.#lock(async () => {
       const current = await this.#getUnlocked(threadKey);
@@ -51,7 +55,8 @@ export class FileThreadInputInbox implements ThreadInputInbox {
         current,
         threadKey,
         boundary,
-        randomUUID()
+        randomUUID(),
+        options
       );
       if (transition.record) {
         await this.#writeUnlocked(threadKey, transition.records);
@@ -94,6 +99,22 @@ export class FileThreadInputInbox implements ThreadInputInbox {
         await this.#writeUnlocked(record.threadKey, transition.records);
       }
       return transition.record;
+    });
+  }
+
+  async recoverClaims(
+    threadKey: string
+  ): Promise<RecoverThreadInputClaimsResult> {
+    return await this.#lock(async () => {
+      const current = await this.#getUnlocked(threadKey);
+      const transition = recoverThreadInputClaims(current, threadKey);
+      if (transition.acked.length > 0 || transition.released.length > 0) {
+        await this.#writeUnlocked(threadKey, transition.records);
+      }
+      return {
+        acked: transition.acked,
+        released: transition.released,
+      };
     });
   }
 
