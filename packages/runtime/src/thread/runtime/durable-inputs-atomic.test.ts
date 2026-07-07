@@ -28,9 +28,11 @@ describe("durable input atomic commits", () => {
 
     await expect(
       commitAndAckDurableThreadInput({
+        buffer: [],
         executionHost: executionHostWithFailingAck(base),
         record: claim,
         state,
+        threadKey,
       })
     ).rejects.toThrow("ack failed");
 

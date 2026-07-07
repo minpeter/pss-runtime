@@ -16,8 +16,13 @@ import {
   releaseDurableThreadInputClaim,
 } from "./durable-inputs";
 import type { ThreadEventDispatcher } from "./events";
+import {
+  commitThreadStateAndEvents,
+  type DurableThreadEventBuffer,
+} from "./thread-event-log";
 
 export async function drainRuntimeInput({
+  durableEvents,
   events,
   executionHost,
   placement,
@@ -29,6 +34,7 @@ export async function drainRuntimeInput({
   recordEvent,
 }: {
   readonly attachmentStore: RuntimeAttachmentStore | undefined;
+  readonly durableEvents: DurableThreadEventBuffer;
   readonly events: ThreadEventDispatcher;
   readonly executionHost?: ExecutionHost;
   readonly placement: RuntimeInputPlacement;
@@ -44,6 +50,13 @@ export async function drainRuntimeInput({
     if (
       await emitRuntimeInputEvent(events, run, state, next, {
         attachmentStore,
+        commit: () =>
+          commitThreadStateAndEvents({
+            buffer: durableEvents,
+            executionHost,
+            state,
+            threadKey,
+          }),
         recordEvent,
       })
     ) {
@@ -56,6 +69,7 @@ export async function drainRuntimeInput({
     (await drainDurableRuntimeInput({
       events,
       executionHost,
+      durableEvents,
       attachmentStore,
       placement,
       recordEvent,
@@ -67,6 +81,7 @@ export async function drainRuntimeInput({
 }
 
 async function drainDurableRuntimeInput({
+  durableEvents,
   events,
   executionHost,
   attachmentStore,
@@ -76,6 +91,7 @@ async function drainDurableRuntimeInput({
   threadKey,
   recordEvent,
 }: {
+  readonly durableEvents: DurableThreadEventBuffer;
   readonly events: ThreadEventDispatcher;
   readonly executionHost?: ExecutionHost;
   readonly attachmentStore: RuntimeAttachmentStore | undefined;
@@ -110,9 +126,11 @@ async function drainDurableRuntimeInput({
           attachmentStore,
           commit: () =>
             commitAndAckDurableThreadInput({
+              buffer: durableEvents,
               executionHost,
               record,
               state,
+              threadKey,
             }),
           onHandled: () =>
             ackDurableThreadInput({

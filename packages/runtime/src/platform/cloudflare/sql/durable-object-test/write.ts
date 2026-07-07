@@ -13,6 +13,14 @@ export function writeSqlStatement(
   query: string,
   bindings: readonly unknown[]
 ): void {
+  if (query.startsWith("insert into pss_thread_event_meta")) {
+    writeThreadEventMeta(state, bindings);
+    return;
+  }
+  if (query.startsWith("insert into pss_thread_event")) {
+    writeThreadEvent(state, bindings);
+    return;
+  }
   if (query.includes("pss_thread_")) {
     writeThreadStatement(state, query, bindings);
     return;
@@ -115,6 +123,28 @@ function writeEvent(
     event: stringBinding(bindings[2]),
     run_key: stringBinding(bindings[0]),
     seq: numberBinding(bindings[1]),
+  });
+}
+
+function writeThreadEventMeta(
+  state: InMemoryDurableObjectSqlState,
+  bindings: readonly unknown[]
+): void {
+  const key = stringBinding(bindings[0]);
+  state.threadEventMeta.set(key, {
+    next_seq: numberBinding(bindings[1]),
+    thread_key: key,
+  });
+}
+
+function writeThreadEvent(
+  state: InMemoryDurableObjectSqlState,
+  bindings: readonly unknown[]
+): void {
+  state.threadEvents.push({
+    event: stringBinding(bindings[2]),
+    seq: numberBinding(bindings[1]),
+    thread_key: stringBinding(bindings[0]),
   });
 }
 

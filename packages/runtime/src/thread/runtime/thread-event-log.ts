@@ -1,4 +1,8 @@
-import type { ExecutionHost } from "../../execution/host/types";
+import type {
+  ExecutionHost,
+  ExecutionStoreTransaction,
+  ThreadEventLog,
+} from "../../execution/host/types";
 import type { AgentEvent } from "../protocol/events";
 import type { ThreadState } from "../state/thread-state";
 
@@ -9,6 +13,48 @@ export function recordDurableThreadEvent(
   event: AgentEvent
 ): void {
   buffer.push(structuredClone(event));
+}
+
+export class ThreadEventTransactionUnsupportedError extends Error {
+  readonly name = "ThreadEventTransactionUnsupportedError";
+
+  constructor() {
+    super(
+      "ExecutionStore.transaction() must provide threadEvents when the store enables durable thread event replay."
+    );
+  }
+}
+
+export function takeDurableThreadEvents(
+  buffer: DurableThreadEventBuffer
+): AgentEvent[] {
+  return buffer.splice(0);
+}
+
+export function restoreDurableThreadEvents(
+  buffer: DurableThreadEventBuffer,
+  events: readonly AgentEvent[]
+): void {
+  buffer.unshift(...events);
+}
+
+export async function appendDurableThreadEvents(
+  eventLog: ThreadEventLog,
+  threadKey: string,
+  events: readonly AgentEvent[]
+): Promise<void> {
+  for (const event of events) {
+    await eventLog.append(threadKey, event);
+  }
+}
+
+export function transactionalThreadEvents(
+  tx: ExecutionStoreTransaction
+): ThreadEventLog {
+  if (!tx.threadEvents) {
+    throw new ThreadEventTransactionUnsupportedError();
+  }
+  return tx.threadEvents;
 }
 
 export async function commitThreadStateAndEvents({
@@ -22,13 +68,13 @@ export async function commitThreadStateAndEvents({
   readonly state: ThreadState;
   readonly threadKey: string;
 }): Promise<void> {
-  const pendingEvents = buffer.splice(0);
+  const pendingEvents = takeDurableThreadEvents(buffer);
   const eventLog = executionHost?.store.threadEvents;
   if (!eventLog || pendingEvents.length === 0) {
     try {
       await state.commit();
     } catch (error) {
-      buffer.unshift(...pendingEvents);
+      restoreDurableThreadEvents(buffer, pendingEvents);
       throw error;
     }
     return;
@@ -45,15 +91,16 @@ export async function commitThreadStateAndEvents({
             return result;
           }
 
-          const txEventLog = tx.threadEvents ?? eventLog;
-          for (const event of pendingEvents) {
-            await txEventLog.append(threadKey, event);
-          }
+          await appendDurableThreadEvents(
+            transactionalThreadEvents(tx),
+            threadKey,
+            pendingEvents
+          );
           return result;
         })
     );
   } catch (error) {
-    buffer.unshift(...pendingEvents);
+    restoreDurableThreadEvents(buffer, pendingEvents);
     throw error;
   }
 }
@@ -67,7 +114,7 @@ export async function flushDurableThreadEvents({
   readonly executionHost?: ExecutionHost;
   readonly threadKey: string;
 }): Promise<void> {
-  const pendingEvents = buffer.splice(0);
+  const pendingEvents = takeDurableThreadEvents(buffer);
   const eventLog = executionHost?.store.threadEvents;
   if (!eventLog || pendingEvents.length === 0) {
     return;
@@ -75,13 +122,14 @@ export async function flushDurableThreadEvents({
 
   try {
     await executionHost.store.transaction(async (tx) => {
-      const txEventLog = tx.threadEvents ?? eventLog;
-      for (const event of pendingEvents) {
-        await txEventLog.append(threadKey, event);
-      }
+      await appendDurableThreadEvents(
+        transactionalThreadEvents(tx),
+        threadKey,
+        pendingEvents
+      );
     });
   } catch (error) {
-    buffer.unshift(...pendingEvents);
+    restoreDurableThreadEvents(buffer, pendingEvents);
     throw error;
   }
 }

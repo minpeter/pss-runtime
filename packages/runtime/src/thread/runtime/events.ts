@@ -94,6 +94,16 @@ export class ThreadEventDispatcher {
     event: AgentEvent,
     options: { readonly awaitAck?: boolean } = {}
   ): Promise<void> {
+    await this.observeRunEvent(event);
+    if (options.awaitAck === false) {
+      run.emit(event);
+      return;
+    }
+
+    await run.emitBoundary(event);
+  }
+
+  async observeRunEvent(event: AgentEvent): Promise<void> {
     await runPluginsForEvent(
       this.#plugins,
       {
@@ -103,12 +113,6 @@ export class ThreadEventDispatcher {
       },
       { observeOnly: true }
     );
-    if (options.awaitAck === false) {
-      run.emit(event);
-      return;
-    }
-
-    await run.emitBoundary(event);
   }
 
   async emitRunEvent(

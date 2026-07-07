@@ -16,6 +16,7 @@ export type {
   ThreadEventReadOptions,
 } from "./execution/host/types";
 export type { AgentToolChoice } from "./llm/llm";
+export { ThreadEventReplayUnsupportedError } from "./thread/handle/thread-event-replay";
 export {
   decodeRuntimeAttachmentData,
   encodeRuntimeAttachmentData,

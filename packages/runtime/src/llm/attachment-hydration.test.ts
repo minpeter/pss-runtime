@@ -63,6 +63,45 @@ describe("model attachment hydration", () => {
     ]);
   });
 
+  it("estimates hydrated attachment bytes by metadata for the default context gate", async () => {
+    const attachmentStore = new MemoryAttachmentStore();
+    const bytes = new Uint8Array(1024);
+    const ref = await attachmentStore.put({
+      bytes,
+      filename: "photo.png",
+      mediaType: "image/png",
+    });
+    const runModelStep = await loadModelStepRunner();
+
+    await runModelStep(
+      {
+        attachmentStore,
+        contextGate: { maxInputTokens: 200 },
+        model: fakeModel,
+      },
+      {
+        history: userHistoryWithAttachment(encodeRuntimeAttachmentData(ref)),
+        signal: new AbortController().signal,
+      }
+    );
+
+    expect(generateTextMock).toHaveBeenCalledTimes(1);
+    expect(generateTextMock.mock.calls.at(-1)?.[0].messages).toEqual([
+      {
+        content: [
+          { text: "describe", type: "text" },
+          {
+            data: bytes,
+            filename: "photo.png",
+            mediaType: "image/png",
+            type: "file",
+          },
+        ],
+        role: "user",
+      },
+    ]);
+  });
+
   it("fails before provider calls when history contains refs without an attachment store", async () => {
     const attachmentStore = new MemoryAttachmentStore();
     const ref = await attachmentStore.put({

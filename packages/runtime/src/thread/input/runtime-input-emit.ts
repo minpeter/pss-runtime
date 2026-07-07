@@ -25,7 +25,11 @@ export async function commitPreUserRuntimeInputs(
   events: ThreadEventDispatcher,
   state: ThreadState,
   runtimeInputs: readonly QueuedRuntimeInput[],
-  attachmentStore: RuntimeAttachmentStore | undefined
+  attachmentStore: RuntimeAttachmentStore | undefined,
+  options: {
+    readonly commitRecordedEvents?: () => Promise<void>;
+    readonly recordEvent?: (event: AgentEvent) => void;
+  } = {}
 ): Promise<readonly AgentEvent[]> {
   const committed: AgentEvent[] = [];
   for (const queued of runtimeInputs) {
@@ -44,9 +48,11 @@ export async function commitPreUserRuntimeInputs(
     );
     if (queued.canonical === false) {
       state.appendTransientUserInput(input);
+      options.recordEvent?.(processed);
     } else {
       state.appendUserInput(input);
-      await state.commit();
+      options.recordEvent?.(processed);
+      await (options.commitRecordedEvents ?? (() => state.commit()))();
     }
   }
 
@@ -93,8 +99,8 @@ export async function emitRuntimeInputEvent(
       { trustRuntimeAttachmentRefs: true }
     )
   );
-  await (options.commit ?? (() => state.commit()))();
   options.recordEvent?.(processed);
+  await (options.commit ?? (() => state.commit()))();
   return true;
 }
 

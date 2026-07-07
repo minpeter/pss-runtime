@@ -29,6 +29,7 @@ import {
   Agent,
   runPluginsForEvent,
   threadStoreKey as runtimeThreadStoreKey,
+  ThreadEventReplayUnsupportedError,
 } from "../index";
 
 type EmptyHostIsRejected =
@@ -140,6 +141,9 @@ describe("runtime public exports", () => {
     expectTypeOf<ReturnType<ThreadHandle["events"]>>().toEqualTypeOf<
       AsyncIterable<StoredThreadEvent>
     >();
+    expect(new ThreadEventReplayUnsupportedError("thread-1").name).toBe(
+      "ThreadEventReplayUnsupportedError"
+    );
     expectTypeOf<ReturnType<Agent["overlay"]>>().toEqualTypeOf<ThreadHandle>();
     expectTypeOf<
       ReturnType<typeof runtimeThreadStoreKey>

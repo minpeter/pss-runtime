@@ -18,10 +18,8 @@ import {
   type StoragePayloadBudgetOptions,
 } from "../payload-guard";
 import { DurableObjectSqliteCheckpointStore } from "../sqlite/checkpoint-store";
-import {
-  DurableObjectSqliteEventStore,
-  DurableObjectSqliteThreadEventLog,
-} from "../sqlite/event-store";
+import { DurableObjectSqliteEventStore } from "../sqlite/event-store";
+import { DurableObjectSqliteThreadEventLog } from "../sqlite/thread-event-log";
 import { DurableObjectSqliteThreadStore } from "../sqlite/thread-store";
 import { DurableObjectThreadInputInbox } from "./input-store";
 import { DurableObjectNotificationInbox } from "./notification-store";

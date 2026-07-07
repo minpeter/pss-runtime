@@ -1,5 +1,6 @@
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { normalizeThreadEventReadOptions } from "../../../../execution/host/thread-event-read-options";
 import type {
   EventCursor,
   EventStore,
@@ -149,9 +150,9 @@ export class FileThreadEventLog implements ThreadEventLog {
       return parsed;
     });
 
-    const start = options.after?.offset ?? 0;
-    const limit = options.limit ?? Number.POSITIVE_INFINITY;
-    for (const event of events.slice(start, start + limit)) {
+    const { limit, start } = normalizeThreadEventReadOptions(options);
+    const end = limit === undefined ? undefined : start + limit;
+    for (const event of events.slice(start, end)) {
       yield structuredClone(event);
     }
   }

@@ -154,11 +154,31 @@ function estimatePromptTokens(
     return estimator(input);
   }
 
-  const serialized = JSON.stringify({
-    instructions: input.instructions,
-    messages: input.messages,
-  });
+  const serialized = JSON.stringify(
+    {
+      instructions: input.instructions,
+      messages: input.messages,
+    },
+    promptTokenEstimateReplacer
+  );
   return Math.ceil(serialized.length / 4);
+}
+
+function promptTokenEstimateReplacer(_key: string, value: unknown): unknown {
+  if (ArrayBuffer.isView(value)) {
+    return binaryPromptTokenEstimate(value.byteLength);
+  }
+  if (value instanceof ArrayBuffer) {
+    return binaryPromptTokenEstimate(value.byteLength);
+  }
+  return value;
+}
+
+function binaryPromptTokenEstimate(byteLength: number): {
+  readonly byteLength: number;
+  readonly type: "binary";
+} {
+  return { byteLength, type: "binary" };
 }
 
 function promptForModel({

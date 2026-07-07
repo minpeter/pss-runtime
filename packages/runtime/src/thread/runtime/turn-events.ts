@@ -9,8 +9,10 @@ import type { BufferedAgentTurn } from "../protocol/turn";
 import type { ThreadState } from "../state/thread-state";
 import { drainRuntimeInput } from "./drain";
 import type { ThreadEventDispatcher } from "./events";
+import type { DurableThreadEventBuffer } from "./thread-event-log";
 
 export async function emitTurnEvent({
+  durableEvents,
   event,
   events,
   executionHost,
@@ -22,6 +24,7 @@ export async function emitTurnEvent({
   state,
   threadKey,
 }: {
+  readonly durableEvents: DurableThreadEventBuffer;
   readonly event: AgentEvent;
   readonly attachmentStore: RuntimeAttachmentStore | undefined;
   readonly awaitBoundaries: boolean;
@@ -49,6 +52,7 @@ export async function emitTurnEvent({
   recordEvent?.(event);
   const runtimeInputAdded = await drainRuntimeInput({
     attachmentStore,
+    durableEvents,
     events,
     executionHost,
     placement: event.type,
