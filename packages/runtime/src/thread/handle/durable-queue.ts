@@ -1,5 +1,8 @@
 import type { ExecutionHost } from "../../execution/host/types";
 import {
+  cleanupStagedRuntimeAttachments,
+  cleanupUnreferencedStagedRuntimeAttachments,
+  type RuntimeAttachmentReference,
   type RuntimeAttachmentStore,
   stageUserInputAttachments,
   userInputRequiresAttachmentProcessing,
@@ -134,49 +137,66 @@ export async function createQueuedSendInput({
     normalized.meta === undefined
       ? attachInputMeta(normalized, { source: "send" })
       : normalized;
-  const stagedAcceptedInput = await stageUserInputAttachments(
-    acceptedInput,
-    attachmentStore
-  );
-  const processed = await events.interceptEvent(stagedAcceptedInput);
-  if (processed === "handled") {
-    run.close();
-    return { kind: "handled" };
-  }
+  const stagedRefs: RuntimeAttachmentReference[] = [];
+  let keepStagedAttachments = false;
+  try {
+    const stagedAcceptedInput = await stageUserInputAttachments(
+      acceptedInput,
+      attachmentStore,
+      { stagedRefs }
+    );
+    const processed = await events.interceptEvent(stagedAcceptedInput, {
+      stagedRefs,
+    });
+    if (processed === "handled") {
+      run.close();
+      return { kind: "handled" };
+    }
 
-  const queuedInput = await stageUserInputAttachments(
-    userInputFromEvent(
-      processed.type === "user-input" ? processed : stagedAcceptedInput
-    ),
-    attachmentStore,
-    { trustRuntimeAttachmentRefs: true }
-  );
-  const admission = await admitDurableThreadInput({
-    executionHost,
-    input: queuedInput,
-    kind: "send",
-    threadKey,
-  });
-  if (admission.kind === "admitted" && admission.receipt.duplicate) {
-    run.close();
-    return { kind: "handled" };
-  }
+    const queuedInput = await stageUserInputAttachments(
+      userInputFromEvent(
+        processed.type === "user-input" ? processed : stagedAcceptedInput
+      ),
+      attachmentStore,
+      { stagedRefs, trustRuntimeAttachmentRefs: true }
+    );
+    const admission = await admitDurableThreadInput({
+      executionHost,
+      input: queuedInput,
+      kind: "send",
+      threadKey,
+    });
+    if (admission.kind === "admitted" && admission.receipt.duplicate) {
+      run.close();
+      return { kind: "handled" };
+    }
 
-  const item = {
-    awaitBoundaries,
-    durableInput: admission.kind === "admitted",
-    ...(admission.kind === "admitted"
-      ? { durableMessageId: admission.receipt.record.messageId }
-      : {}),
-    initialEvents: [],
-    ...(admission.kind === "unavailable"
-      ? { input: structuredClone(queuedInput) }
-      : {}),
-    preUserRuntimeInputs: pendingOverlays.splice(0),
-    run,
-    runtimeInput: createRuntimeInputState(pendingRuntimeInputs.splice(0)),
-  } satisfies QueuedInput;
-  return { kind: "queued", item, processed };
+    const item = {
+      awaitBoundaries,
+      durableInput: admission.kind === "admitted",
+      ...(admission.kind === "admitted"
+        ? { durableMessageId: admission.receipt.record.messageId }
+        : {}),
+      initialEvents: [],
+      ...(admission.kind === "unavailable"
+        ? { input: structuredClone(queuedInput) }
+        : {}),
+      preUserRuntimeInputs: pendingOverlays.splice(0),
+      run,
+      runtimeInput: createRuntimeInputState(pendingRuntimeInputs.splice(0)),
+    } satisfies QueuedInput;
+    await cleanupUnreferencedStagedRuntimeAttachments(
+      attachmentStore,
+      stagedRefs,
+      [queuedInput, processed]
+    );
+    keepStagedAttachments = true;
+    return { kind: "queued", item, processed };
+  } finally {
+    if (!keepStagedAttachments) {
+      await cleanupStagedRuntimeAttachments(attachmentStore, stagedRefs);
+    }
+  }
 }
 
 export async function addDurableSteeringInput({
@@ -194,31 +214,43 @@ export async function addDurableSteeringInput({
 }): Promise<void> {
   const placement = currentSteeringPlacement(runtimeInput);
   const next = runtimeInput.pending.then(async () => {
+    const stagedRefs: RuntimeAttachmentReference[] = [];
+    let keepStagedAttachments = false;
     assertRuntimeInputOpen(runtimeInput);
     const acceptedInput = attachInputMeta(normalizeAgentInput(input), {
       source: "steer",
       streaming: "steer",
     });
-    const stagedInput = userInputRequiresAttachmentProcessing(acceptedInput)
-      ? await stageUserInputAttachments(acceptedInput, attachmentStore)
-      : acceptedInput;
-    assertRuntimeInputOpen(runtimeInput);
-    const admission = await admitDurableThreadInput({
-      executionHost,
-      input: stagedInput,
-      kind: "steer",
-      placement,
-      threadKey,
-    });
-    if (admission.kind === "admitted") {
-      return;
-    }
+    try {
+      const stagedInput = userInputRequiresAttachmentProcessing(acceptedInput)
+        ? await stageUserInputAttachments(acceptedInput, attachmentStore, {
+            stagedRefs,
+          })
+        : acceptedInput;
+      assertRuntimeInputOpen(runtimeInput);
+      const admission = await admitDurableThreadInput({
+        executionHost,
+        input: stagedInput,
+        kind: "steer",
+        placement,
+        threadKey,
+      });
+      if (admission.kind === "admitted") {
+        keepStagedAttachments = true;
+        return;
+      }
 
-    assertRuntimeInputOpen(runtimeInput);
-    queueRuntimeInput(runtimeInput, {
-      input: stagedInput,
-      placement,
-    });
+      assertRuntimeInputOpen(runtimeInput);
+      queueRuntimeInput(runtimeInput, {
+        input: stagedInput,
+        placement,
+      });
+      keepStagedAttachments = true;
+    } finally {
+      if (!keepStagedAttachments) {
+        await cleanupStagedRuntimeAttachments(attachmentStore, stagedRefs);
+      }
+    }
   });
   runtimeInput.pending = next.catch(() => undefined);
   await next;

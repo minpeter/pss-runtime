@@ -16,11 +16,13 @@ export interface RuntimeAttachmentBlob extends RuntimeAttachmentPutInput {
 }
 
 export interface RuntimeAttachmentStore {
+  delete(ref: RuntimeAttachmentReference): Promise<void>;
   get(ref: RuntimeAttachmentReference): Promise<RuntimeAttachmentBlob | null>;
   put(input: RuntimeAttachmentPutInput): Promise<RuntimeAttachmentReference>;
 }
 
 export interface RuntimeAttachmentStagingOptions {
+  readonly stagedRefs?: RuntimeAttachmentReference[];
   readonly trustRuntimeAttachmentRefs?: boolean;
 }
 

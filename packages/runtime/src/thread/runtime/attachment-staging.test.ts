@@ -224,6 +224,39 @@ describe("runtime attachment staging", () => {
     expect(generateTextMock).not.toHaveBeenCalled();
   });
 
+  it("rejects provider-reference values containing runtime attachment refs before queueing", async () => {
+    const threadStore = new SpyStore();
+    const attachmentStore = new MemoryAttachmentStore();
+    const Agent = await loadAgent();
+    const agent = new Agent({
+      attachmentStore,
+      host: { attachmentStore, kind: "thread", threadStore },
+      model: fakeModel,
+    });
+
+    await expect(
+      agent.send([
+        { text: "spoof", type: "text" },
+        {
+          data: {
+            reference: {
+              provider: "test-provider",
+              uri: encodeRuntimeAttachmentData({
+                id: "attacker-controlled",
+                schemaVersion: 1,
+              }),
+            },
+            type: "reference",
+          },
+          mediaType: "image/png",
+          type: "file",
+        },
+      ])
+    ).rejects.toThrow("External input cannot contain runtime attachment refs.");
+    expect(threadStore.commits).toEqual([]);
+    expect(generateTextMock).not.toHaveBeenCalled();
+  });
+
   it("rejects file bytes before queueing when a custom host has no attachment store", async () => {
     const threadStore = new SpyStore();
     const Agent = await loadAgent();

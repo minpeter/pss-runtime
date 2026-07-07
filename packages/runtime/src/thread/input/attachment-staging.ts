@@ -1,10 +1,12 @@
 import type { AgentEvent, RuntimeInput } from "../protocol/events";
 import { base64ToBytes } from "./attachment-base64";
 import {
+  decodeRuntimeAttachmentData,
   encodeRuntimeAttachmentData,
   isRuntimeAttachmentData,
 } from "./attachment-refs";
 import type {
+  RuntimeAttachmentReference,
   RuntimeAttachmentStagingOptions,
   RuntimeAttachmentStore,
 } from "./attachment-types";
@@ -50,6 +52,35 @@ export async function stageUserInputAttachments(
     ...input,
     content,
   };
+}
+
+export async function cleanupStagedRuntimeAttachments(
+  store: RuntimeAttachmentStore | undefined,
+  refs: readonly RuntimeAttachmentReference[]
+): Promise<void> {
+  if (!store || refs.length === 0) {
+    return;
+  }
+
+  await Promise.allSettled([...refs].reverse().map((ref) => store.delete(ref)));
+}
+
+export async function cleanupUnreferencedStagedRuntimeAttachments(
+  store: RuntimeAttachmentStore | undefined,
+  refs: readonly RuntimeAttachmentReference[],
+  retained: readonly (AgentEvent | UserInput)[]
+): Promise<void> {
+  const retainedRefs = new Set<string>();
+  for (const value of retained) {
+    for (const ref of runtimeAttachmentRefs(value)) {
+      retainedRefs.add(runtimeAttachmentRefKey(ref));
+    }
+  }
+
+  await cleanupStagedRuntimeAttachments(
+    store,
+    refs.filter((ref) => !retainedRefs.has(runtimeAttachmentRefKey(ref)))
+  );
 }
 
 export function userInputRequiresAttachmentStaging(input: UserInput): boolean {
@@ -125,6 +156,43 @@ export async function stageAgentEventsAttachments(
   return staged;
 }
 
+function runtimeAttachmentRefs(
+  value: AgentEvent | UserInput
+): RuntimeAttachmentReference[] {
+  if ("type" in value && value.type === "runtime-input") {
+    return runtimeAttachmentRefsForUserInput(value.input);
+  }
+
+  if ("type" in value && value.type === "user-input") {
+    return runtimeAttachmentRefsForUserInput(value);
+  }
+
+  return [];
+}
+
+function runtimeAttachmentRefsForUserInput(
+  input: UserInput
+): RuntimeAttachmentReference[] {
+  if (!("content" in input)) {
+    return [];
+  }
+
+  const refs: RuntimeAttachmentReference[] = [];
+  for (const part of input.content) {
+    if (part.type === "image" && isRuntimeAttachmentData(part.image)) {
+      refs.push(decodeRuntimeAttachmentData(part.image));
+    }
+
+    if (part.type === "file") {
+      const ref = runtimeAttachmentDataRef(part.data);
+      if (ref) {
+        refs.push(decodeRuntimeAttachmentData(ref));
+      }
+    }
+  }
+  return refs;
+}
+
 async function stageFileData(
   data: UserMessageFileData,
   part: { readonly filename?: string; readonly mediaType: string },
@@ -157,6 +225,7 @@ async function stageFileData(
     filename: part.filename,
     mediaType: part.mediaType,
   });
+  options.stagedRefs?.push(ref);
   return encodeRuntimeAttachmentData(ref);
 }
 
@@ -256,6 +325,10 @@ function runtimeAttachmentDataRef(
     return data.url;
   }
 
+  if (isReferenceFileData(data)) {
+    return Object.values(data.reference).find(isRuntimeAttachmentData);
+  }
+
   return;
 }
 
@@ -272,6 +345,14 @@ function isUrlFileData(
 ): data is Extract<UserMessageFileData, { readonly type: "url" }> {
   return typeof data === "object" && data !== null && "type" in data
     ? data.type === "url"
+    : false;
+}
+
+function isReferenceFileData(
+  data: UserMessageFileData
+): data is Extract<UserMessageFileData, { readonly type: "reference" }> {
+  return typeof data === "object" && data !== null && "type" in data
+    ? data.type === "reference"
     : false;
 }
 
@@ -292,4 +373,8 @@ function base64DataToBytes(data: string): Uint8Array {
 
 function isRemoteUrl(value: string): boolean {
   return value.startsWith("http://") || value.startsWith("https://");
+}
+
+function runtimeAttachmentRefKey(ref: RuntimeAttachmentReference): string {
+  return `${ref.schemaVersion}:${ref.source ?? ""}:${ref.id}`;
 }

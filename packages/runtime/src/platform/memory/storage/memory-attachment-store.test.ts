@@ -20,4 +20,16 @@ describe("MemoryAttachmentStore", () => {
       ref,
     });
   });
+
+  it("deletes stored attachments by ref", async () => {
+    const store = new MemoryAttachmentStore();
+    const ref = await store.put({
+      bytes: new Uint8Array([9, 8, 7]),
+      mediaType: "image/png",
+    });
+
+    await store.delete(ref);
+
+    await expect(store.get(ref)).resolves.toBeNull();
+  });
 });

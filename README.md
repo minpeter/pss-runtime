@@ -78,6 +78,14 @@ await agent.send([
 ]);
 ```
 
+Inline image/file bytes and base64 data URLs are staged into the runtime's
+`attachmentStore` before thread state is committed. Durable events and snapshots
+store only internal `pss-attachment:` refs, and the runtime hydrates those refs
+back into bytes immediately before calling the model. Custom hosts that accept
+byte inputs must provide an `attachmentStore` with `put`, `get`, and `delete`;
+remote `http(s)` media stays as a provider URL/reference and is not fetched by
+the runtime.
+
 Run the TUI:
 
 ```sh

@@ -14,6 +14,16 @@ interface StoredCloudflareAttachment {
   readonly sizeBytes: number;
 }
 
+class CloudflareAttachmentStoreError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CloudflareAttachmentStoreError";
+  }
+}
+
+const attachmentIdPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export class CloudflareAttachmentStore implements RuntimeAttachmentStore {
   readonly #prefix: string;
   readonly #storage: CloudflareDurableObjectTransactionStorage;
@@ -29,9 +39,15 @@ export class CloudflareAttachmentStore implements RuntimeAttachmentStore {
     this.#storage = storage;
   }
 
+  async delete(ref: RuntimeAttachmentReference): Promise<void> {
+    assertAttachmentId(ref.id);
+    await this.#storage.delete(this.#key(ref.id));
+  }
+
   async get(
     ref: RuntimeAttachmentReference
   ): Promise<RuntimeAttachmentBlob | null> {
+    assertAttachmentId(ref.id);
     const stored = await this.#storage.get<StoredCloudflareAttachment>(
       this.#key(ref.id)
     );
@@ -63,6 +79,14 @@ export class CloudflareAttachmentStore implements RuntimeAttachmentStore {
 
   #key(id: string): string {
     return `${this.#prefix}:attachment:${id}`;
+  }
+}
+
+function assertAttachmentId(id: string): void {
+  if (!attachmentIdPattern.test(id)) {
+    throw new CloudflareAttachmentStoreError(
+      "Invalid CloudflareAttachmentStore ref id."
+    );
   }
 }
 

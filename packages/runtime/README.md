@@ -107,9 +107,13 @@ await agent.send([
 ]);
 ```
 
-The runtime normalizes and persists these content parts as thread continuation
-state; it does not fetch remote media, decode files, or guarantee provider support
-for every media type.
+Inline bytes and base64 data URLs are runtime-owned attachments. Before the
+input is committed, the runtime writes them to the configured `attachmentStore`
+and persists only internal `pss-attachment:` refs in events, snapshots, queued
+inputs, and notifications. Refs are hydrated back into bytes immediately before
+model generation. Custom hosts that accept byte inputs must provide an
+`attachmentStore` with `put`, `get`, and `delete`; remote `http(s)` media stays
+as a provider URL/reference and is not fetched by the runtime.
 
 The public transcript protocol is `AgentEvent`: live turns emit runtime-defined
 events through `turn.events()`. Provider/model message history is internal
@@ -322,11 +326,13 @@ Each accepted call returns one `AgentTurn`. Drain that turn's `events()` stream 
 observe the turn; each `AgentTurn.events()` stream is single-consumer.
 
 Input APIs accept strings, arrays of strings, or multipart arrays such as
-`[{ type: "text", text: "hello" }, { type: "image", image }]`. The runtime
-normalizes accepted `send` input into `user-input` events. Active steering and
-host resume input emit `runtime-input` events. A `runtime-input` is
-runtime/API-originated input mapped internally to the model's user role. It is
-distinct from human-origin `user-input` events.
+`[{ type: "text", text: "hello" }, { type: "image", image }]`. Inline
+image/file bytes are staged into `attachmentStore` and replaced by
+`pss-attachment:` refs before durable state is written. The runtime normalizes
+accepted `send` input into `user-input` events. Active steering and host resume
+input emit `runtime-input` events. A `runtime-input` is runtime/API-originated
+input mapped internally to the model's user role. It is distinct from
+human-origin `user-input` events.
 
 Runtime input windows are tied to synchronized events:
 

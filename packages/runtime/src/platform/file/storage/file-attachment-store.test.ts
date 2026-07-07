@@ -23,6 +23,19 @@ describe("FileAttachmentStore", () => {
     });
   });
 
+  it("deletes persisted attachment blobs by ref", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "pss-attachments-"));
+    const store = new FileAttachmentStore(directory);
+    const ref = await store.put({
+      bytes: new Uint8Array([4, 5, 6]),
+      mediaType: "image/png",
+    });
+
+    await store.delete(ref);
+
+    await expect(store.get(ref)).resolves.toBeNull();
+  });
+
   it("rejects attachment refs that cannot be store-owned ids", async () => {
     const directory = await mkdtemp(join(tmpdir(), "pss-attachments-"));
     const store = new FileAttachmentStore(directory);

@@ -1,5 +1,7 @@
 import { agentNamespace } from "../../agent/identity/namespace";
 import {
+  cleanupStagedRuntimeAttachments,
+  type RuntimeAttachmentReference,
   stageAgentEventsAttachments,
   stageUserInputAttachments,
 } from "../../thread/input/attachments";
@@ -62,83 +64,99 @@ export async function dispatchAgentNotification(
 
   const runId = crypto.randomUUID();
   const notificationId = crypto.randomUUID();
-  const stagedInput = await stageUserInputAttachments(
-    input.input,
-    input.host.attachmentStore
-  );
-  const stagedOverlays = await stageUserInputs(
-    input.overlays,
-    input.host.attachmentStore
-  );
-  const stagedObserverEvents = await stageAgentEventsAttachments(
-    input.observerEvents ?? [],
-    input.host.attachmentStore
-  );
-  const runRecord = {
-    checkpointVersion: 0,
-    dedupeKey: storageIdempotencyKey,
-    kind: "notification",
-    ownerNamespace,
-    rootRunId: runId,
-    runId,
-    threadKey: input.threadKey,
-    status: "queued",
-  } satisfies TurnRecord;
-  const notificationRecord = {
-    idempotencyKey: storageIdempotencyKey,
-    input: stagedInput,
-    notificationId,
-    observerEvents: stagedObserverEvents,
-    overlays: stagedOverlays,
-    ownerNamespace,
-    runId,
-    threadKey: input.threadKey,
-    status: "pending",
-  } satisfies NotificationRecord;
-
+  const stagedRefs: RuntimeAttachmentReference[] = [];
+  let keepStagedAttachments = false;
   try {
-    await input.host.store.transaction(async (tx) => {
-      const runCreate = await tx.turns.create(runRecord);
-      if (!runCreate.ok) {
-        throw new DuplicateNotificationError();
-      }
-      const writeResult = await tx.notifications.enqueue(notificationRecord);
-      if (!writeResult.ok) {
-        throw new DuplicateNotificationError();
-      }
-    });
-  } catch (error) {
-    if (error instanceof DuplicateNotificationError) {
-      const deduplicated = await queuedNotificationRun({
-        host: input.host,
-        idempotencyKey: input.idempotencyKey,
-        ownerNamespace,
-        threadKey: input.threadKey,
-        storageIdempotencyKey,
-      });
-      if (deduplicated) {
-        await scheduleAgentNotification(input.host, deduplicated);
-        return dispatchedAgentNotification(deduplicated);
-      }
-    }
-    throw error;
-  }
+    const stagedInput = await stageUserInputAttachments(
+      input.input,
+      input.host.attachmentStore,
+      { stagedRefs }
+    );
+    const stagedOverlays = await stageUserInputs(
+      input.overlays,
+      input.host.attachmentStore,
+      { stagedRefs }
+    );
+    const stagedObserverEvents = await stageAgentEventsAttachments(
+      input.observerEvents ?? [],
+      input.host.attachmentStore,
+      { stagedRefs }
+    );
+    const runRecord = {
+      checkpointVersion: 0,
+      dedupeKey: storageIdempotencyKey,
+      kind: "notification",
+      ownerNamespace,
+      rootRunId: runId,
+      runId,
+      threadKey: input.threadKey,
+      status: "queued",
+    } satisfies TurnRecord;
+    const notificationRecord = {
+      idempotencyKey: storageIdempotencyKey,
+      input: stagedInput,
+      notificationId,
+      observerEvents: stagedObserverEvents,
+      overlays: stagedOverlays,
+      ownerNamespace,
+      runId,
+      threadKey: input.threadKey,
+      status: "pending",
+    } satisfies NotificationRecord;
 
-  const created = {
-    deduplicated: false,
-    idempotencyKey: input.idempotencyKey,
-    notificationId,
-    runId,
-    threadKey: input.threadKey,
-    storageIdempotencyKey,
-  } satisfies SchedulableAgentNotification;
-  await scheduleAgentNotification(input.host, created);
-  return dispatchedAgentNotification(created);
+    try {
+      await input.host.store.transaction(async (tx) => {
+        const runCreate = await tx.turns.create(runRecord);
+        if (!runCreate.ok) {
+          throw new DuplicateNotificationError();
+        }
+        const writeResult = await tx.notifications.enqueue(notificationRecord);
+        if (!writeResult.ok) {
+          throw new DuplicateNotificationError();
+        }
+      });
+    } catch (error) {
+      if (error instanceof DuplicateNotificationError) {
+        const deduplicated = await queuedNotificationRun({
+          host: input.host,
+          idempotencyKey: input.idempotencyKey,
+          ownerNamespace,
+          threadKey: input.threadKey,
+          storageIdempotencyKey,
+        });
+        if (deduplicated) {
+          await scheduleAgentNotification(input.host, deduplicated);
+          return dispatchedAgentNotification(deduplicated);
+        }
+      }
+      throw error;
+    }
+
+    keepStagedAttachments = true;
+    const created = {
+      deduplicated: false,
+      idempotencyKey: input.idempotencyKey,
+      notificationId,
+      runId,
+      threadKey: input.threadKey,
+      storageIdempotencyKey,
+    } satisfies SchedulableAgentNotification;
+    await scheduleAgentNotification(input.host, created);
+    return dispatchedAgentNotification(created);
+  } finally {
+    if (!keepStagedAttachments) {
+      await cleanupStagedRuntimeAttachments(
+        input.host.attachmentStore,
+        stagedRefs
+      );
+    }
+  }
 }
 
 async function stageUserInputs(
   inputs: readonly UserInput[] | undefined,
-  attachmentStore: Parameters<typeof stageUserInputAttachments>[1]
+  attachmentStore: Parameters<typeof stageUserInputAttachments>[1],
+  options: Parameters<typeof stageUserInputAttachments>[2]
 ): Promise<readonly UserInput[] | undefined> {
   if (!inputs) {
     return;
@@ -146,7 +164,9 @@ async function stageUserInputs(
 
   const staged: UserInput[] = [];
   for (const input of inputs) {
-    staged.push(await stageUserInputAttachments(input, attachmentStore));
+    staged.push(
+      await stageUserInputAttachments(input, attachmentStore, options)
+    );
   }
   return staged;
 }

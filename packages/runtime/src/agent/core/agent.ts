@@ -46,11 +46,12 @@ export class Agent {
   constructor(options: AgentOptions) {
     assertAgentOptions(options);
 
+    const providedHost = options.host;
     this.namespace = options.namespace;
     this.#ownerNamespace = stableAgentNamespace({
       namespace: options.namespace,
     });
-    this.#host = options.host ?? createInMemoryExecutionHost();
+    this.#host = providedHost ?? createInMemoryExecutionHost();
     this.host = this.#host;
     this.#store = threadStoreForHost(this.#host);
     this.#plugins = options.plugins ?? [];
@@ -59,7 +60,10 @@ export class Agent {
       options.autoCompaction
     );
     this.#modelOptions = {
-      attachmentStore: options.attachmentStore ?? this.#host.attachmentStore,
+      attachmentStore:
+        providedHost?.attachmentStore ??
+        options.attachmentStore ??
+        this.#host.attachmentStore,
       instructions: options.instructions,
       model: options.model,
       toolChoice: options.toolChoice,

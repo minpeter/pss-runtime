@@ -32,6 +32,14 @@ export class FileAttachmentStore implements RuntimeAttachmentStore {
     this.#directory = join(directory, "attachments");
   }
 
+  async delete(ref: RuntimeAttachmentReference): Promise<void> {
+    assertAttachmentId(ref.id);
+    await Promise.all([
+      rm(this.#blobFile(ref.id), { force: true }),
+      rm(this.#metadataFile(ref.id), { force: true }),
+    ]);
+  }
+
   async get(
     ref: RuntimeAttachmentReference
   ): Promise<RuntimeAttachmentBlob | null> {

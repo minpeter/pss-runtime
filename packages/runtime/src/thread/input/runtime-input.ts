@@ -2,6 +2,8 @@ import type { ClaimedThreadInput } from "../../execution/host/types";
 import type { AgentEvent, RuntimeInput } from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
 import {
+  cleanupStagedRuntimeAttachments,
+  type RuntimeAttachmentReference,
   type RuntimeAttachmentStore,
   stageUserInputAttachments,
   userInputRequiresAttachmentProcessing,
@@ -54,20 +56,28 @@ export function addSteeringInput(
 ): Promise<void> {
   const placement = currentSteeringPlacement(runtimeInput);
   const next = runtimeInput.pending.then(async () => {
+    const stagedRefs: RuntimeAttachmentReference[] = [];
     assertRuntimeInputOpen(runtimeInput);
 
     const acceptedInput = attachInputMeta(normalizeAgentInput(input), {
       source: "steer",
       streaming: "steer",
     });
-    const staged = userInputRequiresAttachmentProcessing(acceptedInput)
-      ? await stageUserInputAttachments(acceptedInput, attachmentStore)
-      : acceptedInput;
-    assertRuntimeInputOpen(runtimeInput);
-    queueRuntimeInput(runtimeInput, {
-      input: staged,
-      placement,
-    });
+    try {
+      const staged = userInputRequiresAttachmentProcessing(acceptedInput)
+        ? await stageUserInputAttachments(acceptedInput, attachmentStore, {
+            stagedRefs,
+          })
+        : acceptedInput;
+      assertRuntimeInputOpen(runtimeInput);
+      queueRuntimeInput(runtimeInput, {
+        input: staged,
+        placement,
+      });
+    } catch (error) {
+      await cleanupStagedRuntimeAttachments(attachmentStore, stagedRefs);
+      throw error;
+    }
   });
   runtimeInput.pending = next.catch(() => undefined);
   return next;
