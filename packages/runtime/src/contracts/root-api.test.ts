@@ -18,6 +18,7 @@ import type {
   AgentHost,
   AgentInput,
   AgentOptions,
+  RuntimeAttachmentStore,
   ThreadCompactionInput,
   ThreadHandle,
 } from "../index";
@@ -100,7 +101,9 @@ describe("runtime public exports", () => {
       retainMessages: 4,
     } satisfies AgentAutoCompactionOptions;
     const model = {} as AgentOptions["model"];
+    const attachmentStore = {} as RuntimeAttachmentStore;
     const enabledOptions = {
+      attachmentStore,
       autoCompaction,
       model,
       notificationOverlays: ["runtime context"],
@@ -129,6 +132,7 @@ describe("runtime public exports", () => {
       ReturnType<typeof runtimeThreadStoreKey>
     >().toEqualTypeOf<string>();
     expect(enabledOptions.autoCompaction).toEqual(autoCompaction);
+    expect(enabledOptions.attachmentStore).toBe(attachmentStore);
     expect(enabledOptions.notificationOverlays).toEqual(["runtime context"]);
     expect(disabledOptions.autoCompaction).toBe(false);
     expect(compaction.startSeq).toBe(0);
@@ -161,6 +165,7 @@ describe("runtime public exports", () => {
       ExecutionStoreTransaction["notifications"]
     >().toEqualTypeOf<NotificationInbox>();
     const threadHost = {
+      attachmentStore: {} as RuntimeAttachmentStore,
       kind: "thread",
       threadStore: {} as ThreadHost["threadStore"],
     } satisfies ThreadHost;
@@ -182,6 +187,15 @@ describe("runtime public exports", () => {
     >().toEqualTypeOf<ExecutionScheduler>();
     expectTypeOf<DurableBackgroundHost["transaction"]>().toEqualTypeOf<
       ExecutionStore["transaction"]
+    >();
+    expectTypeOf<ThreadHost["attachmentStore"]>().toEqualTypeOf<
+      RuntimeAttachmentStore | undefined
+    >();
+    expectTypeOf<ExecutionHost["attachmentStore"]>().toEqualTypeOf<
+      RuntimeAttachmentStore | undefined
+    >();
+    expectTypeOf<DurableBackgroundHost["attachmentStore"]>().toEqualTypeOf<
+      RuntimeAttachmentStore | undefined
     >();
     expect(agentHost.kind).toBe("thread");
   });

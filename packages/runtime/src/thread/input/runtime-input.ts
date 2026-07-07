@@ -1,6 +1,11 @@
 import type { ClaimedThreadInput } from "../../execution/host/types";
 import type { AgentEvent, RuntimeInput } from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
+import {
+  type RuntimeAttachmentStore,
+  stageUserInputAttachments,
+  userInputRequiresAttachmentProcessing,
+} from "./attachments";
 import type { AgentInput, UserInput } from "./input";
 import { attachInputMeta } from "./input-meta";
 import { normalizeAgentInput } from "./input-normalization";
@@ -44,17 +49,24 @@ export function createRuntimeInputState(
 
 export function addSteeringInput(
   runtimeInput: RuntimeInputState,
-  input: AgentInput
+  input: AgentInput,
+  attachmentStore: RuntimeAttachmentStore | undefined
 ): Promise<void> {
-  const next = runtimeInput.pending.then(() => {
+  const placement = currentSteeringPlacement(runtimeInput);
+  const next = runtimeInput.pending.then(async () => {
     assertRuntimeInputOpen(runtimeInput);
 
+    const acceptedInput = attachInputMeta(normalizeAgentInput(input), {
+      source: "steer",
+      streaming: "steer",
+    });
+    const staged = userInputRequiresAttachmentProcessing(acceptedInput)
+      ? await stageUserInputAttachments(acceptedInput, attachmentStore)
+      : acceptedInput;
+    assertRuntimeInputOpen(runtimeInput);
     queueRuntimeInput(runtimeInput, {
-      input: attachInputMeta(normalizeAgentInput(input), {
-        source: "steer",
-        streaming: "steer",
-      }),
-      placement: currentSteeringPlacement(runtimeInput),
+      input: staged,
+      placement,
     });
   });
   runtimeInput.pending = next.catch(() => undefined);

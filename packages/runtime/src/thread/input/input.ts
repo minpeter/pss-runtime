@@ -20,8 +20,10 @@ export interface UserMessageImagePart {
 }
 
 export type UserMessageFileData =
+  | ArrayBuffer
   | string
-  | { data: string; type: "data" }
+  | Uint8Array
+  | { data: ArrayBuffer | string | Uint8Array; type: "data" }
   | { reference: Record<string, string>; type: "reference" }
   | { text: string; type: "text" }
   | { type: "url"; url: string };

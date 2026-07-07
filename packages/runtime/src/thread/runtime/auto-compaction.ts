@@ -167,6 +167,7 @@ async function summarizeCompactionRange({
   readonly model: ModelGenerationOptions;
 }): Promise<string> {
   const output = await generateModelStep({
+    attachmentStore: model.attachmentStore,
     history: [
       {
         content:
