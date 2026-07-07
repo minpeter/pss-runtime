@@ -8,6 +8,7 @@ import {
   base64Url,
   checkpointRecord,
   collectEvents,
+  collectThreadEvents,
   contractTempDir,
   createDeferred,
   currentDataDirectory,
@@ -141,6 +142,32 @@ describe("FileExecutionStore", () => {
       store.notifications.getByIdempotencyKey("notify:rollback")
     ).resolves.toBeNull();
     await expect(store.threads.load("thread:rollback")).resolves.toBeNull();
+  });
+
+  it("preserves thread events across committed transactions", async () => {
+    const store = new FileExecutionStore(await tempDir());
+
+    await expect(
+      store.threadEvents.append("thread:replay", { type: "turn-start" })
+    ).resolves.toEqual({ offset: 1 });
+
+    await store.transaction(async (tx) => {
+      await tx.threads.commit(
+        "thread:replay",
+        { state: { value: "committed transaction" } },
+        { expectedVersion: null }
+      );
+    });
+
+    await expect(
+      collectThreadEvents(store.threadEvents.read("thread:replay"))
+    ).resolves.toEqual([
+      {
+        cursor: { offset: 1 },
+        event: { type: "turn-start" },
+        threadKey: "thread:replay",
+      },
+    ]);
   });
 
   it("serializes direct thread writes against transaction directory swaps", async () => {
