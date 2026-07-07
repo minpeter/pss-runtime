@@ -6,10 +6,13 @@ import {
   createCallbackModel,
   eventTypes,
   overlayRuntimeInput,
-  sentUserMessage,
   sentUserText,
   userText,
 } from "../../testing/test-fixtures";
+import {
+  encodeRuntimeAttachmentData,
+  isRuntimeAttachmentData,
+} from "../input/attachments";
 import { userTextToModelMessage } from "../protocol/mapping";
 import { collect } from "./test-support";
 
@@ -78,21 +81,44 @@ describe("Agent thread API", () => {
     expect(seenHistory).toEqual([
       [
         {
-          role: "user",
           content: [
-            { type: "text", text: "describe this" },
-            { type: "file", data: "iVBORw0KGgo=", mediaType: "image/png" },
             {
+              providerOptions: undefined,
+              text: "describe this",
+              type: "text",
+            },
+            {
+              data: new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+              filename: undefined,
+              mediaType: "image/png",
+              providerOptions: undefined,
               type: "file",
+            },
+            {
               data: { type: "text", text: "inline document" },
               filename: "note.txt",
               mediaType: "text/plain",
+              providerOptions: undefined,
+              type: "file",
             },
           ],
+          providerOptions: undefined,
+          role: "user",
         },
       ],
     ]);
-    expect(events[0]).toEqual(sentUserMessage(input));
+    const acceptedInput = events[0];
+    expect(acceptedInput?.type).toBe("user-input");
+    if (acceptedInput?.type !== "user-input" || !("content" in acceptedInput)) {
+      throw new Error("expected multipart user-input event");
+    }
+    const imagePart = acceptedInput.content[1];
+    expect(imagePart?.type).toBe("file");
+    if (imagePart?.type !== "file") {
+      throw new Error("expected staged image file part");
+    }
+    expect(isRuntimeAttachmentData(imagePart.data)).toBe(true);
+    expect(acceptedInput.content[2]).toEqual(input[2]);
   });
 
   it("rejects malformed multipart input before queueing", async () => {
@@ -172,17 +198,22 @@ describe("Agent thread API", () => {
     expect(seenHistory).toEqual([
       [
         {
-          role: "user",
           content: [
-            { type: "text", text: "summarize" },
             {
-              type: "file",
-              data: "iVBORw0KGgo=",
+              providerOptions: undefined,
+              text: "summarize",
+              type: "text",
+            },
+            {
+              data: new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
               filename: undefined,
               mediaType: "image/png",
               providerOptions: undefined,
+              type: "file",
             },
           ],
+          providerOptions: undefined,
+          role: "user",
         },
       ],
     ]);
@@ -241,5 +272,31 @@ describe("Agent thread API", () => {
         userTextToModelMessage(userText("hello")),
       ],
     ]);
+  });
+
+  it("thread.overlay rejects externally supplied runtime attachment refs", () => {
+    const seenHistory: ModelMessage[][] = [];
+    const agent = new Agent({
+      model: createCallbackModel(({ history }) => {
+        seenHistory.push([...history]);
+        return Promise.resolve([assistantMessage("DONE")]);
+      }),
+    });
+    const ref = encodeRuntimeAttachmentData({
+      id: "attacker-controlled",
+      schemaVersion: 1,
+    });
+
+    expect(() =>
+      agent.overlay([
+        { text: "context", type: "text" },
+        {
+          data: ref,
+          mediaType: "image/png",
+          type: "file",
+        },
+      ])
+    ).toThrow("External input cannot contain runtime attachment refs.");
+    expect(seenHistory).toEqual([]);
   });
 });

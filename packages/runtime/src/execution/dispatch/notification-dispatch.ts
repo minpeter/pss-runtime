@@ -1,4 +1,8 @@
 import { agentNamespace } from "../../agent/identity/namespace";
+import {
+  stageAgentEventsAttachments,
+  stageUserInputAttachments,
+} from "../../thread/input/attachments";
 import type { AgentEvent, UserInput } from "../../thread/protocol/events";
 import type {
   ExecutionHost,
@@ -58,6 +62,18 @@ export async function dispatchAgentNotification(
 
   const runId = crypto.randomUUID();
   const notificationId = crypto.randomUUID();
+  const stagedInput = await stageUserInputAttachments(
+    input.input,
+    input.host.attachmentStore
+  );
+  const stagedOverlays = await stageUserInputs(
+    input.overlays,
+    input.host.attachmentStore
+  );
+  const stagedObserverEvents = await stageAgentEventsAttachments(
+    input.observerEvents ?? [],
+    input.host.attachmentStore
+  );
   const runRecord = {
     checkpointVersion: 0,
     dedupeKey: storageIdempotencyKey,
@@ -70,10 +86,10 @@ export async function dispatchAgentNotification(
   } satisfies TurnRecord;
   const notificationRecord = {
     idempotencyKey: storageIdempotencyKey,
-    input: input.input,
+    input: stagedInput,
     notificationId,
-    observerEvents: input.observerEvents,
-    overlays: input.overlays,
+    observerEvents: stagedObserverEvents,
+    overlays: stagedOverlays,
     ownerNamespace,
     runId,
     threadKey: input.threadKey,
@@ -118,6 +134,21 @@ export async function dispatchAgentNotification(
   } satisfies SchedulableAgentNotification;
   await scheduleAgentNotification(input.host, created);
   return dispatchedAgentNotification(created);
+}
+
+async function stageUserInputs(
+  inputs: readonly UserInput[] | undefined,
+  attachmentStore: Parameters<typeof stageUserInputAttachments>[1]
+): Promise<readonly UserInput[] | undefined> {
+  if (!inputs) {
+    return;
+  }
+
+  const staged: UserInput[] = [];
+  for (const input of inputs) {
+    staged.push(await stageUserInputAttachments(input, attachmentStore));
+  }
+  return staged;
 }
 
 async function queuedNotificationRun({

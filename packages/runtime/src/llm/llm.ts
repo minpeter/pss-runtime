@@ -1,5 +1,9 @@
 import type { LanguageModel, ModelMessage, ToolChoice, ToolSet } from "ai";
 import { generateText } from "ai";
+import {
+  hydrateRuntimeAttachments,
+  type RuntimeAttachmentStore,
+} from "../thread/input/attachments";
 import type { RuntimeToolExecutionContext } from "./tool-execution";
 import {
   normalizeToolCallIds,
@@ -22,6 +26,7 @@ export type ModelStepOutput = Awaited<
 export type ModelStepOutputPart = ModelStepOutput[number];
 
 export interface ModelGenerationOptions {
+  attachmentStore?: RuntimeAttachmentStore;
   instructions?: string;
   model: LanguageModel;
   toolChoice?: AgentToolChoice;
@@ -35,6 +40,7 @@ export interface ModelStepOptions extends ModelGenerationOptions {
 }
 
 export async function generateModelStep({
+  attachmentStore,
   history,
   model,
   instructions,
@@ -45,10 +51,14 @@ export async function generateModelStep({
 }: ModelStepOptions): Promise<ModelStepOutput> {
   const toolCallIds = new Map<string, string>();
   const prompt = promptForModel({ history, instructions });
+  const messages = await hydrateRuntimeAttachments(
+    prompt.messages,
+    attachmentStore
+  );
   const { responseMessages } = await generateText({
     abortSignal: signal,
     instructions: prompt.instructions,
-    messages: prompt.messages,
+    messages,
     model,
     toolChoice,
     tools: normalizeToolCallIds(tools, toolCallIds, toolExecution),

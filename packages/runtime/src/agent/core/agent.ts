@@ -59,6 +59,7 @@ export class Agent {
       options.autoCompaction
     );
     this.#modelOptions = {
+      attachmentStore: options.attachmentStore ?? this.#host.attachmentStore,
       instructions: options.instructions,
       model: options.model,
       toolChoice: options.toolChoice,

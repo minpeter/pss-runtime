@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { agentNamespace } from "../../agent/identity/namespace";
 import { createInMemoryExecutionHost } from "../../platform/memory";
+import { isRuntimeAttachmentData } from "../../thread/input/attachments";
 import type { ExecutionHost, TurnRecord, TurnStore } from "../host/types";
 import { dispatchAgentNotification } from "./notification-dispatch";
 
@@ -85,6 +86,87 @@ describe("dispatchAgentNotification", () => {
       ownerNamespace: agentNamespace("agent-b"),
       threadKey: "room:1:user:2",
     });
+  });
+
+  it("stages notification file bytes before durable enqueue", async () => {
+    const host = createInMemoryExecutionHost();
+    const dispatched = await dispatchAgentNotification({
+      host,
+      idempotencyKey: "attachment:1",
+      input: {
+        content: [
+          { text: "look", type: "text" },
+          {
+            data: new Uint8Array([1, 2, 3]),
+            filename: "photo.png",
+            mediaType: "image/png",
+            type: "file",
+          },
+        ],
+        type: "user-input",
+      },
+      namespace: "agent-a",
+      threadKey: "room:1:user:2",
+    });
+
+    const run = await host.store.turns.get(dispatched.runId);
+    const notification = await host.store.notifications.getByIdempotencyKey(
+      run?.dedupeKey ?? ""
+    );
+
+    expect(JSON.stringify(notification)).toContain("pss-attachment:");
+    expect(JSON.stringify(notification)).not.toContain('"0":1');
+    if (!(notification && "content" in notification.input)) {
+      throw new Error("expected multipart notification input");
+    }
+    const filePart = notification.input.content[1];
+    expect(filePart?.type).toBe("file");
+    if (filePart?.type !== "file") {
+      throw new Error("expected staged file part");
+    }
+    expect(isRuntimeAttachmentData(filePart.data)).toBe(true);
+  });
+
+  it("stages notification observer event file bytes before durable enqueue", async () => {
+    const host = createInMemoryExecutionHost();
+    const dispatched = await dispatchAgentNotification({
+      host,
+      idempotencyKey: "attachment-observer:1",
+      input: { text: "wake", type: "user-input" },
+      namespace: "agent-a",
+      observerEvents: [
+        {
+          content: [
+            {
+              data: new Uint8Array([7, 8, 9]),
+              filename: "context.png",
+              mediaType: "image/png",
+              type: "file",
+            },
+          ],
+          type: "user-input",
+        },
+      ],
+      threadKey: "room:1:user:2",
+    });
+
+    const run = await host.store.turns.get(dispatched.runId);
+    const notification = await host.store.notifications.getByIdempotencyKey(
+      run?.dedupeKey ?? ""
+    );
+
+    expect(JSON.stringify(notification)).toContain("pss-attachment:");
+    expect(JSON.stringify(notification)).not.toContain('"0":7');
+    const observerEvent = notification?.observerEvents?.[0];
+    if (observerEvent?.type !== "user-input" || !("content" in observerEvent)) {
+      throw new Error("expected staged multipart observer event");
+    }
+    const filePart = observerEvent.content[0];
+    expect(filePart?.type).toBe("file");
+    if (filePart?.type !== "file") {
+      throw new Error("expected staged observer file part");
+    }
+    expect(isRuntimeAttachmentData(filePart.data)).toBe(true);
   });
 
   it("returns the existing notification when run dedupe wins a create race", async () => {

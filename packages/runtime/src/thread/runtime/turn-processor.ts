@@ -1,6 +1,7 @@
 import { runAgentLoop } from "../../agent/loop/loop";
 import type { ModelGenerationOptions } from "../../llm/llm";
 import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution";
+import { stageUserInputAttachments } from "../input/attachments";
 import {
   closeRuntimeInput,
   type QueuedInput,
@@ -98,10 +99,15 @@ export async function processQueuedInput({
     const committedPreUser = await commitPreUserRuntimeInputs(
       events,
       state,
-      preUserRuntimeInputs
+      preUserRuntimeInputs,
+      model.attachmentStore
     );
     if (input) {
-      state.appendUserInput(input);
+      state.appendUserInput(
+        await stageUserInputAttachments(input, model.attachmentStore, {
+          trustRuntimeAttachmentRefs: true,
+        })
+      );
       if (pendingDurableInputClaim) {
         await commitAndAckDurableThreadInput({
           executionHost: execution.executionHost,
@@ -122,6 +128,7 @@ export async function processQueuedInput({
     });
     await emitCommittedRuntimeInputs(events, run, committedPreUser);
     await drainRuntimeInput({
+      attachmentStore: model.attachmentStore,
       events,
       executionHost: execution.executionHost,
       placement: "turn-start",
@@ -138,6 +145,7 @@ export async function processQueuedInput({
         runAgentLoop({
           emit: async (event) =>
             emitTurnEvent({
+              attachmentStore: model.attachmentStore,
               event,
               events,
               executionHost: execution.executionHost,

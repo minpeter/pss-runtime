@@ -8,6 +8,7 @@ import {
   type ScheduledThreadPrompt,
   threadPromptScheduledWorkId,
 } from "../../../execution/scheduled-work";
+import { MemoryAttachmentStore } from "../storage/memory-attachment-store";
 import { InMemoryExecutionStore } from "./store";
 
 export type MemoryScheduledThreadPrompt = ScheduledThreadPrompt;
@@ -23,6 +24,7 @@ export interface InMemoryExecutionHost extends ExecutionHost {
 
 export function createInMemoryExecutionHost(): InMemoryExecutionHost {
   return {
+    attachmentStore: new MemoryAttachmentStore(),
     kind: "execution",
     store: new InMemoryExecutionStore(),
     scheduler: new InMemoryExecutionScheduler(),
