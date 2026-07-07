@@ -1,8 +1,8 @@
 import type {
+  Checkpoint,
   ExecutionHost,
   NotificationRecord,
-  RunCheckpoint,
-  RunRecord,
+  TurnRecord,
 } from "../src/execution";
 import {
   createCloudflareDurableObjectHost,
@@ -25,6 +25,7 @@ import {
 
 interface DemoIds {
   readonly idempotencyKey: string;
+  readonly inputMessageId: string;
   readonly notificationId: string;
   readonly runId: string;
   readonly threadKey: string;
@@ -33,6 +34,7 @@ interface DemoIds {
 const prefix = "inspect-runtime-storage";
 const ids: DemoIds = {
   idempotencyKey: "notify:demo-run-1",
+  inputMessageId: "input:demo-steer-1",
   notificationId: "notification-1",
   runId: "run-1",
   threadKey: "agent:demo-agent/user:user-42/thread:main",
@@ -71,16 +73,16 @@ async function writeDemoScenario(runtimeHost: ExecutionHost): Promise<void> {
     { expectedVersion: null }
   );
 
-  const run: RunRecord = {
+  const run: TurnRecord = {
     checkpointVersion: 0,
-    kind: "thread-turn",
+    kind: "user-turn",
     ownerNamespace: "demo-agent",
     rootRunId: ids.runId,
     runId: ids.runId,
     status: "queued",
     threadKey: ids.threadKey,
   };
-  await runtimeHost.store.runs.create(run);
+  await runtimeHost.store.turns.create(run);
 
   const events: readonly AgentEvent[] = [
     { type: "turn-start" },
@@ -112,7 +114,7 @@ async function writeDemoScenario(runtimeHost: ExecutionHost): Promise<void> {
     await runtimeHost.store.events.append(ids.runId, event);
   }
 
-  const checkpoint: RunCheckpoint = {
+  const checkpoint: Checkpoint = {
     checkpointId: "checkpoint-1",
     phase: "after-tool",
     runId: ids.runId,
@@ -123,7 +125,7 @@ async function writeDemoScenario(runtimeHost: ExecutionHost): Promise<void> {
   await runtimeHost.store.checkpoints.append(checkpoint, {
     expectedVersion: 0,
   });
-  await runtimeHost.store.runs.update({
+  await runtimeHost.store.turns.update({
     ...run,
     checkpointVersion: 1,
     status: "suspended",
@@ -142,6 +144,16 @@ async function writeDemoScenario(runtimeHost: ExecutionHost): Promise<void> {
     threadKey: ids.threadKey,
   };
   await runtimeHost.store.notifications.enqueue(notification);
+  await runtimeHost.store.inputs.admit({
+    input: {
+      text: "배송지 변경 요청도 같은 실행에 반영해줘.",
+      type: "user-input",
+    },
+    kind: "steer",
+    messageId: ids.inputMessageId,
+    placement: "step-start",
+    threadKey: ids.threadKey,
+  });
   await runtimeHost.scheduler.enqueueRun(ids.runId);
   await runtimeHost.scheduler.resumeThread(ids.threadKey, {
     idempotencyKey: ids.idempotencyKey,
@@ -158,8 +170,8 @@ async function printLoadResults(runtimeHost: ExecutionHost): Promise<void> {
   console.log(`  history length: ${historyLength(thread?.state) ?? "unknown"}`);
   console.log(`  state preview: ${preview(thread?.state, 220)}`);
 
-  const run = await runtimeHost.store.runs.get(ids.runId);
-  console.log(`runs.get(${ids.runId})`);
+  const run = await runtimeHost.store.turns.get(ids.runId);
+  console.log(`turns.get(${ids.runId})`);
   console.log(`  ${preview(run, 220)}`);
 
   const eventTypes: string[] = [];

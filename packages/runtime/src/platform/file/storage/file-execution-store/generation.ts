@@ -6,6 +6,7 @@ import { isNodeError } from "./utils";
 const DATA_DIRECTORIES = [
   "checkpoints",
   "events",
+  "inputs",
   "notifications",
   "runs",
   "threads",

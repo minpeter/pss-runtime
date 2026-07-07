@@ -53,6 +53,7 @@ function createCheckpointSpyCloudflareHost(maxPayloadBytes: number): {
           latest: (runId) => store.checkpoints.latest(runId),
         },
         events: store.events,
+        inputs: store.inputs,
         notifications: store.notifications,
         turns: store.turns,
         threads: store.threads,

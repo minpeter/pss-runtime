@@ -58,18 +58,23 @@ export async function emitRuntimeInputEvent(
   events: ThreadEventDispatcher,
   run: BufferedAgentTurn,
   state: ThreadState,
-  queued: QueuedRuntimeInput
+  queued: QueuedRuntimeInput,
+  options: {
+    readonly commit?: () => Promise<void>;
+    readonly onHandled?: () => Promise<void>;
+  } = {}
 ): Promise<boolean> {
   const processed = await events.interceptEvent(
     runtimeInputEventFromQueued(queued)
   );
   if (processed === "handled") {
+    await options.onHandled?.();
     return false;
   }
 
   events.emitProcessedEvent(run, processed);
   state.appendUserInput(runtimeInputHistoryFromEvent(processed, queued));
-  await state.commit();
+  await (options.commit ?? (() => state.commit()))();
   return true;
 }
 

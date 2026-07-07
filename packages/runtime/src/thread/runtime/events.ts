@@ -79,7 +79,8 @@ export class ThreadEventDispatcher {
 
   async emitRunBoundaryEvent(
     run: BufferedAgentTurn,
-    event: AgentEvent
+    event: AgentEvent,
+    options: { readonly awaitAck?: boolean } = {}
   ): Promise<void> {
     await runPluginsForEvent(
       this.#plugins,
@@ -90,6 +91,11 @@ export class ThreadEventDispatcher {
       },
       { observeOnly: true }
     );
+    if (options.awaitAck === false) {
+      run.emit(event);
+      return;
+    }
+
     await run.emitBoundary(event);
   }
 

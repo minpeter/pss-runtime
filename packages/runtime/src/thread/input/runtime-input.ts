@@ -1,3 +1,4 @@
+import type { ClaimedThreadInput } from "../../execution/host/types";
 import type { AgentEvent, RuntimeInput } from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
 import type { AgentInput, UserInput } from "./input";
@@ -21,6 +22,10 @@ export interface RuntimeInputState {
 }
 
 export interface QueuedInput {
+  readonly awaitBoundaries?: boolean;
+  readonly durableInput?: boolean;
+  readonly durableInputClaim?: ClaimedThreadInput;
+  readonly durableMessageId?: string;
   readonly initialEvents: AgentEvent[];
   readonly input?: UserInput;
   readonly preUserRuntimeInputs: QueuedRuntimeInput[];
@@ -42,21 +47,30 @@ export function addSteeringInput(
   input: AgentInput
 ): Promise<void> {
   const next = runtimeInput.pending.then(() => {
-    if (runtimeInput.closedReason) {
-      throw runtimeInputClosedError(runtimeInput.closedReason);
-    }
+    assertRuntimeInputOpen(runtimeInput);
 
     queueRuntimeInput(runtimeInput, {
       input: attachInputMeta(normalizeAgentInput(input), {
         source: "steer",
         streaming: "steer",
       }),
-      placement:
-        runtimeInput.steerPlacement ?? runtimeInput.placement ?? "step-end",
+      placement: currentSteeringPlacement(runtimeInput),
     });
   });
   runtimeInput.pending = next.catch(() => undefined);
   return next;
+}
+
+export function assertRuntimeInputOpen(runtimeInput: RuntimeInputState): void {
+  if (runtimeInput.closedReason) {
+    throw runtimeInputClosedError(runtimeInput.closedReason);
+  }
+}
+
+export function currentSteeringPlacement(
+  runtimeInput: RuntimeInputState
+): RuntimeInputPlacement {
+  return runtimeInput.steerPlacement ?? runtimeInput.placement ?? "step-end";
 }
 
 export function closeRuntimeInput(

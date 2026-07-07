@@ -10,6 +10,7 @@ export type StorageMetricsTable =
   | "pss_payload_chunk"
   | "pss_run"
   | "pss_scheduled_work"
+  | "pss_thread_input"
   | "pss_thread_message"
   | "pss_thread_message_chunk"
   | "pss_thread_meta";
@@ -50,6 +51,7 @@ export function collectStorageMetrics(sql: SqlStorage): StorageMetrics {
     pss_payload_chunk: countRows(sql, "pss_payload_chunk"),
     pss_run: countRows(sql, "pss_run"),
     pss_scheduled_work: countRows(sql, "pss_scheduled_work"),
+    pss_thread_input: countRows(sql, "pss_thread_input"),
     pss_thread_message: countRows(sql, "pss_thread_message"),
     pss_thread_message_chunk: countRows(sql, "pss_thread_message_chunk"),
     pss_thread_meta: countRows(sql, "pss_thread_meta"),

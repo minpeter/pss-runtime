@@ -7,6 +7,7 @@ import type {
   ExecutionStore,
   ExecutionStoreTransaction,
   NotificationInbox,
+  ThreadInputInbox,
   TurnStore,
 } from "../../../execution/host/types";
 import type { ThreadStore } from "../../../thread/store/types";
@@ -25,6 +26,7 @@ import { createFileExecutionStorePorts } from "./file-execution-store/ports";
 export class FileExecutionStore implements ExecutionStore {
   readonly checkpoints: CheckpointStore;
   readonly events: EventStore;
+  readonly inputs: ThreadInputInbox;
   readonly notifications: NotificationInbox;
   readonly turns: TurnStore;
   readonly threads: ThreadStore;
@@ -43,6 +45,7 @@ export class FileExecutionStore implements ExecutionStore {
     this.turns = ports.turns;
     this.events = ports.events;
     this.checkpoints = ports.checkpoints;
+    this.inputs = ports.inputs;
     this.notifications = ports.notifications;
     this.threads = ports.threads;
   }

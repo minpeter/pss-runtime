@@ -60,6 +60,13 @@ describe("storage metrics", () => {
       status: "pending",
       threadKey,
     });
+    await host.store.inputs.admit({
+      input: { text: "라".repeat(480), type: "user-input" },
+      kind: "steer",
+      messageId: `${runId}:input`,
+      placement: "step-start",
+      threadKey,
+    });
     await host.scheduler.enqueueRun(runId);
     await host.scheduler.resumeThread(threadKey, {
       idempotencyKey: `${runId}:notification`,
@@ -74,6 +81,7 @@ describe("storage metrics", () => {
     expect(metrics.rowCounts.pss_event).toBe(1);
     expect(metrics.rowCounts.pss_checkpoint).toBe(1);
     expect(metrics.rowCounts.pss_notification).toBe(1);
+    expect(metrics.rowCounts.pss_thread_input).toBe(1);
     expect(metrics.chunkBytes.threadMessage).toBeGreaterThan(0);
     expect(metrics.chunkBytes.payload).toBeGreaterThan(0);
     expect(metrics.chunkBytes.total).toBeGreaterThan(

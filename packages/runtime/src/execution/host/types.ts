@@ -186,9 +186,92 @@ export interface NotificationInbox {
   releaseByIdempotencyKey(idempotencyKey: string): Promise<void>;
 }
 
+export type ThreadInputKind = "send" | "steer";
+export type ThreadInputStatus = "acked" | "claiming" | "pending" | "promoted";
+export type ThreadInputBoundary =
+  | "step-end"
+  | "step-start"
+  | "turn-idle"
+  | "turn-start";
+export type ThreadInputPlacement = "step-end" | "step-start" | "turn-start";
+
+export interface ThreadInputRecord {
+  readonly admittedAtMs: number;
+  readonly admittedSeq: number;
+  readonly claimId?: string;
+  readonly input: UserInput;
+  readonly kind: ThreadInputKind;
+  readonly messageId: string;
+  readonly placement?: ThreadInputPlacement;
+  readonly status: ThreadInputStatus;
+  readonly threadKey: string;
+}
+
+export interface AdmitThreadInput {
+  readonly admittedAtMs?: number;
+  readonly input: UserInput;
+  readonly kind: ThreadInputKind;
+  readonly messageId: string;
+  readonly placement?: ThreadInputPlacement;
+  readonly threadKey: string;
+}
+
+export interface AdmitReceipt {
+  readonly duplicate: boolean;
+  readonly record: ThreadInputRecord;
+}
+
+export interface ClaimedThreadInput extends ThreadInputRecord {
+  readonly claimId: string;
+  readonly status: "claiming";
+}
+
+export interface RecoverThreadInputClaimsResult {
+  readonly acked: readonly ThreadInputRecord[];
+  readonly released: readonly ThreadInputRecord[];
+}
+
+export interface ClaimThreadInputOptions {
+  readonly messageId?: string;
+}
+
+export interface ThreadInputInbox {
+  ack(record: ThreadInputRecord): Promise<ThreadInputRecord | null>;
+  admit(input: AdmitThreadInput): Promise<AdmitReceipt>;
+  claimNext(
+    threadKey: string,
+    boundary: ThreadInputBoundary,
+    options?: ClaimThreadInputOptions
+  ): Promise<ClaimedThreadInput | null>;
+  markPromoted(record: ClaimedThreadInput): Promise<ThreadInputRecord | null>;
+  recoverClaims(threadKey: string): Promise<RecoverThreadInputClaimsResult>;
+  releaseClaim(record: ClaimedThreadInput): Promise<ThreadInputRecord | null>;
+}
+
+export class ThreadInputDuplicateConflictError extends Error {
+  readonly existing: ThreadInputRecord;
+  readonly incoming: AdmitThreadInput;
+  readonly name = "ThreadInputDuplicateConflictError";
+
+  constructor({
+    existing,
+    incoming,
+  }: {
+    readonly existing: ThreadInputRecord;
+    readonly incoming: AdmitThreadInput;
+  }) {
+    super(
+      `Thread input messageId ${incoming.messageId} conflicts with an existing semantic payload.`
+    );
+    this.existing = structuredClone(existing);
+    this.incoming = structuredClone(incoming);
+  }
+}
+
 export interface ExecutionStorePorts {
   readonly checkpoints: CheckpointStore;
   readonly events: EventStore;
+  readonly inputs: ThreadInputInbox;
   readonly notifications: NotificationInbox;
   readonly threads: ThreadStore;
   readonly turns: TurnStore;

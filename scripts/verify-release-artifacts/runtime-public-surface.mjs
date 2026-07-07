@@ -5,7 +5,11 @@ export const REQUIRED_RUNTIME_ROOT_EXPORTS = [
 ];
 
 export const REQUIRED_RUNTIME_EXECUTION_EXPORTS = [
+  "AdmitReceipt",
+  "AdmitThreadInput",
   "CheckpointStore",
+  "ClaimedThreadInput",
+  "ClaimThreadInputOptions",
   "DurableBackgroundHost",
   "EventStore",
   "ExecutionHost",
@@ -14,6 +18,14 @@ export const REQUIRED_RUNTIME_EXECUTION_EXPORTS = [
   "ExecutionStoreTransaction",
   "NotificationInbox",
   "NotificationRecord",
+  "RecoverThreadInputClaimsResult",
+  "ThreadInputBoundary",
+  "ThreadInputDuplicateConflictError",
+  "ThreadInputInbox",
+  "ThreadInputKind",
+  "ThreadInputPlacement",
+  "ThreadInputRecord",
+  "ThreadInputStatus",
   "TurnRecord",
   "TurnStore",
   "TurnStatus",
@@ -174,6 +186,7 @@ export const FORBIDDEN_RUNTIME_ROOT_NAMES = [
     ].flatMap((names) => names.split(" ")),
     // Every platform-subpath export is forbidden on the root surface; spread
     // the required lists so the two can never drift apart.
+    ...REQUIRED_RUNTIME_EXECUTION_EXPORTS,
     ...REQUIRED_RUNTIME_CLOUDFLARE_AGENTS_EXPORTS,
     ...REQUIRED_RUNTIME_CLOUDFLARE_WORKER_EXPORTS,
     ...REQUIRED_RUNTIME_FILE_EXPORTS,

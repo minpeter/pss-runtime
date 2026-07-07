@@ -6,6 +6,7 @@ import {
   createDeferred,
   createQueuedRun,
 } from "./fixtures";
+import { describeThreadInputInboxContract } from "./thread-input-contract";
 
 export interface ExecutionStoreContractOptions {
   readonly createStore: () => ExecutionStore;
@@ -100,6 +101,8 @@ export function describeExecutionStoreContract({
 
       await expect(store.threads.load("thread-1")).resolves.toBeNull();
     });
+
+    describeThreadInputInboxContract({ createStore });
 
     it("serializes concurrent transactions", async () => {
       const store = createStore();

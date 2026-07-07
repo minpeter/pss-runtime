@@ -1,5 +1,10 @@
 import type { ModelMessage } from "ai";
-import type { ThreadStore } from "../store/types";
+import type {
+  CommitResult,
+  ExpectedThreadVersion,
+  ThreadStore,
+  ThreadStoreCommit,
+} from "../store/types";
 import { ModelMessageHistory } from "./history";
 import {
   decodeStoredThreadState,
@@ -23,6 +28,12 @@ export interface ThreadCompactionInput {
   readonly endSeqExclusive: number;
   readonly startSeq: number;
   readonly summary: string;
+}
+
+export interface PreparedThreadCommit {
+  readonly expectedVersion: ExpectedThreadVersion;
+  readonly key: string;
+  readonly next: ThreadStoreCommit;
 }
 
 export class ThreadCommitConflictError extends Error {
@@ -141,6 +152,17 @@ export class ThreadState {
   }
 
   async commit(): Promise<void> {
+    await this.commitWith(
+      async (commit) =>
+        await this.#persistence.store.commit(commit.key, commit.next, {
+          expectedVersion: commit.expectedVersion,
+        })
+    );
+  }
+
+  async commitWith(
+    commit: (input: PreparedThreadCommit) => Promise<CommitResult>
+  ): Promise<void> {
     if (this.#deleteRequested || this.#deleted) {
       return;
     }
@@ -152,11 +174,11 @@ export class ThreadState {
         return;
       }
 
-      const result = await this.#persistence.store.commit(
-        this.#persistence.key,
-        { state: encodeThreadSnapshot(snapshot, compactions) },
-        { expectedVersion: this.#storeVersion ?? null }
-      );
+      const result = await commit({
+        expectedVersion: this.#storeVersion ?? null,
+        key: this.#persistence.key,
+        next: { state: encodeThreadSnapshot(snapshot, compactions) },
+      });
 
       if (!result.ok) {
         await this.#replaceWithStoredThread();
