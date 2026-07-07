@@ -123,7 +123,7 @@ describe("createNodeFileExecutionHost", () => {
         []
       );
     } finally {
-      await rm(directory, { force: true, recursive: true });
+      await removeTempDir(directory);
     }
   });
 
@@ -171,7 +171,7 @@ describe("createNodeFileExecutionHost", () => {
         []
       );
     } finally {
-      await rm(directory, { force: true, recursive: true });
+      await removeTempDir(directory);
     }
   });
 
@@ -225,7 +225,7 @@ describe("createNodeFileExecutionHost", () => {
         prompt,
       ]);
     } finally {
-      await rm(directory, { force: true, recursive: true });
+      await removeTempDir(directory);
     }
   });
 
@@ -245,13 +245,17 @@ describe("createNodeFileExecutionHost", () => {
         malformedScheduledWorkPattern
       );
     } finally {
-      await rm(directory, { force: true, recursive: true });
+      await removeTempDir(directory);
     }
   });
 });
 
 function tempDir(): Promise<string> {
   return mkdtemp(join(tmpdir(), "pss-runtime-node-execution-host-"));
+}
+
+function removeTempDir(directory: string): Promise<void> {
+  return rm(directory, { force: true, maxRetries: 10, recursive: true });
 }
 
 async function currentDataDirectory(directory: string): Promise<string> {

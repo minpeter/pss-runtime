@@ -7,6 +7,7 @@ import {
 import { ModelMessageHistory } from "../state/history";
 import type { ThreadCompactionRecord } from "../state/snapshot";
 import type { ThreadState } from "../state/thread-state";
+import { messageContentText } from "./auto-compaction-message-text";
 
 export interface ThreadAutoCompactionOptions {
   readonly background?: boolean;
@@ -255,25 +256,6 @@ function messageHasToolCall(message: ModelMessage | undefined): boolean {
   return content.some(
     (part) => isObjectRecord(part) && part.type === "tool-call"
   );
-}
-
-function messageContentText(content: unknown): string[] {
-  if (typeof content === "string") {
-    return [content];
-  }
-  if (!Array.isArray(content)) {
-    return [JSON.stringify(content)];
-  }
-
-  return content.flatMap((part) => {
-    if (typeof part === "string") {
-      return [part];
-    }
-    if (isObjectRecord(part) && typeof part.text === "string") {
-      return [part.text];
-    }
-    return [];
-  });
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {

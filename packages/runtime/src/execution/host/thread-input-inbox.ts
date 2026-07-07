@@ -1,13 +1,13 @@
+import { ThreadInputDuplicateConflictError } from "./thread-input-conflict";
 import { recordWithoutClaimId } from "./thread-input-recovery";
-import {
-  type AdmitReceipt,
-  type AdmitThreadInput,
-  type ClaimedThreadInput,
-  type ClaimThreadInputOptions,
-  type ThreadInputBoundary,
-  ThreadInputDuplicateConflictError,
-  type ThreadInputPlacement,
-  type ThreadInputRecord,
+import type {
+  AdmitReceipt,
+  AdmitThreadInput,
+  ClaimedThreadInput,
+  ClaimThreadInputOptions,
+  ThreadInputBoundary,
+  ThreadInputPlacement,
+  ThreadInputRecord,
 } from "./types";
 
 export interface ThreadInputAdmitTransition {

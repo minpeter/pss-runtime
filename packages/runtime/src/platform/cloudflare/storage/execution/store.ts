@@ -9,8 +9,10 @@ import type {
   TurnStore,
 } from "../../../../execution";
 import type { ThreadStore } from "../../../../index";
+import type { SqlStorage } from "../../sql/ports/storage-port";
 import {
   type CloudflareDurableObjectStorage,
+  isSqlStorage,
   withSqlStorage,
 } from "../durable-object/durable-object-storage";
 import {
@@ -102,6 +104,44 @@ export class DurableObjectExecutionStore implements ExecutionStore {
       );
     }
 
-    return await fn(this);
+    const sql = transactionalSqlStorage(this.#storage.sql);
+    if (sql) {
+      return await sql.transaction(() =>
+        fn(
+          new DurableObjectExecutionStore({
+            maxPayloadBytes: this.#maxPayloadBytes,
+            prefix: this.#prefix,
+            storage: withSqlStorage(this.#storage, sql),
+          })
+        )
+      );
+    }
+
+    throw new Error(
+      "DurableObjectExecutionStore requires Durable Object storage.transaction or storage.sql.transaction for atomic transactions."
+    );
   }
+}
+
+interface TransactionalSqlStorage extends SqlStorage {
+  transaction<T>(fn: () => Promise<T>): Promise<T>;
+}
+
+function transactionalSqlStorage(
+  value: unknown
+): TransactionalSqlStorage | undefined {
+  if (!isSqlStorage(value)) {
+    return;
+  }
+  const transaction = value.transaction?.bind(value);
+  if (!transaction) {
+    return;
+  }
+  return {
+    exec: (query, ...bindings) => value.exec(query, ...bindings),
+    transaction: (fn) => transaction(fn),
+    ...(value.transactionSync
+      ? { transactionSync: (fn) => value.transactionSync?.(fn) ?? fn() }
+      : {}),
+  };
 }

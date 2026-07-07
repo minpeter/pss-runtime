@@ -2,6 +2,7 @@ import type { RuntimeAttachmentStore } from "../../thread/input/attachments";
 import type { AgentEvent, UserInput } from "../../thread/protocol/events";
 import type { ThreadStore } from "../../thread/store/types";
 import type { DurableBackgroundHost, ThreadHost } from "./capabilities";
+import type { ResumeThreadOptions } from "./scheduler-options";
 
 export type AgentHost = DurableBackgroundHost | ExecutionHost | ThreadHost;
 
@@ -18,12 +19,6 @@ export interface ExecutionScheduler {
     options?: { readonly runAfterMs?: number }
   ): Promise<void>;
   resumeThread(threadKey: string, options: ResumeThreadOptions): Promise<void>;
-}
-
-export interface ResumeThreadOptions {
-  readonly idempotencyKey?: string;
-  readonly notificationId?: string;
-  readonly runId: string;
 }
 
 export type TurnKind = "notification" | "tool-recovery" | "user-turn";
@@ -271,26 +266,6 @@ export interface ThreadInputInbox {
   markPromoted(record: ClaimedThreadInput): Promise<ThreadInputRecord | null>;
   recoverClaims(threadKey: string): Promise<RecoverThreadInputClaimsResult>;
   releaseClaim(record: ClaimedThreadInput): Promise<ThreadInputRecord | null>;
-}
-
-export class ThreadInputDuplicateConflictError extends Error {
-  readonly existing: ThreadInputRecord;
-  readonly incoming: AdmitThreadInput;
-  readonly name = "ThreadInputDuplicateConflictError";
-
-  constructor({
-    existing,
-    incoming,
-  }: {
-    readonly existing: ThreadInputRecord;
-    readonly incoming: AdmitThreadInput;
-  }) {
-    super(
-      `Thread input messageId ${incoming.messageId} conflicts with an existing semantic payload.`
-    );
-    this.existing = structuredClone(existing);
-    this.incoming = structuredClone(incoming);
-  }
 }
 
 export interface ExecutionStorePorts {

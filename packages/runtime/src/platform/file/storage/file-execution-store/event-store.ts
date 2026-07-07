@@ -11,7 +11,10 @@ import type {
   ThreadEventReadOptions,
 } from "../../../../execution/host/types";
 import type { AgentEvent } from "../../../../thread/protocol/events";
-import { parseEventLogLine, parseThreadEventLogLine } from "./schemas";
+import {
+  parseEventLogLine,
+  parseThreadEventLogLine,
+} from "./event-log-schemas";
 import type { DataDirectoryResolver } from "./types";
 import { encodeKey, isNodeError } from "./utils";
 

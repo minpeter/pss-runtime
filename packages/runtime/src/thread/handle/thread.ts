@@ -25,11 +25,11 @@ import {
   ThreadState,
 } from "../state/thread-state";
 import {
-  addDurableSteeringInput,
   admitThreadSendInput,
   DurableInputRecoveryState,
   recoverThreadDurableInputClaims,
 } from "./durable-queue";
+import { addDurableSteeringInput } from "./durable-steering";
 import { runThreadInputDrainLoop } from "./thread-drain";
 import { readThreadEvents } from "./thread-event-replay";
 import { createOverlayRuntimeInput } from "./thread-overlay";

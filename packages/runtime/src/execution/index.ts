@@ -16,6 +16,8 @@ export type {
   ThreadHost,
 } from "./host/capabilities";
 export { executionHost, threadHost } from "./host/host";
+export type { ResumeThreadOptions } from "./host/scheduler-options";
+export { ThreadInputDuplicateConflictError } from "./host/thread-input-conflict";
 export type {
   AdmitReceipt,
   AdmitThreadInput,
@@ -40,7 +42,6 @@ export type {
   NotificationStatus,
   NotificationWriteResult,
   RecoverThreadInputClaimsResult,
-  ResumeThreadOptions,
   StoredAgentEvent,
   StoredThreadEvent,
   ThreadEventCursor,
@@ -58,4 +59,3 @@ export type {
   TurnStatus,
   TurnStore,
 } from "./host/types";
-export { ThreadInputDuplicateConflictError } from "./host/types";
