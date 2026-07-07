@@ -2,7 +2,10 @@ import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { verifyReleaseArtifacts } from "./verify-release-artifacts/core.mjs";
-import { REQUIRED_RUNTIME_CLOUDFLARE_AGENTS_EXPORTS } from "./verify-release-artifacts/runtime-public-surface.mjs";
+import {
+  REQUIRED_RUNTIME_CLOUDFLARE_AGENTS_EXPORTS,
+  REQUIRED_RUNTIME_EXECUTION_EXPORTS,
+} from "./verify-release-artifacts/runtime-public-surface.mjs";
 import {
   cleanupFixtures,
   createFixture,
@@ -111,25 +114,12 @@ describe("verifyReleaseArtifacts runtime subpath checks", () => {
       "export {};\n"
     );
 
-    expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export CheckpointStore",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export DurableBackgroundHost",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export EventStore",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ExecutionHost",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ExecutionScheduler",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ExecutionStore",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ExecutionStoreTransaction",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export NotificationInbox",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export NotificationRecord",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export TurnRecord",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export TurnStore",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export TurnStatus",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RuntimeToolExecutionCheckpoint",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RuntimeToolExecutionContext",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RuntimeToolExecutionDecision",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export RuntimeToolRetryPolicy",
-      "packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ToolExecutionNeedsRecoveryError",
-    ]);
+    expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual(
+      REQUIRED_RUNTIME_EXECUTION_EXPORTS.map(
+        (name) =>
+          `packages/runtime/dist/execution/index.d.ts: missing explicit execution runtime export ${name}`
+      )
+    );
   });
 
   it("reports required exports whose names are substrings of present exports", () => {

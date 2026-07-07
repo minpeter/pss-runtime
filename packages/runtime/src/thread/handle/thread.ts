@@ -25,7 +25,6 @@ import {
 import {
   addDurableSteeringInput,
   admitThreadSendInput,
-  consumeRecoveredDurableInput,
   DurableInputRecoveryState,
   recoverThreadDurableInputClaims,
 } from "./durable-queue";
@@ -218,9 +217,6 @@ export class AgentThread {
 
     this.#running = true;
     this.#drainRequested = false;
-    const claimRecoveredDurableInput = consumeRecoveredDurableInput(
-      this.#durableInputRecovery
-    );
     const drain = runThreadInputDrainLoop({
       activate: ({ abort, run, runtimeInput }) => {
         this.#activeAbort = abort;
@@ -228,7 +224,6 @@ export class AgentThread {
         this.#activeRuntimeInput = runtimeInput;
         this.#runToCloseOnKill = run;
       },
-      claimRecoveredDurableInput,
       continueDraining: () => !(this.#killed || this.#drainRequested),
       deactivateRun: () => {
         this.#activeRun = undefined;

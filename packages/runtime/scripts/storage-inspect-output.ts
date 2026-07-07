@@ -13,6 +13,7 @@ type TableName =
   | "pss_payload_chunk"
   | "pss_run"
   | "pss_scheduled_work"
+  | "pss_thread_input"
   | "pss_thread_message"
   | "pss_thread_message_chunk"
   | "pss_thread_meta";
@@ -35,6 +36,7 @@ const tables: readonly TableName[] = [
   "pss_event_meta",
   "pss_checkpoint",
   "pss_notification",
+  "pss_thread_input",
   "pss_payload_chunk",
   "pss_scheduled_work",
 ];
@@ -80,6 +82,11 @@ const sampleQueries: readonly SampleQuery[] = [
       "SELECT idempotency_key, notification_id, run_id, thread_key, status, substr(record, 1, 140) AS record_preview FROM pss_notification",
   },
   {
+    label: "pss_thread_input",
+    query:
+      "SELECT thread_key, message_id, kind, placement, status, admitted_seq, claim_id, substr(record, 1, 140) AS record_preview FROM pss_thread_input ORDER BY admitted_seq, message_id",
+  },
+  {
     label: "pss_payload_chunk",
     query:
       "SELECT scope, owner_key, payload_key, chunk_index, length(chunk) AS chunk_chars FROM pss_payload_chunk ORDER BY scope, owner_key, payload_key, chunk_index",
@@ -95,10 +102,11 @@ export function printApiMap(): void {
   printSection("API -> SQL table map");
   const lines = [
     "threads.commit/load -> pss_thread_meta + pss_thread_message + pss_thread_message_chunk",
-    "runs.create/get/update -> pss_run",
+    "turns.create/get/update -> pss_run",
     "events.append/read -> pss_event + pss_event_meta",
     "checkpoints.append/latest -> pss_checkpoint + pss_run.checkpoint_version",
     "notifications.enqueue/claim -> pss_notification",
+    "inputs.admit/claim/promote/ack -> pss_thread_input + pss_payload_chunk(scope=thread-input)",
     "scheduler.enqueueRun/resumeThread -> pss_scheduled_work",
   ];
   for (const line of lines) {

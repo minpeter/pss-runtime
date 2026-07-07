@@ -22,7 +22,6 @@ import type { ThreadEventDispatcher } from "../runtime/events";
 import { startThreadQueueDrain } from "../runtime/notification";
 
 export class DurableInputRecoveryState {
-  pendingRecoveredDurableInput = false;
   recoveredInputClaims = false;
 }
 
@@ -68,14 +67,6 @@ export async function admitThreadSendInput({
   startThreadQueueDrain(run, drain);
 }
 
-export function consumeRecoveredDurableInput(
-  state: DurableInputRecoveryState
-): boolean {
-  const pending = state.pendingRecoveredDurableInput;
-  state.pendingRecoveredDurableInput = false;
-  return pending;
-}
-
 export async function recoverThreadDurableInputClaims({
   executionHost,
   state,
@@ -91,11 +82,10 @@ export async function recoverThreadDurableInputClaims({
 
   state.recoveredInputClaims = true;
   try {
-    const recovered = await recoverDurableThreadInputs({
+    await recoverDurableThreadInputs({
       executionHost,
       threadKey,
     });
-    state.pendingRecoveredDurableInput = recovered.released.length > 0;
   } catch (error) {
     state.recoveredInputClaims = false;
     throw error;

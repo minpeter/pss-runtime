@@ -1,5 +1,5 @@
 import type { ModelMessage } from "ai";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Agent } from "../../agent/core/agent";
 import type {
   ExecutionHost,
@@ -132,6 +132,41 @@ describe("AgentThread durable inputs", () => {
     await expect(base.store.inputs.releaseClaim(oldClaim)).resolves.toBeNull();
     await expect(
       base.store.inputs.claimNext("durable-recovery", "turn-idle")
+    ).resolves.toBeNull();
+  });
+
+  it("drains pending durable sends left behind before in-memory queueing", async () => {
+    const host = createInMemoryExecutionHost();
+    await host.store.inputs.admit({
+      admittedAtMs: 1,
+      input: userText("old"),
+      kind: "send",
+      messageId: "old-message",
+      threadKey: "durable-pending-orphan",
+    });
+    const seenHistory: ModelMessage[][] = [];
+    const agent = new Agent({
+      host,
+      model: createCallbackModel(({ history }) => {
+        seenHistory.push([...history]);
+        return [assistantMessage(`DONE ${seenHistory.length}`)];
+      }),
+    });
+
+    const events = await collect(
+      await agent.thread("durable-pending-orphan").send("new")
+    );
+
+    expect(events[0]).toEqual(sentUserText("new"));
+    expect(seenHistory[0]).toEqual([userTextToModelMessage(userText("new"))]);
+    await vi.waitFor(() => expect(seenHistory).toHaveLength(2));
+    expect(seenHistory[1]).toEqual([
+      userTextToModelMessage(userText("new")),
+      assistantMessage("DONE 1"),
+      userTextToModelMessage(userText("old")),
+    ]);
+    await expect(
+      host.store.inputs.claimNext("durable-pending-orphan", "turn-idle")
     ).resolves.toBeNull();
   });
 });

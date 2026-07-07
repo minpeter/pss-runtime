@@ -19,7 +19,6 @@ interface ActiveTurn {
 
 export interface ThreadInputDrainLoopOptions {
   readonly activate: (turn: ActiveTurn) => void;
-  readonly claimRecoveredDurableInput: boolean;
   readonly continueDraining: () => boolean;
   readonly deactivateRun: () => void;
   readonly events: ThreadEventDispatcher;
@@ -33,7 +32,6 @@ export interface ThreadInputDrainLoopOptions {
 
 export async function runThreadInputDrainLoop({
   activate,
-  claimRecoveredDurableInput,
   continueDraining,
   deactivateRun,
   events,
@@ -44,8 +42,7 @@ export async function runThreadInputDrainLoop({
   state,
   threadKey,
 }: ThreadInputDrainLoopOptions): Promise<void> {
-  let claimOrphanDurableInput =
-    inputQueue.length === 0 || claimRecoveredDurableInput;
+  let claimOrphanDurableInput = true;
   while (continueDraining()) {
     const queuedInput = inputQueue.shift();
     if (queuedInput) {

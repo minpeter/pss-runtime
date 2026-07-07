@@ -12,7 +12,8 @@ export const runtimeRootDeclaration = [
 ].join("\n");
 export const runtimeExecutionDeclaration = [
   'export type { DurableBackgroundHost } from "./capabilities";',
-  'export type { CheckpointStore, EventStore, ExecutionHost, ExecutionScheduler, ExecutionStore, ExecutionStoreTransaction, NotificationInbox, NotificationRecord, TurnRecord, TurnStatus, TurnStore } from "./types";',
+  'export type { AdmitReceipt, AdmitThreadInput, CheckpointStore, ClaimedThreadInput, ClaimThreadInputOptions, EventStore, ExecutionHost, ExecutionScheduler, ExecutionStore, ExecutionStoreTransaction, NotificationInbox, NotificationRecord, RecoverThreadInputClaimsResult, ThreadInputBoundary, ThreadInputInbox, ThreadInputKind, ThreadInputPlacement, ThreadInputRecord, ThreadInputStatus, TurnRecord, TurnStatus, TurnStore } from "./types";',
+  'export { ThreadInputDuplicateConflictError } from "./types";',
   'export type { RuntimeToolExecutionCheckpoint, RuntimeToolExecutionContext, RuntimeToolExecutionDecision, RuntimeToolRetryPolicy } from "../llm-tool-execution";',
   'export { ToolExecutionNeedsRecoveryError } from "../llm-tool-execution";',
   "",
