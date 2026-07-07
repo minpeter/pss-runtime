@@ -2,6 +2,7 @@ import type {
   Checkpoint,
   NotificationRecord,
   StoredAgentEvent,
+  StoredThreadEvent,
   TurnKind,
   TurnLease,
   TurnRecord,
@@ -161,6 +162,40 @@ export function parseEventLogLine(
     cursor: { offset: parsed.cursor.offset },
     event: parsed.event,
     runId: parsed.runId,
+  };
+}
+
+export function parseThreadEventLogLine(
+  line: string,
+  file: string
+): StoredThreadEvent {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line) as unknown;
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new Error(
+        `Invalid FileExecutionStore thread event log ${JSON.stringify(
+          file
+        )}: invalid JSON (${error.message})`
+      );
+    }
+    throw error;
+  }
+
+  if (
+    !(isRecord(parsed) && isRecord(parsed.cursor)) ||
+    typeof parsed.cursor.offset !== "number" ||
+    !isAgentEvent(parsed.event) ||
+    typeof parsed.threadKey !== "string"
+  ) {
+    throw invalidEventLog(file, "expected stored thread event");
+  }
+
+  return {
+    cursor: { offset: parsed.cursor.offset },
+    event: parsed.event,
+    threadKey: parsed.threadKey,
   };
 }
 

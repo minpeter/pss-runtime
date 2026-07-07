@@ -49,6 +49,12 @@ consume the events for the turn to progress. This is what lets code react to
 `turn-start`, `step-start`, and `step-end` before the next model snapshot is
 created.
 
+`thread.events({ after, limit })` replays durable, thread-scoped `AgentEvent`
+records from the configured `ExecutionHost`. It is not a live turn driver; use it
+to rebuild an event transcript after a turn has committed. Each replayed record
+has a cursor, so callers can persist `record.cursor` and resume with
+`thread.events({ after: cursor })`.
+
 `model` is the single public constructor key for model execution. Pass an AI SDK
 `LanguageModel` object and configure runtime-owned prompting through
 `instructions`, `tools`, and `toolChoice`:
@@ -370,8 +376,8 @@ The runtime owns full thread state encoding and history compaction semantics.
 Adapters own persistence only through `ThreadStore`:
 
 Stored thread state is an opaque, versioned runtime snapshot for continuation.
-Do not inspect it as a replay log; exact replay should be modeled separately as
-an `AgentEvent` log if that capability is added later.
+Do not inspect it as a replay log. Use `thread.events({ after, limit })` with an
+`ExecutionHost` when a product needs a durable `AgentEvent` transcript.
 
 `ThreadStore` is snapshot-only. It does not own background task ids, run
 leases, checkpoints, notification inbox state, or scheduling. Those live on the
@@ -433,6 +439,28 @@ omitted, `Agent` defaults to an in-memory `ExecutionHost` (and its
 `MemoryThreadStore`). Pass a full `ExecutionHost` (or `DurableBackgroundHost`)
 when you need durable runs, tool checkpoints, and resume alongside your
 `threadStore`.
+
+Automatic compaction can also enforce a pre-provider context budget:
+
+```ts
+const agent = new Agent({
+  autoCompaction: {
+    contextGate: {
+      maxInputTokens: 120_000,
+      onOverflow: "compact",
+    },
+    minMessages: 24,
+    retainMessages: 8,
+  },
+  model,
+});
+```
+
+`contextGate` estimates the prompt immediately before `generateText`. With
+`onOverflow: "error"`, the turn fails before the provider is called. With
+`onOverflow: "compact"` (the default), the runtime runs blocking compaction and
+retries once. Provider-thrown context-window errors still use the same blocking
+compaction fallback.
 
 Hosts that need durable runs pass `host:` into `Agent`. The execution subpath
 keeps the durable surface split by responsibility. `ThreadHost` is the small
@@ -523,7 +551,7 @@ and prompt-routing behavior.
 ### Platform adapter parity
 
 Every platform adapter implements the same core ports — `ExecutionStore`
-(turns, checkpoints, events, notifications, threads) and `ExecutionScheduler`
+(turns, checkpoints, run events, thread events, notifications, threads) and `ExecutionScheduler`
 (run enqueueing and thread resumes) — and each is verified by shared in-repo
 contract test suites (internal, not part of the published API).
 Platform-neutral scheduled-work semantics (work-id derivation, thread-prompt

@@ -18,6 +18,7 @@ export async function emitTurnEvent({
   awaitBoundaries,
   run,
   runtimeInput,
+  recordEvent,
   state,
   threadKey,
 }: {
@@ -26,13 +27,17 @@ export async function emitTurnEvent({
   readonly awaitBoundaries: boolean;
   readonly events: ThreadEventDispatcher;
   readonly executionHost: ExecutionHost | undefined;
+  readonly recordEvent?: (event: AgentEvent) => void;
   readonly run: BufferedAgentTurn;
   readonly runtimeInput: RuntimeInputState;
   readonly state: ThreadState;
   readonly threadKey: string;
 }): Promise<{ readonly runtimeInputAdded: boolean } | undefined> {
   if (event.type !== "step-start" && event.type !== "step-end") {
-    await events.emitRunEvent(run, event);
+    const processed = await events.emitRunEvent(run, event);
+    if (processed !== "handled") {
+      recordEvent?.(processed);
+    }
     return;
   }
 
@@ -41,11 +46,13 @@ export async function emitTurnEvent({
       awaitAck: awaitBoundaries,
     });
   });
+  recordEvent?.(event);
   const runtimeInputAdded = await drainRuntimeInput({
     attachmentStore,
     events,
     executionHost,
     placement: event.type,
+    recordEvent,
     run,
     runtimeInput,
     state,

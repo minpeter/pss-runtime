@@ -56,10 +56,12 @@ export async function commitPreUserRuntimeInputs(
 export function emitCommittedRuntimeInputs(
   events: ThreadEventDispatcher,
   run: BufferedAgentTurn,
-  committed: readonly AgentEvent[]
+  committed: readonly AgentEvent[],
+  recordEvent?: (event: AgentEvent) => void
 ): void {
   for (const event of committed) {
     events.emitProcessedEvent(run, event);
+    recordEvent?.(event);
   }
 }
 
@@ -72,6 +74,7 @@ export async function emitRuntimeInputEvent(
     readonly attachmentStore?: RuntimeAttachmentStore;
     readonly commit?: () => Promise<void>;
     readonly onHandled?: () => Promise<void>;
+    readonly recordEvent?: (event: AgentEvent) => void;
   } = {}
 ): Promise<boolean> {
   const processed = await events.interceptEvent(
@@ -91,6 +94,7 @@ export async function emitRuntimeInputEvent(
     )
   );
   await (options.commit ?? (() => state.commit()))();
+  options.recordEvent?.(processed);
   return true;
 }
 

@@ -1,10 +1,16 @@
 import type { ModelMessage } from "ai";
-import { generateModelStep, type ModelGenerationOptions } from "../../llm/llm";
+import {
+  generateModelStep,
+  type ModelContextGateOptions,
+  type ModelGenerationOptions,
+} from "../../llm/llm";
 import { ModelMessageHistory } from "../state/history";
 import type { ThreadCompactionRecord } from "../state/snapshot";
 import type { ThreadState } from "../state/thread-state";
 
 export interface ThreadAutoCompactionOptions {
+  readonly background?: boolean;
+  readonly contextGate?: false | ModelContextGateOptions;
   readonly minMessages: number;
   readonly retainMessages: number;
 }
@@ -25,7 +31,7 @@ export function scheduleThreadAutoCompaction({
   readonly policy?: ThreadAutoCompactionOptions;
   readonly state: ThreadState;
 }): void {
-  if (!policy) {
+  if (!policy || policy.background === false) {
     return;
   }
 
@@ -168,6 +174,7 @@ async function summarizeCompactionRange({
 }): Promise<string> {
   const output = await generateModelStep({
     attachmentStore: model.attachmentStore,
+    contextGate: false,
     history: [
       {
         content:

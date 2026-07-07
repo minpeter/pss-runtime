@@ -1,3 +1,7 @@
+import type {
+  StoredThreadEvent,
+  ThreadEventReadOptions,
+} from "../../execution/host/types";
 import type { ModelGenerationOptions } from "../../llm/llm";
 import {
   RuntimeAttachmentSecurityError,
@@ -192,6 +196,15 @@ export class AgentThread {
     await this.#state.compact(input);
   }
 
+  events(options?: ThreadEventReadOptions): AsyncIterable<StoredThreadEvent> {
+    const eventLog = this.#execution.executionHost?.store.threadEvents;
+    if (!eventLog) {
+      return emptyThreadEvents();
+    }
+
+    return eventLog.read(this.#threadKey, options);
+  }
+
   interrupt(): void {
     this.#activeAbort?.abort();
   }
@@ -294,4 +307,12 @@ export class AgentThread {
       threadKey: this.#threadKey,
     });
   }
+}
+
+function emptyThreadEvents(): AsyncIterable<StoredThreadEvent> {
+  return {
+    [Symbol.asyncIterator]: () => ({
+      next: () => Promise.resolve({ done: true, value: undefined }),
+    }),
+  };
 }

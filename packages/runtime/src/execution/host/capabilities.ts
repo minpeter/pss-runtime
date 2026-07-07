@@ -6,6 +6,7 @@ import type {
   ExecutionScheduler,
   ExecutionStore,
   NotificationInbox,
+  ThreadEventLog,
   TurnStore,
 } from "./types";
 
@@ -31,6 +32,10 @@ interface EventHost {
   readonly eventStore: EventStore;
 }
 
+interface ThreadEventHost {
+  readonly threadEventLog?: ThreadEventLog;
+}
+
 interface NotificationHost {
   readonly notificationInbox: NotificationInbox;
 }
@@ -48,6 +53,7 @@ export type DurableBackgroundHost = BackgroundSchedulerHost &
   ExecutionTransactionHost &
   NotificationHost &
   CheckpointHost &
+  ThreadEventHost &
   ThreadStoreHost & {
     readonly attachmentStore?: RuntimeAttachmentStore;
     readonly kind: "durable-background";

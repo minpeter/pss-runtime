@@ -4,6 +4,7 @@ import type {
   ExecutionStore,
   ExecutionStoreTransaction,
   NotificationInbox,
+  ThreadEventLog,
   ThreadInputInbox,
   TurnStore,
 } from "../../../../execution";
@@ -17,7 +18,10 @@ import {
   type StoragePayloadBudgetOptions,
 } from "../payload-guard";
 import { DurableObjectSqliteCheckpointStore } from "../sqlite/checkpoint-store";
-import { DurableObjectSqliteEventStore } from "../sqlite/event-store";
+import {
+  DurableObjectSqliteEventStore,
+  DurableObjectSqliteThreadEventLog,
+} from "../sqlite/event-store";
 import { DurableObjectSqliteThreadStore } from "../sqlite/thread-store";
 import { DurableObjectThreadInputInbox } from "./input-store";
 import { DurableObjectNotificationInbox } from "./notification-store";
@@ -28,6 +32,7 @@ export class DurableObjectExecutionStore implements ExecutionStore {
   readonly events: EventStore;
   readonly inputs: ThreadInputInbox;
   readonly notifications: NotificationInbox;
+  readonly threadEvents: ThreadEventLog;
   readonly turns: TurnStore;
   readonly threads: ThreadStore;
   readonly #maxPayloadBytes: number;
@@ -53,6 +58,11 @@ export class DurableObjectExecutionStore implements ExecutionStore {
       payloadBudget
     );
     this.events = new DurableObjectSqliteEventStore(
+      storage,
+      prefix,
+      payloadBudget
+    );
+    this.threadEvents = new DurableObjectSqliteThreadEventLog(
       storage,
       prefix,
       payloadBudget

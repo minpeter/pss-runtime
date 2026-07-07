@@ -14,6 +14,98 @@ import {
 import { collect, SpyStore } from "./test-support";
 
 describe("Agent thread automatic compaction overflow recovery", () => {
+  it("rejects before provider calls when the context gate overflows with error", async () => {
+    let calls = 0;
+    const agent = agentWithAutoCompaction({
+      autoCompaction: {
+        contextGate: {
+          estimateTokens: () => 2,
+          maxInputTokens: 1,
+          onOverflow: "error",
+        },
+        minMessages: 5,
+        retainMessages: 2,
+      },
+      model: createCallbackModel(() => {
+        calls += 1;
+        return [assistantMessage("unexpected")];
+      }),
+    });
+
+    const events = await collect(
+      await agent.thread("gate-error").send("too much")
+    );
+
+    expect(calls).toBe(0);
+    expect(eventTypes(events)).toEqual([
+      "user-input",
+      "turn-start",
+      "step-start",
+      "turn-error",
+    ]);
+    expect(events.at(-1)).toMatchObject({
+      message: expect.stringContaining("context gate"),
+      type: "turn-error",
+    });
+  });
+
+  it("compacts before retrying a context gate overflow", async () => {
+    const store = new SpyStore();
+    const providerHistories: ModelMessage[][] = [];
+    let calls = 0;
+    const agent = agentWithAutoCompaction({
+      autoCompaction: {
+        contextGate: {
+          estimateTokens: ({ messages }) => (messages.length > 3 ? 100 : 1),
+          maxInputTokens: 10,
+          onOverflow: "compact",
+        },
+        minMessages: 5,
+        retainMessages: 2,
+      },
+      host: { kind: "thread", threadStore: store },
+      model: createCallbackModel(({ history }) => {
+        calls += 1;
+        providerHistories.push([...history]);
+        if (calls === 1) {
+          return [assistantMessage("old done")];
+        }
+        if (calls === 2) {
+          return [assistantMessage("tail done")];
+        }
+        if (calls === 3) {
+          return [assistantMessage("old exchange summarized")];
+        }
+        return [assistantMessage("after gated compaction")];
+      }),
+    });
+    const thread = agent.thread("gate-compact");
+
+    await collect(await thread.send("old"));
+    await collect(await thread.send("tail"));
+    const events = await collect(await thread.send("next"));
+
+    expect(eventTypes(events)).toContain("turn-end");
+    expect(events).toContainEqual({
+      text: "after gated compaction",
+      type: "assistant-output",
+    });
+    expect(calls).toBe(4);
+    expect(providerHistories).not.toContainEqual([
+      userTextToModelMessage(userText("old")),
+      assistantMessage("old done"),
+      userTextToModelMessage(userText("tail")),
+      assistantMessage("tail done"),
+      userTextToModelMessage(userText("next")),
+    ]);
+    expect(providerHistories.at(-1)).toEqual([
+      { content: "old exchange summarized", role: "system" },
+      userTextToModelMessage(userText("tail")),
+      assistantMessage("tail done"),
+      userTextToModelMessage(userText("next")),
+    ]);
+  });
+
   it("blocks for compaction and retries once when the model overflows context", async () => {
     const store = new SpyStore();
     const retryHistory: ModelMessage[][] = [];

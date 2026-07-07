@@ -7,6 +7,7 @@ import type {
   ExecutionStore,
   ExecutionStoreTransaction,
   NotificationInbox,
+  ThreadEventLog,
   ThreadInputInbox,
   TurnStore,
 } from "../../../execution/host/types";
@@ -28,6 +29,7 @@ export class FileExecutionStore implements ExecutionStore {
   readonly events: EventStore;
   readonly inputs: ThreadInputInbox;
   readonly notifications: NotificationInbox;
+  readonly threadEvents: ThreadEventLog;
   readonly turns: TurnStore;
   readonly threads: ThreadStore;
 
@@ -47,6 +49,7 @@ export class FileExecutionStore implements ExecutionStore {
     this.checkpoints = ports.checkpoints;
     this.inputs = ports.inputs;
     this.notifications = ports.notifications;
+    this.threadEvents = assertFileThreadEvents(ports.threadEvents);
     this.threads = ports.threads;
   }
 
@@ -88,4 +91,13 @@ export class FileExecutionStore implements ExecutionStore {
       }
     );
   }
+}
+
+function assertFileThreadEvents(
+  threadEvents: ThreadEventLog | undefined
+): ThreadEventLog {
+  if (!threadEvents) {
+    throw new Error("FileExecutionStore requires a thread event log");
+  }
+  return threadEvents;
 }

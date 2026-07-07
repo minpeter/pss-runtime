@@ -61,6 +61,9 @@ function durableBackgroundHostFromExecutionHost(
     eventStore: host.store.events,
     kind: "durable-background",
     notificationInbox: host.store.notifications,
+    ...(host.store.threadEvents
+      ? { threadEventLog: host.store.threadEvents }
+      : {}),
     threadStore: threadStoreFromExecutionStore(host.store),
     transaction: transactionForStore(host.store),
     turnStore: host.store.turns,
@@ -80,6 +83,7 @@ function executionHostFromDurableBackgroundHost(
       inputs: new UnsupportedThreadInputInbox(),
       notifications: host.notificationInbox,
       checkpoints: host.checkpointStore,
+      ...(host.threadEventLog ? { threadEvents: host.threadEventLog } : {}),
       threads: threadStore,
       turns: host.turnStore,
       transaction: host.transaction,

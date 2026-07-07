@@ -12,6 +12,7 @@ import {
   commitPreUserRuntimeInputs,
   emitCommittedRuntimeInputs,
 } from "../input/runtime-input-emit";
+import type { AgentEvent } from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
 import { errorMessage } from "../state/thread-errors";
 import type { ThreadState } from "../state/thread-state";
@@ -29,6 +30,12 @@ import {
   type ThreadExecutionTerminalStatus,
 } from "./execution";
 import { runAgentLoopWithOverflowCompaction } from "./loop-overflow";
+import {
+  commitThreadStateAndEvents,
+  type DurableThreadEventBuffer,
+  flushDurableThreadEvents,
+  recordDurableThreadEvent,
+} from "./thread-event-log";
 import { emitTurnErrorAfterRecovery } from "./turn-error";
 import { emitTurnEvent } from "./turn-events";
 
@@ -83,6 +90,9 @@ export async function processQueuedInput({
   const historySnapshot = state.modelSnapshot();
   let executionRun: ThreadExecutionRun | undefined;
   let pendingDurableInputClaim = durableInputClaim;
+  const durableEvents: DurableThreadEventBuffer = [];
+  const recordEvent = (event: AgentEvent) =>
+    recordDurableThreadEvent(durableEvents, event);
 
   try {
     executionRun = await startThreadExecutionRun({
@@ -94,7 +104,10 @@ export async function processQueuedInput({
       turnId,
     });
     for (const event of initialEvents) {
-      await events.emitRunEvent(run, event);
+      const processed = await events.emitRunEvent(run, event);
+      if (processed !== "handled") {
+        recordEvent(processed);
+      }
     }
     const committedPreUser = await commitPreUserRuntimeInputs(
       events,
@@ -118,6 +131,7 @@ export async function processQueuedInput({
       } else {
         await state.commit();
       }
+      recordEvent(item.acceptedEvent ?? input);
     }
     await withRuntimeInputWindow(runtimeInput, "turn-start", async () => {
       await events.emitRunBoundaryEvent(
@@ -126,12 +140,19 @@ export async function processQueuedInput({
         { awaitAck: awaitBoundaries }
       );
     });
-    await emitCommittedRuntimeInputs(events, run, committedPreUser);
+    recordEvent({ type: "turn-start" });
+    await emitCommittedRuntimeInputs(
+      events,
+      run,
+      committedPreUser,
+      recordEvent
+    );
     await drainRuntimeInput({
       attachmentStore: model.attachmentStore,
       events,
       executionHost: execution.executionHost,
       placement: "turn-start",
+      recordEvent,
       run,
       runtimeInput,
       state,
@@ -150,6 +171,7 @@ export async function processQueuedInput({
               events,
               executionHost: execution.executionHost,
               awaitBoundaries,
+              recordEvent,
               run,
               runtimeInput,
               state,
@@ -166,14 +188,25 @@ export async function processQueuedInput({
     });
 
     state.clearTransientInputs();
-    await state.commit();
+    await commitThreadStateAndEvents({
+      buffer: durableEvents,
+      executionHost: execution.executionHost,
+      state,
+      threadKey,
+    });
     await executionRun?.complete(executionStatusForResult(result));
     await closeSuccessfulTurn({
       deactivateRun,
       events,
+      recordEvent,
       result,
       run,
       runtimeInput,
+    });
+    await flushDurableThreadEvents({
+      buffer: durableEvents,
+      executionHost: execution.executionHost,
+      threadKey,
     });
     if (result === "completed" && input) {
       scheduleThreadAutoCompaction({
@@ -227,12 +260,14 @@ function executionStatusForError(error: Error): ThreadExecutionTerminalStatus {
 async function closeSuccessfulTurn({
   deactivateRun,
   events,
+  recordEvent,
   result,
   run,
   runtimeInput,
 }: {
   readonly deactivateRun: () => void;
   readonly events: ThreadEventDispatcher;
+  readonly recordEvent: (event: AgentEvent) => void;
   readonly result: "aborted" | "completed";
   readonly run: BufferedAgentTurn;
   readonly runtimeInput: RuntimeInputState;
@@ -241,7 +276,10 @@ async function closeSuccessfulTurn({
   closeRuntimeInput(runtimeInput, terminalEvent);
   deactivateRun();
   try {
-    await events.emitRunEvent(run, { type: terminalEvent });
+    const processed = await events.emitRunEvent(run, { type: terminalEvent });
+    if (processed !== "handled") {
+      recordEvent(processed);
+    }
   } catch (terminalError) {
     run.emit({ type: "turn-error", message: errorMessage(terminalError) });
     closeRuntimeInput(runtimeInput, "turn-error");

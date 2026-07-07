@@ -6,6 +6,7 @@ import {
   shiftRuntimeInput,
 } from "../input/runtime-input";
 import { emitRuntimeInputEvent } from "../input/runtime-input-emit";
+import type { AgentEvent } from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
 import type { ThreadState } from "../state/thread-state";
 import {
@@ -25,11 +26,13 @@ export async function drainRuntimeInput({
   state,
   threadKey,
   attachmentStore,
+  recordEvent,
 }: {
   readonly attachmentStore: RuntimeAttachmentStore | undefined;
   readonly events: ThreadEventDispatcher;
   readonly executionHost?: ExecutionHost;
   readonly placement: RuntimeInputPlacement;
+  readonly recordEvent?: (event: AgentEvent) => void;
   readonly run: BufferedAgentTurn;
   readonly runtimeInput: RuntimeInputState;
   readonly state: ThreadState;
@@ -39,7 +42,10 @@ export async function drainRuntimeInput({
   let next = shiftRuntimeInput(runtimeInput, placement);
   while (next) {
     if (
-      await emitRuntimeInputEvent(events, run, state, next, { attachmentStore })
+      await emitRuntimeInputEvent(events, run, state, next, {
+        attachmentStore,
+        recordEvent,
+      })
     ) {
       added = true;
     }
@@ -52,6 +58,7 @@ export async function drainRuntimeInput({
       executionHost,
       attachmentStore,
       placement,
+      recordEvent,
       run,
       state,
       threadKey,
@@ -67,11 +74,13 @@ async function drainDurableRuntimeInput({
   run,
   state,
   threadKey,
+  recordEvent,
 }: {
   readonly events: ThreadEventDispatcher;
   readonly executionHost?: ExecutionHost;
   readonly attachmentStore: RuntimeAttachmentStore | undefined;
   readonly placement: RuntimeInputPlacement;
+  readonly recordEvent?: (event: AgentEvent) => void;
   readonly run: BufferedAgentTurn;
   readonly state: ThreadState;
   readonly threadKey: string;
@@ -110,6 +119,7 @@ async function drainDurableRuntimeInput({
               executionHost,
               record,
             }),
+          recordEvent,
         }
       );
       added = inputAdded || added;

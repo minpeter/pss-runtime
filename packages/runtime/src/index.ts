@@ -9,7 +9,12 @@ export {
   type ThreadMetadata,
 } from "./agent/core/agent";
 export { threadStoreKey } from "./agent/core/thread-entry";
-export type { AgentHost } from "./execution/host/types";
+export type {
+  AgentHost,
+  StoredThreadEvent,
+  ThreadEventCursor,
+  ThreadEventReadOptions,
+} from "./execution/host/types";
 export type { AgentToolChoice } from "./llm/llm";
 export {
   decodeRuntimeAttachmentData,

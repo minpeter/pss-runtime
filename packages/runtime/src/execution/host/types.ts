@@ -125,6 +125,16 @@ export interface StoredAgentEvent {
   readonly runId: string;
 }
 
+export interface ThreadEventCursor {
+  readonly offset: number;
+}
+
+export interface StoredThreadEvent {
+  readonly cursor: ThreadEventCursor;
+  readonly event: AgentEvent;
+  readonly threadKey: string;
+}
+
 export type NotificationStatus = "acked" | "cancelled" | "pending";
 
 export interface NotificationRecord {
@@ -175,6 +185,19 @@ export interface CheckpointStore {
 export interface EventStore {
   append(runId: string, event: AgentEvent): Promise<EventCursor>;
   read(runId: string, cursor?: EventCursor): AsyncIterable<StoredAgentEvent>;
+}
+
+export interface ThreadEventReadOptions {
+  readonly after?: ThreadEventCursor;
+  readonly limit?: number;
+}
+
+export interface ThreadEventLog {
+  append(threadKey: string, event: AgentEvent): Promise<ThreadEventCursor>;
+  read(
+    threadKey: string,
+    options?: ThreadEventReadOptions
+  ): AsyncIterable<StoredThreadEvent>;
 }
 
 export interface NotificationInbox {
@@ -275,6 +298,7 @@ export interface ExecutionStorePorts {
   readonly events: EventStore;
   readonly inputs: ThreadInputInbox;
   readonly notifications: NotificationInbox;
+  readonly threadEvents?: ThreadEventLog;
   readonly threads: ThreadStore;
   readonly turns: TurnStore;
 }

@@ -8,6 +8,10 @@ import type {
   ExecutionStoreTransaction,
   NotificationInbox,
   StoredAgentEvent,
+  StoredThreadEvent,
+  ThreadEventCursor,
+  ThreadEventLog,
+  ThreadEventReadOptions,
   ThreadInputInbox,
   TurnStore,
 } from "../../../execution/host/types";
@@ -36,6 +40,9 @@ export class InMemoryExecutionStore implements ExecutionStore {
     () => this.#state
   );
   readonly notifications: NotificationInbox = new InMemoryNotificationInbox(
+    () => this.#state
+  );
+  readonly threadEvents: ThreadEventLog = new InMemoryThreadEventLog(
     () => this.#state
   );
   readonly turns: TurnStore = new InMemoryRunStore(() => this.#state);
@@ -72,6 +79,7 @@ class InMemoryTransactionStore implements ExecutionStoreTransaction {
   readonly events: EventStore;
   readonly inputs: ThreadInputInbox;
   readonly notifications: NotificationInbox;
+  readonly threadEvents: ThreadEventLog;
   readonly turns: TurnStore;
   readonly threads: ThreadStore;
   readonly #state: ExecutionState;
@@ -82,6 +90,7 @@ class InMemoryTransactionStore implements ExecutionStoreTransaction {
     this.events = new InMemoryEventStore(() => this.#state);
     this.inputs = new InMemoryThreadInputInbox(() => this.#state);
     this.notifications = new InMemoryNotificationInbox(() => this.#state);
+    this.threadEvents = new InMemoryThreadEventLog(() => this.#state);
     this.turns = new InMemoryRunStore(() => this.#state);
     this.threads = new InMemoryExecutionThreadStore(() => this.#state);
   }
@@ -200,6 +209,39 @@ class InMemoryEventStore implements EventStore {
     const events = this.#state().events.get(runId) ?? [];
     const start = cursor?.offset ?? 0;
     for (const event of events.slice(start)) {
+      yield structuredClone(event);
+    }
+  }
+}
+
+class InMemoryThreadEventLog implements ThreadEventLog {
+  readonly #state: () => ExecutionState;
+
+  constructor(state: () => ExecutionState) {
+    this.#state = state;
+  }
+
+  append(threadKey: string, event: AgentEvent): Promise<ThreadEventCursor> {
+    const events = this.#state().threadEvents.get(threadKey) ?? [];
+    const cursor = { offset: events.length + 1 };
+    events.push({
+      cursor,
+      event: structuredClone(event),
+      threadKey,
+    });
+    this.#state().threadEvents.set(threadKey, events);
+    return Promise.resolve(cursor);
+  }
+
+  async *read(
+    threadKey: string,
+    options: ThreadEventReadOptions = {}
+  ): AsyncIterable<StoredThreadEvent> {
+    await Promise.resolve();
+    const events = this.#state().threadEvents.get(threadKey) ?? [];
+    const start = options.after?.offset ?? 0;
+    const limit = options.limit ?? Number.POSITIVE_INFINITY;
+    for (const event of events.slice(start, start + limit)) {
       yield structuredClone(event);
     }
   }

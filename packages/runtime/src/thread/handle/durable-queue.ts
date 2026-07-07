@@ -172,6 +172,7 @@ export async function createQueuedSendInput({
     }
 
     const item = {
+      acceptedEvent: processed,
       awaitBoundaries,
       durableInput: admission.kind === "admitted",
       ...(admission.kind === "admitted"
@@ -273,6 +274,7 @@ export async function claimOrphanDurableThreadInput({
   }
 
   return {
+    acceptedEvent: claimed.record.input,
     awaitBoundaries: false,
     durableInputClaim: claimed.record,
     initialEvents: [],
