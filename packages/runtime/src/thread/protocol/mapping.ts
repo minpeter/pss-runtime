@@ -70,14 +70,6 @@ function userMessageContentPartToUserContentPart(
     return { type: "text", text: part.text };
   }
 
-  if (part.type === "image") {
-    return {
-      type: "file",
-      data: part.image,
-      mediaType: part.mediaType ?? "image",
-    };
-  }
-
   return {
     type: "file",
     data: userMessageFileDataToFileData(part.data),

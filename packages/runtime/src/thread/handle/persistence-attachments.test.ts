@@ -11,13 +11,13 @@ import {
 import { collect } from "./test-support";
 
 describe("Agent thread persistence attachments", () => {
-  it("file thread store preserves image content parts across reload", async () => {
+  it("file thread store preserves image file parts across reload", async () => {
     const input = [
       { text: "remember this image", type: "text" },
       {
-        image: "data:image/png;base64,ZmFrZQ==",
+        data: "data:image/png;base64,ZmFrZQ==",
         mediaType: "image/png",
-        type: "image",
+        type: "file",
       },
       {
         data: { text: "inline note", type: "text" },

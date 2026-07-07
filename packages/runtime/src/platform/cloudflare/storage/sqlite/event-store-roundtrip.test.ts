@@ -32,9 +32,9 @@ function agentEventVariants(): readonly AgentEvent[] {
       content: [
         { text: "multipart text", type: "text" },
         {
-          image: "data:image/png;base64,AAAA",
+          data: "data:image/png;base64,AAAA",
           mediaType: "image/png",
-          type: "image",
+          type: "file",
         },
         {
           data: {

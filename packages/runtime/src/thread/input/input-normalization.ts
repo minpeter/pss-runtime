@@ -84,7 +84,7 @@ function assertUserMessageContent(
   for (const part of input) {
     if (!isUserMessageContentPart(part)) {
       throw new TypeError(
-        'Agent input content parts must be { type: "text", text }, { type: "image", image }, or { type: "file", data, mediaType }.'
+        'Agent input content parts must be { type: "text", text } or { type: "file", data, mediaType }.'
       );
     }
   }
@@ -99,14 +99,6 @@ function isUserMessageContentPart(
 
   if (part.type === "text") {
     return "text" in part && typeof part.text === "string";
-  }
-
-  if (part.type === "image") {
-    return (
-      "image" in part &&
-      typeof part.image === "string" &&
-      (!("mediaType" in part) || typeof part.mediaType === "string")
-    );
   }
 
   if (part.type === "file") {

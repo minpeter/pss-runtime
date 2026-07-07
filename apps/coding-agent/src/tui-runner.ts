@@ -185,8 +185,6 @@ function formatUserMessagePart(part: UserMessageContentPart): string {
   switch (part.type) {
     case "text":
       return part.text;
-    case "image":
-      return `[image ${part.mediaType ?? "unknown"}]`;
     case "file":
       return `[file ${part.filename ?? part.mediaType}]`;
     default:

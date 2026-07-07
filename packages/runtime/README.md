@@ -91,8 +91,8 @@ shortcuts for text-only turns.
 const turn = await agent.send([
   { type: "text", text: "Describe this UI screenshot." },
   {
-    type: "image",
-    image: "data:image/png;base64,iVBORw0KGgo...",
+    type: "file",
+    data: "data:image/png;base64,iVBORw0KGgo...",
     mediaType: "image/png",
   },
 ]);
@@ -332,7 +332,7 @@ Each accepted call returns one `AgentTurn`. Drain that turn's `events()` stream 
 observe the turn; each `AgentTurn.events()` stream is single-consumer.
 
 Input APIs accept strings, arrays of strings, or multipart arrays such as
-`[{ type: "text", text: "hello" }, { type: "image", image }]`. Inline
+`[{ type: "text", text: "hello" }, { type: "file", data: imageBytes, mediaType: "image/png" }]`. Inline
 image/file bytes are staged into `attachmentStore` and replaced by
 `pss-attachment:` refs before durable state is written. The runtime normalizes
 accepted `send` input into `user-input` events. Active steering and host resume

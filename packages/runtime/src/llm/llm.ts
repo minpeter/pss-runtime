@@ -4,6 +4,7 @@ import {
   hydrateRuntimeAttachments,
   type RuntimeAttachmentStore,
 } from "../thread/input/attachments";
+import { assertNoUnsupportedToolApproval } from "./tool-approval";
 import type { RuntimeToolExecutionContext } from "./tool-execution";
 import {
   normalizeToolCallIds,
@@ -102,6 +103,7 @@ export async function generateModelStep({
     instructions: prompt.instructions,
     messages,
   });
+  assertNoUnsupportedToolApproval(tools);
   const { responseMessages } = await generateText({
     abortSignal: signal,
     instructions: prompt.instructions,

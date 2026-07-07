@@ -11,6 +11,7 @@ import {
 import { assistantMessage } from "../testing/test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
+const unsupportedApprovalPattern = /needsApproval.*not supported/;
 
 describe("generateModelStep", () => {
   beforeEach(() => {
@@ -129,6 +130,29 @@ describe("generateModelStep", () => {
         toolChoice,
       })
     );
+  });
+
+  it("rejects tools using AI SDK tool approval before generateText", async () => {
+    const runModelStep = await loadModelStepRunner();
+    const signal = new AbortController().signal;
+    const history = [{ role: "user" as const, content: "hello" }];
+    const tools = {
+      risky: {
+        ...createNoopTool(),
+        needsApproval: true,
+      },
+    } satisfies ToolSet;
+
+    await expect(
+      runModelStep(
+        {
+          model: fakeModel,
+          tools,
+        },
+        { history, signal }
+      )
+    ).rejects.toThrow(unsupportedApprovalPattern);
+    expect(generateTextMock).not.toHaveBeenCalled();
   });
 });
 

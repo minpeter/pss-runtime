@@ -13,12 +13,6 @@ export interface UserMessageTextPart {
   type: "text";
 }
 
-export interface UserMessageImagePart {
-  image: string;
-  mediaType?: string;
-  type: "image";
-}
-
 export type UserMessageFileData =
   | ArrayBuffer
   | string
@@ -35,10 +29,7 @@ export interface UserMessageFilePart {
   type: "file";
 }
 
-export type UserMessageContentPart =
-  | UserMessageFilePart
-  | UserMessageImagePart
-  | UserMessageTextPart;
+export type UserMessageContentPart = UserMessageFilePart | UserMessageTextPart;
 
 export type UserMessageContent = readonly UserMessageContentPart[];
 

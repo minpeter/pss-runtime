@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
+import { createNoopTool } from "../../testing/llm-test-utils";
 import {
   createMockLanguageModelV4,
   mockLanguageModelV4Text,
@@ -12,6 +13,7 @@ const functionModel = () => Promise.resolve([]);
 const invalidModelPattern = /invalid options\.model/;
 const missingModelPattern = /missing options\.model/;
 const missingOptionsPattern = /Agent options are required/;
+const unsupportedApprovalPattern = /needsApproval.*not supported/;
 const agentOptionsSourceUrl = new URL("./options.ts", import.meta.url);
 const agentSourceUrl = new URL("./agent.ts", import.meta.url);
 const forbiddenAgentSubagentSurface = [
@@ -165,6 +167,23 @@ describe("Agent", () => {
     expect(() => Reflect.construct(Agent, [{ model: "not-a-model" }])).toThrow(
       invalidModelPattern
     );
+  });
+
+  it("rejects tools using AI SDK tool approval", () => {
+    const tools = {
+      risky: {
+        ...createNoopTool(),
+        needsApproval: true,
+      },
+    } satisfies NonNullable<AgentOptions["tools"]>;
+
+    expect(
+      () =>
+        new Agent({
+          model: fakeModel,
+          tools,
+        })
+    ).toThrow(unsupportedApprovalPattern);
   });
 
   it("does not implement legacy llm configuration", () => {
