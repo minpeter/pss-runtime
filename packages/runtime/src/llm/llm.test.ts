@@ -11,6 +11,7 @@ import {
 import { assistantMessage } from "../testing/test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
+const unsupportedApprovalPattern = /needsApproval.*not supported/;
 
 describe("generateModelStep", () => {
   beforeEach(() => {
@@ -150,7 +151,7 @@ describe("generateModelStep", () => {
         },
         { history, signal }
       )
-    ).rejects.toThrow(/needsApproval.*not supported/);
+    ).rejects.toThrow(unsupportedApprovalPattern);
     expect(generateTextMock).not.toHaveBeenCalled();
   });
 });

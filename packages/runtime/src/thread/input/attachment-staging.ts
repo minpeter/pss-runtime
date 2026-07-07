@@ -104,11 +104,10 @@ export function userInputContainsRuntimeAttachmentRefs(
     return false;
   }
 
-  return input.content.some((part) => {
-    return (
+  return input.content.some(
+    (part) =>
       part.type === "file" && runtimeAttachmentDataRef(part.data) !== undefined
-    );
-  });
+  );
 }
 
 export async function stageAgentEventAttachments(

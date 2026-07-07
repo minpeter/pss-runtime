@@ -4,12 +4,12 @@ import {
   hydrateRuntimeAttachments,
   type RuntimeAttachmentStore,
 } from "../thread/input/attachments";
+import { assertNoUnsupportedToolApproval } from "./tool-approval";
 import type { RuntimeToolExecutionContext } from "./tool-execution";
 import {
   normalizeToolCallIds,
   rewriteMessageToolCallIds,
 } from "./tool-execution";
-import { assertNoUnsupportedToolApproval } from "./tool-approval";
 
 export type {
   RuntimePersistedToolExecutionCheckpoint,

@@ -29,9 +29,7 @@ export interface UserMessageFilePart {
   type: "file";
 }
 
-export type UserMessageContentPart =
-  | UserMessageFilePart
-  | UserMessageTextPart;
+export type UserMessageContentPart = UserMessageFilePart | UserMessageTextPart;
 
 export type UserMessageContent = readonly UserMessageContentPart[];
 
