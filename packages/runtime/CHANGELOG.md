@@ -1,5 +1,13 @@
 # @minpeter/pss-runtime
 
+## 0.1.2
+
+### Patch Changes
+
+- 4592e28: Add a durable `ThreadInputInbox` execution-store port with memory, file, and Cloudflare storage implementations, and wire runtime send/steer admission through durable input claim, promote, ack, release, recovery, and context-overflow compaction boundaries.
+- cfb2a0f: Tighten runtime attachment ref validation, cleanup staged attachments on rejected durable inputs, and keep host-owned attachment stores authoritative for resumed work.
+- d84ebb3: Add runtime-owned attachment staging, durable attachment refs, and provider-time hydration for multimodal file inputs.
+
 ## 0.1.1
 
 ### Patch Changes
