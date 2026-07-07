@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { agentNamespace } from "../../agent/identity/namespace";
 import { createInMemoryExecutionHost } from "../../platform/memory";
-import { isRuntimeAttachmentData } from "../../thread/input/attachments";
+import {
+  isRuntimeAttachmentData,
+  type RuntimeAttachmentReference,
+  type RuntimeAttachmentStore,
+} from "../../thread/input/attachments";
 import type { ExecutionHost, TurnRecord, TurnStore } from "../host/types";
 import { dispatchAgentNotification } from "./notification-dispatch";
 
@@ -190,7 +194,99 @@ describe("dispatchAgentNotification", () => {
 
     expect(duplicate).toEqual({ ...first, deduplicated: true });
   });
+
+  it("deletes staged notification attachments when a create race dedupes", async () => {
+    const baseHost = createInMemoryExecutionHost();
+    const deletedRefs: RuntimeAttachmentReference[] = [];
+    const attachmentStore = trackingAttachmentStore(
+      baseHost.attachmentStore,
+      deletedRefs
+    );
+    const host = { ...baseHost, attachmentStore } satisfies ExecutionHost;
+    const first = await dispatchAgentNotification({
+      host,
+      idempotencyKey: "attachment-race",
+      input: { text: "first", type: "user-input" },
+      namespace: "agent-a",
+      threadKey: "room:1:user:2",
+    });
+    const racingHost = hostWithDuplicateRunCreateAfterFirstLookup(host);
+
+    const duplicate = await dispatchAgentNotification({
+      host: racingHost,
+      idempotencyKey: "attachment-race",
+      input: {
+        content: [
+          {
+            data: new Uint8Array([1, 2, 3]),
+            filename: "duplicate.png",
+            mediaType: "image/png",
+            type: "file",
+          },
+        ],
+        type: "user-input",
+      },
+      namespace: "agent-a",
+      threadKey: "room:1:user:2",
+    });
+
+    expect(duplicate).toEqual({ ...first, deduplicated: true });
+    expect(deletedRefs).toHaveLength(1);
+    const deletedRef = deletedRefs[0];
+    if (!deletedRef) {
+      throw new Error("expected deleted staged attachment ref");
+    }
+    await expect(attachmentStore.get(deletedRef)).resolves.toBeNull();
+  });
 });
+
+function trackingAttachmentStore(
+  store: RuntimeAttachmentStore | undefined,
+  deletedRefs: RuntimeAttachmentReference[]
+): RuntimeAttachmentStore {
+  if (!store) {
+    throw new Error("expected base host attachment store");
+  }
+
+  return {
+    delete: async (ref) => {
+      deletedRefs.push(ref);
+      await store.delete(ref);
+    },
+    get: (ref) => store.get(ref),
+    put: (input) => store.put(input),
+  };
+}
+
+function hostWithDuplicateRunCreateAfterFirstLookup(
+  host: ExecutionHost
+): ExecutionHost {
+  let dedupeLookups = 0;
+  const runs = {
+    claim: (runId, options) => host.store.turns.claim(runId, options),
+    create: async (record: TurnRecord) => {
+      const existing = record.dedupeKey
+        ? await host.store.turns.getByDedupeKey(record.dedupeKey)
+        : await host.store.turns.get(record.runId);
+      if (!existing) {
+        throw new Error("Expected pre-existing run for duplicate create race.");
+      }
+      return { ok: false, reason: "duplicate", record: existing } as const;
+    },
+    get: (runId) => host.store.turns.get(runId),
+    getByDedupeKey: async (dedupeKey) => {
+      dedupeLookups += 1;
+      return dedupeLookups === 1
+        ? null
+        : await host.store.turns.getByDedupeKey(dedupeKey);
+    },
+    listByParentRunId: (parentRunId) =>
+      host.store.turns.listByParentRunId(parentRunId),
+    update: (record) => host.store.turns.update(record),
+  } satisfies TurnStore;
+
+  return hostWithRuns(host, runs);
+}
 
 function hostWithDuplicateRunCreate(host: ExecutionHost): ExecutionHost {
   const runs = {
@@ -211,6 +307,10 @@ function hostWithDuplicateRunCreate(host: ExecutionHost): ExecutionHost {
     update: (record) => host.store.turns.update(record),
   } satisfies TurnStore;
 
+  return hostWithRuns(host, runs);
+}
+
+function hostWithRuns(host: ExecutionHost, runs: TurnStore): ExecutionHost {
   return {
     ...host,
     store: {

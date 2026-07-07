@@ -7,6 +7,8 @@ export {
   isRuntimeAttachmentData,
 } from "./attachment-refs";
 export {
+  cleanupStagedRuntimeAttachments,
+  cleanupUnreferencedStagedRuntimeAttachments,
   stageAgentEventAttachments,
   stageAgentEventsAttachments,
   stageUserInputAttachments,

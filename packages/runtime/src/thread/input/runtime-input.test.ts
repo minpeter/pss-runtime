@@ -25,7 +25,12 @@ describe("runtime input", () => {
     const putResult = new Promise<RuntimeAttachmentReference>((resolve) => {
       resolvePut = resolve;
     });
+    const deletedRefs: RuntimeAttachmentReference[] = [];
     const store: RuntimeAttachmentStore = {
+      delete: (ref) => {
+        deletedRefs.push(ref);
+        return Promise.resolve();
+      },
       get: () => Promise.resolve(null),
       put: () => {
         resolvePutStarted();
@@ -47,11 +52,13 @@ describe("runtime input", () => {
 
     await putStarted;
     closeRuntimeInput(runtimeInput, "test close");
-    resolvePut({ id: "attachment-1", schemaVersion: 1 });
+    const stagedRef = { id: "attachment-1", schemaVersion: 1 } as const;
+    resolvePut(stagedRef);
 
     await expect(pending).rejects.toThrow(
       "thread.steer() cannot be used after test close"
     );
     expect(runtimeInput.queue).toEqual([]);
+    expect(deletedRefs).toEqual([stagedRef]);
   });
 });

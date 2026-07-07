@@ -8,6 +8,11 @@ import type {
 export class MemoryAttachmentStore implements RuntimeAttachmentStore {
   readonly #attachments = new Map<string, RuntimeAttachmentBlob>();
 
+  delete(ref: RuntimeAttachmentReference): Promise<void> {
+    this.#attachments.delete(ref.id);
+    return Promise.resolve();
+  }
+
   get(ref: RuntimeAttachmentReference): Promise<RuntimeAttachmentBlob | null> {
     const attachment = this.#attachments.get(ref.id);
     return Promise.resolve(attachment ? cloneAttachment(attachment) : null);

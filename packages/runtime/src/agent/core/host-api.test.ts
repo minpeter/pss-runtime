@@ -6,6 +6,7 @@ import type {
   ThreadHost,
 } from "../../execution";
 import { createInMemoryExecutionHost } from "../../platform/memory";
+import { MemoryAttachmentStore } from "../../platform/memory/storage/memory-attachment-store";
 import {
   createMockLanguageModelV4,
   mockLanguageModelV4Text,
@@ -15,6 +16,12 @@ import {
   createCallbackModel,
 } from "../../testing/test-fixtures";
 import { collect, SpyStore } from "../../thread/handle/test-support";
+import type {
+  RuntimeAttachmentBlob,
+  RuntimeAttachmentPutInput,
+  RuntimeAttachmentReference,
+  RuntimeAttachmentStore,
+} from "../../thread/input/attachments";
 import { Agent, type AgentHost, type AgentOptions } from "./agent";
 
 const fakeModel = createMockLanguageModelV4([mockLanguageModelV4Text("DONE")]);
@@ -207,4 +214,76 @@ describe("Agent host public API", () => {
       "scope:user%3A1:thread:room%2F1"
     );
   });
+
+  it("uses a caller-provided host attachment store before an option store", async () => {
+    const baseHost = createInMemoryExecutionHost();
+    const hostAttachmentStore = new TrackingAttachmentStore();
+    const optionAttachmentStore = new TrackingAttachmentStore();
+    const agent = new Agent({
+      attachmentStore: optionAttachmentStore,
+      host: { ...baseHost, attachmentStore: hostAttachmentStore },
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
+    });
+
+    await collect(
+      await agent.send([
+        {
+          data: new Uint8Array([1, 2, 3]),
+          mediaType: "image/png",
+          type: "file",
+        },
+      ])
+    );
+
+    expect(hostAttachmentStore.putCount).toBe(1);
+    expect(optionAttachmentStore.putCount).toBe(0);
+  });
+
+  it("uses an option attachment store when Agent creates the host", async () => {
+    const attachmentStore = new TrackingAttachmentStore();
+    const agent = new Agent({
+      attachmentStore,
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
+    });
+
+    await collect(
+      await agent.send([
+        {
+          data: new Uint8Array([1, 2, 3]),
+          mediaType: "image/png",
+          type: "file",
+        },
+      ])
+    );
+
+    expect(attachmentStore.putCount).toBe(1);
+  });
 });
+
+class TrackingAttachmentStore implements RuntimeAttachmentStore {
+  readonly #store = new MemoryAttachmentStore();
+  #putCount = 0;
+
+  get putCount(): number {
+    return this.#putCount;
+  }
+
+  delete(ref: RuntimeAttachmentReference): Promise<void> {
+    return this.#store.delete(ref);
+  }
+
+  get(ref: RuntimeAttachmentReference): Promise<RuntimeAttachmentBlob | null> {
+    return this.#store.get(ref);
+  }
+
+  async put(
+    input: RuntimeAttachmentPutInput
+  ): Promise<RuntimeAttachmentReference> {
+    this.#putCount += 1;
+    return await this.#store.put(input);
+  }
+}

@@ -4,6 +4,7 @@ import type {
   RuntimeToolExecutionDecision,
 } from "../../llm/llm";
 import {
+  type RuntimeAttachmentReference,
   type RuntimeAttachmentStore,
   stageAgentEventAttachments,
 } from "../input/attachments";
@@ -20,6 +21,10 @@ interface ThreadEventDispatcherOptions {
   readonly history: () => readonly ModelMessage[];
   readonly plugins: readonly AgentPlugin[];
   readonly signal: () => AbortSignal | undefined;
+}
+
+interface InterceptEventOptions {
+  readonly stagedRefs?: RuntimeAttachmentReference[];
 }
 
 export class ThreadEventDispatcher {
@@ -131,7 +136,10 @@ export class ThreadEventDispatcher {
       : undefined;
   }
 
-  async interceptEvent(event: AgentEvent): Promise<AgentEvent | "handled"> {
+  async interceptEvent(
+    event: AgentEvent,
+    options: InterceptEventOptions = {}
+  ): Promise<AgentEvent | "handled"> {
     const pipeline = await this.#runInterceptPipeline(event);
     if (pipeline.kind === "handled") {
       return "handled";
@@ -142,6 +150,7 @@ export class ThreadEventDispatcher {
     }
 
     return stageAgentEventAttachments(pipeline.event, this.#attachmentStore, {
+      stagedRefs: options.stagedRefs,
       trustRuntimeAttachmentRefs: true,
     });
   }
