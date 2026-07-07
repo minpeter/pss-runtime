@@ -5,6 +5,36 @@
   "files": {
     "includes": ["**/*", "!!**/.omo", "!!**/.omx"]
   },
+  "assist": {
+    "actions": {
+      "source": {
+        "useSortedKeys": "off"
+      }
+    }
+  },
+  "linter": {
+    "rules": {
+      "complexity": {
+        "noDivRegex": "off",
+        "noUselessReturn": "off"
+      },
+      "performance": {
+        "noAwaitInLoops": "off"
+      },
+      "style": {
+        "noIncrementDecrement": "off",
+        "useConsistentMethodSignatures": "off",
+        "useDestructuring": "off",
+        "useErrorCause": "off"
+      },
+      "suspicious": {
+        "noEqualsToNull": "off",
+        "noNestedPromises": "off",
+        "noShadow": "off",
+        "noUnnecessaryConditions": "off"
+      }
+    }
+  },
   "overrides": [
     {
       "includes": [
