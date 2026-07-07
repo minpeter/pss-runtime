@@ -20,6 +20,21 @@ export interface ThreadMessageChunkRow {
   readonly thread_key: string;
 }
 
+export interface ThreadInputRow {
+  readonly admitted_at_ms: number;
+  readonly admitted_seq: number;
+  readonly claim_id: string | null;
+  readonly created_at: number;
+  readonly kind: string;
+  readonly message_id: string;
+  readonly placement: string | null;
+  readonly prefix: string;
+  readonly record: string;
+  readonly status: string;
+  readonly thread_key: string;
+  readonly updated_at: number;
+}
+
 export interface ThreadCompactionRow {
   readonly end_seq_exclusive: number;
   readonly ordinal: number;
@@ -98,6 +113,7 @@ export interface InMemoryDurableObjectSqlState {
   payloadChunks: PayloadChunkRow[];
   scheduledWork: ScheduledWorkRow[];
   threadCompactions: ThreadCompactionRow[];
+  threadInputs: ThreadInputRow[];
   threadMessageChunks: ThreadMessageChunkRow[];
   threadMessages: ThreadMessageRow[];
   threadMeta: Map<string, ThreadMetaRow>;
@@ -114,6 +130,7 @@ export function createInMemoryDurableObjectSqlState(): InMemoryDurableObjectSqlS
     turns: [],
     scheduledWork: [],
     threadCompactions: [],
+    threadInputs: [],
     threadMessageChunks: [],
     threadMessages: [],
     threadMeta: new Map(),
@@ -134,6 +151,7 @@ export function cloneInMemoryDurableObjectSqlState(
     turns: structuredClone(state.turns),
     scheduledWork: structuredClone(state.scheduledWork),
     threadCompactions: structuredClone(state.threadCompactions),
+    threadInputs: structuredClone(state.threadInputs),
     threadMessageChunks: structuredClone(state.threadMessageChunks),
     threadMessages: structuredClone(state.threadMessages),
     threadMeta: new Map(

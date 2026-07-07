@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { describeExecutionStoreContract } from "../../../../contracts/execution-store/contract";
 import type { NotificationRecord, TurnRecord } from "../../../../execution";
+import {
+  createCloudflareDurableObjectHost,
+  InMemoryCloudflareDurableObjectStorage as PublicInMemoryCloudflareDurableObjectStorage,
+} from "../../host/durable-object-host";
 import { InMemorySqlStorage } from "../../sql/node-test/node-sqlite-storage";
+import type {
+  SqlStorage,
+  SqlStorageCursorLike,
+} from "../../sql/ports/storage-port";
 import { InMemoryCloudflareDurableObjectStorage } from "../durable-object/durable-object-storage";
 import { DurableObjectExecutionStore } from "./store";
 
@@ -9,7 +17,9 @@ describeExecutionStoreContract({
   createStore: () =>
     new DurableObjectExecutionStore({
       prefix: "contract-test",
-      storage: new InMemoryCloudflareDurableObjectStorage(),
+      storage: new InMemoryCloudflareDurableObjectStorage({
+        sql: new TransactionalInMemorySqlStorage(),
+      }),
     }),
   name: "DurableObjectExecutionStore",
 });
@@ -151,6 +161,35 @@ describe("DurableObjectExecutionStore payload guards", () => {
       version: "1",
     });
   });
+
+  it("round-trips thread inputs with the public default Durable Object SQL test storage", async () => {
+    const host = createCloudflareDurableObjectHost({
+      prefix: "default-sql-thread-input-test",
+      storage: new PublicInMemoryCloudflareDurableObjectStorage(),
+    });
+
+    await expect(
+      host.store.inputs.admit({
+        admittedAtMs: 10,
+        input: { text: "default storage input", type: "user-input" },
+        kind: "send",
+        messageId: "input-default-storage",
+        threadKey: "thread-1",
+      })
+    ).resolves.toMatchObject({
+      duplicate: false,
+      record: {
+        messageId: "input-default-storage",
+        status: "pending",
+      },
+    });
+    await expect(
+      host.store.inputs.claimNext("thread-1", "turn-idle")
+    ).resolves.toMatchObject({
+      messageId: "input-default-storage",
+      status: "claiming",
+    });
+  });
 });
 
 function createBudgetedStore(
@@ -161,6 +200,29 @@ function createBudgetedStore(
     prefix: "payload-test",
     storage: new InMemoryCloudflareDurableObjectStorage(),
   });
+}
+
+class TransactionalInMemorySqlStorage implements SqlStorage {
+  readonly #storage = new InMemorySqlStorage();
+
+  exec<T = Record<string, unknown>>(
+    query: string,
+    ...bindings: unknown[]
+  ): SqlStorageCursorLike<T> {
+    return this.#storage.exec<T>(query, ...bindings);
+  }
+
+  async transaction<T>(fn: () => Promise<T>): Promise<T> {
+    this.#storage.exec("BEGIN");
+    try {
+      const result = await fn();
+      this.#storage.exec("COMMIT");
+      return result;
+    } catch (error) {
+      this.#storage.exec("ROLLBACK");
+      throw error;
+    }
+  }
 }
 
 function runRecord(

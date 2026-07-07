@@ -66,6 +66,7 @@ export function createCheckpointSpyHost(): {
           latest: (runId) => baseHost.store.checkpoints.latest(runId),
         },
         events: baseHost.store.events,
+        inputs: baseHost.store.inputs,
         notifications: baseHost.store.notifications,
         turns: baseHost.store.turns,
         threads: baseHost.store.threads,

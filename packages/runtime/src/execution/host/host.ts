@@ -1,5 +1,6 @@
 import type { DurableBackgroundHost, ThreadHost } from "./capabilities";
 import type { AgentHost, ExecutionHost, ExecutionStorePorts } from "./types";
+import { UnsupportedThreadInputInbox } from "./unsupported-thread-input-inbox";
 
 type Transaction = ExecutionHost["store"]["transaction"];
 
@@ -69,6 +70,7 @@ function executionHostFromDurableBackgroundHost(
     scheduler: host.backgroundScheduler,
     store: {
       events: host.eventStore,
+      inputs: new UnsupportedThreadInputInbox(),
       notifications: host.notificationInbox,
       checkpoints: host.checkpointStore,
       threads: threadStore,

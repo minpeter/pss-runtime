@@ -2,6 +2,7 @@ import { join } from "node:path";
 import type { ExecutionStoreTransaction } from "../../../../execution/host/types";
 import { FileCheckpointStore } from "./checkpoint-store";
 import { FileEventStore } from "./event-store";
+import { FileThreadInputInbox } from "./input-inbox";
 import { LockedThreadStore } from "./locked-thread-store";
 import { FileNotificationInbox } from "./notification-inbox";
 import { FileRunStore } from "./run-store";
@@ -19,6 +20,7 @@ export function createFileExecutionStorePorts(
   );
   return {
     events: new FileEventStore(directory, lock),
+    inputs: new FileThreadInputInbox(directory, lock),
     notifications: new FileNotificationInbox(directory, lock),
     checkpoints,
     threads,

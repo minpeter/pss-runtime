@@ -4,6 +4,7 @@ import type {
   ExecutionStore,
   ExecutionStoreTransaction,
   NotificationInbox,
+  ThreadInputInbox,
   TurnStore,
 } from "../../../../execution";
 import type { ThreadStore } from "../../../../index";
@@ -18,12 +19,14 @@ import {
 import { DurableObjectSqliteCheckpointStore } from "../sqlite/checkpoint-store";
 import { DurableObjectSqliteEventStore } from "../sqlite/event-store";
 import { DurableObjectSqliteThreadStore } from "../sqlite/thread-store";
+import { DurableObjectThreadInputInbox } from "./input-store";
 import { DurableObjectNotificationInbox } from "./notification-store";
 import { DurableObjectRunStore } from "./run-store";
 
 export class DurableObjectExecutionStore implements ExecutionStore {
   readonly checkpoints: CheckpointStore;
   readonly events: EventStore;
+  readonly inputs: ThreadInputInbox;
   readonly notifications: NotificationInbox;
   readonly turns: TurnStore;
   readonly threads: ThreadStore;
@@ -55,6 +58,11 @@ export class DurableObjectExecutionStore implements ExecutionStore {
       payloadBudget
     );
     this.notifications = new DurableObjectNotificationInbox(
+      storage,
+      prefix,
+      payloadBudget
+    );
+    this.inputs = new DurableObjectThreadInputInbox(
       storage,
       prefix,
       payloadBudget

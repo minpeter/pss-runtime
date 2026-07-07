@@ -2,6 +2,7 @@ import type {
   Checkpoint,
   NotificationRecord,
   StoredAgentEvent,
+  ThreadInputRecord,
   TurnRecord,
 } from "../../../execution/host/types";
 import type { StoredThread } from "../../../thread/store/types";
@@ -9,6 +10,7 @@ import type { StoredThread } from "../../../thread/store/types";
 export interface ExecutionState {
   readonly checkpoints: Map<string, Checkpoint[]>;
   readonly events: Map<string, StoredAgentEvent[]>;
+  readonly inputsByThread: Map<string, ThreadInputRecord[]>;
   readonly notificationsByKey: Map<string, NotificationRecord>;
   readonly threads: Map<string, StoredThread>;
   readonly threadVersions: Map<string, number>;
@@ -19,6 +21,7 @@ export function createEmptyState(): ExecutionState {
   return {
     checkpoints: new Map(),
     events: new Map(),
+    inputsByThread: new Map(),
     notificationsByKey: new Map(),
     turns: new Map(),
     threadVersions: new Map(),
@@ -30,11 +33,23 @@ export function cloneState(state: ExecutionState): ExecutionState {
   return {
     checkpoints: cloneCheckpointMap(state.checkpoints),
     events: cloneEventMap(state.events),
+    inputsByThread: cloneInputMap(state.inputsByThread),
     notificationsByKey: cloneRecordMap(state.notificationsByKey),
     turns: cloneRecordMap(state.turns),
     threadVersions: cloneRecordMap(state.threadVersions),
     threads: cloneRecordMap(state.threads),
   };
+}
+
+function cloneInputMap(
+  map: ReadonlyMap<string, readonly ThreadInputRecord[]>
+): Map<string, ThreadInputRecord[]> {
+  return new Map(
+    [...map.entries()].map(([key, value]) => [
+      key,
+      value.map((record) => structuredClone(record)),
+    ])
+  );
 }
 
 function cloneCheckpointMap(

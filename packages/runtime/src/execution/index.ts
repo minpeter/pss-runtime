@@ -17,10 +17,13 @@ export type {
 } from "./host/capabilities";
 export { executionHost, threadHost } from "./host/host";
 export type {
+  AdmitReceipt,
+  AdmitThreadInput,
   Checkpoint,
   CheckpointPhase,
   CheckpointStore,
   CheckpointWriteResult,
+  ClaimedThreadInput,
   ClaimTurnOptions,
   ClaimTurnResult,
   CreateTurnResult,
@@ -37,9 +40,16 @@ export type {
   NotificationWriteResult,
   ResumeThreadOptions,
   StoredAgentEvent,
+  ThreadInputBoundary,
+  ThreadInputInbox,
+  ThreadInputKind,
+  ThreadInputPlacement,
+  ThreadInputRecord,
+  ThreadInputStatus,
   TurnKind,
   TurnLease,
   TurnRecord,
   TurnStatus,
   TurnStore,
 } from "./host/types";
+export { ThreadInputDuplicateConflictError } from "./host/types";

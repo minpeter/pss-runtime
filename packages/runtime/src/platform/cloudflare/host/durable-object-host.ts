@@ -163,6 +163,7 @@ function executionStoreWithThreads(
 ): ExecutionHost["store"] {
   return {
     events: store.events,
+    inputs: store.inputs,
     notifications: store.notifications,
     checkpoints: store.checkpoints,
     threads,
@@ -171,6 +172,7 @@ function executionStoreWithThreads(
       store.transaction((tx) =>
         fn({
           events: tx.events,
+          inputs: tx.inputs,
           notifications: tx.notifications,
           checkpoints: tx.checkpoints,
           threads,

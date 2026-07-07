@@ -1,0 +1,136 @@
+import { randomUUID } from "node:crypto";
+import {
+  ackThreadInputClaim,
+  admitThreadInput,
+  claimNextThreadInput,
+  promoteThreadInputClaim,
+  releaseThreadInputClaim,
+} from "../../../../execution/host/thread-input-inbox";
+import type {
+  AdmitReceipt,
+  AdmitThreadInput,
+  ClaimedThreadInput,
+  ThreadInputBoundary,
+  ThreadInputInbox,
+  ThreadInputRecord,
+} from "../../../../execution/host/types";
+import type { CloudflareDurableObjectStorage } from "../durable-object/durable-object-storage";
+import { withTransaction } from "../durable-object/sql-access";
+import {
+  resolveStoragePayloadMaxBytes,
+  type StoragePayloadBudgetOptions,
+} from "../payload-guard";
+import { listThreadInputRecords, putThreadInputRecords } from "./input-records";
+
+export class DurableObjectThreadInputInbox implements ThreadInputInbox {
+  readonly #maxPayloadBytes: number;
+  readonly #prefix: string;
+  readonly #storage: CloudflareDurableObjectStorage;
+
+  constructor(
+    storage: CloudflareDurableObjectStorage,
+    prefix: string,
+    options: StoragePayloadBudgetOptions = {}
+  ) {
+    this.#maxPayloadBytes = resolveStoragePayloadMaxBytes(options);
+    this.#prefix = prefix;
+    this.#storage = storage;
+  }
+
+  async admit(input: AdmitThreadInput): Promise<AdmitReceipt> {
+    return await withTransaction(this.#storage, async (storage) => {
+      const current = await listThreadInputRecords(
+        storage,
+        this.#prefix,
+        input.threadKey
+      );
+      const transition = admitThreadInput(current, input);
+      if (!transition.receipt.duplicate) {
+        await putThreadInputRecords(storage, this.#prefix, transition.records, {
+          maxPayloadBytes: this.#maxPayloadBytes,
+        });
+      }
+      return structuredClone(transition.receipt);
+    });
+  }
+
+  async claimNext(
+    threadKey: string,
+    boundary: ThreadInputBoundary
+  ): Promise<ClaimedThreadInput | null> {
+    return await withTransaction(this.#storage, async (storage) => {
+      const current = await listThreadInputRecords(
+        storage,
+        this.#prefix,
+        threadKey
+      );
+      const transition = claimNextThreadInput(
+        current,
+        threadKey,
+        boundary,
+        randomUUID()
+      );
+      if (transition.record) {
+        await putThreadInputRecords(storage, this.#prefix, transition.records, {
+          maxPayloadBytes: this.#maxPayloadBytes,
+        });
+      }
+      return transition.record ? structuredClone(transition.record) : null;
+    });
+  }
+
+  async releaseClaim(
+    claim: ClaimedThreadInput
+  ): Promise<ThreadInputRecord | null> {
+    return await withTransaction(this.#storage, async (storage) => {
+      const current = await listThreadInputRecords(
+        storage,
+        this.#prefix,
+        claim.threadKey
+      );
+      const transition = releaseThreadInputClaim(current, claim);
+      if (transition.record) {
+        await putThreadInputRecords(storage, this.#prefix, transition.records, {
+          maxPayloadBytes: this.#maxPayloadBytes,
+        });
+      }
+      return transition.record ? structuredClone(transition.record) : null;
+    });
+  }
+
+  async markPromoted(
+    claim: ClaimedThreadInput
+  ): Promise<ThreadInputRecord | null> {
+    return await withTransaction(this.#storage, async (storage) => {
+      const current = await listThreadInputRecords(
+        storage,
+        this.#prefix,
+        claim.threadKey
+      );
+      const transition = promoteThreadInputClaim(current, claim);
+      if (transition.record) {
+        await putThreadInputRecords(storage, this.#prefix, transition.records, {
+          maxPayloadBytes: this.#maxPayloadBytes,
+        });
+      }
+      return transition.record ? structuredClone(transition.record) : null;
+    });
+  }
+
+  async ack(record: ThreadInputRecord): Promise<ThreadInputRecord | null> {
+    return await withTransaction(this.#storage, async (storage) => {
+      const current = await listThreadInputRecords(
+        storage,
+        this.#prefix,
+        record.threadKey
+      );
+      const transition = ackThreadInputClaim(current, record);
+      if (transition.record) {
+        await putThreadInputRecords(storage, this.#prefix, transition.records, {
+          maxPayloadBytes: this.#maxPayloadBytes,
+        });
+      }
+      return transition.record ? structuredClone(transition.record) : null;
+    });
+  }
+}

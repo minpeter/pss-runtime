@@ -137,6 +137,7 @@ function hostWithDuplicateRunCreate(host: ExecutionHost): ExecutionHost {
       transaction: (callback) =>
         callback({
           events: host.store.events,
+          inputs: host.store.inputs,
           notifications: host.store.notifications,
           checkpoints: host.store.checkpoints,
           threads: host.store.threads,

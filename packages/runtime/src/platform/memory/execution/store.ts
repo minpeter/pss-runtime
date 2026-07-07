@@ -8,6 +8,7 @@ import type {
   ExecutionStoreTransaction,
   NotificationInbox,
   StoredAgentEvent,
+  ThreadInputInbox,
   TurnStore,
 } from "../../../execution/host/types";
 import type { AgentEvent } from "../../../thread/protocol/events";
@@ -18,6 +19,7 @@ import type {
   ThreadStore,
   ThreadStoreCommit,
 } from "../../../thread/store/types";
+import { InMemoryThreadInputInbox } from "./inputs";
 import { InMemoryNotificationInbox } from "./notifications";
 import { InMemoryRunStore } from "./runs";
 import type { ExecutionState } from "./state";
@@ -30,6 +32,9 @@ export class InMemoryExecutionStore implements ExecutionStore {
     () => this.#state
   );
   readonly events: EventStore = new InMemoryEventStore(() => this.#state);
+  readonly inputs: ThreadInputInbox = new InMemoryThreadInputInbox(
+    () => this.#state
+  );
   readonly notifications: NotificationInbox = new InMemoryNotificationInbox(
     () => this.#state
   );
@@ -65,6 +70,7 @@ export class InMemoryExecutionStore implements ExecutionStore {
 class InMemoryTransactionStore implements ExecutionStoreTransaction {
   readonly checkpoints: CheckpointStore;
   readonly events: EventStore;
+  readonly inputs: ThreadInputInbox;
   readonly notifications: NotificationInbox;
   readonly turns: TurnStore;
   readonly threads: ThreadStore;
@@ -74,6 +80,7 @@ class InMemoryTransactionStore implements ExecutionStoreTransaction {
     this.#state = state;
     this.checkpoints = new InMemoryCheckpointStore(() => this.#state);
     this.events = new InMemoryEventStore(() => this.#state);
+    this.inputs = new InMemoryThreadInputInbox(() => this.#state);
     this.notifications = new InMemoryNotificationInbox(() => this.#state);
     this.turns = new InMemoryRunStore(() => this.#state);
     this.threads = new InMemoryExecutionThreadStore(() => this.#state);
