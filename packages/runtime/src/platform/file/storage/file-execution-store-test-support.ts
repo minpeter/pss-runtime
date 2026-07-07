@@ -6,6 +6,7 @@ import type {
   Checkpoint,
   NotificationRecord,
   StoredAgentEvent,
+  StoredThreadEvent,
   TurnRecord,
 } from "../../../execution";
 
@@ -27,6 +28,16 @@ export async function collectEvents(
   events: AsyncIterable<StoredAgentEvent>
 ): Promise<readonly StoredAgentEvent[]> {
   const collected: StoredAgentEvent[] = [];
+  for await (const event of events) {
+    collected.push(event);
+  }
+  return collected;
+}
+
+export async function collectThreadEvents(
+  events: AsyncIterable<StoredThreadEvent>
+): Promise<readonly StoredThreadEvent[]> {
+  const collected: StoredThreadEvent[] = [];
   for await (const event of events) {
     collected.push(event);
   }

@@ -7,6 +7,7 @@ import type {
   PayloadChunkRow,
   RunRow,
   ScheduledWorkRow,
+  ThreadEventRow,
 } from "./state";
 import { selectThreadSqlRows } from "./thread-select";
 
@@ -17,6 +18,12 @@ export function selectSqlRows(
 ): unknown[] {
   if (query.includes("from sqlite_master")) {
     return [];
+  }
+  if (query.includes("from pss_thread_event_meta")) {
+    return selectThreadEventMetaRows(state, bindings);
+  }
+  if (query.includes("from pss_thread_event")) {
+    return selectThreadEventRows(state, query, bindings);
   }
   if (query.includes("from pss_thread_")) {
     return selectThreadSqlRows(state, query, bindings);
@@ -139,6 +146,32 @@ function selectEventRows(
     .filter((row) => row.run_key === key && row.seq >= start)
     .sort((left: EventRow, right: EventRow) => left.seq - right.seq)
     .map((row: EventRow) => ({ event: row.event, seq: row.seq }));
+}
+
+function selectThreadEventMetaRows(
+  state: InMemoryDurableObjectSqlState,
+  bindings: readonly unknown[]
+): unknown[] {
+  const key = stringBinding(bindings[0]);
+  const row = state.threadEventMeta.get(key);
+  return row ? [{ next_seq: row.next_seq }] : [];
+}
+
+function selectThreadEventRows(
+  state: InMemoryDurableObjectSqlState,
+  query: string,
+  bindings: readonly unknown[]
+): unknown[] {
+  const key = stringBinding(bindings[0]);
+  const start = query.includes("seq >= ?") ? numberBinding(bindings[1]) : 0;
+  const limit = query.includes("limit ?")
+    ? numberBinding(bindings[2])
+    : undefined;
+  return [...state.threadEvents]
+    .filter((row) => row.thread_key === key && row.seq >= start)
+    .sort((left: ThreadEventRow, right: ThreadEventRow) => left.seq - right.seq)
+    .slice(0, limit)
+    .map((row: ThreadEventRow) => ({ event: row.event, seq: row.seq }));
 }
 
 function selectCheckpointRows(

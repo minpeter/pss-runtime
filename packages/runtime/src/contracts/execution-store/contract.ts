@@ -6,6 +6,7 @@ import {
   createDeferred,
   createQueuedRun,
 } from "./fixtures";
+import { describeThreadEventLogContract } from "./thread-event-contract";
 import { describeThreadInputInboxContract } from "./thread-input-contract";
 
 export interface ExecutionStoreContractOptions {
@@ -216,6 +217,8 @@ export function describeExecutionStoreContract({
         },
       ]);
     });
+
+    describeThreadEventLogContract({ createStore });
 
     it("dedupes notifications by idempotency key", async () => {
       const store = createStore();

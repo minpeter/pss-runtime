@@ -9,6 +9,7 @@ const DATA_DIRECTORIES = [
   "inputs",
   "notifications",
   "runs",
+  "thread-events",
   "threads",
 ] as const;
 

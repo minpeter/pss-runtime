@@ -1,0 +1,97 @@
+import { describe, expect, it } from "vitest";
+import { Agent } from "../../agent/core/agent";
+import {
+  createInMemoryExecutionHost,
+  MemoryThreadStore,
+} from "../../platform/memory";
+import {
+  assistantMessage,
+  createCallbackModel,
+} from "../../testing/test-fixtures";
+import { collect } from "./test-support";
+import { ThreadEventReplayUnsupportedError } from "./thread-event-replay";
+
+describe("AgentThread durable event replay", () => {
+  it("replays committed thread events with cursor pagination", async () => {
+    const host = createInMemoryExecutionHost();
+    const agent = new Agent({
+      host,
+      model: createCallbackModel(() => [assistantMessage("DONE")]),
+    });
+    const thread = agent.thread("durable-events");
+
+    await collect(await thread.send("hello"));
+
+    const firstPage = await collectThreadEvents(thread.events({ limit: 3 }));
+    expect(firstPage.map((record) => record.event.type)).toEqual([
+      "user-input",
+      "turn-start",
+      "step-start",
+    ]);
+    expect(firstPage.map((record) => record.cursor.offset)).toEqual([1, 2, 3]);
+    expect(firstPage.map((record) => record.threadKey)).toEqual([
+      "durable-events",
+      "durable-events",
+      "durable-events",
+    ]);
+
+    const lastRecord = firstPage.at(-1);
+    if (!lastRecord) {
+      throw new Error("expected first replay page");
+    }
+
+    const secondPage = await collectThreadEvents(
+      thread.events({ after: lastRecord.cursor })
+    );
+    expect(secondPage.map((record) => record.event.type)).toEqual([
+      "assistant-output",
+      "step-end",
+      "turn-end",
+    ]);
+    expect(secondPage.map((record) => record.cursor.offset)).toEqual([4, 5, 6]);
+  });
+
+  it("replays failed turns with their durable turn-error event", async () => {
+    const host = createInMemoryExecutionHost();
+    const agent = new Agent({
+      host,
+      model: createCallbackModel(() =>
+        Promise.reject(new Error("model unavailable"))
+      ),
+    });
+    const thread = agent.thread("durable-events-error");
+
+    await collect(await thread.send("fail"));
+
+    const replayed = await collectThreadEvents(thread.events());
+    expect(replayed.map((record) => record.event.type)).toEqual([
+      "user-input",
+      "turn-start",
+      "step-start",
+      "turn-error",
+    ]);
+    expect(replayed.at(-1)?.event).toEqual({
+      message: "model unavailable",
+      type: "turn-error",
+    });
+  });
+
+  it("throws a typed error when replay is unsupported by the host", () => {
+    const agent = new Agent({
+      host: { kind: "thread", threadStore: new MemoryThreadStore() },
+      model: createCallbackModel(() => [assistantMessage("DONE")]),
+    });
+
+    expect(() => agent.thread("no-replay").events()).toThrow(
+      ThreadEventReplayUnsupportedError
+    );
+  });
+});
+
+async function collectThreadEvents<T>(events: AsyncIterable<T>): Promise<T[]> {
+  const collected: T[] = [];
+  for await (const event of events) {
+    collected.push(event);
+  }
+  return collected;
+}

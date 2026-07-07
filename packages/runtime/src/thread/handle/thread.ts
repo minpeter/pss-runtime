@@ -1,13 +1,9 @@
+import type {
+  StoredThreadEvent,
+  ThreadEventReadOptions,
+} from "../../execution/host/types";
 import type { ModelGenerationOptions } from "../../llm/llm";
-import {
-  RuntimeAttachmentSecurityError,
-  RuntimeAttachmentStagingError,
-  userInputContainsRuntimeAttachmentRefs,
-  userInputRequiresAttachmentStaging,
-} from "../input/attachments";
 import type { AgentInput, UserInput } from "../input/input";
-import { attachInputMeta } from "../input/input-meta";
-import { normalizeAgentInput } from "../input/input-normalization";
 import type {
   QueuedInput,
   QueuedRuntimeInput,
@@ -29,12 +25,14 @@ import {
   ThreadState,
 } from "../state/thread-state";
 import {
-  addDurableSteeringInput,
   admitThreadSendInput,
   DurableInputRecoveryState,
   recoverThreadDurableInputClaims,
 } from "./durable-queue";
+import { addDurableSteeringInput } from "./durable-steering";
 import { runThreadInputDrainLoop } from "./thread-drain";
+import { readThreadEvents } from "./thread-event-replay";
+import { createOverlayRuntimeInput } from "./thread-overlay";
 
 export type { AgentInput, ThreadInput, UserInput } from "../input/input";
 export type { AgentTurn } from "../protocol/turn";
@@ -117,25 +115,7 @@ export class AgentThread {
   overlay(input: AgentInput): this {
     this.#assertOpen();
 
-    const normalized = attachInputMeta(normalizeAgentInput(input), {
-      source: "overlay",
-    });
-    if (userInputContainsRuntimeAttachmentRefs(normalized)) {
-      throw new RuntimeAttachmentSecurityError(
-        "External input cannot contain runtime attachment refs."
-      );
-    }
-    if (userInputRequiresAttachmentStaging(normalized)) {
-      throw new RuntimeAttachmentStagingError(
-        "thread.overlay() cannot accept inline file bytes because overlay() is synchronous."
-      );
-    }
-
-    this.#pendingOverlays.push({
-      canonical: false,
-      input: normalized,
-      placement: "turn-start",
-    });
+    this.#pendingOverlays.push(createOverlayRuntimeInput(input));
     return this;
   }
 
@@ -190,6 +170,10 @@ export class AgentThread {
     this.#assertOpen();
 
     await this.#state.compact(input);
+  }
+
+  events(options?: ThreadEventReadOptions): AsyncIterable<StoredThreadEvent> {
+    return readThreadEvents(this.#execution, this.#threadKey, options);
   }
 
   interrupt(): void {

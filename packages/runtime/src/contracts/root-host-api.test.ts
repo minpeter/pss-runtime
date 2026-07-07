@@ -9,6 +9,7 @@ import type {
   ExecutionStoreTransaction,
   NotificationInbox,
   NotificationRecord,
+  ThreadEventLog,
   ThreadHost,
   TurnRecord,
   TurnStore,
@@ -33,6 +34,9 @@ describe("runtime host public contracts", () => {
       ExecutionStore["checkpoints"]
     >().toEqualTypeOf<CheckpointStore>();
     expectTypeOf<ExecutionStore["events"]>().toEqualTypeOf<EventStore>();
+    expectTypeOf<ExecutionStore["threadEvents"]>().toEqualTypeOf<
+      ThreadEventLog | undefined
+    >();
     expectTypeOf<
       Parameters<NotificationInbox["enqueue"]>[0]
     >().toEqualTypeOf<NotificationRecord>();
@@ -45,6 +49,9 @@ describe("runtime host public contracts", () => {
     expectTypeOf<
       ExecutionStoreTransaction["notifications"]
     >().toEqualTypeOf<NotificationInbox>();
+    expectTypeOf<ExecutionStoreTransaction["threadEvents"]>().toEqualTypeOf<
+      ThreadEventLog | undefined
+    >();
     const threadHost = {
       attachmentStore: {} as RuntimeAttachmentStore,
       kind: "thread",

@@ -5,19 +5,14 @@ import {
   type RuntimeAttachmentReference,
   type RuntimeAttachmentStore,
   stageUserInputAttachments,
-  userInputRequiresAttachmentProcessing,
 } from "../input/attachments";
 import type { AgentInput } from "../input/input";
 import { attachInputMeta, userInputFromEvent } from "../input/input-meta";
 import { normalizeAgentInput } from "../input/input-normalization";
 import {
-  assertRuntimeInputOpen,
   createRuntimeInputState,
-  currentSteeringPlacement,
   type QueuedInput,
   type QueuedRuntimeInput,
-  queueRuntimeInput,
-  type RuntimeInputState,
 } from "../input/runtime-input";
 import type { AgentEvent } from "../protocol/events";
 import { BufferedAgentTurn } from "../protocol/turn";
@@ -172,6 +167,7 @@ export async function createQueuedSendInput({
     }
 
     const item = {
+      acceptedEvent: processed,
       awaitBoundaries,
       durableInput: admission.kind === "admitted",
       ...(admission.kind === "admitted"
@@ -199,63 +195,6 @@ export async function createQueuedSendInput({
   }
 }
 
-export async function addDurableSteeringInput({
-  attachmentStore,
-  executionHost,
-  input,
-  runtimeInput,
-  threadKey,
-}: {
-  readonly attachmentStore: RuntimeAttachmentStore | undefined;
-  readonly executionHost: ExecutionHost | undefined;
-  readonly input: AgentInput;
-  readonly runtimeInput: RuntimeInputState;
-  readonly threadKey: string;
-}): Promise<void> {
-  const placement = currentSteeringPlacement(runtimeInput);
-  const next = runtimeInput.pending.then(async () => {
-    const stagedRefs: RuntimeAttachmentReference[] = [];
-    let keepStagedAttachments = false;
-    assertRuntimeInputOpen(runtimeInput);
-    const acceptedInput = attachInputMeta(normalizeAgentInput(input), {
-      source: "steer",
-      streaming: "steer",
-    });
-    try {
-      const stagedInput = userInputRequiresAttachmentProcessing(acceptedInput)
-        ? await stageUserInputAttachments(acceptedInput, attachmentStore, {
-            stagedRefs,
-          })
-        : acceptedInput;
-      assertRuntimeInputOpen(runtimeInput);
-      const admission = await admitDurableThreadInput({
-        executionHost,
-        input: stagedInput,
-        kind: "steer",
-        placement,
-        threadKey,
-      });
-      if (admission.kind === "admitted") {
-        keepStagedAttachments = true;
-        return;
-      }
-
-      assertRuntimeInputOpen(runtimeInput);
-      queueRuntimeInput(runtimeInput, {
-        input: stagedInput,
-        placement,
-      });
-      keepStagedAttachments = true;
-    } finally {
-      if (!keepStagedAttachments) {
-        await cleanupStagedRuntimeAttachments(attachmentStore, stagedRefs);
-      }
-    }
-  });
-  runtimeInput.pending = next.catch(() => undefined);
-  await next;
-}
-
 export async function claimOrphanDurableThreadInput({
   executionHost,
   threadKey,
@@ -273,6 +212,7 @@ export async function claimOrphanDurableThreadInput({
   }
 
   return {
+    acceptedEvent: claimed.record.input,
     awaitBoundaries: false,
     durableInputClaim: claimed.record,
     initialEvents: [],

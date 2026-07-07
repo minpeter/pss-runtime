@@ -11,6 +11,13 @@ import type {
 import { ThreadInputInboxUnavailableError } from "../../execution/host/unsupported-thread-input-inbox";
 import type { UserInput } from "../input/input";
 import type { ThreadState } from "../state/thread-state";
+import {
+  appendDurableThreadEvents,
+  type DurableThreadEventBuffer,
+  restoreDurableThreadEvents,
+  takeDurableThreadEvents,
+  transactionalThreadEvents,
+} from "./thread-event-log";
 
 export type DurableInputAdmission =
   | {
@@ -109,42 +116,66 @@ export async function promoteAndAckDurableThreadInput({
 }
 
 export async function commitAndAckDurableThreadInput({
+  buffer,
   executionHost,
   record,
   state,
+  threadKey,
 }: {
+  readonly buffer: DurableThreadEventBuffer;
   readonly executionHost: ExecutionHost | undefined;
   readonly record: ClaimedThreadInput;
   readonly state: ThreadState;
+  readonly threadKey: string;
 }): Promise<void> {
+  const pendingEvents = takeDurableThreadEvents(buffer);
   if (!executionHost) {
-    await state.commit();
+    try {
+      await state.commit();
+    } catch (error) {
+      restoreDurableThreadEvents(buffer, pendingEvents);
+      throw error;
+    }
     return;
   }
 
-  await state.commitWith(
-    async (commit) =>
-      await executionHost.store.transaction(async (tx) => {
-        const result = await tx.threads.commit(commit.key, commit.next, {
-          expectedVersion: commit.expectedVersion,
-        });
-        if (!result.ok) {
+  const eventLogEnabled = executionHost.store.threadEvents !== undefined;
+  try {
+    await state.commitWith(
+      async (commit) =>
+        await executionHost.store.transaction(async (tx) => {
+          const result = await tx.threads.commit(commit.key, commit.next, {
+            expectedVersion: commit.expectedVersion,
+          });
+          if (!result.ok) {
+            return result;
+          }
+
+          const promoted = await tx.inputs.markPromoted(record);
+          if (!promoted) {
+            throw new DurableThreadInputClaimError("promote", record);
+          }
+
+          const acked = await tx.inputs.ack(promoted);
+          if (!acked) {
+            throw new DurableThreadInputClaimError("ack", record);
+          }
+
+          if (eventLogEnabled && pendingEvents.length > 0) {
+            await appendDurableThreadEvents(
+              transactionalThreadEvents(tx),
+              threadKey,
+              pendingEvents
+            );
+          }
+
           return result;
-        }
-
-        const promoted = await tx.inputs.markPromoted(record);
-        if (!promoted) {
-          throw new DurableThreadInputClaimError("promote", record);
-        }
-
-        const acked = await tx.inputs.ack(promoted);
-        if (!acked) {
-          throw new DurableThreadInputClaimError("ack", record);
-        }
-
-        return result;
-      })
-  );
+        })
+    );
+  } catch (error) {
+    restoreDurableThreadEvents(buffer, pendingEvents);
+    throw error;
+  }
 }
 
 export async function ackDurableThreadInput({

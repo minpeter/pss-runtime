@@ -1,7 +1,6 @@
 import type {
   Checkpoint,
   NotificationRecord,
-  StoredAgentEvent,
   TurnKind,
   TurnLease,
   TurnRecord,
@@ -130,40 +129,6 @@ export function parseNotificationRecord(
   };
 }
 
-export function parseEventLogLine(
-  line: string,
-  file: string
-): StoredAgentEvent {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(line) as unknown;
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      throw new Error(
-        `Invalid FileExecutionStore event log ${JSON.stringify(
-          file
-        )}: invalid JSON (${error.message})`
-      );
-    }
-    throw error;
-  }
-
-  if (
-    !(isRecord(parsed) && isRecord(parsed.cursor)) ||
-    typeof parsed.cursor.offset !== "number" ||
-    !isAgentEvent(parsed.event) ||
-    typeof parsed.runId !== "string"
-  ) {
-    throw invalidEventLog(file, "expected stored agent event");
-  }
-
-  return {
-    cursor: { offset: parsed.cursor.offset },
-    event: parsed.event,
-    runId: parsed.runId,
-  };
-}
-
 export function isClaimable(record: TurnRecord): boolean {
   return (
     record.status === "leased" ||
@@ -247,11 +212,5 @@ function isNotificationStatus(
 function invalidFile(file: string, message: string): Error {
   return new Error(
     `Invalid FileExecutionStore file ${JSON.stringify(file)}: ${message}`
-  );
-}
-
-function invalidEventLog(file: string, message: string): Error {
-  return new Error(
-    `Invalid FileExecutionStore event log ${JSON.stringify(file)}: ${message}`
   );
 }

@@ -1,4 +1,8 @@
 import type {
+  StoredThreadEvent,
+  ThreadEventReadOptions,
+} from "../../execution/host/types";
+import type {
   AgentInput,
   NotifyOptions,
   ThreadCompactionInput,
@@ -23,6 +27,7 @@ export interface ThreadHandle {
   compact(input: ThreadCompactionInput): Promise<void>;
   delete(): Promise<void>;
   dispose(): Promise<void>;
+  events(options?: ThreadEventReadOptions): AsyncIterable<StoredThreadEvent>;
   interrupt(): void;
   overlay(input: AgentInput): ThreadHandle;
   send(input: AgentInput): Promise<AgentTurn>;

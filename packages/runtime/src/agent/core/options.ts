@@ -1,14 +1,18 @@
 import type { LanguageModel, ToolSet } from "ai";
 import type { AgentHost } from "../../execution/host/types";
-import type { AgentToolChoice } from "../../llm/llm";
+import type { AgentToolChoice, ModelContextGateOptions } from "../../llm/llm";
 import type { RuntimeAttachmentStore } from "../../thread/input/attachments";
 import type { AgentInput, UserInput } from "../../thread/input/input";
 import type { AgentPlugin } from "../../thread/plugins/pipeline";
 
 export interface AgentAutoCompactionOptions {
+  readonly background?: boolean;
+  readonly contextGate?: false | AgentContextGateOptions;
   readonly minMessages: number;
   readonly retainMessages: number;
 }
+
+export type AgentContextGateOptions = ModelContextGateOptions;
 
 export interface AgentOptions {
   readonly attachmentStore?: RuntimeAttachmentStore;
@@ -26,7 +30,9 @@ export interface AgentOptions {
 export type AgentModelOptions = Pick<
   AgentOptions,
   "attachmentStore" | "instructions" | "model" | "toolChoice" | "tools"
->;
+> & {
+  readonly contextGate?: false | AgentContextGateOptions;
+};
 
 export function assertAgentOptions(
   options: unknown
@@ -80,7 +86,17 @@ export function normalizeAgentAutoCompactionOptions(
     );
   }
 
+  if (value.background !== undefined && typeof value.background !== "boolean") {
+    throw new TypeError(
+      "Agent: options.autoCompaction.background must be a boolean."
+    );
+  }
+
+  const contextGate = normalizeContextGateOptions(value.contextGate);
+
   return {
+    ...(value.background === undefined ? {} : { background: value.background }),
+    ...(contextGate === undefined ? {} : { contextGate }),
     minMessages: value.minMessages,
     retainMessages: value.retainMessages,
   };
@@ -88,4 +104,75 @@ export function normalizeAgentAutoCompactionOptions(
 
 function isPositiveInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+function normalizeContextGateOptions(
+  value: AgentAutoCompactionOptions["contextGate"]
+): AgentAutoCompactionOptions["contextGate"] | undefined {
+  if (value === undefined) {
+    return;
+  }
+
+  if (value === false) {
+    return false;
+  }
+
+  if (!isObjectRecord(value)) {
+    throw new TypeError(
+      "Agent: options.autoCompaction.contextGate must be an object or false."
+    );
+  }
+
+  const maxInputTokens = value.maxInputTokens;
+  const bufferTokens = value.bufferTokens;
+  const estimateTokens = value.estimateTokens;
+  const onOverflow = value.onOverflow;
+  if (!isPositiveInteger(maxInputTokens)) {
+    throw new TypeError(
+      "Agent: options.autoCompaction.contextGate.maxInputTokens must be a positive integer."
+    );
+  }
+
+  if (bufferTokens !== undefined && !isNonNegativeInteger(bufferTokens)) {
+    throw new TypeError(
+      "Agent: options.autoCompaction.contextGate.bufferTokens must be a non-negative integer."
+    );
+  }
+
+  if (estimateTokens !== undefined && !isTokenEstimator(estimateTokens)) {
+    throw new TypeError(
+      "Agent: options.autoCompaction.contextGate.estimateTokens must be a function."
+    );
+  }
+
+  if (
+    onOverflow !== undefined &&
+    onOverflow !== "compact" &&
+    onOverflow !== "error"
+  ) {
+    throw new TypeError(
+      "Agent: options.autoCompaction.contextGate.onOverflow must be 'compact' or 'error'."
+    );
+  }
+
+  return {
+    ...(bufferTokens === undefined ? {} : { bufferTokens }),
+    ...(estimateTokens === undefined ? {} : { estimateTokens }),
+    maxInputTokens,
+    ...(onOverflow === undefined ? {} : { onOverflow }),
+  };
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
+function isTokenEstimator(
+  value: unknown
+): value is NonNullable<ModelContextGateOptions["estimateTokens"]> {
+  return typeof value === "function";
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object";
 }

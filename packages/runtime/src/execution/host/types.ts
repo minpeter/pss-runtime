@@ -2,6 +2,7 @@ import type { RuntimeAttachmentStore } from "../../thread/input/attachments";
 import type { AgentEvent, UserInput } from "../../thread/protocol/events";
 import type { ThreadStore } from "../../thread/store/types";
 import type { DurableBackgroundHost, ThreadHost } from "./capabilities";
+import type { ResumeThreadOptions } from "./scheduler-options";
 
 export type AgentHost = DurableBackgroundHost | ExecutionHost | ThreadHost;
 
@@ -18,12 +19,6 @@ export interface ExecutionScheduler {
     options?: { readonly runAfterMs?: number }
   ): Promise<void>;
   resumeThread(threadKey: string, options: ResumeThreadOptions): Promise<void>;
-}
-
-export interface ResumeThreadOptions {
-  readonly idempotencyKey?: string;
-  readonly notificationId?: string;
-  readonly runId: string;
 }
 
 export type TurnKind = "notification" | "tool-recovery" | "user-turn";
@@ -125,6 +120,16 @@ export interface StoredAgentEvent {
   readonly runId: string;
 }
 
+export interface ThreadEventCursor {
+  readonly offset: number;
+}
+
+export interface StoredThreadEvent {
+  readonly cursor: ThreadEventCursor;
+  readonly event: AgentEvent;
+  readonly threadKey: string;
+}
+
 export type NotificationStatus = "acked" | "cancelled" | "pending";
 
 export interface NotificationRecord {
@@ -175,6 +180,19 @@ export interface CheckpointStore {
 export interface EventStore {
   append(runId: string, event: AgentEvent): Promise<EventCursor>;
   read(runId: string, cursor?: EventCursor): AsyncIterable<StoredAgentEvent>;
+}
+
+export interface ThreadEventReadOptions {
+  readonly after?: ThreadEventCursor;
+  readonly limit?: number;
+}
+
+export interface ThreadEventLog {
+  append(threadKey: string, event: AgentEvent): Promise<ThreadEventCursor>;
+  read(
+    threadKey: string,
+    options?: ThreadEventReadOptions
+  ): AsyncIterable<StoredThreadEvent>;
 }
 
 export interface NotificationInbox {
@@ -250,31 +268,12 @@ export interface ThreadInputInbox {
   releaseClaim(record: ClaimedThreadInput): Promise<ThreadInputRecord | null>;
 }
 
-export class ThreadInputDuplicateConflictError extends Error {
-  readonly existing: ThreadInputRecord;
-  readonly incoming: AdmitThreadInput;
-  readonly name = "ThreadInputDuplicateConflictError";
-
-  constructor({
-    existing,
-    incoming,
-  }: {
-    readonly existing: ThreadInputRecord;
-    readonly incoming: AdmitThreadInput;
-  }) {
-    super(
-      `Thread input messageId ${incoming.messageId} conflicts with an existing semantic payload.`
-    );
-    this.existing = structuredClone(existing);
-    this.incoming = structuredClone(incoming);
-  }
-}
-
 export interface ExecutionStorePorts {
   readonly checkpoints: CheckpointStore;
   readonly events: EventStore;
   readonly inputs: ThreadInputInbox;
   readonly notifications: NotificationInbox;
+  readonly threadEvents?: ThreadEventLog;
   readonly threads: ThreadStore;
   readonly turns: TurnStore;
 }

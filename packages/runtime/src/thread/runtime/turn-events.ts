@@ -9,8 +9,10 @@ import type { BufferedAgentTurn } from "../protocol/turn";
 import type { ThreadState } from "../state/thread-state";
 import { drainRuntimeInput } from "./drain";
 import type { ThreadEventDispatcher } from "./events";
+import type { DurableThreadEventBuffer } from "./thread-event-log";
 
 export async function emitTurnEvent({
+  durableEvents,
   event,
   events,
   executionHost,
@@ -18,21 +20,27 @@ export async function emitTurnEvent({
   awaitBoundaries,
   run,
   runtimeInput,
+  recordEvent,
   state,
   threadKey,
 }: {
+  readonly durableEvents: DurableThreadEventBuffer;
   readonly event: AgentEvent;
   readonly attachmentStore: RuntimeAttachmentStore | undefined;
   readonly awaitBoundaries: boolean;
   readonly events: ThreadEventDispatcher;
   readonly executionHost: ExecutionHost | undefined;
+  readonly recordEvent?: (event: AgentEvent) => void;
   readonly run: BufferedAgentTurn;
   readonly runtimeInput: RuntimeInputState;
   readonly state: ThreadState;
   readonly threadKey: string;
 }): Promise<{ readonly runtimeInputAdded: boolean } | undefined> {
   if (event.type !== "step-start" && event.type !== "step-end") {
-    await events.emitRunEvent(run, event);
+    const processed = await events.emitRunEvent(run, event);
+    if (processed !== "handled") {
+      recordEvent?.(processed);
+    }
     return;
   }
 
@@ -41,11 +49,14 @@ export async function emitTurnEvent({
       awaitAck: awaitBoundaries,
     });
   });
+  recordEvent?.(event);
   const runtimeInputAdded = await drainRuntimeInput({
     attachmentStore,
+    durableEvents,
     events,
     executionHost,
     placement: event.type,
+    recordEvent,
     run,
     runtimeInput,
     state,

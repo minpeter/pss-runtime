@@ -1,4 +1,7 @@
-import type { ModelGenerationOptions } from "../../llm/llm";
+import {
+  ContextBudgetExceededError,
+  type ModelGenerationOptions,
+} from "../../llm/llm";
 import type { ThreadState } from "../state/thread-state";
 import { compactThreadBlocking } from "./auto-compaction";
 import type { ThreadExecutionOptions } from "./execution";
@@ -17,7 +20,12 @@ export async function runAgentLoopWithOverflowCompaction({
   try {
     return await runLoop();
   } catch (error) {
-    if (!isContextOverflowError(error)) {
+    const gateOverflow = error instanceof ContextBudgetExceededError;
+    if (gateOverflow && error.onOverflow === "error") {
+      throw error;
+    }
+
+    if (!(gateOverflow || isContextOverflowError(error))) {
       throw error;
     }
 

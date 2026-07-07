@@ -64,6 +64,7 @@ export class Agent {
         providedHost?.attachmentStore ??
         options.attachmentStore ??
         this.#host.attachmentStore,
+      contextGate: this.#autoCompaction?.contextGate,
       instructions: options.instructions,
       model: options.model,
       toolChoice: options.toolChoice,
@@ -145,6 +146,7 @@ export class Agent {
         this.#evictThreadHandle(key);
         return Promise.resolve();
       },
+      events: (options) => thread.events(options),
       interrupt: () => thread.interrupt(),
       overlay: (input) => {
         thread.overlay(input);

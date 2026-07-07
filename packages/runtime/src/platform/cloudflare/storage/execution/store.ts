@@ -4,12 +4,15 @@ import type {
   ExecutionStore,
   ExecutionStoreTransaction,
   NotificationInbox,
+  ThreadEventLog,
   ThreadInputInbox,
   TurnStore,
 } from "../../../../execution";
 import type { ThreadStore } from "../../../../index";
+import type { SqlStorage } from "../../sql/ports/storage-port";
 import {
   type CloudflareDurableObjectStorage,
+  isSqlStorage,
   withSqlStorage,
 } from "../durable-object/durable-object-storage";
 import {
@@ -18,6 +21,7 @@ import {
 } from "../payload-guard";
 import { DurableObjectSqliteCheckpointStore } from "../sqlite/checkpoint-store";
 import { DurableObjectSqliteEventStore } from "../sqlite/event-store";
+import { DurableObjectSqliteThreadEventLog } from "../sqlite/thread-event-log";
 import { DurableObjectSqliteThreadStore } from "../sqlite/thread-store";
 import { DurableObjectThreadInputInbox } from "./input-store";
 import { DurableObjectNotificationInbox } from "./notification-store";
@@ -28,6 +32,7 @@ export class DurableObjectExecutionStore implements ExecutionStore {
   readonly events: EventStore;
   readonly inputs: ThreadInputInbox;
   readonly notifications: NotificationInbox;
+  readonly threadEvents: ThreadEventLog;
   readonly turns: TurnStore;
   readonly threads: ThreadStore;
   readonly #maxPayloadBytes: number;
@@ -53,6 +58,11 @@ export class DurableObjectExecutionStore implements ExecutionStore {
       payloadBudget
     );
     this.events = new DurableObjectSqliteEventStore(
+      storage,
+      prefix,
+      payloadBudget
+    );
+    this.threadEvents = new DurableObjectSqliteThreadEventLog(
       storage,
       prefix,
       payloadBudget
@@ -94,6 +104,44 @@ export class DurableObjectExecutionStore implements ExecutionStore {
       );
     }
 
-    return await fn(this);
+    const sql = transactionalSqlStorage(this.#storage.sql);
+    if (sql) {
+      return await sql.transaction(() =>
+        fn(
+          new DurableObjectExecutionStore({
+            maxPayloadBytes: this.#maxPayloadBytes,
+            prefix: this.#prefix,
+            storage: withSqlStorage(this.#storage, sql),
+          })
+        )
+      );
+    }
+
+    throw new Error(
+      "DurableObjectExecutionStore requires Durable Object storage.transaction or storage.sql.transaction for atomic transactions."
+    );
   }
+}
+
+interface TransactionalSqlStorage extends SqlStorage {
+  transaction<T>(fn: () => Promise<T>): Promise<T>;
+}
+
+function transactionalSqlStorage(
+  value: unknown
+): TransactionalSqlStorage | undefined {
+  if (!isSqlStorage(value)) {
+    return;
+  }
+  const transaction = value.transaction?.bind(value);
+  if (!transaction) {
+    return;
+  }
+  return {
+    exec: (query, ...bindings) => value.exec(query, ...bindings),
+    transaction: (fn) => transaction(fn),
+    ...(value.transactionSync
+      ? { transactionSync: (fn) => value.transactionSync?.(fn) ?? fn() }
+      : {}),
+  };
 }

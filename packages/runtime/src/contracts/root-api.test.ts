@@ -9,6 +9,9 @@ import type {
   ExecutionStoreTransaction,
   NotificationInbox,
   NotificationRecord,
+  StoredThreadEvent,
+  ThreadEventLog,
+  ThreadEventReadOptions,
   ThreadHost,
   TurnRecord,
   TurnStore,
@@ -26,6 +29,7 @@ import {
   Agent,
   runPluginsForEvent,
   threadStoreKey as runtimeThreadStoreKey,
+  ThreadEventReplayUnsupportedError,
 } from "../index";
 
 type EmptyHostIsRejected =
@@ -97,6 +101,10 @@ describe("runtime public exports", () => {
 
   it("types public thread compaction options from the package root", () => {
     const autoCompaction = {
+      contextGate: {
+        maxInputTokens: 120_000,
+        onOverflow: "compact",
+      },
       minMessages: 12,
       retainMessages: 4,
     } satisfies AgentAutoCompactionOptions;
@@ -127,6 +135,15 @@ describe("runtime public exports", () => {
     expectTypeOf<
       ReturnType<ThreadHandle["overlay"]>
     >().toEqualTypeOf<ThreadHandle>();
+    expectTypeOf<Parameters<ThreadHandle["events"]>[0]>().toEqualTypeOf<
+      ThreadEventReadOptions | undefined
+    >();
+    expectTypeOf<ReturnType<ThreadHandle["events"]>>().toEqualTypeOf<
+      AsyncIterable<StoredThreadEvent>
+    >();
+    expect(new ThreadEventReplayUnsupportedError("thread-1").name).toBe(
+      "ThreadEventReplayUnsupportedError"
+    );
     expectTypeOf<ReturnType<Agent["overlay"]>>().toEqualTypeOf<ThreadHandle>();
     expectTypeOf<
       ReturnType<typeof runtimeThreadStoreKey>
@@ -152,6 +169,9 @@ describe("runtime public exports", () => {
       ExecutionStore["checkpoints"]
     >().toEqualTypeOf<CheckpointStore>();
     expectTypeOf<ExecutionStore["events"]>().toEqualTypeOf<EventStore>();
+    expectTypeOf<ExecutionStore["threadEvents"]>().toEqualTypeOf<
+      ThreadEventLog | undefined
+    >();
     expectTypeOf<
       Parameters<NotificationInbox["enqueue"]>[0]
     >().toEqualTypeOf<NotificationRecord>();
@@ -164,6 +184,9 @@ describe("runtime public exports", () => {
     expectTypeOf<
       ExecutionStoreTransaction["notifications"]
     >().toEqualTypeOf<NotificationInbox>();
+    expectTypeOf<ExecutionStoreTransaction["threadEvents"]>().toEqualTypeOf<
+      ThreadEventLog | undefined
+    >();
     const threadHost = {
       attachmentStore: {} as RuntimeAttachmentStore,
       kind: "thread",

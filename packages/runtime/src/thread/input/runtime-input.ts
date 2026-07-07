@@ -29,6 +29,7 @@ export interface RuntimeInputState {
 }
 
 export interface QueuedInput {
+  readonly acceptedEvent?: AgentEvent;
   readonly awaitBoundaries?: boolean;
   readonly durableInput?: boolean;
   readonly durableInputClaim?: ClaimedThreadInput;

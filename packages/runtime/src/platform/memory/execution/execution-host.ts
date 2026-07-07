@@ -1,7 +1,7 @@
+import type { ResumeThreadOptions } from "../../../execution/host/scheduler-options";
 import type {
   ExecutionHost,
   ExecutionScheduler,
-  ResumeThreadOptions,
 } from "../../../execution/host/types";
 import {
   applyListLimit,
