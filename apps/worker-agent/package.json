@@ -26,7 +26,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "3.0.2",
-    "@chat-adapter/state-memory": "4.31.0",
+    "@chat-adapter/state-memory": "4.32.0",
     "@chat-adapter/telegram": "4.31.0",
     "@minpeter/pss-runtime": "workspace:*",
     "@trpc/client": "11.18.0",
