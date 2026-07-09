@@ -303,6 +303,40 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  experimental/pss-image-codec-edge-qa:
+    dependencies:
+      '@jsquash/avif':
+        specifier: ^2.1.1
+        version: 2.1.1
+      '@jsquash/webp':
+        specifier: ^1.5.0
+        version: 1.5.0
+      '@minpeter/pss-runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+      fast-png:
+        specifier: ^8.0.0
+        version: 8.0.0
+      heic-decode:
+        specifier: ^2.1.0
+        version: 2.1.0
+      jpeg-js:
+        specifier: ^0.4.4
+        version: 0.4.4
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^5.20260707.1
+        version: 5.20260707.1
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      wrangler:
+        specifier: ^4.107.0
+        version: 4.107.0(@cloudflare/workers-types@5.20260707.1)
+
   packages/runtime:
     dependencies:
       '@jsquash/avif':
@@ -323,6 +357,9 @@ importers:
       jpeg-js:
         specifier: ^0.4.4
         version: 0.4.4
+      libheif-js:
+        specifier: ^1.19.8
+        version: 1.19.8
     devDependencies:
       agents:
         specifier: 0.17.3

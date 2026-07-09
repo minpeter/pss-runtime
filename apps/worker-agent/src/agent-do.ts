@@ -6,8 +6,14 @@ import {
   type CloudflarePlatformContext,
   createCloudflarePlatformContext,
 } from "@minpeter/pss-runtime/platform/cloudflare";
+import { installCloudflareImageCodecs } from "@minpeter/pss-runtime/platform/cloudflare/image-codecs";
 
 import { createConfiguredAgent } from "./agent";
+
+// DO isolate may load this module without executing worker entry side-effects.
+// Install static AVIF/WebP/HEIF wasm here so attachment staging never hits
+// "wasm not installed" on the Durable Object path.
+installCloudflareImageCodecs();
 import { deliverToolOnlyTurn, withCapturedMessages } from "./agent-do-delivery";
 import { parseAgentRequest } from "./agent-do-request";
 import {

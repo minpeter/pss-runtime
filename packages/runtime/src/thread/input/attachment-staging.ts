@@ -19,6 +19,7 @@ import type {
   UserInput,
   UserMessageContentPart,
   UserMessageFileData,
+  UserMessageFilePart,
 } from "./input";
 
 export async function stageUserInputAttachments(
@@ -37,10 +38,7 @@ export async function stageUserInputAttachments(
       continue;
     }
 
-    content.push({
-      ...part,
-      data: await stageFileData(part.data, part, store, options),
-    });
+    content.push(await stageFilePart(part, store, options));
   }
 
   return {
@@ -175,25 +173,24 @@ function runtimeAttachmentRefsForUserInput(
   return refs;
 }
 
-async function stageFileData(
-  data: UserMessageFileData,
-  part: { readonly filename?: string; readonly mediaType: string },
+async function stageFilePart(
+  part: UserMessageFilePart,
   store: HostAttachmentStore | undefined,
   options: RuntimeAttachmentStagingOptions
-): Promise<UserMessageFileData> {
-  const runtimeRef = runtimeAttachmentDataRef(data);
+): Promise<UserMessageFilePart> {
+  const runtimeRef = runtimeAttachmentDataRef(part.data);
   if (runtimeRef !== undefined) {
     if (options.trustRuntimeAttachmentRefs === true) {
-      return runtimeRef;
+      return { ...part, data: runtimeRef };
     }
     throw new RuntimeAttachmentSecurityError(
       "External input cannot contain runtime attachment refs."
     );
   }
 
-  const bytes = fileDataBytes(data);
+  const bytes = fileDataBytes(part.data);
   if (!bytes) {
-    return structuredClone(data);
+    return structuredClone(part);
   }
 
   if (!store) {
@@ -214,7 +211,12 @@ async function stageFileData(
     mediaType: prepared.mediaType,
   });
   options.stagedRefs?.push(ref);
-  return encodeRuntimeAttachmentData(ref);
+  return {
+    ...part,
+    // Keep part mediaType aligned with stored bytes (e.g. heic → image/jpeg).
+    data: encodeRuntimeAttachmentData(ref),
+    mediaType: prepared.mediaType,
+  };
 }
 
 function fileDataBytes(data: UserMessageFileData): Uint8Array | undefined {

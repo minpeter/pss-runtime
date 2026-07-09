@@ -9,6 +9,13 @@ export {
   type CloudflareAgentsResumableAgent,
   createCloudflarePlatformContext,
 } from "./agents/context";
+/** Lazy so Node tests can import the cloudflare entry without loading .wasm. */
+export async function installCloudflareImageCodecs(): Promise<void> {
+  const { installCloudflareImageCodecs: install } = await import(
+    "./image-codecs-edge.js"
+  );
+  install();
+}
 export {
   type RecoverCloudflareAgentsFiberOptions,
   recoverCloudflareAgentsFiber,

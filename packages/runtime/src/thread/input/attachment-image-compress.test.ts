@@ -138,6 +138,26 @@ describe("prepareAttachmentBytesForStorage", () => {
     30_000
   );
 
+  it(
+    "always normalizes WebP to image/jpeg or image/png (never webp)",
+    async () => {
+      const bytes = new Uint8Array(
+        readFileSync(join(fixturesDir, "sample.webp"))
+      );
+      const prepared = await prepareAttachmentBytesForStorage({
+        bytes,
+        mediaType: "image/webp",
+      });
+      expect(isStoredImageMediaType(prepared.mediaType)).toBe(true);
+      expect(prepared.mediaType).not.toBe("image/webp");
+      expect(prepared.mediaType).toBe("image/jpeg");
+      expect(prepared.bytes.byteLength).toBeLessThanOrEqual(
+        DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES
+      );
+    },
+    30_000
+  );
+
   it("throws when maxImageBytes is non-positive", async () => {
     await expect(
       prepareAttachmentBytesForStorage({
@@ -147,6 +167,242 @@ describe("prepareAttachmentBytesForStorage", () => {
       })
     ).rejects.toBeInstanceOf(RuntimeAttachmentStagingError);
   });
+
+  it("strips MIME parameters for JPEG passthrough", async () => {
+    const bytes = encodeSolidJpeg(32, 32, 80);
+    const prepared = await prepareAttachmentBytesForStorage({
+      bytes,
+      mediaType: "image/jpeg; charset=binary",
+    });
+    expect(prepared.mediaType).toBe("image/jpeg");
+    expect(prepared.bytes).toBe(bytes);
+  });
+
+  it(
+    "strips MIME parameters for HEIC",
+    async () => {
+      const bytes = new Uint8Array(
+        readFileSync(join(fixturesDir, "sample.heic"))
+      );
+      const prepared = await prepareAttachmentBytesForStorage({
+        bytes,
+        mediaType: "image/heic; codecs=hevc",
+      });
+      expect(prepared.mediaType).toBe("image/jpeg");
+    },
+    30_000
+  );
+
+  it("rejects unsupported GIF with a clear error", async () => {
+    // Minimal GIF89a header-ish bytes (not a full image; no decoder path).
+    const bytes = new Uint8Array([
+      0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00,
+      0x00, 0x3b,
+    ]);
+    await expect(
+      prepareAttachmentBytesForStorage({
+        bytes,
+        mediaType: "image/gif",
+      })
+    ).rejects.toThrow(/Unsupported image media type|gif/i);
+  });
+
+  it("rejects SVG as unsupported for raster normalization", async () => {
+    const bytes = new TextEncoder().encode(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>'
+    );
+    await expect(
+      prepareAttachmentBytesForStorage({
+        bytes,
+        mediaType: "image/svg+xml",
+      })
+    ).rejects.toThrow(/Unsupported image media type|svg/i);
+  });
+
+  it("sniffs JPEG bytes even when mediaType is image/png", async () => {
+    const bytes = encodeSolidJpeg(24, 24, 80);
+    const prepared = await prepareAttachmentBytesForStorage({
+      bytes,
+      mediaType: "image/png",
+    });
+    expect(prepared.mediaType).toBe("image/jpeg");
+  });
+
+  it(
+    "sniffs HEIC bytes even when mediaType lies (image/jpeg)",
+    async () => {
+      const bytes = new Uint8Array(
+        readFileSync(join(fixturesDir, "sample.heic"))
+      );
+      const prepared = await prepareAttachmentBytesForStorage({
+        bytes,
+        mediaType: "image/jpeg",
+      });
+      expect(prepared.mediaType).toBe("image/jpeg");
+      expect(prepared.bytes.byteLength).toBeLessThanOrEqual(
+        DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES
+      );
+      expect(prepared.bytes[0]).toBe(0xff);
+      expect(prepared.bytes[1]).toBe(0xd8);
+    },
+    30_000
+  );
+
+  it(
+    "sniffs HEIC under application/octet-stream",
+    async () => {
+      const bytes = new Uint8Array(
+        readFileSync(join(fixturesDir, "sample.heic"))
+      );
+      const prepared = await prepareAttachmentBytesForStorage({
+        bytes,
+        mediaType: "application/octet-stream",
+      });
+      expect(prepared.mediaType).toBe("image/jpeg");
+    },
+    30_000
+  );
+
+  it(
+    "normalizes alpha WebP to image/png (never webp)",
+    async () => {
+      const bytes = new Uint8Array(
+        readFileSync(join(fixturesDir, "sample-alpha.webp"))
+      );
+      const prepared = await prepareAttachmentBytesForStorage({
+        bytes,
+        mediaType: "image/webp",
+      });
+      expect(prepared.mediaType).toBe("image/png");
+      expect(prepared.bytes[0]).toBe(0x89);
+      expect(prepared.bytes[1]).toBe(0x50);
+    },
+    30_000
+  );
+
+  it("rejects truncated JPEG (no EOI passthrough)", async () => {
+    const bytes = new Uint8Array(
+      readFileSync(join(fixturesDir, "corrupt-truncated.jpeg"))
+    );
+    await expect(
+      prepareAttachmentBytesForStorage({
+        bytes,
+        mediaType: "image/jpeg",
+      })
+    ).rejects.toBeInstanceOf(RuntimeAttachmentStagingError);
+  });
+
+  it("rejects truncated HEIC", async () => {
+    const bytes = new Uint8Array(
+      readFileSync(join(fixturesDir, "corrupt-truncated.heic"))
+    );
+    await expect(
+      prepareAttachmentBytesForStorage({
+        bytes,
+        mediaType: "image/heic",
+      })
+    ).rejects.toBeInstanceOf(RuntimeAttachmentStagingError);
+  });
+
+  it("rejects garbage WebP", async () => {
+    const bytes = new Uint8Array(
+      readFileSync(join(fixturesDir, "corrupt-garbage.webp"))
+    );
+    await expect(
+      prepareAttachmentBytesForStorage({
+        bytes,
+        mediaType: "image/webp",
+      })
+    ).rejects.toBeInstanceOf(RuntimeAttachmentStagingError);
+  });
+
+  it("rejects truncated AVIF", async () => {
+    const bytes = new Uint8Array(
+      readFileSync(join(fixturesDir, "corrupt-truncated.avif"))
+    );
+    await expect(
+      prepareAttachmentBytesForStorage({
+        bytes,
+        mediaType: "image/avif",
+      })
+    ).rejects.toBeInstanceOf(RuntimeAttachmentStagingError);
+  });
+
+  it("rejects empty image/* payload", async () => {
+    await expect(
+      prepareAttachmentBytesForStorage({
+        bytes: new Uint8Array(0),
+        mediaType: "image/png",
+      })
+    ).rejects.toBeInstanceOf(RuntimeAttachmentStagingError);
+  });
+
+  it(
+    "compresses extreme-resolution JPEG under 1MB",
+    async () => {
+      const bytes = encodeNoisyJpeg(2200, 2200, 90);
+      expect(bytes.byteLength).toBeGreaterThan(
+        DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES
+      );
+      const prepared = await prepareAttachmentBytesForStorage({
+        bytes,
+        mediaType: "image/jpeg",
+      });
+      expect(prepared.mediaType).toBe("image/jpeg");
+      expect(prepared.bytes.byteLength).toBeLessThanOrEqual(
+        DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES
+      );
+    },
+    30_000
+  );
+
+  it(
+    "handles concurrent multi-format normalization",
+    async () => {
+      const heic = new Uint8Array(
+        readFileSync(join(fixturesDir, "sample.heic"))
+      );
+      const avif = new Uint8Array(
+        readFileSync(join(fixturesDir, "sample.avif"))
+      );
+      const webp = new Uint8Array(
+        readFileSync(join(fixturesDir, "sample.webp"))
+      );
+      const alpha = new Uint8Array(
+        readFileSync(join(fixturesDir, "sample-alpha.webp"))
+      );
+      const results = await Promise.all([
+        prepareAttachmentBytesForStorage({
+          bytes: heic,
+          mediaType: "image/heic",
+        }),
+        prepareAttachmentBytesForStorage({
+          bytes: avif,
+          mediaType: "image/avif",
+        }),
+        prepareAttachmentBytesForStorage({
+          bytes: webp,
+          mediaType: "image/webp",
+        }),
+        prepareAttachmentBytesForStorage({
+          bytes: alpha,
+          mediaType: "image/webp",
+        }),
+      ]);
+      expect(results.map((r) => r.mediaType)).toEqual([
+        "image/jpeg",
+        "image/jpeg",
+        "image/jpeg",
+        "image/png",
+      ]);
+      for (const r of results) {
+        expect(r.bytes.byteLength).toBeLessThanOrEqual(
+          DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES
+        );
+      }
+    },
+    60_000
+  );
 });
 
 describe("stageUserInputAttachments image normalization", () => {
@@ -185,6 +441,72 @@ describe("stageUserInputAttachments image normalization", () => {
       expect(blob?.mediaType).toBe("image/jpeg");
     },
     30_000
+  );
+
+  it(
+    "stages multi-image user input (heic+avif+webp+alpha) to jpeg/png only",
+    async () => {
+      const store = new MemoryAttachmentStore();
+      const staged = await stageUserInputAttachments(
+        {
+          type: "user-input",
+          content: [
+            {
+              type: "file",
+              mediaType: "image/heic",
+              filename: "a.heic",
+              data: new Uint8Array(readFileSync(join(fixturesDir, "sample.heic"))),
+            },
+            {
+              type: "file",
+              mediaType: "image/avif",
+              filename: "b.avif",
+              data: new Uint8Array(readFileSync(join(fixturesDir, "sample.avif"))),
+            },
+            {
+              type: "file",
+              mediaType: "image/webp",
+              filename: "c.webp",
+              data: new Uint8Array(readFileSync(join(fixturesDir, "sample.webp"))),
+            },
+            {
+              type: "file",
+              mediaType: "image/webp",
+              filename: "d-alpha.webp",
+              data: new Uint8Array(
+                readFileSync(join(fixturesDir, "sample-alpha.webp"))
+              ),
+            },
+          ],
+        },
+        store
+      );
+
+      if (!("content" in staged)) {
+        throw new Error("expected multipart user input");
+      }
+      expect(staged.content).toHaveLength(4);
+      const storedTypes: string[] = [];
+      for (const part of staged.content) {
+        if (part?.type !== "file" || typeof part.data !== "string") {
+          throw new Error("expected staged ref");
+        }
+        const blob = await store.get(decodeRuntimeAttachmentData(part.data));
+        expect(blob).not.toBeNull();
+        expect(isStoredImageMediaType(blob?.mediaType ?? "")).toBe(true);
+        expect(blob?.bytes.byteLength ?? Infinity).toBeLessThanOrEqual(
+          DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES
+        );
+        storedTypes.push(blob?.mediaType ?? "");
+      }
+      expect(storedTypes).toEqual([
+        "image/jpeg",
+        "image/jpeg",
+        "image/jpeg",
+        "image/png",
+      ]);
+    },
+    60_000
   );
 });
 

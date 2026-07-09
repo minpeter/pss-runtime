@@ -3,6 +3,7 @@ packages:
   - "!apps/bori-agent-backend"
   - "packages/*"
   - "examples/*"
+  - "experimental/*"
 overrides:
   read-yaml-file: 2.1.0
   vite: 8.1.0

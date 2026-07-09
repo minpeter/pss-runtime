@@ -1,5 +1,12 @@
 import { decode as decodePng, encode as encodePng } from "fast-png";
 import jpeg from "jpeg-js";
+import {
+  getInstalledImageCodecWasm,
+  hasAvifDecodeWasm,
+  hasHeifDecodeWasm,
+  hasWebpDecodeWasm,
+  installImageCodecWasmFromNodeModules,
+} from "./attachment-image-codec-registry";
 import { RuntimeAttachmentStagingError } from "./attachment-types";
 
 /** Default max stored size for image attachments (all hosts). */
@@ -9,10 +16,20 @@ export const DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES = 1_000_000;
 export const STORED_IMAGE_MEDIA_TYPES = ["image/jpeg", "image/png"] as const;
 export type StoredImageMediaType = (typeof STORED_IMAGE_MEDIA_TYPES)[number];
 
-const QUALITY_STEPS = [85, 75, 65, 55, 45, 35, 28, 22] as const;
-/** Skip full-resolution encodes for very large frames (pure-JS codecs are slow). */
-const FULL_RES_PIXEL_BUDGET = 1_600_000;
+/**
+ * JPEG quality ladder (ascending). Binary-searched so large frames cost
+ * ~log2(n) encodes instead of n linear probes.
+ */
+const JPEG_QUALITY_STEPS = [22, 28, 35, 45, 55, 65, 75, 85] as const;
+/**
+ * Cap pure-JS JPEG encode cost. Attachment vision quality stays fine around
+ * ~1MP; going higher burns CPU with little storage benefit under the 1MB cap.
+ */
+const FULL_RES_PIXEL_BUDGET = 1_200_000;
+/** Target bytes/pixel when picking the first scale for JPEG under budget. */
+const JPEG_TARGET_BPP = 0.65;
 const MIN_EDGE_PX = 64;
+const MAX_SCALE_ATTEMPTS = 10;
 
 const HEIC_BRANDS = new Set([
   "heic",
@@ -56,7 +73,8 @@ export async function prepareAttachmentBytesForStorage({
     );
   }
 
-  const normalizedMediaType = mediaType.trim().toLowerCase();
+  // Strip `; charset=…` / other parameters — clients often send them.
+  const normalizedMediaType = baseMediaType(mediaType);
   const isImage =
     isImageMediaType(normalizedMediaType) || looksLikeKnownImage(bytes);
 
@@ -64,24 +82,28 @@ export async function prepareAttachmentBytesForStorage({
     return { bytes, mediaType };
   }
 
-  // Passthrough: already JPEG under budget.
+  // Passthrough: complete JPEG under budget (EOI required — reject truncated).
+  // Skip wasm bootstrap on the hot path for already-valid small JPEG/PNG.
   if (
-    looksLikeJpeg(bytes) &&
+    looksLikeCompleteJpeg(bytes) &&
     bytes.byteLength <= maxImageBytes &&
     (isJpegMediaType(normalizedMediaType) || !looksLikeOtherRaster(bytes))
   ) {
     return { bytes, mediaType: "image/jpeg" };
   }
 
-  // Passthrough: already PNG under budget.
-  if (looksLikePng(bytes) && bytes.byteLength <= maxImageBytes) {
+  // Passthrough: complete PNG under budget (IEND required — reject truncated).
+  if (looksLikeCompletePng(bytes) && bytes.byteLength <= maxImageBytes) {
     return { bytes, mediaType: "image/png" };
   }
 
-  const decoded = await decodeImageRgba(
-    bytes,
-    sniffImageMediaType(bytes) ?? normalizedMediaType
-  );
+  const sniffed = sniffImageMediaType(bytes) ?? normalizedMediaType;
+  // Only load AVIF/WebP/HEIF wasm when those formats may be involved.
+  if (needsWasmImageCodecs(sniffed, bytes)) {
+    await ensureImageCodecRuntimeReady();
+  }
+
+  const decoded = await decodeImageRgba(bytes, sniffed);
   const hasAlpha = rgbaHasTransparency(decoded.data);
 
   if (hasAlpha) {
@@ -91,14 +113,21 @@ export async function prepareAttachmentBytesForStorage({
 }
 
 export function isCompressibleImageMediaType(mediaType: string): boolean {
-  return isImageMediaType(mediaType.trim().toLowerCase());
+  return isImageMediaType(baseMediaType(mediaType));
 }
 
 export function isStoredImageMediaType(
   mediaType: string
 ): mediaType is StoredImageMediaType {
-  const normalized = mediaType.trim().toLowerCase();
+  const normalized = baseMediaType(mediaType);
   return normalized === "image/jpeg" || normalized === "image/png";
+}
+
+/** `image/jpeg; charset=binary` → `image/jpeg` */
+function baseMediaType(mediaType: string): string {
+  const trimmed = mediaType.trim().toLowerCase();
+  const semi = trimmed.indexOf(";");
+  return (semi === -1 ? trimmed : trimmed.slice(0, semi)).trim();
 }
 
 function isImageMediaType(normalized: string): boolean {
@@ -126,24 +155,78 @@ function isPngMediaType(normalized: string): boolean {
   return normalized === "image/png" || normalized === "image/x-png";
 }
 
+function isSupportedRasterMediaType(normalized: string): boolean {
+  return (
+    isJpegMediaType(normalized) ||
+    isPngMediaType(normalized) ||
+    normalized === "image/webp" ||
+    normalized === "image/heic" ||
+    normalized === "image/heif" ||
+    normalized === "image/heic-sequence" ||
+    normalized === "image/heif-sequence" ||
+    normalized === "image/avif" ||
+    normalized === "image/avif-sequence"
+  );
+}
+
 function encodeJpegUnderBudget(
   decoded: RgbaImage,
   maxImageBytes: number
 ): PreparedAttachmentBytes {
   let best: Uint8Array | undefined;
-  for (const frame of iterateScaledFrames(decoded)) {
-    for (const quality of QUALITY_STEPS) {
-      const encoded = encodeJpeg(frame, quality);
-      if (!best || encoded.byteLength < best.byteLength) {
-        best = encoded;
-      }
-      if (encoded.byteLength <= maxImageBytes) {
-        return { bytes: encoded, mediaType: "image/jpeg" };
-      }
+  for (const frame of iterateScaledFrames(decoded, maxImageBytes)) {
+    const attempt = encodeJpegMaxQualityUnderBudget(frame, maxImageBytes);
+    if (!best || attempt.bytes.byteLength < best.byteLength) {
+      best = attempt.bytes;
+    }
+    if (attempt.underBudget) {
+      return { bytes: attempt.bytes, mediaType: "image/jpeg" };
     }
   }
 
   throw budgetError("JPEG", maxImageBytes, best);
+}
+
+/**
+ * Pick highest JPEG quality under budget with minimal encodes:
+ * 1) Probe max quality (camera/HEIC photos often fit in one try after scale).
+ * 2) Otherwise binary-search lower steps (~log2 n probes).
+ */
+function encodeJpegMaxQualityUnderBudget(
+  frame: RgbaImage,
+  maxImageBytes: number
+): { readonly underBudget: boolean; readonly bytes: Uint8Array } {
+  const last = JPEG_QUALITY_STEPS.length - 1;
+  const highQuality = JPEG_QUALITY_STEPS[last] ?? 85;
+  const high = encodeJpeg(frame, highQuality);
+  if (high.byteLength <= maxImageBytes) {
+    return { underBudget: true, bytes: high };
+  }
+
+  let bestUnder: Uint8Array | undefined;
+  let bestAny: Uint8Array = high;
+  let lo = 0;
+  let hi = last - 1;
+
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const quality = JPEG_QUALITY_STEPS[mid] ?? 22;
+    const encoded = encodeJpeg(frame, quality);
+    if (encoded.byteLength < bestAny.byteLength) {
+      bestAny = encoded;
+    }
+    if (encoded.byteLength <= maxImageBytes) {
+      bestUnder = encoded;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+
+  if (bestUnder) {
+    return { underBudget: true, bytes: bestUnder };
+  }
+  return { underBudget: false, bytes: bestAny };
 }
 
 function encodePngUnderBudget(
@@ -151,7 +234,7 @@ function encodePngUnderBudget(
   maxImageBytes: number
 ): PreparedAttachmentBytes {
   let best: Uint8Array | undefined;
-  for (const frame of iterateScaledFrames(decoded)) {
+  for (const frame of iterateScaledFrames(decoded, maxImageBytes)) {
     const encoded = encodePngRgba(frame);
     if (!best || encoded.byteLength < best.byteLength) {
       best = encoded;
@@ -170,15 +253,30 @@ function encodePngUnderBudget(
   }
 }
 
-function* iterateScaledFrames(decoded: RgbaImage): Generator<RgbaImage> {
-  const pixelCount = decoded.width * decoded.height;
-  let scale =
-    pixelCount > FULL_RES_PIXEL_BUDGET
-      ? Math.sqrt(FULL_RES_PIXEL_BUDGET / pixelCount)
-      : 1;
+/**
+ * Yield progressively smaller frames. Initial scale is chosen so a moderate
+ * JPEG quality is likely under budget — avoids encoding full-res noise frames.
+ */
+function* iterateScaledFrames(
+  decoded: RgbaImage,
+  maxImageBytes: number
+): Generator<RgbaImage> {
+  const pixelCount = Math.max(1, decoded.width * decoded.height);
+  const budgetPixels = Math.max(
+    MIN_EDGE_PX * MIN_EDGE_PX,
+    maxImageBytes / JPEG_TARGET_BPP
+  );
 
-  // Always attempt at least one full (or budgeted) frame, then keep shrinking.
-  for (let attempt = 0; attempt < 16; attempt += 1) {
+  let scale = 1;
+  if (pixelCount > budgetPixels) {
+    scale = Math.sqrt(budgetPixels / pixelCount);
+  }
+  if (pixelCount * scale * scale > FULL_RES_PIXEL_BUDGET) {
+    scale = Math.min(scale, Math.sqrt(FULL_RES_PIXEL_BUDGET / pixelCount));
+  }
+  scale = Math.min(1, scale);
+
+  for (let attempt = 0; attempt < MAX_SCALE_ATTEMPTS; attempt += 1) {
     const frame =
       scale >= 0.999
         ? decoded
@@ -188,8 +286,28 @@ function* iterateScaledFrames(decoded: RgbaImage): Generator<RgbaImage> {
     if (Math.min(frame.width, frame.height) <= MIN_EDGE_PX) {
       break;
     }
-    scale *= 0.7;
+    // Shrink faster than linear quality steps — pure-JS encode is the bottleneck.
+    scale *= 0.65;
   }
+}
+
+function needsWasmImageCodecs(
+  mediaType: string,
+  bytes: Uint8Array
+): boolean {
+  const normalized = baseMediaType(mediaType);
+  return (
+    normalized === "image/webp" ||
+    normalized === "image/heic" ||
+    normalized === "image/heif" ||
+    normalized === "image/heic-sequence" ||
+    normalized === "image/heif-sequence" ||
+    normalized === "image/avif" ||
+    normalized === "image/avif-sequence" ||
+    looksLikeHeic(bytes) ||
+    looksLikeAvif(bytes) ||
+    looksLikeWebp(bytes)
+  );
 }
 
 function budgetError(
@@ -215,16 +333,31 @@ async function decodeImageRgba(
   bytes: Uint8Array,
   mediaType: string
 ): Promise<RgbaImage> {
-  const normalized = mediaType.trim().toLowerCase();
+  const normalized = baseMediaType(mediaType);
   try {
-    if (
-      isJpegMediaType(normalized) ||
-      looksLikeJpeg(bytes)
-    ) {
+    // Prefer container magic over declared MIME when both are present.
+    if (looksLikeJpeg(bytes)) {
       return decodeJpegToRgba(bytes);
     }
+    if (looksLikePng(bytes)) {
+      return decodePngToRgba(bytes);
+    }
+    // AVIF before HEIC (shared ISO-BMFF + overlapping `mif1` brands).
+    if (looksLikeAvif(bytes)) {
+      return await decodeAvifToRgba(bytes);
+    }
+    if (looksLikeHeic(bytes)) {
+      return await decodeHeicToRgba(bytes);
+    }
+    if (looksLikeWebp(bytes)) {
+      return await decodeWebpToRgba(bytes);
+    }
 
-    if (isPngMediaType(normalized) || looksLikePng(bytes)) {
+    // No recognized magic — fall back to declared type.
+    if (isJpegMediaType(normalized)) {
+      return decodeJpegToRgba(bytes);
+    }
+    if (isPngMediaType(normalized)) {
       return decodePngToRgba(bytes);
     }
 
@@ -232,42 +365,26 @@ async function decodeImageRgba(
       normalized === "image/heic" ||
       normalized === "image/heif" ||
       normalized === "image/heic-sequence" ||
-      normalized === "image/heif-sequence" ||
-      looksLikeHeic(bytes)
+      normalized === "image/heif-sequence"
     ) {
       return await decodeHeicToRgba(bytes);
     }
-
-    if (
-      normalized === "image/avif" ||
-      normalized === "image/avif-sequence" ||
-      looksLikeAvif(bytes)
-    ) {
+    if (normalized === "image/avif" || normalized === "image/avif-sequence") {
       return await decodeAvifToRgba(bytes);
     }
-
-    if (normalized === "image/webp" || looksLikeWebp(bytes)) {
+    if (normalized === "image/webp") {
       return await decodeWebpToRgba(bytes);
     }
 
-    if (looksLikeJpeg(bytes)) {
-      return decodeJpegToRgba(bytes);
-    }
-    if (looksLikePng(bytes)) {
-      return decodePngToRgba(bytes);
-    }
-    if (looksLikeHeic(bytes)) {
-      return await decodeHeicToRgba(bytes);
-    }
-    if (looksLikeAvif(bytes)) {
-      return await decodeAvifToRgba(bytes);
-    }
-    if (looksLikeWebp(bytes)) {
-      return await decodeWebpToRgba(bytes);
+    if (isSupportedRasterMediaType(normalized)) {
+      throw new Error(
+        `Bytes do not match a decodable ${normalized} payload (truncated or corrupt?).`
+      );
     }
 
     throw new Error(
-      `No decoder available for media type ${mediaType} (and no recognized image signature).`
+      `Unsupported image media type for normalization: ${normalized}. ` +
+        `Supported: jpeg, png, webp, heic/heif, avif. (gif/bmp/svg/tiff are not decoded.)`
     );
   } catch (error) {
     if (error instanceof RuntimeAttachmentStagingError) {
@@ -275,7 +392,7 @@ async function decodeImageRgba(
     }
     const detail = error instanceof Error ? error.message : String(error);
     throw new RuntimeAttachmentStagingError(
-      `Unable to decode image attachment for normalization (${mediaType}): ${detail}`
+      `Unable to decode image attachment for normalization (${normalized}): ${detail}`
     );
   }
 }
@@ -292,55 +409,261 @@ function decodeJpegToRgba(bytes: Uint8Array): RgbaImage {
   };
 }
 
+/**
+ * Edge-safe HEIC decode via libheif ESM bundle (wasmBinary inlined).
+ * Avoids `heic-decode`'s CJS path that touches `__dirname` under Workers.
+ */
 async function decodeHeicToRgba(bytes: Uint8Array): Promise<RgbaImage> {
-  const decode = (await import("heic-decode")).default;
-  const decoded = await decode({
-    buffer: bytes as unknown as ArrayBuffer,
-  });
-  return {
-    data: asUint8Array(decoded.data),
-    height: decoded.height,
-    width: decoded.width,
-  };
+  try {
+    return await decodeHeicWithLibheifEsm(bytes);
+  } catch (edgeError) {
+    // Node fallback
+    try {
+      const decode = (await import("heic-decode")).default;
+      const decoded = await decode({
+        buffer: bytes as unknown as ArrayBuffer,
+      });
+      return {
+        data: asUint8Array(decoded.data),
+        height: decoded.height,
+        width: decoded.width,
+      };
+    } catch {
+      throw edgeError;
+    }
+  }
 }
 
-let avifDecoderReady: Promise<void> | undefined;
-let webpDecoderReady: Promise<void> | undefined;
+type LibheifImage = {
+  display: (
+    imageData: {
+      data: Uint8ClampedArray;
+      height: number;
+      width: number;
+    },
+    callback: (
+      displayData: { data: Uint8ClampedArray; height: number; width: number } | null
+    ) => void
+  ) => void;
+  free: () => void;
+  get_height: () => number;
+  get_width: () => number;
+};
+
+type LibheifModule = {
+  HeifDecoder: new () => {
+    decode: (buffer: Uint8Array) => LibheifImage[];
+    decoder: { delete: () => void };
+  };
+  ready: Promise<void>;
+};
+
+/** Cached libheif module — Wasm.Instance is expensive; reuse across HEIC decodes. */
+let libheifModulePromise: Promise<LibheifModule> | undefined;
+/**
+ * Serialize HEIC decodes: a single libheif Wasm instance is not safe for
+ * concurrent decode/display (Promise.all of HEIC attachments fails with
+ * "HEIF processing error").
+ */
+let heicDecodeGate: Promise<void> = Promise.resolve();
+
+async function getLibheifModule(): Promise<LibheifModule> {
+  if (!libheifModulePromise) {
+    libheifModulePromise = (async () => {
+      // Workers + nodejs_compat: emscripten may probe Node and touch __dirname.
+      polyfillEmscriptenNodeShims();
+      await ensureImageCodecRuntimeReady();
+
+      const heifWasm = getInstalledImageCodecWasm().heifDecodeWasm as
+        | WebAssembly.Module
+        | undefined;
+      if (!heifWasm) {
+        throw new Error(
+          "HEIF decode wasm is not installed. On Cloudflare Workers, import image-codecs-edge (static libheif.wasm)."
+        );
+      }
+
+      // ESM glue with instantiateWasm so Workers never compile wasm from raw bytes.
+      const factory = (
+        await import("libheif-js/libheif-wasm/libheif-bundle.mjs")
+      ).default as (options?: object) => LibheifModule;
+
+      const libheif =
+        typeof factory === "function"
+          ? factory({
+              instantiateWasm(
+                imports: WebAssembly.Imports,
+                successCallback: (
+                  instance: WebAssembly.Instance,
+                  module: WebAssembly.Module
+                ) => void
+              ) {
+                const instance = new WebAssembly.Instance(heifWasm, imports);
+                successCallback(instance, heifWasm);
+                return instance.exports;
+              },
+            })
+          : factory;
+
+      if (libheif.ready) {
+        await libheif.ready;
+      }
+      return libheif;
+    })();
+  }
+  try {
+    return await libheifModulePromise;
+  } catch (error) {
+    // Allow retry after a failed cold init (e.g. missing wasm in tests).
+    libheifModulePromise = undefined;
+    throw error;
+  }
+}
+
+async function decodeHeicWithLibheifEsm(bytes: Uint8Array): Promise<RgbaImage> {
+  const previous = heicDecodeGate;
+  let release!: () => void;
+  heicDecodeGate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await previous;
+  try {
+    return await decodeHeicWithLibheifEsmUnlocked(bytes);
+  } finally {
+    release();
+  }
+}
+
+async function decodeHeicWithLibheifEsmUnlocked(
+  bytes: Uint8Array
+): Promise<RgbaImage> {
+  const libheif = await getLibheifModule();
+  const decoder = new libheif.HeifDecoder();
+  let images: LibheifImage[] = [];
+  try {
+    images = decoder.decode(bytes);
+    if (!images.length) {
+      throw new Error("HEIF image not found");
+    }
+    const image = images[0];
+    if (!image) {
+      throw new Error("HEIF image not found");
+    }
+    const width = image.get_width();
+    const height = image.get_height();
+    const displayData = await new Promise<{
+      data: Uint8ClampedArray;
+      height: number;
+      width: number;
+    }>((resolve, reject) => {
+      image.display(
+        { data: new Uint8ClampedArray(width * height * 4), width, height },
+        (result) => {
+          if (!result) {
+            reject(new Error("HEIF processing error"));
+            return;
+          }
+          resolve(result);
+        }
+      );
+    });
+    return {
+      data: asUint8Array(displayData.data),
+      height: displayData.height,
+      width: displayData.width,
+    };
+  } finally {
+    for (const image of images) {
+      try {
+        image.free();
+      } catch {
+        // ignore
+      }
+    }
+    try {
+      decoder.decoder.delete();
+    } catch {
+      // ignore
+    }
+  }
+}
+
+let avifInitPromise: Promise<void> | undefined;
+let webpInitPromise: Promise<void> | undefined;
+let runtimeReadyPromise: Promise<void> | undefined;
+
+/** True when AVIF + WebP + HEIF decode wasm modules are installed. */
+function hasAllImageDecodeWasm(): boolean {
+  return (
+    hasAvifDecodeWasm() && hasWebpDecodeWasm() && hasHeifDecodeWasm()
+  );
+}
+
+/**
+ * Load codec wasm for the current runtime.
+ * 1) Already installed (Worker static imports / app bootstrap)
+ * 2) Node: read wasm from node_modules
+ * 3) Edge bundle: dynamic-import image-codecs-edge (static wasm imports inside)
+ *
+ * Never relies on bare jSquash `init()` network fetch — that breaks on Workers.
+ * Never compiles wasm from raw bytes on Workers (embedder forbids it).
+ */
+async function ensureImageCodecRuntimeReady(): Promise<void> {
+  if (runtimeReadyPromise) {
+    await runtimeReadyPromise;
+    return;
+  }
+  runtimeReadyPromise = (async () => {
+    if (hasAllImageDecodeWasm()) {
+      return;
+    }
+    await installImageCodecWasmFromNodeModules();
+    if (hasAllImageDecodeWasm()) {
+      return;
+    }
+    try {
+      // Wrangler follows this static specifier and bundles .wasm imports.
+      const edge = await import("../../platform/cloudflare/image-codecs-edge.js");
+      edge.installCloudflareImageCodecs();
+    } catch {
+      // Not bundled (e.g. pure Node unit path without edge entry).
+    }
+  })();
+  await runtimeReadyPromise;
+}
 
 async function ensureAvifDecoderInitialized(): Promise<void> {
-  if (!avifDecoderReady) {
-    avifDecoderReady = initJsquashDecoder("@jsquash/avif", "avif_dec.wasm");
+  if (!avifInitPromise) {
+    avifInitPromise = (async () => {
+      await ensureImageCodecRuntimeReady();
+      const wasm = getInstalledImageCodecWasm().avifDecodeWasm;
+      if (!wasm) {
+        throw new Error(
+          "AVIF decode wasm is not installed. On Cloudflare Workers, import @minpeter/pss-runtime/platform/cloudflare (image-codecs-edge) or call installImageCodecWasm()."
+        );
+      }
+      const mod = await import("@jsquash/avif/decode.js");
+      await mod.init(wasm as WebAssembly.Module);
+    })();
   }
-  await avifDecoderReady;
+  await avifInitPromise;
 }
 
 async function ensureWebpDecoderInitialized(): Promise<void> {
-  if (!webpDecoderReady) {
-    webpDecoderReady = initJsquashDecoder("@jsquash/webp", "webp_dec.wasm");
+  if (!webpInitPromise) {
+    webpInitPromise = (async () => {
+      await ensureImageCodecRuntimeReady();
+      const wasm = getInstalledImageCodecWasm().webpDecodeWasm;
+      if (!wasm) {
+        throw new Error(
+          "WebP decode wasm is not installed. On Cloudflare Workers, import @minpeter/pss-runtime/platform/cloudflare (image-codecs-edge) or call installImageCodecWasm()."
+        );
+      }
+      const mod = await import("@jsquash/webp/decode.js");
+      await mod.init(wasm as WebAssembly.Module);
+    })();
   }
-  await webpDecoderReady;
-}
-
-async function initJsquashDecoder(
-  packageName: "@jsquash/avif" | "@jsquash/webp",
-  wasmFileName: string
-): Promise<void> {
-  const mod =
-    packageName === "@jsquash/avif"
-      ? await import("@jsquash/avif/decode.js")
-      : await import("@jsquash/webp/decode.js");
-  try {
-    const { createRequire } = await import("node:module");
-    const { readFileSync } = await import("node:fs");
-    const path = await import("node:path");
-    const require = createRequire(import.meta.url);
-    const pkgDir = path.dirname(require.resolve(`${packageName}/package.json`));
-    const wasmPath = path.join(pkgDir, "codec/dec", wasmFileName);
-    const wasmBytes = readFileSync(wasmPath);
-    await mod.init(await WebAssembly.compile(wasmBytes));
-  } catch {
-    await mod.init();
-  }
+  await webpInitPromise;
 }
 
 async function decodeAvifToRgba(bytes: Uint8Array): Promise<RgbaImage> {
@@ -520,11 +843,12 @@ function sniffImageMediaType(bytes: Uint8Array): string | undefined {
   if (looksLikePng(bytes)) {
     return "image/png";
   }
-  if (looksLikeHeic(bytes)) {
-    return "image/heic";
-  }
+  // AVIF before HEIC: both are ISO-BMFF; many AVIFs also list `mif1`.
   if (looksLikeAvif(bytes)) {
     return "image/avif";
+  }
+  if (looksLikeHeic(bytes)) {
+    return "image/heic";
   }
   if (looksLikeWebp(bytes)) {
     return "image/webp";
@@ -536,6 +860,16 @@ function looksLikeJpeg(bytes: Uint8Array): boolean {
   return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8;
 }
 
+/** JPEG SOI + EOI — truncated streams must not passthrough. */
+function looksLikeCompleteJpeg(bytes: Uint8Array): boolean {
+  return (
+    looksLikeJpeg(bytes) &&
+    bytes.length >= 4 &&
+    bytes[bytes.length - 2] === 0xff &&
+    bytes[bytes.length - 1] === 0xd9
+  );
+}
+
 function looksLikePng(bytes: Uint8Array): boolean {
   return (
     bytes.length >= 8 &&
@@ -544,6 +878,25 @@ function looksLikePng(bytes: Uint8Array): boolean {
     bytes[2] === 0x4e &&
     bytes[3] === 0x47
   );
+}
+
+/** PNG signature + IEND chunk near end — truncated streams must not passthrough. */
+function looksLikeCompletePng(bytes: Uint8Array): boolean {
+  if (!looksLikePng(bytes) || bytes.length < 12) {
+    return false;
+  }
+  const start = Math.max(8, bytes.length - 24);
+  for (let i = start; i <= bytes.length - 4; i += 1) {
+    if (
+      bytes[i] === 0x49 &&
+      bytes[i + 1] === 0x45 &&
+      bytes[i + 2] === 0x4e &&
+      bytes[i + 3] === 0x44
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function looksLikeWebp(bytes: Uint8Array): boolean {
@@ -566,7 +919,8 @@ function looksLikeWebp(bytes: Uint8Array): boolean {
 }
 
 function looksLikeHeic(bytes: Uint8Array): boolean {
-  return isIsoBmffBrand(bytes, HEIC_BRANDS);
+  // Prefer AVIF when both brand families appear (common with `mif1` + `avif`).
+  return isIsoBmffBrand(bytes, HEIC_BRANDS) && !isIsoBmffBrand(bytes, AVIF_BRANDS);
 }
 
 function looksLikeAvif(bytes: Uint8Array): boolean {
@@ -589,15 +943,29 @@ function isIsoBmffBrand(
   if (box !== "ftyp") {
     return false;
   }
-  const brand = String.fromCharCode(
-    bytes[8] ?? 0,
-    bytes[9] ?? 0,
-    bytes[10] ?? 0,
-    bytes[11] ?? 0
+
+  // Major brand at offset 8, then compatible brands from offset 16.
+  const major = fourCc(bytes, 8);
+  if (brands.has(major)) {
+    return true;
+  }
+  for (let offset = 16; offset + 4 <= bytes.length && offset < 64; offset += 4) {
+    if (brands.has(fourCc(bytes, offset))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function fourCc(bytes: Uint8Array, offset: number): string {
+  return String.fromCharCode(
+    bytes[offset] ?? 0,
+    bytes[offset + 1] ?? 0,
+    bytes[offset + 2] ?? 0,
+    bytes[offset + 3] ?? 0
   )
     .replaceAll("\0", " ")
     .trim();
-  return brands.has(brand);
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
@@ -605,6 +973,23 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
     bytes.byteOffset,
     bytes.byteOffset + bytes.byteLength
   ) as ArrayBuffer;
+}
+
+/**
+ * Emscripten Node probes under Cloudflare Workers + nodejs_compat hit missing
+ * `__dirname` / `__filename`. Provide minimal shims so inlined-wasm bundles boot.
+ */
+function polyfillEmscriptenNodeShims(): void {
+  const g = globalThis as typeof globalThis & {
+    __dirname?: string;
+    __filename?: string;
+  };
+  if (typeof g.__dirname !== "string") {
+    g.__dirname = "/";
+  }
+  if (typeof g.__filename !== "string") {
+    g.__filename = "/libheif.js";
+  }
 }
 
 function asUint8Array(

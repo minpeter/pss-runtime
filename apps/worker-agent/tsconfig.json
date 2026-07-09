@@ -8,6 +8,9 @@
       "@minpeter/pss-runtime/platform/cloudflare": [
         "../../packages/runtime/src/platform/cloudflare/index.ts"
       ],
+      "@minpeter/pss-runtime/platform/cloudflare/image-codecs": [
+        "../../packages/runtime/src/platform/cloudflare/image-codecs-edge.ts"
+      ],
       "@minpeter/pss-runtime/platform/file": [
         "../../packages/runtime/src/platform/file/index.ts"
       ],

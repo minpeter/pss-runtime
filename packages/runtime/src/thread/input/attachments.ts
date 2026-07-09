@@ -2,6 +2,12 @@
 
 export { hydrateRuntimeAttachments } from "./attachment-hydration";
 export {
+  getInstalledImageCodecWasm,
+  installImageCodecWasm,
+  installImageCodecWasmFromNodeModules,
+  type ImageCodecWasmModules,
+} from "./attachment-image-codec-registry";
+export {
   DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,
   isCompressibleImageMediaType,
   isStoredImageMediaType,
