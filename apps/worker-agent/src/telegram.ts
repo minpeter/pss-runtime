@@ -301,12 +301,32 @@ export function collectTurnTexts(
 
 export interface IngressBatchSummary {
   readonly correlationId?: string;
+  /** True when at least one image attachment was present. */
+  readonly hasImages: boolean;
+  /** Exact count of image attachments (not messages). */
+  readonly imageCount: number;
+  /** Distinct media types among image attachments, e.g. image/jpeg. */
+  readonly imageMediaTypes: readonly string[];
   readonly key: string;
+  /** Webhook fragments merged into this quiet-window batch. */
   readonly messageCount: number;
-  readonly messagesWithImages: number;
   readonly subscribe: boolean;
   readonly textChars: number;
   readonly textPreview: string;
+}
+
+function isImageConversationAttachment(
+  attachment: ConversationAttachment
+): boolean {
+  if (attachment.type === "image") {
+    return true;
+  }
+  if (attachment.type !== "file") {
+    return false;
+  }
+  return (
+    attachment.mimeType?.trim().toLowerCase().startsWith("image/") ?? false
+  );
 }
 
 /** Pure Layer 1 batch summary (no agent). Used for dry-run and logs. */
@@ -319,20 +339,29 @@ export function summarizeIngressBatch(
   }
 ): IngressBatchSummary {
   const text = collectTurnTexts(messages);
-  const messagesWithImages = messages.filter((message) =>
-    message.attachments?.some(
-      (attachment) =>
-        attachment.type === "image" ||
-        (attachment.type === "file" &&
-          (attachment.mimeType?.startsWith("image/") ?? false))
-    )
-  ).length;
+  const imageMediaTypes: string[] = [];
+  let imageCount = 0;
+  for (const message of messages) {
+    for (const attachment of message.attachments ?? []) {
+      if (!isImageConversationAttachment(attachment)) {
+        continue;
+      }
+      imageCount += 1;
+      const mediaType =
+        attachment.mimeType?.trim().toLowerCase() || "image/unknown";
+      if (!imageMediaTypes.includes(mediaType)) {
+        imageMediaTypes.push(mediaType);
+      }
+    }
+  }
   const textPreview =
     text.length <= 80 ? text : `${text.slice(0, 77).trimEnd()}...`;
   return {
     key: meta.key,
     messageCount: messages.length,
-    messagesWithImages,
+    hasImages: imageCount > 0,
+    imageCount,
+    imageMediaTypes,
     subscribe: meta.subscribe,
     textChars: text.length,
     textPreview,
@@ -341,9 +370,12 @@ export function summarizeIngressBatch(
 }
 
 export function formatIngressDryRunReply(summary: IngressBatchSummary): string {
+  const imageLine = summary.hasImages
+    ? `images=${summary.imageCount} types=[${summary.imageMediaTypes.join(", ")}]`
+    : "images=0 (none attached)";
   const lines = [
     "🧪 ingress dry-run (Layer 1 only — agent skipped)",
-    `messages=${summary.messageCount} images~${summary.messagesWithImages} textChars=${summary.textChars}`,
+    `fragments=${summary.messageCount} ${imageLine} textChars=${summary.textChars}`,
   ];
   if (summary.textPreview) {
     lines.push(`text: ${summary.textPreview}`);

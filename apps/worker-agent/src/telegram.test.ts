@@ -109,7 +109,10 @@ describe("telegram conversation handling", () => {
       [
         { text: "hello" },
         {
-          attachments: [{ mimeType: "image/jpeg", type: "image" }],
+          attachments: [
+            { mimeType: "image/jpeg", type: "image" },
+            { mimeType: "image/png", type: "image" },
+          ],
           text: "caption",
         },
       ],
@@ -121,15 +124,28 @@ describe("telegram conversation handling", () => {
     );
     expect(summary).toEqual({
       correlationId: "corr-1",
+      hasImages: true,
+      imageCount: 2,
+      imageMediaTypes: ["image/jpeg", "image/png"],
       key: "chat-1",
       messageCount: 2,
-      messagesWithImages: 1,
       subscribe: false,
       textChars: "hello\ncaption".length,
       textPreview: "hello\ncaption",
     });
-    expect(formatIngressDryRunReply(summary)).toContain("Layer 1 only");
-    expect(formatIngressDryRunReply(summary)).toContain("messages=2");
+    const reply = formatIngressDryRunReply(summary);
+    expect(reply).toContain("Layer 1 only");
+    expect(reply).toContain("fragments=2");
+    expect(reply).toContain("images=2");
+    expect(reply).toContain("image/jpeg");
+    expect(
+      formatIngressDryRunReply({
+        ...summary,
+        hasImages: false,
+        imageCount: 0,
+        imageMediaTypes: [],
+      })
+    ).toContain("images=0 (none attached)");
   });
 
   it("uses concurrent delivery plus app quiet-window coalesce", async () => {
