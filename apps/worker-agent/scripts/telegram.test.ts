@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { logError } from "../src/worker-log";
 import { forwardUpdates, isAbortError, sleepMs } from "./telegram";
@@ -8,7 +8,26 @@ vi.mock("../src/worker-log", () => ({
   logTagged: vi.fn(),
 }));
 
+/** Relay calls fetch(url, { body: JSON.stringify(update), ... }). */
+function updateIdFromFetchArgs(
+  input: RequestInfo | URL,
+  init?: RequestInit
+): number {
+  if (typeof init?.body === "string") {
+    return (JSON.parse(init.body) as { update_id: number }).update_id;
+  }
+  if (input instanceof Request) {
+    throw new Error("Expected fetch(url, init) with string body in relay");
+  }
+  throw new Error("Missing fetch body with update_id");
+}
+
 describe("telegram local relay", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
   it("treats AbortError as a clean shutdown signal", () => {
     const abortError = new Error("aborted");
     abortError.name = "AbortError";
@@ -25,13 +44,48 @@ describe("telegram local relay", () => {
     expect(Date.now() - started).toBeLessThan(5000);
   });
 
-  it("does not advance offset past a failed forwarded update", async () => {
-    const fetchMock = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(new Response(null, { status: 200 }))
-      .mockResolvedValueOnce(new Response(null, { status: 500 }))
-      .mockResolvedValueOnce(new Response(null, { status: 200 }));
+  it("forwards a getUpdates batch in parallel", async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fetchMock = vi.fn(async () => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await gate;
+      inFlight -= 1;
+      return new Response(null, { status: 200 });
+    });
     vi.stubGlobal("fetch", fetchMock);
+
+    const done = forwardUpdates({
+      offset: 0,
+      secret: "secret",
+      signal: new AbortController().signal,
+      updates: [{ update_id: 10 }, { update_id: 11 }, { update_id: 12 }],
+      webhookUrl: "http://127.0.0.1:8792/",
+    });
+
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(maxInFlight).toBe(3);
+    });
+    release();
+    await expect(done).resolves.toBe(13);
+  });
+
+  it("does not advance offset past the first failed update in id order", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const updateId = updateIdFromFetchArgs(input, init);
+        return new Response(null, {
+          status: updateId === 11 ? 500 : 200,
+        });
+      })
+    );
 
     await expect(
       forwardUpdates({
@@ -42,21 +96,26 @@ describe("telegram local relay", () => {
         webhookUrl: "http://127.0.0.1:8792/",
       })
     ).resolves.toBe(11);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(3);
     expect(logError).toHaveBeenCalledWith({
       action: "webhook_forward_status",
       scope: "telegram-relay",
       status: 500,
+      updateId: 11,
     });
   });
 
   it("does not advance offset past a thrown forward failure", async () => {
-    const fetchMock = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(new Response(null, { status: 200 }))
-      .mockRejectedValueOnce(new TypeError("connection refused"))
-      .mockResolvedValueOnce(new Response(null, { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const updateId = updateIdFromFetchArgs(input, init);
+        if (updateId === 11) {
+          throw new TypeError("connection refused");
+        }
+        return new Response(null, { status: 200 });
+      })
+    );
 
     await expect(
       forwardUpdates({
@@ -67,10 +126,11 @@ describe("telegram local relay", () => {
         webhookUrl: "http://127.0.0.1:8792/",
       })
     ).resolves.toBe(11);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(3);
     expect(logError).toHaveBeenCalledWith(expect.any(TypeError), {
       action: "webhook_forward_failed",
       scope: "telegram-relay",
+      updateId: 11,
     });
   });
 });

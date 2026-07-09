@@ -119,6 +119,27 @@ export async function relay(): Promise<void> {
   }
 }
 
+type ForwardResult =
+  | { readonly ok: true; readonly updateId: number }
+  | {
+      readonly ok: false;
+      readonly aborted?: boolean;
+      readonly error?: unknown;
+      readonly status?: number;
+      readonly updateId: number;
+    };
+
+/**
+ * Forward one getUpdates batch to the local worker.
+ *
+ * Production Telegram webhooks hit the worker concurrently; relay used to
+ * await each forward serially, which stretched dual text+photo updates by the
+ * first request's latency (often ~cold-start). Forward the batch in parallel
+ * so local timing matches cloud webhooks more closely.
+ *
+ * Offset still advances only through the longest successful prefix in
+ * update_id order, so a mid-batch failure does not skip later ids.
+ */
 export async function forwardUpdates({
   offset,
   secret,
@@ -132,43 +153,96 @@ export async function forwardUpdates({
   readonly updates: readonly { readonly update_id: number }[];
   readonly webhookUrl: string;
 }): Promise<number> {
-  let nextOffset = offset;
-  for (const update of updates) {
-    let response: Response;
-    try {
-      response = await fetch(webhookUrl, {
-        body: JSON.stringify(update),
-        headers: {
-          "content-type": "application/json",
-          [SECRET_HEADER]: secret,
-        },
-        method: "POST",
+  if (updates.length === 0 || signal.aborted) {
+    return offset;
+  }
+
+  const ordered = [...updates].sort(
+    (left, right) => left.update_id - right.update_id
+  );
+
+  const results = await Promise.all(
+    ordered.map((update) =>
+      forwardOneUpdate({
+        secret,
         signal,
-      });
-    } catch (error) {
-      if (isAbortError(error) || signal.aborted) {
+        update,
+        webhookUrl,
+      })
+    )
+  );
+
+  let nextOffset = offset;
+  for (const result of results) {
+    if (!result.ok) {
+      if (result.aborted || signal.aborted) {
         break;
       }
-      if (error instanceof Error) {
-        logError(error, {
+      if (result.status !== undefined) {
+        logError({
+          action: "webhook_forward_status",
+          scope: "telegram-relay",
+          status: result.status,
+          updateId: result.updateId,
+        });
+      } else if (result.error instanceof Error) {
+        logError(result.error, {
           action: "webhook_forward_failed",
           scope: "telegram-relay",
+          updateId: result.updateId,
         });
-        break;
+      } else if (result.error !== undefined) {
+        logError(new Error(String(result.error)), {
+          action: "webhook_forward_failed",
+          scope: "telegram-relay",
+          updateId: result.updateId,
+        });
       }
-      throw error;
-    }
-    if (!response.ok) {
-      logError({
-        action: "webhook_forward_status",
-        scope: "telegram-relay",
-        status: response.status,
-      });
       break;
     }
-    nextOffset = update.update_id + 1;
+    nextOffset = result.updateId + 1;
   }
   return nextOffset;
+}
+
+async function forwardOneUpdate({
+  secret,
+  signal,
+  update,
+  webhookUrl,
+}: {
+  readonly secret: string;
+  readonly signal: AbortSignal;
+  readonly update: { readonly update_id: number };
+  readonly webhookUrl: string;
+}): Promise<ForwardResult> {
+  if (signal.aborted) {
+    return { ok: false, aborted: true, updateId: update.update_id };
+  }
+  try {
+    const response = await fetch(webhookUrl, {
+      body: JSON.stringify(update),
+      headers: {
+        "content-type": "application/json",
+        [SECRET_HEADER]: secret,
+      },
+      method: "POST",
+      signal,
+    });
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        updateId: update.update_id,
+      };
+    }
+    return { ok: true, updateId: update.update_id };
+  } catch (error) {
+    if (isAbortError(error) || signal.aborted) {
+      return { ok: false, aborted: true, updateId: update.update_id };
+    }
+    return { ok: false, error, updateId: update.update_id };
+  }
 }
 
 export async function webhook(): Promise<void> {
