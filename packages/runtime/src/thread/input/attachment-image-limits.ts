@@ -1,4 +1,4 @@
-import { RuntimeAttachmentStagingError } from "./attachment-types";
+import { RuntimeAttachmentImageLimitError } from "./attachment-types";
 
 /** Default max stored size for image attachments (all hosts). */
 export const DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES = 1_000_000;
@@ -29,14 +29,16 @@ export function assertDecodedImageWithinLimits(decoded: {
     decoded.width <= 0 ||
     decoded.height <= 0
   ) {
-    throw new RuntimeAttachmentStagingError(
-      "Image attachment has invalid dimensions after decode."
+    throw new RuntimeAttachmentImageLimitError(
+      "Image attachment has invalid dimensions after decode.",
+      "invalid_dimensions"
     );
   }
   const pixels = decoded.width * decoded.height;
   if (pixels > MAX_IMAGE_DECODED_PIXELS) {
-    throw new RuntimeAttachmentStagingError(
-      `Image attachment exceeds max decoded pixel count of ${MAX_IMAGE_DECODED_PIXELS} (${decoded.width}x${decoded.height}).`
+    throw new RuntimeAttachmentImageLimitError(
+      `Image attachment exceeds max decoded pixel count of ${MAX_IMAGE_DECODED_PIXELS} (${decoded.width}x${decoded.height}).`,
+      "decoded_pixels"
     );
   }
 }

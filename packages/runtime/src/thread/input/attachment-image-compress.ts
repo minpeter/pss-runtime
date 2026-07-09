@@ -26,7 +26,10 @@ import {
   sniffImageMediaType,
 } from "./attachment-image-sniff";
 import { rgbaHasTransparency } from "./attachment-image-rgba";
-import { RuntimeAttachmentStagingError } from "./attachment-types";
+import {
+  RuntimeAttachmentImageLimitError,
+  RuntimeAttachmentStagingError,
+} from "./attachment-types";
 
 export {
   assertDecodedImageWithinLimits,
@@ -64,8 +67,9 @@ export async function prepareAttachmentBytesForStorage({
     maxImageBytes <= 0 ||
     maxImageBytes > MAX_IMAGE_STORAGE_BUDGET_BYTES
   ) {
-    throw new RuntimeAttachmentStagingError(
-      `maxImageBytes must be a positive number ≤ ${MAX_IMAGE_STORAGE_BUDGET_BYTES}.`
+    throw new RuntimeAttachmentImageLimitError(
+      `maxImageBytes must be a positive number ≤ ${MAX_IMAGE_STORAGE_BUDGET_BYTES}.`,
+      "storage_budget"
     );
   }
 
@@ -78,8 +82,9 @@ export async function prepareAttachmentBytesForStorage({
   }
 
   if (bytes.byteLength > MAX_IMAGE_INPUT_BYTES) {
-    throw new RuntimeAttachmentStagingError(
-      `Image attachment exceeds max input size of ${MAX_IMAGE_INPUT_BYTES} bytes.`
+    throw new RuntimeAttachmentImageLimitError(
+      `Image attachment exceeds max input size of ${MAX_IMAGE_INPUT_BYTES} bytes.`,
+      "input_bytes"
     );
   }
 

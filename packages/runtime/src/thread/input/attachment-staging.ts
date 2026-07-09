@@ -12,6 +12,7 @@ import type {
   HostAttachmentStore,
 } from "./attachment-types";
 import {
+  RuntimeAttachmentImageLimitError,
   RuntimeAttachmentSecurityError,
   RuntimeAttachmentStagingError,
 } from "./attachment-types";
@@ -20,6 +21,7 @@ import type {
   UserMessageContentPart,
   UserMessageFileData,
   UserMessageFilePart,
+  UserMessageTextPart,
 } from "./input";
 
 export async function stageUserInputAttachments(
@@ -177,7 +179,7 @@ async function stageFilePart(
   part: UserMessageFilePart,
   store: HostAttachmentStore | undefined,
   options: RuntimeAttachmentStagingOptions
-): Promise<UserMessageFilePart> {
+): Promise<UserMessageContentPart> {
   const runtimeRef = runtimeAttachmentDataRef(part.data);
   if (runtimeRef !== undefined) {
     if (options.trustRuntimeAttachmentRefs === true) {
@@ -199,23 +201,50 @@ async function stageFilePart(
     );
   }
 
-  const prepared = await prepareAttachmentBytesForStorage({
-    bytes,
-    maxImageBytes: options.maxImageBytes,
-    mediaType: part.mediaType,
-  });
+  try {
+    const prepared = await prepareAttachmentBytesForStorage({
+      bytes,
+      maxImageBytes: options.maxImageBytes,
+      mediaType: part.mediaType,
+    });
 
-  const ref = await store.put({
-    bytes: prepared.bytes,
-    filename: part.filename,
-    mediaType: prepared.mediaType,
-  });
-  options.stagedRefs?.push(ref);
+    const ref = await store.put({
+      bytes: prepared.bytes,
+      filename: part.filename,
+      mediaType: prepared.mediaType,
+    });
+    options.stagedRefs?.push(ref);
+    return {
+      ...part,
+      // Keep part mediaType aligned with stored bytes (e.g. heic → image/jpeg).
+      data: encodeRuntimeAttachmentData(ref),
+      mediaType: prepared.mediaType,
+    };
+  } catch (error) {
+    // Safety limits: omit this image, keep the rest of the turn (text + other files).
+    if (error instanceof RuntimeAttachmentImageLimitError) {
+      return imageLimitOmittedTextPart(part.filename, error);
+    }
+    throw error;
+  }
+}
+
+function imageLimitOmittedTextPart(
+  filename: string | undefined,
+  error: RuntimeAttachmentImageLimitError
+): UserMessageTextPart {
+  const label = filename?.trim() || "image";
+  const reason =
+    error.limit === "input_bytes"
+      ? "file too large to process safely"
+      : error.limit === "decoded_pixels"
+        ? "resolution too high to process safely"
+        : error.limit === "storage_budget"
+          ? "storage budget invalid or too high"
+          : "invalid image dimensions";
   return {
-    ...part,
-    // Keep part mediaType aligned with stored bytes (e.g. heic → image/jpeg).
-    data: encodeRuntimeAttachmentData(ref),
-    mediaType: prepared.mediaType,
+    type: "text",
+    text: `[Attachment omitted: ${label} (${reason})]`,
   };
 }
 

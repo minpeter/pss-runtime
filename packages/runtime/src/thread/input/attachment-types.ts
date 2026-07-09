@@ -38,6 +38,32 @@ export class RuntimeAttachmentStagingError extends Error {
   }
 }
 
+/**
+ * Image safety limit exceeded (input size / decoded pixels / budget).
+ * Staging soft-fails these into a text notice so the rest of the user turn
+ * can still proceed.
+ */
+export class RuntimeAttachmentImageLimitError extends RuntimeAttachmentStagingError {
+  readonly limit:
+    | "decoded_pixels"
+    | "input_bytes"
+    | "invalid_dimensions"
+    | "storage_budget";
+
+  constructor(
+    message: string,
+    limit:
+      | "decoded_pixels"
+      | "input_bytes"
+      | "invalid_dimensions"
+      | "storage_budget"
+  ) {
+    super(message);
+    this.name = "RuntimeAttachmentImageLimitError";
+    this.limit = limit;
+  }
+}
+
 export class RuntimeAttachmentHydrationError extends Error {
   constructor(message: string) {
     super(message);

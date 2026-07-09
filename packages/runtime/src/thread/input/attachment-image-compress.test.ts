@@ -444,6 +444,41 @@ describe("prepareAttachmentBytesForStorage", () => {
 });
 
 describe("stageUserInputAttachments image normalization", () => {
+  it("soft-omits images that exceed safety input limits without failing the turn", async () => {
+    const store = new MemoryAttachmentStore();
+    const huge = new Uint8Array(MAX_IMAGE_INPUT_BYTES + 1);
+    huge[0] = 0xff;
+    huge[1] = 0xd8;
+    huge[huge.length - 2] = 0xff;
+    huge[huge.length - 1] = 0xd9;
+
+    const staged = await stageUserInputAttachments(
+      {
+        type: "user-input",
+        content: [
+          { type: "text", text: "see this?" },
+          {
+            type: "file",
+            mediaType: "image/jpeg",
+            filename: "huge.jpg",
+            data: huge,
+          },
+        ],
+      },
+      store
+    );
+
+    if (!("content" in staged)) {
+      throw new Error("expected multipart user input");
+    }
+    expect(staged.content).toHaveLength(2);
+    expect(staged.content[0]).toEqual({ type: "text", text: "see this?" });
+    expect(staged.content[1]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("Attachment omitted: huge.jpg"),
+    });
+  });
+
   it(
     "stores only jpeg/png media types for image inputs",
     async () => {

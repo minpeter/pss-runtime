@@ -35,6 +35,7 @@ export {
   type PreparedAttachmentBytes,
   type RuntimeAttachmentBlob,
   RuntimeAttachmentHydrationError,
+  RuntimeAttachmentImageLimitError,
   type RuntimeAttachmentPutInput,
   type RuntimeAttachmentReference,
   RuntimeAttachmentSecurityError,

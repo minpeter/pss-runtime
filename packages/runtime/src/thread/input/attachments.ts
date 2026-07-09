@@ -37,6 +37,7 @@ export {
 export {
   type RuntimeAttachmentBlob,
   RuntimeAttachmentHydrationError,
+  RuntimeAttachmentImageLimitError,
   type RuntimeAttachmentPutInput,
   type RuntimeAttachmentReference,
   RuntimeAttachmentSecurityError,
