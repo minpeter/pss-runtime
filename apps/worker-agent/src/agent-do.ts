@@ -3,8 +3,8 @@ import type { Agent as PssAgent } from "@minpeter/pss-runtime";
 import {
   type CloudflareAgentsFiberRecoveryContext,
   type CloudflareAgentsFiberRecoveryResult,
-  type CloudflareAgentsPlatformContext,
-  createCloudflareAgentsPlatformContext,
+  type CloudflarePlatformContext,
+  createCloudflarePlatformContext,
 } from "@minpeter/pss-runtime/platform/cloudflare";
 
 import { createConfiguredAgent } from "./agent";
@@ -47,7 +47,7 @@ import {
  * Scheduling/resume uses Agents fibers; HTTP remains app-owned via onRequest.
  */
 export class AgentDurableObject extends CloudflareAgent<Env> {
-  readonly #platform: CloudflareAgentsPlatformContext<PssAgent>;
+  readonly #platform: CloudflarePlatformContext<PssAgent>;
   readonly #env: Env;
   readonly #storage: DurableObjectStorage;
   readonly #sessionIndexClient: SessionIndexClient;
@@ -60,7 +60,7 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
     this.#storage = ctx.storage;
     this.#sessionIndexClient = createSessionIndexClient(env);
     this.#sessionTranscriptClient = createSessionTranscriptClient(env);
-    this.#platform = createCloudflareAgentsPlatformContext({
+    this.#platform = createCloudflarePlatformContext({
       cloudflareAgent: this,
       createAgent: ({ env: agentEnv, host }) =>
         createConfiguredAgent(agentEnv, host, {

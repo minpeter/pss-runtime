@@ -514,15 +514,15 @@ Cloudflare Agents SDK fiber, schedule, recovery, and context helpers.
 
 **Cloudflare agent products use the Agents SDK path only.** Implement the
 Worker DO as a Cloudflare Agents SDK `Agent` subclass and wire PSS through
-`createCloudflareAgentsPlatformContext` / `createCloudflareHost({ cloudflareAgent,
+`createCloudflarePlatformContext` / `createCloudflareHost({ cloudflareAgent,
 durableObjectContext: this.ctx, resume, ... })`. Immediate run/thread resumes map
 to `startFiber()`, delayed resumes to SDK `schedule()`, and recovery to
 `onFiberRecovered()`. HTTP app routes should use `onRequest` (PartyServer entry).
 Scheduled callback and recovery payloads are prefix-guarded by default; pass
 `allowedPrefixes` or `allowPrefix` for multi-namespace Workers. The
-`worker-agent` app is the reference. Low-level `createCloudflareStorageHost` +
-`drainCloudflareAlarm` remain available for store inspection and plain DO
-alarm tooling, not as the product agent host API.
+`worker-agent` app is the reference. Low-level `createCloudflareStorageHost`
+remains available for store inspection and tests; wake/resume is Agents-owned
+via `createCloudflarePlatformContext` / fibers.
 
 ### Platform adapter parity
 
@@ -541,7 +541,7 @@ timers.
 | Delayed runs (`runAfterMs`)           | due-time filtered | due-time filtered        | Agents `schedule()` / fibers  |
 | Product host factory                  | `createInMemoryHost` | `createFileHost`      | `createCloudflareHost`        |
 | Low-level storage host                | —                 | —                        | `createCloudflareStorageHost` |
-| Drain helper                          | app-driven        | `drainScheduledNodeWork` | fiber resume / `drainCloudflareAlarm` |
+| Drain helper                          | app-driven        | `drainScheduledNodeWork` | Agents fiber resume               |
 | Scheduled fiber retry backoff         | —                 | —                        | Cloudflare Agents SDK adapter |
 
 The same core API supports room/user/thread routing through stable thread keys.
@@ -562,39 +562,11 @@ checkpoints, cancellation, scheduling, thread snapshots, and completion
 notifications. The Cloudflare adapter persists scheduled runs and thread
 prompts, sets alarms, and resumes work through `Agent.resume(...)`.
 
-Use `dispatchCloudflareAgentNotification` for later events such as reminders,
-connector callbacks, and button actions. It creates the durable notification run,
-deduplicates by `idempotencyKey`, and schedules the Durable Object alarm:
+Use `dispatchCloudflareAgentsNotification` (or host-level notification
+dispatch) for later events such as reminders and connector callbacks. Delayed
+work is woken by the Agents SDK schedule/fiber path through
+`createCloudflarePlatformContext`.
 
-```ts
-import {
-  dispatchCloudflareAgentNotification,
-  drainCloudflareAlarm,
-} from "@minpeter/pss-runtime/platform/cloudflare";
-
-await dispatchCloudflareAgentNotification({
-  idempotencyKey: `reminder:${reminderId}`,
-  input: reminderText,
-  namespace: "support-agent",
-  prefix: "agent",
-  threadKey: `room:${roomId}:user:${userId}`,
-  storage: ctx.storage,
-});
-```
-
-Alarm drain can use a single agent, or resolve one per scheduled run when the
-Durable Object owns multiple rooms/users:
-
-```ts
-await drainCloudflareAlarm({
-  agentForRun: ({ threadKey }) =>
-    createAgentForSession({ env, host, threadKey }),
-  failOnTurnError: true,
-  onEvent: ({ runId }, event) => streamEventToDelivery(runId, event),
-  prefix: "agent",
-  storage: ctx.storage,
-});
-```
 
 ## Checkpoints and Cancellation
 

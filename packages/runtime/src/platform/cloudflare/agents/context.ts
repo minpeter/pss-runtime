@@ -23,7 +23,7 @@ const defaultPrefix = "pss-runtime";
 
 type MaybePromise<T> = Promise<T> | T;
 
-export interface CloudflareAgentsPlatformFactoryOptions<
+export interface CloudflarePlatformFactoryOptions<
   Env,
   TAgent extends
     CloudflareAgentsDefaultResumeAgent = CloudflareAgentsDefaultResumeAgent,
@@ -35,16 +35,16 @@ export interface CloudflareAgentsPlatformFactoryOptions<
   readonly prefix: string;
 }
 
-interface CloudflareAgentsPlatformContextBaseOptions<
+interface CloudflarePlatformContextBaseOptions<
   Env,
   CreatedAgent extends CloudflareAgentsResumableAgent,
   TAgent extends CloudflareAgentsDefaultResumeAgent,
 > {
   readonly allowedPrefixes?: readonly string[];
-  readonly allowPrefix?: CloudflareAgentsPlatformPrefixGuard<Env>;
+  readonly allowPrefix?: CloudflarePlatformPrefixGuard<Env>;
   readonly cloudflareAgent: TAgent;
   readonly createAgent: (
-    options: CloudflareAgentsPlatformFactoryOptions<Env, TAgent>
+    options: CloudflarePlatformFactoryOptions<Env, TAgent>
   ) => CreatedAgent;
   readonly defaultPrefix?: string;
   readonly drain?: CloudflareAgentsTurnDrainOptions;
@@ -55,15 +55,15 @@ interface CloudflareAgentsPlatformContextBaseOptions<
   readonly retryRunAfterMs?: number;
 }
 
-export type CloudflareAgentsPlatformContextOptions<
+export type CloudflarePlatformContextOptions<
   Env,
   CreatedAgent extends CloudflareAgentsResumableAgent,
   TAgent extends
     CloudflareAgentsDefaultResumeAgent = CloudflareAgentsDefaultResumeAgent,
-> = CloudflareAgentsPlatformContextBaseOptions<Env, CreatedAgent, TAgent> &
+> = CloudflarePlatformContextBaseOptions<Env, CreatedAgent, TAgent> &
   Pick<CloudflareHostAgentsOptions<TAgent>, "delayedResumeCallback">;
 
-export interface CloudflareAgentsPlatformContext<
+export interface CloudflarePlatformContext<
   CreatedAgent extends CloudflareAgentsResumableAgent,
 > {
   agent(prefix?: string): CreatedAgent;
@@ -80,18 +80,18 @@ export interface CloudflareAgentsResumableAgent {
   resume(runId: string): ReturnType<CloudflareAgentsResumeRun>;
 }
 
-export type CloudflareAgentsPlatformPrefixGuard<Env> = (
-  options: CloudflareAgentsPlatformPrefixGuardOptions<Env>
+export type CloudflarePlatformPrefixGuard<Env> = (
+  options: CloudflarePlatformPrefixGuardOptions<Env>
 ) => MaybePromise<boolean>;
 
-export interface CloudflareAgentsPlatformPrefixGuardOptions<Env>
+export interface CloudflarePlatformPrefixGuardOptions<Env>
   extends CloudflareAgentsPrefixGuardOptions {
   readonly cloudflareAgent: CloudflareAgentsPlatformAgent;
   readonly durableObjectContext: CloudflareAgentsDurableObjectContext;
   readonly env: Env;
 }
 
-export function createCloudflareAgentsPlatformContext<
+export function createCloudflarePlatformContext<
   Env,
   CreatedAgent extends CloudflareAgentsResumableAgent,
   TAgent extends
@@ -109,11 +109,11 @@ export function createCloudflareAgentsPlatformContext<
   retryMaxAttempts,
   retryMaxRunAfterMs,
   retryRunAfterMs,
-}: CloudflareAgentsPlatformContextOptions<
+}: CloudflarePlatformContextOptions<
   Env,
   CreatedAgent,
   TAgent
->): CloudflareAgentsPlatformContext<CreatedAgent> {
+>): CloudflarePlatformContext<CreatedAgent> {
   const retry = createCloudflareAgentsFiberRetryScheduler({
     cloudflareAgent,
     delayedResumeCallback,

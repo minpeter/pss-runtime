@@ -1,4 +1,4 @@
-import { drainAgentTurnWithBudget } from "../alarm/run-drain";
+import { drainAgentTurnWithBudget } from "../turn-drain";
 import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import { cloudflareAgentsDrainOptionsForPayload } from "./drain-options";
 import {

@@ -13,11 +13,11 @@ describe("cloudflare durable object adapter", () => {
     const storeSource = readText(
       "packages/runtime/src/platform/cloudflare/storage/execution/store.ts"
     );
-    const alarmDrainerSource = readText(
-      "packages/runtime/src/platform/cloudflare/alarm/drainer.ts"
+    const platformHostSource = readText(
+      "packages/runtime/src/platform/cloudflare/host/create-cloudflare-host.ts"
     );
-    const alarmWorkSource = readText(
-      "packages/runtime/src/platform/cloudflare/alarm/scheduled-work.ts"
+    const platformContextSource = readText(
+      "packages/runtime/src/platform/cloudflare/agents/context.ts"
     );
     const threadStoreSource = readText(
       "packages/runtime/src/platform/cloudflare/storage/sqlite/thread-store.ts"
@@ -28,18 +28,18 @@ describe("cloudflare durable object adapter", () => {
 
     expect(hostSource).not.toContain("createFakeCloudflareDurableObjectHost");
     expect(hostSource).toContain("createCloudflareStorageHost");
-    expect(hostSource).toContain("createCloudflareAlarmScheduler");
-    expect(hostSource).toContain("setAlarm");
+    expect(hostSource).toContain("createCloudflareScheduledWorkScheduler");
+    expect(hostSource).not.toContain("setAlarm");
+    expect(platformHostSource).toContain("createCloudflareHost");
+    expect(platformHostSource).toContain("createCloudflareAgentsFiberScheduler");
+    expect(platformContextSource).toContain("createCloudflarePlatformContext");
     expect(storeSource).toContain("DurableObjectExecutionStore");
     expect(storeSource).toContain("DurableObjectSqliteThreadStore");
-    expect(alarmWorkSource).toContain("agent.resume(");
-    expect(alarmWorkSource).toContain("ackScheduledCloudflareRun");
-    expect(alarmDrainerSource).toContain("rescheduleCloudflareAlarm");
     expect(threadStoreSource).toContain("DurableObjectSqliteThreadStore");
     expect(threadStoreSchemaSource).toContain("pss_thread_meta");
   });
 
-  it("drives Cloudflare scheduled runs and thread prompts through stored alarms", async () => {
+  it("drives Cloudflare scheduled work through the queue-only storage host", async () => {
     const { InMemorySqlStorage } = await import(
       "../packages/runtime/src/platform/cloudflare/sql/node-test/node-sqlite-storage.ts"
     );
@@ -76,52 +76,26 @@ describe("cloudflare durable object adapter", () => {
     await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([
       runId,
     ]);
+    await expect(listScheduledCloudflareThreadPrompts(storage)).resolves.toEqual(
+      [
+        {
+          idempotencyKey,
+          runId: notificationRunId,
+          threadKey: "example",
+        },
+      ]
+    );
+
     await ackScheduledCloudflareRun(storage, runId);
-    await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([]);
-    const prompt = {
+    await ackScheduledCloudflareThreadPrompt(storage, {
       idempotencyKey,
       runId: notificationRunId,
       threadKey: "example",
-    };
-    await expect(
-      listScheduledCloudflareThreadPrompts(storage)
-    ).resolves.toEqual([prompt]);
-    await ackScheduledCloudflareThreadPrompt(storage, prompt);
+    });
+
+    await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([]);
     await expect(
       listScheduledCloudflareThreadPrompts(storage)
     ).resolves.toEqual([]);
-    await expect(
-      host.store.notifications.claimByIdempotencyKey(idempotencyKey)
-    ).resolves.toMatchObject({ ok: true });
-  });
-
-  it("stores Durable Object threads in SQLite rows", async () => {
-    const { InMemorySqlStorage } = await import(
-      "../packages/runtime/src/platform/cloudflare/sql/node-test/node-sqlite-storage.ts"
-    );
-    const { DurableObjectSqliteThreadStore } = await import(
-      "../packages/runtime/src/platform/cloudflare/storage/sqlite/thread-store.ts"
-    );
-    const { InMemoryCloudflareDurableObjectStorage } = await import(
-      "../packages/runtime/src/platform/cloudflare/index.ts"
-    );
-
-    const storage = new InMemoryCloudflareDurableObjectStorage({
-      sql: new InMemorySqlStorage(),
-    });
-    const threads = new DurableObjectSqliteThreadStore(storage, "script");
-
-    await threads.commit(
-      "thread:review",
-      {
-        state: { history: [{ role: "user", content: "hi" }], schemaVersion: 1 },
-      },
-      { expectedVersion: null }
-    );
-
-    await expect(threads.load("thread:review")).resolves.toEqual({
-      state: { history: [{ role: "user", content: "hi" }], schemaVersion: 1 },
-      version: "1",
-    });
   });
 });

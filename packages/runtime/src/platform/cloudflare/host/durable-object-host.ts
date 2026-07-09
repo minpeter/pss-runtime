@@ -55,16 +55,15 @@ export interface CloudflareStorageHostOptions {
 /**
  * Low-level DO storage host (store + attachments + optional scheduler).
  *
- * Defaults to the alarm scheduler. Product agent deployments should use
- * {@link createCloudflareHost} (Agents SDK fibers). Prefer this helper for
- * store inspection, alarm-drain tests, and non-Agents DO tooling.
+ * Defaults to a queue-only scheduler (no DO alarm wake). Product agent
+ * deployments should use {@link createCloudflareHost} (Agents SDK fibers).
  */
 export function createCloudflareStorageHost({
   maxPayloadBytes,
   prefix = defaultPrefix,
   threadStore,
   storage,
-  scheduler = createCloudflareAlarmScheduler({ prefix, storage }),
+  scheduler = createCloudflareScheduledWorkScheduler({ prefix, storage }),
 }: CloudflareStorageHostOptions): AgentHost {
   const store = new DurableObjectExecutionStore({
     maxPayloadBytes,
@@ -78,7 +77,11 @@ export function createCloudflareStorageHost({
   };
 }
 
-export function createCloudflareAlarmScheduler({
+/**
+ * Queue-only HostScheduler backed by DO storage scheduled-work rows.
+ * Does not arm Durable Object alarms — wake/resume is Agents SDK owned.
+ */
+export function createCloudflareScheduledWorkScheduler({
   prefix = defaultPrefix,
   storage,
 }: {
@@ -86,9 +89,8 @@ export function createCloudflareAlarmScheduler({
   readonly storage: CloudflareDurableObjectStorage;
 }): HostScheduler {
   return {
-    enqueueRun: async (runId, options) => {
+    enqueueRun: async (runId) => {
       await appendScheduledRun(storage, prefix, runId);
-      await setAlarm(storage, options?.runAfterMs ?? 0);
     },
     resumeThread: async (threadKey, options) => {
       await appendScheduledThreadPrompt(storage, prefix, {
@@ -97,7 +99,6 @@ export function createCloudflareAlarmScheduler({
         runId: options?.runId,
         threadKey,
       });
-      await setAlarm(storage, 0);
     },
   };
 }
@@ -153,19 +154,6 @@ export async function claimScheduledCloudflareThreadPrompt(
   );
 }
 
-export async function rescheduleCloudflareAlarm(
-  storage: CloudflareDurableObjectStorage,
-  options: { readonly runAfterMs?: number } = {}
-): Promise<void> {
-  await setAlarm(storage, options.runAfterMs ?? 0);
-}
-
-async function setAlarm(
-  storage: CloudflareDurableObjectStorage,
-  runAfterMs: number
-): Promise<void> {
-  await storage.setAlarm?.(Date.now() + Math.max(0, runAfterMs));
-}
 
 function executionStoreWithThreads(
   store: AgentHost["store"],

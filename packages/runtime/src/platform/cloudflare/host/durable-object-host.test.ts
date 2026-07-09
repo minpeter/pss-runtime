@@ -3,7 +3,6 @@ import type { AgentEvent, AgentTurn } from "../../../index";
 import {
   ackScheduledCloudflareRun,
   ackScheduledCloudflareThreadPrompt,
-  type CloudflareAlarmAgent,
   type CloudflareDurableObjectId,
   type CloudflareDurableObjectNamespace,
   type CloudflareDurableObjectState,
@@ -11,17 +10,12 @@ import {
   type CloudflareDurableObjectStub,
   createCloudflareStorageHost,
   drainAgentTurn,
-  drainCloudflareAlarm,
   InMemoryCloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
   listScheduledCloudflareThreadPrompts,
 } from "../index";
 import { InMemorySqlStorage } from "../sql/node-test/node-sqlite-storage";
 import type { CloudflareDurableObjectTransactionStorage } from "../storage/durable-object/durable-object-storage";
-
-const unclaimableAgent = {
-  resume: () => Promise.resolve(null),
-} satisfies CloudflareAlarmAgent;
 
 interface ScheduledWorkProbeRow {
   readonly kind: string;
@@ -214,68 +208,6 @@ describe("Cloudflare Durable Object host adapter", () => {
     await ackScheduledCloudflareThreadPrompt(cloudflareLikeStorage, prompt);
 
     expect(readScheduledWorkRows(storage)).toEqual([]);
-  });
-
-  it("keeps unclaimable scheduled runs pending and reschedules the alarm", async () => {
-    const storage = new InMemoryCloudflareDurableObjectStorage({
-      sql: new InMemorySqlStorage(),
-    });
-    const host = createCloudflareStorageHost({ storage });
-    const runId = "background:bg_retry";
-
-    await host.store.turns.create(notificationRunRecord(runId));
-    await host.scheduler.enqueueRun(runId);
-
-    const summary = await drainCloudflareAlarm({
-      agent: unclaimableAgent,
-      prefix: "pss-runtime",
-      storage,
-    });
-
-    await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([
-      runId,
-    ]);
-    expect(summary.failedRuns).toEqual([
-      { error: "Run was not claimable during this alarm.", id: runId },
-    ]);
-    expect(storage.alarmTime()).not.toBeUndefined();
-  });
-
-  it("keeps unclaimable scheduled thread prompts pending and reschedules the alarm", async () => {
-    const storage = new InMemoryCloudflareDurableObjectStorage({
-      sql: new InMemorySqlStorage(),
-    });
-    const host = createCloudflareStorageHost({ storage });
-    const idempotencyKey = "background-complete:demo:bg_unclaimable";
-    const runId = "notification:bg_unclaimable";
-    const prompt = {
-      idempotencyKey,
-      runId,
-      threadKey: "room:demo:user:edge",
-    };
-
-    await host.scheduler.resumeThread(prompt.threadKey, {
-      idempotencyKey,
-      runId,
-    });
-    await host.store.turns.create(notificationRunRecord(runId, idempotencyKey));
-
-    const summary = await drainCloudflareAlarm({
-      agent: unclaimableAgent,
-      prefix: "pss-runtime",
-      storage,
-    });
-
-    await expect(
-      listScheduledCloudflareThreadPrompts(storage)
-    ).resolves.toEqual([prompt]);
-    expect(summary.failedThreadPrompts).toEqual([
-      {
-        error: "Thread prompt was not claimable during this alarm.",
-        id: idempotencyKey,
-      },
-    ]);
-    expect(storage.alarmTime()).not.toBeUndefined();
   });
 
   it("observes drained run events when an event callback is provided", async () => {

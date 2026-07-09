@@ -2,7 +2,7 @@ import { describeExecutionSchedulerContract } from "../../../contracts/execution
 import {
   ackScheduledCloudflareRun,
   ackScheduledCloudflareThreadPrompt,
-  createCloudflareAlarmScheduler,
+  createCloudflareScheduledWorkScheduler,
   InMemoryCloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
   listScheduledCloudflareThreadPrompts,
@@ -15,20 +15,13 @@ describeExecutionSchedulerContract({
       ackRun: (runId) => ackScheduledCloudflareRun(storage, runId),
       ackThreadPrompt: (prompt) =>
         ackScheduledCloudflareThreadPrompt(storage, prompt),
-      alarmTimeMs: () => {
-        const alarmTime = storage.alarmTime();
-        if (alarmTime === undefined) {
-          return;
-        }
-        return typeof alarmTime === "number" ? alarmTime : alarmTime.getTime();
-      },
       listRuns: (options) =>
         listScheduledCloudflareRuns(storage, { limit: options?.limit }),
       listThreadPrompts: (options) =>
         listScheduledCloudflareThreadPrompts(storage, {
           limit: options?.limit,
         }),
-      scheduler: createCloudflareAlarmScheduler({ storage }),
+      scheduler: createCloudflareScheduledWorkScheduler({ storage }),
     };
   },
   name: "cloudflare durable object",

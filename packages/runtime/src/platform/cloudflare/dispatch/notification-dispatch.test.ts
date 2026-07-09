@@ -77,7 +77,6 @@ describe("dispatchCloudflareAgentNotification", () => {
         threadKey: "room:1:user:2",
       })
     ).toBe("connector:oauth:done");
-    expect(storage.alarmTime()).toEqual(expect.any(Number));
   });
 
   it("keeps raw and malformed notification idempotency keys unchanged", () => {

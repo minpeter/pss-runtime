@@ -51,11 +51,12 @@ describe("runtime package subpaths", () => {
     const canonicalCloudflareExports = [
       "createCloudflareHost",
       "createCloudflareStorageHost",
+      "createCloudflareScheduledWorkScheduler",
       "createCloudflareAgentsFiberScheduler",
-      "createCloudflareAgentsPlatformContext",
+      "createCloudflarePlatformContext",
       "recoverCloudflareAgentsFiber",
       "startCloudflareAgentsResumeFiber",
-      "drainCloudflareAlarm",
+      "drainAgentTurn",
     ] as const;
 
     expect(cloudflarePlatform).not.toHaveProperty("createCloudflareAgentsHost");

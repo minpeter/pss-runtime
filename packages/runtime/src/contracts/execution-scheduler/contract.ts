@@ -32,8 +32,8 @@ export interface ExecutionSchedulerContractOptions {
   readonly name: string;
   /**
    * Whether list results filter by due time. The memory and file adapters
-   * store a dueAt per work item; the cloudflare adapter delegates dueness to
-   * the Durable Object alarm and lists every pending item.
+   * store a dueAt per work item; the Cloudflare queue scheduler lists every
+   * pending item (Agents schedule owns delayed wake).
    */
   readonly supportsDueTimeFiltering: boolean;
 }
@@ -157,16 +157,20 @@ export function describeExecutionSchedulerContract({
     );
 
     it.runIf(!supportsDueTimeFiltering)(
-      "arms the platform timer for delayed runs",
+      "lists delayed runs immediately when the platform does not filter by due time",
       async () => {
         const harness = await setup();
         const beforeEnqueueMs = Date.now();
         await harness.scheduler.enqueueRun("run-later", {
           runAfterMs: 60_000,
         });
+        // Queue-only adapters (e.g. Cloudflare storage host) ignore runAfterMs
+        // for listing and leave wake timing to the Agents schedule path.
+        expect(await harness.listRuns()).toEqual(["run-later"]);
         const alarmTimeMs = harness.alarmTimeMs?.();
-        expect(alarmTimeMs).toBeDefined();
-        expect(alarmTimeMs).toBeGreaterThanOrEqual(beforeEnqueueMs + 60_000);
+        if (alarmTimeMs !== undefined) {
+          expect(alarmTimeMs).toBeGreaterThanOrEqual(beforeEnqueueMs + 60_000);
+        }
       }
     );
   });
