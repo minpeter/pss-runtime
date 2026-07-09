@@ -59,6 +59,16 @@ export type ImagePrepareDiagnosticsListener = (
   diagnostics: ImagePrepareDiagnostics
 ) => void;
 
+export type ImageOmitDiagnosticsListener = (diagnostics: {
+  readonly filename?: string;
+  readonly limit:
+    | "decoded_pixels"
+    | "input_bytes"
+    | "invalid_dimensions"
+    | "storage_budget";
+  readonly mediaType: string;
+}) => void;
+
 /**
  * Request-scoped image-prepare collector (ALS). Hosts (e.g. worker-agent)
  * register a listener and log via their own stack (evlog wide events).
@@ -67,11 +77,34 @@ export type ImagePrepareDiagnosticsListener = (
 const imagePrepareDiagnosticsStore =
   new AsyncLocalStorage<ImagePrepareDiagnosticsListener>();
 
+const imageOmitDiagnosticsStore =
+  new AsyncLocalStorage<ImageOmitDiagnosticsListener>();
+
 export function runWithImagePrepareDiagnosticsListener<T>(
   listener: ImagePrepareDiagnosticsListener,
   fn: () => T
 ): T {
   return imagePrepareDiagnosticsStore.run(listener, fn);
+}
+
+export function runWithImageOmitDiagnosticsListener<T>(
+  listener: ImageOmitDiagnosticsListener,
+  fn: () => T
+): T {
+  return imageOmitDiagnosticsStore.run(listener, fn);
+}
+
+/** Notify host of a soft-omitted image (staging options and/or ALS). */
+export function notifyImageOmitDiagnostics(diagnostics: {
+  readonly filename?: string;
+  readonly limit:
+    | "decoded_pixels"
+    | "input_bytes"
+    | "invalid_dimensions"
+    | "storage_budget";
+  readonly mediaType: string;
+}): void {
+  imageOmitDiagnosticsStore.getStore()?.(diagnostics);
 }
 
 /**
@@ -175,10 +208,10 @@ export async function prepareAttachmentBytesForStorage({
   const decoded = await decodeImageRgba(bytes, sniffed);
   assertDecodedImageWithinLimits(decoded);
   const hasAlpha = rgbaHasTransparency(decoded.data);
-  const path: ImagePreparePath = hasAlpha ? "reencode_png" : "reencode_jpeg";
   const prepared = hasAlpha
     ? encodePngUnderBudget(decoded, maxImageBytes)
     : encodeJpegUnderBudget(decoded, maxImageBytes);
+  const path = resolveReencodePath(hasAlpha, prepared.mediaType);
 
   return withDiagnostics(
     prepared,
@@ -195,6 +228,19 @@ export async function prepareAttachmentBytesForStorage({
     },
     { onImagePrepare }
   );
+}
+
+function resolveReencodePath(
+  hasAlpha: boolean,
+  outputMediaType: string
+): ImagePreparePath {
+  if (outputMediaType === "image/png") {
+    return "reencode_png";
+  }
+  if (hasAlpha) {
+    return "reencode_png_fallback_jpeg";
+  }
+  return "reencode_jpeg";
 }
 
 export function isCompressibleImageMediaType(mediaType: string): boolean {

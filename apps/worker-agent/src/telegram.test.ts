@@ -9,7 +9,11 @@ import {
   isImageAttachment,
   replyToThread,
   TELEGRAM_COALESCE_QUIET_MS,
+  TELEGRAM_MAX_RAW_IMAGE_BYTES,
+  TELEGRAM_MAX_TURN_IMAGES,
+  TELEGRAM_MAX_TURN_RAW_IMAGE_BYTES,
   TELEGRAM_MESSAGE_CONCURRENCY,
+  TelegramAttachmentLimitError,
 } from "./telegram";
 import { logError } from "./worker-log";
 
@@ -154,6 +158,52 @@ describe("telegram conversation handling", () => {
         mediaType: "image/png",
       },
     ]);
+  });
+
+  it("rejects oversized raw images before the DO hop", async () => {
+    const huge = new Uint8Array(TELEGRAM_MAX_RAW_IMAGE_BYTES + 1);
+    await expect(
+      collectTurnImages([
+        {
+          attachments: [{ data: huge, mimeType: "image/jpeg", type: "image" }],
+          text: "",
+        },
+      ])
+    ).rejects.toBeInstanceOf(TelegramAttachmentLimitError);
+  });
+
+  it("rejects turns that exceed the max image count", async () => {
+    const tiny = new Uint8Array([1]);
+    const messages = Array.from(
+      { length: TELEGRAM_MAX_TURN_IMAGES + 1 },
+      () =>
+        ({
+          attachments: [
+            { data: tiny, mimeType: "image/jpeg", type: "image" as const },
+          ],
+          text: "",
+        }) as const
+    );
+    await expect(collectTurnImages(messages)).rejects.toBeInstanceOf(
+      TelegramAttachmentLimitError
+    );
+  });
+
+  it("rejects turns that exceed total raw image bytes", async () => {
+    const chunk = new Uint8Array(
+      Math.floor(TELEGRAM_MAX_TURN_RAW_IMAGE_BYTES / 2) + 1
+    );
+    await expect(
+      collectTurnImages([
+        {
+          attachments: [
+            { data: chunk, mimeType: "image/jpeg", type: "image" },
+            { data: chunk, mimeType: "image/jpeg", type: "image" },
+          ],
+          text: "",
+        },
+      ])
+    ).rejects.toBeInstanceOf(TelegramAttachmentLimitError);
   });
 
   it("treats telegram photos and image documents as image attachments", () => {

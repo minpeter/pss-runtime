@@ -10,6 +10,7 @@ export {
 export {
   DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,
   IMAGE_PREPARE_LOG_MESSAGE,
+  type ImageOmitDiagnosticsListener,
   type ImagePrepareDiagnostics,
   type ImagePrepareDiagnosticsListener,
   type ImagePreparePath,
@@ -18,8 +19,10 @@ export {
   MAX_IMAGE_DECODED_PIXELS,
   MAX_IMAGE_INPUT_BYTES,
   MAX_IMAGE_STORAGE_BUDGET_BYTES,
+  notifyImageOmitDiagnostics,
   type PreparedAttachmentBytes,
   prepareAttachmentBytesForStorage,
+  runWithImageOmitDiagnosticsListener,
   runWithImagePrepareDiagnosticsListener,
   STORED_IMAGE_MEDIA_TYPES,
   type StoredImageMediaType,

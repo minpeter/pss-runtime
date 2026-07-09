@@ -11,6 +11,12 @@ export const workerErrors = defineErrorCatalog("worker-agent", {
     why: "Telegram file download or decode failed before the agent turn",
     fix: "Retry the message or send a smaller image",
   },
+  ATTACHMENT_LIMIT_EXCEEDED: {
+    message: "Image attachment exceeds worker size or count limits",
+    status: 413,
+    why: "Too many images or raw image bytes before Durable Object staging",
+    fix: "Send fewer or smaller images and retry",
+  },
   INVALID_TURN_PAYLOAD: {
     message: "text or attachments and channel required",
     status: 400,

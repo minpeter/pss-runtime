@@ -16,7 +16,10 @@ export type { Env } from "./env";
 const TUI_RPC_PATHNAME = "/trpc";
 
 export default defineWorkerFetch<Env>(async (request, env, ctx, log) => {
-  ensureWorkerLogger({ version: env.CF_VERSION_METADATA?.id });
+  ensureWorkerLogger({
+    environment: env.ENVIRONMENT,
+    version: env.CF_VERSION_METADATA?.id,
+  });
   const url = new URL(request.url);
   const correlationId = newCorrelationId();
   const handler =

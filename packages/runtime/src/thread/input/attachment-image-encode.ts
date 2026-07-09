@@ -20,7 +20,9 @@ export type ImagePreparePath =
   | "passthrough_jpeg"
   | "passthrough_png"
   | "reencode_jpeg"
-  | "reencode_png";
+  | "reencode_png"
+  /** Alpha source reencoded as JPEG after PNG budget failure. */
+  | "reencode_png_fallback_jpeg";
 
 /** Safe, queryable fields for Workers logs / dashboards (no pixel/base64 payloads). */
 export interface ImagePrepareDiagnostics {

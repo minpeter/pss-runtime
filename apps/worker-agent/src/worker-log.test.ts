@@ -1,8 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { defineErrorCatalog } from "evlog";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   attachmentLogFields,
   imagePrepareLogEvent,
+  logError,
+  summarizeImageOmits,
   summarizeImagePrepares,
 } from "./worker-log";
 
@@ -88,5 +91,58 @@ describe("imagePrepareLogEvent", () => {
       maxImageBytes: 240_000,
     });
     expect(JSON.stringify(event)).not.toMatch(TREE_CHARS_PATTERN);
+  });
+});
+
+describe("summarizeImageOmits", () => {
+  it("nests soft-omit diagnostics for wide events", () => {
+    expect(
+      summarizeImageOmits([
+        { limit: "input_bytes", mediaType: "image/heic", filename: "big.heic" },
+      ])
+    ).toEqual({
+      imageOmits: {
+        count: 1,
+        omits: [
+          {
+            limit: "input_bytes",
+            mediaType: "image/heic",
+            filename: "big.heic",
+          },
+        ],
+      },
+    });
+  });
+});
+
+describe("logError", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("preserves EvlogError catalog fields and cause", async () => {
+    const { log } = await import("evlog");
+    const errorSpy = vi.spyOn(log, "error").mockImplementation(() => undefined);
+    const catalog = defineErrorCatalog("test-log", {
+      SAMPLE: {
+        message: "sample failed",
+        status: 502,
+        why: "because",
+        fix: "retry",
+      },
+    });
+    logError(catalog.SAMPLE({ cause: new Error("root cause") }), {
+      scope: "unit",
+    });
+    expect(errorSpy).toHaveBeenCalled();
+    const [payload] = errorSpy.mock.calls[0] ?? [];
+    expect(payload).toMatchObject({
+      code: "test-log.SAMPLE",
+      error: "sample failed",
+      why: "because",
+      fix: "retry",
+      cause: "root cause",
+      scope: "unit",
+    });
   });
 });

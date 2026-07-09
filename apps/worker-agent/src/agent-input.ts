@@ -46,8 +46,20 @@ export function agentTurnIndexText(payload: {
   return payload.text ? `${payload.text}\n${imageLabel}` : imageLabel;
 }
 
-function decodeBase64(dataBase64: string): Uint8Array {
-  const binary = atob(dataBase64);
+export class InvalidAttachmentBase64Error extends Error {
+  constructor(message = "Invalid attachment base64") {
+    super(message);
+    this.name = "InvalidAttachmentBase64Error";
+  }
+}
+
+export function decodeBase64(dataBase64: string): Uint8Array {
+  let binary: string;
+  try {
+    binary = atob(dataBase64);
+  } catch {
+    throw new InvalidAttachmentBase64Error();
+  }
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i += 1) {
     bytes[i] = binary.charCodeAt(i);

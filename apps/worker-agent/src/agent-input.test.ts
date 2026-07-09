@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { agentInputFromRequest, agentTurnIndexText } from "./agent-input";
+import {
+  agentInputFromRequest,
+  agentTurnIndexText,
+  decodeBase64,
+  InvalidAttachmentBase64Error,
+} from "./agent-input";
 
 describe("agentInputFromRequest", () => {
   it("returns plain text when there are no attachments", () => {
@@ -50,6 +55,14 @@ describe("agentInputFromRequest", () => {
     }
     expect(input).toHaveLength(1);
     expect(input[0]).toMatchObject({ mediaType: "image/jpeg", type: "file" });
+  });
+});
+
+describe("decodeBase64", () => {
+  it("throws a typed error for invalid base64", () => {
+    expect(() => decodeBase64("!!!not-base64!!!")).toThrow(
+      InvalidAttachmentBase64Error
+    );
   });
 });
 

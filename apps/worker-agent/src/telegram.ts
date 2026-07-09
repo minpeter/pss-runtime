@@ -7,6 +7,11 @@ import { Chat, type Message, type MessageContext, type Thread } from "chat";
 import { z } from "zod";
 
 import type { AgentRequestAttachment } from "./agent-do-request";
+import {
+  AGENT_MAX_RAW_IMAGE_BYTES,
+  AGENT_MAX_TURN_IMAGES,
+  AGENT_MAX_TURN_RAW_IMAGE_BYTES,
+} from "./attachment-limits";
 import { type ChannelAddress, channelKey } from "./channel";
 import {
   durableObjectName,
@@ -14,7 +19,10 @@ import {
   isDevelopment,
   readWebhookSecretToken,
 } from "./env";
-import { createMessageCoalescer } from "./telegram-message-coalesce";
+import {
+  createMessageCoalescer,
+  MissingWaitUntilError,
+} from "./telegram-message-coalesce";
 import { workerErrors } from "./worker-errors";
 import { logError, logWarn, newCorrelationId } from "./worker-log";
 
@@ -42,6 +50,13 @@ export const TELEGRAM_COALESCE_QUIET_MS = 500;
 export const TELEGRAM_MESSAGE_CONCURRENCY = {
   strategy: "concurrent",
 } as const;
+
+/** Cap images per coalesced turn before base64 DO hop. */
+export const TELEGRAM_MAX_TURN_IMAGES = AGENT_MAX_TURN_IMAGES;
+/** Cap raw bytes per image before DO hop (compress still happens in DO). */
+export const TELEGRAM_MAX_RAW_IMAGE_BYTES = AGENT_MAX_RAW_IMAGE_BYTES;
+/** Cap total raw image bytes per coalesced turn before DO hop. */
+export const TELEGRAM_MAX_TURN_RAW_IMAGE_BYTES = AGENT_MAX_TURN_RAW_IMAGE_BYTES;
 
 const AgentDeliverySchema = z.discriminatedUnion("delivered", [
   z.object({ delivered: z.literal(true) }).strict(),
@@ -143,11 +158,26 @@ function createBot(env: Env, config: BotConfig): Chat {
         env,
         batchMessages: batch.messages,
         context: { skipped: batch.messages.slice(0, -1) },
+        correlationId: batch.correlationId,
         deliverTurn: (channelId, text, options) =>
-          requestAgentDelivery(env, channelId, text, options),
+          requestAgentDelivery(env, channelId, text, {
+            ...options,
+            ...(batch.correlationId
+              ? { correlationId: batch.correlationId }
+              : {}),
+          }),
         message: latest,
         subscribe: batch.subscribe,
         thread,
+      });
+    },
+    onFlushError: (key, error, batch) => {
+      logError(normalizeError(error), {
+        action: "coalesce_flush_failed",
+        scope: "telegram",
+        key,
+        messageCount: batch.messages.length,
+        ...(batch.correlationId ? { correlationId: batch.correlationId } : {}),
       });
     },
   });
@@ -155,27 +185,25 @@ function createBot(env: Env, config: BotConfig): Chat {
   const handleMessage = (
     thread: Thread,
     message: Message,
-    context: MessageContext | undefined,
+    _context: MessageContext | undefined,
     options?: { readonly subscribe?: boolean }
   ): void => {
     const key = message.threadId || thread.id || thread.channelId;
     threadsByKey.set(key, thread);
     const waitUntil = waitUntilStore.getStore();
-    // Enqueue only — never await agent work on the webhook path (Workers
-    // cancels cross-request promise resolution / hung handlers).
-    for (const prior of context?.skipped ?? []) {
-      coalescer.enqueue(
+    if (!waitUntil) {
+      logError(new MissingWaitUntilError(), {
+        action: "coalesce_missing_wait_until",
+        scope: "telegram",
         key,
-        {
-          message: asConversationMessage(prior),
-          subscribe: options?.subscribe,
-        },
-        { waitUntil }
-      );
+      });
+      return;
     }
+    // concurrent strategy: skipped is empty; enqueue only — never await agent.
     coalescer.enqueue(
       key,
       {
+        correlationId: correlationStore.getStore(),
         message: asConversationMessage(message),
         subscribe: options?.subscribe,
       },
@@ -219,38 +247,90 @@ export function collectTurnImageAttachments(
   return collectTurnImages([message]);
 }
 
+export class TelegramAttachmentLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TelegramAttachmentLimitError";
+  }
+}
+
 export async function collectTurnImages(
   messages: readonly ConversationMessage[]
 ): Promise<readonly AgentRequestAttachment[]> {
   const images: AgentRequestAttachment[] = [];
+  let totalRawBytes = 0;
 
   for (const message of messages) {
-    const attachments = message.attachments ?? [];
-    for (const attachment of attachments) {
-      if (!isImageAttachment(attachment)) {
-        continue;
-      }
-
-      const bytes = await readAttachmentBytes(attachment);
-      if (!bytes || bytes.byteLength === 0) {
-        logWarn({
-          action: "attachment_empty",
-          scope: "telegram",
-        });
-        continue;
-      }
-
-      images.push({
-        dataBase64: bytesToBase64(bytes),
-        mediaType: imageMediaType(attachment),
-        ...(attachment.name?.trim()
-          ? { filename: attachment.name.trim() }
-          : {}),
+    for (const attachment of message.attachments ?? []) {
+      const next = await collectOneTurnImage(attachment, {
+        count: images.length,
+        totalRawBytes,
       });
+      if (!next) {
+        continue;
+      }
+      totalRawBytes += next.rawBytes;
+      images.push(next.attachment);
     }
   }
 
   return images;
+}
+
+async function collectOneTurnImage(
+  attachment: ConversationAttachment,
+  budget: { readonly count: number; readonly totalRawBytes: number }
+): Promise<
+  | {
+      readonly attachment: AgentRequestAttachment;
+      readonly rawBytes: number;
+    }
+  | undefined
+> {
+  if (!isImageAttachment(attachment)) {
+    return;
+  }
+
+  const bytes = await readAttachmentBytes(attachment);
+  if (!bytes || bytes.byteLength === 0) {
+    logWarn({
+      action: "attachment_empty",
+      scope: "telegram",
+    });
+    return;
+  }
+
+  assertTelegramImageBudget(bytes.byteLength, budget);
+
+  return {
+    rawBytes: bytes.byteLength,
+    attachment: {
+      dataBase64: bytesToBase64(bytes),
+      mediaType: imageMediaType(attachment),
+      ...(attachment.name?.trim() ? { filename: attachment.name.trim() } : {}),
+    },
+  };
+}
+
+function assertTelegramImageBudget(
+  rawBytes: number,
+  budget: { readonly count: number; readonly totalRawBytes: number }
+): void {
+  if (rawBytes > TELEGRAM_MAX_RAW_IMAGE_BYTES) {
+    throw new TelegramAttachmentLimitError(
+      `Image exceeds max raw size of ${TELEGRAM_MAX_RAW_IMAGE_BYTES} bytes before DO hop.`
+    );
+  }
+  if (budget.count >= TELEGRAM_MAX_TURN_IMAGES) {
+    throw new TelegramAttachmentLimitError(
+      `Turn exceeds max of ${TELEGRAM_MAX_TURN_IMAGES} images.`
+    );
+  }
+  if (budget.totalRawBytes + rawBytes > TELEGRAM_MAX_TURN_RAW_IMAGE_BYTES) {
+    throw new TelegramAttachmentLimitError(
+      `Turn exceeds max total raw image size of ${TELEGRAM_MAX_TURN_RAW_IMAGE_BYTES} bytes.`
+    );
+  }
 }
 
 export function isImageAttachment(attachment: ConversationAttachment): boolean {
@@ -267,6 +347,7 @@ export function isImageAttachment(attachment: ConversationAttachment): boolean {
 export async function replyToThread({
   batchMessages,
   context,
+  correlationId,
   deliverTurn,
   env,
   message,
@@ -275,6 +356,7 @@ export async function replyToThread({
 }: {
   readonly batchMessages?: readonly ConversationMessage[];
   readonly context?: ConversationContext;
+  readonly correlationId?: string;
   readonly deliverTurn: TurnDeliverer;
   readonly env: ConversationEnv;
   readonly message: ConversationMessage;
@@ -287,10 +369,17 @@ export async function replyToThread({
   try {
     attachments = await collectTurnImages(messages);
   } catch (error) {
-    logError(
-      workerErrors.ATTACHMENT_FETCH_FAILED({ cause: normalizeError(error) }),
-      { scope: "telegram" }
-    );
+    const normalized = normalizeError(error);
+    if (error instanceof TelegramAttachmentLimitError) {
+      logError(workerErrors.ATTACHMENT_LIMIT_EXCEEDED({ cause: normalized }), {
+        scope: "telegram",
+        action: "attachment_limit",
+      });
+    } else {
+      logError(workerErrors.ATTACHMENT_FETCH_FAILED({ cause: normalized }), {
+        scope: "telegram",
+      });
+    }
     await thread.post(FAILURE_REPLY);
     return;
   }
@@ -309,6 +398,7 @@ export async function replyToThread({
 
     await deliverTurn(thread.channelId, text, {
       attachments,
+      ...(correlationId ? { correlationId } : {}),
       sessionScopeKey: telegramSessionScopeKeyFromMessages(messages),
     });
   } catch (error) {

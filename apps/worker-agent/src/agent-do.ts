@@ -1,9 +1,12 @@
 import type {
+  AgentInput,
+  ImageOmitDiagnostics,
   ImagePrepareDiagnostics,
   Agent as PssAgent,
 } from "@minpeter/pss-runtime";
 import {
   IMAGE_PREPARE_LOG_MESSAGE,
+  runWithImageOmitDiagnosticsListener,
   runWithImagePrepareDiagnosticsListener,
 } from "@minpeter/pss-runtime";
 import {
@@ -23,7 +26,11 @@ import {
   createSendMessageToolOptions,
   type SendMessageToolSetup,
 } from "./agent-do-send-message";
-import { agentInputFromRequest, agentTurnIndexText } from "./agent-input";
+import {
+  agentInputFromRequest,
+  agentTurnIndexText,
+  InvalidAttachmentBase64Error,
+} from "./agent-input";
 import {
   CHANNEL_DURABLE_OBJECT_THREAD_KEY,
   type ChannelRuntimeBinding,
@@ -59,6 +66,8 @@ import {
   imagePrepareLogEvent,
   logError,
   logInfo,
+  logWarn,
+  summarizeImageOmits,
   summarizeImagePrepares,
 } from "./worker-log";
 
@@ -81,7 +90,10 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
     super(ctx, env);
     this.#env = env;
     this.#storage = ctx.storage;
-    ensureWorkerLogger({ version: env.CF_VERSION_METADATA?.id });
+    ensureWorkerLogger({
+      environment: env.ENVIRONMENT,
+      version: env.CF_VERSION_METADATA?.id,
+    });
     this.#sessionIndexClient = createSessionIndexClient(env);
     this.#sessionTranscriptClient = createSessionTranscriptClient(env);
     this.#platform = createCloudflarePlatformContext({
@@ -142,6 +154,7 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
 
     const turnEvents = createTurnEventCollector();
     const imagePrepares: ImagePrepareDiagnostics[] = [];
+    const imageOmits: ImageOmitDiagnostics[] = [];
     // AI SDK V4 here — log model id only until evlog/ai supports V4 wrap.
     const modelId = this.#env.AI_MODEL?.trim() || DEFAULT_MODEL;
 
@@ -164,46 +177,45 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
         : {}),
     });
 
-    return await runWithImagePrepareDiagnosticsListener(
-      (diagnostics) => {
-        imagePrepares.push(diagnostics);
-        // Host owns logging via global evlog (object form → pretty + colors).
-        // RequestLogger.info is string-only and only folds into the wide event.
-        logInfo(
-          imagePrepareLogEvent({
-            ...diagnostics,
-            message: IMAGE_PREPARE_LOG_MESSAGE,
-          })
+    const runTurn = async (): Promise<Response> => {
+      try {
+        const sendMessage = createRequestSendMessageToolSetup(
+          this.#env,
+          payload.channel
         );
-      },
-      async () => {
+        const binding = durableObjectChannelBinding(payload.channel);
+        const sessionScopeKey = payload.sessionScopeKey;
+        const agent = createConfiguredAgent(this.#env, this.#platform.host(), {
+          sendMessage: sendMessage.options,
+          sessionTools: {
+            currentConversationKey: () => binding.channelKey,
+            currentSessionScopeKey: () => sessionScopeKey,
+            reader: this.#sessionIndexClient,
+            transcriptReader: this.#sessionTranscriptClient,
+          },
+          observability: { log: turnEvents.record },
+        });
+        const assistantMessages: string[] = [];
+        let agentInput: AgentInput;
         try {
-          const sendMessage = createRequestSendMessageToolSetup(
-            this.#env,
-            payload.channel
-          );
-          const binding = durableObjectChannelBinding(payload.channel);
-          const sessionScopeKey = payload.sessionScopeKey;
-          const agent = createConfiguredAgent(
-            this.#env,
-            this.#platform.host(),
-            {
-              sendMessage: sendMessage.options,
-              sessionTools: {
-                currentConversationKey: () => binding.channelKey,
-                currentSessionScopeKey: () => sessionScopeKey,
-                reader: this.#sessionIndexClient,
-                transcriptReader: this.#sessionTranscriptClient,
-              },
-              observability: { log: turnEvents.record },
-            }
-          );
-          const assistantMessages: string[] = [];
-          const delivery = await deliverToolOnlyTurn(
-            agent.thread(binding.thread),
-            agentInputFromRequest(payload),
-            { onAssistantOutput: (text) => assistantMessages.push(text) }
-          );
+          agentInput = agentInputFromRequest(payload);
+        } catch (error) {
+          if (error instanceof InvalidAttachmentBase64Error) {
+            const invalid = workerErrors.INVALID_TURN_PAYLOAD();
+            log.error(invalid);
+            log.set({ outcome: "invalid_attachment_base64" });
+            log.emit({ status: 400 });
+            return new Response(invalid.message, { status: 400 });
+          }
+          throw error;
+        }
+        const delivery = await deliverToolOnlyTurn(
+          agent.thread(binding.thread),
+          agentInput,
+          { onAssistantOutput: (text) => assistantMessages.push(text) }
+        );
+
+        if (delivery.delivered) {
           await this.#indexTurn(
             binding,
             agentTurnIndexText(payload),
@@ -211,53 +223,74 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
             assistantMessages,
             sessionScopeKey
           );
-
-          const turnSummary = turnEvents.summary();
-          log.set({
-            delivery: {
-              delivered: delivery.delivered,
-              outcome: delivery.delivered
-                ? "delivered"
-                : "missing_send_message",
-              ...(delivery.delivered
-                ? {}
-                : { error: "missing_send_message" as const }),
-            },
-            turn: {
-              steps: turnSummary.steps,
-              toolCalls: turnSummary.toolCalls,
-              ...(turnSummary.errors.length > 0
-                ? { errors: turnSummary.errors }
-                : {}),
-            },
-            ...summarizeImagePrepares(imagePrepares),
-          });
-
-          if (!delivery.delivered) {
-            // Model finished without tool delivery — treat as upstream failure.
-            log.error(workerErrors.MISSING_SEND_MESSAGE());
-            log.emit({ status: 502 });
-            return Response.json(
-              withCapturedMessages(delivery, sendMessage.messages()),
-              { status: 502 }
-            );
-          }
-
-          log.emit({ status: 200 });
-          return Response.json(
-            withCapturedMessages(delivery, sendMessage.messages())
-          );
-        } catch (error) {
-          log.error(error instanceof Error ? error : new Error(String(error)));
-          log.set({
-            delivery: { delivered: false, outcome: "error" },
-            turn: turnEvents.summary(),
-            ...summarizeImagePrepares(imagePrepares),
-          });
-          log.emit({ status: 500 });
-          throw error;
         }
+
+        const turnSummary = turnEvents.summary();
+        log.set({
+          delivery: {
+            delivered: delivery.delivered,
+            outcome: delivery.delivered ? "delivered" : "missing_send_message",
+            ...(delivery.delivered
+              ? {}
+              : { error: "missing_send_message" as const }),
+          },
+          turn: {
+            steps: turnSummary.steps,
+            toolCalls: turnSummary.toolCalls,
+            ...(turnSummary.errors.length > 0
+              ? { errors: turnSummary.errors }
+              : {}),
+          },
+          ...summarizeImagePrepares(imagePrepares),
+          ...summarizeImageOmits(imageOmits),
+        });
+
+        if (!delivery.delivered) {
+          log.error(workerErrors.MISSING_SEND_MESSAGE());
+          log.emit({ status: 502 });
+          return Response.json(
+            withCapturedMessages(delivery, sendMessage.messages()),
+            { status: 502 }
+          );
+        }
+
+        log.emit({ status: 200 });
+        return Response.json(
+          withCapturedMessages(delivery, sendMessage.messages())
+        );
+      } catch (error) {
+        log.error(error instanceof Error ? error : new Error(String(error)));
+        log.set({
+          delivery: { delivered: false, outcome: "error" },
+          turn: turnEvents.summary(),
+          ...summarizeImagePrepares(imagePrepares),
+          ...summarizeImageOmits(imageOmits),
+        });
+        log.emit({ status: 500 });
+        throw error;
       }
+    };
+
+    return await runWithImagePrepareDiagnosticsListener(
+      (diagnostics) => {
+        imagePrepares.push(diagnostics);
+        logInfo(
+          imagePrepareLogEvent({
+            ...diagnostics,
+            message: IMAGE_PREPARE_LOG_MESSAGE,
+          })
+        );
+      },
+      () =>
+        runWithImageOmitDiagnosticsListener((omit) => {
+          imageOmits.push(omit);
+          logWarn({
+            message: "pss-runtime image-omit",
+            limit: omit.limit,
+            mediaType: omit.mediaType,
+            ...(omit.filename === undefined ? {} : { filename: omit.filename }),
+          });
+        }, runTurn)
     );
   }
 

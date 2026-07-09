@@ -1,4 +1,4 @@
-import { initLogger, log } from "evlog";
+import { EvlogError, initLogger, log } from "evlog";
 import {
   createWorkersLogger,
   type WorkerExecutionContext,
@@ -7,22 +7,26 @@ import {
 let initialized = false;
 
 /** Pretty tree under local wrangler; production keeps object dumps for CF logs. */
-function shouldPrettyPrint(): boolean {
-  if (typeof process === "undefined") {
-    return true;
-  }
+function shouldPrettyPrint(environment?: string): boolean {
+  const envName =
+    environment ??
+    (typeof process === "undefined" ? undefined : process.env.ENVIRONMENT);
   // workerd sets NODE_ENV=production under `wrangler dev` too.
-  return process.env.ENVIRONMENT !== "production";
+  return envName !== "production";
 }
 
-function isProductionEnvironment(): boolean {
-  if (typeof process === "undefined") {
-    return false;
+function resolveEnvironment(explicit?: string): string {
+  if (explicit) {
+    return explicit;
   }
-  return process.env.ENVIRONMENT === "production";
+  if (typeof process !== "undefined" && process.env.ENVIRONMENT) {
+    return process.env.ENVIRONMENT;
+  }
+  return "development";
 }
 
 export interface EnsureWorkerLoggerOptions {
+  readonly environment?: string;
   readonly version?: string;
 }
 
@@ -33,14 +37,8 @@ export function ensureWorkerLogger(
   if (initialized) {
     return;
   }
-  const pretty = shouldPrettyPrint();
-  const production = isProductionEnvironment();
-  let environment = "development";
-  if (production) {
-    environment = "production";
-  } else if (typeof process !== "undefined" && process.env.ENVIRONMENT) {
-    environment = process.env.ENVIRONMENT;
-  }
+  const environment = resolveEnvironment(options.environment);
+  const pretty = shouldPrettyPrint(environment);
   initLogger({
     env: {
       service: "pss-worker-agent",
@@ -84,21 +82,51 @@ export function logWarn(event: Record<string, unknown>): void {
   log.warn(event);
 }
 
-/** Structured error event or Error object. */
+/** Structured error event or Error object (preserves EvlogError catalog fields). */
 export function logError(
   event: Error | Record<string, unknown>,
   context?: Record<string, unknown>
 ): void {
   ensureWorkerLogger();
+  if (event instanceof EvlogError) {
+    log.error({
+      ...(context ?? {}),
+      ...(event.code === undefined ? {} : { code: event.code }),
+      ...(event.why === undefined ? {} : { why: event.why }),
+      ...(event.fix === undefined ? {} : { fix: event.fix }),
+      ...(event.status === undefined ? {} : { status: event.status }),
+      error: event.message,
+      errorName: event.name,
+      ...(event.stack ? { stack: event.stack } : {}),
+      ...causeFields(event.cause),
+    });
+    return;
+  }
   if (event instanceof Error) {
     log.error({
       ...(context ?? {}),
       error: event.message,
       errorName: event.name,
+      ...(event.stack ? { stack: event.stack } : {}),
+      ...causeFields(event.cause),
     });
     return;
   }
   log.error(event);
+}
+
+function causeFields(cause: unknown): Record<string, unknown> {
+  if (cause instanceof Error) {
+    return {
+      cause: cause.message,
+      causeName: cause.name,
+      ...(cause.stack ? { causeStack: cause.stack } : {}),
+    };
+  }
+  if (cause !== undefined) {
+    return { cause: String(cause) };
+  }
+  return {};
 }
 
 /**
@@ -181,6 +209,37 @@ export function summarizeImagePrepares(
         outputBytes: prepare.outputBytes,
         outputMediaType: prepare.outputMediaType,
         path: prepare.path,
+      })),
+    },
+  };
+}
+
+export function summarizeImageOmits(
+  omits: readonly {
+    readonly limit: string;
+    readonly mediaType: string;
+    readonly filename?: string;
+  }[]
+): {
+  readonly imageOmits?: {
+    readonly count: number;
+    readonly omits: readonly {
+      readonly limit: string;
+      readonly mediaType: string;
+      readonly filename?: string;
+    }[];
+  };
+} {
+  if (omits.length === 0) {
+    return {};
+  }
+  return {
+    imageOmits: {
+      count: omits.length,
+      omits: omits.map((omit) => ({
+        limit: omit.limit,
+        mediaType: omit.mediaType,
+        ...(omit.filename === undefined ? {} : { filename: omit.filename }),
       })),
     },
   };

@@ -15,11 +15,13 @@ export interface CoalesceMessage {
 }
 
 export interface CoalescePushItem<TMessage extends CoalesceMessage> {
+  readonly correlationId?: string;
   readonly message: TMessage;
   readonly subscribe?: boolean;
 }
 
 export interface CoalesceBatch<TMessage extends CoalesceMessage> {
+  readonly correlationId?: string;
   readonly messages: readonly TMessage[];
   readonly subscribe: boolean;
 }
@@ -31,6 +33,12 @@ export interface MessageCoalescerOptions<TMessage extends CoalesceMessage> {
     key: string,
     batch: CoalesceBatch<TMessage>
   ) => Promise<void>;
+  /** Called when flush fails (after onFlush throws). Lifetime still settles. */
+  readonly onFlushError?: (
+    key: string,
+    error: unknown,
+    batch: CoalesceBatch<TMessage>
+  ) => void;
   readonly quietMs: number;
   readonly schedule?: (
     callback: () => void,
@@ -39,11 +47,20 @@ export interface MessageCoalescerOptions<TMessage extends CoalesceMessage> {
 }
 
 interface PendingBatch<TMessage extends CoalesceMessage> {
+  /** First non-empty correlationId enqueued for this batch. */
+  correlationId: string | undefined;
   items: CoalescePushItem<TMessage>[];
   /** Settles when quiet-window flush (including agent turn) finishes. */
   lifetime: Promise<void>;
   resolveLifetime: () => void;
   timer: { clear: () => void } | undefined;
+}
+
+export class MissingWaitUntilError extends Error {
+  constructor(message = "waitUntil is required for telegram message coalesce") {
+    super(message);
+    this.name = "MissingWaitUntilError";
+  }
 }
 
 function defaultSchedule(
@@ -74,12 +91,15 @@ export function createMessageCoalescer<TMessage extends CoalesceMessage>(
     state.timer = undefined;
 
     const batch: CoalesceBatch<TMessage> = {
+      ...(state.correlationId ? { correlationId: state.correlationId } : {}),
       messages: state.items.map((item) => item.message),
       subscribe: state.items.some((item) => item.subscribe === true),
     };
 
     try {
       await options.onFlush(key, batch);
+    } catch (error) {
+      options.onFlushError?.(key, error, batch);
     } finally {
       state.resolveLifetime();
     }
@@ -89,13 +109,17 @@ export function createMessageCoalescer<TMessage extends CoalesceMessage>(
     /**
      * Enqueue a message and (re)arm the quiet timer.
      * Returns immediately — do not await agent work on the webhook path.
-     * Pass `waitUntil` so the isolate stays alive through quiet wait + flush.
+     * `waitUntil` is required so the isolate stays alive through flush.
      */
     enqueue(
       key: string,
       item: CoalescePushItem<TMessage>,
       runtime: { readonly waitUntil?: WaitUntil } = {}
     ): void {
+      if (!runtime.waitUntil) {
+        throw new MissingWaitUntilError();
+      }
+
       let state = pending.get(key);
       if (!state) {
         let resolveLifetime = () => {
@@ -105,6 +129,7 @@ export function createMessageCoalescer<TMessage extends CoalesceMessage>(
           resolveLifetime = resolve;
         });
         state = {
+          correlationId: undefined,
           items: [],
           lifetime,
           resolveLifetime,
@@ -113,17 +138,21 @@ export function createMessageCoalescer<TMessage extends CoalesceMessage>(
         pending.set(key, state);
       }
 
+      if (!state.correlationId && item.correlationId?.trim()) {
+        state.correlationId = item.correlationId.trim();
+      }
+
       state.items.push(item);
       state.timer?.clear();
       state.timer = schedule(() => {
         flush(key).catch(() => {
-          // onFlush errors are handled inside reply path; lifetime still ends.
+          // onFlushError already invoked; lifetime settled in finally.
         });
       }, options.quietMs);
 
       // Keep isolate alive through quiet wait + agent turn without blocking
       // the webhook response (avoids Workers "hung request" / cross-context cancel).
-      runtime.waitUntil?.(state.lifetime);
+      runtime.waitUntil(state.lifetime);
     },
 
     /** Test helper: pending batch size for a key. */
@@ -134,6 +163,11 @@ export function createMessageCoalescer<TMessage extends CoalesceMessage>(
     /** Test helper: await current batch lifetime (flush done). */
     lifetime(key: string): Promise<void> | undefined {
       return pending.get(key)?.lifetime;
+    },
+
+    /** Test helper: first correlation id captured for a pending batch. */
+    correlationId(key: string): string | undefined {
+      return pending.get(key)?.correlationId;
     },
   };
 }

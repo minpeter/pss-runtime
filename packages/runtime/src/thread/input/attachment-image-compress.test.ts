@@ -139,6 +139,15 @@ describe("prepareAttachmentBytesForStorage", () => {
     });
     expect(isStoredImageMediaType(prepared.mediaType)).toBe(true);
     expect(prepared.bytes.byteLength).toBeLessThanOrEqual(maxImageBytes);
+    // Solid frames may already be under budget (passthrough); reencode paths
+    // must match output media type (including PNG→JPEG fallback labeling).
+    if (prepared.diagnostics?.path === "passthrough_png") {
+      expect(prepared.mediaType).toBe("image/png");
+    } else if (prepared.mediaType === "image/jpeg") {
+      expect(prepared.diagnostics?.path).toBe("reencode_png_fallback_jpeg");
+    } else {
+      expect(prepared.diagnostics?.path).toBe("reencode_png");
+    }
   }, 20_000);
 
   it("always normalizes HEIC to image/jpeg or image/png (never heic)", async () => {
