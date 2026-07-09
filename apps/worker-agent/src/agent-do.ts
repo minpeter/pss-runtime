@@ -1,4 +1,5 @@
 import type {
+  Agent,
   AgentInput,
   ImageOmitDiagnostics,
   ImagePrepareDiagnostics,
@@ -19,13 +20,17 @@ import { installCloudflareImageCodecs } from "@minpeter/pss-runtime/platform/clo
 import { Agent as CloudflareAgent } from "agents";
 
 import { createConfiguredAgent, DEFAULT_MODEL } from "./agent";
-import { deliverToolOnlyTurn, withCapturedMessages } from "./agent-do-delivery";
+import {
+  type WorkerAgentDeliveredMessage,
+  withCapturedMessages,
+} from "./agent-do-delivery";
 import { parseAgentRequest } from "./agent-do-request";
 import {
   createRequestSendMessageToolSetup,
   createSendMessageToolOptions,
   type SendMessageToolSetup,
 } from "./agent-do-send-message";
+import { createTurnSession, type TurnSession } from "./agent-do-turn-session";
 import {
   agentInputFromRequest,
   agentTurnIndexText,
@@ -33,6 +38,7 @@ import {
 } from "./agent-input";
 import {
   CHANNEL_DURABLE_OBJECT_THREAD_KEY,
+  type ChannelAddress,
   type ChannelRuntimeBinding,
   durableObjectChannelBinding,
 } from "./channel";
@@ -58,6 +64,7 @@ import {
   isSessionTranscriptPath,
   SessionTranscriptReadRequestSchema,
 } from "./session-transcript-client";
+import type { WorkerAgentSendMessageToolOptions } from "./tools";
 import { workerErrors } from "./worker-errors";
 import {
   attachmentLogFields,
@@ -77,6 +84,9 @@ installCloudflareImageCodecs();
 /**
  * Channel agent Durable Object on the Cloudflare Agents SDK.
  * Scheduling/resume uses Agents fibers; HTTP remains app-owned via onRequest.
+ *
+ * One Agent/ThreadHandle is reused per DO so runtime queue/steer can see the
+ * active turn: idle → send, running → mid-turn steer.
  */
 export class AgentDurableObject extends CloudflareAgent<Env> {
   readonly #platform: CloudflarePlatformContext<PssAgent>;
@@ -85,6 +95,13 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
   readonly #sessionIndexClient: SessionIndexClient;
   readonly #sessionTranscriptClient: SessionTranscriptReader;
   #sessionIndexStore: SessionIndexStore | undefined;
+  /** Reused across HTTP turns so send/steer share in-memory active-run state. */
+  #agent: Agent | undefined;
+  #turnSession: TurnSession | undefined;
+  #channel: ChannelAddress | undefined;
+  #sessionScopeKey: string | undefined;
+  #observability: ReturnType<typeof createTurnEventCollector> | undefined;
+  #tuiMessageCapture: WorkerAgentDeliveredMessage[] = [];
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -177,99 +194,14 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
         : {}),
     });
 
-    const runTurn = async (): Promise<Response> => {
-      try {
-        const sendMessage = createRequestSendMessageToolSetup(
-          this.#env,
-          payload.channel
-        );
-        const binding = durableObjectChannelBinding(payload.channel);
-        const sessionScopeKey = payload.sessionScopeKey;
-        const agent = createConfiguredAgent(this.#env, this.#platform.host(), {
-          sendMessage: sendMessage.options,
-          sessionTools: {
-            currentConversationKey: () => binding.channelKey,
-            currentSessionScopeKey: () => sessionScopeKey,
-            reader: this.#sessionIndexClient,
-            transcriptReader: this.#sessionTranscriptClient,
-          },
-          observability: { log: turnEvents.record },
-        });
-        const assistantMessages: string[] = [];
-        let agentInput: AgentInput;
-        try {
-          agentInput = agentInputFromRequest(payload);
-        } catch (error) {
-          if (error instanceof InvalidAttachmentBase64Error) {
-            const invalid = workerErrors.INVALID_TURN_PAYLOAD();
-            log.error(invalid);
-            log.set({ outcome: "invalid_attachment_base64" });
-            log.emit({ status: 400 });
-            return new Response(invalid.message, { status: 400 });
-          }
-          throw error;
-        }
-        const delivery = await deliverToolOnlyTurn(
-          agent.thread(binding.thread),
-          agentInput,
-          { onAssistantOutput: (text) => assistantMessages.push(text) }
-        );
-
-        if (delivery.delivered) {
-          await this.#indexTurn(
-            binding,
-            agentTurnIndexText(payload),
-            sendMessage,
-            assistantMessages,
-            sessionScopeKey
-          );
-        }
-
-        const turnSummary = turnEvents.summary();
-        log.set({
-          delivery: {
-            delivered: delivery.delivered,
-            outcome: delivery.delivered ? "delivered" : "missing_send_message",
-            ...(delivery.delivered
-              ? {}
-              : { error: "missing_send_message" as const }),
-          },
-          turn: {
-            steps: turnSummary.steps,
-            toolCalls: turnSummary.toolCalls,
-            ...(turnSummary.errors.length > 0
-              ? { errors: turnSummary.errors }
-              : {}),
-          },
-          ...summarizeImagePrepares(imagePrepares),
-          ...summarizeImageOmits(imageOmits),
-        });
-
-        if (!delivery.delivered) {
-          log.error(workerErrors.MISSING_SEND_MESSAGE());
-          log.emit({ status: 502 });
-          return Response.json(
-            withCapturedMessages(delivery, sendMessage.messages()),
-            { status: 502 }
-          );
-        }
-
-        log.emit({ status: 200 });
-        return Response.json(
-          withCapturedMessages(delivery, sendMessage.messages())
-        );
-      } catch (error) {
-        log.error(error instanceof Error ? error : new Error(String(error)));
-        log.set({
-          delivery: { delivered: false, outcome: "error" },
-          turn: turnEvents.summary(),
-          ...summarizeImagePrepares(imagePrepares),
-          ...summarizeImageOmits(imageOmits),
-        });
-        log.emit({ status: 500 });
-        throw error;
-      }
-    };
+    const runTurn = (): Promise<Response> =>
+      this.#runPayloadTurn({
+        imageOmits,
+        imagePrepares,
+        log,
+        payload,
+        turnEvents,
+      });
 
     return await runWithImagePrepareDiagnosticsListener(
       (diagnostics) => {
@@ -292,6 +224,177 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
           });
         }, runTurn)
     );
+  }
+
+  async #runPayloadTurn({
+    imageOmits,
+    imagePrepares,
+    log,
+    payload,
+    turnEvents,
+  }: {
+    readonly imageOmits: ImageOmitDiagnostics[];
+    readonly imagePrepares: ImagePrepareDiagnostics[];
+    readonly log: ReturnType<typeof createTurnLogger>;
+    readonly payload: NonNullable<
+      Awaited<ReturnType<typeof parseAgentRequest>>
+    >;
+    readonly turnEvents: ReturnType<typeof createTurnEventCollector>;
+  }): Promise<Response> {
+    try {
+      this.#channel = payload.channel;
+      this.#sessionScopeKey = payload.sessionScopeKey;
+      const binding = durableObjectChannelBinding(payload.channel);
+      const session = this.#ensureTurnSession(binding);
+      const sendMessage = this.#sendMessageSetup(payload.channel);
+      const agentInput = this.#parseAgentInput(payload, log);
+      if (agentInput instanceof Response) {
+        return agentInput;
+      }
+
+      const assistantMessages: string[] = [];
+      const delivery = await this.#deliverWithObservability(
+        session,
+        agentInput,
+        turnEvents,
+        payload.channel.kind,
+        assistantMessages
+      );
+
+      if (delivery.mode === "send" && delivery.delivered) {
+        await this.#indexTurn(
+          binding,
+          agentTurnIndexText(payload),
+          sendMessage,
+          assistantMessages,
+          payload.sessionScopeKey
+        );
+      }
+
+      return this.#deliveryResponse({
+        delivery,
+        imageOmits,
+        imagePrepares,
+        log,
+        sendMessage,
+        turnEvents,
+      });
+    } catch (error) {
+      log.error(error instanceof Error ? error : new Error(String(error)));
+      log.set({
+        delivery: { delivered: false, outcome: "error" },
+        turn: turnEvents.summary(),
+        ...summarizeImagePrepares(imagePrepares),
+        ...summarizeImageOmits(imageOmits),
+      });
+      log.emit({ status: 500 });
+      throw error;
+    }
+  }
+
+  #parseAgentInput(
+    payload: NonNullable<Awaited<ReturnType<typeof parseAgentRequest>>>,
+    log: ReturnType<typeof createTurnLogger>
+  ): AgentInput | Response {
+    try {
+      return agentInputFromRequest(payload);
+    } catch (error) {
+      if (error instanceof InvalidAttachmentBase64Error) {
+        const invalid = workerErrors.INVALID_TURN_PAYLOAD();
+        log.error(invalid);
+        log.set({ outcome: "invalid_attachment_base64" });
+        log.emit({ status: 400 });
+        return new Response(invalid.message, { status: 400 });
+      }
+      throw error;
+    }
+  }
+
+  async #deliverWithObservability(
+    session: TurnSession,
+    agentInput: AgentInput,
+    turnEvents: ReturnType<typeof createTurnEventCollector>,
+    channelKind: ChannelAddress["kind"],
+    assistantMessages: string[]
+  ): Promise<Awaited<ReturnType<TurnSession["deliver"]>>> {
+    const previousObservability = this.#observability;
+    let ownsObservability = false;
+    try {
+      return await session.deliver(agentInput, {
+        onAssistantOutput: (text) => {
+          assistantMessages.push(text);
+        },
+        onSendStarted: () => {
+          ownsObservability = true;
+          this.#observability = turnEvents;
+          if (channelKind === "tui") {
+            this.#tuiMessageCapture = [];
+          }
+        },
+      });
+    } finally {
+      if (ownsObservability && this.#observability === turnEvents) {
+        this.#observability = previousObservability;
+      }
+    }
+  }
+
+  #deliveryResponse({
+    delivery,
+    imageOmits,
+    imagePrepares,
+    log,
+    sendMessage,
+    turnEvents,
+  }: {
+    readonly delivery: Awaited<ReturnType<TurnSession["deliver"]>>;
+    readonly imageOmits: ImageOmitDiagnostics[];
+    readonly imagePrepares: ImagePrepareDiagnostics[];
+    readonly log: ReturnType<typeof createTurnLogger>;
+    readonly sendMessage: SendMessageToolSetup;
+    readonly turnEvents: ReturnType<typeof createTurnEventCollector>;
+  }): Response {
+    const turnSummary = turnEvents.summary();
+    log.set({
+      delivery: {
+        delivered: delivery.delivered,
+        mode: delivery.mode,
+        outcome: deliveryLogOutcome(delivery),
+        ...(delivery.delivered
+          ? {}
+          : { error: "missing_send_message" as const }),
+      },
+      turn: {
+        steps: turnSummary.steps,
+        toolCalls: turnSummary.toolCalls,
+        ...(turnSummary.errors.length > 0
+          ? { errors: turnSummary.errors }
+          : {}),
+      },
+      ...summarizeImagePrepares(imagePrepares),
+      ...summarizeImageOmits(imageOmits),
+    });
+
+    if (!delivery.delivered) {
+      log.error(workerErrors.MISSING_SEND_MESSAGE());
+      log.emit({ status: 502 });
+      return Response.json(
+        {
+          ...withCapturedMessages(
+            { delivered: false, error: delivery.error },
+            sendMessage.messages()
+          ),
+          mode: delivery.mode,
+        },
+        { status: 502 }
+      );
+    }
+
+    log.emit({ status: 200 });
+    return Response.json({
+      ...withCapturedMessages({ delivered: true }, sendMessage.messages()),
+      mode: delivery.mode,
+    });
   }
 
   async #handleSessionTranscriptRequest(request: Request): Promise<Response> {
@@ -339,6 +442,66 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
     return this.#sessionIndexStore;
   }
 
+  #ensureTurnSession(binding: ChannelRuntimeBinding): TurnSession {
+    if (this.#turnSession) {
+      return this.#turnSession;
+    }
+
+    const sendMessage = this.#longLivedSendMessageOptions();
+    this.#agent = createConfiguredAgent(this.#env, this.#platform.host(), {
+      sendMessage,
+      sessionTools: {
+        currentConversationKey: () => {
+          const channel = this.#channel;
+          if (!channel) {
+            return binding.channelKey;
+          }
+          return durableObjectChannelBinding(channel).channelKey;
+        },
+        currentSessionScopeKey: () => this.#sessionScopeKey,
+        reader: this.#sessionIndexClient,
+        transcriptReader: this.#sessionTranscriptClient,
+      },
+      observability: {
+        log: (entry) => {
+          this.#observability?.record(entry);
+        },
+      },
+    });
+    this.#turnSession = createTurnSession(this.#agent.thread(binding.thread));
+    return this.#turnSession;
+  }
+
+  #longLivedSendMessageOptions(): WorkerAgentSendMessageToolOptions {
+    return {
+      channel: () => this.#channel,
+      sink: {
+        send: async (channel, text) => {
+          const setup = createRequestSendMessageToolSetup(this.#env, channel);
+          const sent = await setup.options.sink.send(channel, text);
+          if (channel.kind === "tui") {
+            this.#tuiMessageCapture.push({
+              channel: sent.channel,
+              messageId: sent.messageId,
+              text,
+            });
+          }
+          return sent;
+        },
+      },
+    };
+  }
+
+  #sendMessageSetup(channel: ChannelAddress): SendMessageToolSetup {
+    if (channel.kind === "tui") {
+      return {
+        messages: () => this.#tuiMessageCapture,
+        options: this.#longLivedSendMessageOptions(),
+      };
+    }
+    return createRequestSendMessageToolSetup(this.#env, channel);
+  }
+
   async #indexTurn(
     binding: ChannelRuntimeBinding,
     userText: string,
@@ -372,6 +535,18 @@ class AgentDurableObjectInvariantError extends Error {
     super(message);
     this.name = "AgentDurableObjectInvariantError";
   }
+}
+
+function deliveryLogOutcome(
+  delivery: Awaited<ReturnType<TurnSession["deliver"]>>
+): "delivered" | "missing_send_message" | "steered" {
+  if (delivery.mode === "steer") {
+    return "steered";
+  }
+  if (delivery.delivered) {
+    return "delivered";
+  }
+  return "missing_send_message";
 }
 
 function normalizeIndexError(error: unknown): Error {

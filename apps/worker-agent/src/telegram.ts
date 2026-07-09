@@ -199,7 +199,7 @@ function createBot(env: Env, config: BotConfig): Chat {
       });
       return;
     }
-    // concurrent strategy: skipped is empty; enqueue only — never await agent.
+    // Enqueue only — never await agent. DO applies idle→send / running→steer.
     coalescer.enqueue(
       key,
       {

@@ -70,29 +70,54 @@ describe("createMessageCoalescer", () => {
     expect(coalescer.pendingCount("thread-1")).toBe(0);
   });
 
-  it("returns immediately from enqueue without waiting for flush", async () => {
+  it("allows a concurrent flush so mid-turn messages can steer", async () => {
     vi.useFakeTimers();
-    let flushed = false;
+    const flushes: string[][] = [];
+    let releaseFirstFlush: (() => void) | undefined;
+    let blockNextFlush = true;
     const coalescer = createMessageCoalescer({
       quietMs: 500,
-      onFlush: () => {
-        flushed = true;
+      onFlush: (_key, batch) => {
+        flushes.push(batch.messages.map((message) => message.text ?? ""));
+        if (blockNextFlush) {
+          blockNextFlush = false;
+          return new Promise((resolve) => {
+            releaseFirstFlush = resolve;
+          });
+        }
         return Promise.resolve();
       },
     });
 
     coalescer.enqueue(
       "thread-1",
-      { message: { text: "a" } },
+      { message: { text: "first" } },
       { waitUntil: noopWaitUntil }
     );
-    expect(flushed).toBe(false);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(coalescer.inFlightCount("thread-1")).toBe(1);
+    expect(flushes).toEqual([["first"]]);
+
+    // Second message while first flush is still running → new quiet batch.
+    coalescer.enqueue(
+      "thread-1",
+      { message: { text: "second" } },
+      { waitUntil: noopWaitUntil }
+    );
     expect(coalescer.pendingCount("thread-1")).toBe(1);
+    expect(flushes).toEqual([["first"]]);
 
     const lifetime = coalescer.lifetime("thread-1");
     await vi.advanceTimersByTimeAsync(500);
+    // Concurrent flush starts for mid-turn steer path.
+    expect(flushes).toEqual([["first"], ["second"]]);
+    expect(coalescer.inFlightCount("thread-1")).toBe(1);
+
+    releaseFirstFlush?.();
     await lifetime;
-    expect(flushed).toBe(true);
+
+    expect(coalescer.inFlightCount("thread-1")).toBe(0);
+    expect(coalescer.pendingCount("thread-1")).toBe(0);
   });
 
   it("requires waitUntil and reports flush failures", async () => {
