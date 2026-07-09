@@ -223,11 +223,19 @@ async function stageFilePart(
   } catch (error) {
     // Safety limits: omit this image, keep the rest of the turn (text + other files).
     if (error instanceof RuntimeAttachmentImageLimitError) {
-      console.warn("pss-runtime image-omit", {
-        filename: part.filename,
-        limit: error.limit,
-        mediaType: part.mediaType,
-      });
+      const omitRows = [
+        `limit: ${error.limit}`,
+        `mediaType: ${part.mediaType}`,
+        ...(part.filename ? [`filename: ${part.filename}`] : []),
+      ];
+      console.warn(
+        `pss-runtime image-omit\n${omitRows
+          .map((row, index) => {
+            const prefix = index === omitRows.length - 1 ? "└─" : "├─";
+            return `  ${prefix} ${row}`;
+          })
+          .join("\n")}`
+      );
       return imageLimitOmittedTextPart(part.filename, error);
     }
     throw error;

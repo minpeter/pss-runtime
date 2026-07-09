@@ -12,6 +12,7 @@ import {
   isDevelopment,
   readWebhookSecretToken,
 } from "./env";
+import { logError, logWarn } from "./worker-log";
 
 const DEV_NOTICE = "🧪 DEVELOPMENT ENVIRONMENT";
 const FAILURE_REPLY =
@@ -152,7 +153,10 @@ export async function collectTurnImageAttachments(
 
     const bytes = await readAttachmentBytes(attachment);
     if (!bytes || bytes.byteLength === 0) {
-      console.warn("telegram image attachment empty or unreadable");
+      logWarn({
+        action: "attachment_empty",
+        scope: "telegram",
+      });
       continue;
     }
 
@@ -197,7 +201,10 @@ export async function replyToThread({
   try {
     attachments = await collectTurnImageAttachments(message);
   } catch (error) {
-    console.error("telegram attachment fetch failed", normalizeError(error));
+    logError(normalizeError(error), {
+      action: "attachment_fetch_failed",
+      scope: "telegram",
+    });
     await thread.post(FAILURE_REPLY);
     return;
   }
@@ -219,7 +226,10 @@ export async function replyToThread({
       sessionScopeKey: telegramSessionScopeKey(message),
     });
   } catch (error) {
-    console.error("telegram handler failed", normalizeError(error));
+    logError(normalizeError(error), {
+      action: "handler_failed",
+      scope: "telegram",
+    });
     await thread.post(FAILURE_REPLY);
   }
 }

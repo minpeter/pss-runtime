@@ -1,12 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { logError } from "../src/worker-log";
 import { forwardUpdates } from "./telegram";
+
+vi.mock("../src/worker-log", () => ({
+  logError: vi.fn(),
+  logTagged: vi.fn(),
+}));
 
 describe("telegram local relay", () => {
   it("does not advance offset past a failed forwarded update", async () => {
-    const errorLog = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response(null, { status: 200 }))
@@ -24,13 +27,14 @@ describe("telegram local relay", () => {
       })
     ).resolves.toBe(11);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(errorLog).toHaveBeenCalledWith("webhook 500");
+    expect(logError).toHaveBeenCalledWith({
+      action: "webhook_forward_status",
+      scope: "telegram-relay",
+      status: 500,
+    });
   });
 
   it("does not advance offset past a thrown forward failure", async () => {
-    const errorLog = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response(null, { status: 200 }))
@@ -48,8 +52,9 @@ describe("telegram local relay", () => {
       })
     ).resolves.toBe(11);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(errorLog).toHaveBeenCalledWith(
-      "webhook forward failed: connection refused"
-    );
+    expect(logError).toHaveBeenCalledWith(expect.any(TypeError), {
+      action: "webhook_forward_failed",
+      scope: "telegram-relay",
+    });
   });
 });

@@ -6,6 +6,8 @@ import {
   isToolAgentEvent,
 } from "@minpeter/pss-runtime";
 
+import { logError, logInfo } from "./worker-log";
+
 export interface TurnObservabilityEntry {
   readonly event: AgentEvent["type"];
   readonly label?: string;
@@ -19,11 +21,18 @@ export interface TurnObservabilityOptions {
 }
 
 function defaultLog(entry: TurnObservabilityEntry): void {
+  const event = {
+    scope: "worker-agent.turn",
+    event: entry.event,
+    ...(entry.label ? { label: entry.label } : {}),
+    ...(entry.message ? { message: entry.message } : {}),
+    ...(entry.toolName ? { toolName: entry.toolName } : {}),
+  };
   if (entry.event === "turn-error") {
-    console.error("worker-agent turn", entry);
+    logError(event);
     return;
   }
-  console.info("worker-agent turn", entry);
+  logInfo(event);
 }
 
 export function describeEvent(

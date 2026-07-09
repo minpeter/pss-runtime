@@ -1,4 +1,4 @@
-import { initLogger } from "evlog";
+import { initLogger, log } from "evlog";
 import {
   createWorkersLogger,
   type WorkerExecutionContext,
@@ -49,6 +49,45 @@ export function createTurnLogger(
   return createWorkersLogger(request, {
     ...(options?.executionCtx ? { executionCtx: options.executionCtx } : {}),
   });
+}
+
+/** Structured info event (pretty tree when enabled). */
+export function logInfo(event: Record<string, unknown>): void {
+  ensureWorkerLogger();
+  log.info(event);
+}
+
+/** Structured warn event. */
+export function logWarn(event: Record<string, unknown>): void {
+  ensureWorkerLogger();
+  log.warn(event);
+}
+
+/** Structured error event or Error object. */
+export function logError(
+  event: Error | Record<string, unknown>,
+  context?: Record<string, unknown>
+): void {
+  ensureWorkerLogger();
+  if (event instanceof Error) {
+    log.error({
+      ...(context ?? {}),
+      error: event.message,
+      errorName: event.name,
+    });
+    return;
+  }
+  log.error(event);
+}
+
+/** Tagged one-liner (startup / CLI). */
+export function logTagged(
+  level: "info" | "warn" | "error",
+  tag: string,
+  message: string
+): void {
+  ensureWorkerLogger();
+  log[level](tag, message);
 }
 
 export function attachmentLogFields(

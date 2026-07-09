@@ -47,6 +47,7 @@ import {
   attachmentLogFields,
   createTurnLogger,
   ensureWorkerLogger,
+  logError,
 } from "./worker-log";
 
 // DO isolate may load this module without executing worker entry side-effects.
@@ -247,7 +248,10 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
         userText,
       });
     } catch (error) {
-      console.error("session index upsert failed", normalizeIndexError(error));
+      logError(normalizeIndexError(error), {
+        action: "session_index_upsert_failed",
+        scope: "agent-do",
+      });
     }
   }
 }

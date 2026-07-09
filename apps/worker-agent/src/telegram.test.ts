@@ -8,6 +8,15 @@ import {
   isImageAttachment,
   replyToThread,
 } from "./telegram";
+import { logError } from "./worker-log";
+
+vi.mock("./worker-log", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./worker-log")>();
+  return {
+    ...actual,
+    logError: vi.fn(),
+  };
+});
 
 const resolved = Promise.resolve();
 const chatConstructors: unknown[] = [];
@@ -264,9 +273,7 @@ describe("telegram conversation handling", () => {
   });
 
   it("does not leak internal failures to the chat thread", async () => {
-    const errorLog = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
+    vi.mocked(logError).mockClear();
     const error = new Error("internal secret failure");
     const posts: string[] = [];
 
@@ -291,7 +298,10 @@ describe("telegram conversation handling", () => {
       "🧪 DEVELOPMENT ENVIRONMENT",
       "처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
     ]);
-    expect(errorLog).toHaveBeenCalledWith("telegram handler failed", error);
+    expect(logError).toHaveBeenCalledWith(error, {
+      action: "handler_failed",
+      scope: "telegram",
+    });
   });
 
   it("recreates the cached bot when Durable Object namespace changes", async () => {

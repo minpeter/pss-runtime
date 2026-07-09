@@ -182,7 +182,34 @@ function withDiagnostics(
   options: { readonly log?: boolean } = {}
 ): PreparedAttachmentBytes {
   if (options.log !== false) {
-    console.info(IMAGE_PREPARE_LOG_MESSAGE, diagnostics);
+    // Single multi-line string so local terminals (and CF) show a tree, not
+    // `console.info(msg, object)` object dumps. Runtime stays free of evlog.
+    console.info(formatImagePrepareLog(diagnostics));
   }
   return { ...prepared, diagnostics };
+}
+
+function formatImagePrepareLog(diagnostics: ImagePrepareDiagnostics): string {
+  const rows: Array<readonly [string, string | number | boolean]> = [
+    ["path", diagnostics.path],
+    ["inputBytes", diagnostics.inputBytes],
+    ["outputBytes", diagnostics.outputBytes],
+    ["inputMediaType", diagnostics.inputMediaType],
+    ["outputMediaType", diagnostics.outputMediaType],
+    ["maxImageBytes", diagnostics.maxImageBytes],
+  ];
+  if (diagnostics.decodedWidth !== undefined) {
+    rows.push(["decodedWidth", diagnostics.decodedWidth]);
+  }
+  if (diagnostics.decodedHeight !== undefined) {
+    rows.push(["decodedHeight", diagnostics.decodedHeight]);
+  }
+  if (diagnostics.hasAlpha !== undefined) {
+    rows.push(["hasAlpha", diagnostics.hasAlpha]);
+  }
+  const lines = rows.map(([key, value], index) => {
+    const prefix = index === rows.length - 1 ? "└─" : "├─";
+    return `  ${prefix} ${key}: ${value}`;
+  });
+  return `${IMAGE_PREPARE_LOG_MESSAGE}\n${lines.join("\n")}`;
 }

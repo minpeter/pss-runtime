@@ -3,6 +3,7 @@ import { loadEnvFile } from "node:process";
 import { pathToFileURL } from "node:url";
 
 import { assertWebhookSecretToken } from "../src/env";
+import { logError, logTagged } from "../src/worker-log";
 
 const SECRET_HEADER = "x-telegram-bot-api-secret-token";
 const LOCAL_WEBHOOK = "http://127.0.0.1:8792/";
@@ -53,7 +54,7 @@ export async function relay(): Promise<void> {
   process.once("SIGTERM", () => abort.abort());
 
   await telegramApi(token, "deleteWebhook", { drop_pending_updates: false });
-  console.log(`relay -> ${webhookUrl}`);
+  logTagged("info", "telegram-relay", `relay -> ${webhookUrl}`);
 
   let offset = 0;
   while (!abort.signal.aborted) {
@@ -102,13 +103,20 @@ export async function forwardUpdates({
       });
     } catch (error) {
       if (error instanceof Error) {
-        console.error(`webhook forward failed: ${error.message}`);
+        logError(error, {
+          action: "webhook_forward_failed",
+          scope: "telegram-relay",
+        });
         break;
       }
       throw error;
     }
     if (!response.ok) {
-      console.error(`webhook ${response.status}`);
+      logError({
+        action: "webhook_forward_status",
+        scope: "telegram-relay",
+        status: response.status,
+      });
       break;
     }
     nextOffset = update.update_id + 1;
@@ -126,7 +134,7 @@ export async function webhook(): Promise<void> {
     secret_token: secret,
     url,
   });
-  console.log(`webhook -> ${url}`);
+  logTagged("info", "telegram-relay", `webhook -> ${url}`);
 }
 
 export async function main(command = process.argv[2]): Promise<void> {
