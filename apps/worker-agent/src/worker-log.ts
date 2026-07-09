@@ -114,14 +114,28 @@ export function logError(
   log.error(event);
 }
 
-/** Tagged one-liner (startup / CLI). */
+/**
+ * One-liner for CLI/startup (relay, webhook setup).
+ * Uses structured object form so pretty mode flushes via process.stdout.write
+ * (same channel as request wide events). The tag-string API uses console.log
+ * and loses the wrangler `stdout:` prefix.
+ */
 export function logTagged(
   level: "info" | "warn" | "error",
   tag: string,
   message: string
 ): void {
   ensureWorkerLogger();
-  log[level](tag, message);
+  const event = { message, scope: tag };
+  if (level === "error") {
+    log.error(event);
+    return;
+  }
+  if (level === "warn") {
+    log.warn(event);
+    return;
+  }
+  log.info(event);
 }
 
 export function attachmentLogFields(
