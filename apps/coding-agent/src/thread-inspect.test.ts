@@ -1,14 +1,12 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   formatThreadInspectionReport,
   inspectCodingAgentThread,
+  storageFileForThread,
 } from "./thread-inspect";
-
-const threadFileName = (key: string): string =>
-  `${Buffer.from(key).toString("base64url")}.json`;
 
 async function tempDir(): Promise<string> {
   return await mkdtemp(join(tmpdir(), "pss-coding-agent-inspect-"));
@@ -20,10 +18,12 @@ describe("thread inspection", () => {
     const key = "inspect:key";
     const summary = { content: "old context summarized", role: "system" };
     const summaryBytes = Buffer.byteLength(JSON.stringify(summary), "utf8");
+    const storageFile = storageFileForThread(directory, key);
 
     try {
+      await mkdir(dirname(storageFile), { recursive: true });
       await writeFile(
-        join(directory, threadFileName(key)),
+        storageFile,
         `${JSON.stringify(
           {
             state: {
@@ -57,7 +57,7 @@ describe("thread inspection", () => {
       });
 
       expect(formatThreadInspectionReport(report)).toBe(`threadKey: inspect:key
-storageFile: ${join(directory, threadFileName(key))}
+storageFile: ${storageFile}
 version: 7
 messageCount: 3
 compactionCount: 1
@@ -82,7 +82,7 @@ autoCompaction: min=12 retain=4`);
       });
 
       expect(formatThreadInspectionReport(report)).toBe(`threadKey: missing:key
-storageFile: ${join(directory, threadFileName(key))}
+storageFile: ${storageFileForThread(directory, key)}
 version: none
 messageCount: 0
 compactionCount: 0
