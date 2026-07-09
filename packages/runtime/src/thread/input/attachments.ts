@@ -9,6 +9,9 @@ export {
 } from "./attachment-image-codec-registry";
 export {
   DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,
+  IMAGE_PREPARE_LOG_MESSAGE,
+  type ImagePrepareDiagnostics,
+  type ImagePreparePath,
   isCompressibleImageMediaType,
   isStoredImageMediaType,
   MAX_IMAGE_DECODED_PIXELS,

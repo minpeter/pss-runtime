@@ -44,6 +44,12 @@ describe("prepareAttachmentBytesForStorage", () => {
     expect(prepared.bytes).toBe(bytes);
     expect(prepared.mediaType).toBe("image/jpeg");
     expect(isStoredImageMediaType(prepared.mediaType)).toBe(true);
+    expect(prepared.diagnostics).toMatchObject({
+      inputBytes: bytes.byteLength,
+      outputBytes: bytes.byteLength,
+      outputMediaType: "image/jpeg",
+      path: "passthrough_jpeg",
+    });
   });
 
   it("passthroughs small PNG bytes as image/png", async () => {
@@ -54,6 +60,7 @@ describe("prepareAttachmentBytesForStorage", () => {
     });
     expect(prepared.bytes).toBe(bytes);
     expect(prepared.mediaType).toBe("image/png");
+    expect(prepared.diagnostics?.path).toBe("passthrough_png");
   });
 
   it("compresses oversized opaque images to image/jpeg under 1MB", async () => {
@@ -67,6 +74,13 @@ describe("prepareAttachmentBytesForStorage", () => {
     });
     expect(prepared.mediaType).toBe("image/jpeg");
     expect(prepared.bytes.byteLength).toBeLessThanOrEqual(
+      DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES
+    );
+    expect(prepared.diagnostics).toMatchObject({
+      inputBytes: bytes.byteLength,
+      path: "reencode_jpeg",
+    });
+    expect(prepared.diagnostics?.outputBytes).toBeLessThanOrEqual(
       DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES
     );
     expect(

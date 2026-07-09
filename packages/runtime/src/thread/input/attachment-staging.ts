@@ -223,6 +223,11 @@ async function stageFilePart(
   } catch (error) {
     // Safety limits: omit this image, keep the rest of the turn (text + other files).
     if (error instanceof RuntimeAttachmentImageLimitError) {
+      console.warn("pss-runtime image-omit", {
+        filename: part.filename,
+        limit: error.limit,
+        mediaType: part.mediaType,
+      });
       return imageLimitOmittedTextPart(part.filename, error);
     }
     throw error;

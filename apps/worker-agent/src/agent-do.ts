@@ -43,11 +43,17 @@ import {
   isSessionTranscriptPath,
   SessionTranscriptReadRequestSchema,
 } from "./session-transcript-client";
+import {
+  attachmentLogFields,
+  createTurnLogger,
+  ensureWorkerLogger,
+} from "./worker-log";
 
 // DO isolate may load this module without executing worker entry side-effects.
 // Install static AVIF/WebP/HEIF wasm so attachment staging never hits
 // "wasm not installed" on the Durable Object path.
 installCloudflareImageCodecs();
+ensureWorkerLogger();
 
 /**
  * Channel agent Durable Object implemented on the Cloudflare Agents SDK.
@@ -110,54 +116,72 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
       return await this.#handleSessionTranscriptRequest(request);
     }
 
+    const log = createTurnLogger(request);
     const payload = await parseAgentRequest(request);
     if (!payload) {
+      log.set({ action: "agent_turn", outcome: "invalid_payload" });
+      log.emit({ status: 400 });
       return new Response("text or attachments and channel required", {
         status: 400,
       });
     }
 
-    if (payload.attachments.length > 0) {
-      console.info("worker-agent turn attachments", {
-        count: payload.attachments.length,
-        mediaTypes: payload.attachments.map(
-          (attachment) => attachment.mediaType
-        ),
-      });
-    }
-
-    const sendMessage = createRequestSendMessageToolSetup(
-      this.#env,
-      payload.channel
-    );
-    const binding = durableObjectChannelBinding(payload.channel);
-    const sessionScopeKey = payload.sessionScopeKey;
-    const agent = createConfiguredAgent(this.#env, this.#platform.host(), {
-      sendMessage: sendMessage.options,
-      sessionTools: {
-        currentConversationKey: () => binding.channelKey,
-        currentSessionScopeKey: () => sessionScopeKey,
-        reader: this.#sessionIndexClient,
-        transcriptReader: this.#sessionTranscriptClient,
-      },
+    const attachmentFields = attachmentLogFields(payload.attachments);
+    log.set({
+      action: "agent_turn",
+      channelKind: payload.channel.kind,
+      hasSessionScope: Boolean(payload.sessionScopeKey),
+      textChars: payload.text.length,
+      ...attachmentFields,
     });
-    const assistantMessages: string[] = [];
-    const delivery = await deliverToolOnlyTurn(
-      agent.thread(binding.thread),
-      agentInputFromRequest(payload),
-      { onAssistantOutput: (text) => assistantMessages.push(text) }
-    );
-    await this.#indexTurn(
-      binding,
-      agentTurnIndexText(payload),
-      sendMessage,
-      assistantMessages,
-      sessionScopeKey
-    );
 
-    return Response.json(
-      withCapturedMessages(delivery, sendMessage.messages())
-    );
+    try {
+      const sendMessage = createRequestSendMessageToolSetup(
+        this.#env,
+        payload.channel
+      );
+      const binding = durableObjectChannelBinding(payload.channel);
+      const sessionScopeKey = payload.sessionScopeKey;
+      const agent = createConfiguredAgent(this.#env, this.#platform.host(), {
+        sendMessage: sendMessage.options,
+        sessionTools: {
+          currentConversationKey: () => binding.channelKey,
+          currentSessionScopeKey: () => sessionScopeKey,
+          reader: this.#sessionIndexClient,
+          transcriptReader: this.#sessionTranscriptClient,
+        },
+      });
+      const assistantMessages: string[] = [];
+      const delivery = await deliverToolOnlyTurn(
+        agent.thread(binding.thread),
+        agentInputFromRequest(payload),
+        { onAssistantOutput: (text) => assistantMessages.push(text) }
+      );
+      await this.#indexTurn(
+        binding,
+        agentTurnIndexText(payload),
+        sendMessage,
+        assistantMessages,
+        sessionScopeKey
+      );
+
+      log.set({
+        delivered: delivery.delivered,
+        outcome: delivery.delivered ? "delivered" : "missing_send_message",
+        ...(delivery.delivered
+          ? {}
+          : { deliveryError: "missing_send_message" }),
+      });
+      log.emit({ status: 200 });
+      return Response.json(
+        withCapturedMessages(delivery, sendMessage.messages())
+      );
+    } catch (error) {
+      log.error(error instanceof Error ? error : new Error(String(error)));
+      log.set({ outcome: "error" });
+      log.emit({ status: 500 });
+      throw error;
+    }
   }
 
   async #handleSessionTranscriptRequest(request: Request): Promise<Response> {
