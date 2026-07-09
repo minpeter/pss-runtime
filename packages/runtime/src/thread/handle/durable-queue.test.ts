@@ -10,7 +10,7 @@ import type {
   RuntimeAttachmentBlob,
   RuntimeAttachmentPutInput,
   RuntimeAttachmentReference,
-  RuntimeAttachmentStore,
+  HostAttachmentStore,
 } from "../input/attachments";
 import type { UserInput } from "../input/input";
 import type { AgentPlugin } from "../plugins/pipeline";
@@ -175,7 +175,7 @@ function threadInputRecord(
   };
 }
 
-class TrackingAttachmentStore implements RuntimeAttachmentStore {
+class TrackingAttachmentStore implements HostAttachmentStore {
   readonly #store = new MemoryAttachmentStore();
   readonly deletedRefs: RuntimeAttachmentReference[] = [];
   #putCount = 0;

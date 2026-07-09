@@ -1,4 +1,4 @@
-import type { AgentHost, ExecutionScheduler } from "../../../execution";
+import type { AgentHost, HostScheduler } from "../../../execution";
 import type { ThreadStore } from "../../../index";
 import { CloudflareAttachmentStore } from "../storage/attachment-store";
 import {
@@ -47,7 +47,7 @@ export class InMemoryCloudflareDurableObjectStorage extends BaseInMemoryCloudfla
 export interface CloudflareStorageHostOptions {
   readonly maxPayloadBytes?: number;
   readonly prefix?: string;
-  readonly scheduler?: ExecutionScheduler;
+  readonly scheduler?: HostScheduler;
   readonly storage: CloudflareDurableObjectStorage;
   readonly threadStore?: ThreadStore;
 }
@@ -78,7 +78,7 @@ export function createCloudflareAlarmScheduler({
 }: {
   readonly prefix?: string;
   readonly storage: CloudflareDurableObjectStorage;
-}): ExecutionScheduler {
+}): HostScheduler {
   return {
     enqueueRun: async (runId, options) => {
       await appendScheduledRun(storage, prefix, runId);

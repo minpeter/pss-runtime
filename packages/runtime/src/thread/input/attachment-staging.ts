@@ -8,7 +8,7 @@ import {
 import type {
   RuntimeAttachmentReference,
   RuntimeAttachmentStagingOptions,
-  RuntimeAttachmentStore,
+  HostAttachmentStore,
 } from "./attachment-types";
 import {
   RuntimeAttachmentSecurityError,
@@ -22,7 +22,7 @@ import type {
 
 export async function stageUserInputAttachments(
   input: UserInput,
-  store: RuntimeAttachmentStore | undefined,
+  store: HostAttachmentStore | undefined,
   options: RuntimeAttachmentStagingOptions = {}
 ): Promise<UserInput> {
   if (!("content" in input)) {
@@ -49,7 +49,7 @@ export async function stageUserInputAttachments(
 }
 
 export async function cleanupStagedRuntimeAttachments(
-  store: RuntimeAttachmentStore | undefined,
+  store: HostAttachmentStore | undefined,
   refs: readonly RuntimeAttachmentReference[]
 ): Promise<void> {
   if (!store || refs.length === 0) {
@@ -60,7 +60,7 @@ export async function cleanupStagedRuntimeAttachments(
 }
 
 export async function cleanupUnreferencedStagedRuntimeAttachments(
-  store: RuntimeAttachmentStore | undefined,
+  store: HostAttachmentStore | undefined,
   refs: readonly RuntimeAttachmentReference[],
   retained: readonly (AgentEvent | UserInput)[]
 ): Promise<void> {
@@ -112,7 +112,7 @@ export function userInputContainsRuntimeAttachmentRefs(
 
 export async function stageAgentEventAttachments(
   event: AgentEvent,
-  store: RuntimeAttachmentStore | undefined,
+  store: HostAttachmentStore | undefined,
   options: RuntimeAttachmentStagingOptions = {}
 ): Promise<AgentEvent> {
   if (event.type === "user-input") {
@@ -131,7 +131,7 @@ export async function stageAgentEventAttachments(
 
 export async function stageAgentEventsAttachments(
   events: readonly AgentEvent[],
-  store: RuntimeAttachmentStore | undefined,
+  store: HostAttachmentStore | undefined,
   options: RuntimeAttachmentStagingOptions = {}
 ): Promise<AgentEvent[]> {
   const staged: AgentEvent[] = [];
@@ -177,7 +177,7 @@ function runtimeAttachmentRefsForUserInput(
 async function stageFileData(
   data: UserMessageFileData,
   part: { readonly filename?: string; readonly mediaType: string },
-  store: RuntimeAttachmentStore | undefined,
+  store: HostAttachmentStore | undefined,
   options: RuntimeAttachmentStagingOptions
 ): Promise<UserMessageFileData> {
   const runtimeRef = runtimeAttachmentDataRef(data);

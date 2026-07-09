@@ -4,7 +4,7 @@ import { createInMemoryHost } from "../../platform/memory";
 import {
   isRuntimeAttachmentData,
   type RuntimeAttachmentReference,
-  type RuntimeAttachmentStore,
+  type HostAttachmentStore,
 } from "../../thread/input/attachments";
 import type { AgentHost, TurnRecord, TurnStore } from "../host/types";
 import { dispatchAgentNotification } from "./notification-dispatch";
@@ -241,9 +241,9 @@ describe("dispatchAgentNotification", () => {
 });
 
 function trackingAttachmentStore(
-  store: RuntimeAttachmentStore | undefined,
+  store: HostAttachmentStore | undefined,
   deletedRefs: RuntimeAttachmentReference[]
-): RuntimeAttachmentStore {
+): HostAttachmentStore {
   if (!store) {
     throw new Error("expected base host attachment store");
   }

@@ -1,16 +1,16 @@
-import type { RuntimeAttachmentStore } from "../../thread/input/attachments";
+import type { HostAttachmentStore } from "../../thread/input/attachments";
 import type { AgentEvent, UserInput } from "../../thread/protocol/events";
 import type { ThreadStore } from "../../thread/store/types";
 import type { ResumeThreadOptions } from "./scheduler-options";
 
 /** Single host contract: persistence, scheduling, and optional attachments. */
 export interface AgentHost {
-  readonly attachmentStore?: RuntimeAttachmentStore;
-  readonly scheduler: ExecutionScheduler;
-  readonly store: ExecutionStore;
+  readonly attachmentStore?: HostAttachmentStore;
+  readonly scheduler: HostScheduler;
+  readonly store: HostStore;
 }
 
-export interface ExecutionScheduler {
+export interface HostScheduler {
   enqueueRun(
     runId: string,
     options?: { readonly runAfterMs?: number }
@@ -265,7 +265,7 @@ export interface ThreadInputInbox {
   releaseClaim(record: ClaimedThreadInput): Promise<ThreadInputRecord | null>;
 }
 
-export interface ExecutionStorePorts {
+export interface HostStorePorts {
   readonly checkpoints: CheckpointStore;
   readonly events: EventStore;
   readonly inputs: ThreadInputInbox;
@@ -275,8 +275,8 @@ export interface ExecutionStorePorts {
   readonly turns: TurnStore;
 }
 
-export interface ExecutionStoreTransaction extends ExecutionStorePorts {}
+export interface HostStoreTransaction extends HostStorePorts {}
 
-export interface ExecutionStore extends ExecutionStorePorts {
-  transaction<T>(fn: (tx: ExecutionStoreTransaction) => Promise<T>): Promise<T>;
+export interface HostStore extends HostStorePorts {
+  transaction<T>(fn: (tx: HostStoreTransaction) => Promise<T>): Promise<T>;
 }

@@ -1,4 +1,4 @@
-import type { AgentHost, ExecutionScheduler } from "../../../execution";
+import type { AgentHost, HostScheduler } from "../../../execution";
 import { FileAttachmentStore } from "../storage/file-attachment-store";
 import { FileExecutionStore } from "../storage/file-execution-store";
 import {
@@ -20,7 +20,7 @@ export function createFileHost({ directory }: FileHostOptions): AgentHost {
 
 export function createFileScheduler({
   directory,
-}: FileHostOptions): ExecutionScheduler {
+}: FileHostOptions): HostScheduler {
   return {
     enqueueRun: async (runId, options) => {
       await appendScheduledNodeRun(directory, runId, options);

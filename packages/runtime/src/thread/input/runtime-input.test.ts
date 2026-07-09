@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type {
   RuntimeAttachmentReference,
-  RuntimeAttachmentStore,
+  HostAttachmentStore,
 } from "./attachments";
 import {
   addSteeringInput,
@@ -26,7 +26,7 @@ describe("runtime input", () => {
       resolvePut = resolve;
     });
     const deletedRefs: RuntimeAttachmentReference[] = [];
-    const store: RuntimeAttachmentStore = {
+    const store: HostAttachmentStore = {
       delete: (ref) => {
         deletedRefs.push(ref);
         return Promise.resolve();

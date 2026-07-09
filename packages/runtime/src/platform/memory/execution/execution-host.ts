@@ -1,7 +1,7 @@
 import type { ResumeThreadOptions } from "../../../execution/host/scheduler-options";
 import type {
   AgentHost,
-  ExecutionScheduler,
+  HostScheduler,
 } from "../../../execution/host/types";
 import {
   applyListLimit,
@@ -37,7 +37,7 @@ interface StoredScheduledWork<T> {
   readonly workId: string;
 }
 
-export class InMemoryExecutionScheduler implements ExecutionScheduler {
+export class InMemoryExecutionScheduler implements HostScheduler {
   readonly #runs = new Map<string, StoredScheduledWork<string>>();
   readonly #threadPrompts = new Map<
     string,

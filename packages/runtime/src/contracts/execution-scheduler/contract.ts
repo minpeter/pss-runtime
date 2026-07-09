@@ -1,5 +1,5 @@
 import { describe, expect, it, onTestFinished } from "vitest";
-import type { ExecutionScheduler } from "../../execution";
+import type { HostScheduler } from "../../execution";
 import type { ScheduledThreadPrompt } from "../../execution/scheduled-work";
 
 export interface ExecutionSchedulerContractListOptions {
@@ -22,7 +22,7 @@ export interface ExecutionSchedulerContractHarness {
   listThreadPrompts(
     options?: ExecutionSchedulerContractListOptions
   ): Promise<readonly ScheduledThreadPrompt[]>;
-  readonly scheduler: ExecutionScheduler;
+  readonly scheduler: HostScheduler;
 }
 
 export interface ExecutionSchedulerContractOptions {
@@ -51,7 +51,7 @@ export function describeExecutionSchedulerContract({
     return harness;
   };
 
-  describe(`${name} ExecutionScheduler contract`, () => {
+  describe(`${name} HostScheduler contract`, () => {
     it("lists enqueued runs until they are acked", async () => {
       const harness = await setup();
       await harness.scheduler.enqueueRun("run-1");

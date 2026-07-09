@@ -2,7 +2,7 @@ import type {
   RuntimeAttachmentBlob,
   RuntimeAttachmentPutInput,
   RuntimeAttachmentReference,
-  RuntimeAttachmentStore,
+  HostAttachmentStore,
 } from "../../../thread/input/attachments";
 import type { CloudflareDurableObjectTransactionStorage } from "./durable-object/durable-object-storage";
 
@@ -24,7 +24,7 @@ class CloudflareAttachmentStoreError extends Error {
 const attachmentIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export class CloudflareAttachmentStore implements RuntimeAttachmentStore {
+export class CloudflareAttachmentStore implements HostAttachmentStore {
   readonly #prefix: string;
   readonly #storage: CloudflareDurableObjectTransactionStorage;
 

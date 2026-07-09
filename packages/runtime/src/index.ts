@@ -27,7 +27,7 @@ export {
   type RuntimeAttachmentReference,
   RuntimeAttachmentSecurityError,
   RuntimeAttachmentStagingError,
-  type RuntimeAttachmentStore,
+  type HostAttachmentStore,
 } from "./thread/input/attachments";
 export { delegateUserInput } from "./thread/input/delegate-input";
 export type { AgentInput, ThreadInput } from "./thread/input/input";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentHost, ExecutionStoreTransaction } from "../../execution";
+import type { AgentHost, HostStoreTransaction } from "../../execution";
 import { createInMemoryHost } from "../../platform/memory";
 import { userText } from "../../testing/test-fixtures";
 import { ThreadState } from "../state/thread-state";
@@ -68,8 +68,8 @@ function executionHostWithFailingAck(base: AgentHost): AgentHost {
 }
 
 function transactionWithFailingAck(
-  tx: ExecutionStoreTransaction
-): ExecutionStoreTransaction {
+  tx: HostStoreTransaction
+): HostStoreTransaction {
   return {
     checkpoints: tx.checkpoints,
     events: tx.events,

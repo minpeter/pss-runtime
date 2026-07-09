@@ -5,8 +5,8 @@ import type {
   CheckpointWriteResult,
   EventCursor,
   EventStore,
-  ExecutionStore,
-  ExecutionStoreTransaction,
+  HostStore,
+  HostStoreTransaction,
   NotificationInbox,
   StoredAgentEvent,
   StoredThreadEvent,
@@ -30,7 +30,7 @@ import { InMemoryRunStore } from "./runs";
 import type { ExecutionState } from "./state";
 import { cloneState, createEmptyState } from "./state";
 
-export class InMemoryExecutionStore implements ExecutionStore {
+export class InMemoryExecutionStore implements HostStore {
   #state = createEmptyState();
   #transactionChain: Promise<void> = Promise.resolve();
   readonly checkpoints: CheckpointStore = new InMemoryCheckpointStore(
@@ -55,7 +55,7 @@ export class InMemoryExecutionStore implements ExecutionStore {
   }
 
   async transaction<T>(
-    fn: (tx: ExecutionStoreTransaction) => Promise<T>
+    fn: (tx: HostStoreTransaction) => Promise<T>
   ): Promise<T> {
     const previousTransaction = this.#transactionChain;
     let releaseTransaction: () => void = () => undefined;
@@ -75,7 +75,7 @@ export class InMemoryExecutionStore implements ExecutionStore {
   }
 }
 
-class InMemoryTransactionStore implements ExecutionStoreTransaction {
+class InMemoryTransactionStore implements HostStoreTransaction {
   readonly checkpoints: CheckpointStore;
   readonly events: EventStore;
   readonly inputs: ThreadInputInbox;

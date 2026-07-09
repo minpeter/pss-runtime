@@ -1,12 +1,12 @@
 import type { AgentHost } from "../execution/host/types";
 import { createInMemoryHost } from "../platform/memory";
-import type { RuntimeAttachmentStore } from "../thread/input/attachments";
+import type { HostAttachmentStore } from "../thread/input/attachments";
 import type { ThreadStore } from "../thread/store/types";
 
 /** Test helper: full AgentHost with a custom threads port. */
 export function hostWithThreads(
   threadStore: ThreadStore,
-  attachmentStore?: RuntimeAttachmentStore
+  attachmentStore?: HostAttachmentStore
 ): AgentHost {
   const base = createInMemoryHost();
   return {

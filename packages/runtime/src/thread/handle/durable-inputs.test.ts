@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { Agent } from "../../agent/core/agent";
 import type {
   AgentHost,
-  ExecutionStore,
-  ExecutionStoreTransaction,
+  HostStore,
+  HostStoreTransaction,
   ThreadInputBoundary,
   ThreadInputInbox,
 } from "../../execution";
@@ -222,9 +222,9 @@ function tracedInputs(
 }
 
 function executionStoreWithInputTrace(
-  store: ExecutionStore,
+  store: HostStore,
   trace: string[]
-): ExecutionStore {
+): HostStore {
   return {
     checkpoints: store.checkpoints,
     events: store.events,
@@ -240,9 +240,9 @@ function executionStoreWithInputTrace(
 }
 
 function transactionWithInputTrace(
-  tx: ExecutionStoreTransaction,
+  tx: HostStoreTransaction,
   trace: string[]
-): ExecutionStoreTransaction {
+): HostStoreTransaction {
   return {
     checkpoints: tx.checkpoints,
     events: tx.events,

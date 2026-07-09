@@ -4,8 +4,8 @@ import { join } from "node:path";
 import type {
   CheckpointStore,
   EventStore,
-  ExecutionStore,
-  ExecutionStoreTransaction,
+  HostStore,
+  HostStoreTransaction,
   NotificationInbox,
   ThreadEventLog,
   ThreadInputInbox,
@@ -24,7 +24,7 @@ import {
 } from "./file-execution-store/lock";
 import { createFileExecutionStorePorts } from "./file-execution-store/ports";
 
-export class FileExecutionStore implements ExecutionStore {
+export class FileExecutionStore implements HostStore {
   readonly checkpoints: CheckpointStore;
   readonly events: EventStore;
   readonly inputs: ThreadInputInbox;
@@ -54,7 +54,7 @@ export class FileExecutionStore implements ExecutionStore {
   }
 
   async transaction<T>(
-    fn: (tx: ExecutionStoreTransaction) => Promise<T>
+    fn: (tx: HostStoreTransaction) => Promise<T>
   ): Promise<T> {
     return await withFileLock(
       this.#lockDirectory,

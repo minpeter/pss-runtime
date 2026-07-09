@@ -24,5 +24,5 @@ export {
   RuntimeAttachmentSecurityError,
   RuntimeAttachmentStagingError,
   type RuntimeAttachmentStagingOptions,
-  type RuntimeAttachmentStore,
+  type HostAttachmentStore,
 } from "./attachment-types";

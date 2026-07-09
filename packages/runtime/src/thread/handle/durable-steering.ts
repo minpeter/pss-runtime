@@ -2,7 +2,7 @@ import type { AgentHost } from "../../execution/host/types";
 import {
   cleanupStagedRuntimeAttachments,
   type RuntimeAttachmentReference,
-  type RuntimeAttachmentStore,
+  type HostAttachmentStore,
   stageUserInputAttachments,
   userInputRequiresAttachmentProcessing,
 } from "../input/attachments";
@@ -24,7 +24,7 @@ export async function addDurableSteeringInput({
   runtimeInput,
   threadKey,
 }: {
-  readonly attachmentStore: RuntimeAttachmentStore | undefined;
+  readonly attachmentStore: HostAttachmentStore | undefined;
   readonly executionHost: AgentHost | undefined;
   readonly input: AgentInput;
   readonly runtimeInput: RuntimeInputState;

@@ -15,7 +15,7 @@ export interface RuntimeAttachmentBlob extends RuntimeAttachmentPutInput {
   readonly ref: RuntimeAttachmentReference;
 }
 
-export interface RuntimeAttachmentStore {
+export interface HostAttachmentStore {
   delete(ref: RuntimeAttachmentReference): Promise<void>;
   get(ref: RuntimeAttachmentReference): Promise<RuntimeAttachmentBlob | null>;
   put(input: RuntimeAttachmentPutInput): Promise<RuntimeAttachmentReference>;

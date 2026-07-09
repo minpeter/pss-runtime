@@ -1,6 +1,6 @@
 import type {
   CheckpointWriteResult,
-  ExecutionStore,
+  HostStore,
   StoredAgentEvent,
   StoredThreadEvent,
   TurnRecord,
@@ -49,7 +49,7 @@ export function createDeferred(): {
 }
 
 export async function appendCheckpoint(
-  store: ExecutionStore,
+  store: HostStore,
   expectedVersion: number
 ): Promise<CheckpointWriteResult> {
   return await store.checkpoints.append(

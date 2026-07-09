@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { ExecutionStore } from "../../execution";
+import type { HostStore } from "../../execution";
 import { collectThreadEvents } from "./fixtures";
 
 export interface ThreadEventLogContractOptions {
-  readonly createStore: () => ExecutionStore;
+  readonly createStore: () => HostStore;
 }
 
 export function describeThreadEventLogContract({

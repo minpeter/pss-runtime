@@ -3,9 +3,9 @@ import type {
   AgentHost,
   CheckpointStore,
   EventStore,
-  ExecutionScheduler,
-  ExecutionStore,
-  ExecutionStoreTransaction,
+  HostScheduler,
+  HostStore,
+  HostStoreTransaction,
   NotificationInbox,
   NotificationRecord,
   StoredThreadEvent,
@@ -18,7 +18,7 @@ import type {
   AgentAutoCompactionOptions,
   AgentInput,
   AgentOptions,
-  RuntimeAttachmentStore,
+  HostAttachmentStore,
   ThreadCompactionInput,
   ThreadHandle,
 } from "../index";
@@ -106,7 +106,7 @@ describe("runtime public exports", () => {
       retainMessages: 4,
     } satisfies AgentAutoCompactionOptions;
     const model = {} as AgentOptions["model"];
-    const attachmentStore = {} as RuntimeAttachmentStore;
+    const attachmentStore = {} as HostAttachmentStore;
     const enabledOptions = {
       attachmentStore,
       autoCompaction,
@@ -153,20 +153,20 @@ describe("runtime public exports", () => {
   });
 
   it("types advanced host contracts", () => {
-    expectTypeOf<AgentHost["scheduler"]>().toEqualTypeOf<ExecutionScheduler>();
-    expectTypeOf<AgentHost["store"]>().toEqualTypeOf<ExecutionStore>();
+    expectTypeOf<AgentHost["scheduler"]>().toEqualTypeOf<HostScheduler>();
+    expectTypeOf<AgentHost["store"]>().toEqualTypeOf<HostStore>();
     expectTypeOf<
-      ExecutionStore["notifications"]
+      HostStore["notifications"]
     >().toEqualTypeOf<NotificationInbox>();
     expectTypeOf<AgentHost["attachmentStore"]>().toEqualTypeOf<
-      RuntimeAttachmentStore | undefined
+      HostAttachmentStore | undefined
     >();
-    expectTypeOf<ExecutionStore["turns"]>().toEqualTypeOf<TurnStore>();
+    expectTypeOf<HostStore["turns"]>().toEqualTypeOf<TurnStore>();
     expectTypeOf<
-      ExecutionStore["checkpoints"]
+      HostStore["checkpoints"]
     >().toEqualTypeOf<CheckpointStore>();
-    expectTypeOf<ExecutionStore["events"]>().toEqualTypeOf<EventStore>();
-    expectTypeOf<ExecutionStore["threadEvents"]>().toEqualTypeOf<
+    expectTypeOf<HostStore["events"]>().toEqualTypeOf<EventStore>();
+    expectTypeOf<HostStore["threadEvents"]>().toEqualTypeOf<
       ThreadEventLog | undefined
     >();
     expectTypeOf<
@@ -176,12 +176,12 @@ describe("runtime public exports", () => {
       Awaited<ReturnType<TurnStore["get"]>>
     >().toEqualTypeOf<TurnRecord | null>();
     expectTypeOf<
-      ExecutionStoreTransaction["turns"]
+      HostStoreTransaction["turns"]
     >().toEqualTypeOf<TurnStore>();
     expectTypeOf<
-      ExecutionStoreTransaction["notifications"]
+      HostStoreTransaction["notifications"]
     >().toEqualTypeOf<NotificationInbox>();
-    expectTypeOf<ExecutionStoreTransaction["threadEvents"]>().toEqualTypeOf<
+    expectTypeOf<HostStoreTransaction["threadEvents"]>().toEqualTypeOf<
       ThreadEventLog | undefined
     >();
     expectTypeOf<AgentHost>().not.toHaveProperty("kind");

@@ -1,8 +1,8 @@
 import type {
   CheckpointStore,
   EventStore,
-  ExecutionStore,
-  ExecutionStoreTransaction,
+  HostStore,
+  HostStoreTransaction,
   NotificationInbox,
   ThreadEventLog,
   ThreadInputInbox,
@@ -27,7 +27,7 @@ import { DurableObjectThreadInputInbox } from "./input-store";
 import { DurableObjectNotificationInbox } from "./notification-store";
 import { DurableObjectRunStore } from "./run-store";
 
-export class DurableObjectExecutionStore implements ExecutionStore {
+export class DurableObjectExecutionStore implements HostStore {
   readonly checkpoints: CheckpointStore;
   readonly events: EventStore;
   readonly inputs: ThreadInputInbox;
@@ -90,7 +90,7 @@ export class DurableObjectExecutionStore implements ExecutionStore {
   }
 
   async transaction<T>(
-    fn: (tx: ExecutionStoreTransaction) => Promise<T>
+    fn: (tx: HostStoreTransaction) => Promise<T>
   ): Promise<T> {
     if (this.#storage.transaction) {
       return await this.#storage.transaction((storage) =>

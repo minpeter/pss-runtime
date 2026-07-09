@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { ExecutionStoreTransaction } from "../../../../execution/host/types";
+import type { HostStoreTransaction } from "../../../../execution/host/types";
 import { FileCheckpointStore } from "./checkpoint-store";
 import { FileEventStore, FileThreadEventLog } from "./event-store";
 import { FileThreadInputInbox } from "./input-inbox";
@@ -11,7 +11,7 @@ import type { DataDirectoryResolver } from "./types";
 export function createFileExecutionStorePorts(
   directory: DataDirectoryResolver,
   lock: <T>(fn: () => Promise<T>) => Promise<T>
-): ExecutionStoreTransaction {
+): HostStoreTransaction {
   const runs = new FileRunStore(directory, lock);
   const checkpoints = new FileCheckpointStore(directory, lock, runs);
   const threads = new LockedThreadStore(

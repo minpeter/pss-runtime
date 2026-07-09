@@ -3,7 +3,7 @@ import {
   cleanupStagedRuntimeAttachments,
   cleanupUnreferencedStagedRuntimeAttachments,
   type RuntimeAttachmentReference,
-  type RuntimeAttachmentStore,
+  type HostAttachmentStore,
   stageUserInputAttachments,
 } from "../input/attachments";
 import type { AgentInput } from "../input/input";
@@ -42,7 +42,7 @@ export async function admitThreadSendInput({
   threadKey,
 }: {
   readonly awaitBoundaries: boolean;
-  readonly attachmentStore: RuntimeAttachmentStore | undefined;
+  readonly attachmentStore: HostAttachmentStore | undefined;
   readonly drain: () => Promise<void>;
   readonly events: ThreadEventDispatcher;
   readonly executionHost: AgentHost | undefined;
@@ -118,7 +118,7 @@ export async function createQueuedSendInput({
   threadKey,
 }: {
   readonly awaitBoundaries: boolean;
-  readonly attachmentStore: RuntimeAttachmentStore | undefined;
+  readonly attachmentStore: HostAttachmentStore | undefined;
   readonly events: ThreadEventDispatcher;
   readonly executionHost: AgentHost | undefined;
   readonly input: AgentInput;

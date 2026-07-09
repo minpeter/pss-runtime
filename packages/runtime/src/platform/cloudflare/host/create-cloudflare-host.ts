@@ -1,4 +1,4 @@
-import type { AgentHost, ExecutionScheduler } from "../../../execution";
+import type { AgentHost, HostScheduler } from "../../../execution";
 import type { ThreadStore } from "../../../thread/store/types";
 import { createCloudflareAgentsFiberRetryScheduler } from "../agents/retry-scheduler";
 import {
@@ -125,4 +125,4 @@ export {
   type CloudflareStorageHostOptions as CloudflareHostBaseOptions,
 };
 
-export type { ExecutionScheduler };
+export type { HostScheduler };

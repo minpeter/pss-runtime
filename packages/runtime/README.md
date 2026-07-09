@@ -428,8 +428,8 @@ const report = await inspectFileThread({
 console.log(report.messageCount, report.compactionCount, report.storageFile);
 ```
 
-There is a single host contract: `AgentHost` (`store` + `scheduler` + optional
-`attachmentStore`). When `host` is omitted, `Agent` defaults to
+There is a single host contract: `AgentHost` (`HostStore` + `HostScheduler` + optional
+`HostAttachmentStore`). When `host` is omitted, `Agent` defaults to
 `createInMemoryHost()`. Platform factories (`createInMemoryHost`,
 `createFileHost`, `createCloudflareHost`) all return that same shape.
 `createCloudflareHost` accepts either plain DO storage options or Agents SDK
@@ -525,8 +525,8 @@ webhook, and prompt-routing behavior.
 
 ### Platform adapter parity
 
-Every platform adapter implements the same core ports — `ExecutionStore`
-(turns, checkpoints, run events, thread events, notifications, threads) and `ExecutionScheduler`
+Every platform adapter implements the same core ports — `HostStore`
+(turns, checkpoints, run events, thread events, notifications, threads) and `HostScheduler`
 (run enqueueing and thread resumes) — and each is verified by shared in-repo
 contract test suites (internal, not part of the published API).
 Platform-neutral scheduled-work semantics (work-id derivation, thread-prompt

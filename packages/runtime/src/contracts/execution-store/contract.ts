@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ExecutionStore } from "../../execution";
+import type { HostStore } from "../../execution";
 import {
   appendCheckpoint,
   collectEvents,
@@ -10,7 +10,7 @@ import { describeThreadEventLogContract } from "./thread-event-contract";
 import { describeThreadInputInboxContract } from "./thread-input-contract";
 
 export interface ExecutionStoreContractOptions {
-  readonly createStore: () => ExecutionStore;
+  readonly createStore: () => HostStore;
   readonly name: string;
 }
 
@@ -18,7 +18,7 @@ export function describeExecutionStoreContract({
   createStore,
   name,
 }: ExecutionStoreContractOptions): void {
-  describe(`${name} ExecutionStore contract`, () => {
+  describe(`${name} HostStore contract`, () => {
     it("transactions commit run checkpoint event and notification atomically", async () => {
       const store = createStore();
 

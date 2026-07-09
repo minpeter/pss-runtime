@@ -16,7 +16,7 @@ import type {
   RuntimeAttachmentBlob,
   RuntimeAttachmentPutInput,
   RuntimeAttachmentReference,
-  RuntimeAttachmentStore,
+  HostAttachmentStore,
 } from "../../thread/input/attachments";
 import { Agent, type AgentOptions } from "./agent";
 
@@ -205,7 +205,7 @@ describe("Agent host public API", () => {
   });
 });
 
-class TrackingAttachmentStore implements RuntimeAttachmentStore {
+class TrackingAttachmentStore implements HostAttachmentStore {
   readonly #store = new MemoryAttachmentStore();
   #putCount = 0;
 
