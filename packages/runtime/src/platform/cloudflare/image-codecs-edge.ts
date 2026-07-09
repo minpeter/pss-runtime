@@ -1,3 +1,4 @@
+/// <reference path="../../types/wasm.d.ts" />
 /**
  * Cloudflare Workers / edge bootstrap for image attachment codecs.
  *

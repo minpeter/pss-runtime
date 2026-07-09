@@ -1,3 +1,5 @@
+/// <reference path="../../types/heic-decode.d.ts" />
+/// <reference path="../../types/libheif-js.d.ts" />
 import { getInstalledImageCodecWasm } from "./attachment-image-codec-registry";
 import { ensureImageCodecRuntimeReady } from "./attachment-image-decode-runtime";
 import { asUint8Array, type RgbaImage } from "./attachment-image-rgba";
