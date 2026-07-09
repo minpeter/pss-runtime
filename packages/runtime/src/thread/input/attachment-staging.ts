@@ -202,7 +202,7 @@ async function stageFileData(
     );
   }
 
-  const prepared = prepareAttachmentBytesForStorage({
+  const prepared = await prepareAttachmentBytesForStorage({
     bytes,
     maxImageBytes: options.maxImageBytes,
     mediaType: part.mediaType,

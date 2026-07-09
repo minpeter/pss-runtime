@@ -116,9 +116,10 @@ await agent.send([
 Inline bytes and base64 data URLs are runtime-owned attachments. Before the
 input is committed, the runtime writes them to the configured `attachmentStore`
 and persists only internal `pss-attachment:` refs in events, snapshots, queued
-inputs, and notifications. Image byte inputs (`image/*`) larger than 1MB are
-compressed (re-encoded, scaled if needed) to fit under 1MB on every host
-before `put`; non-image files are left unchanged. Override with
+inputs, and notifications. Image byte inputs larger than 1MB are compressed (re-encoded, scaled if
+needed) to fit under 1MB on every host before `put`. Oversize decode
+support covers JPEG, PNG, HEIC/HEIF, and AVIF (stored as JPEG after
+compression). Non-image files are left unchanged. Override with
 `maxImageBytes` on staging options when needed. Refs are hydrated back into
 bytes immediately before model generation. Custom hosts that accept byte inputs
 must provide an `attachmentStore` with `put`, `get`, and `delete`; remote

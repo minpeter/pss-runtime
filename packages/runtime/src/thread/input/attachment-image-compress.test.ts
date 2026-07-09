@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { encode as encodePng } from "fast-png";
 import jpeg from "jpeg-js";
 import { describe, expect, it } from "vitest";
@@ -10,11 +13,13 @@ import { decodeRuntimeAttachmentData } from "./attachment-refs";
 import { stageUserInputAttachments } from "./attachment-staging";
 import { RuntimeAttachmentStagingError } from "./attachment-types";
 
+const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
+
 describe("prepareAttachmentBytesForStorage", () => {
-  it("leaves non-image bytes unchanged even when larger than the default cap", () => {
+  it("leaves non-image bytes unchanged even when larger than the default cap", async () => {
     const bytes = new Uint8Array(DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES + 50_000);
     bytes.fill(7);
-    const prepared = prepareAttachmentBytesForStorage({
+    const prepared = await prepareAttachmentBytesForStorage({
       bytes,
       mediaType: "application/pdf",
     });
@@ -25,10 +30,10 @@ describe("prepareAttachmentBytesForStorage", () => {
     );
   });
 
-  it("leaves already-small images unchanged", () => {
+  it("leaves already-small images unchanged", async () => {
     const bytes = encodeSolidJpeg(64, 64, 80);
     expect(bytes.byteLength).toBeLessThan(DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES);
-    const prepared = prepareAttachmentBytesForStorage({
+    const prepared = await prepareAttachmentBytesForStorage({
       bytes,
       mediaType: "image/jpeg",
     });
@@ -38,13 +43,13 @@ describe("prepareAttachmentBytesForStorage", () => {
 
   it(
     "compresses oversized JPEGs under the default 1MB cap as image/jpeg",
-    () => {
+    async () => {
       const bytes = encodeNoisyJpeg(1600, 1600, 95);
       expect(bytes.byteLength).toBeGreaterThan(
         DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES
       );
 
-      const prepared = prepareAttachmentBytesForStorage({
+      const prepared = await prepareAttachmentBytesForStorage({
         bytes,
         mediaType: "image/jpeg",
       });
@@ -54,7 +59,6 @@ describe("prepareAttachmentBytesForStorage", () => {
         DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES
       );
       expect(prepared.bytes.byteLength).toBeGreaterThan(0);
-      // Still a decodable JPEG.
       const decoded = jpeg.decode(prepared.bytes, { useTArray: true });
       expect(decoded.width).toBeGreaterThan(0);
       expect(decoded.height).toBeGreaterThan(0);
@@ -62,11 +66,10 @@ describe("prepareAttachmentBytesForStorage", () => {
     20_000
   );
 
-  it("compresses oversized PNGs under a custom maxImageBytes budget", () => {
+  it("compresses oversized PNGs under a custom maxImageBytes budget", async () => {
     const bytes = encodeSolidPng(1800, 1800);
-    // Solid PNGs can be small; force path with a tight budget.
     const maxImageBytes = Math.max(8_000, Math.floor(bytes.byteLength / 4));
-    const prepared = prepareAttachmentBytesForStorage({
+    const prepared = await prepareAttachmentBytesForStorage({
       bytes,
       maxImageBytes,
       mediaType: "image/png",
@@ -75,14 +78,56 @@ describe("prepareAttachmentBytesForStorage", () => {
     expect(prepared.mediaType).toBe("image/jpeg");
   });
 
-  it("throws when maxImageBytes is non-positive", () => {
-    expect(() =>
+  it(
+    "compresses HEIC inputs under a tight budget as image/jpeg",
+    async () => {
+      const bytes = new Uint8Array(
+        readFileSync(join(fixturesDir, "sample.heic"))
+      );
+      const maxImageBytes = 80_000;
+      const prepared = await prepareAttachmentBytesForStorage({
+        bytes,
+        maxImageBytes,
+        mediaType: "image/heic",
+      });
+      expect(prepared.mediaType).toBe("image/jpeg");
+      expect(prepared.bytes.byteLength).toBeLessThanOrEqual(maxImageBytes);
+      const decoded = jpeg.decode(prepared.bytes, { useTArray: true });
+      expect(decoded.width).toBeGreaterThan(0);
+      expect(decoded.height).toBeGreaterThan(0);
+    },
+    30_000
+  );
+
+  it(
+    "compresses AVIF inputs under a tight budget as image/jpeg",
+    async () => {
+      const bytes = new Uint8Array(
+        readFileSync(join(fixturesDir, "sample.avif"))
+      );
+      const maxImageBytes = 120_000;
+      const prepared = await prepareAttachmentBytesForStorage({
+        bytes,
+        maxImageBytes,
+        mediaType: "image/avif",
+      });
+      expect(prepared.mediaType).toBe("image/jpeg");
+      expect(prepared.bytes.byteLength).toBeLessThanOrEqual(maxImageBytes);
+      const decoded = jpeg.decode(prepared.bytes, { useTArray: true });
+      expect(decoded.width).toBeGreaterThan(0);
+      expect(decoded.height).toBeGreaterThan(0);
+    },
+    30_000
+  );
+
+  it("throws when maxImageBytes is non-positive", async () => {
+    await expect(
       prepareAttachmentBytesForStorage({
         bytes: encodeSolidJpeg(32, 32, 80),
         maxImageBytes: 0,
         mediaType: "image/jpeg",
       })
-    ).toThrow(RuntimeAttachmentStagingError);
+    ).rejects.toBeInstanceOf(RuntimeAttachmentStagingError);
   });
 });
 

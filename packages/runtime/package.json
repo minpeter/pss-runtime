@@ -69,8 +69,10 @@
     "lint": "ultracite check ."
   },
   "dependencies": {
+    "@jsquash/avif": "^2.1.1",
     "ai": "7.0.16",
     "fast-png": "^8.0.0",
+    "heic-decode": "^2.1.0",
     "jpeg-js": "^0.4.4"
   },
   "devDependencies": {
