@@ -26,6 +26,7 @@ export {
   IMAGE_PREPARE_LOG_MESSAGE,
   type ImageCodecWasmModules,
   type ImagePrepareDiagnostics,
+  type ImagePrepareDiagnosticsListener,
   type ImagePreparePath,
   installImageCodecWasm,
   installImageCodecWasmFromNodeModules,
@@ -46,6 +47,7 @@ export {
   RuntimeAttachmentStagingError,
   STORED_IMAGE_MEDIA_TYPES,
   type StoredImageMediaType,
+  setImagePrepareDiagnosticsListener,
 } from "./thread/input/attachments";
 export { delegateUserInput } from "./thread/input/delegate-input";
 export type { AgentInput, ThreadInput } from "./thread/input/input";

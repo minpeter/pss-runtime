@@ -4,7 +4,7 @@ import { defineWorkerFetch } from "evlog/workers";
 import type { Env } from "./env";
 import { handleTelegramWebhook } from "./telegram";
 import { handleTuiRpcRequest } from "./tui-rpc";
-import { ensureWorkerLogger } from "./worker-log";
+import { ensureWorkerLogger, newCorrelationId } from "./worker-log";
 
 // Edge-first: static wasm modules for AVIF/WebP/HEIC must be installed before
 // any attachment staging path runs (Workers cannot fetch/compile wasm at runtime).
@@ -19,6 +19,7 @@ const TUI_RPC_PATHNAME = "/trpc";
 
 export default defineWorkerFetch<Env>(async (request, env, ctx, log) => {
   const url = new URL(request.url);
+  const correlationId = newCorrelationId();
   const handler =
     url.pathname === TUI_RPC_PATHNAME ||
     url.pathname.startsWith(`${TUI_RPC_PATHNAME}/`)
@@ -26,6 +27,7 @@ export default defineWorkerFetch<Env>(async (request, env, ctx, log) => {
       : "telegram-webhook";
 
   log.set({
+    correlationId,
     handler,
     method: request.method,
     path: url.pathname,
@@ -35,7 +37,9 @@ export default defineWorkerFetch<Env>(async (request, env, ctx, log) => {
     const response =
       handler === "tui-rpc"
         ? await handleTuiRpcRequest(request, env)
-        : await handleTelegramWebhook(request, env, ctx as ExecutionContext);
+        : await handleTelegramWebhook(request, env, ctx as ExecutionContext, {
+            correlationId,
+          });
 
     log.set({ status: response.status });
     log.emit({ status: response.status });

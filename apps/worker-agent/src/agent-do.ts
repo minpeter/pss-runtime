@@ -1,4 +1,8 @@
-import type { Agent as PssAgent } from "@minpeter/pss-runtime";
+import type {
+  ImagePrepareDiagnostics,
+  Agent as PssAgent,
+} from "@minpeter/pss-runtime";
+import { setImagePrepareDiagnosticsListener } from "@minpeter/pss-runtime";
 import {
   type CloudflareAgentsFiberRecoveryContext,
   type CloudflareAgentsFiberRecoveryResult,
@@ -8,7 +12,7 @@ import {
 import { installCloudflareImageCodecs } from "@minpeter/pss-runtime/platform/cloudflare/image-codecs";
 import { Agent as CloudflareAgent } from "agents";
 
-import { createConfiguredAgent } from "./agent";
+import { createConfiguredAgent, DEFAULT_MODEL_FOR_LOG } from "./agent";
 import { deliverToolOnlyTurn, withCapturedMessages } from "./agent-do-delivery";
 import { parseAgentRequest } from "./agent-do-request";
 import {
@@ -23,6 +27,7 @@ import {
   durableObjectChannelBinding,
 } from "./channel";
 import type { Env } from "./env";
+import { createTurnEventCollector } from "./observability";
 import {
   createSessionIndexStore,
   type SessionIndexStore,
@@ -43,11 +48,13 @@ import {
   isSessionTranscriptPath,
   SessionTranscriptReadRequestSchema,
 } from "./session-transcript-client";
+import { workerErrors } from "./worker-errors";
 import {
   attachmentLogFields,
   createTurnLogger,
   ensureWorkerLogger,
   logError,
+  summarizeImagePrepares,
 } from "./worker-log";
 
 // DO isolate may load this module without executing worker entry side-effects.
@@ -120,20 +127,44 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
     const log = createTurnLogger(request);
     const payload = await parseAgentRequest(request);
     if (!payload) {
-      log.set({ action: "agent_turn", outcome: "invalid_payload" });
-      log.emit({ status: 400 });
-      return new Response("text or attachments and channel required", {
-        status: 400,
+      const invalid = workerErrors.INVALID_TURN_PAYLOAD();
+      log.error(invalid);
+      log.set({
+        action: "agent_turn",
+        outcome: "invalid_payload",
       });
+      log.emit({ status: 400 });
+      return new Response(invalid.message, { status: 400 });
     }
 
+    const turnEvents = createTurnEventCollector();
+    const imagePrepares: ImagePrepareDiagnostics[] = [];
     const attachmentFields = attachmentLogFields(payload.attachments);
+    // Full evlog/ai wrap needs LanguageModelV3; AI SDK here is V4 — log model
+    // identity on the wide event until evlog/ai supports V4 middleware.
+    const modelId = this.#env.AI_MODEL?.trim() || DEFAULT_MODEL_FOR_LOG;
+
     log.set({
       action: "agent_turn",
-      channelKind: payload.channel.kind,
-      hasSessionScope: Boolean(payload.sessionScopeKey),
-      textChars: payload.text.length,
-      ...attachmentFields,
+      ai: {
+        model: modelId,
+        provider: "openai-compatible",
+      },
+      channel: {
+        kind: payload.channel.kind,
+        hasSessionScope: Boolean(payload.sessionScopeKey),
+      },
+      input: {
+        textChars: payload.text.length,
+        ...attachmentFields.attachments,
+      },
+      ...(payload.correlationId
+        ? { correlationId: payload.correlationId }
+        : {}),
+    });
+
+    setImagePrepareDiagnosticsListener((diagnostics) => {
+      imagePrepares.push(diagnostics);
     });
 
     try {
@@ -151,6 +182,7 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
           reader: this.#sessionIndexClient,
           transcriptReader: this.#sessionTranscriptClient,
         },
+        observability: { log: turnEvents.record },
       });
       const assistantMessages: string[] = [];
       const delivery = await deliverToolOnlyTurn(
@@ -166,22 +198,44 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
         sessionScopeKey
       );
 
+      const turnSummary = turnEvents.summary();
       log.set({
-        delivered: delivery.delivered,
-        outcome: delivery.delivered ? "delivered" : "missing_send_message",
-        ...(delivery.delivered
-          ? {}
-          : { deliveryError: "missing_send_message" }),
+        delivery: {
+          delivered: delivery.delivered,
+          outcome: delivery.delivered ? "delivered" : "missing_send_message",
+          ...(delivery.delivered
+            ? {}
+            : { error: "missing_send_message" as const }),
+        },
+        turn: {
+          steps: turnSummary.steps,
+          toolCalls: turnSummary.toolCalls,
+          ...(turnSummary.errors.length > 0
+            ? { errors: turnSummary.errors }
+            : {}),
+        },
+        ...summarizeImagePrepares(imagePrepares),
       });
+
+      if (!delivery.delivered) {
+        log.error(workerErrors.MISSING_SEND_MESSAGE());
+      }
+
       log.emit({ status: 200 });
       return Response.json(
         withCapturedMessages(delivery, sendMessage.messages())
       );
     } catch (error) {
       log.error(error instanceof Error ? error : new Error(String(error)));
-      log.set({ outcome: "error" });
+      log.set({
+        delivery: { delivered: false, outcome: "error" },
+        turn: turnEvents.summary(),
+        ...summarizeImagePrepares(imagePrepares),
+      });
       log.emit({ status: 500 });
       throw error;
+    } finally {
+      setImagePrepareDiagnosticsListener();
     }
   }
 
@@ -248,10 +302,12 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
         userText,
       });
     } catch (error) {
-      logError(normalizeIndexError(error), {
-        action: "session_index_upsert_failed",
-        scope: "agent-do",
-      });
+      logError(
+        workerErrors.SESSION_INDEX_UPSERT_FAILED({
+          cause: normalizeIndexError(error),
+        }),
+        { scope: "agent-do" }
+      );
     }
   }
 }

@@ -11,6 +11,7 @@ export {
   DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,
   IMAGE_PREPARE_LOG_MESSAGE,
   type ImagePrepareDiagnostics,
+  type ImagePrepareDiagnosticsListener,
   type ImagePreparePath,
   isCompressibleImageMediaType,
   isStoredImageMediaType,
@@ -21,6 +22,7 @@ export {
   prepareAttachmentBytesForStorage,
   STORED_IMAGE_MEDIA_TYPES,
   type StoredImageMediaType,
+  setImagePrepareDiagnosticsListener,
 } from "./attachment-image-compress";
 export {
   decodeRuntimeAttachmentData,

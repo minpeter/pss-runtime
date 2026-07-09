@@ -14,6 +14,7 @@ const AgentRequestSchema = z
   .object({
     attachments: z.array(AgentAttachmentSchema).optional(),
     channel: ChannelAddressSchema,
+    correlationId: z.string().optional(),
     sessionScopeKey: z.string().optional(),
     text: z.string().optional(),
   })
@@ -28,6 +29,7 @@ export interface AgentRequestAttachment {
 export interface AgentRequestPayload {
   readonly attachments: readonly AgentRequestAttachment[];
   readonly channel: ChannelAddress;
+  readonly correlationId?: string;
   readonly sessionScopeKey?: string;
   readonly text: string;
 }
@@ -52,6 +54,7 @@ export async function parseAgentRequest(
 
   const channelId = result.data.channel.id.trim();
   const sessionScopeKey = result.data.sessionScopeKey?.trim();
+  const correlationId = result.data.correlationId?.trim();
   const text = (result.data.text ?? "").trim();
   const attachments = normalizeAttachments(result.data.attachments);
   if (!(channelId && (text || attachments.length > 0))) {
@@ -61,6 +64,7 @@ export async function parseAgentRequest(
   return {
     attachments,
     channel: { id: channelId, kind: result.data.channel.kind },
+    ...(correlationId ? { correlationId } : {}),
     ...(sessionScopeKey ? { sessionScopeKey } : {}),
     text,
   };

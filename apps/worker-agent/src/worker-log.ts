@@ -17,8 +17,14 @@ function shouldPrettyPrint(): boolean {
     return true;
   }
   // Do not use NODE_ENV: workerd sets it to "production" under `wrangler dev` too.
-  // Only suppress pretty when our wrangler var ENVIRONMENT is explicitly production.
   return process.env.ENVIRONMENT !== "production";
+}
+
+function isProductionEnvironment(): boolean {
+  if (typeof process === "undefined") {
+    return false;
+  }
+  return process.env.ENVIRONMENT === "production";
 }
 
 /** Idempotent module-scope init for Worker + Durable Object isolates. */
@@ -27,16 +33,40 @@ export function ensureWorkerLogger(): void {
     return;
   }
   const pretty = shouldPrettyPrint();
+  const production = isProductionEnvironment();
+  let environment = "development";
+  if (production) {
+    environment = "production";
+  } else if (typeof process !== "undefined" && process.env.ENVIRONMENT) {
+    environment = process.env.ENVIRONMENT;
+  }
   initLogger({
     env: {
       service: "pss-worker-agent",
-      ...(typeof process !== "undefined" && process.env.ENVIRONMENT
-        ? { environment: process.env.ENVIRONMENT }
-        : { environment: pretty ? "development" : "production" }),
+      environment,
+      ...(typeof process !== "undefined" && process.env.CF_VERSION_METADATA
+        ? { version: process.env.CF_VERSION_METADATA }
+        : {}),
     },
-    // Workers adapter docs recommend stringify:false so CF logs stay objects.
     pretty,
+    // Explicit PII safety net (also default in prod; set always for defense in depth).
+    redact: true,
+    // Workers: objects for CF Observability parsing.
     stringify: false,
+    // Low traffic today — keep 100% but structure keep rules for scale.
+    ...(production
+      ? {
+          sampling: {
+            rates: {
+              debug: 0,
+              error: 100,
+              info: 100,
+              warn: 100,
+            },
+            keep: [{ status: 400 }, { duration: 3000 }, { path: "/turn" }],
+          },
+        }
+      : {}),
   });
   initialized = true;
 }
@@ -49,6 +79,10 @@ export function createTurnLogger(
   return createWorkersLogger(request, {
     ...(options?.executionCtx ? { executionCtx: options.executionCtx } : {}),
   });
+}
+
+export function newCorrelationId(): string {
+  return crypto.randomUUID();
 }
 
 /** Structured info event (pretty tree when enabled). */
@@ -96,18 +130,59 @@ export function attachmentLogFields(
     readonly mediaType: string;
   }[]
 ): {
-  readonly attachmentCount: number;
-  readonly attachmentMediaTypes: readonly string[];
-  readonly attachmentPayloadBytes: number;
+  readonly attachments: {
+    readonly count: number;
+    readonly mediaTypes: readonly string[];
+    readonly payloadBytes: number;
+  };
 } {
   return {
-    attachmentCount: attachments.length,
-    attachmentMediaTypes: attachments.map((attachment) => attachment.mediaType),
-    // base64 length ≈ 4/3 of raw bytes; useful size signal without decoding.
-    attachmentPayloadBytes: attachments.reduce(
-      (sum, attachment) =>
-        sum + Math.floor((attachment.dataBase64.length * 3) / 4),
-      0
-    ),
+    attachments: {
+      count: attachments.length,
+      mediaTypes: attachments.map((attachment) => attachment.mediaType),
+      // base64 length ≈ 4/3 of raw bytes; useful size signal without decoding.
+      payloadBytes: attachments.reduce(
+        (sum, attachment) =>
+          sum + Math.floor((attachment.dataBase64.length * 3) / 4),
+        0
+      ),
+    },
+  };
+}
+
+export function summarizeImagePrepares(
+  prepares: readonly {
+    readonly path: string;
+    readonly inputBytes: number;
+    readonly outputBytes: number;
+    readonly inputMediaType: string;
+    readonly outputMediaType: string;
+  }[]
+): {
+  readonly images?: {
+    readonly count: number;
+    readonly prepares: readonly {
+      readonly path: string;
+      readonly inputBytes: number;
+      readonly outputBytes: number;
+      readonly inputMediaType: string;
+      readonly outputMediaType: string;
+    }[];
+  };
+} {
+  if (prepares.length === 0) {
+    return {};
+  }
+  return {
+    images: {
+      count: prepares.length,
+      prepares: prepares.map((prepare) => ({
+        inputBytes: prepare.inputBytes,
+        inputMediaType: prepare.inputMediaType,
+        outputBytes: prepare.outputBytes,
+        outputMediaType: prepare.outputMediaType,
+        path: prepare.path,
+      })),
+    },
   };
 }

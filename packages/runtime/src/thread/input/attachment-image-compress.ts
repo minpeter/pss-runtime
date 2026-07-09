@@ -50,6 +50,25 @@ export const IMAGE_PREPARE_LOG_MESSAGE = "pss-runtime image-prepare";
 export const STORED_IMAGE_MEDIA_TYPES = ["image/jpeg", "image/png"] as const;
 export type StoredImageMediaType = (typeof STORED_IMAGE_MEDIA_TYPES)[number];
 
+export type ImagePrepareDiagnosticsListener = (
+  diagnostics: ImagePrepareDiagnostics
+) => void;
+
+let imagePrepareDiagnosticsListener:
+  | ImagePrepareDiagnosticsListener
+  | undefined;
+
+/**
+ * Optional process/isolate-local hook for hosts that want image-prepare
+ * diagnostics on a request-scoped wide event (e.g. worker-agent + evlog).
+ * Always clear in a finally block after the turn.
+ */
+export function setImagePrepareDiagnosticsListener(
+  listener?: ImagePrepareDiagnosticsListener
+): void {
+  imagePrepareDiagnosticsListener = listener;
+}
+
 /**
  * Normalize image byte inputs for HostAttachmentStore.
  *
@@ -186,6 +205,7 @@ function withDiagnostics(
     // `console.info(msg, object)` object dumps. Runtime stays free of evlog.
     console.info(formatImagePrepareLog(diagnostics));
   }
+  imagePrepareDiagnosticsListener?.(diagnostics);
   return { ...prepared, diagnostics };
 }
 

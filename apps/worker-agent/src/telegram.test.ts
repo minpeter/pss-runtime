@@ -298,10 +298,10 @@ describe("telegram conversation handling", () => {
       "🧪 DEVELOPMENT ENVIRONMENT",
       "처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
     ]);
-    expect(logError).toHaveBeenCalledWith(error, {
-      action: "handler_failed",
-      scope: "telegram",
-    });
+    expect(logError).toHaveBeenCalled();
+    const [logged] = vi.mocked(logError).mock.calls[0] ?? [];
+    expect(logged).toBeInstanceOf(Error);
+    expect((logged as Error).message).toContain("Telegram message handling");
   });
 
   it("recreates the cached bot when Durable Object namespace changes", async () => {

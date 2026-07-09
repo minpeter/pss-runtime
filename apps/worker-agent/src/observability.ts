@@ -6,8 +6,6 @@ import {
   isToolAgentEvent,
 } from "@minpeter/pss-runtime";
 
-import { logError, logInfo } from "./worker-log";
-
 export interface TurnObservabilityEntry {
   readonly event: AgentEvent["type"];
   readonly label?: string;
@@ -17,22 +15,45 @@ export interface TurnObservabilityEntry {
 
 export interface TurnObservabilityOptions {
   readonly label?: string;
+  /** Defaults to a no-op collector — prefer folding into the request wide event. */
   readonly log?: (entry: TurnObservabilityEntry) => void;
 }
 
-function defaultLog(entry: TurnObservabilityEntry): void {
-  const event = {
-    scope: "worker-agent.turn",
-    event: entry.event,
-    ...(entry.label ? { label: entry.label } : {}),
-    ...(entry.message ? { message: entry.message } : {}),
-    ...(entry.toolName ? { toolName: entry.toolName } : {}),
+export interface TurnObservabilitySummary {
+  readonly errors: readonly string[];
+  readonly steps: number;
+  readonly toolCalls: readonly string[];
+}
+
+/** Accumulate lifecycle/tool events for one wide event instead of N log lines. */
+export function createTurnEventCollector(): {
+  readonly record: (entry: TurnObservabilityEntry) => void;
+  readonly summary: () => TurnObservabilitySummary;
+} {
+  const toolCalls: string[] = [];
+  const errors: string[] = [];
+  let steps = 0;
+
+  return {
+    record(entry) {
+      if (entry.event === "step-start") {
+        steps += 1;
+      }
+      if (entry.event === "tool-call" && entry.toolName) {
+        toolCalls.push(entry.toolName);
+      }
+      if (entry.event === "turn-error" && entry.message) {
+        errors.push(entry.message);
+      }
+    },
+    summary() {
+      return {
+        errors: [...errors],
+        steps,
+        toolCalls: [...toolCalls],
+      };
+    },
   };
-  if (entry.event === "turn-error") {
-    logError(event);
-    return;
-  }
-  logInfo(event);
 }
 
 export function describeEvent(
@@ -55,7 +76,7 @@ export function describeEvent(
 export function createTurnObservabilityPlugin(
   options: TurnObservabilityOptions = {}
 ): AgentPlugin {
-  const log = options.log ?? defaultLog;
+  const record = options.log ?? (() => undefined);
 
   return {
     name: "worker-agent.turn-observability",
@@ -64,7 +85,7 @@ export function createTurnObservabilityPlugin(
       // intentionally never logged so this hook cannot leak conversation content.
       const entry = describeEvent(context.event, options.label);
       if (entry) {
-        log(entry);
+        record(entry);
       }
       return;
     },

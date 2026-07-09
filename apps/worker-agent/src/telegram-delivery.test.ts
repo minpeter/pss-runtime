@@ -5,6 +5,8 @@ import type { Env } from "./env";
 import { durableObjectName } from "./env";
 import { requestAgentDelivery } from "./telegram";
 
+const SEND_MESSAGE_ERROR_PATTERN = /send_message/i;
+
 const durableObjectMock = vi.hoisted(
   (): {
     readonly objectNames: string[];
@@ -63,10 +65,14 @@ describe("agent delivery request", () => {
     if (!request) {
       throw new Error("Expected a Durable Object request.");
     }
-    await expect(request.json()).resolves.toEqual({
-      channel: { id: "channel-1", kind: "telegram" },
-      text: "hello",
-    });
+    const body = (await request.json()) as {
+      channel: unknown;
+      correlationId?: string;
+      text: string;
+    };
+    expect(body.channel).toEqual({ id: "channel-1", kind: "telegram" });
+    expect(body.text).toBe("hello");
+    expect(body.correlationId).toEqual(expect.any(String));
   });
 
   it("includes an explicit requester scope when available", async () => {
@@ -83,11 +89,16 @@ describe("agent delivery request", () => {
     if (!request) {
       throw new Error("Expected a Durable Object request.");
     }
-    await expect(request.json()).resolves.toEqual({
-      channel: { id: "channel-1", kind: "telegram" },
-      sessionScopeKey: "telegram:user:user-1",
-      text: "hello",
-    });
+    const body = (await request.json()) as {
+      channel: unknown;
+      correlationId?: string;
+      sessionScopeKey?: string;
+      text: string;
+    };
+    expect(body.channel).toEqual({ id: "channel-1", kind: "telegram" });
+    expect(body.sessionScopeKey).toBe("telegram:user:user-1");
+    expect(body.text).toBe("hello");
+    expect(body.correlationId).toEqual(expect.any(String));
   });
 
   it("rejects when the agent Durable Object reports missing tool delivery", async () => {
@@ -101,7 +112,7 @@ describe("agent delivery request", () => {
 
     await expect(
       requestAgentDelivery(webhookEnv, "channel-1", "hello")
-    ).rejects.toThrow("agent did not deliver a send_message result");
+    ).rejects.toThrow(SEND_MESSAGE_ERROR_PATTERN);
   });
 });
 

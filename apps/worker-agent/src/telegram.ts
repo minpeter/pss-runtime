@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import { createMemoryState } from "@chat-adapter/state-memory";
 import { createTelegramAdapter } from "@chat-adapter/telegram";
 import { fetchCloudflareDurableObject } from "@minpeter/pss-runtime/platform/cloudflare";
@@ -12,7 +14,10 @@ import {
   isDevelopment,
   readWebhookSecretToken,
 } from "./env";
-import { logError, logWarn } from "./worker-log";
+import { workerErrors } from "./worker-errors";
+import { logError, logWarn, newCorrelationId } from "./worker-log";
+
+const correlationStore = new AsyncLocalStorage<string>();
 
 const DEV_NOTICE = "🧪 DEVELOPMENT ENVIRONMENT";
 const FAILURE_REPLY =
@@ -33,6 +38,7 @@ let cachedBot: CachedBot | undefined;
 
 interface TurnDeliveryOptions {
   readonly attachments?: readonly AgentRequestAttachment[];
+  readonly correlationId?: string;
   readonly sessionScopeKey?: string;
 }
 
@@ -201,10 +207,10 @@ export async function replyToThread({
   try {
     attachments = await collectTurnImageAttachments(message);
   } catch (error) {
-    logError(normalizeError(error), {
-      action: "attachment_fetch_failed",
-      scope: "telegram",
-    });
+    logError(
+      workerErrors.ATTACHMENT_FETCH_FAILED({ cause: normalizeError(error) }),
+      { scope: "telegram" }
+    );
     await thread.post(FAILURE_REPLY);
     return;
   }
@@ -226,10 +232,10 @@ export async function replyToThread({
       sessionScopeKey: telegramSessionScopeKey(message),
     });
   } catch (error) {
-    logError(normalizeError(error), {
-      action: "handler_failed",
-      scope: "telegram",
-    });
+    logError(
+      workerErrors.TELEGRAM_HANDLER_FAILED({ cause: normalizeError(error) }),
+      { scope: "telegram" }
+    );
     await thread.post(FAILURE_REPLY);
   }
 }
@@ -249,6 +255,10 @@ export async function requestAgentDelivery(
 ): Promise<void> {
   const channel: ChannelAddress = { id: channelId, kind: "telegram" };
   const sessionScopeKey = options.sessionScopeKey?.trim();
+  const correlationId =
+    options.correlationId?.trim() ||
+    correlationStore.getStore() ||
+    newCorrelationId();
   const attachments = options.attachments ?? [];
   const response = await fetchCloudflareDurableObject({
     namespace: env.AGENT_DO,
@@ -256,6 +266,7 @@ export async function requestAgentDelivery(
     request: new Request("https://agent.internal/turn", {
       body: JSON.stringify({
         channel,
+        correlationId,
         ...(attachments.length > 0 ? { attachments } : {}),
         ...(sessionScopeKey ? { sessionScopeKey } : {}),
         text,
@@ -276,7 +287,7 @@ export async function requestAgentDelivery(
     return;
   }
 
-  throw new Error("agent did not deliver a send_message result");
+  throw workerErrors.MISSING_SEND_MESSAGE();
 }
 
 function telegramSessionScopeKey(
@@ -289,15 +300,23 @@ function telegramSessionScopeKey(
 export function handleTelegramWebhook(
   request: Request,
   env: Env,
-  ctx: ExecutionContext
+  ctx: ExecutionContext,
+  options: { readonly correlationId?: string } = {}
 ): Promise<Response> {
   const config = readBotConfig(env);
   if (!(cachedBot && isSameBotConfig(cachedBot.config, config))) {
     cachedBot = { bot: createBot(env, config), config };
   }
-  return cachedBot.bot.webhooks.telegram(request, {
-    waitUntil: (task) => ctx.waitUntil(task),
-  });
+  const correlationId = options.correlationId?.trim() || newCorrelationId();
+  const bot = cachedBot;
+  if (!bot) {
+    throw new Error("Telegram bot cache was not initialized.");
+  }
+  return correlationStore.run(correlationId, () =>
+    bot.bot.webhooks.telegram(request, {
+      waitUntil: (task) => ctx.waitUntil(task),
+    })
+  );
 }
 
 function readBotConfig(env: Env): BotConfig {
