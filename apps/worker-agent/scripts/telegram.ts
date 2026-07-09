@@ -8,6 +8,8 @@ import { logError, logTagged } from "../src/worker-log";
 const SECRET_HEADER = "x-telegram-bot-api-secret-token";
 const LOCAL_WEBHOOK = "http://127.0.0.1:8792/";
 const TRAILING_SLASHES_PATTERN = /\/+$/;
+/** Backoff after Telegram getUpdates network blips (ECONNRESET, etc.). */
+const RELAY_RETRY_MS = 1000;
 
 function required(key: string): string {
   const value = process.env[key]?.trim();
@@ -15,6 +17,35 @@ function required(key: string): string {
     throw new Error(`${key} is required in .dev.vars`);
   }
   return value;
+}
+
+export function isAbortError(error: unknown): boolean {
+  if (error instanceof Error && error.name === "AbortError") {
+    return true;
+  }
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name: unknown }).name === "AbortError"
+  );
+}
+
+export async function sleepMs(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 async function telegramApi(
@@ -58,20 +89,33 @@ export async function relay(): Promise<void> {
 
   let offset = 0;
   while (!abort.signal.aborted) {
-    const updates = (await telegramApi(
-      token,
-      "getUpdates",
-      { limit: 100, offset: offset || undefined, timeout: 30 },
-      abort.signal
-    )) as { readonly update_id: number }[];
+    try {
+      const updates = (await telegramApi(
+        token,
+        "getUpdates",
+        { limit: 100, offset: offset || undefined, timeout: 30 },
+        abort.signal
+      )) as { readonly update_id: number }[];
 
-    offset = await forwardUpdates({
-      offset,
-      secret,
-      signal: abort.signal,
-      updates,
-      webhookUrl,
-    });
+      offset = await forwardUpdates({
+        offset,
+        secret,
+        signal: abort.signal,
+        updates,
+        webhookUrl,
+      });
+    } catch (error) {
+      // Ctrl-C / process stop during long-poll — exit cleanly.
+      if (abort.signal.aborted || isAbortError(error)) {
+        break;
+      }
+      // Transient network errors (ECONNRESET on getUpdates) must not kill dev.
+      logError(normalizeError(error), {
+        action: "get_updates_failed",
+        scope: "telegram-relay",
+      });
+      await sleepMs(RELAY_RETRY_MS, abort.signal);
+    }
   }
 }
 
@@ -102,6 +146,9 @@ export async function forwardUpdates({
         signal,
       });
     } catch (error) {
+      if (isAbortError(error) || signal.aborted) {
+        break;
+      }
       if (error instanceof Error) {
         logError(error, {
           action: "webhook_forward_failed",
@@ -154,8 +201,23 @@ function loadDevVars(): void {
   loadEnvFile(resolve(import.meta.dirname, "../.dev.vars"));
 }
 
+function normalizeError(error: unknown): Error {
+  if (error instanceof Error) {
+    return error;
+  }
+  return new Error(`Non-Error thrown: ${String(error)}`);
+}
+
 if (isMainModule(import.meta.url)) {
-  await main();
+  try {
+    await main();
+  } catch (error) {
+    logError(normalizeError(error), {
+      action: "relay_fatal",
+      scope: "telegram-relay",
+    });
+    process.exitCode = 1;
+  }
 }
 
 function isMainModule(moduleUrl: string, argvPath = process.argv[1]): boolean {

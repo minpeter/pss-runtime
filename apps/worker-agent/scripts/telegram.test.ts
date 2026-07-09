@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { logError } from "../src/worker-log";
-import { forwardUpdates } from "./telegram";
+import { forwardUpdates, isAbortError, sleepMs } from "./telegram";
 
 vi.mock("../src/worker-log", () => ({
   logError: vi.fn(),
@@ -9,6 +9,22 @@ vi.mock("../src/worker-log", () => ({
 }));
 
 describe("telegram local relay", () => {
+  it("treats AbortError as a clean shutdown signal", () => {
+    const abortError = new Error("aborted");
+    abortError.name = "AbortError";
+    expect(isAbortError(abortError)).toBe(true);
+    expect(isAbortError(new TypeError("fetch failed"))).toBe(false);
+  });
+
+  it("sleepMs resolves early when aborted", async () => {
+    const abort = new AbortController();
+    const started = Date.now();
+    const sleeping = sleepMs(30_000, abort.signal);
+    abort.abort();
+    await sleeping;
+    expect(Date.now() - started).toBeLessThan(5000);
+  });
+
   it("does not advance offset past a failed forwarded update", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
