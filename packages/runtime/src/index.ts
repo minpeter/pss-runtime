@@ -23,6 +23,7 @@ export {
   encodeRuntimeAttachmentData,
   isCompressibleImageMediaType,
   isRuntimeAttachmentData,
+  isStoredImageMediaType,
   prepareAttachmentBytesForStorage,
   type PreparedAttachmentBytes,
   type RuntimeAttachmentBlob,
@@ -31,6 +32,8 @@ export {
   type RuntimeAttachmentReference,
   RuntimeAttachmentSecurityError,
   RuntimeAttachmentStagingError,
+  STORED_IMAGE_MEDIA_TYPES,
+  type StoredImageMediaType,
   type HostAttachmentStore,
 } from "./thread/input/attachments";
 export { delegateUserInput } from "./thread/input/delegate-input";

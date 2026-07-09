@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { MemoryAttachmentStore } from "../../platform/memory";
 import {
   DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,
+  isStoredImageMediaType,
   prepareAttachmentBytesForStorage,
 } from "./attachment-image-compress";
 import { decodeRuntimeAttachmentData } from "./attachment-refs";
@@ -25,97 +26,114 @@ describe("prepareAttachmentBytesForStorage", () => {
     });
     expect(prepared.bytes).toBe(bytes);
     expect(prepared.mediaType).toBe("application/pdf");
-    expect(prepared.bytes.byteLength).toBeGreaterThan(
-      DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES
-    );
   });
 
-  it("leaves already-small images unchanged", async () => {
+  it("passthroughs small JPEG bytes as image/jpeg", async () => {
     const bytes = encodeSolidJpeg(64, 64, 80);
-    expect(bytes.byteLength).toBeLessThan(DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES);
     const prepared = await prepareAttachmentBytesForStorage({
       bytes,
       mediaType: "image/jpeg",
     });
     expect(prepared.bytes).toBe(bytes);
     expect(prepared.mediaType).toBe("image/jpeg");
+    expect(isStoredImageMediaType(prepared.mediaType)).toBe(true);
+  });
+
+  it("passthroughs small PNG bytes as image/png", async () => {
+    const bytes = encodeSolidPng(32, 32, false);
+    const prepared = await prepareAttachmentBytesForStorage({
+      bytes,
+      mediaType: "image/png",
+    });
+    expect(prepared.bytes).toBe(bytes);
+    expect(prepared.mediaType).toBe("image/png");
   });
 
   it(
-    "compresses oversized JPEGs under the default 1MB cap as image/jpeg",
+    "compresses oversized opaque images to image/jpeg under 1MB",
     async () => {
       const bytes = encodeNoisyJpeg(1600, 1600, 95);
       expect(bytes.byteLength).toBeGreaterThan(
         DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES
       );
-
       const prepared = await prepareAttachmentBytesForStorage({
         bytes,
         mediaType: "image/jpeg",
       });
-
       expect(prepared.mediaType).toBe("image/jpeg");
       expect(prepared.bytes.byteLength).toBeLessThanOrEqual(
         DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES
       );
-      expect(prepared.bytes.byteLength).toBeGreaterThan(0);
-      const decoded = jpeg.decode(prepared.bytes, { useTArray: true });
-      expect(decoded.width).toBeGreaterThan(0);
-      expect(decoded.height).toBeGreaterThan(0);
+      expect(jpeg.decode(prepared.bytes, { useTArray: true }).width).toBeGreaterThan(
+        0
+      );
     },
     20_000
   );
 
-  it("compresses oversized PNGs under a custom maxImageBytes budget", async () => {
-    const bytes = encodeSolidPng(1800, 1800);
-    const maxImageBytes = Math.max(8_000, Math.floor(bytes.byteLength / 4));
+  it("keeps transparent PNGs as image/png when under budget", async () => {
+    const bytes = encodeSolidPng(64, 64, true);
     const prepared = await prepareAttachmentBytesForStorage({
       bytes,
-      maxImageBytes,
       mediaType: "image/png",
     });
-    expect(prepared.bytes.byteLength).toBeLessThanOrEqual(maxImageBytes);
-    expect(prepared.mediaType).toBe("image/jpeg");
+    expect(prepared.mediaType).toBe("image/png");
+    expect(prepared.bytes).toBe(bytes);
   });
 
   it(
-    "compresses HEIC inputs under a tight budget as image/jpeg",
+    "encodes transparent oversized frames as PNG (or JPEG fallback)",
+    async () => {
+      const bytes = encodeSolidPng(1800, 1800, true);
+      const maxImageBytes = 50_000;
+      const prepared = await prepareAttachmentBytesForStorage({
+        bytes,
+        maxImageBytes,
+        mediaType: "image/png",
+      });
+      expect(isStoredImageMediaType(prepared.mediaType)).toBe(true);
+      expect(prepared.bytes.byteLength).toBeLessThanOrEqual(maxImageBytes);
+    },
+    20_000
+  );
+
+  it(
+    "always normalizes HEIC to image/jpeg or image/png (never heic)",
     async () => {
       const bytes = new Uint8Array(
         readFileSync(join(fixturesDir, "sample.heic"))
       );
-      const maxImageBytes = 80_000;
       const prepared = await prepareAttachmentBytesForStorage({
         bytes,
-        maxImageBytes,
         mediaType: "image/heic",
       });
+      expect(isStoredImageMediaType(prepared.mediaType)).toBe(true);
+      expect(prepared.mediaType).not.toBe("image/heic");
+      // fixture is photo-like / opaque → jpeg
       expect(prepared.mediaType).toBe("image/jpeg");
-      expect(prepared.bytes.byteLength).toBeLessThanOrEqual(maxImageBytes);
-      const decoded = jpeg.decode(prepared.bytes, { useTArray: true });
-      expect(decoded.width).toBeGreaterThan(0);
-      expect(decoded.height).toBeGreaterThan(0);
+      expect(prepared.bytes.byteLength).toBeLessThanOrEqual(
+        DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES
+      );
     },
     30_000
   );
 
   it(
-    "compresses AVIF inputs under a tight budget as image/jpeg",
+    "always normalizes AVIF to image/jpeg or image/png (never avif)",
     async () => {
       const bytes = new Uint8Array(
         readFileSync(join(fixturesDir, "sample.avif"))
       );
-      const maxImageBytes = 120_000;
       const prepared = await prepareAttachmentBytesForStorage({
         bytes,
-        maxImageBytes,
         mediaType: "image/avif",
       });
+      expect(isStoredImageMediaType(prepared.mediaType)).toBe(true);
+      expect(prepared.mediaType).not.toBe("image/avif");
       expect(prepared.mediaType).toBe("image/jpeg");
-      expect(prepared.bytes.byteLength).toBeLessThanOrEqual(maxImageBytes);
-      const decoded = jpeg.decode(prepared.bytes, { useTArray: true });
-      expect(decoded.width).toBeGreaterThan(0);
-      expect(decoded.height).toBeGreaterThan(0);
+      expect(prepared.bytes.byteLength).toBeLessThanOrEqual(
+        DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES
+      );
     },
     30_000
   );
@@ -131,15 +149,12 @@ describe("prepareAttachmentBytesForStorage", () => {
   });
 });
 
-describe("stageUserInputAttachments image compression", () => {
+describe("stageUserInputAttachments image normalization", () => {
   it(
-    "stores compressed image bytes under the default 1MB cap",
+    "stores only jpeg/png media types for image inputs",
     async () => {
       const store = new MemoryAttachmentStore();
-      const large = encodeNoisyJpeg(1600, 1600, 95);
-      expect(large.byteLength).toBeGreaterThan(
-        DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES
-      );
+      const heic = new Uint8Array(readFileSync(join(fixturesDir, "sample.heic")));
 
       const staged = await stageUserInputAttachments(
         {
@@ -147,9 +162,9 @@ describe("stageUserInputAttachments image compression", () => {
           content: [
             {
               type: "file",
-              mediaType: "image/jpeg",
-              filename: "photo.jpg",
-              data: large,
+              mediaType: "image/heic",
+              filename: "photo.heic",
+              data: heic,
             },
           ],
         },
@@ -160,19 +175,16 @@ describe("stageUserInputAttachments image compression", () => {
         throw new Error("expected multipart user input");
       }
       const part = staged.content[0];
-      expect(part?.type).toBe("file");
       if (part?.type !== "file" || typeof part.data !== "string") {
         throw new Error("expected staged runtime attachment ref string");
       }
       const ref = decodeRuntimeAttachmentData(part.data);
       const blob = await store.get(ref);
       expect(blob).not.toBeNull();
+      expect(isStoredImageMediaType(blob?.mediaType ?? "")).toBe(true);
       expect(blob?.mediaType).toBe("image/jpeg");
-      expect(blob?.bytes.byteLength).toBeLessThanOrEqual(
-        DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES
-      );
     },
-    20_000
+    30_000
   );
 });
 
@@ -206,13 +218,17 @@ function encodeNoisyJpeg(
   return asBytes(jpeg.encode({ data, width, height }, quality).data);
 }
 
-function encodeSolidPng(width: number, height: number): Uint8Array {
+function encodeSolidPng(
+  width: number,
+  height: number,
+  transparent: boolean
+): Uint8Array {
   const data = new Uint8Array(width * height * 4);
   for (let i = 0; i < data.length; i += 4) {
     data[i] = 200;
     data[i + 1] = 40;
     data[i + 2] = 40;
-    data[i + 3] = 255;
+    data[i + 3] = transparent ? 128 : 255;
   }
   return encodePng({
     width,

@@ -1,14 +1,18 @@
-import { decode as decodePng } from "fast-png";
+import { decode as decodePng, encode as encodePng } from "fast-png";
 import jpeg from "jpeg-js";
 import { RuntimeAttachmentStagingError } from "./attachment-types";
 
 /** Default max stored size for image attachments (all hosts). */
 export const DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES = 1_000_000;
 
-const QUALITY_STEPS = [80, 60, 45, 32, 22] as const;
-const SCALE_STEPS = [1, 0.75, 0.55, 0.4, 0.28, 0.18] as const;
-/** Skip full-resolution encodes for very large frames (pure-JS JPEG is slow). */
+/** Stored image attachments are always one of these MIME types. */
+export const STORED_IMAGE_MEDIA_TYPES = ["image/jpeg", "image/png"] as const;
+export type StoredImageMediaType = (typeof STORED_IMAGE_MEDIA_TYPES)[number];
+
+const QUALITY_STEPS = [85, 75, 65, 55, 45, 35, 28, 22] as const;
+/** Skip full-resolution encodes for very large frames (pure-JS codecs are slow). */
 const FULL_RES_PIXEL_BUDGET = 1_600_000;
+const MIN_EDGE_PX = 64;
 
 const HEIC_BRANDS = new Set([
   "heic",
@@ -29,11 +33,13 @@ export interface PreparedAttachmentBytes {
 }
 
 /**
- * Ensure image bytes fit within maxImageBytes by re-encoding (and scaling if
- * needed). Non-images and already-small images are returned unchanged.
+ * Normalize image byte inputs for HostAttachmentStore.
  *
- * Supported for oversize compression: JPEG, PNG, HEIC/HEIF, AVIF (decoded then
- * stored as JPEG). WebP/GIF/BMP remain best-effort via signature sniffing.
+ * - Non-images are returned unchanged.
+ * - Images are always stored as `image/jpeg` or `image/png`.
+ * - Policy B: alpha → PNG, opaque → JPEG (with jpeg/png passthrough when already
+ *   under budget and magic matches).
+ * - HEIC/HEIF/AVIF/WebP/etc. are decoded and re-encoded (never stored as-is).
  */
 export async function prepareAttachmentBytesForStorage({
   bytes,
@@ -44,37 +50,61 @@ export async function prepareAttachmentBytesForStorage({
   readonly mediaType: string;
   readonly maxImageBytes?: number;
 }): Promise<PreparedAttachmentBytes> {
-  if (!isCompressibleImageMediaType(mediaType) && !looksLikeCompressibleImage(bytes)) {
-    return { bytes, mediaType };
-  }
-  // Treat signature-detected images as compressible even if mediaType was wrong.
-  const effectiveMediaType = isCompressibleImageMediaType(mediaType)
-    ? mediaType
-    : sniffImageMediaType(bytes) ?? mediaType;
-
-  if (!isCompressibleImageMediaType(effectiveMediaType)) {
-    return { bytes, mediaType };
-  }
-
-  if (bytes.byteLength <= maxImageBytes) {
-    return { bytes, mediaType: effectiveMediaType };
-  }
   if (maxImageBytes <= 0) {
     throw new RuntimeAttachmentStagingError(
       "maxImageBytes must be a positive number."
     );
   }
 
-  return await compressImageToMaxBytes(bytes, effectiveMediaType, maxImageBytes);
+  const normalizedMediaType = mediaType.trim().toLowerCase();
+  const isImage =
+    isImageMediaType(normalizedMediaType) || looksLikeKnownImage(bytes);
+
+  if (!isImage) {
+    return { bytes, mediaType };
+  }
+
+  // Passthrough: already JPEG under budget.
+  if (
+    looksLikeJpeg(bytes) &&
+    bytes.byteLength <= maxImageBytes &&
+    (isJpegMediaType(normalizedMediaType) || !looksLikeOtherRaster(bytes))
+  ) {
+    return { bytes, mediaType: "image/jpeg" };
+  }
+
+  // Passthrough: already PNG under budget.
+  if (looksLikePng(bytes) && bytes.byteLength <= maxImageBytes) {
+    return { bytes, mediaType: "image/png" };
+  }
+
+  const decoded = await decodeImageRgba(
+    bytes,
+    sniffImageMediaType(bytes) ?? normalizedMediaType
+  );
+  const hasAlpha = rgbaHasTransparency(decoded.data);
+
+  if (hasAlpha) {
+    return encodePngUnderBudget(decoded, maxImageBytes);
+  }
+  return encodeJpegUnderBudget(decoded, maxImageBytes);
 }
 
 export function isCompressibleImageMediaType(mediaType: string): boolean {
+  return isImageMediaType(mediaType.trim().toLowerCase());
+}
+
+export function isStoredImageMediaType(
+  mediaType: string
+): mediaType is StoredImageMediaType {
   const normalized = mediaType.trim().toLowerCase();
+  return normalized === "image/jpeg" || normalized === "image/png";
+}
+
+function isImageMediaType(normalized: string): boolean {
   return (
-    normalized === "image/jpeg" ||
-    normalized === "image/jpg" ||
-    normalized === "image/png" ||
-    normalized === "image/x-png" ||
+    isJpegMediaType(normalized) ||
+    isPngMediaType(normalized) ||
     normalized === "image/webp" ||
     normalized === "image/gif" ||
     normalized === "image/bmp" ||
@@ -83,29 +113,25 @@ export function isCompressibleImageMediaType(mediaType: string): boolean {
     normalized === "image/heic-sequence" ||
     normalized === "image/heif-sequence" ||
     normalized === "image/avif" ||
-    normalized === "image/avif-sequence"
+    normalized === "image/avif-sequence" ||
+    normalized.startsWith("image/")
   );
 }
 
-async function compressImageToMaxBytes(
-  bytes: Uint8Array,
-  mediaType: string,
+function isJpegMediaType(normalized: string): boolean {
+  return normalized === "image/jpeg" || normalized === "image/jpg";
+}
+
+function isPngMediaType(normalized: string): boolean {
+  return normalized === "image/png" || normalized === "image/x-png";
+}
+
+function encodeJpegUnderBudget(
+  decoded: RgbaImage,
   maxImageBytes: number
-): Promise<PreparedAttachmentBytes> {
-  const decoded = await decodeImageRgba(bytes, mediaType);
+): PreparedAttachmentBytes {
   let best: Uint8Array | undefined;
-  const pixelCount = decoded.width * decoded.height;
-  const scales =
-    pixelCount > FULL_RES_PIXEL_BUDGET
-      ? SCALE_STEPS.filter((scale) => scale < 1)
-      : SCALE_STEPS;
-
-  for (const scale of scales) {
-    const frame =
-      scale === 1
-        ? decoded
-        : scaleRgbaNearest(decoded.data, decoded.width, decoded.height, scale);
-
+  for (const frame of iterateScaledFrames(decoded)) {
     for (const quality of QUALITY_STEPS) {
       const encoded = encodeJpeg(frame, quality);
       if (!best || encoded.byteLength < best.byteLength) {
@@ -117,8 +143,62 @@ async function compressImageToMaxBytes(
     }
   }
 
-  throw new RuntimeAttachmentStagingError(
-    `Unable to compress image attachment under ${maxImageBytes} bytes` +
+  throw budgetError("JPEG", maxImageBytes, best);
+}
+
+function encodePngUnderBudget(
+  decoded: RgbaImage,
+  maxImageBytes: number
+): PreparedAttachmentBytes {
+  let best: Uint8Array | undefined;
+  for (const frame of iterateScaledFrames(decoded)) {
+    const encoded = encodePngRgba(frame);
+    if (!best || encoded.byteLength < best.byteLength) {
+      best = encoded;
+    }
+    if (encoded.byteLength <= maxImageBytes) {
+      return { bytes: encoded, mediaType: "image/png" };
+    }
+  }
+
+  // Transparent PNG still too large: flatten onto white and fall back to JPEG.
+  const opaque = flattenAlphaOntoWhite(decoded);
+  try {
+    return encodeJpegUnderBudget(opaque, maxImageBytes);
+  } catch {
+    throw budgetError("PNG", maxImageBytes, best);
+  }
+}
+
+function* iterateScaledFrames(decoded: RgbaImage): Generator<RgbaImage> {
+  const pixelCount = decoded.width * decoded.height;
+  let scale =
+    pixelCount > FULL_RES_PIXEL_BUDGET
+      ? Math.sqrt(FULL_RES_PIXEL_BUDGET / pixelCount)
+      : 1;
+
+  // Always attempt at least one full (or budgeted) frame, then keep shrinking.
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const frame =
+      scale >= 0.999
+        ? decoded
+        : scaleRgbaNearest(decoded.data, decoded.width, decoded.height, scale);
+    yield frame;
+
+    if (Math.min(frame.width, frame.height) <= MIN_EDGE_PX) {
+      break;
+    }
+    scale *= 0.7;
+  }
+}
+
+function budgetError(
+  kind: string,
+  maxImageBytes: number,
+  best: Uint8Array | undefined
+): RuntimeAttachmentStagingError {
+  return new RuntimeAttachmentStagingError(
+    `Unable to encode image attachment as ${kind} under ${maxImageBytes} bytes` +
       (best
         ? ` (smallest attempt ${best.byteLength} bytes).`
         : " (encode produced no output).")
@@ -138,18 +218,13 @@ async function decodeImageRgba(
   const normalized = mediaType.trim().toLowerCase();
   try {
     if (
-      normalized === "image/jpeg" ||
-      normalized === "image/jpg" ||
+      isJpegMediaType(normalized) ||
       looksLikeJpeg(bytes)
     ) {
       return decodeJpegToRgba(bytes);
     }
 
-    if (
-      normalized === "image/png" ||
-      normalized === "image/x-png" ||
-      looksLikePng(bytes)
-    ) {
+    if (isPngMediaType(normalized) || looksLikePng(bytes)) {
       return decodePngToRgba(bytes);
     }
 
@@ -171,7 +246,10 @@ async function decodeImageRgba(
       return await decodeAvifToRgba(bytes);
     }
 
-    // webp/gif/bmp: signature fallbacks only
+    if (normalized === "image/webp" || looksLikeWebp(bytes)) {
+      return await decodeWebpToRgba(bytes);
+    }
+
     if (looksLikeJpeg(bytes)) {
       return decodeJpegToRgba(bytes);
     }
@@ -184,6 +262,9 @@ async function decodeImageRgba(
     if (looksLikeAvif(bytes)) {
       return await decodeAvifToRgba(bytes);
     }
+    if (looksLikeWebp(bytes)) {
+      return await decodeWebpToRgba(bytes);
+    }
 
     throw new Error(
       `No decoder available for media type ${mediaType} (and no recognized image signature).`
@@ -194,7 +275,7 @@ async function decodeImageRgba(
     }
     const detail = error instanceof Error ? error.message : String(error);
     throw new RuntimeAttachmentStagingError(
-      `Unable to decode image attachment for compression (${mediaType}): ${detail}`
+      `Unable to decode image attachment for normalization (${mediaType}): ${detail}`
     );
   }
 }
@@ -214,7 +295,6 @@ function decodeJpegToRgba(bytes: Uint8Array): RgbaImage {
 async function decodeHeicToRgba(bytes: Uint8Array): Promise<RgbaImage> {
   const decode = (await import("heic-decode")).default;
   const decoded = await decode({
-    // libheif accepts Uint8Array-backed buffers
     buffer: bytes as unknown as ArrayBuffer,
   });
   return {
@@ -225,41 +305,64 @@ async function decodeHeicToRgba(bytes: Uint8Array): Promise<RgbaImage> {
 }
 
 let avifDecoderReady: Promise<void> | undefined;
+let webpDecoderReady: Promise<void> | undefined;
 
 async function ensureAvifDecoderInitialized(): Promise<void> {
   if (!avifDecoderReady) {
-    avifDecoderReady = (async () => {
-      const mod = await import("@jsquash/avif/decode.js");
-      try {
-        const { createRequire } = await import("node:module");
-        const { readFileSync } = await import("node:fs");
-        const path = await import("node:path");
-        const require = createRequire(import.meta.url);
-        const pkgDir = path.dirname(
-          require.resolve("@jsquash/avif/package.json")
-        );
-        const wasmPath = path.join(pkgDir, "codec/dec/avif_dec.wasm");
-        const wasmBytes = readFileSync(wasmPath);
-        await mod.init(await WebAssembly.compile(wasmBytes));
-      } catch {
-        // Bundlers / Workers: default init may resolve wasm via import.
-        await mod.init();
-      }
-    })();
+    avifDecoderReady = initJsquashDecoder("@jsquash/avif", "avif_dec.wasm");
   }
   await avifDecoderReady;
+}
+
+async function ensureWebpDecoderInitialized(): Promise<void> {
+  if (!webpDecoderReady) {
+    webpDecoderReady = initJsquashDecoder("@jsquash/webp", "webp_dec.wasm");
+  }
+  await webpDecoderReady;
+}
+
+async function initJsquashDecoder(
+  packageName: "@jsquash/avif" | "@jsquash/webp",
+  wasmFileName: string
+): Promise<void> {
+  const mod =
+    packageName === "@jsquash/avif"
+      ? await import("@jsquash/avif/decode.js")
+      : await import("@jsquash/webp/decode.js");
+  try {
+    const { createRequire } = await import("node:module");
+    const { readFileSync } = await import("node:fs");
+    const path = await import("node:path");
+    const require = createRequire(import.meta.url);
+    const pkgDir = path.dirname(require.resolve(`${packageName}/package.json`));
+    const wasmPath = path.join(pkgDir, "codec/dec", wasmFileName);
+    const wasmBytes = readFileSync(wasmPath);
+    await mod.init(await WebAssembly.compile(wasmBytes));
+  } catch {
+    await mod.init();
+  }
 }
 
 async function decodeAvifToRgba(bytes: Uint8Array): Promise<RgbaImage> {
   await ensureAvifDecoderInitialized();
   const { default: decode } = await import("@jsquash/avif/decode.js");
-  const buffer = bytes.buffer.slice(
-    bytes.byteOffset,
-    bytes.byteOffset + bytes.byteLength
-  ) as ArrayBuffer;
-  const decoded = await decode(buffer);
+  const decoded = await decode(toArrayBuffer(bytes));
   if (!decoded) {
     throw new Error("AVIF decoder returned no image data.");
+  }
+  return {
+    data: asUint8Array(decoded.data),
+    height: decoded.height,
+    width: decoded.width,
+  };
+}
+
+async function decodeWebpToRgba(bytes: Uint8Array): Promise<RgbaImage> {
+  await ensureWebpDecoderInitialized();
+  const { default: decode } = await import("@jsquash/webp/decode.js");
+  const decoded = await decode(toArrayBuffer(bytes));
+  if (!decoded) {
+    throw new Error("WebP decoder returned no image data.");
   }
   return {
     data: asUint8Array(decoded.data),
@@ -332,6 +435,37 @@ function encodeJpeg(image: RgbaImage, quality: number): Uint8Array {
   return asUint8Array(encoded.data);
 }
 
+function encodePngRgba(image: RgbaImage): Uint8Array {
+  return encodePng({
+    width: image.width,
+    height: image.height,
+    data: image.data,
+    channels: 4,
+    depth: 8,
+  });
+}
+
+function rgbaHasTransparency(data: Uint8Array): boolean {
+  for (let i = 3; i < data.length; i += 4) {
+    if ((data[i] ?? 255) < 255) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function flattenAlphaOntoWhite(image: RgbaImage): RgbaImage {
+  const data = new Uint8Array(image.data.length);
+  for (let i = 0; i < image.data.length; i += 4) {
+    const a = (image.data[i + 3] ?? 255) / 255;
+    data[i] = Math.round((image.data[i] ?? 0) * a + 255 * (1 - a));
+    data[i + 1] = Math.round((image.data[i + 1] ?? 0) * a + 255 * (1 - a));
+    data[i + 2] = Math.round((image.data[i + 2] ?? 0) * a + 255 * (1 - a));
+    data[i + 3] = 255;
+  }
+  return { data, height: image.height, width: image.width };
+}
+
 function scaleRgbaNearest(
   data: Uint8Array,
   width: number,
@@ -360,12 +494,22 @@ function scaleRgbaNearest(
   return { data: out, height: nextHeight, width: nextWidth };
 }
 
-function looksLikeCompressibleImage(bytes: Uint8Array): boolean {
+function looksLikeKnownImage(bytes: Uint8Array): boolean {
   return (
     looksLikeJpeg(bytes) ||
     looksLikePng(bytes) ||
     looksLikeHeic(bytes) ||
-    looksLikeAvif(bytes)
+    looksLikeAvif(bytes) ||
+    looksLikeWebp(bytes)
+  );
+}
+
+function looksLikeOtherRaster(bytes: Uint8Array): boolean {
+  return (
+    looksLikePng(bytes) ||
+    looksLikeHeic(bytes) ||
+    looksLikeAvif(bytes) ||
+    looksLikeWebp(bytes)
   );
 }
 
@@ -381,6 +525,9 @@ function sniffImageMediaType(bytes: Uint8Array): string | undefined {
   }
   if (looksLikeAvif(bytes)) {
     return "image/avif";
+  }
+  if (looksLikeWebp(bytes)) {
+    return "image/webp";
   }
   return;
 }
@@ -399,6 +546,25 @@ function looksLikePng(bytes: Uint8Array): boolean {
   );
 }
 
+function looksLikeWebp(bytes: Uint8Array): boolean {
+  if (bytes.length < 12) {
+    return false;
+  }
+  const riff = String.fromCharCode(
+    bytes[0] ?? 0,
+    bytes[1] ?? 0,
+    bytes[2] ?? 0,
+    bytes[3] ?? 0
+  );
+  const webp = String.fromCharCode(
+    bytes[8] ?? 0,
+    bytes[9] ?? 0,
+    bytes[10] ?? 0,
+    bytes[11] ?? 0
+  );
+  return riff === "RIFF" && webp === "WEBP";
+}
+
 function looksLikeHeic(bytes: Uint8Array): boolean {
   return isIsoBmffBrand(bytes, HEIC_BRANDS);
 }
@@ -407,7 +573,10 @@ function looksLikeAvif(bytes: Uint8Array): boolean {
   return isIsoBmffBrand(bytes, AVIF_BRANDS);
 }
 
-function isIsoBmffBrand(bytes: Uint8Array, brands: ReadonlySet<string>): boolean {
+function isIsoBmffBrand(
+  bytes: Uint8Array,
+  brands: ReadonlySet<string>
+): boolean {
   if (bytes.length < 12) {
     return false;
   }
@@ -429,6 +598,13 @@ function isIsoBmffBrand(bytes: Uint8Array, brands: ReadonlySet<string>): boolean
     .replaceAll("\0", " ")
     .trim();
   return brands.has(brand);
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength
+  ) as ArrayBuffer;
 }
 
 function asUint8Array(
