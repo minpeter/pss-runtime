@@ -1,5 +1,5 @@
 import type {
-  ExecutionHost,
+  AgentHost,
   NotificationRecord,
   TurnRecord,
 } from "../../execution/host/types";
@@ -7,7 +7,7 @@ import type { AgentTurn } from "../../thread/protocol/turn";
 import { ownsAgentNamespace } from "../identity/namespace";
 
 interface ResumeAgentTurnInput {
-  readonly host: ExecutionHost;
+  readonly host: AgentHost;
   readonly ownerNamespace: string;
   resumeNotification(notification: NotificationRecord): Promise<AgentTurn>;
   readonly runId: string;
@@ -61,7 +61,7 @@ async function claimNotificationForRun({
   idempotencyKey,
   ownerNamespace,
 }: {
-  readonly host: ExecutionHost;
+  readonly host: AgentHost;
   readonly idempotencyKey: string;
   readonly ownerNamespace: string;
 }): Promise<NotificationRecord | null> {
@@ -103,7 +103,7 @@ function canAccessRun(run: TurnRecord, ownerNamespace: string): boolean {
 }
 
 export async function completeNotificationRun(
-  host: ExecutionHost,
+  host: AgentHost,
   runId: string
 ): Promise<void> {
   const run = await host.store.turns.get(runId);
@@ -115,7 +115,7 @@ export async function completeNotificationRun(
 }
 
 async function claimRun(
-  host: ExecutionHost,
+  host: AgentHost,
   run: TurnRecord
 ): Promise<TurnRecord | null> {
   const claim = await host.store.turns.claim(run.runId, {

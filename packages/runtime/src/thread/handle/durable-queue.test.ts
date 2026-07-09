@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type {
-  ExecutionHost,
+  AgentHost,
   ThreadInputInbox,
   ThreadInputRecord,
 } from "../../execution/host/types";
-import { createInMemoryExecutionHost } from "../../platform/memory";
+import { createInMemoryHost } from "../../platform/memory";
 import { MemoryAttachmentStore } from "../../platform/memory/storage/memory-attachment-store";
 import type {
   RuntimeAttachmentBlob,
@@ -132,8 +132,8 @@ function transformAnyInputToTextPlugin(): AgentPlugin {
   };
 }
 
-function duplicateAdmissionHost(): ExecutionHost {
-  const base = createInMemoryExecutionHost();
+function duplicateAdmissionHost(): AgentHost {
+  const base = createInMemoryHost();
   return {
     ...base,
     store: {

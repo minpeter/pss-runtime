@@ -1,7 +1,7 @@
 import type { RuntimeToolExecutionCheckpointMetadata } from "../../llm/llm";
 import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution";
 import { createCheckpointId } from "../host/checkpoint-ids";
-import type { Checkpoint, CheckpointPhase, ExecutionHost } from "../host/types";
+import type { Checkpoint, CheckpointPhase, AgentHost } from "../host/types";
 import type { ResumeRunState } from "./types";
 
 const maxCheckpointWriteAttempts = 5;
@@ -90,7 +90,7 @@ export async function appendCheckpoint({
   runtimeState,
   threadSnapshot,
 }: {
-  readonly host: ExecutionHost;
+  readonly host: AgentHost;
   readonly pendingToolCall?: unknown;
   readonly phase: CheckpointPhase;
   readonly runId: string;

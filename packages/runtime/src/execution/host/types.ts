@@ -1,14 +1,11 @@
 import type { RuntimeAttachmentStore } from "../../thread/input/attachments";
 import type { AgentEvent, UserInput } from "../../thread/protocol/events";
 import type { ThreadStore } from "../../thread/store/types";
-import type { DurableBackgroundHost, ThreadHost } from "./capabilities";
 import type { ResumeThreadOptions } from "./scheduler-options";
 
-export type AgentHost = DurableBackgroundHost | ExecutionHost | ThreadHost;
-
-export interface ExecutionHost {
+/** Single host contract: persistence, scheduling, and optional attachments. */
+export interface AgentHost {
   readonly attachmentStore?: RuntimeAttachmentStore;
-  readonly kind: "execution";
   readonly scheduler: ExecutionScheduler;
   readonly store: ExecutionStore;
 }

@@ -1,5 +1,4 @@
 import type { Agent } from "../../../agent/core/agent";
-import { executionHost } from "../../../execution/host/host";
 import type { TurnStatus } from "../../../execution/host/types";
 import { normalizedListLimit } from "../../../execution/scheduled-work";
 import type { AgentEvent } from "../../../thread/protocol/events";
@@ -136,7 +135,7 @@ async function shouldAckNullResume(
   agent: Agent,
   runId: string
 ): Promise<boolean> {
-  const host = executionHost(agent.host);
+  const host = agent.host;
   if (!host) {
     return false;
   }

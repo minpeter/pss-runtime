@@ -14,6 +14,7 @@ import {
 } from "./automatic-compaction.test-support";
 import { collect, SpyStore } from "./test-support";
 import { AgentThread } from "./thread";
+import { hostWithThreads } from "../../testing/host-with-threads";
 
 const minMessagesError = /autoCompaction\.minMessages/;
 const retainMessagesError = /autoCompaction\.retainMessages/;
@@ -23,7 +24,7 @@ describe("Agent thread automatic compaction policy", () => {
     const store = new SpyStore();
     let calls = 0;
     const agent = new Agent({
-      host: { kind: "thread", threadStore: store },
+      host: hostWithThreads(store),
       model: createCallbackModel(() => {
         calls += 1;
         return [assistantMessage(`DONE ${calls}`)];
@@ -51,7 +52,7 @@ describe("Agent thread automatic compaction policy", () => {
     let calls = 0;
     const agent = agentWithAutoCompaction({
       autoCompaction: { minMessages: 8, retainMessages: 1 },
-      host: { kind: "thread", threadStore: store },
+      host: hostWithThreads(store),
       model: createCallbackModel(() => {
         calls += 1;
         return [assistantMessage("DONE")];

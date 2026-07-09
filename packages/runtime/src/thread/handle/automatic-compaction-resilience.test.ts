@@ -16,6 +16,7 @@ import {
   storedAssistantOutput,
   waitForModelCalls,
 } from "./automatic-compaction.test-support";
+import { hostWithThreads } from "../../testing/host-with-threads";
 import {
   ConflictOnCommitStore,
   collect,
@@ -37,7 +38,7 @@ describe("Agent thread automatic compaction resilience", () => {
     const agent = agentWithAutoCompaction({
       ...model,
       autoCompaction: { minMessages: 4, retainMessages: 2 },
-      host: { kind: "thread", threadStore: store },
+      host: hostWithThreads(store),
     });
     const thread = agent.thread("tool-tail");
 
@@ -75,7 +76,7 @@ describe("Agent thread automatic compaction resilience", () => {
     let calls = 0;
     const agent = agentWithAutoCompaction({
       autoCompaction: { minMessages: 4, retainMessages: 2 },
-      host: { kind: "thread", threadStore: store },
+      host: hostWithThreads(store),
       model: createCallbackModel(() => {
         calls += 1;
         if (calls === 1) {
@@ -112,7 +113,7 @@ describe("Agent thread automatic compaction resilience", () => {
     let calls = 0;
     const agent = agentWithAutoCompaction({
       autoCompaction: { minMessages: 4, retainMessages: 2 },
-      host: { kind: "thread", threadStore: store },
+      host: hostWithThreads(store),
       model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         calls += 1;
@@ -162,7 +163,7 @@ describe("Agent thread automatic compaction resilience", () => {
     let calls = 0;
     const agent = agentWithAutoCompaction({
       autoCompaction: { minMessages: 4, retainMessages: 2 },
-      host: { kind: "thread", threadStore: store },
+      host: hostWithThreads(store),
       model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         calls += 1;
@@ -209,7 +210,7 @@ describe("Agent thread automatic compaction resilience", () => {
     let calls = 0;
     const agent = agentWithAutoCompaction({
       autoCompaction: { minMessages: 4, retainMessages: 2 },
-      host: { kind: "thread", threadStore: store },
+      host: hostWithThreads(store),
       model: createCallbackModel(async () => {
         calls += 1;
         if (calls === 1) {

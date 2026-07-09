@@ -11,14 +11,11 @@ export type {
   DispatchedAgentNotification,
 } from "./dispatch/notification-dispatch";
 export { dispatchAgentNotification } from "./dispatch/notification-dispatch";
-export type {
-  DurableBackgroundHost,
-  ThreadHost,
-} from "./host/capabilities";
-export { executionHost, threadHost } from "./host/host";
+export { threadStoreFromHost } from "./host/host";
 export type { ResumeThreadOptions } from "./host/scheduler-options";
 export { ThreadInputDuplicateConflictError } from "./host/thread-input-conflict";
 export type {
+  AgentHost,
   AdmitReceipt,
   AdmitThreadInput,
   Checkpoint,
@@ -32,7 +29,6 @@ export type {
   CreateTurnResult,
   EventCursor,
   EventStore,
-  ExecutionHost,
   ExecutionScheduler,
   ExecutionStore,
   ExecutionStoreTransaction,

@@ -8,6 +8,7 @@ import {
 } from "../../testing/test-fixtures";
 import { userTextToModelMessage } from "../protocol/mapping";
 import { collect, SpyStore } from "./test-support";
+import { hostWithThreads } from "../../testing/host-with-threads";
 
 const storedAssistantOutput = (text: string): ModelMessage => ({
   content: [{ providerOptions: undefined, text, type: "text" }],
@@ -19,7 +20,7 @@ describe("Agent thread persistence compaction", () => {
     const store = new SpyStore();
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
-      host: { kind: "thread", threadStore: store },
+      host: hostWithThreads(store),
       model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([

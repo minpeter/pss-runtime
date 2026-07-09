@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AgentEvent, AgentTurn } from "../../../index";
 import {
   type CloudflareAlarmAgent,
-  createCloudflareDurableObjectHost,
+  createCloudflareHost,
   drainCloudflareAlarm,
   InMemoryCloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
@@ -15,7 +15,7 @@ describe("Cloudflare alarm run contexts", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
-    const host = createCloudflareDurableObjectHost({ storage });
+    const host = createCloudflareHost({ storage });
     const contexts: string[] = [];
 
     await host.store.turns.create({
@@ -51,7 +51,7 @@ describe("Cloudflare alarm run contexts", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
-    const host = createCloudflareDurableObjectHost({ storage });
+    const host = createCloudflareHost({ storage });
     const contexts: string[] = [];
     const observedEvents: string[] = [];
 
@@ -87,7 +87,7 @@ describe("Cloudflare alarm run contexts", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
-    const host = createCloudflareDurableObjectHost({ storage });
+    const host = createCloudflareHost({ storage });
 
     await host.store.turns.create(notificationRunRecord("run-turn-error"));
     await host.scheduler.enqueueRun("run-turn-error");
@@ -114,7 +114,7 @@ describe("Cloudflare alarm run contexts", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
-    const host = createCloudflareDurableObjectHost({ storage });
+    const host = createCloudflareHost({ storage });
 
     await host.scheduler.enqueueRun("missing-run");
 
@@ -135,7 +135,7 @@ describe("Cloudflare alarm run contexts", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
-    const host = createCloudflareDurableObjectHost({ storage });
+    const host = createCloudflareHost({ storage });
 
     await host.scheduler.resumeThread("room:1:user:2", {
       idempotencyKey: "missing-notification",

@@ -1,4 +1,4 @@
-import { createNodeFileThreadHost } from "@minpeter/pss-runtime/platform/file";
+import { createFileHost } from "@minpeter/pss-runtime/platform/file";
 
 interface ProbeState {
   readonly history: readonly string[];
@@ -10,8 +10,8 @@ const mode =
   process.argv[2] === "--"
     ? (process.argv[3] ?? "write")
     : (process.argv[2] ?? "write");
-const host = createNodeFileThreadHost({ directory });
-const loaded = await host.threadStore.load(threadKey);
+const host = createFileHost({ directory });
+const loaded = await host.store.threads.load(threadKey);
 const history = readHistory(loaded?.state);
 
 if (mode === "write") {
@@ -19,7 +19,7 @@ if (mode === "write") {
     ...history,
     `probe-write-${String(history.length + 1).padStart(2, "0")}`,
   ];
-  const result = await host.threadStore.commit(
+  const result = await host.store.threads.commit(
     threadKey,
     { state: { history: nextHistory } satisfies ProbeState },
     { expectedVersion: loaded?.version ?? null }

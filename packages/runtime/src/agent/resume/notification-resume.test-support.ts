@@ -1,6 +1,6 @@
 import { expect } from "vitest";
-import type { ExecutionHost, TurnRecord } from "../../execution/host/types";
-import { createInMemoryExecutionHost } from "../../platform/memory";
+import type { AgentHost, TurnRecord } from "../../execution/host/types";
+import { createInMemoryHost } from "../../platform/memory";
 import type { AgentTurn } from "../../thread/protocol/turn";
 import { agentNamespace } from "../identity/namespace";
 
@@ -17,8 +17,8 @@ export function expectResumeSurface(
   ).toBeTypeOf("function");
 }
 
-export function createThreadLoadFailingHost(): ExecutionHost {
-  const base = createInMemoryExecutionHost();
+export function createThreadLoadFailingHost(): AgentHost {
+  const base = createInMemoryHost();
   return {
     ...base,
     store: {

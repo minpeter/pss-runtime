@@ -1,7 +1,7 @@
 import { createCheckpointId } from "../../execution/host/checkpoint-ids";
 import type {
   CheckpointPhase,
-  ExecutionHost,
+  AgentHost,
 } from "../../execution/host/types";
 import type {
   RuntimeToolExecutionCheckpoint,
@@ -32,7 +32,7 @@ export function createThreadToolExecutionContext({
   runId,
   state,
 }: {
-  readonly executionHost: ExecutionHost;
+  readonly executionHost: AgentHost;
   readonly interceptToolCall?: ThreadToolCallInterceptor;
   readonly runId: string;
   readonly state: ThreadState;
@@ -81,7 +81,7 @@ async function appendThreadToolExecutionCheckpoint({
   state,
   toolCall,
 }: {
-  readonly executionHost: ExecutionHost;
+  readonly executionHost: AgentHost;
   readonly phase: Extract<CheckpointPhase, "after-tool" | "before-tool">;
   readonly runId: string;
   readonly state: ThreadState;

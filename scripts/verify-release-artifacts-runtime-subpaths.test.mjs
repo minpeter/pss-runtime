@@ -76,7 +76,7 @@ describe("verifyReleaseArtifacts runtime subpath checks", () => {
       "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export ackScheduledCloudflareThreadPrompt",
       "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareAlarmScheduler",
       "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareAgentContext",
-      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareDurableObjectHost",
+      "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export createCloudflareHost",
       "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export drainAgentTurn",
       "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export drainAgentTurnWithBudget",
       "packages/runtime/dist/platform/cloudflare/index.d.ts: missing explicit cloudflare runtime export drainCloudflareAlarm",
@@ -126,11 +126,11 @@ describe("verifyReleaseArtifacts runtime subpath checks", () => {
     const cwd = createFixture();
     writeFileSync(
       runtimeDistDeclaration(cwd, "platform", "memory"),
-      'export { createInMemoryExecutionHost } from "./index";\n'
+      'export { createInMemoryHost } from "./index";\n'
     );
 
     expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
-      "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export InMemoryExecutionHost",
+      "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export InMemoryHost",
       "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export InMemoryExecutionScheduler",
       "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export MemoryScheduledThreadPrompt",
       "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export MemoryScheduledWorkListOptions",
@@ -146,8 +146,8 @@ describe("verifyReleaseArtifacts runtime subpath checks", () => {
     );
 
     expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
-      "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export createInMemoryExecutionHost",
-      "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export InMemoryExecutionHost",
+      "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export createInMemoryHost",
+      "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export InMemoryHost",
       "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export InMemoryExecutionScheduler",
       "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export MemoryScheduledThreadPrompt",
       "packages/runtime/dist/platform/memory/index.d.ts: missing explicit memory runtime export MemoryScheduledWorkListOptions",

@@ -1,32 +1,27 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expectTypeOf, it } from "vitest";
 import type {
+  AgentHost,
   CheckpointStore,
-  DurableBackgroundHost,
   EventStore,
-  ExecutionHost,
   ExecutionScheduler,
   ExecutionStore,
   ExecutionStoreTransaction,
   NotificationInbox,
   NotificationRecord,
   ThreadEventLog,
-  ThreadHost,
   TurnRecord,
   TurnStore,
 } from "../execution";
-import type { AgentHost, RuntimeAttachmentStore } from "../index";
+import type { RuntimeAttachmentStore } from "../index";
 
 describe("runtime host public contracts", () => {
-  it("types advanced host contracts", () => {
-    expectTypeOf<
-      ExecutionHost["scheduler"]
-    >().toEqualTypeOf<ExecutionScheduler>();
-    expectTypeOf<ExecutionHost["store"]>().toEqualTypeOf<ExecutionStore>();
+  it("types the single AgentHost contract", () => {
+    expectTypeOf<AgentHost["scheduler"]>().toEqualTypeOf<ExecutionScheduler>();
+    expectTypeOf<AgentHost["store"]>().toEqualTypeOf<ExecutionStore>();
     expectTypeOf<
       ExecutionStore["notifications"]
     >().toEqualTypeOf<NotificationInbox>();
-    expectTypeOf<ExecutionHost["kind"]>().toEqualTypeOf<"execution">();
-    expectTypeOf<ExecutionHost["attachmentStore"]>().toEqualTypeOf<
+    expectTypeOf<AgentHost["attachmentStore"]>().toEqualTypeOf<
       RuntimeAttachmentStore | undefined
     >();
     expectTypeOf<ExecutionStore["turns"]>().toEqualTypeOf<TurnStore>();
@@ -52,36 +47,6 @@ describe("runtime host public contracts", () => {
     expectTypeOf<ExecutionStoreTransaction["threadEvents"]>().toEqualTypeOf<
       ThreadEventLog | undefined
     >();
-    const threadHost = {
-      attachmentStore: {} as RuntimeAttachmentStore,
-      kind: "thread",
-      threadStore: {} as ThreadHost["threadStore"],
-    } satisfies ThreadHost;
-    const agentHost = threadHost satisfies AgentHost;
-    expectTypeOf<ThreadHost["attachmentStore"]>().toEqualTypeOf<
-      RuntimeAttachmentStore | undefined
-    >();
-    expectTypeOf<
-      DurableBackgroundHost["turnStore"]
-    >().toEqualTypeOf<TurnStore>();
-    expectTypeOf<
-      DurableBackgroundHost["checkpointStore"]
-    >().toEqualTypeOf<CheckpointStore>();
-    expectTypeOf<
-      DurableBackgroundHost["eventStore"]
-    >().toEqualTypeOf<EventStore>();
-    expectTypeOf<
-      DurableBackgroundHost["notificationInbox"]
-    >().toEqualTypeOf<NotificationInbox>();
-    expectTypeOf<
-      DurableBackgroundHost["backgroundScheduler"]
-    >().toEqualTypeOf<ExecutionScheduler>();
-    expectTypeOf<DurableBackgroundHost["transaction"]>().toEqualTypeOf<
-      ExecutionStore["transaction"]
-    >();
-    expectTypeOf<DurableBackgroundHost["attachmentStore"]>().toEqualTypeOf<
-      RuntimeAttachmentStore | undefined
-    >();
-    expect(agentHost.kind).toBe("thread");
+    expectTypeOf<AgentHost>().not.toHaveProperty("kind");
   });
 });

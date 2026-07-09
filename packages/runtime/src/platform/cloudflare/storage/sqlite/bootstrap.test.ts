@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { TurnRecord } from "../../../../execution";
 import {
-  createCloudflareDurableObjectHost,
+  createCloudflareHost,
   InMemoryCloudflareDurableObjectStorage,
 } from "../../index";
 import { InMemorySqlStorage } from "../../sql/node-test/node-sqlite-storage";
@@ -20,10 +20,10 @@ const createRun = (runId = "run-1"): TurnRecord => ({
   status: "queued",
 });
 
-describe("createCloudflareDurableObjectHost store selection", () => {
+describe("createCloudflareHost store selection", () => {
   it("creates SQLite-backed in-memory storage by default", async () => {
     const storage = new InMemoryCloudflareDurableObjectStorage();
-    const host = createCloudflareDurableObjectHost({ storage });
+    const host = createCloudflareHost({ storage });
 
     await host.store.turns.create(createRun());
     await host.store.events.append("run-1", { type: "turn-start" });
@@ -39,7 +39,7 @@ describe("createCloudflareDurableObjectHost store selection", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
-    const host = createCloudflareDurableObjectHost({ storage });
+    const host = createCloudflareHost({ storage });
 
     await host.store.turns.create(createRun());
 
@@ -90,7 +90,7 @@ describe("createCloudflareDurableObjectHost store selection", () => {
 
   it("rolls back SQLite rows with failed execution transactions", async () => {
     const storage = new InMemoryCloudflareDurableObjectStorage();
-    const host = createCloudflareDurableObjectHost({ storage });
+    const host = createCloudflareHost({ storage });
 
     await expect(
       host.store.transaction(async (tx) => {
@@ -144,7 +144,7 @@ describe("createCloudflareDurableObjectHost store selection", () => {
 
   it("rejects non-SQLite Durable Object storage", () => {
     expect(() =>
-      createCloudflareDurableObjectHost({
+      createCloudflareHost({
         storage: {} as CloudflareDurableObjectStorage,
       })
     ).toThrow(requiresSqlitePattern);

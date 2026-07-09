@@ -1,5 +1,5 @@
 import type {
-  ExecutionHost,
+  AgentHost,
   TurnStatus,
 } from "@minpeter/pss-runtime/execution";
 import { jsonSchema, tool } from "ai";
@@ -15,7 +15,7 @@ export function createBackgroundOutputTool({
   ownerNamespace,
   parentThreadKey,
 }: {
-  readonly executionHost: ExecutionHost;
+  readonly executionHost: AgentHost;
   readonly ownerNamespace: string;
   readonly parentThreadKey: string;
 }) {

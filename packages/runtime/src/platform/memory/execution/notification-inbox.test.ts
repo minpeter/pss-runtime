@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { agentNamespace } from "../../../agent/identity/namespace";
 import type { NotificationRecord } from "../../../execution/host/types";
 import { userText } from "../../../testing/test-fixtures";
-import { createInMemoryExecutionHost } from "./execution-host";
+import { createInMemoryHost } from "./execution-host";
 
 describe("NotificationInbox", () => {
   it("dedupes duplicate completion notification claims by key", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     const record = createNotificationRecord();
 
     await expect(host.store.notifications.enqueue(record)).resolves.toEqual({
@@ -38,7 +38,7 @@ describe("NotificationInbox", () => {
   });
 
   it("dedupes duplicate pending notification enqueue by key", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     const record = createNotificationRecord();
 
     await expect(host.store.notifications.enqueue(record)).resolves.toEqual({

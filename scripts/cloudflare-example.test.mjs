@@ -27,7 +27,7 @@ describe("cloudflare durable object adapter", () => {
     );
 
     expect(hostSource).not.toContain("createFakeCloudflareDurableObjectHost");
-    expect(hostSource).toContain("createCloudflareDurableObjectHost");
+    expect(hostSource).toContain("createCloudflareHost");
     expect(hostSource).toContain("createCloudflareAlarmScheduler");
     expect(hostSource).toContain("setAlarm");
     expect(storeSource).toContain("DurableObjectExecutionStore");
@@ -47,14 +47,14 @@ describe("cloudflare durable object adapter", () => {
       InMemoryCloudflareDurableObjectStorage,
       ackScheduledCloudflareRun,
       ackScheduledCloudflareThreadPrompt,
-      createCloudflareDurableObjectHost,
+      createCloudflareHost,
       listScheduledCloudflareRuns,
       listScheduledCloudflareThreadPrompts,
     } = await import("../packages/runtime/src/platform/cloudflare/index.ts");
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
-    const host = createCloudflareDurableObjectHost({ storage });
+    const host = createCloudflareHost({ storage });
     const runId = "background:bg_cloudflare_delayed";
     const idempotencyKey = "background-complete:example:bg_delayed";
     const notificationRunId = "notification-run-delayed";

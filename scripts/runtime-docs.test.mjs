@@ -26,10 +26,14 @@ describe("runtime docs", () => {
     expect(turnSource).not.toContain("AgentRunEventListener");
   });
 
-  it("keeps the durable background host snippet assignable", () => {
+  it("documents the single AgentHost factory surface", () => {
     const readme = readRepoFile("packages/runtime/README.md");
 
-    expect(readme).toContain("const durableHost: DurableBackgroundHost = {");
-    expect(readme).toContain("transaction,");
+    expect(readme).toContain("createInMemoryHost");
+    expect(readme).toContain("createFileHost");
+    expect(readme).toContain("const host: AgentHost = createInMemoryHost()");
+    expect(readme).not.toContain("DurableBackgroundHost");
+    expect(readme).not.toContain("createNodeFileThreadHost");
+    expect(readme).not.toContain("createInMemoryExecutionHost");
   });
 });

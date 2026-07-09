@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createInMemoryExecutionHost } from "../../memory";
+import { createInMemoryHost } from "../../memory";
 import {
   dispatchCloudflareAgentNotification,
   InMemoryCloudflareDurableObjectStorage,
@@ -10,7 +10,7 @@ import { InMemorySqlStorage } from "../sql/node-test/node-sqlite-storage";
 
 describe("dispatchCloudflareAgentNotification", () => {
   it("creates a notification run with a provided execution host", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
 
     const dispatched = await dispatchCloudflareAgentNotification({
       host,

@@ -1,11 +1,11 @@
-import type { ExecutionHost } from "../../../execution";
+import type { AgentHost } from "../../../execution";
 import type { CloudflareAlarmDrainBudget } from "../alarm/budget";
 import type {
   CloudflareAlarmAgent,
   CloudflareAlarmDrainSummary,
 } from "../alarm/drainer";
 import { drainCloudflareAlarm } from "../alarm/drainer";
-import { createCloudflareDurableObjectHost } from "../host/durable-object-host";
+import { createCloudflareHost } from "../host/create-cloudflare-host";
 import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 
 const defaultContextPrefix = "pss-runtime";
@@ -14,7 +14,7 @@ type MaybePromise<T> = Promise<T> | T;
 
 export interface CloudflareAgentContextFactoryOptions<Env> {
   readonly env: Env;
-  readonly host: ExecutionHost;
+  readonly host: AgentHost;
   readonly prefix: string;
   readonly storage: CloudflareDurableObjectStorage;
 }
@@ -44,7 +44,7 @@ export interface CloudflareAgentContext<Agent extends CloudflareAlarmAgent> {
   drainAlarm(
     budget?: CloudflareAlarmDrainBudget
   ): Promise<CloudflareAlarmDrainSummary>;
-  host(prefix?: string): ExecutionHost;
+  host(prefix?: string): AgentHost;
   readonly storage: CloudflareDurableObjectStorage;
 }
 
@@ -59,7 +59,7 @@ export function createCloudflareAgentContext<
   storage,
 }: CloudflareAgentContextOptions<Env, Agent>): CloudflareAgentContext<Agent> {
   const createHost = (prefix = defaultPrefix) =>
-    createCloudflareDurableObjectHost({ prefix, storage });
+    createCloudflareHost({ prefix, storage });
   const createContextAgent = (prefix = defaultPrefix) =>
     createAgent({
       env,

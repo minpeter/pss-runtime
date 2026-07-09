@@ -106,14 +106,13 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      `${runtimeRootDeclaration}export type { ExecutionHost, ExecutionScheduler, ExecutionStore, RuntimeToolExecutionContext } from "./execution";\nexport { ToolExecutionNeedsRecoveryError, createInMemoryExecutionHost } from "./execution";\nexport { MemoryThreadStore } from "./platform/memory";\n`
+      `${runtimeRootDeclaration}export type { ExecutionScheduler, ExecutionStore, RuntimeToolExecutionContext } from "./execution";\nexport { ToolExecutionNeedsRecoveryError, createInMemoryHost } from "./execution";\nexport { MemoryThreadStore } from "./platform/memory";\n`
     );
 
     expect(
       verifyReleaseArtifacts({ cwd, packages: ["runtime", "coding-agent"] })
     ).toEqual([
-      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name createInMemoryExecutionHost",
-      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ExecutionHost",
+      "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name createInMemoryHost",
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ExecutionScheduler",
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name ExecutionStore",
       "packages/runtime/dist/index.d.ts: root declaration exposes internal runtime name MemoryThreadStore",

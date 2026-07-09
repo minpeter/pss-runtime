@@ -50,7 +50,7 @@ consume the events for the turn to progress. This is what lets code react to
 created.
 
 `thread.events({ after, limit })` replays durable, thread-scoped `AgentEvent`
-records from the configured `ExecutionHost`. It is not a live turn driver; use it
+records from the configured `AgentHost`. It is not a live turn driver; use it
 to rebuild an event transcript after a turn has committed. Each replayed record
 has a cursor, so callers can persist `record.cursor` and resume with
 `thread.events({ after: cursor })`.
@@ -377,7 +377,7 @@ Adapters own persistence only through `ThreadStore`:
 
 Stored thread state is an opaque, versioned runtime snapshot for continuation.
 Do not inspect it as a replay log. Use `thread.events({ after, limit })` with an
-`ExecutionHost` when a product needs a durable `AgentEvent` transcript.
+`AgentHost` when a product needs a durable `AgentEvent` transcript.
 
 `ThreadStore` is snapshot-only. It does not own background task ids, run
 leases, checkpoints, notification inbox state, or scheduling. Those live on the
@@ -391,13 +391,10 @@ new version to the runtime. `delete(key)` removes the persisted thread for that
 key.
 
 ```ts
-import { MemoryThreadStore } from "@minpeter/pss-runtime/platform/memory";
+import { createInMemoryHost } from "@minpeter/pss-runtime/platform/memory";
 
 const agent = new Agent({
-  host: {
-    kind: "thread",
-    threadStore: new MemoryThreadStore(),
-  },
+  host: createInMemoryHost(),
   model,
   namespace: "support-agent",
 });
@@ -408,22 +405,22 @@ reconstructed agents map the same app-owned thread keys back to the same
 transcripts:
 
 ```ts
-import { createNodeFileThreadHost } from "@minpeter/pss-runtime/platform/file";
+import { createFileHost } from "@minpeter/pss-runtime/platform/file";
 
 const agent = new Agent({
-  host: createNodeFileThreadHost({ directory: ".pss/threads" }),
+  host: createFileHost({ directory: ".pss/threads" }),
   model,
   namespace: "support-agent",
 });
 ```
 
-Use `inspectNodeFileThread` when local tooling needs to inspect the exact file
+Use `inspectFileThread` when local tooling needs to inspect the exact file
 runtime uses for a thread:
 
 ```ts
-import { inspectNodeFileThread } from "@minpeter/pss-runtime/platform/file";
+import { inspectFileThread } from "@minpeter/pss-runtime/platform/file";
 
-const report = await inspectNodeFileThread({
+const report = await inspectFileThread({
   directory: ".pss/threads",
   key: "room:123:user:456",
 });
@@ -431,14 +428,12 @@ const report = await inspectNodeFileThread({
 console.log(report.messageCount, report.compactionCount, report.storageFile);
 ```
 
-A `host: { kind: "thread", threadStore }` object is a `ThreadHost`-only host.
-That keeps thread persistence on your store but disables the in-memory
-`ExecutionHost`, so the agent runs without durable run records, tool-execution
-checkpoints, or `Agent.resume(...)`. `agent.supportsResume` is `false`. When
-omitted, `Agent` defaults to an in-memory `ExecutionHost` (and its
-`MemoryThreadStore`). Pass a full `ExecutionHost` (or `DurableBackgroundHost`)
-when you need durable runs, tool checkpoints, and resume alongside your
-`threadStore`.
+There is a single host contract: `AgentHost` (`store` + `scheduler` + optional
+`attachmentStore`). When `host` is omitted, `Agent` defaults to
+`createInMemoryHost()`. Platform factories (`createInMemoryHost`,
+`createFileHost`, `createCloudflareHost`) all return that same shape.
+`createCloudflareHost` accepts either plain DO storage options or Agents SDK
+fiber options (the agents path is a superset of the storage path).
 
 Automatic compaction can also enforce a pre-provider context budget:
 
@@ -463,38 +458,20 @@ retries once. Provider-thrown context-window errors still use the same blocking
 compaction fallback.
 
 Hosts that need durable runs pass `host:` into `Agent`. The execution subpath
-keeps the durable surface split by responsibility. `ThreadHost` is the small
-thread-only contract, `ExecutionHost` is the aggregate contract for in-process
-or full-store hosts, and `DurableBackgroundHost` is the split durable contract
-for background scheduling, run records, checkpoints, events, notifications, and
-thread persistence.
+exports the same `AgentHost` contract used by platform factories:
 
 ```ts
 import { Agent } from "@minpeter/pss-runtime";
-import type {
-  DurableBackgroundHost,
-  ExecutionHost,
-} from "@minpeter/pss-runtime/execution";
-import { createInMemoryExecutionHost } from "@minpeter/pss-runtime/platform/memory";
+import type { AgentHost } from "@minpeter/pss-runtime/execution";
+import { createInMemoryHost } from "@minpeter/pss-runtime/platform/memory";
 
-const host = createInMemoryExecutionHost();
+const host: AgentHost = createInMemoryHost();
 
 const agent = new Agent({
   host,
   model,
   namespace: "support-agent",
 });
-
-const durableHost: DurableBackgroundHost = {
-  kind: "durable-background",
-  backgroundScheduler,
-  checkpointStore,
-  eventStore,
-  notificationInbox,
-  runStore,
-  threadStore,
-  transaction,
-};
 ```
 
 ## Supported Deployment Shapes
@@ -510,10 +487,10 @@ thread snapshots on disk between restarts:
 
 ```ts
 import { Agent } from "@minpeter/pss-runtime";
-import { createNodeFileThreadHost } from "@minpeter/pss-runtime/platform/file";
+import { createFileHost } from "@minpeter/pss-runtime/platform/file";
 
 const agent = new Agent({
-  host: createNodeFileThreadHost({ directory: ".pss-local-threads" }),
+  host: createFileHost({ directory: ".pss-local-threads" }),
   model,
 });
 ```
@@ -535,18 +512,16 @@ core runtime code. Use `@minpeter/pss-runtime/platform/cloudflare` as the
 canonical Cloudflare adapter for Durable Object storage, alarms, dispatch, and
 Cloudflare Agents SDK fiber, schedule, recovery, and context helpers.
 
-When the Worker is implemented as a Cloudflare Agents SDK `Agent`, create the
-Cloudflare adapter from inside the Cloudflare `Agent` subclass and pass
-`durableObjectContext: this.ctx`; the adapter does not require `ctx` to be
-public. It maps immediate PSS run and thread resumes onto Agents SDK
-`startFiber()` calls, maps delayed resumes onto SDK `schedule()`, and provides
-recovery helpers for `onFiberRecovered()`. Scheduled callback and recovery
-payloads are prefix-guarded by default; pass `allowedPrefixes` or `allowPrefix`
-when a single Cloudflare Agents Worker intentionally serves multiple PSS runtime
-namespaces. Cloudflare Agents helpers are exported from the canonical
-`@minpeter/pss-runtime/platform/cloudflare` adapter rather than a separate
-platform subpath. The `worker-agent` app still owns session, channel, webhook,
-and prompt-routing behavior.
+**Recommended for agent products:** implement the Worker DO as a Cloudflare
+Agents SDK `Agent` subclass and wire PSS through
+`createCloudflareAgentsPlatformContext` / `createCloudflareHost({ cloudflareAgent,
+durableObjectContext: this.ctx, resume, ... })`. Immediate run/thread resumes map
+to `startFiber()`, delayed resumes to SDK `schedule()`, and recovery to
+`onFiberRecovered()`. HTTP app routes should use `onRequest` (PartyServer entry).
+Scheduled callback and recovery payloads are prefix-guarded by default; pass
+`allowedPrefixes` or `allowPrefix` for multi-namespace Workers. The
+`worker-agent` app follows this Agents SDK path while owning session, channel,
+webhook, and prompt-routing behavior.
 
 ### Platform adapter parity
 
@@ -626,7 +601,7 @@ child link is committed, and when a run suspends. If a process is killed inside 
 provider call or unsafe tool execution, resume rolls back to the last committed
 checkpoint and may re-enter the operation.
 
-When `Agent` receives an `ExecutionHost`, high-level model turns create a
+When `Agent` receives an `AgentHost`, high-level model turns create a
 `user-turn` run record and thread tool execution context into managed model
 calls. Tools are checkpointed before and after execution and receive stable
 `attempt`, `idempotencyKey`, `retryPolicy`, `signal`, and public `toolCallId`

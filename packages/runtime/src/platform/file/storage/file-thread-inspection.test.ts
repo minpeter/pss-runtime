@@ -3,18 +3,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { encodeThreadSnapshot } from "../../../thread/state/snapshot";
+import { createFileHost } from "../host/file-host";
 import {
-  inspectNodeFileThread,
-  nodeFileThreadStorageFile,
+  fileThreadStorageHint,
+  inspectFileThread,
 } from "./file-thread-inspection";
-import { FileThreadStore } from "./file-thread-store";
 
 async function tempDir(): Promise<string> {
   return await mkdtemp(join(tmpdir(), "pss-runtime-file-inspect-"));
 }
 
-describe("inspectNodeFileThread", () => {
-  it("reports stored history and compaction metadata from the node file store", async () => {
+describe("inspectFileThread", () => {
+  it("reports stored history and compaction metadata from the file host", async () => {
     const directory = await tempDir();
     const threadKey = "inspect:thread";
     const summary = {
@@ -24,8 +24,8 @@ describe("inspectNodeFileThread", () => {
     const summaryBytes = Buffer.byteLength(JSON.stringify(summary), "utf8");
 
     try {
-      const store = new FileThreadStore(directory);
-      await store.commit(
+      const host = createFileHost({ directory });
+      await host.store.threads.commit(
         threadKey,
         {
           state: encodeThreadSnapshot(
@@ -48,7 +48,7 @@ describe("inspectNodeFileThread", () => {
       );
 
       await expect(
-        inspectNodeFileThread({ directory, key: threadKey })
+        inspectFileThread({ directory, key: threadKey })
       ).resolves.toEqual({
         compactionCount: 1,
         compactions: [
@@ -59,7 +59,7 @@ describe("inspectNodeFileThread", () => {
           },
         ],
         messageCount: 3,
-        storageFile: nodeFileThreadStorageFile({ directory, key: threadKey }),
+        storageFile: await fileThreadStorageHint({ directory, key: threadKey }),
         summaryBytes,
         threadKey,
         version: "1",
@@ -75,12 +75,12 @@ describe("inspectNodeFileThread", () => {
 
     try {
       await expect(
-        inspectNodeFileThread({ directory, key: threadKey })
+        inspectFileThread({ directory, key: threadKey })
       ).resolves.toEqual({
         compactionCount: 0,
         compactions: [],
         messageCount: 0,
-        storageFile: nodeFileThreadStorageFile({ directory, key: threadKey }),
+        storageFile: await fileThreadStorageHint({ directory, key: threadKey }),
         summaryBytes: 0,
         threadKey,
         version: null,

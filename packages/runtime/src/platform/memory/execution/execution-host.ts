@@ -1,6 +1,6 @@
 import type { ResumeThreadOptions } from "../../../execution/host/scheduler-options";
 import type {
-  ExecutionHost,
+  AgentHost,
   ExecutionScheduler,
 } from "../../../execution/host/types";
 import {
@@ -18,14 +18,13 @@ export interface MemoryScheduledWorkListOptions {
   readonly nowMs?: number;
 }
 
-export interface InMemoryExecutionHost extends ExecutionHost {
+export interface InMemoryHost extends AgentHost {
   readonly scheduler: InMemoryExecutionScheduler;
 }
 
-export function createInMemoryExecutionHost(): InMemoryExecutionHost {
+export function createInMemoryHost(): InMemoryHost {
   return {
     attachmentStore: new MemoryAttachmentStore(),
-    kind: "execution",
     store: new InMemoryExecutionStore(),
     scheduler: new InMemoryExecutionScheduler(),
   };

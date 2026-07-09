@@ -33,6 +33,10 @@ export default defineConfig({
           "src/cloudflare-workers-test-shim.ts"
         ),
       },
+      {
+        find: /^agents$/,
+        replacement: resolve(import.meta.dirname, "src/agents-test-shim.ts"),
+      },
     ],
     conditions: ["@minpeter/pss-source", "import", "module", "default"],
   },

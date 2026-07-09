@@ -2,13 +2,13 @@ import type { ModelMessage } from "ai";
 import { describe, expect, it, vi } from "vitest";
 import { Agent } from "../../agent/core/agent";
 import type {
-  ExecutionHost,
+  AgentHost,
   ExecutionStore,
   ExecutionStoreTransaction,
   ThreadInputBoundary,
   ThreadInputInbox,
 } from "../../execution";
-import { createInMemoryExecutionHost } from "../../platform/memory";
+import { createInMemoryHost } from "../../platform/memory";
 import {
   assistantMessage,
   createCallbackModel,
@@ -97,7 +97,7 @@ describe("AgentThread durable inputs", () => {
   });
 
   it("does not let recovered pending sends steal a newly admitted send turn", async () => {
-    const base = createInMemoryExecutionHost();
+    const base = createInMemoryHost();
     await base.store.inputs.admit({
       admittedAtMs: 1,
       input: userText("old"),
@@ -136,7 +136,7 @@ describe("AgentThread durable inputs", () => {
   });
 
   it("drains pending durable sends left behind before in-memory queueing", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     await host.store.inputs.admit({
       admittedAtMs: 1,
       input: userText("old"),
@@ -172,14 +172,18 @@ describe("AgentThread durable inputs", () => {
 });
 
 function createTracedExecutionHost(): {
-  readonly host: ExecutionHost;
+  readonly host: AgentHost;
   readonly trace: string[];
 } {
-  const base = createInMemoryExecutionHost();
+  const base = createInMemoryHost();
   const trace: string[] = [];
   const store = executionStoreWithInputTrace(base.store, trace);
   return {
-    host: { kind: "execution", scheduler: base.scheduler, store },
+    host: {
+      attachmentStore: base.attachmentStore,
+      scheduler: base.scheduler,
+      store,
+    },
     trace,
   };
 }

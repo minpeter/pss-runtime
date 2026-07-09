@@ -1,13 +1,13 @@
 import type { Agent, AgentInput, AgentTurn } from "@minpeter/pss-runtime";
 import type {
-  ExecutionHost,
+  AgentHost,
   ResumeThreadOptions,
 } from "@minpeter/pss-runtime/execution";
 import {
   defaultChildThreadKey,
   parentThreadNamespace,
 } from "@minpeter/pss-runtime/namespace";
-import { createInMemoryExecutionHost } from "@minpeter/pss-runtime/platform/memory";
+import { createInMemoryHost } from "@minpeter/pss-runtime/platform/memory";
 import { describe, expect, it } from "vitest";
 import { createAppAgent } from "./app-agent";
 import { launchDurableBackgroundDelegation } from "./background-delegation";
@@ -19,7 +19,7 @@ const ownerNamespace = parentThreadNamespace("coordinator", parentThreadKey);
 
 describe("app-owned background delegation", () => {
   it("does not resume a background task owned by another app namespace", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     const job = await launchTask(host, {
       ownerNamespace: "app:other:default",
     });
@@ -31,7 +31,7 @@ describe("app-owned background delegation", () => {
   });
 
   it("does not return stored output for another app namespace", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     const job = await launchTask(host, {
       ownerNamespace: "app:other:default",
     });
@@ -87,7 +87,7 @@ describe("app-owned background delegation", () => {
   });
 
   it("resumes an owned completion notification without runtime-owned namespace helpers", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     const job = await launchTask(host);
     const appAgent = createTestAppAgent(host);
     await appAgent.resume(`background:${job.id}`);
@@ -108,7 +108,7 @@ describe("app-owned background delegation", () => {
 });
 
 async function launchTask(
-  host: ExecutionHost,
+  host: AgentHost,
   overrides: { readonly ownerNamespace?: string } = {}
 ) {
   return await launchDurableBackgroundDelegation({
@@ -125,7 +125,7 @@ async function launchTask(
   });
 }
 
-function createTestAppAgent(host: ExecutionHost): Agent {
+function createTestAppAgent(host: AgentHost): Agent {
   return createAppAgent({
     coordinator: {
       resume: () => Promise.resolve(null),
@@ -181,9 +181,9 @@ async function* eventStream(
 }
 
 function createCountingHost() {
-  const baseHost = createInMemoryExecutionHost();
+  const baseHost = createInMemoryHost();
   const resumeCalls: { options: ResumeThreadOptions; threadKey: string }[] = [];
-  const host: ExecutionHost = {
+  const host: AgentHost = {
     ...baseHost,
     scheduler: {
       enqueueRun: async (runId, options) => {

@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { ExecutionHost, ExecutionStoreTransaction } from "../../execution";
-import { createInMemoryExecutionHost } from "../../platform/memory";
+import type { AgentHost, ExecutionStoreTransaction } from "../../execution";
+import { createInMemoryHost } from "../../platform/memory";
 import { userText } from "../../testing/test-fixtures";
 import { ThreadState } from "../state/thread-state";
 import { commitAndAckDurableThreadInput } from "./durable-inputs";
 
 describe("durable input atomic commits", () => {
   it("rolls back thread commit when durable input ack fails", async () => {
-    const base = createInMemoryExecutionHost();
+    const base = createInMemoryHost();
     const threadKey = "durable-atomic";
     await base.store.inputs.admit({
       input: userText("atomic"),
@@ -49,9 +49,8 @@ describe("durable input atomic commits", () => {
   });
 });
 
-function executionHostWithFailingAck(base: ExecutionHost): ExecutionHost {
+function executionHostWithFailingAck(base: AgentHost): AgentHost {
   return {
-    kind: "execution",
     scheduler: base.scheduler,
     store: {
       checkpoints: base.store.checkpoints,

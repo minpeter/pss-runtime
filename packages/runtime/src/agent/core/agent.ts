@@ -1,6 +1,5 @@
-import { executionHost } from "../../execution/host/host";
 import type { AgentHost, NotificationRecord } from "../../execution/host/types";
-import { createInMemoryExecutionHost } from "../../platform/memory";
+import { createInMemoryHost } from "../../platform/memory";
 import { type AgentInput, AgentThread } from "../../thread/handle/thread";
 import type { AgentPlugin } from "../../thread/plugins/pipeline";
 import type { AgentTurn } from "../../thread/protocol/turn";
@@ -51,7 +50,7 @@ export class Agent {
     this.#ownerNamespace = stableAgentNamespace({
       namespace: options.namespace,
     });
-    this.#host = providedHost ?? createInMemoryExecutionHost();
+    this.#host = providedHost ?? createInMemoryHost();
     this.host = this.#host;
     this.#store = threadStoreForHost(this.#host);
     this.#plugins = options.plugins ?? [];
@@ -74,13 +73,10 @@ export class Agent {
 
   /**
    * Whether this agent's host can resume durable runs through `resume()`.
-   *
-   * `false` when the host is a `ThreadHost`-only object (for example
-   * `{ kind: "thread", threadStore }`). In that case the in-memory `ExecutionHost` is not wired
-   * up, so `resume(runId)` always returns `null` instead of throwing.
+   * Always true for the single AgentHost contract.
    */
   get supportsResume(): boolean {
-    return executionHost(this.#host) !== undefined;
+    return true;
   }
 
   send(input: AgentInput): Promise<AgentTurn> {
@@ -100,13 +96,8 @@ export class Agent {
    * not-found.
    */
   async resume(runId: string): Promise<AgentTurn | null> {
-    const host = executionHost(this.#host);
-    if (!host) {
-      return null;
-    }
-
     return await resumeAgentTurn({
-      host,
+      host: this.#host,
       ownerNamespace: this.#ownerNamespace,
       resumeNotification: (notification) =>
         this.#resumeNotification(notification),
@@ -131,7 +122,7 @@ export class Agent {
       this.#plugins,
       {
         autoCompaction: this.#autoCompaction,
-        executionHost: executionHost(this.#host),
+        executionHost: this.#host,
       }
     );
     const publicHandle: ThreadHandle = {

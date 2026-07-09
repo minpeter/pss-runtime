@@ -1,4 +1,4 @@
-import type { ExecutionHost, ExecutionScheduler } from "../../../execution";
+import type { AgentHost, ExecutionScheduler } from "../../../execution";
 import type { ThreadStore } from "../../../index";
 import { CloudflareAttachmentStore } from "../storage/attachment-store";
 import {
@@ -44,19 +44,22 @@ export interface CloudflareDurableObjectState {
 
 export class InMemoryCloudflareDurableObjectStorage extends BaseInMemoryCloudflareDurableObjectStorage {}
 
-export function createCloudflareDurableObjectHost({
+export interface CloudflareStorageHostOptions {
+  readonly maxPayloadBytes?: number;
+  readonly prefix?: string;
+  readonly scheduler?: ExecutionScheduler;
+  readonly storage: CloudflareDurableObjectStorage;
+  readonly threadStore?: ThreadStore;
+}
+
+/** Low-level DO storage host. Prefer {@link createCloudflareHost}. */
+export function createCloudflareStorageHost({
   maxPayloadBytes,
   prefix = defaultPrefix,
   threadStore,
   storage,
   scheduler = createCloudflareAlarmScheduler({ prefix, storage }),
-}: {
-  readonly maxPayloadBytes?: number;
-  readonly prefix?: string;
-  readonly scheduler?: ExecutionScheduler;
-  readonly threadStore?: ThreadStore;
-  readonly storage: CloudflareDurableObjectStorage;
-}): ExecutionHost {
+}: CloudflareStorageHostOptions): AgentHost {
   const store = new DurableObjectExecutionStore({
     maxPayloadBytes,
     prefix,
@@ -64,7 +67,6 @@ export function createCloudflareDurableObjectHost({
   });
   return {
     attachmentStore: new CloudflareAttachmentStore({ prefix, storage }),
-    kind: "execution",
     scheduler,
     store: threadStore ? executionStoreWithThreads(store, threadStore) : store,
   };
@@ -160,9 +162,9 @@ async function setAlarm(
 }
 
 function executionStoreWithThreads(
-  store: ExecutionHost["store"],
+  store: AgentHost["store"],
   threads: ThreadStore
-): ExecutionHost["store"] {
+): AgentHost["store"] {
   return {
     events: store.events,
     inputs: store.inputs,

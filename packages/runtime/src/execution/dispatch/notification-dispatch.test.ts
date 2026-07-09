@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { agentNamespace } from "../../agent/identity/namespace";
-import { createInMemoryExecutionHost } from "../../platform/memory";
+import { createInMemoryHost } from "../../platform/memory";
 import {
   isRuntimeAttachmentData,
   type RuntimeAttachmentReference,
   type RuntimeAttachmentStore,
 } from "../../thread/input/attachments";
-import type { ExecutionHost, TurnRecord, TurnStore } from "../host/types";
+import type { AgentHost, TurnRecord, TurnStore } from "../host/types";
 import { dispatchAgentNotification } from "./notification-dispatch";
 
 describe("dispatchAgentNotification", () => {
   it("creates and schedules an idempotent notification run", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
 
     const first = await dispatchAgentNotification({
       host,
@@ -55,7 +55,7 @@ describe("dispatchAgentNotification", () => {
   });
 
   it("dedupes notifications within the same owner instead of globally", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
 
     const first = await dispatchAgentNotification({
       host,
@@ -93,7 +93,7 @@ describe("dispatchAgentNotification", () => {
   });
 
   it("stages notification file bytes before durable enqueue", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     const dispatched = await dispatchAgentNotification({
       host,
       idempotencyKey: "attachment:1",
@@ -132,7 +132,7 @@ describe("dispatchAgentNotification", () => {
   });
 
   it("stages notification observer event file bytes before durable enqueue", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     const dispatched = await dispatchAgentNotification({
       host,
       idempotencyKey: "attachment-observer:1",
@@ -174,7 +174,7 @@ describe("dispatchAgentNotification", () => {
   });
 
   it("returns the existing notification when run dedupe wins a create race", async () => {
-    const baseHost = createInMemoryExecutionHost();
+    const baseHost = createInMemoryHost();
     const first = await dispatchAgentNotification({
       host: baseHost,
       idempotencyKey: "reminder:race",
@@ -196,13 +196,13 @@ describe("dispatchAgentNotification", () => {
   });
 
   it("deletes staged notification attachments when a create race dedupes", async () => {
-    const baseHost = createInMemoryExecutionHost();
+    const baseHost = createInMemoryHost();
     const deletedRefs: RuntimeAttachmentReference[] = [];
     const attachmentStore = trackingAttachmentStore(
       baseHost.attachmentStore,
       deletedRefs
     );
-    const host = { ...baseHost, attachmentStore } satisfies ExecutionHost;
+    const host = { ...baseHost, attachmentStore } satisfies AgentHost;
     const first = await dispatchAgentNotification({
       host,
       idempotencyKey: "attachment-race",
@@ -259,8 +259,8 @@ function trackingAttachmentStore(
 }
 
 function hostWithDuplicateRunCreateAfterFirstLookup(
-  host: ExecutionHost
-): ExecutionHost {
+  host: AgentHost
+): AgentHost {
   let dedupeLookups = 0;
   const runs = {
     claim: (runId, options) => host.store.turns.claim(runId, options),
@@ -288,7 +288,7 @@ function hostWithDuplicateRunCreateAfterFirstLookup(
   return hostWithRuns(host, runs);
 }
 
-function hostWithDuplicateRunCreate(host: ExecutionHost): ExecutionHost {
+function hostWithDuplicateRunCreate(host: AgentHost): AgentHost {
   const runs = {
     claim: (runId, options) => host.store.turns.claim(runId, options),
     create: async (record: TurnRecord) => {
@@ -310,7 +310,7 @@ function hostWithDuplicateRunCreate(host: ExecutionHost): ExecutionHost {
   return hostWithRuns(host, runs);
 }
 
-function hostWithRuns(host: ExecutionHost, runs: TurnStore): ExecutionHost {
+function hostWithRuns(host: AgentHost, runs: TurnStore): AgentHost {
   return {
     ...host,
     store: {

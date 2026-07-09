@@ -1,9 +1,7 @@
-import type { ExecutionHost } from "../../../execution";
+import type { AgentHost } from "../../../execution";
 import { recoverCloudflareAgentsFiber } from "./fiber";
-import {
-  type CloudflareAgentsExecutionHostOptions,
-  createCloudflareAgentsExecutionHost,
-} from "./host";
+import type { CloudflareHostAgentsOptions } from "../host/create-cloudflare-host";
+import { createCloudflareHost } from "../host/create-cloudflare-host";
 import { createCloudflareAgentsFiberRetryScheduler } from "./retry-scheduler";
 import { resumeScheduledCloudflareAgentsFiber } from "./scheduled-fiber";
 import type {
@@ -33,7 +31,7 @@ export interface CloudflareAgentsPlatformFactoryOptions<
   readonly cloudflareAgent: TAgent;
   readonly durableObjectContext: CloudflareAgentsDurableObjectContext;
   readonly env: Env;
-  readonly host: ExecutionHost;
+  readonly host: AgentHost;
   readonly prefix: string;
 }
 
@@ -63,13 +61,13 @@ export type CloudflareAgentsPlatformContextOptions<
   TAgent extends
     CloudflareAgentsDefaultResumeAgent = CloudflareAgentsDefaultResumeAgent,
 > = CloudflareAgentsPlatformContextBaseOptions<Env, CreatedAgent, TAgent> &
-  Pick<CloudflareAgentsExecutionHostOptions<TAgent>, "delayedResumeCallback">;
+  Pick<CloudflareHostAgentsOptions<TAgent>, "delayedResumeCallback">;
 
 export interface CloudflareAgentsPlatformContext<
   CreatedAgent extends CloudflareAgentsResumableAgent,
 > {
   agent(prefix?: string): CreatedAgent;
-  host(prefix?: string): ExecutionHost;
+  host(prefix?: string): AgentHost;
   recoverFiber(
     ctx: CloudflareAgentsFiberRecoveryContext
   ): Promise<CloudflareAgentsFiberRecoveryResult | false>;
@@ -124,8 +122,8 @@ export function createCloudflareAgentsPlatformContext<
     retryRunAfterMs,
     storage: durableObjectContext.storage,
   });
-  const createHost = (prefix = contextDefaultPrefix): ExecutionHost =>
-    createCloudflareAgentsExecutionHost({
+  const createHost = (prefix = contextDefaultPrefix): AgentHost =>
+    createCloudflareHost({
       cloudflareAgent,
       delayedResumeCallback,
       drain,

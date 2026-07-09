@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { drainCloudflareAlarm } from "../alarm/drainer";
 import {
-  createCloudflareDurableObjectHost,
+  createCloudflareHost,
   listScheduledCloudflareRuns,
   listScheduledCloudflareThreadPrompts,
 } from "../index";
@@ -22,7 +22,7 @@ describe("Cloudflare Agents scheduled work mixed alarm isolation", () => {
   it("drains only an alarm-scheduled run when the same prefix also has a delayed Agents run", async () => {
     const cloudflareAgent = createFakeCloudflareAgent();
     const storage = cloudflareAgent.durableObjectContext.storage;
-    const alarmHost = createCloudflareDurableObjectHost({
+    const alarmHost = createCloudflareHost({
       prefix: "tenant-a",
       storage,
     });
@@ -80,7 +80,7 @@ describe("Cloudflare Agents scheduled work mixed alarm isolation", () => {
   it("drains only an alarm-scheduled thread prompt when the same prefix also has a delayed Agents thread retry", async () => {
     const cloudflareAgent = createFakeCloudflareAgent();
     const storage = cloudflareAgent.durableObjectContext.storage;
-    const alarmHost = createCloudflareDurableObjectHost({
+    const alarmHost = createCloudflareHost({
       prefix: "tenant-a",
       storage,
     });

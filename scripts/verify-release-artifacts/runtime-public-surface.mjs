@@ -10,9 +10,8 @@ export const REQUIRED_RUNTIME_EXECUTION_EXPORTS = [
   "CheckpointStore",
   "ClaimedThreadInput",
   "ClaimThreadInputOptions",
-  "DurableBackgroundHost",
+  "AgentHost",
   "EventStore",
-  "ExecutionHost",
   "ExecutionScheduler",
   "ExecutionStore",
   "ExecutionStoreTransaction",
@@ -34,11 +33,12 @@ export const REQUIRED_RUNTIME_EXECUTION_EXPORTS = [
   "RuntimeToolExecutionDecision",
   "RuntimeToolRetryPolicy",
   "ToolExecutionNeedsRecoveryError",
+  "threadStoreFromHost",
 ];
 
 export const REQUIRED_RUNTIME_MEMORY_EXPORTS = [
-  "createInMemoryExecutionHost",
-  "InMemoryExecutionHost",
+  "createInMemoryHost",
+  "InMemoryHost",
   "InMemoryExecutionScheduler",
   "MemoryScheduledThreadPrompt",
   "MemoryScheduledWorkListOptions",
@@ -68,7 +68,7 @@ const REQUIRED_RUNTIME_CLOUDFLARE_WORKER_EXPORTS = [
   "ackScheduledCloudflareThreadPrompt",
   "createCloudflareAlarmScheduler",
   "createCloudflareAgentContext",
-  "createCloudflareDurableObjectHost",
+  "createCloudflareHost",
   "drainAgentTurn",
   "drainAgentTurnWithBudget",
   "drainCloudflareAlarm",
@@ -83,7 +83,7 @@ export const REQUIRED_RUNTIME_CLOUDFLARE_AGENTS_EXPORTS = [
   "CloudflareAgentsCallbackName",
   "CloudflareAgentsDurableObjectContext",
   "CloudflareAgentsEventHandler",
-  "CloudflareAgentsExecutionHostOptions",
+  "CloudflareAgentsHostOptions",
   "CloudflareAgentsFiberContext",
   "CloudflareAgentsFiberPayload",
   "CloudflareAgentsFiberRecoveryContext",
@@ -127,7 +127,7 @@ export const REQUIRED_RUNTIME_CLOUDFLARE_AGENTS_EXPORTS = [
   "cloudflareAgentsRunPayload",
   "cloudflareAgentsThreadPayload",
   "cloudflareAgentsTrustFailureReason",
-  "createCloudflareAgentsExecutionHost",
+  "createCloudflareAgentsHost",
   "createCloudflareAgentsFiberScheduler",
   "createCloudflareAgentsFiberRetryScheduler",
   "createCloudflareAgentsPlatformContext",
@@ -152,7 +152,7 @@ export const REQUIRED_RUNTIME_CLOUDFLARE_EXPORTS = [
 ];
 
 export const REQUIRED_RUNTIME_FILE_EXPORTS =
-  "FileExecutionStore FileThreadStore NodeFileAgentContext NodeFileAgentContextFactoryOptions NodeFileAgentContextOptions NodeFileExecutionHostOptions NodeFileThreadHostOptions NodeScheduledThreadPrompt NodeScheduledWorkAppendOptions NodeScheduledWorkDrainOptions NodeScheduledWorkDrainResult NodeScheduledWorkListOptions NodeScheduledWorkRunContext ackScheduledNodeRun ackScheduledNodeThreadPrompt appendScheduledNodeRun appendScheduledNodeThreadPrompt createNodeFileAgentContext createNodeFileExecutionHost createNodeFileScheduler createNodeFileThreadHost drainScheduledNodeWork listScheduledNodeRuns listScheduledNodeThreadPrompts".split(
+  "FileExecutionStore FileThreadStore NodeFileAgentContext NodeFileAgentContextFactoryOptions NodeFileAgentContextOptions FileHostOptions NodeScheduledThreadPrompt NodeScheduledWorkAppendOptions NodeScheduledWorkDrainOptions NodeScheduledWorkDrainResult NodeScheduledWorkListOptions NodeScheduledWorkRunContext ackScheduledNodeRun ackScheduledNodeThreadPrompt appendScheduledNodeRun appendScheduledNodeThreadPrompt createNodeFileAgentContext createFileHost createFileScheduler drainScheduledNodeWork listScheduledNodeRuns listScheduledNodeThreadPrompts".split(
     " "
   );
 
@@ -166,27 +166,27 @@ export const FORBIDDEN_RUNTIME_ROOT_NAMES = [
       "CloudflareAlarmDrainSummary CloudflareDurableObjectFetchOptions CloudflareDurableObjectId",
       "CloudflareDurableObjectNamespace CloudflareDurableObjectState CloudflareDurableObjectStorage",
       "CloudflareDurableObjectStub CloudflareDurableObjectStubOptions CloudflareScheduledThreadPrompt",
-      "createInMemoryExecutionHost createCloudflareAlarmScheduler createCloudflareAgentContext",
-      "createCloudflareAgentsExecutionHost createCloudflareAgentsFiberScheduler createCloudflareAgentsPlatformContext",
-      "createCloudflareDurableObjectHost CreateLlmOptions DurableBackgroundHost DurableNotificationResumeHost",
-      "drainAgentTurn drainAgentTurnWithBudget drainCloudflareAlarm EventHost EventStore ExecutionHost ExecutionScheduler ExecutionStore",
+      "createInMemoryHost createCloudflareAlarmScheduler createCloudflareAgentContext",
+      "createCloudflareAgentsHost createCloudflareAgentsFiberScheduler createCloudflareAgentsPlatformContext",
+      "createCloudflareHost CreateLlmOptions DurableNotificationResumeHost",
+      "drainAgentTurn drainAgentTurnWithBudget drainCloudflareAlarm EventHost EventStore ExecutionScheduler ExecutionStore",
       "ExecutionStoreTransaction ExecutionTransactionHost Llm LlmContext LlmOutput LlmOutputPart",
       "NotificationHost NotificationInbox NotificationRecord fetchCloudflareDurableObject",
       "getCloudflareDurableObjectStub InMemoryCloudflareDurableObjectStorage RunHost RunRecord",
-      "InMemoryExecutionHost InMemoryExecutionScheduler MemoryScheduledThreadPrompt MemoryScheduledWorkListOptions MemoryThreadStore",
+      "InMemoryHost InMemoryExecutionScheduler MemoryScheduledThreadPrompt MemoryScheduledWorkListOptions MemoryThreadStore",
       "RunInput RunStore RuntimeToolExecutionCheckpoint RuntimeToolExecutionContext",
       "RuntimeToolExecutionDecision RuntimeToolRetryPolicy",
       "FileExecutionStore FileThreadStore FileSessionStore NodeFileAgentContext",
-      "NodeFileAgentContextFactoryOptions NodeFileAgentContextOptions NodeFileExecutionHostOptions",
-      "NodeFileThreadHostOptions NodeScheduledThreadPrompt NodeScheduledWorkAppendOptions",
+      "NodeFileAgentContextFactoryOptions NodeFileAgentContextOptions FileHostOptions",
+      "NodeScheduledThreadPrompt NodeScheduledWorkAppendOptions",
       "NodeScheduledWorkDrainOptions NodeScheduledWorkDrainResult NodeScheduledWorkListOptions NodeScheduledWorkRunContext",
       "ackScheduledNodeRun ackScheduledNodeThreadPrompt appendScheduledNodeRun appendScheduledNodeThreadPrompt",
-      "createNodeFileAgentContext createNodeFileExecutionHost createNodeFileScheduler createNodeFileThreadHost drainScheduledNodeWork",
+      "createNodeFileAgentContext createFileHost createFileScheduler drainScheduledNodeWork",
       "listScheduledNodeRuns listScheduledNodeThreadPrompts",
     ].flatMap((names) => names.split(" ")),
     // Every platform-subpath export is forbidden on the root surface; spread
     // the required lists so the two can never drift apart.
-    ...REQUIRED_RUNTIME_EXECUTION_EXPORTS,
+    ...REQUIRED_RUNTIME_EXECUTION_EXPORTS.filter((name) => name !== "AgentHost"),
     ...REQUIRED_RUNTIME_CLOUDFLARE_AGENTS_EXPORTS,
     ...REQUIRED_RUNTIME_CLOUDFLARE_WORKER_EXPORTS,
     ...REQUIRED_RUNTIME_FILE_EXPORTS,

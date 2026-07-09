@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ExecutionHost } from "../../../execution";
+import type { AgentHost } from "../../../execution";
 import {
   type CloudflareAgentsResumeRun,
   cloudflareAgentsFiberIdempotencyKey,
@@ -202,7 +202,7 @@ function runFiberKey(prefix: string, runId: string): string {
 }
 
 async function seedRetryableNotification(
-  host: ExecutionHost,
+  host: AgentHost,
   runId: string
 ): Promise<void> {
   const dedupeKey = dedupeKeyFor(runId);

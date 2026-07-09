@@ -8,6 +8,7 @@ import {
 } from "../../testing/llm-test-utils";
 import { assistantMessage } from "../../testing/test-fixtures";
 import { SpyStore } from "../handle/test-support";
+import { hostWithThreads } from "../../testing/host-with-threads";
 import {
   encodeRuntimeAttachmentData,
   isRuntimeAttachmentData,
@@ -30,7 +31,7 @@ describe("runtime attachment staging", () => {
     const Agent = await loadAgent();
     const agent = new Agent({
       attachmentStore,
-      host: { attachmentStore, kind: "thread", threadStore },
+      host: hostWithThreads(threadStore, attachmentStore),
       model: fakeModel,
     });
 
@@ -89,7 +90,7 @@ describe("runtime attachment staging", () => {
     const Agent = await loadAgent();
     const agent = new Agent({
       attachmentStore,
-      host: { attachmentStore, kind: "thread", threadStore },
+      host: hostWithThreads(threadStore, attachmentStore),
       model: fakeModel,
     });
 
@@ -143,7 +144,7 @@ describe("runtime attachment staging", () => {
     const Agent = await loadAgent();
     const agent = new Agent({
       attachmentStore,
-      host: { attachmentStore, kind: "thread", threadStore },
+      host: hostWithThreads(threadStore, attachmentStore),
       model: fakeModel,
     });
 
@@ -170,7 +171,7 @@ describe("runtime attachment staging", () => {
     const Agent = await loadAgent();
     const agent = new Agent({
       attachmentStore,
-      host: { attachmentStore, kind: "thread", threadStore },
+      host: hostWithThreads(threadStore, attachmentStore),
       model: fakeModel,
     });
 
@@ -200,7 +201,7 @@ describe("runtime attachment staging", () => {
     const Agent = await loadAgent();
     const agent = new Agent({
       attachmentStore,
-      host: { attachmentStore, kind: "thread", threadStore },
+      host: hostWithThreads(threadStore, attachmentStore),
       model: fakeModel,
     });
 
@@ -230,7 +231,7 @@ describe("runtime attachment staging", () => {
     const Agent = await loadAgent();
     const agent = new Agent({
       attachmentStore,
-      host: { attachmentStore, kind: "thread", threadStore },
+      host: hostWithThreads(threadStore, attachmentStore),
       model: fakeModel,
     });
 
@@ -261,7 +262,10 @@ describe("runtime attachment staging", () => {
     const threadStore = new SpyStore();
     const Agent = await loadAgent();
     const agent = new Agent({
-      host: { kind: "thread", threadStore },
+      host: {
+        ...hostWithThreads(threadStore),
+        attachmentStore: undefined,
+      },
       model: fakeModel,
     });
 

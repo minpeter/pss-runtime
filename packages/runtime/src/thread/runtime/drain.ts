@@ -1,4 +1,4 @@
-import type { ExecutionHost } from "../../execution/host/types";
+import type { AgentHost } from "../../execution/host/types";
 import type { RuntimeAttachmentStore } from "../input/attachments";
 import {
   type RuntimeInputPlacement,
@@ -36,7 +36,7 @@ export async function drainRuntimeInput({
   readonly attachmentStore: RuntimeAttachmentStore | undefined;
   readonly durableEvents: DurableThreadEventBuffer;
   readonly events: ThreadEventDispatcher;
-  readonly executionHost?: ExecutionHost;
+  readonly executionHost?: AgentHost;
   readonly placement: RuntimeInputPlacement;
   readonly recordEvent?: (event: AgentEvent) => void;
   readonly run: BufferedAgentTurn;
@@ -93,7 +93,7 @@ async function drainDurableRuntimeInput({
 }: {
   readonly durableEvents: DurableThreadEventBuffer;
   readonly events: ThreadEventDispatcher;
-  readonly executionHost?: ExecutionHost;
+  readonly executionHost?: AgentHost;
   readonly attachmentStore: RuntimeAttachmentStore | undefined;
   readonly placement: RuntimeInputPlacement;
   readonly recordEvent?: (event: AgentEvent) => void;

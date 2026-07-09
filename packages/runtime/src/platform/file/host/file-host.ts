@@ -1,4 +1,4 @@
-import type { ExecutionHost, ExecutionScheduler } from "../../../execution";
+import type { AgentHost, ExecutionScheduler } from "../../../execution";
 import { FileAttachmentStore } from "../storage/file-attachment-store";
 import { FileExecutionStore } from "../storage/file-execution-store";
 import {
@@ -6,24 +6,21 @@ import {
   appendScheduledNodeThreadPrompt,
 } from "./scheduled-work-store";
 
-export interface NodeFileExecutionHostOptions {
+export interface FileHostOptions {
   readonly directory: string;
 }
 
-export function createNodeFileExecutionHost({
-  directory,
-}: NodeFileExecutionHostOptions): ExecutionHost {
+export function createFileHost({ directory }: FileHostOptions): AgentHost {
   return {
     attachmentStore: new FileAttachmentStore(directory),
-    kind: "execution",
-    scheduler: createNodeFileScheduler({ directory }),
+    scheduler: createFileScheduler({ directory }),
     store: new FileExecutionStore(directory),
   };
 }
 
-export function createNodeFileScheduler({
+export function createFileScheduler({
   directory,
-}: NodeFileExecutionHostOptions): ExecutionScheduler {
+}: FileHostOptions): ExecutionScheduler {
   return {
     enqueueRun: async (runId, options) => {
       await appendScheduledNodeRun(directory, runId, options);

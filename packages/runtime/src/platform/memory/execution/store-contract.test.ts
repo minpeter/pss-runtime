@@ -1,7 +1,7 @@
 import { describeExecutionStoreContract } from "../../../contracts/execution-store/contract";
-import { createInMemoryExecutionHost } from "./execution-host";
+import { createInMemoryHost } from "./execution-host";
 
 describeExecutionStoreContract({
-  createStore: () => createInMemoryExecutionHost().store,
+  createStore: () => createInMemoryHost().store,
   name: "InMemoryExecutionStore",
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Agent } from "../../agent/core/agent";
 import {
-  createInMemoryExecutionHost,
+  createInMemoryHost,
   MemoryThreadStore,
 } from "../../platform/memory";
 import {
@@ -10,10 +10,11 @@ import {
 } from "../../testing/test-fixtures";
 import { collect } from "./test-support";
 import { ThreadEventReplayUnsupportedError } from "./thread-event-replay";
+import { hostWithThreads } from "../../testing/host-with-threads";
 
 describe("AgentThread durable event replay", () => {
   it("replays committed thread events with cursor pagination", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     const agent = new Agent({
       host,
       model: createCallbackModel(() => [assistantMessage("DONE")]),
@@ -52,7 +53,7 @@ describe("AgentThread durable event replay", () => {
   });
 
   it("replays failed turns with their durable turn-error event", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     const agent = new Agent({
       host,
       model: createCallbackModel(() =>
@@ -77,8 +78,22 @@ describe("AgentThread durable event replay", () => {
   });
 
   it("throws a typed error when replay is unsupported by the host", () => {
+    const base = hostWithThreads(new MemoryThreadStore());
     const agent = new Agent({
-      host: { kind: "thread", threadStore: new MemoryThreadStore() },
+      host: {
+        ...base,
+        store: {
+          ...base.store,
+          threadEvents: undefined,
+          transaction: (fn) =>
+            base.store.transaction(async (tx) =>
+              fn({
+                ...tx,
+                threadEvents: undefined,
+              })
+            ),
+        },
+      },
       model: createCallbackModel(() => [assistantMessage("DONE")]),
     });
 

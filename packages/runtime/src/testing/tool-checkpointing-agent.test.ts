@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Checkpoint, ExecutionHost } from "../execution";
+import type { Checkpoint, AgentHost } from "../execution";
 import { InMemorySqlStorage } from "../platform/cloudflare/sql/node-test/node-sqlite-storage";
 import { InMemoryCloudflareDurableObjectStorage } from "../platform/cloudflare/storage/durable-object/durable-object-storage";
 import { DurableObjectExecutionStore } from "../platform/cloudflare/storage/execution/store";
@@ -23,7 +23,7 @@ const textEncoder = new TextEncoder();
 
 function createCheckpointSpyCloudflareHost(maxPayloadBytes: number): {
   readonly checkpoints: Checkpoint[];
-  readonly host: ExecutionHost;
+  readonly host: AgentHost;
 } {
   const store = new DurableObjectExecutionStore({
     maxPayloadBytes,
@@ -36,7 +36,6 @@ function createCheckpointSpyCloudflareHost(maxPayloadBytes: number): {
   return {
     checkpoints,
     host: {
-      kind: "execution",
       scheduler: {
         enqueueRun: async () => undefined,
         resumeThread: async () => undefined,

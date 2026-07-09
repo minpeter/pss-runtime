@@ -5,6 +5,7 @@ import {
   createCallbackModel,
 } from "../../testing/test-fixtures";
 import { collect, SpyStore } from "./test-support";
+import { hostWithThreads } from "../../testing/host-with-threads";
 
 class RejectingDeleteStore extends SpyStore {
   override delete(_key: string): Promise<void> {
@@ -16,7 +17,7 @@ describe("Agent thread delete failure", () => {
   it("hard-stops the thread handle when persistence deletion fails", async () => {
     const store = new RejectingDeleteStore();
     const agent = new Agent({
-      host: { kind: "thread", threadStore: store },
+      host: hostWithThreads(store),
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
       ),

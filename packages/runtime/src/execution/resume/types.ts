@@ -1,6 +1,6 @@
 import type { ModelMessage } from "ai";
 import type { ModelGenerationOptions } from "../../llm/llm";
-import type { ExecutionHost } from "../host/types";
+import type { AgentHost } from "../host/types";
 
 export interface ResumeRunState {
   readonly history: readonly ModelMessage[];
@@ -19,7 +19,7 @@ export interface ResumeRunResult {
 
 export interface ResumeRunOptions {
   readonly budget: ResumeRunBudget;
-  readonly host: ExecutionHost;
+  readonly host: AgentHost;
   readonly loadState: () => Promise<ResumeRunState>;
   readonly model: ModelGenerationOptions;
   readonly runId: string;

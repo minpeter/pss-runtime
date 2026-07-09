@@ -1,21 +1,25 @@
 import { join } from "node:path";
 import { decodeStoredThreadState } from "../../../thread/state/snapshot";
-import { FileThreadStore } from "./file-thread-store";
+import { createFileHost } from "../host/file-host";
+import {
+  currentDataDirectory,
+  INITIAL_GENERATION_ID,
+} from "./file-execution-store/generation";
 
-export interface NodeFileThreadInspectionOptions {
+export interface FileThreadInspectionOptions {
   readonly directory: string;
   readonly key: string;
 }
 
-export interface NodeFileThreadInspectionCompaction {
+export interface FileThreadInspectionCompaction {
   readonly endSeqExclusive: number;
   readonly startSeq: number;
   readonly summaryBytes: number;
 }
 
-export interface NodeFileThreadInspection {
+export interface FileThreadInspection {
   readonly compactionCount: number;
-  readonly compactions: readonly NodeFileThreadInspectionCompaction[];
+  readonly compactions: readonly FileThreadInspectionCompaction[];
   readonly messageCount: number;
   readonly storageFile: string;
   readonly summaryBytes: number;
@@ -23,11 +27,12 @@ export interface NodeFileThreadInspection {
   readonly version: string | null;
 }
 
-export async function inspectNodeFileThread({
+export async function inspectFileThread({
   directory,
   key,
-}: NodeFileThreadInspectionOptions): Promise<NodeFileThreadInspection> {
-  const stored = await new FileThreadStore(directory).load(key);
+}: FileThreadInspectionOptions): Promise<FileThreadInspection> {
+  const host = createFileHost({ directory });
+  const stored = await host.store.threads.load(key);
   const state = decodeStoredThreadState(stored);
   const compactions = state.compactions.map((record) => ({
     endSeqExclusive: record.endSeqExclusive,
@@ -43,18 +48,39 @@ export async function inspectNodeFileThread({
     compactionCount: compactions.length,
     compactions,
     messageCount: state.history.length,
-    storageFile: nodeFileThreadStorageFile({ directory, key }),
+    storageFile: await fileThreadStorageHint({ directory, key }),
     summaryBytes,
     threadKey: key,
     version: stored?.version ?? null,
   };
 }
 
-export function nodeFileThreadStorageFile({
+/** Best-effort path under the current generation's threads directory. */
+export async function fileThreadStorageHint(
+  options: FileThreadInspectionOptions
+): Promise<string> {
+  const dataDirectory = await currentDataDirectory(options.directory).catch(
+    () => join(options.directory, "generations", INITIAL_GENERATION_ID)
+  );
+  return join(
+    dataDirectory,
+    "threads",
+    `${Buffer.from(options.key).toString("base64url")}.json`
+  );
+}
+
+/** Sync path assuming the default main generation layout. */
+export function fileThreadStoragePath({
   directory,
   key,
-}: NodeFileThreadInspectionOptions): string {
-  return join(directory, `${Buffer.from(key).toString("base64url")}.json`);
+}: FileThreadInspectionOptions): string {
+  return join(
+    directory,
+    "generations",
+    INITIAL_GENERATION_ID,
+    "threads",
+    `${Buffer.from(key).toString("base64url")}.json`
+  );
 }
 
 function jsonByteLength(value: unknown): number {

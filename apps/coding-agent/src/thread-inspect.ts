@@ -1,14 +1,14 @@
 import {
-  inspectNodeFileThread,
-  type NodeFileThreadInspection,
-  type NodeFileThreadInspectionCompaction,
-  nodeFileThreadStorageFile,
+  fileThreadStoragePath,
+  inspectFileThread,
+  type FileThreadInspection,
+  type FileThreadInspectionCompaction,
 } from "@minpeter/pss-runtime/platform/file";
 import type { CodingAgentThreadConfig } from "./thread-config";
 
-export type ThreadInspectionCompaction = NodeFileThreadInspectionCompaction;
+export type ThreadInspectionCompaction = FileThreadInspectionCompaction;
 
-export interface ThreadInspectionReport extends NodeFileThreadInspection {
+export interface ThreadInspectionReport extends FileThreadInspection {
   readonly autoCompaction: CodingAgentThreadConfig["autoCompaction"];
   readonly compactions: readonly ThreadInspectionCompaction[];
 }
@@ -16,7 +16,7 @@ export interface ThreadInspectionReport extends NodeFileThreadInspection {
 export async function inspectCodingAgentThread(
   config: CodingAgentThreadConfig
 ): Promise<ThreadInspectionReport> {
-  const inspection = await inspectNodeFileThread({
+  const inspection = await inspectFileThread({
     directory: config.directory,
     key: config.key,
   });
@@ -53,7 +53,7 @@ export function formatThreadInspectionReport(
 }
 
 export function storageFileForThread(directory: string, key: string): string {
-  return nodeFileThreadStorageFile({ directory, key });
+  return fileThreadStoragePath({ directory, key });
 }
 
 function formatAutoCompaction(

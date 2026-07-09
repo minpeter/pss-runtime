@@ -1,4 +1,4 @@
-import type { ExecutionHost } from "../../execution/host/types";
+import type { AgentHost } from "../../execution/host/types";
 import type { RuntimeAttachmentStore } from "../input/attachments";
 import {
   type RuntimeInputState,
@@ -29,7 +29,7 @@ export async function emitTurnEvent({
   readonly attachmentStore: RuntimeAttachmentStore | undefined;
   readonly awaitBoundaries: boolean;
   readonly events: ThreadEventDispatcher;
-  readonly executionHost: ExecutionHost | undefined;
+  readonly executionHost: AgentHost | undefined;
   readonly recordEvent?: (event: AgentEvent) => void;
   readonly run: BufferedAgentTurn;
   readonly runtimeInput: RuntimeInputState;

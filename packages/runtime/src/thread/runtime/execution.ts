@@ -1,5 +1,5 @@
 import type {
-  ExecutionHost,
+  AgentHost,
   TurnRecord,
   TurnStatus,
 } from "../../execution/host/types";
@@ -13,7 +13,7 @@ import {
 
 export interface ThreadExecutionOptions {
   readonly autoCompaction?: ThreadAutoCompactionOptions;
-  readonly executionHost?: ExecutionHost;
+  readonly executionHost?: AgentHost;
 }
 
 export interface ThreadExecutionRun {
@@ -34,7 +34,7 @@ export async function startThreadExecutionRun({
   state,
   turnId,
 }: {
-  readonly executionHost?: ExecutionHost;
+  readonly executionHost?: AgentHost;
   readonly interceptToolCall?: ThreadToolCallInterceptor;
   readonly threadKey: string;
   readonly state: ThreadState;
@@ -74,7 +74,7 @@ async function completeThreadExecutionRun({
   runId,
   status,
 }: {
-  readonly executionHost: ExecutionHost;
+  readonly executionHost: AgentHost;
   readonly runId: string;
   readonly status: ThreadExecutionTerminalStatus;
 }): Promise<void> {

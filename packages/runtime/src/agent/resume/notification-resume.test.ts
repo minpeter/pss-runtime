@@ -1,6 +1,6 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
-import { createInMemoryExecutionHost } from "../../platform/memory";
+import { createInMemoryHost } from "../../platform/memory";
 import {
   assistantMessage,
   createCallbackModel,
@@ -18,7 +18,7 @@ import {
 
 describe("host notification resume", () => {
   it("host resumes parent notification run once without direct prompt resume surface", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
     const agent = new Agent({
@@ -82,7 +82,7 @@ describe("host notification resume", () => {
   });
 
   it("does not let another agent claim a foreign notification", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     const owner = new Agent({
       host,
       model: createCallbackModel(() =>
@@ -158,7 +158,7 @@ describe("host notification resume", () => {
   });
 
   it("resumes an acked notification when durable run retry owns the lease", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     let calls = 0;
     const agent = new Agent({
       host,
@@ -200,7 +200,7 @@ describe("host notification resume", () => {
   });
 
   it("does not complete durable notification run when payload is unavailable", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     const agent = new Agent({
       host,
       model: createCallbackModel(() =>

@@ -1,5 +1,5 @@
 import { delegateUserInput } from "@minpeter/pss-runtime";
-import type { ExecutionHost } from "@minpeter/pss-runtime/execution";
+import type { AgentHost } from "@minpeter/pss-runtime/execution";
 import { defaultChildThreadKey } from "@minpeter/pss-runtime/namespace";
 import { jsonSchema, tool } from "ai";
 import {
@@ -17,7 +17,7 @@ interface DelegateInput {
 
 export function createDelegateToReaderTool(options: {
   readonly description: string;
-  readonly executionHost: ExecutionHost;
+  readonly executionHost: AgentHost;
   readonly parentAgentNamespace: string;
   readonly parentThreadKey: string;
 }) {

@@ -14,7 +14,7 @@ import {
   type CloudflareAgentsScheduleOptions,
   type CloudflareAgentsStartFiberOptions,
   type CloudflareAgentsStartFiberResult,
-  createCloudflareAgentsExecutionHost,
+  createCloudflareHost,
 } from "./index";
 import { createFakeCloudflareAgent, runWithText } from "./test-support";
 
@@ -77,7 +77,7 @@ class AgentsSdkShapeFixture {
   readonly startedFiberNames: string[] = [];
 
   createPssRuntimeHost() {
-    return createCloudflareAgentsExecutionHost({
+    return createCloudflareHost({
       cloudflareAgent: this,
       durableObjectContext: this.ctx,
       prefix: "tenant-a",

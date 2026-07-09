@@ -1,5 +1,5 @@
 import type {
-  ExecutionHost,
+  AgentHost,
   ExecutionStoreTransaction,
   ThreadEventLog,
 } from "../../execution/host/types";
@@ -64,7 +64,7 @@ export async function commitThreadStateAndEvents({
   threadKey,
 }: {
   readonly buffer: DurableThreadEventBuffer;
-  readonly executionHost?: ExecutionHost;
+  readonly executionHost?: AgentHost;
   readonly state: ThreadState;
   readonly threadKey: string;
 }): Promise<void> {
@@ -111,7 +111,7 @@ export async function flushDurableThreadEvents({
   threadKey,
 }: {
   readonly buffer: DurableThreadEventBuffer;
-  readonly executionHost?: ExecutionHost;
+  readonly executionHost?: AgentHost;
   readonly threadKey: string;
 }): Promise<void> {
   const pendingEvents = takeDurableThreadEvents(buffer);

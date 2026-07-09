@@ -1,6 +1,6 @@
 import type { TurnRecord } from "../../../../execution";
 import type { AgentEvent } from "../../../../index";
-import { createCloudflareDurableObjectHost } from "../../index";
+import { createCloudflareHost } from "../../index";
 import type { InMemoryCloudflareDurableObjectStorage } from "../durable-object/durable-object-storage";
 
 export async function hostLoadFinalThread(
@@ -8,7 +8,7 @@ export async function hostLoadFinalThread(
   prefix: string,
   threadKey: string
 ) {
-  const host = createCloudflareDurableObjectHost({ prefix, storage });
+  const host = createCloudflareHost({ prefix, storage });
   return await host.store.threads.load(threadKey);
 }
 

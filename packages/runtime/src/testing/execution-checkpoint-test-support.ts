@@ -2,10 +2,10 @@ import type { Tool, ToolSet } from "ai";
 import { jsonSchema, tool } from "ai";
 import type {
   Checkpoint,
-  ExecutionHost,
+  AgentHost,
   TurnRecord,
 } from "../execution/host/types";
-import { createInMemoryExecutionHost } from "../platform/memory";
+import { createInMemoryHost } from "../platform/memory";
 
 export interface GenerateTextToolOptions {
   readonly tools?: ToolSet;
@@ -48,14 +48,13 @@ export function toolOptions(toolCallId: string, signal: AbortSignal) {
 
 export function createCheckpointSpyHost(): {
   readonly checkpoints: Checkpoint[];
-  readonly host: ExecutionHost;
+  readonly host: AgentHost;
 } {
-  const baseHost = createInMemoryExecutionHost();
+  const baseHost = createInMemoryHost();
   const checkpoints: Checkpoint[] = [];
   return {
     checkpoints,
     host: {
-      kind: "execution",
       scheduler: baseHost.scheduler,
       store: {
         checkpoints: {

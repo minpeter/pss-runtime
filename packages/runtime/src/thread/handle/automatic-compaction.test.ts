@@ -19,6 +19,7 @@ import {
   waitForModelCalls,
 } from "./automatic-compaction.test-support";
 import { collect, SpyStore } from "./test-support";
+import { hostWithThreads } from "../../testing/host-with-threads";
 
 describe("Agent thread automatic compaction", () => {
   it("summarizes old history in the background and uses the summary plus latest tail on the next model call", async () => {
@@ -27,7 +28,7 @@ describe("Agent thread automatic compaction", () => {
     let calls = 0;
     const agent = agentWithAutoCompaction({
       autoCompaction: { minMessages: 4, retainMessages: 2 },
-      host: { kind: "thread", threadStore: store },
+      host: hostWithThreads(store),
       model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         calls += 1;
@@ -82,7 +83,7 @@ describe("Agent thread automatic compaction", () => {
     let calls = 0;
     const agent = agentWithAutoCompaction({
       autoCompaction: { minMessages: 4, retainMessages: 2 },
-      host: { kind: "thread", threadStore: store },
+      host: hostWithThreads(store),
       model: createCallbackModel(() => {
         calls += 1;
         if (calls === 1) {
@@ -120,7 +121,7 @@ describe("Agent thread automatic compaction", () => {
     let calls = 0;
     const agent = agentWithAutoCompaction({
       autoCompaction: { minMessages: 4, retainMessages: 2 },
-      host: { kind: "thread", threadStore: store },
+      host: hostWithThreads(store),
       model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         calls += 1;
@@ -173,7 +174,7 @@ describe("Agent thread automatic compaction", () => {
     let calls = 0;
     const agent = agentWithAutoCompaction({
       autoCompaction: { minMessages: 4, retainMessages: 1 },
-      host: { kind: "thread", threadStore: store },
+      host: hostWithThreads(store),
       model: createCallbackModel(async () => {
         calls += 1;
         if (calls === 1) {

@@ -16,8 +16,8 @@ export {
   startCloudflareAgentsResumeFiber,
 } from "./agents/fiber";
 export {
-  type CloudflareAgentsExecutionHostOptions,
-  createCloudflareAgentsExecutionHost,
+  type CloudflareAgentsHostOptions,
+  createCloudflareAgentsHost,
 } from "./agents/host";
 export {
   ackScheduledCloudflareAgentsRun,
@@ -147,12 +147,16 @@ export {
   ackScheduledCloudflareRun,
   ackScheduledCloudflareThreadPrompt,
   createCloudflareAlarmScheduler,
-  createCloudflareDurableObjectHost,
   InMemoryCloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
   listScheduledCloudflareThreadPrompts,
   rescheduleCloudflareAlarm,
 } from "./host/durable-object-host";
+export {
+  type CloudflareHostAgentsOptions,
+  type CloudflareHostStorageOptions,
+  createCloudflareHost,
+} from "./host/create-cloudflare-host";
 export type {
   SqlStorage,
   SqlStorageCursorLike,

@@ -1,5 +1,5 @@
 import type { CloudflareAgentTurnDrainOptions } from "../alarm/run-drain";
-import { createCloudflareDurableObjectHost } from "../host/durable-object-host";
+import { createCloudflareHost } from "../host/create-cloudflare-host";
 import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import {
   assertNeverPayload,
@@ -62,7 +62,7 @@ async function scheduledRunPayloadContext(
   const run =
     storage === undefined
       ? undefined
-      : await createCloudflareDurableObjectHost({
+      : await createCloudflareHost({
           prefix: payload.prefix,
           storage,
         }).store.turns.get(payload.runId);

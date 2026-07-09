@@ -1,8 +1,8 @@
 // biome-ignore-all lint/performance/noBarrelFile: Public package subpath entrypoint required by package exports.
 
 export {
-  createInMemoryExecutionHost,
-  type InMemoryExecutionHost,
+  createInMemoryHost,
+  type InMemoryHost,
   InMemoryExecutionScheduler,
   type MemoryScheduledThreadPrompt,
   type MemoryScheduledWorkListOptions,

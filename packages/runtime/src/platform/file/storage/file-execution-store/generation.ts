@@ -15,7 +15,7 @@ const DATA_DIRECTORIES = [
 
 const CURRENT_GENERATION_FILE = ".current-generation";
 export const GENERATIONS_DIRECTORY = "generations";
-const INITIAL_GENERATION_ID = "main";
+export const INITIAL_GENERATION_ID = "main";
 
 export async function copyDataDirectories(
   source: string,

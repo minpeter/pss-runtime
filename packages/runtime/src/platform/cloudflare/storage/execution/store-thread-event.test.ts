@@ -1,12 +1,12 @@
+import { createCloudflareHost } from "../../host/create-cloudflare-host";
 import { expect, it } from "vitest";
 import type { StoredThreadEvent } from "../../../../execution";
 import {
-  createCloudflareDurableObjectHost,
   InMemoryCloudflareDurableObjectStorage,
 } from "../../host/durable-object-host";
 
 it("round-trips thread events with the public default Durable Object SQL test storage", async () => {
-  const host = createCloudflareDurableObjectHost({
+  const host = createCloudflareHost({
     prefix: "default-sql-thread-event-test",
     storage: new InMemoryCloudflareDurableObjectStorage(),
   });

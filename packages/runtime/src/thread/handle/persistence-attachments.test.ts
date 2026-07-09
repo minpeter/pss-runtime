@@ -9,6 +9,7 @@ import {
   mockLanguageModelV4Text,
 } from "../../testing/mock-language-model-v4-test-utils";
 import { collect } from "./test-support";
+import { hostWithThreads } from "../../testing/host-with-threads";
 
 describe("Agent thread persistence attachments", () => {
   it("file thread store preserves image file parts across reload", async () => {
@@ -30,11 +31,7 @@ describe("Agent thread persistence attachments", () => {
     const store = new FileThreadStore(directory);
 
     const first = new Agent({
-      host: {
-        attachmentStore: new FileAttachmentStore(directory),
-        kind: "thread",
-        threadStore: store,
-      },
+      host: hostWithThreads(store, new FileAttachmentStore(directory)),
       model: createMockLanguageModelV4([mockLanguageModelV4Text("stored")]),
     });
     await collect(await first.thread("images").send(input));
@@ -43,11 +40,7 @@ describe("Agent thread persistence attachments", () => {
       mockLanguageModelV4Text("DONE"),
     ]);
     const second = new Agent({
-      host: {
-        attachmentStore: new FileAttachmentStore(directory),
-        kind: "thread",
-        threadStore: store,
-      },
+      host: hostWithThreads(store, new FileAttachmentStore(directory)),
       model: secondModel,
     });
 
