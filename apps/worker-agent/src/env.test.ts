@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertWebhookSecretToken,
   durableObjectName,
+  isTelegramIngressDryRun,
   readWebhookSecretToken,
   WorkerAgentConfigError,
 } from "./env";
@@ -12,6 +13,19 @@ const DURABLE_OBJECT_NAME_PATTERN = /^tg-v1-[A-Za-z0-9_-]*$/u;
 describe("worker-agent env helpers", () => {
   it("accepts Telegram-compatible webhook secrets", () => {
     expect(() => assertWebhookSecretToken("abc_123-XYZ")).not.toThrow();
+  });
+
+  it("detects Layer 1 ingress dry-run flags", () => {
+    expect(isTelegramIngressDryRun({})).toBe(false);
+    expect(isTelegramIngressDryRun({ TELEGRAM_INGRESS_DRY_RUN: "0" })).toBe(
+      false
+    );
+    expect(isTelegramIngressDryRun({ TELEGRAM_INGRESS_DRY_RUN: "1" })).toBe(
+      true
+    );
+    expect(isTelegramIngressDryRun({ TELEGRAM_INGRESS_DRY_RUN: "true" })).toBe(
+      true
+    );
   });
 
   it("rejects missing webhook secrets", () => {

@@ -5,9 +5,11 @@ import {
   collectTurnImageAttachments,
   collectTurnImages,
   collectTurnText,
+  formatIngressDryRunReply,
   handleTelegramWebhook,
   isImageAttachment,
   replyToThread,
+  summarizeIngressBatch,
   TELEGRAM_COALESCE_QUIET_MS,
   TELEGRAM_MAX_RAW_IMAGE_BYTES,
   TELEGRAM_MAX_TURN_IMAGES,
@@ -100,6 +102,34 @@ describe("telegram conversation handling", () => {
         { skipped: [{ text: "first" }, { text: "second" }] }
       )
     ).toBe("first\nsecond\nlatest");
+  });
+
+  it("summarizes Layer 1 batches for dry-run verification", () => {
+    const summary = summarizeIngressBatch(
+      [
+        { text: "hello" },
+        {
+          attachments: [{ mimeType: "image/jpeg", type: "image" }],
+          text: "caption",
+        },
+      ],
+      {
+        correlationId: "corr-1",
+        key: "chat-1",
+        subscribe: false,
+      }
+    );
+    expect(summary).toEqual({
+      correlationId: "corr-1",
+      key: "chat-1",
+      messageCount: 2,
+      messagesWithImages: 1,
+      subscribe: false,
+      textChars: "hello\ncaption".length,
+      textPreview: "hello\ncaption",
+    });
+    expect(formatIngressDryRunReply(summary)).toContain("Layer 1 only");
+    expect(formatIngressDryRunReply(summary)).toContain("messages=2");
   });
 
   it("uses concurrent delivery plus app quiet-window coalesce", async () => {

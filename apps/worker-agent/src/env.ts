@@ -21,6 +21,11 @@ export interface Env {
   readonly ENVIRONMENT: EnvironmentName;
   readonly TELEGRAM_BOT_TOKEN: string;
   readonly TELEGRAM_BOT_USERNAME?: string;
+  /**
+   * When `"1"` / `"true"`, Layer 1 ingress reassembly runs but Layer 2 agent
+   * delivery is skipped (local verification of telegram fragment coalesce).
+   */
+  readonly TELEGRAM_INGRESS_DRY_RUN?: string;
   readonly TELEGRAM_WEBHOOK_SECRET_TOKEN: string;
   readonly WORKER_AGENT_TUI_TOKEN?: string;
 }
@@ -29,6 +34,14 @@ export function isDevelopment(env: {
   readonly ENVIRONMENT: EnvironmentName;
 }): boolean {
   return env.ENVIRONMENT === "development";
+}
+
+/** Layer 1 only: no DO /turn, no model — for verifying ingress reassembly. */
+export function isTelegramIngressDryRun(env: {
+  readonly TELEGRAM_INGRESS_DRY_RUN?: string;
+}): boolean {
+  const value = env.TELEGRAM_INGRESS_DRY_RUN?.trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
 }
 
 export function durableObjectName(channelId: string): string {

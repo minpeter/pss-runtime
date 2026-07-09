@@ -17,6 +17,7 @@ import {
   durableObjectName,
   type Env,
   isDevelopment,
+  isTelegramIngressDryRun,
   readWebhookSecretToken,
 } from "./env";
 import { TELEGRAM_INGRESS_LAYER } from "./message-path-layers";
@@ -190,26 +191,24 @@ function createBot(env: Env, config: BotConfig): Chat {
         return;
       }
 
-      // Layer 1 observability only — what was reassembled before agent.
-      const text = collectTurnTexts(batch.messages);
-      const imageMessageCount = batch.messages.filter((message) =>
-        message.attachments?.some(
-          (attachment) =>
-            attachment.type === "image" ||
-            (attachment.type === "file" &&
-              (attachment.mimeType?.startsWith("image/") ?? false))
-        )
-      ).length;
+      // Layer 1 observability — what was reassembled (agent may be skipped).
+      const summary = summarizeIngressBatch(batch.messages, {
+        correlationId: batch.correlationId,
+        key,
+        subscribe: batch.subscribe,
+      });
       logInfo({
         message: "telegram-ingress flush",
         layer: TELEGRAM_INGRESS_LAYER,
-        key,
-        messageCount: batch.messages.length,
-        textChars: text.length,
-        messagesWithImages: imageMessageCount,
-        subscribe: batch.subscribe,
-        ...(batch.correlationId ? { correlationId: batch.correlationId } : {}),
+        dryRun: isTelegramIngressDryRun(env),
+        ...summary,
       });
+
+      // Layer 1 only: verify reassembly without DO / model.
+      if (isTelegramIngressDryRun(env)) {
+        await thread.post(formatIngressDryRunReply(summary));
+        return;
+      }
 
       // Boundary: Layer 1 → Layer 2. DO admits with idle send / running steer.
       await replyToThread({
@@ -298,6 +297,61 @@ export function collectTurnTexts(
     .map((item) => item.text)
     .filter((text): text is string => Boolean(text))
     .join("\n");
+}
+
+export interface IngressBatchSummary {
+  readonly correlationId?: string;
+  readonly key: string;
+  readonly messageCount: number;
+  readonly messagesWithImages: number;
+  readonly subscribe: boolean;
+  readonly textChars: number;
+  readonly textPreview: string;
+}
+
+/** Pure Layer 1 batch summary (no agent). Used for dry-run and logs. */
+export function summarizeIngressBatch(
+  messages: readonly ConversationMessage[],
+  meta: {
+    readonly correlationId?: string;
+    readonly key: string;
+    readonly subscribe: boolean;
+  }
+): IngressBatchSummary {
+  const text = collectTurnTexts(messages);
+  const messagesWithImages = messages.filter((message) =>
+    message.attachments?.some(
+      (attachment) =>
+        attachment.type === "image" ||
+        (attachment.type === "file" &&
+          (attachment.mimeType?.startsWith("image/") ?? false))
+    )
+  ).length;
+  const textPreview =
+    text.length <= 80 ? text : `${text.slice(0, 77).trimEnd()}...`;
+  return {
+    key: meta.key,
+    messageCount: messages.length,
+    messagesWithImages,
+    subscribe: meta.subscribe,
+    textChars: text.length,
+    textPreview,
+    ...(meta.correlationId ? { correlationId: meta.correlationId } : {}),
+  };
+}
+
+export function formatIngressDryRunReply(summary: IngressBatchSummary): string {
+  const lines = [
+    "🧪 ingress dry-run (Layer 1 only — agent skipped)",
+    `messages=${summary.messageCount} images~${summary.messagesWithImages} textChars=${summary.textChars}`,
+  ];
+  if (summary.textPreview) {
+    lines.push(`text: ${summary.textPreview}`);
+  }
+  if (summary.correlationId) {
+    lines.push(`correlationId=${summary.correlationId}`);
+  }
+  return lines.join("\n");
 }
 
 /** Collect images from a single message (batch path uses collectTurnImages). */
