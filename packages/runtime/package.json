@@ -1,6 +1,6 @@
 {
   "name": "@minpeter/pss-runtime",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "description": "Generic agent runtime for threads, model loops, and synchronized run events.",
   "type": "module",
   "main": "./dist/index.js",
