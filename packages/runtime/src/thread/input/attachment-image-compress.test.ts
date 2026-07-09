@@ -94,7 +94,7 @@ describe("prepareAttachmentBytesForStorage", () => {
     expect(prepared.diagnostics?.path).toBe("passthrough_png");
   });
 
-  it("compresses oversized opaque images to image/jpeg under 1MB", async () => {
+  it("compresses oversized opaque images to image/jpeg under the default budget", async () => {
     const bytes = encodeNoisyJpeg(1600, 1600, 95);
     expect(bytes.byteLength).toBeGreaterThan(
       DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES
@@ -388,7 +388,7 @@ describe("prepareAttachmentBytesForStorage", () => {
     ).rejects.toBeInstanceOf(RuntimeAttachmentStagingError);
   });
 
-  it("compresses extreme-resolution JPEG under 1MB", async () => {
+  it("compresses extreme-resolution JPEG under the default budget", async () => {
     const bytes = encodeNoisyJpeg(2200, 2200, 90);
     expect(bytes.byteLength).toBeGreaterThan(
       DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES

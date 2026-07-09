@@ -36,7 +36,7 @@ export interface ImageOmitDiagnostics {
 export interface RuntimeAttachmentStagingOptions {
   /**
    * Max stored size for image byte inputs after compression.
-   * Defaults to 1_000_000 (1MB) for all hosts.
+   * Defaults to 240_000 (240KB) for all hosts.
    */
   readonly maxImageBytes?: number;
   /**

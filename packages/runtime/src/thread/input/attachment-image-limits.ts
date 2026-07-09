@@ -1,7 +1,7 @@
 import { RuntimeAttachmentImageLimitError } from "./attachment-types";
 
 /** Default max stored size for image attachments (all hosts). */
-export const DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES = 1_000_000;
+export const DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES = 240_000;
 
 /**
  * Reject raw image inputs larger than this before any decode (DoS guard).

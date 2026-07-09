@@ -75,7 +75,7 @@ describe("imagePrepareLogEvent", () => {
       outputBytes: 66_540,
       inputMediaType: "image/jpeg",
       outputMediaType: "image/jpeg",
-      maxImageBytes: 1_000_000,
+      maxImageBytes: 240_000,
       message: "pss-runtime image-prepare",
     });
     expect(event).toEqual({
@@ -85,7 +85,7 @@ describe("imagePrepareLogEvent", () => {
       outputBytes: 66_540,
       inputMediaType: "image/jpeg",
       outputMediaType: "image/jpeg",
-      maxImageBytes: 1_000_000,
+      maxImageBytes: 240_000,
     });
     expect(JSON.stringify(event)).not.toMatch(TREE_CHARS_PATTERN);
   });
