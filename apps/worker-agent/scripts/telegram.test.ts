@@ -79,11 +79,13 @@ describe("telegram local relay", () => {
   it("does not advance offset past the first failed update in id order", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
         const updateId = updateIdFromFetchArgs(input, init);
-        return new Response(null, {
-          status: updateId === 11 ? 500 : 200,
-        });
+        return Promise.resolve(
+          new Response(null, {
+            status: updateId === 11 ? 500 : 200,
+          })
+        );
       })
     );
 
@@ -108,12 +110,12 @@ describe("telegram local relay", () => {
   it("does not advance offset past a thrown forward failure", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
         const updateId = updateIdFromFetchArgs(input, init);
         if (updateId === 11) {
-          throw new TypeError("connection refused");
+          return Promise.reject(new TypeError("connection refused"));
         }
-        return new Response(null, { status: 200 });
+        return Promise.resolve(new Response(null, { status: 200 }));
       })
     );
 
