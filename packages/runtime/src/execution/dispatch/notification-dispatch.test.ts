@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { solidTestPng } from "../../testing/valid-image-fixture";
 import { agentNamespace } from "../../agent/identity/namespace";
 import { createInMemoryHost } from "../../platform/memory";
 import {
@@ -101,7 +102,7 @@ describe("dispatchAgentNotification", () => {
         content: [
           { text: "look", type: "text" },
           {
-            data: new Uint8Array([1, 2, 3]),
+            data: solidTestPng(),
             filename: "photo.png",
             mediaType: "image/png",
             type: "file",
@@ -142,7 +143,7 @@ describe("dispatchAgentNotification", () => {
         {
           content: [
             {
-              data: new Uint8Array([7, 8, 9]),
+              data: solidTestPng(),
               filename: "context.png",
               mediaType: "image/png",
               type: "file",
@@ -218,7 +219,7 @@ describe("dispatchAgentNotification", () => {
       input: {
         content: [
           {
-            data: new Uint8Array([1, 2, 3]),
+            data: solidTestPng(),
             filename: "duplicate.png",
             mediaType: "image/png",
             type: "file",

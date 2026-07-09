@@ -8,6 +8,7 @@ import { MemoryAttachmentStore } from "../../platform/memory";
 import {
   DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,
   isStoredImageMediaType,
+  MAX_IMAGE_INPUT_BYTES,
   prepareAttachmentBytesForStorage,
 } from "./attachment-image-compress";
 import { decodeRuntimeAttachmentData } from "./attachment-refs";
@@ -166,6 +167,31 @@ describe("prepareAttachmentBytesForStorage", () => {
         mediaType: "image/jpeg",
       })
     ).rejects.toBeInstanceOf(RuntimeAttachmentStagingError);
+  });
+
+  it("throws when maxImageBytes exceeds storage budget ceiling", async () => {
+    await expect(
+      prepareAttachmentBytesForStorage({
+        bytes: encodeSolidJpeg(32, 32, 80),
+        maxImageBytes: 50_000_001,
+        mediaType: "image/jpeg",
+      })
+    ).rejects.toBeInstanceOf(RuntimeAttachmentStagingError);
+  });
+
+  it("rejects oversized raw image inputs before decode", async () => {
+    const bytes = new Uint8Array(MAX_IMAGE_INPUT_BYTES + 1);
+    // Minimal JPEG SOI so it is treated as an image without full decode passthrough.
+    bytes[0] = 0xff;
+    bytes[1] = 0xd8;
+    bytes[bytes.length - 2] = 0xff;
+    bytes[bytes.length - 1] = 0xd9;
+    await expect(
+      prepareAttachmentBytesForStorage({
+        bytes,
+        mediaType: "image/jpeg",
+      })
+    ).rejects.toThrow(/max input size/i);
   });
 
   it("strips MIME parameters for JPEG passthrough", async () => {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { solidTestPng } from "../../testing/valid-image-fixture";
 import type {
   AgentHost,
   ThreadInputInbox,
@@ -66,7 +67,7 @@ describe("createQueuedSendInput", () => {
       executionHost: undefined,
       input: [
         {
-          data: new Uint8Array([4, 5, 6]),
+          data: solidTestPng(),
           filename: "discarded.png",
           mediaType: "image/png",
           type: "file",
@@ -101,7 +102,7 @@ function transformTextToFileInputPlugin(): AgentPlugin {
         event: {
           content: [
             {
-              data: new Uint8Array([1, 2, 3]),
+              data: solidTestPng(),
               filename: "plugin.png",
               mediaType: "image/png",
               type: "file",

@@ -1,10 +1,10 @@
 /**
- * Bridge: import runtime sources + force edge wasm install before compress API.
- * Relative paths into packages/runtime so wrangler bundles codecs + wasm.
+ * Package-surface bridge for the edge QA worker.
+ * Uses public @minpeter/pss-runtime exports only (workspace boundaries).
  */
 
-export { installCloudflareImageCodecs } from "../../../packages/runtime/src/platform/cloudflare/image-codecs-edge";
+export { installCloudflareImageCodecs } from "@minpeter/pss-runtime/platform/cloudflare/image-codecs";
 export {
   DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,
   prepareAttachmentBytesForStorage,
-} from "../../../packages/runtime/src/thread/input/attachment-image-compress";
+} from "@minpeter/pss-runtime";

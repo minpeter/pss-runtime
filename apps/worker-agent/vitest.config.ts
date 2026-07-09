@@ -6,6 +6,13 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: /^@minpeter\/pss-runtime\/platform\/cloudflare\/image-codecs$/,
+        replacement: resolve(
+          import.meta.dirname,
+          "src/image-codecs-test-shim.ts"
+        ),
+      },
+      {
         find: /^@minpeter\/pss-runtime\/platform\/cloudflare$/,
         replacement: resolve(
           import.meta.dirname,

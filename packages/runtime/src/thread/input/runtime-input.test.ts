@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { solidTestPng, solidTestPngBase64 } from "../../testing/valid-image-fixture";
 import type {
   RuntimeAttachmentReference,
   HostAttachmentStore,
@@ -42,7 +43,7 @@ describe("runtime input", () => {
       runtimeInput,
       [
         {
-          data: new Uint8Array([1, 2, 3]),
+          data: solidTestPng(),
           mediaType: "image/png",
           type: "file",
         },

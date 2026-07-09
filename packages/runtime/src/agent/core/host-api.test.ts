@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { solidTestPng } from "../../testing/valid-image-fixture";
 import type { AgentHost } from "../../execution";
 import { createInMemoryHost } from "../../platform/memory";
 import { MemoryAttachmentStore } from "../../platform/memory/storage/memory-attachment-store";
@@ -166,7 +167,7 @@ describe("Agent host public API", () => {
     await collect(
       await agent.send([
         {
-          data: new Uint8Array([1, 2, 3]),
+          data: solidTestPng(),
           mediaType: "image/png",
           type: "file",
         },
@@ -189,7 +190,7 @@ describe("Agent host public API", () => {
     await collect(
       await agent.send([
         {
-          data: new Uint8Array([1, 2, 3]),
+          data: solidTestPng(),
           mediaType: "image/png",
           type: "file",
         },
