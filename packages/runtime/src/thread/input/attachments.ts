@@ -2,6 +2,12 @@
 
 export { hydrateRuntimeAttachments } from "./attachment-hydration";
 export {
+  DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,
+  isCompressibleImageMediaType,
+  prepareAttachmentBytesForStorage,
+  type PreparedAttachmentBytes,
+} from "./attachment-image-compress";
+export {
   decodeRuntimeAttachmentData,
   encodeRuntimeAttachmentData,
   isRuntimeAttachmentData,

@@ -5,6 +5,7 @@ import {
   encodeRuntimeAttachmentData,
   isRuntimeAttachmentData,
 } from "./attachment-refs";
+import { prepareAttachmentBytesForStorage } from "./attachment-image-compress";
 import type {
   RuntimeAttachmentReference,
   RuntimeAttachmentStagingOptions,
@@ -201,10 +202,16 @@ async function stageFileData(
     );
   }
 
-  const ref = await store.put({
+  const prepared = prepareAttachmentBytesForStorage({
     bytes,
-    filename: part.filename,
+    maxImageBytes: options.maxImageBytes,
     mediaType: part.mediaType,
+  });
+
+  const ref = await store.put({
+    bytes: prepared.bytes,
+    filename: part.filename,
+    mediaType: prepared.mediaType,
   });
   options.stagedRefs?.push(ref);
   return encodeRuntimeAttachmentData(ref);

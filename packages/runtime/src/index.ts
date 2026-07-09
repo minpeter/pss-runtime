@@ -18,9 +18,13 @@ export type {
 export type { AgentToolChoice } from "./llm/llm";
 export { ThreadEventReplayUnsupportedError } from "./thread/handle/thread-event-replay";
 export {
+  DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,
   decodeRuntimeAttachmentData,
   encodeRuntimeAttachmentData,
+  isCompressibleImageMediaType,
   isRuntimeAttachmentData,
+  prepareAttachmentBytesForStorage,
+  type PreparedAttachmentBytes,
   type RuntimeAttachmentBlob,
   RuntimeAttachmentHydrationError,
   type RuntimeAttachmentPutInput,

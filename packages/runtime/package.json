@@ -69,7 +69,9 @@
     "lint": "ultracite check ."
   },
   "dependencies": {
-    "ai": "7.0.16"
+    "ai": "7.0.16",
+    "fast-png": "^8.0.0",
+    "jpeg-js": "^0.4.4"
   },
   "devDependencies": {
     "agents": "0.17.3",
