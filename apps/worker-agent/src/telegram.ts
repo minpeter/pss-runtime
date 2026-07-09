@@ -25,7 +25,7 @@ import {
   MissingWaitUntilError,
 } from "./telegram-message-coalesce";
 import { workerErrors } from "./worker-errors";
-import { logError, logWarn, newCorrelationId } from "./worker-log";
+import { logError, logInfo, logWarn, newCorrelationId } from "./worker-log";
 
 /**
  * Telegram webhook entry (Worker). Two layers — see message-path-layers.ts:
@@ -174,12 +174,14 @@ function createBot(env: Env, config: BotConfig): Chat {
   });
 
   // Layer 1: reassemble Telegram fragments; flush hands one message to Layer 2.
+  // Keep the last Thread handle per key — do not delete on flush. Concurrent
+  // enqueue during a long flush races with delete and loses the handle
+  // ("Missing telegram thread for coalesce key").
   const threadsByKey = new Map<string, ConversationThread>();
   const ingressCoalescer = createMessageCoalescer<ConversationMessage>({
     quietMs: TELEGRAM_COALESCE_QUIET_MS,
     onFlush: async (key, batch) => {
       const thread = threadsByKey.get(key);
-      threadsByKey.delete(key);
       if (!thread) {
         throw new Error(`Missing telegram thread for coalesce key ${key}`);
       }
@@ -187,6 +189,28 @@ function createBot(env: Env, config: BotConfig): Chat {
       if (!latest) {
         return;
       }
+
+      // Layer 1 observability only — what was reassembled before agent.
+      const text = collectTurnTexts(batch.messages);
+      const imageMessageCount = batch.messages.filter((message) =>
+        message.attachments?.some(
+          (attachment) =>
+            attachment.type === "image" ||
+            (attachment.type === "file" &&
+              (attachment.mimeType?.startsWith("image/") ?? false))
+        )
+      ).length;
+      logInfo({
+        message: "telegram-ingress flush",
+        layer: TELEGRAM_INGRESS_LAYER,
+        key,
+        messageCount: batch.messages.length,
+        textChars: text.length,
+        messagesWithImages: imageMessageCount,
+        subscribe: batch.subscribe,
+        ...(batch.correlationId ? { correlationId: batch.correlationId } : {}),
+      });
+
       // Boundary: Layer 1 → Layer 2. DO admits with idle send / running steer.
       await replyToThread({
         env,
