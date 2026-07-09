@@ -12,6 +12,7 @@ import {
   MAX_IMAGE_DECODED_PIXELS,
   MAX_IMAGE_INPUT_BYTES,
   prepareAttachmentBytesForStorage,
+  runWithImagePrepareDiagnosticsListener,
 } from "./attachment-image-compress";
 import { decodeRuntimeAttachmentData } from "./attachment-refs";
 import { stageUserInputAttachments } from "./attachment-staging";
@@ -50,6 +51,36 @@ describe("prepareAttachmentBytesForStorage", () => {
       outputMediaType: "image/jpeg",
       path: "passthrough_jpeg",
     });
+  });
+
+  it("delivers diagnostics to ALS listener without dual tree when collected", async () => {
+    const bytes = encodeSolidJpeg(64, 64, 80);
+    const received: string[] = [];
+    await runWithImagePrepareDiagnosticsListener(
+      (diagnostics) => {
+        received.push(diagnostics.path);
+      },
+      async () => {
+        await prepareAttachmentBytesForStorage({
+          bytes,
+          mediaType: "image/jpeg",
+        });
+      }
+    );
+    expect(received).toEqual(["passthrough_jpeg"]);
+  });
+
+  it("delivers diagnostics via onImagePrepare staging option", async () => {
+    const bytes = encodeSolidJpeg(64, 64, 80);
+    const received: string[] = [];
+    await prepareAttachmentBytesForStorage({
+      bytes,
+      mediaType: "image/jpeg",
+      onImagePrepare: (diagnostics) => {
+        received.push(diagnostics.path);
+      },
+    });
+    expect(received).toEqual(["passthrough_jpeg"]);
   });
 
   it("passthroughs small PNG bytes as image/png", async () => {

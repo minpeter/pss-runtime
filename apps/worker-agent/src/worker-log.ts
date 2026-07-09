@@ -6,17 +6,12 @@ import {
 
 let initialized = false;
 
-/**
- * Pretty tree in local wrangler. Production stays object dumps for CF logs.
- *
- * Note: `initWorkersLogger` hardcodes `pretty: false` / `stringify: false`
- * (after spreading options), so we call `initLogger` directly.
- */
+/** Pretty tree under local wrangler; production keeps object dumps for CF logs. */
 function shouldPrettyPrint(): boolean {
   if (typeof process === "undefined") {
     return true;
   }
-  // Do not use NODE_ENV: workerd sets it to "production" under `wrangler dev` too.
+  // workerd sets NODE_ENV=production under `wrangler dev` too.
   return process.env.ENVIRONMENT !== "production";
 }
 
@@ -27,8 +22,14 @@ function isProductionEnvironment(): boolean {
   return process.env.ENVIRONMENT === "production";
 }
 
+export interface EnsureWorkerLoggerOptions {
+  readonly version?: string;
+}
+
 /** Idempotent module-scope init for Worker + Durable Object isolates. */
-export function ensureWorkerLogger(): void {
+export function ensureWorkerLogger(
+  options: EnsureWorkerLoggerOptions = {}
+): void {
   if (initialized) {
     return;
   }
@@ -44,29 +45,12 @@ export function ensureWorkerLogger(): void {
     env: {
       service: "pss-worker-agent",
       environment,
-      ...(typeof process !== "undefined" && process.env.CF_VERSION_METADATA
-        ? { version: process.env.CF_VERSION_METADATA }
-        : {}),
+      ...(options.version ? { version: options.version } : {}),
     },
     pretty,
-    // Explicit PII safety net (also default in prod; set always for defense in depth).
     redact: true,
-    // Workers: objects for CF Observability parsing.
+    // Objects for Cloudflare Observability parsing (not JSON strings).
     stringify: false,
-    // Low traffic today — keep 100% but structure keep rules for scale.
-    ...(production
-      ? {
-          sampling: {
-            rates: {
-              debug: 0,
-              error: 100,
-              info: 100,
-              warn: 100,
-            },
-            keep: [{ status: 400 }, { duration: 3000 }, { path: "/turn" }],
-          },
-        }
-      : {}),
   });
   initialized = true;
 }
@@ -85,7 +69,10 @@ export function newCorrelationId(): string {
   return crypto.randomUUID();
 }
 
-/** Structured info event (pretty tree when enabled). */
+/**
+ * Structured info event via global evlog `log` (object form → pretty tree + colors).
+ * Prefer this over hand-rolled stdout for host-owned diagnostics.
+ */
 export function logInfo(event: Record<string, unknown>): void {
   ensureWorkerLogger();
   log.info(event);
@@ -115,10 +102,8 @@ export function logError(
 }
 
 /**
- * One-liner for CLI/startup (relay, webhook setup).
- * Uses structured object form so pretty mode flushes via process.stdout.write
- * (same channel as request wide events). The tag-string API uses console.log
- * and loses the wrangler `stdout:` prefix.
+ * CLI/startup one-liner (relay, webhook). Object form so pretty mode uses
+ * process.stdout.write (same channel as request wide events).
  */
 export function logTagged(
   level: "info" | "warn" | "error",
@@ -154,7 +139,7 @@ export function attachmentLogFields(
     attachments: {
       count: attachments.length,
       mediaTypes: attachments.map((attachment) => attachment.mediaType),
-      // base64 length ≈ 4/3 of raw bytes; useful size signal without decoding.
+      // base64 length ≈ 4/3 of raw bytes; size signal without decoding.
       payloadBytes: attachments.reduce(
         (sum, attachment) =>
           sum + Math.floor((attachment.dataBase64.length * 3) / 4),
@@ -198,5 +183,38 @@ export function summarizeImagePrepares(
         path: prepare.path,
       })),
     },
+  };
+}
+
+/** Structured fields for a single image-prepare evlog event (no hand-rolled trees). */
+export function imagePrepareLogEvent(diagnostics: {
+  readonly path: string;
+  readonly inputBytes: number;
+  readonly outputBytes: number;
+  readonly inputMediaType: string;
+  readonly outputMediaType: string;
+  readonly maxImageBytes: number;
+  readonly decodedWidth?: number;
+  readonly decodedHeight?: number;
+  readonly hasAlpha?: boolean;
+  readonly message?: string;
+}): Record<string, unknown> {
+  return {
+    message: diagnostics.message ?? "pss-runtime image-prepare",
+    path: diagnostics.path,
+    inputBytes: diagnostics.inputBytes,
+    outputBytes: diagnostics.outputBytes,
+    inputMediaType: diagnostics.inputMediaType,
+    outputMediaType: diagnostics.outputMediaType,
+    maxImageBytes: diagnostics.maxImageBytes,
+    ...(diagnostics.decodedWidth === undefined
+      ? {}
+      : { decodedWidth: diagnostics.decodedWidth }),
+    ...(diagnostics.decodedHeight === undefined
+      ? {}
+      : { decodedHeight: diagnostics.decodedHeight }),
+    ...(diagnostics.hasAlpha === undefined
+      ? {}
+      : { hasAlpha: diagnostics.hasAlpha }),
   };
 }

@@ -16,6 +16,8 @@ export interface Env {
   readonly AI_API_KEY: string;
   readonly AI_BASE_URL?: string;
   readonly AI_MODEL?: string;
+  /** Present when wrangler `version_metadata` binding is configured. */
+  readonly CF_VERSION_METADATA?: WorkerVersionMetadata;
   readonly ENVIRONMENT: EnvironmentName;
   readonly TELEGRAM_BOT_TOKEN: string;
   readonly TELEGRAM_BOT_USERNAME?: string;

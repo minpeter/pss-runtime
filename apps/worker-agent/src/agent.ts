@@ -22,10 +22,9 @@ import {
 } from "./tools";
 
 const DEFAULT_BASE_URL = "https://apis.opengateway.ai/v1";
-const DEFAULT_MODEL = "minimax/MiniMax-M2.7";
 
-/** Shared for wide-event `ai.model` without importing agent internals. */
-export const DEFAULT_MODEL_FOR_LOG = DEFAULT_MODEL;
+/** Default model id when `AI_MODEL` is unset (also used on wide-event `ai.model`). */
+export const DEFAULT_MODEL = "minimax/MiniMax-M2.7";
 
 export const WORKER_AGENT_AUTO_COMPACTION: AgentAutoCompactionOptions = {
   minMessages: 48,

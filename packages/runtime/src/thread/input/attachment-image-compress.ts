@@ -1,4 +1,6 @@
 // biome-ignore-all lint/performance/noBarrelFile: Public compress API re-exports limits/types for stable import surface.
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import {
   decodeImageRgba,
   ensureImageCodecRuntimeReady,
@@ -43,7 +45,10 @@ export {
   MAX_IMAGE_STORAGE_BUDGET_BYTES,
 } from "./attachment-image-limits";
 
-/** Structured log message key for Workers Observability / wrangler tail. */
+/**
+ * Host-facing message key when logging image-prepare via the app logger
+ * (e.g. worker-agent + evlog). Runtime does not print this itself.
+ */
 export const IMAGE_PREPARE_LOG_MESSAGE = "pss-runtime image-prepare";
 
 /** Stored image attachments are always one of these MIME types. */
@@ -54,19 +59,19 @@ export type ImagePrepareDiagnosticsListener = (
   diagnostics: ImagePrepareDiagnostics
 ) => void;
 
-let imagePrepareDiagnosticsListener:
-  | ImagePrepareDiagnosticsListener
-  | undefined;
-
 /**
- * Optional process/isolate-local hook for hosts that want image-prepare
- * diagnostics on a request-scoped wide event (e.g. worker-agent + evlog).
- * Always clear in a finally block after the turn.
+ * Request-scoped image-prepare collector (ALS). Hosts (e.g. worker-agent)
+ * register a listener and log via their own stack (evlog wide events).
+ * Runtime never hand-prints trees to stdout.
  */
-export function setImagePrepareDiagnosticsListener(
-  listener?: ImagePrepareDiagnosticsListener
-): void {
-  imagePrepareDiagnosticsListener = listener;
+const imagePrepareDiagnosticsStore =
+  new AsyncLocalStorage<ImagePrepareDiagnosticsListener>();
+
+export function runWithImagePrepareDiagnosticsListener<T>(
+  listener: ImagePrepareDiagnosticsListener,
+  fn: () => T
+): T {
+  return imagePrepareDiagnosticsStore.run(listener, fn);
 }
 
 /**
@@ -77,16 +82,18 @@ export function setImagePrepareDiagnosticsListener(
  * - Policy B: alpha → PNG, opaque → JPEG (with jpeg/png passthrough when already
  *   under budget and magic matches).
  * - HEIC/HEIF/AVIF/WebP/etc. are decoded and re-encoded (never stored as-is).
- * - Emits a structured `pss-runtime image-prepare` log for image inputs (no bytes).
+ * - Diagnostics are returned and optionally delivered to host listeners (no stdout).
  */
 export async function prepareAttachmentBytesForStorage({
   bytes,
   mediaType,
   maxImageBytes = DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,
+  onImagePrepare,
 }: {
   readonly bytes: Uint8Array;
   readonly mediaType: string;
   readonly maxImageBytes?: number;
+  readonly onImagePrepare?: ImagePrepareDiagnosticsListener;
 }): Promise<PreparedAttachmentBytes> {
   if (
     !Number.isFinite(maxImageBytes) ||
@@ -115,7 +122,7 @@ export async function prepareAttachmentBytesForStorage({
         outputMediaType: mediaType,
         path: "non_image",
       },
-      { log: false }
+      { log: false, onImagePrepare }
     );
   }
 
@@ -140,7 +147,8 @@ export async function prepareAttachmentBytesForStorage({
         outputBytes: inputBytes,
         outputMediaType: "image/jpeg",
         path: "passthrough_jpeg",
-      }
+      },
+      { onImagePrepare }
     );
   }
 
@@ -154,7 +162,8 @@ export async function prepareAttachmentBytesForStorage({
         outputBytes: inputBytes,
         outputMediaType: "image/png",
         path: "passthrough_png",
-      }
+      },
+      { onImagePrepare }
     );
   }
 
@@ -171,17 +180,21 @@ export async function prepareAttachmentBytesForStorage({
     ? encodePngUnderBudget(decoded, maxImageBytes)
     : encodeJpegUnderBudget(decoded, maxImageBytes);
 
-  return withDiagnostics(prepared, {
-    decodedHeight: decoded.height,
-    decodedWidth: decoded.width,
-    hasAlpha,
-    inputBytes,
-    inputMediaType: sniffed,
-    maxImageBytes,
-    outputBytes: prepared.bytes.byteLength,
-    outputMediaType: prepared.mediaType,
-    path,
-  });
+  return withDiagnostics(
+    prepared,
+    {
+      decodedHeight: decoded.height,
+      decodedWidth: decoded.width,
+      hasAlpha,
+      inputBytes,
+      inputMediaType: sniffed,
+      maxImageBytes,
+      outputBytes: prepared.bytes.byteLength,
+      outputMediaType: prepared.mediaType,
+      path,
+    },
+    { onImagePrepare }
+  );
 }
 
 export function isCompressibleImageMediaType(mediaType: string): boolean {
@@ -198,52 +211,15 @@ export function isStoredImageMediaType(
 function withDiagnostics(
   prepared: PreparedAttachmentBytes,
   diagnostics: ImagePrepareDiagnostics,
-  options: { readonly log?: boolean } = {}
+  options: {
+    readonly log?: boolean;
+    readonly onImagePrepare?: ImagePrepareDiagnosticsListener;
+  } = {}
 ): PreparedAttachmentBytes {
   if (options.log !== false) {
-    // Prefer process.stdout.write (same channel as evlog pretty flush) so
-    // `wrangler dev` prefixes lines with `stdout:` consistently. console.info
-    // multi-line blocks often appear without that prefix.
-    emitRuntimeLogLine(formatImagePrepareLog(diagnostics));
+    const listener =
+      options.onImagePrepare ?? imagePrepareDiagnosticsStore.getStore();
+    listener?.(diagnostics);
   }
-  imagePrepareDiagnosticsListener?.(diagnostics);
   return { ...prepared, diagnostics };
-}
-
-/** Match evlog's pretty flush path for local wrangler log labeling. */
-export function emitRuntimeLogLine(message: string): void {
-  const text = message.endsWith("\n") ? message : `${message}\n`;
-  if (
-    typeof process !== "undefined" &&
-    typeof process.stdout?.write === "function"
-  ) {
-    process.stdout.write(text);
-    return;
-  }
-  console.info(text);
-}
-
-function formatImagePrepareLog(diagnostics: ImagePrepareDiagnostics): string {
-  const rows: Array<readonly [string, string | number | boolean]> = [
-    ["path", diagnostics.path],
-    ["inputBytes", diagnostics.inputBytes],
-    ["outputBytes", diagnostics.outputBytes],
-    ["inputMediaType", diagnostics.inputMediaType],
-    ["outputMediaType", diagnostics.outputMediaType],
-    ["maxImageBytes", diagnostics.maxImageBytes],
-  ];
-  if (diagnostics.decodedWidth !== undefined) {
-    rows.push(["decodedWidth", diagnostics.decodedWidth]);
-  }
-  if (diagnostics.decodedHeight !== undefined) {
-    rows.push(["decodedHeight", diagnostics.decodedHeight]);
-  }
-  if (diagnostics.hasAlpha !== undefined) {
-    rows.push(["hasAlpha", diagnostics.hasAlpha]);
-  }
-  const lines = rows.map(([key, value], index) => {
-    const prefix = index === rows.length - 1 ? "└─" : "├─";
-    return `  ${prefix} ${key}: ${value}`;
-  });
-  return `${IMAGE_PREPARE_LOG_MESSAGE}\n${lines.join("\n")}`;
 }

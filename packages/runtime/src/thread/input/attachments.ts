@@ -20,9 +20,9 @@ export {
   MAX_IMAGE_STORAGE_BUDGET_BYTES,
   type PreparedAttachmentBytes,
   prepareAttachmentBytesForStorage,
+  runWithImagePrepareDiagnosticsListener,
   STORED_IMAGE_MEDIA_TYPES,
   type StoredImageMediaType,
-  setImagePrepareDiagnosticsListener,
 } from "./attachment-image-compress";
 export {
   decodeRuntimeAttachmentData,
@@ -41,6 +41,7 @@ export {
 } from "./attachment-staging";
 export {
   type HostAttachmentStore,
+  type ImageOmitDiagnostics,
   type RuntimeAttachmentBlob,
   RuntimeAttachmentHydrationError,
   RuntimeAttachmentImageLimitError,

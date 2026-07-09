@@ -2,7 +2,10 @@ import type {
   ImagePrepareDiagnostics,
   Agent as PssAgent,
 } from "@minpeter/pss-runtime";
-import { setImagePrepareDiagnosticsListener } from "@minpeter/pss-runtime";
+import {
+  IMAGE_PREPARE_LOG_MESSAGE,
+  runWithImagePrepareDiagnosticsListener,
+} from "@minpeter/pss-runtime";
 import {
   type CloudflareAgentsFiberRecoveryContext,
   type CloudflareAgentsFiberRecoveryResult,
@@ -12,7 +15,7 @@ import {
 import { installCloudflareImageCodecs } from "@minpeter/pss-runtime/platform/cloudflare/image-codecs";
 import { Agent as CloudflareAgent } from "agents";
 
-import { createConfiguredAgent, DEFAULT_MODEL_FOR_LOG } from "./agent";
+import { createConfiguredAgent, DEFAULT_MODEL } from "./agent";
 import { deliverToolOnlyTurn, withCapturedMessages } from "./agent-do-delivery";
 import { parseAgentRequest } from "./agent-do-request";
 import {
@@ -53,18 +56,17 @@ import {
   attachmentLogFields,
   createTurnLogger,
   ensureWorkerLogger,
+  imagePrepareLogEvent,
   logError,
+  logInfo,
   summarizeImagePrepares,
 } from "./worker-log";
 
-// DO isolate may load this module without executing worker entry side-effects.
-// Install static AVIF/WebP/HEIF wasm so attachment staging never hits
-// "wasm not installed" on the Durable Object path.
+// DO isolate may load this module without worker-entry side-effects.
 installCloudflareImageCodecs();
-ensureWorkerLogger();
 
 /**
- * Channel agent Durable Object implemented on the Cloudflare Agents SDK.
+ * Channel agent Durable Object on the Cloudflare Agents SDK.
  * Scheduling/resume uses Agents fibers; HTTP remains app-owned via onRequest.
  */
 export class AgentDurableObject extends CloudflareAgent<Env> {
@@ -79,6 +81,7 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
     super(ctx, env);
     this.#env = env;
     this.#storage = ctx.storage;
+    ensureWorkerLogger({ version: env.CF_VERSION_METADATA?.id });
     this.#sessionIndexClient = createSessionIndexClient(env);
     this.#sessionTranscriptClient = createSessionTranscriptClient(env);
     this.#platform = createCloudflarePlatformContext({
@@ -139,10 +142,8 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
 
     const turnEvents = createTurnEventCollector();
     const imagePrepares: ImagePrepareDiagnostics[] = [];
-    const attachmentFields = attachmentLogFields(payload.attachments);
-    // Full evlog/ai wrap needs LanguageModelV3; AI SDK here is V4 — log model
-    // identity on the wide event until evlog/ai supports V4 middleware.
-    const modelId = this.#env.AI_MODEL?.trim() || DEFAULT_MODEL_FOR_LOG;
+    // AI SDK V4 here — log model id only until evlog/ai supports V4 wrap.
+    const modelId = this.#env.AI_MODEL?.trim() || DEFAULT_MODEL;
 
     log.set({
       action: "agent_turn",
@@ -156,87 +157,108 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
       },
       input: {
         textChars: payload.text.length,
-        ...attachmentFields.attachments,
+        ...attachmentLogFields(payload.attachments),
       },
       ...(payload.correlationId
         ? { correlationId: payload.correlationId }
         : {}),
     });
 
-    setImagePrepareDiagnosticsListener((diagnostics) => {
-      imagePrepares.push(diagnostics);
-    });
+    return await runWithImagePrepareDiagnosticsListener(
+      (diagnostics) => {
+        imagePrepares.push(diagnostics);
+        // Host owns logging via global evlog (object form → pretty + colors).
+        // RequestLogger.info is string-only and only folds into the wide event.
+        logInfo(
+          imagePrepareLogEvent({
+            ...diagnostics,
+            message: IMAGE_PREPARE_LOG_MESSAGE,
+          })
+        );
+      },
+      async () => {
+        try {
+          const sendMessage = createRequestSendMessageToolSetup(
+            this.#env,
+            payload.channel
+          );
+          const binding = durableObjectChannelBinding(payload.channel);
+          const sessionScopeKey = payload.sessionScopeKey;
+          const agent = createConfiguredAgent(
+            this.#env,
+            this.#platform.host(),
+            {
+              sendMessage: sendMessage.options,
+              sessionTools: {
+                currentConversationKey: () => binding.channelKey,
+                currentSessionScopeKey: () => sessionScopeKey,
+                reader: this.#sessionIndexClient,
+                transcriptReader: this.#sessionTranscriptClient,
+              },
+              observability: { log: turnEvents.record },
+            }
+          );
+          const assistantMessages: string[] = [];
+          const delivery = await deliverToolOnlyTurn(
+            agent.thread(binding.thread),
+            agentInputFromRequest(payload),
+            { onAssistantOutput: (text) => assistantMessages.push(text) }
+          );
+          await this.#indexTurn(
+            binding,
+            agentTurnIndexText(payload),
+            sendMessage,
+            assistantMessages,
+            sessionScopeKey
+          );
 
-    try {
-      const sendMessage = createRequestSendMessageToolSetup(
-        this.#env,
-        payload.channel
-      );
-      const binding = durableObjectChannelBinding(payload.channel);
-      const sessionScopeKey = payload.sessionScopeKey;
-      const agent = createConfiguredAgent(this.#env, this.#platform.host(), {
-        sendMessage: sendMessage.options,
-        sessionTools: {
-          currentConversationKey: () => binding.channelKey,
-          currentSessionScopeKey: () => sessionScopeKey,
-          reader: this.#sessionIndexClient,
-          transcriptReader: this.#sessionTranscriptClient,
-        },
-        observability: { log: turnEvents.record },
-      });
-      const assistantMessages: string[] = [];
-      const delivery = await deliverToolOnlyTurn(
-        agent.thread(binding.thread),
-        agentInputFromRequest(payload),
-        { onAssistantOutput: (text) => assistantMessages.push(text) }
-      );
-      await this.#indexTurn(
-        binding,
-        agentTurnIndexText(payload),
-        sendMessage,
-        assistantMessages,
-        sessionScopeKey
-      );
+          const turnSummary = turnEvents.summary();
+          log.set({
+            delivery: {
+              delivered: delivery.delivered,
+              outcome: delivery.delivered
+                ? "delivered"
+                : "missing_send_message",
+              ...(delivery.delivered
+                ? {}
+                : { error: "missing_send_message" as const }),
+            },
+            turn: {
+              steps: turnSummary.steps,
+              toolCalls: turnSummary.toolCalls,
+              ...(turnSummary.errors.length > 0
+                ? { errors: turnSummary.errors }
+                : {}),
+            },
+            ...summarizeImagePrepares(imagePrepares),
+          });
 
-      const turnSummary = turnEvents.summary();
-      log.set({
-        delivery: {
-          delivered: delivery.delivered,
-          outcome: delivery.delivered ? "delivered" : "missing_send_message",
-          ...(delivery.delivered
-            ? {}
-            : { error: "missing_send_message" as const }),
-        },
-        turn: {
-          steps: turnSummary.steps,
-          toolCalls: turnSummary.toolCalls,
-          ...(turnSummary.errors.length > 0
-            ? { errors: turnSummary.errors }
-            : {}),
-        },
-        ...summarizeImagePrepares(imagePrepares),
-      });
+          if (!delivery.delivered) {
+            // Model finished without tool delivery — treat as upstream failure.
+            log.error(workerErrors.MISSING_SEND_MESSAGE());
+            log.emit({ status: 502 });
+            return Response.json(
+              withCapturedMessages(delivery, sendMessage.messages()),
+              { status: 502 }
+            );
+          }
 
-      if (!delivery.delivered) {
-        log.error(workerErrors.MISSING_SEND_MESSAGE());
+          log.emit({ status: 200 });
+          return Response.json(
+            withCapturedMessages(delivery, sendMessage.messages())
+          );
+        } catch (error) {
+          log.error(error instanceof Error ? error : new Error(String(error)));
+          log.set({
+            delivery: { delivered: false, outcome: "error" },
+            turn: turnEvents.summary(),
+            ...summarizeImagePrepares(imagePrepares),
+          });
+          log.emit({ status: 500 });
+          throw error;
+        }
       }
-
-      log.emit({ status: 200 });
-      return Response.json(
-        withCapturedMessages(delivery, sendMessage.messages())
-      );
-    } catch (error) {
-      log.error(error instanceof Error ? error : new Error(String(error)));
-      log.set({
-        delivery: { delivered: false, outcome: "error" },
-        turn: turnEvents.summary(),
-        ...summarizeImagePrepares(imagePrepares),
-      });
-      log.emit({ status: 500 });
-      throw error;
-    } finally {
-      setImagePrepareDiagnosticsListener();
-    }
+    );
   }
 
   async #handleSessionTranscriptRequest(request: Request): Promise<Response> {

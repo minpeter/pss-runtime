@@ -1,9 +1,6 @@
 import type { AgentEvent, RuntimeInput } from "../protocol/events";
 import { base64ToBytes } from "./attachment-base64";
-import {
-  emitRuntimeLogLine,
-  prepareAttachmentBytesForStorage,
-} from "./attachment-image-compress";
+import { prepareAttachmentBytesForStorage } from "./attachment-image-compress";
 import {
   decodeRuntimeAttachmentData,
   encodeRuntimeAttachmentData,
@@ -209,6 +206,9 @@ async function stageFilePart(
       bytes,
       maxImageBytes: options.maxImageBytes,
       mediaType: part.mediaType,
+      ...(options.onImagePrepare
+        ? { onImagePrepare: options.onImagePrepare }
+        : {}),
     });
 
     const ref = await store.put({
@@ -225,20 +225,13 @@ async function stageFilePart(
     };
   } catch (error) {
     // Safety limits: omit this image, keep the rest of the turn (text + other files).
+    // Hosts observe omits via the returned text notice; no hand-rolled stdout trees.
     if (error instanceof RuntimeAttachmentImageLimitError) {
-      const omitRows = [
-        `limit: ${error.limit}`,
-        `mediaType: ${part.mediaType}`,
-        ...(part.filename ? [`filename: ${part.filename}`] : []),
-      ];
-      const body = omitRows
-        .map((row, index) => {
-          const prefix = index === omitRows.length - 1 ? "└─" : "├─";
-          return `  ${prefix} ${row}`;
-        })
-        .join("\n");
-      // Same stdout channel as image-prepare / evlog pretty.
-      emitRuntimeLogLine(`pss-runtime image-omit\n${body}`);
+      options.onImageOmit?.({
+        filename: part.filename,
+        limit: error.limit,
+        mediaType: part.mediaType,
+      });
       return imageLimitOmittedTextPart(part.filename, error);
     }
     throw error;

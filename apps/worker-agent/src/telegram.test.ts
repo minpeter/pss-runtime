@@ -3,10 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Env } from "./env";
 import {
   collectTurnImageAttachments,
+  collectTurnImages,
   collectTurnText,
   handleTelegramWebhook,
   isImageAttachment,
   replyToThread,
+  TELEGRAM_COALESCE_QUIET_MS,
+  TELEGRAM_MESSAGE_CONCURRENCY,
 } from "./telegram";
 import { logError } from "./worker-log";
 
@@ -93,6 +96,64 @@ describe("telegram conversation handling", () => {
         { skipped: [{ text: "first" }, { text: "second" }] }
       )
     ).toBe("first\nsecond\nlatest");
+  });
+
+  it("uses concurrent delivery plus app quiet-window coalesce", async () => {
+    await handleTelegramWebhook(
+      new Request("https://worker.test/"),
+      createWebhookEnv(createDurableObjectNamespace("coalesce-concurrency")),
+      createExecutionContext()
+    );
+
+    expect(chatConstructors.at(-1)).toEqual(
+      expect.objectContaining({
+        concurrency: TELEGRAM_MESSAGE_CONCURRENCY,
+      })
+    );
+    expect(TELEGRAM_MESSAGE_CONCURRENCY).toEqual({
+      strategy: "concurrent",
+    });
+    expect(TELEGRAM_COALESCE_QUIET_MS).toBe(500);
+  });
+
+  it("collects images from every message in a batch", async () => {
+    const first = new Uint8Array([1, 2]);
+    const second = new Uint8Array([3, 4, 5]);
+    await expect(
+      collectTurnImages([
+        {
+          attachments: [
+            {
+              data: first,
+              mimeType: "image/jpeg",
+              type: "image",
+            },
+          ],
+          text: "first",
+        },
+        {
+          attachments: [
+            {
+              data: second,
+              mimeType: "image/png",
+              name: "b.png",
+              type: "image",
+            },
+          ],
+          text: "caption",
+        },
+      ])
+    ).resolves.toEqual([
+      {
+        dataBase64: btoa(String.fromCharCode(1, 2)),
+        mediaType: "image/jpeg",
+      },
+      {
+        dataBase64: btoa(String.fromCharCode(3, 4, 5)),
+        filename: "b.png",
+        mediaType: "image/png",
+      },
+    ]);
   });
 
   it("treats telegram photos and image documents as image attachments", () => {

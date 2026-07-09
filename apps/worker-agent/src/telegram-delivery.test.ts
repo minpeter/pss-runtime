@@ -101,13 +101,16 @@ describe("agent delivery request", () => {
     expect(body.correlationId).toEqual(expect.any(String));
   });
 
-  it("rejects when the agent Durable Object reports missing tool delivery", async () => {
+  it("rejects 502 missing_send_message body as a tool delivery failure", async () => {
     const webhookEnv = createWebhookEnv(createDurableObjectNamespace("agent"));
     durableObjectMock.responses.push(
-      Response.json({
-        delivered: false,
-        error: "missing_send_message",
-      })
+      Response.json(
+        {
+          delivered: false,
+          error: "missing_send_message",
+        },
+        { status: 502 }
+      )
     );
 
     await expect(

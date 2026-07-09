@@ -14,16 +14,35 @@ import {
   isDevelopment,
   readWebhookSecretToken,
 } from "./env";
+import { createMessageCoalescer } from "./telegram-message-coalesce";
 import { workerErrors } from "./worker-errors";
 import { logError, logWarn, newCorrelationId } from "./worker-log";
 
 const correlationStore = new AsyncLocalStorage<string>();
+/** Per-webhook waitUntil so coalesce flush outlives the HTTP response. */
+const waitUntilStore = new AsyncLocalStorage<
+  (task: Promise<unknown>) => void
+>();
 
 const DEV_NOTICE = "🧪 DEVELOPMENT ENVIRONMENT";
 const FAILURE_REPLY =
   "처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
 const MISSING_SEND_MESSAGE_ERROR = "missing_send_message";
 const DEFAULT_IMAGE_MEDIA_TYPE = "image/jpeg";
+/**
+ * Quiet window after the latest inbound message before flushing a turn.
+ * Resets on every message so text + later photo still merge (unlike chat
+ * burst, which waits only once after the first message).
+ */
+export const TELEGRAM_COALESCE_QUIET_MS = 500;
+/**
+ * Deliver every webhook to our coalescer; app-level quiet window owns batching.
+ * chat-sdk burst only sleeps once and cannot re-open for a late photo.
+ */
+export const TELEGRAM_MESSAGE_CONCURRENCY = {
+  strategy: "concurrent",
+} as const;
+
 const AgentDeliverySchema = z.discriminatedUnion("delivered", [
   z.object({ delivered: z.literal(true) }).strict(),
   z
@@ -93,7 +112,7 @@ interface CachedBot {
 
 function createBot(env: Env, config: BotConfig): Chat {
   const chat = new Chat({
-    concurrency: "queue",
+    concurrency: TELEGRAM_MESSAGE_CONCURRENCY,
     adapters: {
       telegram: createTelegramAdapter({
         botToken: config.botToken,
@@ -106,30 +125,72 @@ function createBot(env: Env, config: BotConfig): Chat {
     userName: config.userName,
   });
 
-  const handleMessage = async (
+  // Live Thread handles for post/subscribe after the quiet window flushes.
+  const threadsByKey = new Map<string, ConversationThread>();
+  const coalescer = createMessageCoalescer<ConversationMessage>({
+    quietMs: TELEGRAM_COALESCE_QUIET_MS,
+    onFlush: async (key, batch) => {
+      const thread = threadsByKey.get(key);
+      threadsByKey.delete(key);
+      if (!thread) {
+        throw new Error(`Missing telegram thread for coalesce key ${key}`);
+      }
+      const latest = batch.messages.at(-1);
+      if (!latest) {
+        return;
+      }
+      await replyToThread({
+        env,
+        batchMessages: batch.messages,
+        context: { skipped: batch.messages.slice(0, -1) },
+        deliverTurn: (channelId, text, options) =>
+          requestAgentDelivery(env, channelId, text, options),
+        message: latest,
+        subscribe: batch.subscribe,
+        thread,
+      });
+    },
+  });
+
+  const handleMessage = (
     thread: Thread,
     message: Message,
     context: MessageContext | undefined,
     options?: { readonly subscribe?: boolean }
-  ) =>
-    replyToThread({
-      env,
-      context,
-      deliverTurn: (channelId, text, options) =>
-        requestAgentDelivery(env, channelId, text, options),
-      message,
-      subscribe: options?.subscribe ?? false,
-      thread,
-    });
+  ): void => {
+    const key = message.threadId || thread.id || thread.channelId;
+    threadsByKey.set(key, thread);
+    const waitUntil = waitUntilStore.getStore();
+    // Enqueue only — never await agent work on the webhook path (Workers
+    // cancels cross-request promise resolution / hung handlers).
+    for (const prior of context?.skipped ?? []) {
+      coalescer.enqueue(
+        key,
+        {
+          message: asConversationMessage(prior),
+          subscribe: options?.subscribe,
+        },
+        { waitUntil }
+      );
+    }
+    coalescer.enqueue(
+      key,
+      {
+        message: asConversationMessage(message),
+        subscribe: options?.subscribe,
+      },
+      { waitUntil }
+    );
+  };
 
-  chat.onDirectMessage(async (thread, message, _channel, context) => {
-    await handleMessage(thread, message, context);
+  chat.onDirectMessage((thread, message, _channel, context) => {
+    handleMessage(thread, message, context);
   });
-  chat.onNewMention(async (thread, message, context) => {
-    await handleMessage(thread, message, context, { subscribe: true });
+  chat.onNewMention((thread, message, context) => {
+    handleMessage(thread, message, context, { subscribe: true });
   });
-  chat.onSubscribedMessage(async (thread, message, context) => {
-    await handleMessage(thread, message, context);
+  chat.onSubscribedMessage((thread, message, context) => {
+    handleMessage(thread, message, context);
   });
 
   return chat;
@@ -139,38 +200,54 @@ export function collectTurnText(
   message: ConversationMessage,
   context?: ConversationContext
 ): string {
-  return [...(context?.skipped ?? []), message]
+  return collectTurnTexts([...(context?.skipped ?? []), message]);
+}
+
+export function collectTurnTexts(
+  messages: readonly ConversationMessage[]
+): string {
+  return messages
     .map((item) => item.text)
     .filter((text): text is string => Boolean(text))
     .join("\n");
 }
 
-/** Image attachments on the latest message only (skipped queue is text-only). */
-export async function collectTurnImageAttachments(
+/** Collect images from a single message (batch path uses collectTurnImages). */
+export function collectTurnImageAttachments(
   message: ConversationMessage
 ): Promise<readonly AgentRequestAttachment[]> {
-  const attachments = message.attachments ?? [];
+  return collectTurnImages([message]);
+}
+
+export async function collectTurnImages(
+  messages: readonly ConversationMessage[]
+): Promise<readonly AgentRequestAttachment[]> {
   const images: AgentRequestAttachment[] = [];
 
-  for (const attachment of attachments) {
-    if (!isImageAttachment(attachment)) {
-      continue;
-    }
+  for (const message of messages) {
+    const attachments = message.attachments ?? [];
+    for (const attachment of attachments) {
+      if (!isImageAttachment(attachment)) {
+        continue;
+      }
 
-    const bytes = await readAttachmentBytes(attachment);
-    if (!bytes || bytes.byteLength === 0) {
-      logWarn({
-        action: "attachment_empty",
-        scope: "telegram",
+      const bytes = await readAttachmentBytes(attachment);
+      if (!bytes || bytes.byteLength === 0) {
+        logWarn({
+          action: "attachment_empty",
+          scope: "telegram",
+        });
+        continue;
+      }
+
+      images.push({
+        dataBase64: bytesToBase64(bytes),
+        mediaType: imageMediaType(attachment),
+        ...(attachment.name?.trim()
+          ? { filename: attachment.name.trim() }
+          : {}),
       });
-      continue;
     }
-
-    images.push({
-      dataBase64: bytesToBase64(bytes),
-      mediaType: imageMediaType(attachment),
-      ...(attachment.name?.trim() ? { filename: attachment.name.trim() } : {}),
-    });
   }
 
   return images;
@@ -188,6 +265,7 @@ export function isImageAttachment(attachment: ConversationAttachment): boolean {
 }
 
 export async function replyToThread({
+  batchMessages,
   context,
   deliverTurn,
   env,
@@ -195,17 +273,19 @@ export async function replyToThread({
   subscribe,
   thread,
 }: {
-  readonly context?: MessageContext;
+  readonly batchMessages?: readonly ConversationMessage[];
+  readonly context?: ConversationContext;
   readonly deliverTurn: TurnDeliverer;
   readonly env: ConversationEnv;
   readonly message: ConversationMessage;
   readonly subscribe?: boolean;
   readonly thread: ConversationThread;
 }): Promise<void> {
-  const text = collectTurnText(message, context);
+  const messages = batchMessages ?? [...(context?.skipped ?? []), message];
+  const text = collectTurnTexts(messages);
   let attachments: readonly AgentRequestAttachment[] = [];
   try {
-    attachments = await collectTurnImageAttachments(message);
+    attachments = await collectTurnImages(messages);
   } catch (error) {
     logError(
       workerErrors.ATTACHMENT_FETCH_FAILED({ cause: normalizeError(error) }),
@@ -229,7 +309,7 @@ export async function replyToThread({
 
     await deliverTurn(thread.channelId, text, {
       attachments,
-      sessionScopeKey: telegramSessionScopeKey(message),
+      sessionScopeKey: telegramSessionScopeKeyFromMessages(messages),
     });
   } catch (error) {
     logError(
@@ -276,18 +356,37 @@ export async function requestAgentDelivery(
     }),
   });
 
-  if (!response?.ok) {
-    throw new Error(
-      `agent durable object failed: ${response?.status ?? "missing"}`
-    );
+  if (!response) {
+    throw new Error("agent durable object failed: missing");
   }
 
-  const payload = AgentDeliverySchema.parse(await response.json());
-  if (payload.delivered) {
-    return;
+  // 502 + body is used for missing send_message; parse body first.
+  let raw: unknown;
+  try {
+    raw = await response.json();
+  } catch {
+    throw new Error(`agent durable object failed: ${response.status}`);
   }
 
-  throw workerErrors.MISSING_SEND_MESSAGE();
+  const payload = AgentDeliverySchema.safeParse(raw);
+  if (payload.success) {
+    if (payload.data.delivered) {
+      return;
+    }
+    throw workerErrors.MISSING_SEND_MESSAGE();
+  }
+
+  if (!response.ok) {
+    throw new Error(`agent durable object failed: ${response.status}`);
+  }
+
+  throw new Error(
+    `agent durable object returned invalid delivery payload: ${response.status}`
+  );
+}
+
+function asConversationMessage(message: Message): ConversationMessage {
+  return message;
 }
 
 function telegramSessionScopeKey(
@@ -295,6 +394,18 @@ function telegramSessionScopeKey(
 ): string | undefined {
   const userId = message.author?.userId?.trim();
   return userId ? `telegram:user:${userId}` : undefined;
+}
+
+function telegramSessionScopeKeyFromMessages(
+  messages: readonly ConversationMessage[]
+): string | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const scope = telegramSessionScopeKey(messages[index] ?? {});
+    if (scope) {
+      return scope;
+    }
+  }
+  return;
 }
 
 export function handleTelegramWebhook(
@@ -312,10 +423,13 @@ export function handleTelegramWebhook(
   if (!bot) {
     throw new Error("Telegram bot cache was not initialized.");
   }
+  const waitUntil = (task: Promise<unknown>) => {
+    ctx.waitUntil(task);
+  };
   return correlationStore.run(correlationId, () =>
-    bot.bot.webhooks.telegram(request, {
-      waitUntil: (task) => ctx.waitUntil(task),
-    })
+    waitUntilStore.run(waitUntil, () =>
+      bot.bot.webhooks.telegram(request, { waitUntil })
+    )
   );
 }
 

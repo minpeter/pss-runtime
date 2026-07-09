@@ -6,10 +6,8 @@ import { handleTelegramWebhook } from "./telegram";
 import { handleTuiRpcRequest } from "./tui-rpc";
 import { ensureWorkerLogger, newCorrelationId } from "./worker-log";
 
-// Edge-first: static wasm modules for AVIF/WebP/HEIC must be installed before
-// any attachment staging path runs (Workers cannot fetch/compile wasm at runtime).
+// Edge-first: static wasm for AVIF/WebP/HEIC before any attachment staging.
 installCloudflareImageCodecs();
-ensureWorkerLogger();
 
 // biome-ignore lint/performance/noBarrelFile: Wrangler requires Durable Object classes to be exported from the worker entrypoint.
 export { AgentDurableObject } from "./agent-do";
@@ -18,6 +16,7 @@ export type { Env } from "./env";
 const TUI_RPC_PATHNAME = "/trpc";
 
 export default defineWorkerFetch<Env>(async (request, env, ctx, log) => {
+  ensureWorkerLogger({ version: env.CF_VERSION_METADATA?.id });
   const url = new URL(request.url);
   const correlationId = newCorrelationId();
   const handler =
