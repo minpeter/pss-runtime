@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { logError } from "../src/worker-log";
-import { forwardUpdates, isAbortError, sleepMs } from "./telegram";
+import { forwardUpdates, isAbortError, peakOffset, sleepMs } from "./telegram";
 
 vi.mock("../src/worker-log", () => ({
   logError: vi.fn(),
@@ -33,6 +33,12 @@ describe("telegram local relay", () => {
     abortError.name = "AbortError";
     expect(isAbortError(abortError)).toBe(true);
     expect(isAbortError(new TypeError("fetch failed"))).toBe(false);
+  });
+
+  it("computes optimistic peak offset for a batch", () => {
+    expect(peakOffset(0, [])).toBe(0);
+    expect(peakOffset(0, [{ update_id: 10 }, { update_id: 12 }])).toBe(13);
+    expect(peakOffset(5, [{ update_id: 7 }])).toBe(8);
   });
 
   it("sleepMs resolves early when aborted", async () => {

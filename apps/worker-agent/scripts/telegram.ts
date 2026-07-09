@@ -74,6 +74,50 @@ async function telegramApi(
   return payload.result;
 }
 
+/**
+ * Highest exclusive offset after accepting `updates` (max update_id + 1).
+ * Used for optimistic local ack so the next getUpdates is not blocked on
+ * worker latency (cold start / long turns).
+ */
+export function peakOffset(
+  offset: number,
+  updates: readonly { readonly update_id: number }[]
+): number {
+  if (updates.length === 0) {
+    return offset;
+  }
+  let maxId = offset > 0 ? offset - 1 : 0;
+  for (const update of updates) {
+    if (update.update_id > maxId) {
+      maxId = update.update_id;
+    }
+  }
+  return maxId + 1;
+}
+
+/** Best-effort wake of wrangler so the first real webhook is not ~800ms cold. */
+export async function warmLocalWorker(
+  webhookUrl: string,
+  signal?: AbortSignal
+): Promise<void> {
+  try {
+    await fetch(webhookUrl, {
+      method: "GET",
+      signal,
+    });
+  } catch (error) {
+    if (isAbortError(error) || signal?.aborted) {
+      return;
+    }
+    // GET may 404/405; connection success still warms the isolate.
+    logTagged(
+      "info",
+      "telegram-relay",
+      `warm probe finished (${error instanceof Error ? error.message : "ok"})`
+    );
+  }
+}
+
 export async function relay(): Promise<void> {
   const token = required("TELEGRAM_BOT_TOKEN");
   const secret = required("TELEGRAM_WEBHOOK_SECRET_TOKEN");
@@ -86,6 +130,8 @@ export async function relay(): Promise<void> {
 
   await telegramApi(token, "deleteWebhook", { drop_pending_updates: false });
   logTagged("info", "telegram-relay", `relay -> ${webhookUrl}`);
+  await warmLocalWorker(webhookUrl, abort.signal);
+  logTagged("info", "telegram-relay", "worker warm probe done");
 
   let offset = 0;
   while (!abort.signal.aborted) {
@@ -97,12 +143,35 @@ export async function relay(): Promise<void> {
         abort.signal
       )) as { readonly update_id: number }[];
 
-      offset = await forwardUpdates({
-        offset,
+      if (updates.length === 0) {
+        continue;
+      }
+
+      // Optimistic ack: do not wait for worker responses before the next poll.
+      // Otherwise a ~800ms cold webhook blocks getUpdates and the second half of
+      // a dual text+photo send arrives ~0.85s later (serial poll lag).
+      // Local-dev tradeoff: if forward fails after ack, Telegram will not resend.
+      const claimedFrom = offset;
+      const claimedThrough = peakOffset(offset, updates);
+      offset = claimedThrough;
+
+      void forwardUpdates({
+        offset: claimedFrom,
         secret,
         signal: abort.signal,
         updates,
         webhookUrl,
+      }).then((deliveredThrough) => {
+        if (deliveredThrough < claimedThrough) {
+          logError({
+            action: "webhook_forward_incomplete_after_ack",
+            scope: "telegram-relay",
+            claimedFrom,
+            claimedThrough,
+            deliveredThrough,
+            updateCount: updates.length,
+          });
+        }
       });
     } catch (error) {
       // Ctrl-C / process stop during long-poll — exit cleanly.
