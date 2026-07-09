@@ -4,6 +4,7 @@ import { fetchCloudflareDurableObject } from "@minpeter/pss-runtime/platform/clo
 import { Chat, type Message, type MessageContext, type Thread } from "chat";
 import { z } from "zod";
 
+import type { AgentRequestAttachment } from "./agent-do-request";
 import { type ChannelAddress, channelKey } from "./channel";
 import {
   durableObjectName,
@@ -16,6 +17,7 @@ const DEV_NOTICE = "🧪 DEVELOPMENT ENVIRONMENT";
 const FAILURE_REPLY =
   "처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
 const MISSING_SEND_MESSAGE_ERROR = "missing_send_message";
+const DEFAULT_IMAGE_MEDIA_TYPE = "image/jpeg";
 const AgentDeliverySchema = z.discriminatedUnion("delivered", [
   z.object({ delivered: z.literal(true) }).strict(),
   z
@@ -29,6 +31,7 @@ const AgentDeliverySchema = z.discriminatedUnion("delivered", [
 let cachedBot: CachedBot | undefined;
 
 interface TurnDeliveryOptions {
+  readonly attachments?: readonly AgentRequestAttachment[];
   readonly sessionScopeKey?: string;
 }
 
@@ -42,7 +45,16 @@ interface ConversationEnv {
   readonly ENVIRONMENT: Env["ENVIRONMENT"];
 }
 
+interface ConversationAttachment {
+  readonly data?: ArrayBuffer | Blob | Uint8Array;
+  readonly fetchData?: () => Promise<ArrayBuffer | Blob | Uint8Array>;
+  readonly mimeType?: string;
+  readonly name?: string;
+  readonly type: "audio" | "file" | "image" | "video";
+}
+
 interface ConversationMessage {
+  readonly attachments?: readonly ConversationAttachment[];
   readonly author?: {
     readonly userId?: string;
   };
@@ -126,6 +138,45 @@ export function collectTurnText(
     .join("\n");
 }
 
+/** Image attachments on the latest message only (skipped queue is text-only). */
+export async function collectTurnImageAttachments(
+  message: ConversationMessage
+): Promise<readonly AgentRequestAttachment[]> {
+  const attachments = message.attachments ?? [];
+  const images: AgentRequestAttachment[] = [];
+
+  for (const attachment of attachments) {
+    if (!isImageAttachment(attachment)) {
+      continue;
+    }
+
+    const bytes = await readAttachmentBytes(attachment);
+    if (!bytes || bytes.byteLength === 0) {
+      console.warn("telegram image attachment empty or unreadable");
+      continue;
+    }
+
+    images.push({
+      dataBase64: bytesToBase64(bytes),
+      mediaType: imageMediaType(attachment),
+      ...(attachment.name?.trim() ? { filename: attachment.name.trim() } : {}),
+    });
+  }
+
+  return images;
+}
+
+export function isImageAttachment(attachment: ConversationAttachment): boolean {
+  if (attachment.type === "image") {
+    return true;
+  }
+  if (attachment.type !== "file") {
+    return false;
+  }
+  const mime = attachment.mimeType?.trim().toLowerCase() ?? "";
+  return mime.startsWith("image/");
+}
+
 export async function replyToThread({
   context,
   deliverTurn,
@@ -142,7 +193,16 @@ export async function replyToThread({
   readonly thread: ConversationThread;
 }): Promise<void> {
   const text = collectTurnText(message, context);
-  if (!text) {
+  let attachments: readonly AgentRequestAttachment[] = [];
+  try {
+    attachments = await collectTurnImageAttachments(message);
+  } catch (error) {
+    console.error("telegram attachment fetch failed", normalizeError(error));
+    await thread.post(FAILURE_REPLY);
+    return;
+  }
+
+  if (!(text || attachments.length > 0)) {
     return;
   }
 
@@ -155,6 +215,7 @@ export async function replyToThread({
     }
 
     await deliverTurn(thread.channelId, text, {
+      attachments,
       sessionScopeKey: telegramSessionScopeKey(message),
     });
   } catch (error) {
@@ -178,12 +239,14 @@ export async function requestAgentDelivery(
 ): Promise<void> {
   const channel: ChannelAddress = { id: channelId, kind: "telegram" };
   const sessionScopeKey = options.sessionScopeKey?.trim();
+  const attachments = options.attachments ?? [];
   const response = await fetchCloudflareDurableObject({
     namespace: env.AGENT_DO,
     objectName: durableObjectName(channelKey(channel)),
     request: new Request("https://agent.internal/turn", {
       body: JSON.stringify({
         channel,
+        ...(attachments.length > 0 ? { attachments } : {}),
         ...(sessionScopeKey ? { sessionScopeKey } : {}),
         text,
       }),
@@ -245,4 +308,46 @@ function isSameBotConfig(left: BotConfig, right: BotConfig): boolean {
     left.secretToken === right.secretToken &&
     left.userName === right.userName
   );
+}
+
+function imageMediaType(attachment: ConversationAttachment): string {
+  const mime = attachment.mimeType?.trim();
+  if (mime) {
+    return mime;
+  }
+  return DEFAULT_IMAGE_MEDIA_TYPE;
+}
+
+async function readAttachmentBytes(
+  attachment: ConversationAttachment
+): Promise<Uint8Array | undefined> {
+  if (attachment.data !== undefined) {
+    return coerceBytes(attachment.data);
+  }
+  if (attachment.fetchData) {
+    return coerceBytes(await attachment.fetchData());
+  }
+  return;
+}
+
+async function coerceBytes(
+  value: ArrayBuffer | Blob | Uint8Array
+): Promise<Uint8Array> {
+  if (value instanceof Uint8Array) {
+    return value;
+  }
+  if (value instanceof ArrayBuffer) {
+    return new Uint8Array(value);
+  }
+  return new Uint8Array(await value.arrayBuffer());
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x80_00;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.subarray(offset, offset + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
 }

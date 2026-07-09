@@ -16,6 +16,7 @@ import {
   createSendMessageToolOptions,
   type SendMessageToolSetup,
 } from "./agent-do-send-message";
+import { agentInputFromRequest, agentTurnIndexText } from "./agent-input";
 import {
   CHANNEL_DURABLE_OBJECT_THREAD_KEY,
   type ChannelRuntimeBinding,
@@ -111,7 +112,18 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
 
     const payload = await parseAgentRequest(request);
     if (!payload) {
-      return new Response("text and channel required", { status: 400 });
+      return new Response("text or attachments and channel required", {
+        status: 400,
+      });
+    }
+
+    if (payload.attachments.length > 0) {
+      console.info("worker-agent turn attachments", {
+        count: payload.attachments.length,
+        mediaTypes: payload.attachments.map(
+          (attachment) => attachment.mediaType
+        ),
+      });
     }
 
     const sendMessage = createRequestSendMessageToolSetup(
@@ -132,12 +144,12 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
     const assistantMessages: string[] = [];
     const delivery = await deliverToolOnlyTurn(
       agent.thread(binding.thread),
-      payload.text,
+      agentInputFromRequest(payload),
       { onAssistantOutput: (text) => assistantMessages.push(text) }
     );
     await this.#indexTurn(
       binding,
-      payload.text,
+      agentTurnIndexText(payload),
       sendMessage,
       assistantMessages,
       sessionScopeKey

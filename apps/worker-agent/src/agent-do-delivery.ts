@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentTurn } from "@minpeter/pss-runtime";
+import type { AgentEvent, AgentInput, AgentTurn } from "@minpeter/pss-runtime";
 
 import { collectTurnDelivery } from "./agent";
 import {
@@ -11,7 +11,7 @@ export const TOOL_ONLY_DELIVERY_RECOVERY_PROMPT =
   "Your previous user-triggered turn ended without a successful send_message tool result. The user still has not received your answer. Using the immediately preceding user request and any assistant text you already drafted, call send_message now. Do not answer in assistant text only.";
 
 export interface WorkerAgentThreadSender {
-  send(input: string): Promise<AgentTurn>;
+  send(input: AgentInput): Promise<AgentTurn>;
 }
 
 export interface DeliverToolOnlyTurnOptions {
@@ -51,7 +51,7 @@ export function withCapturedMessages(
 
 export async function deliverToolOnlyTurn(
   thread: WorkerAgentThreadSender,
-  text: string,
+  input: AgentInput,
   options: DeliverToolOnlyTurnOptions = {}
 ): Promise<WorkerAgentDeliveryResponse> {
   const collectOptions = {
@@ -60,7 +60,7 @@ export async function deliverToolOnlyTurn(
       : {}),
     ...(options.onEvent ? { onEvent: options.onEvent } : {}),
   };
-  const firstRun = await thread.send(text);
+  const firstRun = await thread.send(input);
   const firstDelivery = await collectTurnDelivery(firstRun, collectOptions);
   if (firstDelivery.deliveredByTool) {
     return { delivered: true };

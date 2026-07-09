@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Env } from "./env";
 import {
+  collectTurnImageAttachments,
   collectTurnText,
   handleTelegramWebhook,
+  isImageAttachment,
   replyToThread,
 } from "./telegram";
 
@@ -84,6 +86,45 @@ describe("telegram conversation handling", () => {
     ).toBe("first\nsecond\nlatest");
   });
 
+  it("treats telegram photos and image documents as image attachments", () => {
+    expect(isImageAttachment({ type: "image" })).toBe(true);
+    expect(isImageAttachment({ mimeType: "image/png", type: "file" })).toBe(
+      true
+    );
+    expect(
+      isImageAttachment({ mimeType: "application/pdf", type: "file" })
+    ).toBe(false);
+    expect(isImageAttachment({ type: "video" })).toBe(false);
+  });
+
+  it("materializes image attachments as base64 payloads", async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    await expect(
+      collectTurnImageAttachments({
+        attachments: [
+          {
+            fetchData: () => Promise.resolve(bytes),
+            mimeType: "image/png",
+            name: "shot.png",
+            type: "image",
+          },
+          {
+            data: new Uint8Array([9]),
+            mimeType: "application/pdf",
+            type: "file",
+          },
+        ],
+        text: "caption",
+      })
+    ).resolves.toEqual([
+      {
+        dataBase64: btoa(String.fromCharCode(1, 2, 3, 4)),
+        filename: "shot.png",
+        mediaType: "image/png",
+      },
+    ]);
+  });
+
   it("subscribes mention threads and posts development notice before replies", async () => {
     const posts: string[] = [];
     const scopes: Array<string | undefined> = [];
@@ -111,6 +152,69 @@ describe("telegram conversation handling", () => {
     expect(subscribe).toHaveBeenCalledOnce();
     expect(posts).toEqual(["🧪 DEVELOPMENT ENVIRONMENT", "channel-1:hello"]);
     expect(scopes).toEqual(["telegram:user:user-1"]);
+  });
+
+  it("delivers image-only messages with default jpeg media type", async () => {
+    const delivered: Array<{
+      attachments?: readonly { mediaType: string; dataBase64: string }[];
+      text: string;
+    }> = [];
+
+    await replyToThread({
+      env,
+      deliverTurn: (_channelId, text, options) => {
+        delivered.push({
+          text,
+          ...(options?.attachments
+            ? { attachments: [...options.attachments] }
+            : {}),
+        });
+        return resolved;
+      },
+      message: {
+        attachments: [
+          {
+            data: new Uint8Array([10, 20]),
+            type: "image",
+          },
+        ],
+        text: "",
+      },
+      thread: {
+        channelId: "channel-1",
+        post: () => resolved,
+        subscribe: () => resolved,
+      },
+    });
+
+    expect(delivered).toEqual([
+      {
+        attachments: [
+          {
+            dataBase64: btoa(String.fromCharCode(10, 20)),
+            mediaType: "image/jpeg",
+          },
+        ],
+        text: "",
+      },
+    ]);
+  });
+
+  it("ignores empty messages with no text and no images", async () => {
+    const deliverTurn = vi.fn();
+
+    await replyToThread({
+      env,
+      deliverTurn,
+      message: { text: "" },
+      thread: {
+        channelId: "channel-1",
+        post: () => resolved,
+        subscribe: () => resolved,
+      },
+    });
+
+    expect(deliverTurn).not.toHaveBeenCalled();
   });
 
   it("does not post an assistant-output fallback after agent delivery", async () => {

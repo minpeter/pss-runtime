@@ -49,8 +49,33 @@ describe("AgentDurableObject request parsing", () => {
         })
       )
     ).resolves.toEqual({
+      attachments: [],
       channel: { id: "chat-1", kind: "telegram" },
       text: "hello",
+    });
+  });
+
+  it("accepts image-only payloads", async () => {
+    await expect(
+      parseAgentRequest(
+        new Request("https://agent.internal/turn", {
+          body: JSON.stringify({
+            attachments: [
+              {
+                dataBase64: "AAAA",
+                mediaType: "image/jpeg",
+              },
+            ],
+            channel: { id: "chat-1", kind: "telegram" },
+            text: "",
+          }),
+          method: "POST",
+        })
+      )
+    ).resolves.toEqual({
+      attachments: [{ dataBase64: "AAAA", mediaType: "image/jpeg" }],
+      channel: { id: "chat-1", kind: "telegram" },
+      text: "",
     });
   });
 
@@ -176,10 +201,10 @@ describe("tool-only turn delivery", () => {
 });
 
 function threadWithTurns(turns: readonly AgentTurn[]): {
-  readonly inputs: string[];
+  readonly inputs: unknown[];
   readonly thread: WorkerAgentThreadSender;
 } {
-  const inputs: string[] = [];
+  const inputs: unknown[] = [];
   let nextTurnIndex = 0;
   return {
     inputs,
