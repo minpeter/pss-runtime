@@ -201,12 +201,26 @@ function withDiagnostics(
   options: { readonly log?: boolean } = {}
 ): PreparedAttachmentBytes {
   if (options.log !== false) {
-    // Single multi-line string so local terminals (and CF) show a tree, not
-    // `console.info(msg, object)` object dumps. Runtime stays free of evlog.
-    console.info(formatImagePrepareLog(diagnostics));
+    // Prefer process.stdout.write (same channel as evlog pretty flush) so
+    // `wrangler dev` prefixes lines with `stdout:` consistently. console.info
+    // multi-line blocks often appear without that prefix.
+    emitRuntimeLogLine(formatImagePrepareLog(diagnostics));
   }
   imagePrepareDiagnosticsListener?.(diagnostics);
   return { ...prepared, diagnostics };
+}
+
+/** Match evlog's pretty flush path for local wrangler log labeling. */
+export function emitRuntimeLogLine(message: string): void {
+  const text = message.endsWith("\n") ? message : `${message}\n`;
+  if (
+    typeof process !== "undefined" &&
+    typeof process.stdout?.write === "function"
+  ) {
+    process.stdout.write(text);
+    return;
+  }
+  console.info(text);
 }
 
 function formatImagePrepareLog(diagnostics: ImagePrepareDiagnostics): string {

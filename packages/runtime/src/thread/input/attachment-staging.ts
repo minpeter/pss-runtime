@@ -1,6 +1,9 @@
 import type { AgentEvent, RuntimeInput } from "../protocol/events";
 import { base64ToBytes } from "./attachment-base64";
-import { prepareAttachmentBytesForStorage } from "./attachment-image-compress";
+import {
+  emitRuntimeLogLine,
+  prepareAttachmentBytesForStorage,
+} from "./attachment-image-compress";
 import {
   decodeRuntimeAttachmentData,
   encodeRuntimeAttachmentData,
@@ -228,14 +231,14 @@ async function stageFilePart(
         `mediaType: ${part.mediaType}`,
         ...(part.filename ? [`filename: ${part.filename}`] : []),
       ];
-      console.warn(
-        `pss-runtime image-omit\n${omitRows
-          .map((row, index) => {
-            const prefix = index === omitRows.length - 1 ? "└─" : "├─";
-            return `  ${prefix} ${row}`;
-          })
-          .join("\n")}`
-      );
+      const body = omitRows
+        .map((row, index) => {
+          const prefix = index === omitRows.length - 1 ? "└─" : "├─";
+          return `  ${prefix} ${row}`;
+        })
+        .join("\n");
+      // Same stdout channel as image-prepare / evlog pretty.
+      emitRuntimeLogLine(`pss-runtime image-omit\n${body}`);
       return imageLimitOmittedTextPart(part.filename, error);
     }
     throw error;
