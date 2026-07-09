@@ -8,18 +8,20 @@
  * - Telegram + chat-sdk often deliver one user-facing "send" as several
  *   webhook updates (e.g. text, then a photo). Without reassembly the agent
  *   would see multiple user messages for a single human action.
- * - The quiet timer resets on every enqueue so a late photo still joins the
+ * - The quiet window resets on every enqueue so a late photo still joins the
  *   same forward batch (chat-sdk's own burst wait only runs once).
  *
  * What this is not:
  * - Not agent turn queueing.
  * - Not idle→send / running→steer policy (that is Layer 2 on the DO).
  *
- * After flush, one reassembled batch is handed to the agent immediately.
- * Concurrent flushes are allowed so a later batch can mid-turn steer while
- * an earlier agent turn is still running (Layer 2 decides send vs steer).
- *
- * waitUntil keeps the isolate alive through quiet wait + in-flight flushes.
+ * Workers / waitUntil:
+ * - Each enqueue registers **its own** work promise via `waitUntil`, created
+ *   in that request's context: quiet delay → maybe flush.
+ * - A generation counter supersedes older quiet waits without resolving a
+ *   Promise that was created in another request (avoids cross-request
+ *   promise resolution warnings / hung continuations).
+ * - Concurrent flushes are allowed so a later batch can mid-turn steer.
  */
 
 export interface CoalesceMessage {
@@ -45,39 +47,35 @@ export interface CoalesceBatch<TMessage extends CoalesceMessage> {
 export type WaitUntil = (task: Promise<unknown>) => void;
 
 export interface MessageCoalescerOptions<TMessage extends CoalesceMessage> {
+  /** Delay helper for tests (fake timers). Defaults to setTimeout. */
+  readonly delay?: (ms: number) => Promise<void>;
   readonly onFlush: (
     key: string,
     batch: CoalesceBatch<TMessage>
   ) => Promise<void>;
-  /** Called when flush fails (after onFlush throws). Lifetime still settles. */
+  /** Called when flush fails (after onFlush throws). */
   readonly onFlushError?: (
     key: string,
     error: unknown,
     batch: CoalesceBatch<TMessage>
   ) => void;
   readonly quietMs: number;
-  readonly schedule?: (
-    callback: () => void,
-    ms: number
-  ) => { readonly clear: () => void };
 }
 
 interface CollectingBatch<TMessage extends CoalesceMessage> {
   correlationId: string | undefined;
   items: CoalescePushItem<TMessage>[];
-  timer: { clear: () => void } | undefined;
 }
 
 interface ChannelState<TMessage extends CoalesceMessage> {
   collecting: CollectingBatch<TMessage> | undefined;
+  /**
+   * Bumped on every enqueue. Quiet work only flushes when it still owns the
+   * latest generation (created in the same request that called waitUntil).
+   */
+  generation: number;
   /** Number of onFlush calls currently in flight for this channel. */
   inFlight: number;
-  /**
-   * Lifetime of the current chain (collect quiet + flush). Extended while
-   * work remains so waitUntil keeps the isolate alive.
-   */
-  lifetime: Promise<void> | undefined;
-  resolveLifetime: (() => void) | undefined;
 }
 
 export class MissingWaitUntilError extends Error {
@@ -87,16 +85,10 @@ export class MissingWaitUntilError extends Error {
   }
 }
 
-function defaultSchedule(
-  callback: () => void,
-  ms: number
-): { clear: () => void } {
-  const handle = setTimeout(callback, ms);
-  return {
-    clear: () => {
-      clearTimeout(handle);
-    },
-  };
+function defaultDelay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function toBatch<TMessage extends CoalesceMessage>(
@@ -119,48 +111,28 @@ export function createMessageCoalescer<TMessage extends CoalesceMessage>(
   options: MessageCoalescerOptions<TMessage>
 ) {
   const channels = new Map<string, ChannelState<TMessage>>();
-  const schedule = options.schedule ?? defaultSchedule;
+  const delay = options.delay ?? defaultDelay;
 
   const ensureChannel = (key: string): ChannelState<TMessage> => {
     let state = channels.get(key);
     if (!state) {
       state = {
         collecting: undefined,
+        generation: 0,
         inFlight: 0,
-        lifetime: undefined,
-        resolveLifetime: undefined,
       };
       channels.set(key, state);
     }
     return state;
   };
 
-  const ensureLifetime = (
-    state: ChannelState<TMessage>,
-    waitUntil: WaitUntil
-  ): void => {
-    if (!state.lifetime) {
-      let resolveLifetime = () => {
-        return;
-      };
-      state.lifetime = new Promise<void>((resolve) => {
-        resolveLifetime = resolve;
-      });
-      state.resolveLifetime = resolveLifetime;
-    }
-    waitUntil(state.lifetime);
-  };
-
-  const maybeEndLifetime = (
+  const maybeDeleteChannel = (
     key: string,
     state: ChannelState<TMessage>
   ): void => {
     if (state.inFlight > 0 || state.collecting) {
       return;
     }
-    state.resolveLifetime?.();
-    state.lifetime = undefined;
-    state.resolveLifetime = undefined;
     channels.delete(key);
   };
 
@@ -171,11 +143,10 @@ export function createMessageCoalescer<TMessage extends CoalesceMessage>(
     }
 
     const collecting = state.collecting;
-    collecting.timer?.clear();
     state.collecting = undefined;
 
     if (collecting.items.length === 0) {
-      maybeEndLifetime(key, state);
+      maybeDeleteChannel(key, state);
       return;
     }
 
@@ -187,27 +158,33 @@ export function createMessageCoalescer<TMessage extends CoalesceMessage>(
       options.onFlushError?.(key, error, batch);
     } finally {
       state.inFlight -= 1;
-      maybeEndLifetime(key, state);
+      maybeDeleteChannel(key, state);
     }
   };
 
-  const armTimer = (key: string, state: ChannelState<TMessage>): void => {
-    const collecting = state.collecting;
-    if (!collecting) {
+  /**
+   * Work owned by the enqueueing request: wait quietMs, then flush only if
+   * this generation is still current. Registered via that request's waitUntil.
+   */
+  const runQuietThenMaybeFlush = async (
+    key: string,
+    generation: number
+  ): Promise<void> => {
+    await delay(options.quietMs);
+    const state = channels.get(key);
+    if (!state || state.generation !== generation) {
+      // Superseded by a later fragment in another request — do not flush here.
       return;
     }
-    collecting.timer?.clear();
-    collecting.timer = schedule(() => {
-      flushCollecting(key).catch(() => {
-        // onFlushError already invoked; lifetime settled in finally.
-      });
-    }, options.quietMs);
+    await flushCollecting(key);
   };
 
   return {
     /**
      * Enqueue a Telegram fragment. Returns immediately.
-     * `waitUntil` is required so the isolate stays alive through quiet wait + flush.
+     * `waitUntil` must register the **returned work promise from this call**
+     * (same request context) so quiet + flush stay alive without sharing a
+     * deferred Promise across requests.
      */
     enqueue(
       key: string,
@@ -219,32 +196,28 @@ export function createMessageCoalescer<TMessage extends CoalesceMessage>(
       }
 
       const state = ensureChannel(key);
-      ensureLifetime(state, runtime.waitUntil);
-
       const correlation = item.correlationId?.trim();
 
       if (!state.collecting) {
         state.collecting = {
           correlationId: correlation,
           items: [],
-          timer: undefined,
         };
       } else if (!state.collecting.correlationId && correlation) {
         state.collecting.correlationId = correlation;
       }
 
       state.collecting.items.push(item);
-      armTimer(key, state);
+      state.generation += 1;
+      const generation = state.generation;
+
+      // Create work in *this* request context; never resolve foreign promises.
+      runtime.waitUntil(runQuietThenMaybeFlush(key, generation));
     },
 
     /** Test helper: messages waiting in the quiet window. */
     pendingCount(key: string): number {
       return channels.get(key)?.collecting?.items.length ?? 0;
-    },
-
-    /** Test helper: await current chain lifetime (all work done). */
-    lifetime(key: string): Promise<void> | undefined {
-      return channels.get(key)?.lifetime;
     },
 
     /** Test helper: first correlation id of the collecting batch. */
@@ -255,6 +228,11 @@ export function createMessageCoalescer<TMessage extends CoalesceMessage>(
     /** Test helper: number of in-flight flushes. */
     inFlightCount(key: string): number {
       return channels.get(key)?.inFlight ?? 0;
+    },
+
+    /** Test helper: current quiet generation for a channel. */
+    generation(key: string): number {
+      return channels.get(key)?.generation ?? 0;
     },
   };
 }

@@ -5,9 +5,20 @@ import {
   MissingWaitUntilError,
 } from "./telegram-message-coalesce";
 
-const noopWaitUntil = (_task: Promise<unknown>) => {
-  return;
-};
+function trackWaitUntil(): {
+  readonly tasks: Promise<unknown>[];
+  readonly waitUntil: (task: Promise<unknown>) => void;
+  readonly all: () => Promise<unknown[]>;
+} {
+  const tasks: Promise<unknown>[] = [];
+  return {
+    tasks,
+    waitUntil: (task) => {
+      tasks.push(task);
+    },
+    all: () => Promise.all(tasks),
+  };
+}
 
 describe("createMessageCoalescer", () => {
   afterEach(() => {
@@ -21,9 +32,13 @@ describe("createMessageCoalescer", () => {
       texts: string[];
       correlationId?: string;
     }> = [];
-    const waitUntilTasks: Promise<unknown>[] = [];
+    const tracked = trackWaitUntil();
     const coalescer = createMessageCoalescer({
       quietMs: 500,
+      delay: (ms) =>
+        new Promise((resolve) => {
+          setTimeout(resolve, ms);
+        }),
       onFlush: (key, batch) => {
         flushes.push({
           key,
@@ -39,7 +54,7 @@ describe("createMessageCoalescer", () => {
     coalescer.enqueue(
       "thread-1",
       { correlationId: "corr-a", message: { text: "hello" } },
-      { waitUntil: (task) => waitUntilTasks.push(task) }
+      { waitUntil: tracked.waitUntil }
     );
     await vi.advanceTimersByTimeAsync(400);
     coalescer.enqueue(
@@ -49,16 +64,16 @@ describe("createMessageCoalescer", () => {
         message: { text: "photo caption" },
         subscribe: true,
       },
-      { waitUntil: (task) => waitUntilTasks.push(task) }
+      { waitUntil: tracked.waitUntil }
     );
     expect(flushes).toEqual([]);
     expect(coalescer.pendingCount("thread-1")).toBe(2);
     expect(coalescer.correlationId("thread-1")).toBe("corr-a");
+    expect(coalescer.generation("thread-1")).toBe(2);
+    expect(tracked.tasks).toHaveLength(2);
 
-    const lifetime = coalescer.lifetime("thread-1");
     await vi.advanceTimersByTimeAsync(500);
-    await lifetime;
-    await Promise.all(waitUntilTasks);
+    await tracked.all();
 
     expect(flushes).toEqual([
       {
@@ -75,8 +90,13 @@ describe("createMessageCoalescer", () => {
     const flushes: string[][] = [];
     let releaseFirstFlush: (() => void) | undefined;
     let blockNextFlush = true;
+    const tracked = trackWaitUntil();
     const coalescer = createMessageCoalescer({
       quietMs: 500,
+      delay: (ms) =>
+        new Promise((resolve) => {
+          setTimeout(resolve, ms);
+        }),
       onFlush: (_key, batch) => {
         flushes.push(batch.messages.map((message) => message.text ?? ""));
         if (blockNextFlush) {
@@ -92,9 +112,12 @@ describe("createMessageCoalescer", () => {
     coalescer.enqueue(
       "thread-1",
       { message: { text: "first" } },
-      { waitUntil: noopWaitUntil }
+      { waitUntil: tracked.waitUntil }
     );
     await vi.advanceTimersByTimeAsync(500);
+    // Let first quiet work reach onFlush.
+    await Promise.resolve();
+    await Promise.resolve();
     expect(coalescer.inFlightCount("thread-1")).toBe(1);
     expect(flushes).toEqual([["first"]]);
 
@@ -102,19 +125,20 @@ describe("createMessageCoalescer", () => {
     coalescer.enqueue(
       "thread-1",
       { message: { text: "second" } },
-      { waitUntil: noopWaitUntil }
+      { waitUntil: tracked.waitUntil }
     );
     expect(coalescer.pendingCount("thread-1")).toBe(1);
     expect(flushes).toEqual([["first"]]);
 
-    const lifetime = coalescer.lifetime("thread-1");
     await vi.advanceTimersByTimeAsync(500);
+    await Promise.resolve();
+    await Promise.resolve();
     // Concurrent flush starts for mid-turn steer path.
     expect(flushes).toEqual([["first"], ["second"]]);
     expect(coalescer.inFlightCount("thread-1")).toBe(1);
 
     releaseFirstFlush?.();
-    await lifetime;
+    await tracked.all();
 
     expect(coalescer.inFlightCount("thread-1")).toBe(0);
     expect(coalescer.pendingCount("thread-1")).toBe(0);
@@ -123,8 +147,13 @@ describe("createMessageCoalescer", () => {
   it("requires waitUntil and reports flush failures", async () => {
     vi.useFakeTimers();
     const flushErrors: unknown[] = [];
+    const tracked = trackWaitUntil();
     const coalescer = createMessageCoalescer({
       quietMs: 500,
+      delay: (ms) =>
+        new Promise((resolve) => {
+          setTimeout(resolve, ms);
+        }),
       onFlush: () => Promise.reject(new Error("flush boom")),
       onFlushError: (_key, error) => {
         flushErrors.push(error);
@@ -138,11 +167,10 @@ describe("createMessageCoalescer", () => {
     coalescer.enqueue(
       "thread-1",
       { message: { text: "a" } },
-      { waitUntil: noopWaitUntil }
+      { waitUntil: tracked.waitUntil }
     );
-    const lifetime = coalescer.lifetime("thread-1");
     await vi.advanceTimersByTimeAsync(500);
-    await lifetime;
+    await tracked.all();
     expect(flushErrors).toHaveLength(1);
     expect(flushErrors[0]).toEqual(expect.any(Error));
   });
@@ -150,8 +178,13 @@ describe("createMessageCoalescer", () => {
   it("starts a new batch after the previous flush fully completes", async () => {
     vi.useFakeTimers();
     const flushes: string[][] = [];
+    const firstTracked = trackWaitUntil();
     const coalescer = createMessageCoalescer({
       quietMs: 500,
+      delay: (ms) =>
+        new Promise((resolve) => {
+          setTimeout(resolve, ms);
+        }),
       onFlush: (_key, batch) => {
         flushes.push(batch.messages.map((message) => message.text ?? ""));
         return Promise.resolve();
@@ -161,21 +194,54 @@ describe("createMessageCoalescer", () => {
     coalescer.enqueue(
       "thread-1",
       { message: { text: "a" } },
-      { waitUntil: noopWaitUntil }
+      { waitUntil: firstTracked.waitUntil }
     );
-    const firstLifetime = coalescer.lifetime("thread-1");
     await vi.advanceTimersByTimeAsync(500);
-    await firstLifetime;
+    await firstTracked.all();
     expect(flushes).toEqual([["a"]]);
 
+    const secondTracked = trackWaitUntil();
     coalescer.enqueue(
       "thread-1",
       { message: { text: "b" } },
-      { waitUntil: noopWaitUntil }
+      { waitUntil: secondTracked.waitUntil }
     );
-    const secondLifetime = coalescer.lifetime("thread-1");
     await vi.advanceTimersByTimeAsync(500);
-    await secondLifetime;
+    await secondTracked.all();
     expect(flushes).toEqual([["a"], ["b"]]);
+  });
+
+  it("settles superseded quiet work without flushing twice", async () => {
+    vi.useFakeTimers();
+    const flushes: string[][] = [];
+    const tracked = trackWaitUntil();
+    const coalescer = createMessageCoalescer({
+      quietMs: 500,
+      delay: (ms) =>
+        new Promise((resolve) => {
+          setTimeout(resolve, ms);
+        }),
+      onFlush: (_key, batch) => {
+        flushes.push(batch.messages.map((message) => message.text ?? ""));
+        return Promise.resolve();
+      },
+    });
+
+    coalescer.enqueue(
+      "thread-1",
+      { message: { text: "a" } },
+      { waitUntil: tracked.waitUntil }
+    );
+    coalescer.enqueue(
+      "thread-1",
+      { message: { text: "b" } },
+      { waitUntil: tracked.waitUntil }
+    );
+    expect(tracked.tasks).toHaveLength(2);
+
+    await vi.advanceTimersByTimeAsync(500);
+    await tracked.all();
+
+    expect(flushes).toEqual([["a", "b"]]);
   });
 });
