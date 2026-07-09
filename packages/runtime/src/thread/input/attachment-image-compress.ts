@@ -139,7 +139,8 @@ export async function prepareAttachmentBytesForStorage({
   return encodeJpegUnderBudget(decoded, maxImageBytes);
 }
 
-function assertDecodedImageWithinLimits(decoded: {
+/** Exported for unit tests of the post-decode pixel DoS gate. */
+export function assertDecodedImageWithinLimits(decoded: {
   readonly height: number;
   readonly width: number;
 }): void {

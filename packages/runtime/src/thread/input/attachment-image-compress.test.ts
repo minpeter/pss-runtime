@@ -6,8 +6,10 @@ import jpeg from "jpeg-js";
 import { describe, expect, it } from "vitest";
 import { MemoryAttachmentStore } from "../../platform/memory";
 import {
+  assertDecodedImageWithinLimits,
   DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,
   isStoredImageMediaType,
+  MAX_IMAGE_DECODED_PIXELS,
   MAX_IMAGE_INPUT_BYTES,
   prepareAttachmentBytesForStorage,
 } from "./attachment-image-compress";
@@ -192,6 +194,16 @@ describe("prepareAttachmentBytesForStorage", () => {
         mediaType: "image/jpeg",
       })
     ).rejects.toThrow(/max input size/i);
+  });
+
+  it("rejects decoded frames above MAX_IMAGE_DECODED_PIXELS", () => {
+    const side = Math.ceil(Math.sqrt(MAX_IMAGE_DECODED_PIXELS)) + 1;
+    expect(() =>
+      assertDecodedImageWithinLimits({ width: side, height: side })
+    ).toThrow(/max decoded pixel count/i);
+    expect(() =>
+      assertDecodedImageWithinLimits({ width: 100, height: 100 })
+    ).not.toThrow();
   });
 
   it("strips MIME parameters for JPEG passthrough", async () => {
