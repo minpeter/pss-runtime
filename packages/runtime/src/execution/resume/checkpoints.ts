@@ -1,7 +1,7 @@
 import type { RuntimeToolExecutionCheckpointMetadata } from "../../llm/llm";
 import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution";
 import { createCheckpointId } from "../host/checkpoint-ids";
-import type { Checkpoint, CheckpointPhase, AgentHost } from "../host/types";
+import type { AgentHost, Checkpoint, CheckpointPhase } from "../host/types";
 import type { ResumeRunState } from "./types";
 
 const maxCheckpointWriteAttempts = 5;

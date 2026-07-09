@@ -1,5 +1,3 @@
-import { RuntimeAttachmentStagingError } from "./attachment-types";
-
 const HEIC_BRANDS = new Set([
   "heic",
   "heix",
@@ -125,8 +123,8 @@ export function looksLikeCompleteJpeg(bytes: Uint8Array): boolean {
   return (
     looksLikeJpeg(bytes) &&
     bytes.length >= 4 &&
-    bytes[bytes.length - 2] === 0xff &&
-    bytes[bytes.length - 1] === 0xd9
+    bytes.at(-2) === 0xff &&
+    bytes.at(-1) === 0xd9
   );
 }
 
@@ -180,7 +178,9 @@ export function looksLikeWebp(bytes: Uint8Array): boolean {
 
 export function looksLikeHeic(bytes: Uint8Array): boolean {
   // Prefer AVIF when both brand families appear (common with `mif1` + `avif`).
-  return isIsoBmffBrand(bytes, HEIC_BRANDS) && !isIsoBmffBrand(bytes, AVIF_BRANDS);
+  return (
+    isIsoBmffBrand(bytes, HEIC_BRANDS) && !isIsoBmffBrand(bytes, AVIF_BRANDS)
+  );
 }
 
 export function looksLikeAvif(bytes: Uint8Array): boolean {
@@ -209,7 +209,11 @@ export function isIsoBmffBrand(
   if (brands.has(major)) {
     return true;
   }
-  for (let offset = 16; offset + 4 <= bytes.length && offset < 64; offset += 4) {
+  for (
+    let offset = 16;
+    offset + 4 <= bytes.length && offset < 64;
+    offset += 4
+  ) {
     if (brands.has(fourCc(bytes, offset))) {
       return true;
     }
@@ -227,4 +231,3 @@ export function fourCc(bytes: Uint8Array, offset: number): string {
     .replaceAll("\0", " ")
     .trim();
 }
-

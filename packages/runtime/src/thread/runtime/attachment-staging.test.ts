@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
 import { encode as encodePng } from "fast-png";
+import { beforeEach, describe, expect, it } from "vitest";
 import { MemoryAttachmentStore } from "../../platform/memory";
+import { hostWithThreads } from "../../testing/host-with-threads";
 import {
   collectRun,
   fakeModel,
@@ -9,7 +10,6 @@ import {
 } from "../../testing/llm-test-utils";
 import { assistantMessage } from "../../testing/test-fixtures";
 import { SpyStore } from "../handle/test-support";
-import { hostWithThreads } from "../../testing/host-with-threads";
 import {
   encodeRuntimeAttachmentData,
   isRuntimeAttachmentData,
@@ -76,7 +76,9 @@ describe("runtime attachment staging", () => {
     const committedJson = JSON.stringify(committedState);
     expect(committedJson).toContain("pss-attachment:");
     // Raw pixel/png payload must not be embedded in thread JSON.
-    expect(committedJson).not.toContain(Buffer.from(imageBytes).toString("base64"));
+    expect(committedJson).not.toContain(
+      Buffer.from(imageBytes).toString("base64")
+    );
 
     const committedPart = filePartFromStoredState(committedState);
     expect(isRuntimeAttachmentData(committedPart.data)).toBe(true);

@@ -2,15 +2,15 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { solidTestPng, solidTestPngBase64 } from "../../testing/valid-image-fixture";
 import { Agent } from "../../agent/core/agent";
 import { FileAttachmentStore, FileThreadStore } from "../../platform/file";
+import { hostWithThreads } from "../../testing/host-with-threads";
 import {
   createMockLanguageModelV4,
   mockLanguageModelV4Text,
 } from "../../testing/mock-language-model-v4-test-utils";
+import { solidTestPngBase64 } from "../../testing/valid-image-fixture";
 import { collect } from "./test-support";
-import { hostWithThreads } from "../../testing/host-with-threads";
 
 describe("Agent thread persistence attachments", () => {
   it("file thread store preserves image file parts across reload", async () => {

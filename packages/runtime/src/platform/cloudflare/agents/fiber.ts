@@ -1,5 +1,5 @@
-import { drainAgentTurnWithBudget } from "../turn-drain";
 import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
+import { drainAgentTurnWithBudget } from "../turn-drain";
 import { cloudflareAgentsDrainOptionsForPayload } from "./drain-options";
 import {
   type CloudflareAgentsFiberPayload,

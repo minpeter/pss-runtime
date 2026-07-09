@@ -1,6 +1,6 @@
-import { DurableObject } from "cloudflare:workers";
-import { Agent as CloudflareAgent } from "agents";
+import type { DurableObject } from "cloudflare:workers";
 import type { AgentEvent, AgentTurn } from "@minpeter/pss-runtime";
+import { Agent as CloudflareAgent } from "agents";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { AgentDurableObject } from "./agent-do";
 import {

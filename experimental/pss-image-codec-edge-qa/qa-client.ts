@@ -33,28 +33,28 @@ interface NormalizeResponse {
   readonly ok: boolean;
 }
 
-type ExpectOk = {
-  readonly kind: "ok";
-  readonly name: string;
-  readonly mediaType: string;
+interface ExpectOk {
   readonly bytes: Uint8Array;
-  readonly maxImageBytes?: number;
-  readonly expectMedia: string;
-  readonly expectMagic: "jpeg" | "png" | "unknown";
-  /** Skip ≤1MB check (small passthrough / under-budget alpha / non-image). */
-  readonly skipSizeCap?: boolean;
   /** When true, output bytes must equal input (non-image passthrough). */
   readonly expectByteIdentity?: boolean;
-};
-
-type ExpectFail = {
-  readonly kind: "fail";
-  readonly name: string;
-  readonly mediaType: string;
-  readonly bytes: Uint8Array;
+  readonly expectMagic: "jpeg" | "png" | "unknown";
+  readonly expectMedia: string;
+  readonly kind: "ok";
   readonly maxImageBytes?: number;
+  readonly mediaType: string;
+  readonly name: string;
+  /** Skip ≤1MB check (small passthrough / under-budget alpha / non-image). */
+  readonly skipSizeCap?: boolean;
+}
+
+interface ExpectFail {
+  readonly bytes: Uint8Array;
   readonly errorIncludes?: string;
-};
+  readonly kind: "fail";
+  readonly maxImageBytes?: number;
+  readonly mediaType: string;
+  readonly name: string;
+}
 
 type Case = ExpectOk | ExpectFail;
 
@@ -276,7 +276,11 @@ async function runFunctional(cases: Case[]): Promise<number> {
     );
     if (c.kind === "fail") {
       if (body.ok || status < 400) {
-        console.error(`FAIL ${c.name}: expected error, got ok`, body, `(${ms.toFixed(0)}ms)`);
+        console.error(
+          `FAIL ${c.name}: expected error, got ok`,
+          body,
+          `(${ms.toFixed(0)}ms)`
+        );
         failed += 1;
       } else {
         console.log(
@@ -294,16 +298,17 @@ async function runFunctional(cases: Case[]): Promise<number> {
     const mediaOk = body.mediaType === c.expectMedia;
     const magicOk = body.magic === c.expectMagic;
     const sizeOk =
-      c.skipSizeCap || (body.byteLength ?? Infinity) <= MAX_IMAGE_BYTES;
+      c.skipSizeCap ||
+      (body.byteLength ?? Number.POSITIVE_INFINITY) <= MAX_IMAGE_BYTES;
     const identityOk =
       !c.expectByteIdentity || body.byteLength === c.bytes.byteLength;
-    if (!mediaOk || !magicOk || !sizeOk || !identityOk) {
-      console.error(`FAIL ${c.name}:`, body, `(${ms.toFixed(0)}ms)`);
-      failed += 1;
-    } else {
+    if (mediaOk && magicOk && sizeOk && identityOk) {
       console.log(
         `OK   ${c.name}: ${body.mediaType} magic=${body.magic} in=${body.inputByteLength} out=${body.byteLength} (${ms.toFixed(0)}ms)`
       );
+    } else {
+      console.error(`FAIL ${c.name}:`, body, `(${ms.toFixed(0)}ms)`);
+      failed += 1;
     }
   }
   return failed;
@@ -311,9 +316,21 @@ async function runFunctional(cases: Case[]): Promise<number> {
 
 async function runConcurrent(): Promise<number> {
   const payloads = [
-    { name: "heic", mediaType: "image/heic", bytes: loadFixture("sample.heic") },
-    { name: "avif", mediaType: "image/avif", bytes: loadFixture("sample.avif") },
-    { name: "webp", mediaType: "image/webp", bytes: loadFixture("sample.webp") },
+    {
+      name: "heic",
+      mediaType: "image/heic",
+      bytes: loadFixture("sample.heic"),
+    },
+    {
+      name: "avif",
+      mediaType: "image/avif",
+      bytes: loadFixture("sample.avif"),
+    },
+    {
+      name: "webp",
+      mediaType: "image/webp",
+      bytes: loadFixture("sample.webp"),
+    },
     {
       name: "alpha-webp",
       mediaType: "image/webp",
@@ -337,14 +354,16 @@ async function runConcurrent(): Promise<number> {
   for (let i = 0; i < payloads.length; i += 1) {
     const p = payloads[i];
     const r = results[i];
-    if (!p || !r) {
+    if (!(p && r)) {
       failed += 1;
       continue;
     }
     if (!r.body.ok || r.body.mediaType !== expected[p.name]) {
       console.error(`FAIL concurrent-${p.name}:`, r.body);
       failed += 1;
-    } else if ((r.body.byteLength ?? Infinity) > MAX_IMAGE_BYTES) {
+    } else if (
+      (r.body.byteLength ?? Number.POSITIVE_INFINITY) > MAX_IMAGE_BYTES
+    ) {
       console.error(`FAIL concurrent-${p.name}: oversize`, r.body);
       failed += 1;
     } else {
@@ -353,8 +372,72 @@ async function runConcurrent(): Promise<number> {
       );
     }
   }
-  console.log(`     concurrent wall=${wall.toFixed(0)}ms for ${payloads.length} parallel`);
+  console.log(
+    `     concurrent wall=${wall.toFixed(0)}ms for ${payloads.length} parallel`
+  );
   return failed;
+}
+
+function benchHardCapMs(name: string): number {
+  if (name === "bench-oversize-jpeg") {
+    return 30_000;
+  }
+  if (name === "bench-avif" || name === "bench-heic") {
+    return 15_000;
+  }
+  return 5000;
+}
+
+async function warmupBenchTarget(
+  name: string,
+  mediaType: string,
+  bytes: Uint8Array
+): Promise<boolean> {
+  for (let w = 0; w < 2; w += 1) {
+    const warm = await normalize(mediaType, bytes);
+    if (!warm.body.ok) {
+      console.error(`FAIL ${name} warmup: ${warm.body.error}`);
+      return false;
+    }
+  }
+  return true;
+}
+
+async function sampleBenchTarget(
+  name: string,
+  mediaType: string,
+  bytes: Uint8Array
+): Promise<number[] | undefined> {
+  const samples: number[] = [];
+  for (let i = 0; i < BENCH_RUNS; i += 1) {
+    const r = await normalize(mediaType, bytes);
+    if (!r.body.ok) {
+      console.error(`FAIL ${name} run ${i}: ${r.body.error}`);
+      return;
+    }
+    if (
+      !name.includes("small") &&
+      (r.body.byteLength ?? Number.POSITIVE_INFINITY) > MAX_IMAGE_BYTES
+    ) {
+      console.error(`FAIL ${name} oversize out=${r.body.byteLength}`);
+      return;
+    }
+    samples.push(r.ms);
+  }
+  return samples;
+}
+
+function logBenchStats(name: string, samples: number[]): number {
+  samples.sort((a, b) => a - b);
+  const p50 = percentile(samples, 50);
+  const p95 = percentile(samples, 95);
+  const min = samples[0] ?? 0;
+  const max = samples.at(-1) ?? 0;
+  const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
+  console.log(
+    `BENCH ${name}: n=${samples.length} min=${min.toFixed(0)} p50=${p50.toFixed(0)} mean=${mean.toFixed(0)} p95=${p95.toFixed(0)} max=${max.toFixed(0)} ms`
+  );
+  return p95;
 }
 
 async function runBench(): Promise<number> {
@@ -387,66 +470,24 @@ async function runBench(): Promise<number> {
   ] as const;
 
   let failed = 0;
-  console.log(`\n--- Warm latency bench (${BENCH_RUNS} runs after 2 warmup) ---`);
+  console.log(
+    `\n--- Warm latency bench (${BENCH_RUNS} runs after 2 warmup) ---`
+  );
 
   for (const t of targets) {
-    // Warmup (cold isolate amortization for later runs)
-    let warmupFailed = false;
-    for (let w = 0; w < 2; w += 1) {
-      const warm = await normalize(t.mediaType, t.bytes);
-      if (!warm.body.ok) {
-        console.error(`FAIL ${t.name} warmup: ${warm.body.error}`);
-        failed += 1;
-        warmupFailed = true;
-        break;
-      }
-    }
-    if (warmupFailed) {
+    if (!(await warmupBenchTarget(t.name, t.mediaType, t.bytes))) {
+      failed += 1;
       continue;
     }
-
-    const samples: number[] = [];
-    for (let i = 0; i < BENCH_RUNS; i += 1) {
-      const r = await normalize(t.mediaType, t.bytes);
-      if (!r.body.ok) {
-        console.error(`FAIL ${t.name} run ${i}: ${r.body.error}`);
-        failed += 1;
-        break;
-      }
-      if (
-        !t.name.includes("small") &&
-        (r.body.byteLength ?? Infinity) > MAX_IMAGE_BYTES
-      ) {
-        console.error(`FAIL ${t.name} oversize out=${r.body.byteLength}`);
-        failed += 1;
-        break;
-      }
-      samples.push(r.ms);
-    }
-
-    if (samples.length === 0) {
+    const samples = await sampleBenchTarget(t.name, t.mediaType, t.bytes);
+    if (!samples || samples.length === 0) {
+      failed += 1;
       continue;
     }
-    samples.sort((a, b) => a - b);
-    const p50 = percentile(samples, 50);
-    const p95 = percentile(samples, 95);
-    const min = samples[0] ?? 0;
-    const max = samples[samples.length - 1] ?? 0;
-    const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
-    console.log(
-      `BENCH ${t.name}: n=${samples.length} min=${min.toFixed(0)} p50=${p50.toFixed(0)} mean=${mean.toFixed(0)} p95=${p95.toFixed(0)} max=${max.toFixed(0)} ms`
-    );
-
-    // Soft budget guards (network+worker). Fail hard only on extreme regressions.
-    const hardCapMs =
-      t.name === "bench-oversize-jpeg"
-        ? 30_000
-        : t.name === "bench-avif" || t.name === "bench-heic"
-          ? 15_000
-          : 5_000;
-    if (p95 > hardCapMs) {
+    const p95 = logBenchStats(t.name, samples);
+    if (p95 > benchHardCapMs(t.name)) {
       console.error(
-        `FAIL ${t.name}: p95 ${p95.toFixed(0)}ms exceeds hard cap ${hardCapMs}ms`
+        `FAIL ${t.name}: p95 ${p95.toFixed(0)}ms exceeds hard cap ${benchHardCapMs(t.name)}ms`
       );
       failed += 1;
     }

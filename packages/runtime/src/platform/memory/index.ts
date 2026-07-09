@@ -2,8 +2,8 @@
 
 export {
   createInMemoryHost,
-  type InMemoryHost,
   InMemoryExecutionScheduler,
+  type InMemoryHost,
   type MemoryScheduledThreadPrompt,
   type MemoryScheduledWorkListOptions,
 } from "./execution/execution-host";

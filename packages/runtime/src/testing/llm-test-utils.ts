@@ -1,6 +1,6 @@
 import type { Tool, ToolSet } from "ai";
 import { jsonSchema, tool } from "ai";
-import { expect, vi } from "vitest";
+import { expect, type Mock, vi } from "vitest";
 import type { ModelGenerationOptions, ModelStepOptions } from "../llm/llm";
 import type { AgentEvent } from "../thread/protocol/events";
 import {
@@ -25,11 +25,11 @@ export const fakeModel = createMockLanguageModelV4([
   mockLanguageModelV4Empty(),
 ]);
 
-export function getGenerateTextMock() {
+export function getGenerateTextMock(): Mock {
   return generateTextMock;
 }
 
-export const createNoopTool = () =>
+export const createNoopTool = (): Tool =>
   tool({
     description: "No-op test tool.",
     execute: () => ({}),

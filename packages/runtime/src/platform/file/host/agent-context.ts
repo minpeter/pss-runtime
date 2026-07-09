@@ -1,9 +1,6 @@
 import type { Agent } from "../../../agent/core/agent";
 import type { AgentHost } from "../../../execution";
-import {
-  createFileHost,
-  type FileHostOptions,
-} from "./file-host";
+import { createFileHost, type FileHostOptions } from "./file-host";
 
 export interface NodeFileAgentContextFactoryOptions {
   readonly directory: string;
@@ -27,8 +24,7 @@ export function createNodeFileAgentContext<CreatedAgent extends Agent>({
   createAgent,
   directory,
 }: NodeFileAgentContextOptions<CreatedAgent>): NodeFileAgentContext<CreatedAgent> {
-  const createHost = (options: FileHostOptions) =>
-    createFileHost(options);
+  const createHost = (options: FileHostOptions) => createFileHost(options);
   const createContextHost = () => createHost({ directory });
 
   return {

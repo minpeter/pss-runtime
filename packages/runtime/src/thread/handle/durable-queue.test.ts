@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { solidTestPng } from "../../testing/valid-image-fixture";
 import type {
   AgentHost,
   ThreadInputInbox,
@@ -7,11 +6,12 @@ import type {
 } from "../../execution/host/types";
 import { createInMemoryHost } from "../../platform/memory";
 import { MemoryAttachmentStore } from "../../platform/memory/storage/memory-attachment-store";
+import { solidTestPng } from "../../testing/valid-image-fixture";
 import type {
+  HostAttachmentStore,
   RuntimeAttachmentBlob,
   RuntimeAttachmentPutInput,
   RuntimeAttachmentReference,
-  HostAttachmentStore,
 } from "../input/attachments";
 import type { UserInput } from "../input/input";
 import type { AgentPlugin } from "../plugins/pipeline";

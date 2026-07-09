@@ -1,8 +1,5 @@
 import type { AgentInput } from "@minpeter/pss-runtime";
-import type {
-  AgentHost,
-  TurnRecord,
-} from "@minpeter/pss-runtime/execution";
+import type { AgentHost, TurnRecord } from "@minpeter/pss-runtime/execution";
 
 const backgroundDelegationStateKind = "background-delegation" as const;
 

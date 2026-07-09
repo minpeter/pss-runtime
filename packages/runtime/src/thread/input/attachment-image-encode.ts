@@ -1,12 +1,12 @@
 import { encode as encodePng } from "fast-png";
 import jpeg from "jpeg-js";
-import { RuntimeAttachmentStagingError } from "./attachment-types";
 import {
+  asUint8Array,
   flattenAlphaOntoWhite,
   type RgbaImage,
   scaleRgbaNearest,
-  asUint8Array,
 } from "./attachment-image-rgba";
+import { RuntimeAttachmentStagingError } from "./attachment-types";
 
 const JPEG_QUALITY_STEPS = [22, 28, 35, 45, 55, 65, 75, 85] as const;
 const FULL_RES_PIXEL_BUDGET = 1_200_000;
@@ -58,7 +58,7 @@ export function encodeJpegMaxQualityUnderBudget(
   let hi = last - 1;
 
   while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
+    const mid = Math.floor((lo + hi) / 2);
     const quality = JPEG_QUALITY_STEPS[mid] ?? 22;
     const encoded = encodeJpeg(frame, quality);
     if (encoded.byteLength < bestAny.byteLength) {
@@ -173,4 +173,3 @@ function encodePngRgba(image: RgbaImage): Uint8Array {
     depth: 8,
   });
 }
-

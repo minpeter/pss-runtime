@@ -1,6 +1,7 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../../agent/core/agent";
+import { hostWithThreads } from "../../testing/host-with-threads";
 import {
   assistantMessage,
   createCallbackModel,
@@ -10,12 +11,7 @@ import {
 } from "../../testing/test-fixtures";
 import type { AgentEvent } from "../protocol/events";
 import { userTextToModelMessage } from "../protocol/mapping";
-import { hostWithThreads } from "../../testing/host-with-threads";
-import {
-  ConflictOnCommitStore,
-  collect,
-  SpyStore,
-} from "./test-support";
+import { ConflictOnCommitStore, collect, SpyStore } from "./test-support";
 
 describe("Agent thread persistence", () => {
   it("emits and propagates runtime input commit conflicts without using the conflicted snapshot", async () => {

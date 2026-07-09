@@ -12,22 +12,22 @@ export class Agent<
 > extends DurableObject<Env> {
   initialState: State = undefined as State;
 
-  async onRequest(_request: Request): Promise<Response> {
-    return new Response("not found", { status: 404 });
+  onRequest(_request: Request): Promise<Response> {
+    return Promise.resolve(new Response("not found", { status: 404 }));
   }
 
   /** PartyServer-compatible entry used by DO stubs and tests. */
-  async fetch(request: Request): Promise<Response> {
-    return await this.onRequest(request);
+  fetch(request: Request): Promise<Response> {
+    return this.onRequest(request);
   }
 
-  async onFiberRecovered(
+  onFiberRecovered(
     _ctx: unknown
-  ): Promise<void | { readonly status: string }> {
-    return;
+  ): Promise<undefined | { readonly status: string }> {
+    return Promise.resolve(undefined);
   }
 
-  async schedule(
+  schedule(
     _when: Date | number | string,
     _callback: string,
     payload: unknown
@@ -39,14 +39,14 @@ export class Agent<
     readonly type: "delayed";
     readonly delayInSeconds: number;
   }> {
-    return {
+    return Promise.resolve({
       callback: String(_callback),
       delayInSeconds: 0,
       id: "test-schedule",
       payload,
       time: Date.now(),
       type: "delayed",
-    };
+    });
   }
 
   async startFiber(

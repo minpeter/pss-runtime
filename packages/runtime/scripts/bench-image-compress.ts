@@ -36,7 +36,7 @@ async function bench(
   const p50 = samples[Math.floor(samples.length / 2)] ?? 0;
   const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
   console.log(
-    `${name}: p50=${p50.toFixed(0)} mean=${mean.toFixed(0)} min=${samples[0]?.toFixed(0)} max=${samples[samples.length - 1]?.toFixed(0)}`
+    `${name}: p50=${p50.toFixed(0)} mean=${mean.toFixed(0)} min=${samples[0]?.toFixed(0)} max=${samples.at(-1)?.toFixed(0)}`
   );
 }
 

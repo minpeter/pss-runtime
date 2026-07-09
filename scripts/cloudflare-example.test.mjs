@@ -31,7 +31,9 @@ describe("cloudflare durable object adapter", () => {
     expect(hostSource).toContain("createCloudflareScheduledWorkScheduler");
     expect(hostSource).not.toContain("setAlarm");
     expect(platformHostSource).toContain("createCloudflareHost");
-    expect(platformHostSource).toContain("createCloudflareAgentsFiberScheduler");
+    expect(platformHostSource).toContain(
+      "createCloudflareAgentsFiberScheduler"
+    );
     expect(platformContextSource).toContain("createCloudflarePlatformContext");
     expect(storeSource).toContain("DurableObjectExecutionStore");
     expect(storeSource).toContain("DurableObjectSqliteThreadStore");
@@ -76,15 +78,15 @@ describe("cloudflare durable object adapter", () => {
     await expect(listScheduledCloudflareRuns(storage)).resolves.toEqual([
       runId,
     ]);
-    await expect(listScheduledCloudflareThreadPrompts(storage)).resolves.toEqual(
-      [
-        {
-          idempotencyKey,
-          runId: notificationRunId,
-          threadKey: "example",
-        },
-      ]
-    );
+    await expect(
+      listScheduledCloudflareThreadPrompts(storage)
+    ).resolves.toEqual([
+      {
+        idempotencyKey,
+        runId: notificationRunId,
+        threadKey: "example",
+      },
+    ]);
 
     await ackScheduledCloudflareRun(storage, runId);
     await ackScheduledCloudflareThreadPrompt(storage, {

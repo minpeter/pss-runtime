@@ -5,16 +5,18 @@ import {
   hasWebpDecodeWasm,
   installImageCodecWasmFromNodeModules,
 } from "./attachment-image-codec-registry";
-import { asUint8Array, type RgbaImage, toArrayBuffer } from "./attachment-image-rgba";
+import {
+  asUint8Array,
+  type RgbaImage,
+  toArrayBuffer,
+} from "./attachment-image-rgba";
 
 let avifInitPromise: Promise<void> | undefined;
 let webpInitPromise: Promise<void> | undefined;
 let runtimeReadyPromise: Promise<void> | undefined;
 
 function hasAllImageDecodeWasm(): boolean {
-  return (
-    hasAvifDecodeWasm() && hasWebpDecodeWasm() && hasHeifDecodeWasm()
-  );
+  return hasAvifDecodeWasm() && hasWebpDecodeWasm() && hasHeifDecodeWasm();
 }
 
 /**
@@ -41,7 +43,9 @@ export async function ensureImageCodecRuntimeReady(): Promise<void> {
     }
     try {
       // Wrangler follows this static specifier and bundles .wasm imports.
-      const edge = await import("../../platform/cloudflare/image-codecs-edge.js");
+      const edge = await import(
+        "../../platform/cloudflare/image-codecs-edge.js"
+      );
       edge.installCloudflareImageCodecs();
     } catch {
       // Not bundled (e.g. pure Node unit path without edge entry).
@@ -111,4 +115,3 @@ export async function decodeWebpToRgba(bytes: Uint8Array): Promise<RgbaImage> {
     width: decoded.width,
   };
 }
-

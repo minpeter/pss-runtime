@@ -1,12 +1,12 @@
+// biome-ignore-all lint/performance/noBarrelFile: Re-export wasm bootstrap next to decodeImageRgba public entry.
 import { decode as decodePng } from "fast-png";
 import jpeg from "jpeg-js";
-import { asUint8Array, type RgbaImage } from "./attachment-image-rgba";
 import { decodeHeicToRgba } from "./attachment-image-decode-heic";
 import {
   decodeAvifToRgba,
   decodeWebpToRgba,
-  ensureImageCodecRuntimeReady,
 } from "./attachment-image-decode-runtime";
+import { asUint8Array, type RgbaImage } from "./attachment-image-rgba";
 import {
   baseMediaType,
   isJpegMediaType,
@@ -77,7 +77,7 @@ export async function decodeImageRgba(
 
     throw new Error(
       `Unsupported image media type for normalization: ${normalized}. ` +
-        `Supported: jpeg, png, webp, heic/heif, avif. (gif/bmp/svg/tiff are not decoded.)`
+        "Supported: jpeg, png, webp, heic/heif, avif. (gif/bmp/svg/tiff are not decoded.)"
     );
   } catch (error) {
     if (error instanceof RuntimeAttachmentStagingError) {
@@ -157,4 +157,3 @@ function decodePngToRgba(bytes: Uint8Array): RgbaImage {
     width: decoded.width,
   };
 }
-

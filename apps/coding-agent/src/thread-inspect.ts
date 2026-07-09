@@ -1,8 +1,8 @@
 import {
-  fileThreadStoragePath,
-  inspectFileThread,
   type FileThreadInspection,
   type FileThreadInspectionCompaction,
+  fileThreadStoragePath,
+  inspectFileThread,
 } from "@minpeter/pss-runtime/platform/file";
 import type { CodingAgentThreadConfig } from "./thread-config";
 

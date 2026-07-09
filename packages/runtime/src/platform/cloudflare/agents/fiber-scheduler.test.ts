@@ -4,8 +4,8 @@ import {
   cloudflareAgentsFiberIdempotencyKey,
   cloudflareAgentsRunPayload,
   cloudflareAgentsThreadPayload,
-  createCloudflareHost,
   createCloudflareAgentsFiberScheduler,
+  createCloudflareHost,
   resumeScheduledCloudflareAgentsFiber,
 } from "./index";
 import { createFakeCloudflareAgent, runWithText } from "./test-support";

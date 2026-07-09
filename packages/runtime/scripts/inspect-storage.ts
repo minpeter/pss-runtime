@@ -1,6 +1,6 @@
 import type {
-  Checkpoint,
   AgentHost,
+  Checkpoint,
   NotificationRecord,
   TurnRecord,
 } from "../src/execution";

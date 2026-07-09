@@ -15,9 +15,9 @@ export { threadStoreFromHost } from "./host/host";
 export type { ResumeThreadOptions } from "./host/scheduler-options";
 export { ThreadInputDuplicateConflictError } from "./host/thread-input-conflict";
 export type {
-  AgentHost,
   AdmitReceipt,
   AdmitThreadInput,
+  AgentHost,
   Checkpoint,
   CheckpointPhase,
   CheckpointStore,

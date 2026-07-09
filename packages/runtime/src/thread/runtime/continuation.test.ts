@@ -1,6 +1,5 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
-import { solidTestPng, solidTestPngBase64 } from "../../testing/valid-image-fixture";
 import { Agent } from "../../agent/core/agent";
 import {
   assistantMessage,
@@ -9,6 +8,10 @@ import {
   steerRuntimeInput,
   userText,
 } from "../../testing/test-fixtures";
+import {
+  solidTestPng,
+  solidTestPngBase64,
+} from "../../testing/valid-image-fixture";
 import { isRuntimeAttachmentData } from "../input/attachments";
 import type { AgentEvent } from "../protocol/events";
 import { userTextToModelMessage } from "../protocol/mapping";

@@ -1,8 +1,8 @@
 import type { Tool, ToolSet } from "ai";
 import { jsonSchema, tool } from "ai";
 import type {
-  Checkpoint,
   AgentHost,
+  Checkpoint,
   TurnRecord,
 } from "../execution/host/types";
 import { createInMemoryHost } from "../platform/memory";

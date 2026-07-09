@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { solidTestPng, solidTestPngBase64 } from "../../testing/valid-image-fixture";
+import { solidTestPng } from "../../testing/valid-image-fixture";
 import type {
-  RuntimeAttachmentReference,
   HostAttachmentStore,
+  RuntimeAttachmentReference,
 } from "./attachments";
 import {
   addSteeringInput,

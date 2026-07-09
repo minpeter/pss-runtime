@@ -6,11 +6,7 @@ import {
   stageUserInputAttachments,
 } from "../../thread/input/attachments";
 import type { AgentEvent, UserInput } from "../../thread/protocol/events";
-import type {
-  AgentHost,
-  NotificationRecord,
-  TurnRecord,
-} from "../host/types";
+import type { AgentHost, NotificationRecord, TurnRecord } from "../host/types";
 
 export interface DispatchAgentNotificationInput {
   readonly host: AgentHost;

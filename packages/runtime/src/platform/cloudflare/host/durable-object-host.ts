@@ -154,7 +154,6 @@ export async function claimScheduledCloudflareThreadPrompt(
   );
 }
 
-
 function executionStoreWithThreads(
   store: AgentHost["store"],
   threads: ThreadStore

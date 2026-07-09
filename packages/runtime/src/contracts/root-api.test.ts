@@ -163,9 +163,7 @@ describe("runtime public exports", () => {
       HostAttachmentStore | undefined
     >();
     expectTypeOf<HostStore["turns"]>().toEqualTypeOf<TurnStore>();
-    expectTypeOf<
-      HostStore["checkpoints"]
-    >().toEqualTypeOf<CheckpointStore>();
+    expectTypeOf<HostStore["checkpoints"]>().toEqualTypeOf<CheckpointStore>();
     expectTypeOf<HostStore["events"]>().toEqualTypeOf<EventStore>();
     expectTypeOf<HostStore["threadEvents"]>().toEqualTypeOf<
       ThreadEventLog | undefined
@@ -176,9 +174,7 @@ describe("runtime public exports", () => {
     expectTypeOf<
       Awaited<ReturnType<TurnStore["get"]>>
     >().toEqualTypeOf<TurnRecord | null>();
-    expectTypeOf<
-      HostStoreTransaction["turns"]
-    >().toEqualTypeOf<TurnStore>();
+    expectTypeOf<HostStoreTransaction["turns"]>().toEqualTypeOf<TurnStore>();
     expectTypeOf<
       HostStoreTransaction["notifications"]
     >().toEqualTypeOf<NotificationInbox>();

@@ -1,16 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { Agent } from "../../agent/core/agent";
-import {
-  createInMemoryHost,
-  MemoryThreadStore,
-} from "../../platform/memory";
+import { createInMemoryHost, MemoryThreadStore } from "../../platform/memory";
+import { hostWithThreads } from "../../testing/host-with-threads";
 import {
   assistantMessage,
   createCallbackModel,
 } from "../../testing/test-fixtures";
 import { collect } from "./test-support";
 import { ThreadEventReplayUnsupportedError } from "./thread-event-replay";
-import { hostWithThreads } from "../../testing/host-with-threads";
 
 describe("AgentThread durable event replay", () => {
   it("replays committed thread events with cursor pagination", async () => {

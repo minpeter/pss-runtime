@@ -4,8 +4,8 @@ import type {
   RuntimeToolExecutionDecision,
 } from "../../llm/llm";
 import {
-  type RuntimeAttachmentReference,
   type HostAttachmentStore,
+  type RuntimeAttachmentReference,
   stageAgentEventAttachments,
 } from "../input/attachments";
 import {

@@ -22,17 +22,18 @@ export {
   decodeRuntimeAttachmentData,
   encodeRuntimeAttachmentData,
   getInstalledImageCodecWasm,
+  type HostAttachmentStore,
+  type ImageCodecWasmModules,
   installImageCodecWasm,
   installImageCodecWasmFromNodeModules,
   isCompressibleImageMediaType,
   isRuntimeAttachmentData,
   isStoredImageMediaType,
-  type ImageCodecWasmModules,
   MAX_IMAGE_DECODED_PIXELS,
   MAX_IMAGE_INPUT_BYTES,
   MAX_IMAGE_STORAGE_BUDGET_BYTES,
-  prepareAttachmentBytesForStorage,
   type PreparedAttachmentBytes,
+  prepareAttachmentBytesForStorage,
   type RuntimeAttachmentBlob,
   RuntimeAttachmentHydrationError,
   RuntimeAttachmentImageLimitError,
@@ -42,7 +43,6 @@ export {
   RuntimeAttachmentStagingError,
   STORED_IMAGE_MEDIA_TYPES,
   type StoredImageMediaType,
-  type HostAttachmentStore,
 } from "./thread/input/attachments";
 export { delegateUserInput } from "./thread/input/delegate-input";
 export type { AgentInput, ThreadInput } from "./thread/input/input";

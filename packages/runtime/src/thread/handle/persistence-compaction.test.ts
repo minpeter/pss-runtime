@@ -1,6 +1,7 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../../agent/core/agent";
+import { hostWithThreads } from "../../testing/host-with-threads";
 import {
   assistantMessage,
   createCallbackModel,
@@ -8,7 +9,6 @@ import {
 } from "../../testing/test-fixtures";
 import { userTextToModelMessage } from "../protocol/mapping";
 import { collect, SpyStore } from "./test-support";
-import { hostWithThreads } from "../../testing/host-with-threads";
 
 const storedAssistantOutput = (text: string): ModelMessage => ({
   content: [{ providerOptions: undefined, text, type: "text" }],

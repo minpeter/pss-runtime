@@ -1,8 +1,8 @@
-import {
-  getInstalledImageCodecWasm,
-} from "./attachment-image-codec-registry";
-import { asUint8Array, type RgbaImage } from "./attachment-image-rgba";
+/// <reference path="../../types/heic-decode.d.ts" />
+/// <reference path="../../types/libheif-js.d.ts" />
+import { getInstalledImageCodecWasm } from "./attachment-image-codec-registry";
 import { ensureImageCodecRuntimeReady } from "./attachment-image-decode-runtime";
+import { asUint8Array, type RgbaImage } from "./attachment-image-rgba";
 
 export async function decodeHeicToRgba(bytes: Uint8Array): Promise<RgbaImage> {
   try {
@@ -25,7 +25,7 @@ export async function decodeHeicToRgba(bytes: Uint8Array): Promise<RgbaImage> {
   }
 }
 
-type LibheifImage = {
+interface LibheifImage {
   display: (
     imageData: {
       data: Uint8ClampedArray;
@@ -33,21 +33,25 @@ type LibheifImage = {
       width: number;
     },
     callback: (
-      displayData: { data: Uint8ClampedArray; height: number; width: number } | null
+      displayData: {
+        data: Uint8ClampedArray;
+        height: number;
+        width: number;
+      } | null
     ) => void
   ) => void;
   free: () => void;
   get_height: () => number;
   get_width: () => number;
-};
+}
 
-type LibheifModule = {
+interface LibheifModule {
   HeifDecoder: new () => {
     decode: (buffer: Uint8Array) => LibheifImage[];
     decoder: { delete: () => void };
   };
   ready: Promise<void>;
-};
+}
 
 /** Cached libheif module — Wasm.Instance is expensive; reuse across HEIC decodes. */
 let libheifModulePromise: Promise<LibheifModule> | undefined;
@@ -179,9 +183,9 @@ async function decodeHeicWithLibheifEsmUnlocked(
   }
 }
 
-let avifInitPromise: Promise<void> | undefined;
-let webpInitPromise: Promise<void> | undefined;
-let runtimeReadyPromise: Promise<void> | undefined;
+let _avifInitPromise: Promise<void> | undefined;
+let _webpInitPromise: Promise<void> | undefined;
+let _runtimeReadyPromise: Promise<void> | undefined;
 
 /** True when AVIF + WebP + HEIF decode wasm modules are installed. */
 function polyfillEmscriptenNodeShims(): void {
@@ -196,4 +200,3 @@ function polyfillEmscriptenNodeShims(): void {
     g.__filename = "/libheif.js";
   }
 }
-

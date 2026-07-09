@@ -5,6 +5,7 @@ import {
   readCompactionRows,
   readRows,
 } from "../../platform/cloudflare/storage/sqlite/thread-store.test-support";
+import { hostWithThreads } from "../../testing/host-with-threads";
 import {
   assistantMessage,
   createCallbackModel,
@@ -19,7 +20,6 @@ import {
   waitForModelCalls,
 } from "./automatic-compaction.test-support";
 import { collect, SpyStore } from "./test-support";
-import { hostWithThreads } from "../../testing/host-with-threads";
 
 describe("Agent thread automatic compaction", () => {
   it("summarizes old history in the background and uses the summary plus latest tail on the next model call", async () => {

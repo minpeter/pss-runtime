@@ -1,8 +1,8 @@
 import type { LanguageModel, ModelMessage, ToolChoice, ToolSet } from "ai";
 import { generateText } from "ai";
 import {
-  hydrateRuntimeAttachments,
   type HostAttachmentStore,
+  hydrateRuntimeAttachments,
 } from "../thread/input/attachments";
 import { assertNoUnsupportedToolApproval } from "./tool-approval";
 import type { RuntimeToolExecutionContext } from "./tool-execution";
