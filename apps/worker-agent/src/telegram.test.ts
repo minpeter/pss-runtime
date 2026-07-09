@@ -222,6 +222,7 @@ function createWebhookEnv(namespace: DurableObjectNamespace): Env {
 
 function createExecutionContext(): ExecutionContext {
   return {
+    exports: {},
     passThroughOnException() {
       return;
     },
