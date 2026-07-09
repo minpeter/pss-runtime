@@ -1,11 +1,25 @@
 /**
- * Quiet-window message coalesce for Telegram.
+ * Layer 1 — Telegram ingress fragment reassembly
+ * (`TELEGRAM_INGRESS_LAYER` in message-path-layers.ts).
  *
- * - Resets the quiet timer on every enqueue while collecting.
- * - Flushes after silence into one agent delivery (send or steer).
- * - Concurrent flushes are allowed: while a turn is running, a later quiet
- *   batch is delivered separately so the Durable Object can mid-turn steer.
- * - waitUntil is kept alive for the whole channel lifetime (collect + in-flight).
+ * Quiet-window coalesce for the Telegram/chat-sdk path only.
+ *
+ * Why this exists:
+ * - Telegram + chat-sdk often deliver one user-facing "send" as several
+ *   webhook updates (e.g. text, then a photo). Without reassembly the agent
+ *   would see multiple user messages for a single human action.
+ * - The quiet timer resets on every enqueue so a late photo still joins the
+ *   same forward batch (chat-sdk's own burst wait only runs once).
+ *
+ * What this is not:
+ * - Not agent turn queueing.
+ * - Not idle→send / running→steer policy (that is Layer 2 on the DO).
+ *
+ * After flush, one reassembled batch is handed to the agent immediately.
+ * Concurrent flushes are allowed so a later batch can mid-turn steer while
+ * an earlier agent turn is still running (Layer 2 decides send vs steer).
+ *
+ * waitUntil keeps the isolate alive through quiet wait + in-flight flushes.
  */
 
 export interface CoalesceMessage {
@@ -96,6 +110,11 @@ function toBatch<TMessage extends CoalesceMessage>(
   };
 }
 
+/**
+ * Create a Layer 1 ingress coalescer.
+ * Flush callbacks should only forward to the agent (Layer 2); they must not
+ * implement send/steer policy themselves.
+ */
 export function createMessageCoalescer<TMessage extends CoalesceMessage>(
   options: MessageCoalescerOptions<TMessage>
 ) {
@@ -187,7 +206,7 @@ export function createMessageCoalescer<TMessage extends CoalesceMessage>(
 
   return {
     /**
-     * Enqueue a message. Returns immediately.
+     * Enqueue a Telegram fragment. Returns immediately.
      * `waitUntil` is required so the isolate stays alive through quiet wait + flush.
      */
     enqueue(

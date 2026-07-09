@@ -19,6 +19,7 @@ import {
   isDevelopment,
   readWebhookSecretToken,
 } from "./env";
+import { TELEGRAM_INGRESS_LAYER } from "./message-path-layers";
 import {
   createMessageCoalescer,
   MissingWaitUntilError,
@@ -26,8 +27,16 @@ import {
 import { workerErrors } from "./worker-errors";
 import { logError, logWarn, newCorrelationId } from "./worker-log";
 
+/**
+ * Telegram webhook entry (Worker). Two layers — see message-path-layers.ts:
+ *
+ * 1. Layer 1 (`TELEGRAM_INGRESS_LAYER`): quiet-window fragment reassembly so
+ *    chat-sdk/Telegram split updates become one forward message.
+ * 2. Layer 2 (`AGENT_TURN_ADMISSION_LAYER`): lives on the DO — every
+ *    reassembled message is delivered immediately (idle send / running steer).
+ */
 const correlationStore = new AsyncLocalStorage<string>();
-/** Per-webhook waitUntil so coalesce flush outlives the HTTP response. */
+/** Per-webhook waitUntil so Layer 1 quiet flush outlives the HTTP response. */
 const waitUntilStore = new AsyncLocalStorage<
   (task: Promise<unknown>) => void
 >();
@@ -38,14 +47,19 @@ const FAILURE_REPLY =
 const MISSING_SEND_MESSAGE_ERROR = "missing_send_message";
 const DEFAULT_IMAGE_MEDIA_TYPE = "image/jpeg";
 /**
- * Quiet window after the latest inbound message before flushing a turn.
- * Resets on every message so text + later photo still merge (unlike chat
- * burst, which waits only once after the first message).
+ * Layer 1 only — quiet window after the latest Telegram fragment before
+ * flushing one reassembled user message to the agent.
+ *
+ * Resets on every fragment so text + a late photo still merge (chat-sdk's
+ * own burst wait only runs once and cannot re-open for a late photo).
+ *
+ * This is NOT agent turn queueing; Layer 2 has no debounce.
  */
 export const TELEGRAM_COALESCE_QUIET_MS = 500;
 /**
- * Deliver every webhook to our coalescer; app-level quiet window owns batching.
- * chat-sdk burst only sleeps once and cannot re-open for a late photo.
+ * Layer 1 ingress: deliver every webhook fragment to our coalescer immediately
+ * (strategy concurrent). App quiet window owns fragment reassembly; chat-sdk
+ * must not also serialize/await agent turns.
  */
 export const TELEGRAM_MESSAGE_CONCURRENCY = {
   strategy: "concurrent",
@@ -159,9 +173,9 @@ function createBot(env: Env, config: BotConfig): Chat {
     userName: config.userName,
   });
 
-  // Live Thread handles for post/subscribe after the quiet window flushes.
+  // Layer 1: reassemble Telegram fragments; flush hands one message to Layer 2.
   const threadsByKey = new Map<string, ConversationThread>();
-  const coalescer = createMessageCoalescer<ConversationMessage>({
+  const ingressCoalescer = createMessageCoalescer<ConversationMessage>({
     quietMs: TELEGRAM_COALESCE_QUIET_MS,
     onFlush: async (key, batch) => {
       const thread = threadsByKey.get(key);
@@ -173,6 +187,7 @@ function createBot(env: Env, config: BotConfig): Chat {
       if (!latest) {
         return;
       }
+      // Boundary: Layer 1 → Layer 2. DO admits with idle send / running steer.
       await replyToThread({
         env,
         batchMessages: batch.messages,
@@ -192,7 +207,8 @@ function createBot(env: Env, config: BotConfig): Chat {
     },
     onFlushError: (key, error, batch) => {
       logError(normalizeError(error), {
-        action: "coalesce_flush_failed",
+        action: "ingress_fragment_flush_failed",
+        layer: TELEGRAM_INGRESS_LAYER,
         scope: "telegram",
         key,
         messageCount: batch.messages.length,
@@ -212,14 +228,15 @@ function createBot(env: Env, config: BotConfig): Chat {
     const waitUntil = waitUntilStore.getStore();
     if (!waitUntil) {
       logError(new MissingWaitUntilError(), {
-        action: "coalesce_missing_wait_until",
+        action: "ingress_missing_wait_until",
+        layer: TELEGRAM_INGRESS_LAYER,
         scope: "telegram",
         key,
       });
       return;
     }
-    // Enqueue only — never await agent. DO applies idle→send / running→steer.
-    coalescer.enqueue(
+    // Layer 1 only — never await agent here (Layer 2 is DO /turn admission).
+    ingressCoalescer.enqueue(
       key,
       {
         correlationId: correlationStore.getStore(),

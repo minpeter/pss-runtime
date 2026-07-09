@@ -43,6 +43,7 @@ import {
   durableObjectChannelBinding,
 } from "./channel";
 import type { Env } from "./env";
+import { AGENT_TURN_ADMISSION_LAYER } from "./message-path-layers";
 import { createTurnEventCollector } from "./observability";
 import {
   createSessionIndexStore,
@@ -85,8 +86,12 @@ installCloudflareImageCodecs();
  * Channel agent Durable Object on the Cloudflare Agents SDK.
  * Scheduling/resume uses Agents fibers; HTTP remains app-owned via onRequest.
  *
- * One Agent/ThreadHandle is reused per DO so runtime queue/steer can see the
- * active turn: idle → send, running → mid-turn steer.
+ * Layer 2 — agent turn admission (`AGENT_TURN_ADMISSION_LAYER`):
+ * reuses one Agent/ThreadHandle per DO so every user message is delivered
+ * immediately — idle → send, running → mid-turn steer.
+ *
+ * Layer 1 Telegram fragment reassembly (quiet window) lives only in
+ * telegram.ts / telegram-message-coalesce.ts and never inside this DO.
  */
 export class AgentDurableObject extends CloudflareAgent<Env> {
   readonly #platform: CloudflarePlatformContext<PssAgent>;
@@ -95,7 +100,7 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
   readonly #sessionIndexClient: SessionIndexClient;
   readonly #sessionTranscriptClient: SessionTranscriptReader;
   #sessionIndexStore: SessionIndexStore | undefined;
-  /** Reused across HTTP turns so send/steer share in-memory active-run state. */
+  /** Layer 2: reused so send/steer share in-memory active-run state. */
   #agent: Agent | undefined;
   #turnSession: TurnSession | undefined;
   #channel: ChannelAddress | undefined;
@@ -177,6 +182,7 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
 
     log.set({
       action: "agent_turn",
+      layer: AGENT_TURN_ADMISSION_LAYER,
       ai: {
         model: modelId,
         provider: "openai-compatible",

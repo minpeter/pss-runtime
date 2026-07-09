@@ -1,3 +1,22 @@
+/**
+ * Layer 2 — Agent turn admission
+ * (`AGENT_TURN_ADMISSION_LAYER` in message-path-layers.ts).
+ *
+ * Per-thread admission for worker-agent Durable Objects.
+ *
+ * Every user message that reaches the DO is delivered immediately:
+ * - idle    → `thread.send`  (new tool-only turn; may include recovery send)
+ * - running → `thread.steer` (same turn, mid-turn injection at step boundaries)
+ *
+ * What this is not:
+ * - Not Telegram fragment reassembly (Layer 1 quiet window in telegram-*).
+ * - No extra debounce before send/steer; if a message arrives here, admit it.
+ *
+ * Admission is serialized so two concurrent HTTP requests cannot both start
+ * sends. The active send itself is not held on the admit chain, so mid-turn
+ * steers can be accepted while the first turn is still draining.
+ */
+
 import type { AgentInput, AgentTurn } from "@minpeter/pss-runtime";
 
 import {
@@ -40,16 +59,6 @@ export interface TurnSession {
   isActive(): boolean;
 }
 
-/**
- * Per-thread admission for worker-agent Durable Objects.
- *
- * - idle → `send` (new tool-only turn, may include recovery send)
- * - running → `steer` into the active turn (no second concurrent turn)
- *
- * Admission is serialized so two concurrent HTTP requests cannot both start
- * sends. The active send itself is not held on the admit chain, so mid-turn
- * steers can be accepted while the first turn is still draining.
- */
 export function createTurnSession(thread: TurnSessionThread): TurnSession {
   let admit: Promise<void> = Promise.resolve();
   let active: Promise<unknown> | undefined;
@@ -58,6 +67,7 @@ export function createTurnSession(thread: TurnSessionThread): TurnSession {
     deliver(input, options = {}) {
       return new Promise((resolve, reject) => {
         const runAdmit = (): Promise<void> => {
+          // Layer 2 policy: running → steer, idle → send.
           if (active) {
             return thread.steer(input).then(
               () => {
