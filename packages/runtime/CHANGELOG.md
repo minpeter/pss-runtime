@@ -1,5 +1,16 @@
 # @minpeter/pss-runtime
 
+## 0.2.0
+
+### Minor Changes
+
+- 496e522: Compress image file inputs over 1MB (default, all hosts) during attachment staging before they are written to `HostAttachmentStore`.
+- d8e36b7: Collapse host types to a single `AgentHost` with `HostStore`, `HostScheduler`, and optional `HostAttachmentStore`; rename platform factories; make Cloudflare product path Agents-only; and compress image attachments to at most 1MB by default on all hosts before storage.
+
+### Patch Changes
+
+- 7c4bb7e: Lower the default image attachment storage budget from 1MB to 240KB so multi-image turns stay lighter while typical chat photos remain under budget.
+
 ## 0.1.3
 
 ### Patch Changes
