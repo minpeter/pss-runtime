@@ -59,10 +59,14 @@ describe("runtime package subpaths", () => {
       "drainAgentTurn",
     ] as const;
 
-    expect(cloudflarePlatform).not.toHaveProperty("createCloudflareAgentsHost");
     for (const exportName of canonicalCloudflareExports) {
       expect(cloudflarePlatform).toHaveProperty(exportName);
     }
+    // Deprecated alias kept for migration; same implementation as createCloudflareHost.
+    expect(cloudflarePlatform).toHaveProperty("createCloudflareAgentsHost");
+    expect(cloudflarePlatform.createCloudflareAgentsHost).toBe(
+      cloudflarePlatform.createCloudflareHost
+    );
   });
 
   it("declares the file adapter as a platform implementation subpath", async () => {

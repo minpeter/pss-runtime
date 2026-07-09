@@ -530,6 +530,13 @@ Scheduled callback and recovery payloads are prefix-guarded by default; pass
 remains available for store inspection and tests; wake/resume is Agents-owned
 via `createCloudflarePlatformContext` / fibers.
 
+**Migration from alarm drain:** the DO `alarm` / alarm-scheduler dual stack was
+removed. Pending work that used the shared scheduled-work kinds (`run`,
+thread prompts) is still listed/acked through Agents fibers and
+`createCloudflareScheduledWorkScheduler` storage rows; do not re-arm DO `setAlarm`
+for PSS turn drain. `createCloudflareAgentsHost` remains a **deprecated alias** of
+`createCloudflareHost` for older call sites.
+
 ### Platform adapter parity
 
 Every platform adapter implements the same core ports — `HostStore`

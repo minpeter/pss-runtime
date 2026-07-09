@@ -136,6 +136,7 @@ export {
 export {
   type CloudflareHostAgentsOptions,
   type CloudflareHostOptions,
+  createCloudflareAgentsHost,
   createCloudflareHost,
 } from "./host/create-cloudflare-host";
 export type {

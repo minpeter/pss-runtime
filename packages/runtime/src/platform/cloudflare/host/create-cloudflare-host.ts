@@ -95,3 +95,9 @@ export function createCloudflareHost<
     threadStore,
   });
 }
+
+/**
+ * @deprecated Use {@link createCloudflareHost}. Same factory; kept under the
+ * pre-unification Agents-specific name for migration.
+ */
+export const createCloudflareAgentsHost = createCloudflareHost;

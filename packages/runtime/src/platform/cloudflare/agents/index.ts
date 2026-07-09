@@ -19,6 +19,7 @@ export type { CloudflareAgentsHostOptions } from "./host";
 export {
   type CloudflareHostAgentsOptions,
   type CloudflareHostOptions,
+  createCloudflareAgentsHost,
   createCloudflareHost,
 } from "../host/create-cloudflare-host";
 export {
