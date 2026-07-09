@@ -31,11 +31,11 @@ export type {
 export { FileAttachmentStore } from "./storage/file-attachment-store";
 export { FileExecutionStore } from "./storage/file-execution-store";
 export {
-  fileThreadStorageHint,
-  fileThreadStoragePath,
-  inspectFileThread,
   type FileThreadInspection,
   type FileThreadInspectionCompaction,
   type FileThreadInspectionOptions,
+  fileThreadStorageHint,
+  fileThreadStoragePath,
+  inspectFileThread,
 } from "./storage/file-thread-inspection";
 export { FileThreadStore } from "./storage/file-thread-store";

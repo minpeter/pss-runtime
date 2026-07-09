@@ -24,8 +24,7 @@ export function assertDecodedImageWithinLimits(decoded: {
   readonly width: number;
 }): void {
   if (
-    !Number.isFinite(decoded.width) ||
-    !Number.isFinite(decoded.height) ||
+    !(Number.isFinite(decoded.width) && Number.isFinite(decoded.height)) ||
     decoded.width <= 0 ||
     decoded.height <= 0
   ) {

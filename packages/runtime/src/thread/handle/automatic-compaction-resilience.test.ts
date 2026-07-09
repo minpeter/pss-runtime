@@ -1,5 +1,6 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
+import { hostWithThreads } from "../../testing/host-with-threads";
 import {
   assistantMessage,
   createCallbackModel,
@@ -16,7 +17,6 @@ import {
   storedAssistantOutput,
   waitForModelCalls,
 } from "./automatic-compaction.test-support";
-import { hostWithThreads } from "../../testing/host-with-threads";
 import {
   ConflictOnCommitStore,
   collect,

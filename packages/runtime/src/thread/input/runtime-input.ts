@@ -3,8 +3,8 @@ import type { AgentEvent, RuntimeInput } from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
 import {
   cleanupStagedRuntimeAttachments,
-  type RuntimeAttachmentReference,
   type HostAttachmentStore,
+  type RuntimeAttachmentReference,
   stageUserInputAttachments,
   userInputRequiresAttachmentProcessing,
 } from "./attachments";

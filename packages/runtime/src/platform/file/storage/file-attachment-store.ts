@@ -2,10 +2,10 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type {
+  HostAttachmentStore,
   RuntimeAttachmentBlob,
   RuntimeAttachmentPutInput,
   RuntimeAttachmentReference,
-  HostAttachmentStore,
 } from "../../../thread/input/attachments";
 
 interface FileAttachmentMetadata {

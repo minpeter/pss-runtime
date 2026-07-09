@@ -1,10 +1,4 @@
-import {
-  assertDecodedImageWithinLimits,
-  DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,
-  MAX_IMAGE_DECODED_PIXELS,
-  MAX_IMAGE_INPUT_BYTES,
-  MAX_IMAGE_STORAGE_BUDGET_BYTES,
-} from "./attachment-image-limits";
+// biome-ignore-all lint/performance/noBarrelFile: Public compress API re-exports limits/types for stable import surface.
 import {
   decodeImageRgba,
   ensureImageCodecRuntimeReady,
@@ -14,6 +8,13 @@ import {
   encodePngUnderBudget,
   type PreparedAttachmentBytes,
 } from "./attachment-image-encode";
+import {
+  assertDecodedImageWithinLimits,
+  DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,
+  MAX_IMAGE_INPUT_BYTES,
+  MAX_IMAGE_STORAGE_BUDGET_BYTES,
+} from "./attachment-image-limits";
+import { rgbaHasTransparency } from "./attachment-image-rgba";
 import {
   baseMediaType,
   isImageMediaType,
@@ -25,12 +26,9 @@ import {
   needsWasmImageCodecs,
   sniffImageMediaType,
 } from "./attachment-image-sniff";
-import { rgbaHasTransparency } from "./attachment-image-rgba";
-import {
-  RuntimeAttachmentImageLimitError,
-  RuntimeAttachmentStagingError,
-} from "./attachment-types";
+import { RuntimeAttachmentImageLimitError } from "./attachment-types";
 
+export type { PreparedAttachmentBytes } from "./attachment-image-encode";
 export {
   assertDecodedImageWithinLimits,
   DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,
@@ -38,7 +36,6 @@ export {
   MAX_IMAGE_INPUT_BYTES,
   MAX_IMAGE_STORAGE_BUDGET_BYTES,
 } from "./attachment-image-limits";
-export type { PreparedAttachmentBytes } from "./attachment-image-encode";
 
 /** Stored image attachments are always one of these MIME types. */
 export const STORED_IMAGE_MEDIA_TYPES = ["image/jpeg", "image/png"] as const;

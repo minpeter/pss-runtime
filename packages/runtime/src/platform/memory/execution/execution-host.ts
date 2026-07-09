@@ -1,8 +1,5 @@
 import type { ResumeThreadOptions } from "../../../execution/host/scheduler-options";
-import type {
-  AgentHost,
-  HostScheduler,
-} from "../../../execution/host/types";
+import type { AgentHost, HostScheduler } from "../../../execution/host/types";
 import {
   applyListLimit,
   type ScheduledThreadPrompt,

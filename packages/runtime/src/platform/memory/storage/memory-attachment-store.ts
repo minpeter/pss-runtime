@@ -1,8 +1,8 @@
 import type {
+  HostAttachmentStore,
   RuntimeAttachmentBlob,
   RuntimeAttachmentPutInput,
   RuntimeAttachmentReference,
-  HostAttachmentStore,
 } from "../../../thread/input/attachments";
 
 export class MemoryAttachmentStore implements HostAttachmentStore {

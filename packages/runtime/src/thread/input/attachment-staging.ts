@@ -1,15 +1,15 @@
 import type { AgentEvent, RuntimeInput } from "../protocol/events";
 import { base64ToBytes } from "./attachment-base64";
+import { prepareAttachmentBytesForStorage } from "./attachment-image-compress";
 import {
   decodeRuntimeAttachmentData,
   encodeRuntimeAttachmentData,
   isRuntimeAttachmentData,
 } from "./attachment-refs";
-import { prepareAttachmentBytesForStorage } from "./attachment-image-compress";
 import type {
+  HostAttachmentStore,
   RuntimeAttachmentReference,
   RuntimeAttachmentStagingOptions,
-  HostAttachmentStore,
 } from "./attachment-types";
 import {
   RuntimeAttachmentImageLimitError,
@@ -234,18 +234,29 @@ function imageLimitOmittedTextPart(
   error: RuntimeAttachmentImageLimitError
 ): UserMessageTextPart {
   const label = filename?.trim() || "image";
-  const reason =
-    error.limit === "input_bytes"
-      ? "file too large to process safely"
-      : error.limit === "decoded_pixels"
-        ? "resolution too high to process safely"
-        : error.limit === "storage_budget"
-          ? "storage budget invalid or too high"
-          : "invalid image dimensions";
   return {
     type: "text",
-    text: `[Attachment omitted: ${label} (${reason})]`,
+    text: `[Attachment omitted: ${label} (${imageLimitReason(error.limit)})]`,
   };
+}
+
+function imageLimitReason(
+  limit: RuntimeAttachmentImageLimitError["limit"]
+): string {
+  switch (limit) {
+    case "input_bytes":
+      return "file too large to process safely";
+    case "decoded_pixels":
+      return "resolution too high to process safely";
+    case "storage_budget":
+      return "storage budget invalid or too high";
+    case "invalid_dimensions":
+      return "invalid image dimensions";
+    default: {
+      const _exhaustive: never = limit;
+      return _exhaustive;
+    }
+  }
 }
 
 function fileDataBytes(data: UserMessageFileData): Uint8Array | undefined {

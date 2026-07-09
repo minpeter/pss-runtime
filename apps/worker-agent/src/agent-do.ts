@@ -1,4 +1,3 @@
-import { Agent as CloudflareAgent } from "agents";
 import type { Agent as PssAgent } from "@minpeter/pss-runtime";
 import {
   type CloudflareAgentsFiberRecoveryContext,
@@ -7,6 +6,7 @@ import {
   createCloudflarePlatformContext,
 } from "@minpeter/pss-runtime/platform/cloudflare";
 import { installCloudflareImageCodecs } from "@minpeter/pss-runtime/platform/cloudflare/image-codecs";
+import { Agent as CloudflareAgent } from "agents";
 
 import { createConfiguredAgent } from "./agent";
 import { deliverToolOnlyTurn, withCapturedMessages } from "./agent-do-delivery";
@@ -84,7 +84,7 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
 
   override async onFiberRecovered(
     ctx: CloudflareAgentsFiberRecoveryContext
-  ): Promise<void | CloudflareAgentsFiberRecoveryResult> {
+  ): Promise<undefined | CloudflareAgentsFiberRecoveryResult> {
     const result = await this.#platform.recoverFiber(ctx);
     if (result === false) {
       return;

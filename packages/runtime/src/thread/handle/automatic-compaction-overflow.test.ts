@@ -1,5 +1,6 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
+import { hostWithThreads } from "../../testing/host-with-threads";
 import {
   assistantMessage,
   createCallbackModel,
@@ -12,7 +13,6 @@ import {
   storedAssistantOutput,
 } from "./automatic-compaction.test-support";
 import { collect, SpyStore } from "./test-support";
-import { hostWithThreads } from "../../testing/host-with-threads";
 
 describe("Agent thread automatic compaction overflow recovery", () => {
   it("rejects before provider calls when the context gate overflows with error", async () => {

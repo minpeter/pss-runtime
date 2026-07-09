@@ -94,8 +94,7 @@ async function configureTuiTurnDelivery(
     case "local": {
       await mkdir(config.directory, { recursive: true });
       const host =
-        hostOverride ??
-        createFileHost({ directory: config.directory });
+        hostOverride ?? createFileHost({ directory: config.directory });
       const sessionIndex: SessionIndexStore = createSessionIndexStore(
         createFileSessionIndexRepository(
           join(config.directory, "session-index.json")

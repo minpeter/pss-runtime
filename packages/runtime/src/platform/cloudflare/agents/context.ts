@@ -1,7 +1,7 @@
 import type { AgentHost } from "../../../execution";
-import { recoverCloudflareAgentsFiber } from "./fiber";
 import type { CloudflareHostAgentsOptions } from "../host/create-cloudflare-host";
 import { createCloudflareHost } from "../host/create-cloudflare-host";
+import { recoverCloudflareAgentsFiber } from "./fiber";
 import { createCloudflareAgentsFiberRetryScheduler } from "./retry-scheduler";
 import { resumeScheduledCloudflareAgentsFiber } from "./scheduled-fiber";
 import type {

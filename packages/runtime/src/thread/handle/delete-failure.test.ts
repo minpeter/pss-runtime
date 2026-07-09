@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { Agent } from "../../agent/core/agent";
+import { hostWithThreads } from "../../testing/host-with-threads";
 import {
   assistantMessage,
   createCallbackModel,
 } from "../../testing/test-fixtures";
 import { collect, SpyStore } from "./test-support";
-import { hostWithThreads } from "../../testing/host-with-threads";
 
 class RejectingDeleteStore extends SpyStore {
   override delete(_key: string): Promise<void> {

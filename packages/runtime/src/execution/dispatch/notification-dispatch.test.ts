@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { solidTestPng } from "../../testing/valid-image-fixture";
 import { agentNamespace } from "../../agent/identity/namespace";
 import { createInMemoryHost } from "../../platform/memory";
+import { solidTestPng } from "../../testing/valid-image-fixture";
 import {
+  type HostAttachmentStore,
   isRuntimeAttachmentData,
   type RuntimeAttachmentReference,
-  type HostAttachmentStore,
 } from "../../thread/input/attachments";
 import type { AgentHost, TurnRecord, TurnStore } from "../host/types";
 import { dispatchAgentNotification } from "./notification-dispatch";

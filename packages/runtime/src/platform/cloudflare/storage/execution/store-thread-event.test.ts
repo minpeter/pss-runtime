@@ -1,7 +1,7 @@
-import { createCloudflareStorageHost } from "../../host/durable-object-host";
 import { expect, it } from "vitest";
 import type { StoredThreadEvent } from "../../../../execution";
 import {
+  createCloudflareStorageHost,
   InMemoryCloudflareDurableObjectStorage,
 } from "../../host/durable-object-host";
 

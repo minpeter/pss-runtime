@@ -1,8 +1,5 @@
 import { createCheckpointId } from "../../execution/host/checkpoint-ids";
-import type {
-  CheckpointPhase,
-  AgentHost,
-} from "../../execution/host/types";
+import type { AgentHost, CheckpointPhase } from "../../execution/host/types";
 import type {
   RuntimeToolExecutionCheckpoint,
   RuntimeToolExecutionContext,

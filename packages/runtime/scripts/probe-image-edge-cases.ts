@@ -40,13 +40,14 @@ async function main(): Promise<void> {
   ] as const) {
     try {
       const b = new Uint8Array(readFileSync(join(fixturesDir, f)));
-      const mt = f.includes("heic")
-        ? "image/heic"
-        : f.includes("webp")
-          ? "image/webp"
-          : f.includes("avif")
-            ? "image/avif"
-            : "image/jpeg";
+      let mt = "image/jpeg";
+      if (f.includes("heic")) {
+        mt = "image/heic";
+      } else if (f.includes("webp")) {
+        mt = "image/webp";
+      } else if (f.includes("avif")) {
+        mt = "image/avif";
+      }
       const out = await prepareAttachmentBytesForStorage({
         bytes: b,
         mediaType: mt,
@@ -93,7 +94,9 @@ async function main(): Promise<void> {
     data[i + 2] = (i * 41) % 256;
     data[i + 3] = 255;
   }
-  const big = new Uint8Array(jpeg.encode({ data, width: w, height: h }, 90).data);
+  const big = new Uint8Array(
+    jpeg.encode({ data, width: w, height: h }, 90).data
+  );
   console.log("extreme in", big.byteLength);
   const t1 = performance.now();
   const re = await prepareAttachmentBytesForStorage({

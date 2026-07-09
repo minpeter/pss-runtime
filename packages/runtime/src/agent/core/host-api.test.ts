@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { solidTestPng } from "../../testing/valid-image-fixture";
 import type { AgentHost } from "../../execution";
 import { createInMemoryHost } from "../../platform/memory";
 import { MemoryAttachmentStore } from "../../platform/memory/storage/memory-attachment-store";
@@ -12,12 +11,13 @@ import {
   assistantMessage,
   createCallbackModel,
 } from "../../testing/test-fixtures";
+import { solidTestPng } from "../../testing/valid-image-fixture";
 import { collect, SpyStore } from "../../thread/handle/test-support";
 import type {
+  HostAttachmentStore,
   RuntimeAttachmentBlob,
   RuntimeAttachmentPutInput,
   RuntimeAttachmentReference,
-  HostAttachmentStore,
 } from "../../thread/input/attachments";
 import { Agent, type AgentOptions } from "./agent";
 
@@ -62,8 +62,7 @@ type AcceptsInMemoryHostAsAgentHost = IsAssignable<
 >;
 
 const acceptsHostOptionAssertion: AcceptsHostOption = true;
-const rejectsRuntimeModelOptionAssertion: AssertFalse<AcceptsRuntimeModelOption> =
-  false;
+const rejectsRuntimeModelOptionAssertion: AssertFalse<AcceptsRuntimeModelOption> = false;
 const llmOptionAssertion: RejectsLlmOptionKey = false;
 const runtimeOptionAssertion: RejectsRuntimeOptionKey = false;
 const sessionsOptionAssertion: RejectsSessionsOptionKey = false;

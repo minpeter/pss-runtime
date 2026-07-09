@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Checkpoint, AgentHost } from "../execution";
+import type { AgentHost, Checkpoint } from "../execution";
 import { InMemorySqlStorage } from "../platform/cloudflare/sql/node-test/node-sqlite-storage";
 import { InMemoryCloudflareDurableObjectStorage } from "../platform/cloudflare/storage/durable-object/durable-object-storage";
 import { DurableObjectExecutionStore } from "../platform/cloudflare/storage/execution/store";

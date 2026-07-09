@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Agent } from "../../agent/core/agent";
+import { hostWithThreads } from "../../testing/host-with-threads";
 import {
   assistantMessage,
   createCallbackModel,
@@ -14,7 +15,6 @@ import {
 } from "./automatic-compaction.test-support";
 import { collect, SpyStore } from "./test-support";
 import { AgentThread } from "./thread";
-import { hostWithThreads } from "../../testing/host-with-threads";
 
 const minMessagesError = /autoCompaction\.minMessages/;
 const retainMessagesError = /autoCompaction\.retainMessages/;

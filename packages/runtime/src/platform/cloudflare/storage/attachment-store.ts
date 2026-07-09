@@ -1,8 +1,8 @@
 import type {
+  HostAttachmentStore,
   RuntimeAttachmentBlob,
   RuntimeAttachmentPutInput,
   RuntimeAttachmentReference,
-  HostAttachmentStore,
 } from "../../../thread/input/attachments";
 import type { CloudflareDurableObjectTransactionStorage } from "./durable-object/durable-object-storage";
 

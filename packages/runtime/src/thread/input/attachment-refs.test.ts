@@ -7,6 +7,11 @@ import {
 } from "./attachment-refs";
 import { RuntimeAttachmentHydrationError } from "./attachment-types";
 
+const EXPECTED_RUNTIME_ATTACHMENT_DATA = /Expected runtime attachment data/;
+const UNSUPPORTED_ATTACHMENT_VERSION =
+  /Unsupported runtime attachment data version/;
+const MISSING_PAYLOAD = /missing a payload/;
+
 describe("runtime attachment refs", () => {
   it("round-trips a full reference through encode/decode", () => {
     const ref = {
@@ -26,9 +31,9 @@ describe("runtime attachment refs", () => {
       id: "min-id",
       schemaVersion: 1 as const,
     };
-    expect(decodeRuntimeAttachmentData(encodeRuntimeAttachmentData(ref))).toEqual(
-      ref
-    );
+    expect(
+      decodeRuntimeAttachmentData(encodeRuntimeAttachmentData(ref))
+    ).toEqual(ref);
   });
 
   it("isRuntimeAttachmentData only accepts the pss-attachment prefix", () => {
@@ -46,24 +51,22 @@ describe("runtime attachment refs", () => {
       RuntimeAttachmentHydrationError
     );
     expect(() => decodeRuntimeAttachmentData("not-a-ref")).toThrow(
-      /Expected runtime attachment data/
+      EXPECTED_RUNTIME_ATTACHMENT_DATA
     );
   });
 
   it("rejects unsupported schema versions", () => {
     const payload = bytesToBase64Url(
-      new TextEncoder().encode(
-        JSON.stringify({ id: "x", schemaVersion: 1 })
-      )
+      new TextEncoder().encode(JSON.stringify({ id: "x", schemaVersion: 1 }))
     );
     expect(() =>
       decodeRuntimeAttachmentData(`pss-attachment:?v=2&p=${payload}`)
-    ).toThrow(/Unsupported runtime attachment data version/);
+    ).toThrow(UNSUPPORTED_ATTACHMENT_VERSION);
   });
 
   it("rejects missing payload parameter", () => {
     expect(() => decodeRuntimeAttachmentData("pss-attachment:?v=1")).toThrow(
-      /missing a payload/
+      MISSING_PAYLOAD
     );
   });
 

@@ -1,7 +1,4 @@
-import type {
-  AgentHost,
-  TurnStatus,
-} from "@minpeter/pss-runtime/execution";
+import type { AgentHost, TurnStatus } from "@minpeter/pss-runtime/execution";
 import { jsonSchema, tool } from "ai";
 import { readDurableBackgroundDelegationState } from "./background-delegation";
 import { readerChildName } from "./delegate-tool";

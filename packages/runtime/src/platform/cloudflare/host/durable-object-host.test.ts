@@ -247,7 +247,7 @@ describe("Cloudflare Durable Object host adapter", () => {
   });
 });
 
-function notificationRunRecord(runId: string, idempotencyKey = runId) {
+function _notificationRunRecord(runId: string, idempotencyKey = runId) {
   return {
     checkpointVersion: 0,
     dedupeKey: idempotencyKey,

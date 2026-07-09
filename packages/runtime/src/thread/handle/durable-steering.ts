@@ -1,8 +1,8 @@
 import type { AgentHost } from "../../execution/host/types";
 import {
   cleanupStagedRuntimeAttachments,
-  type RuntimeAttachmentReference,
   type HostAttachmentStore,
+  type RuntimeAttachmentReference,
   stageUserInputAttachments,
   userInputRequiresAttachmentProcessing,
 } from "../input/attachments";
