@@ -163,7 +163,7 @@ describe("telegram conversation handling", () => {
     expect(TELEGRAM_MESSAGE_CONCURRENCY).toEqual({
       strategy: "concurrent",
     });
-    expect(TELEGRAM_COALESCE_QUIET_MS).toBe(500);
+    expect(TELEGRAM_COALESCE_QUIET_MS).toBe(1500);
   });
 
   it("collects images from every message in a batch", async () => {

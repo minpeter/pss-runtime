@@ -54,9 +54,13 @@ const DEFAULT_IMAGE_MEDIA_TYPE = "image/jpeg";
  * Resets on every fragment so text + a late photo still merge (chat-sdk's
  * own burst wait only runs once and cannot re-open for a late photo).
  *
+ * 1500ms matches chat-sdk's default debounce and covers common dual-update
+ * cases Telegram delivers as two webhooks despite one client "Send"
+ * (e.g. forward photo + typed text as separate Message objects).
+ *
  * This is NOT agent turn queueing; Layer 2 has no debounce.
  */
-export const TELEGRAM_COALESCE_QUIET_MS = 500;
+export const TELEGRAM_COALESCE_QUIET_MS = 1500;
 /**
  * Layer 1 ingress: deliver every webhook fragment to our coalescer immediately
  * (strategy concurrent). App quiet window owns fragment reassembly; chat-sdk
@@ -347,8 +351,10 @@ export function summarizeIngressBatch(
         continue;
       }
       imageCount += 1;
+      // Telegram photo objects often omit mime_type; chat-sdk leaves it empty.
       const mediaType =
-        attachment.mimeType?.trim().toLowerCase() || "image/unknown";
+        attachment.mimeType?.trim().toLowerCase() ||
+        (attachment.type === "image" ? "image/jpeg" : "image/unknown");
       if (!imageMediaTypes.includes(mediaType)) {
         imageMediaTypes.push(mediaType);
       }
