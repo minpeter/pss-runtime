@@ -134,6 +134,8 @@ export async function relay(): Promise<void> {
   logTagged("info", "telegram-relay", "worker warm probe done");
 
   let offset = 0;
+  /** Keep fire-and-forget forward promises rooted so they are not GC'd mid-flight. */
+  const inFlightForwards = new Set<Promise<unknown>>();
   while (!abort.signal.aborted) {
     try {
       const updates = (await telegramApi(
@@ -155,7 +157,7 @@ export async function relay(): Promise<void> {
       const claimedThrough = peakOffset(offset, updates);
       offset = claimedThrough;
 
-      void forwardUpdates({
+      const forwardTask = forwardUpdates({
         offset: claimedFrom,
         secret,
         signal: abort.signal,
@@ -172,6 +174,10 @@ export async function relay(): Promise<void> {
             updateCount: updates.length,
           });
         }
+      });
+      inFlightForwards.add(forwardTask);
+      forwardTask.finally(() => {
+        inFlightForwards.delete(forwardTask);
       });
     } catch (error) {
       // Ctrl-C / process stop during long-poll — exit cleanly.
