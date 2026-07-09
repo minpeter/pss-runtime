@@ -95,21 +95,31 @@ export function peakOffset(
   return maxId + 1;
 }
 
-/** Best-effort wake of wrangler so the first real webhook is not ~800ms cold. */
+/**
+ * Best-effort wake of wrangler so the first real webhook is not ~800ms cold.
+ * Uses the webhook secret so chat-sdk does not log "invalid secret token".
+ * Body is a no-op update (no message handlers); 2xx/4xx both warm the isolate.
+ */
 export async function warmLocalWorker(
   webhookUrl: string,
+  secret: string,
   signal?: AbortSignal
 ): Promise<void> {
   try {
     await fetch(webhookUrl, {
-      method: "GET",
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        [SECRET_HEADER]: secret,
+      },
+      // Minimal Telegram-shaped payload with no message — just loads the worker.
+      body: JSON.stringify({ update_id: 0 }),
       signal,
     });
   } catch (error) {
     if (isAbortError(error) || signal?.aborted) {
       return;
     }
-    // GET may 404/405; connection success still warms the isolate.
     logTagged(
       "info",
       "telegram-relay",
@@ -130,7 +140,7 @@ export async function relay(): Promise<void> {
 
   await telegramApi(token, "deleteWebhook", { drop_pending_updates: false });
   logTagged("info", "telegram-relay", `relay -> ${webhookUrl}`);
-  await warmLocalWorker(webhookUrl, abort.signal);
+  await warmLocalWorker(webhookUrl, secret, abort.signal);
   logTagged("info", "telegram-relay", "worker warm probe done");
 
   let offset = 0;
