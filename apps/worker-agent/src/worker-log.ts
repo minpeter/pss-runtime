@@ -1,18 +1,42 @@
+import { initLogger } from "evlog";
 import {
   createWorkersLogger,
-  initWorkersLogger,
   type WorkerExecutionContext,
 } from "evlog/workers";
 
 let initialized = false;
+
+/**
+ * Pretty tree in local wrangler. Production stays object dumps for CF logs.
+ *
+ * Note: `initWorkersLogger` hardcodes `pretty: false` / `stringify: false`
+ * (after spreading options), so we call `initLogger` directly.
+ */
+function shouldPrettyPrint(): boolean {
+  if (typeof process === "undefined") {
+    return true;
+  }
+  // Do not use NODE_ENV: workerd sets it to "production" under `wrangler dev` too.
+  // Only suppress pretty when our wrangler var ENVIRONMENT is explicitly production.
+  return process.env.ENVIRONMENT !== "production";
+}
 
 /** Idempotent module-scope init for Worker + Durable Object isolates. */
 export function ensureWorkerLogger(): void {
   if (initialized) {
     return;
   }
-  initWorkersLogger({
-    env: { service: "pss-worker-agent" },
+  const pretty = shouldPrettyPrint();
+  initLogger({
+    env: {
+      service: "pss-worker-agent",
+      ...(typeof process !== "undefined" && process.env.ENVIRONMENT
+        ? { environment: process.env.ENVIRONMENT }
+        : { environment: pretty ? "development" : "production" }),
+    },
+    // Workers adapter docs recommend stringify:false so CF logs stay objects.
+    pretty,
+    stringify: false,
   });
   initialized = true;
 }
