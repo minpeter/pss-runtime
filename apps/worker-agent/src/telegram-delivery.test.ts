@@ -117,6 +117,21 @@ describe("agent delivery request", () => {
       requestAgentDelivery(webhookEnv, "channel-1", "hello")
     ).rejects.toThrow(SEND_MESSAGE_ERROR_PATTERN);
   });
+
+  it("accepts send and steer delivery modes from the Durable Object", async () => {
+    const webhookEnv = createWebhookEnv(createDurableObjectNamespace("agent"));
+    durableObjectMock.responses.push(
+      Response.json({ delivered: true, mode: "send" }),
+      Response.json({ delivered: true, mode: "steer" })
+    );
+
+    await expect(
+      requestAgentDelivery(webhookEnv, "channel-1", "first")
+    ).resolves.toBeUndefined();
+    await expect(
+      requestAgentDelivery(webhookEnv, "channel-1", "second")
+    ).resolves.toBeUndefined();
+  });
 });
 
 function createWebhookEnv(namespace: DurableObjectNamespace): Env {

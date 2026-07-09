@@ -58,12 +58,31 @@ export const TELEGRAM_MAX_RAW_IMAGE_BYTES = AGENT_MAX_RAW_IMAGE_BYTES;
 /** Cap total raw image bytes per coalesced turn before DO hop. */
 export const TELEGRAM_MAX_TURN_RAW_IMAGE_BYTES = AGENT_MAX_TURN_RAW_IMAGE_BYTES;
 
+/** Matches AgentDurableObject /turn JSON (`mode` from idle send / mid-turn steer). */
 const AgentDeliverySchema = z.discriminatedUnion("delivered", [
-  z.object({ delivered: z.literal(true) }).strict(),
+  z
+    .object({
+      delivered: z.literal(true),
+      mode: z.enum(["send", "steer"]).optional(),
+      messages: z
+        .array(
+          z
+            .object({
+              channel: z.string(),
+              messageId: z.string(),
+              text: z.string(),
+            })
+            .strict()
+        )
+        .readonly()
+        .optional(),
+    })
+    .strict(),
   z
     .object({
       delivered: z.literal(false),
       error: z.literal(MISSING_SEND_MESSAGE_ERROR),
+      mode: z.enum(["send", "steer"]).optional(),
     })
     .strict(),
 ]);
