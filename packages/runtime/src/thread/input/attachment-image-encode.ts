@@ -14,8 +14,32 @@ const JPEG_TARGET_BPP = 0.65;
 const MIN_EDGE_PX = 64;
 const MAX_SCALE_ATTEMPTS = 10;
 
+/** How prepareAttachmentBytesForStorage handled an image (or non-image). */
+export type ImagePreparePath =
+  | "non_image"
+  | "passthrough_jpeg"
+  | "passthrough_png"
+  | "reencode_jpeg"
+  | "reencode_png"
+  /** Alpha source reencoded as JPEG after PNG budget failure. */
+  | "reencode_png_fallback_jpeg";
+
+/** Safe, queryable fields for Workers logs / dashboards (no pixel/base64 payloads). */
+export interface ImagePrepareDiagnostics {
+  readonly decodedHeight?: number;
+  readonly decodedWidth?: number;
+  readonly hasAlpha?: boolean;
+  readonly inputBytes: number;
+  readonly inputMediaType: string;
+  readonly maxImageBytes: number;
+  readonly outputBytes: number;
+  readonly outputMediaType: string;
+  readonly path: ImagePreparePath;
+}
+
 export interface PreparedAttachmentBytes {
   readonly bytes: Uint8Array;
+  readonly diagnostics?: ImagePrepareDiagnostics;
   readonly mediaType: string;
 }
 export function encodeJpegUnderBudget(

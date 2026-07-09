@@ -22,7 +22,9 @@ import {
 } from "./tools";
 
 const DEFAULT_BASE_URL = "https://apis.opengateway.ai/v1";
-const DEFAULT_MODEL = "minimax/MiniMax-M2.7";
+
+/** Default model id when `AI_MODEL` is unset (also used on wide-event `ai.model`). */
+export const DEFAULT_MODEL = "minimax/MiniMax-M2.7";
 
 export const WORKER_AGENT_AUTO_COMPACTION: AgentAutoCompactionOptions = {
   minMessages: 48,
@@ -94,6 +96,14 @@ Session search tools:
 - Do not expose raw channel keys, scores, cursors, or tool mechanics to the user; speak naturally about what was discussed.`.trim();
 
 export interface WorkerAgentRuntimeOptions {
+  readonly observability?: {
+    readonly log?: (entry: {
+      readonly event: AgentEvent["type"];
+      readonly label?: string;
+      readonly message?: string;
+      readonly toolName?: string;
+    }) => void;
+  };
   readonly sendMessage?: WorkerAgentSendMessageToolOptions;
   readonly sessionTools?: WorkerAgentSessionToolOptions;
 }
@@ -126,7 +136,10 @@ export function createConfiguredAgent(
   });
 
   const plugins: readonly AgentPlugin[] = [
-    createTurnObservabilityPlugin({ label: env.ENVIRONMENT }),
+    createTurnObservabilityPlugin({
+      label: env.ENVIRONMENT,
+      ...(options.observability?.log ? { log: options.observability.log } : {}),
+    }),
   ];
   const tools = createWorkerAgentToolSet(options);
 

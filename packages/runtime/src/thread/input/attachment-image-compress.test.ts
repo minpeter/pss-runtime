@@ -12,6 +12,7 @@ import {
   MAX_IMAGE_DECODED_PIXELS,
   MAX_IMAGE_INPUT_BYTES,
   prepareAttachmentBytesForStorage,
+  runWithImagePrepareDiagnosticsListener,
 } from "./attachment-image-compress";
 import { decodeRuntimeAttachmentData } from "./attachment-refs";
 import { stageUserInputAttachments } from "./attachment-staging";
@@ -44,6 +45,42 @@ describe("prepareAttachmentBytesForStorage", () => {
     expect(prepared.bytes).toBe(bytes);
     expect(prepared.mediaType).toBe("image/jpeg");
     expect(isStoredImageMediaType(prepared.mediaType)).toBe(true);
+    expect(prepared.diagnostics).toMatchObject({
+      inputBytes: bytes.byteLength,
+      outputBytes: bytes.byteLength,
+      outputMediaType: "image/jpeg",
+      path: "passthrough_jpeg",
+    });
+  });
+
+  it("delivers diagnostics to ALS listener without dual tree when collected", async () => {
+    const bytes = encodeSolidJpeg(64, 64, 80);
+    const received: string[] = [];
+    await runWithImagePrepareDiagnosticsListener(
+      (diagnostics) => {
+        received.push(diagnostics.path);
+      },
+      async () => {
+        await prepareAttachmentBytesForStorage({
+          bytes,
+          mediaType: "image/jpeg",
+        });
+      }
+    );
+    expect(received).toEqual(["passthrough_jpeg"]);
+  });
+
+  it("delivers diagnostics via onImagePrepare staging option", async () => {
+    const bytes = encodeSolidJpeg(64, 64, 80);
+    const received: string[] = [];
+    await prepareAttachmentBytesForStorage({
+      bytes,
+      mediaType: "image/jpeg",
+      onImagePrepare: (diagnostics) => {
+        received.push(diagnostics.path);
+      },
+    });
+    expect(received).toEqual(["passthrough_jpeg"]);
   });
 
   it("passthroughs small PNG bytes as image/png", async () => {
@@ -54,9 +91,10 @@ describe("prepareAttachmentBytesForStorage", () => {
     });
     expect(prepared.bytes).toBe(bytes);
     expect(prepared.mediaType).toBe("image/png");
+    expect(prepared.diagnostics?.path).toBe("passthrough_png");
   });
 
-  it("compresses oversized opaque images to image/jpeg under 1MB", async () => {
+  it("compresses oversized opaque images to image/jpeg under the default budget", async () => {
     const bytes = encodeNoisyJpeg(1600, 1600, 95);
     expect(bytes.byteLength).toBeGreaterThan(
       DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES
@@ -67,6 +105,13 @@ describe("prepareAttachmentBytesForStorage", () => {
     });
     expect(prepared.mediaType).toBe("image/jpeg");
     expect(prepared.bytes.byteLength).toBeLessThanOrEqual(
+      DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES
+    );
+    expect(prepared.diagnostics).toMatchObject({
+      inputBytes: bytes.byteLength,
+      path: "reencode_jpeg",
+    });
+    expect(prepared.diagnostics?.outputBytes).toBeLessThanOrEqual(
       DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES
     );
     expect(
@@ -94,6 +139,15 @@ describe("prepareAttachmentBytesForStorage", () => {
     });
     expect(isStoredImageMediaType(prepared.mediaType)).toBe(true);
     expect(prepared.bytes.byteLength).toBeLessThanOrEqual(maxImageBytes);
+    // Solid frames may already be under budget (passthrough); reencode paths
+    // must match output media type (including PNG→JPEG fallback labeling).
+    if (prepared.diagnostics?.path === "passthrough_png") {
+      expect(prepared.mediaType).toBe("image/png");
+    } else if (prepared.mediaType === "image/jpeg") {
+      expect(prepared.diagnostics?.path).toBe("reencode_png_fallback_jpeg");
+    } else {
+      expect(prepared.diagnostics?.path).toBe("reencode_png");
+    }
   }, 20_000);
 
   it("always normalizes HEIC to image/jpeg or image/png (never heic)", async () => {
@@ -343,7 +397,7 @@ describe("prepareAttachmentBytesForStorage", () => {
     ).rejects.toBeInstanceOf(RuntimeAttachmentStagingError);
   });
 
-  it("compresses extreme-resolution JPEG under 1MB", async () => {
+  it("compresses extreme-resolution JPEG under the default budget", async () => {
     const bytes = encodeNoisyJpeg(2200, 2200, 90);
     expect(bytes.byteLength).toBeGreaterThan(
       DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES

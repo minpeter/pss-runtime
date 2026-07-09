@@ -7,6 +7,9 @@
     "pretypecheck": "pnpm -F @minpeter/pss-runtime build",
     "preship:worker": "pnpm -F @minpeter/pss-runtime build",
     "dev": "run-p dev:worker dev:relay",
+    "dev:ingress": "run-p dev:worker:ingress dev:relay",
+    "dev:worker": "wrangler dev -e dev",
+    "dev:worker:ingress": "wrangler dev -e dev --var TELEGRAM_INGRESS_DRY_RUN:1",
     "eval": "PSS_WORKER_AGENT_EVAL_REAL=1 tsx --conditions=@minpeter/pss-source src/evals/run.ts",
     "eval:json": "PSS_WORKER_AGENT_EVAL_REAL=1 tsx --conditions=@minpeter/pss-source src/evals/run.ts --json",
     "eval:real": "PSS_WORKER_AGENT_EVAL_REAL=1 tsx --conditions=@minpeter/pss-source src/evals/run.ts",
@@ -14,7 +17,6 @@
     "eval:scripted:json": "PSS_WORKER_AGENT_EVAL_REAL=0 tsx --conditions=@minpeter/pss-source src/evals/run.ts --json",
     "eval:remote": "PSS_WORKER_AGENT_EVAL_REMOTE=1 tsx --conditions=@minpeter/pss-source src/evals/run.ts",
     "tui": "tsx --conditions=@minpeter/pss-source src/tui.ts",
-    "dev:worker": "wrangler dev -e dev",
     "dev:relay": "tsx scripts/telegram.ts relay",
     "ship": "run-s ship:secrets ship:worker ship:webhook",
     "ship:secrets": "wrangler secret bulk .dev.vars --env=\"\"",
@@ -33,6 +35,7 @@
     "@trpc/server": "11.18.0",
     "agents": "0.17.3",
     "chat": "4.32.0",
+    "evlog": "^2.20.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

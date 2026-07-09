@@ -2,10 +2,30 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Env } from "./env";
 import {
+  collectTurnImageAttachments,
+  collectTurnImages,
   collectTurnText,
+  formatIngressDryRunReply,
   handleTelegramWebhook,
+  isImageAttachment,
   replyToThread,
+  summarizeIngressBatch,
+  TELEGRAM_COALESCE_QUIET_MS,
+  TELEGRAM_MAX_RAW_IMAGE_BYTES,
+  TELEGRAM_MAX_TURN_IMAGES,
+  TELEGRAM_MAX_TURN_RAW_IMAGE_BYTES,
+  TELEGRAM_MESSAGE_CONCURRENCY,
+  TelegramAttachmentLimitError,
 } from "./telegram";
+import { logError } from "./worker-log";
+
+vi.mock("./worker-log", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./worker-log")>();
+  return {
+    ...actual,
+    logError: vi.fn(),
+  };
+});
 
 const resolved = Promise.resolve();
 const chatConstructors: unknown[] = [];
@@ -84,6 +104,193 @@ describe("telegram conversation handling", () => {
     ).toBe("first\nsecond\nlatest");
   });
 
+  it("summarizes Layer 1 batches for dry-run verification", () => {
+    const summary = summarizeIngressBatch(
+      [
+        { text: "hello" },
+        {
+          attachments: [
+            { mimeType: "image/jpeg", type: "image" },
+            { mimeType: "image/png", type: "image" },
+          ],
+          text: "caption",
+        },
+      ],
+      {
+        correlationId: "corr-1",
+        key: "chat-1",
+        subscribe: false,
+      }
+    );
+    expect(summary).toEqual({
+      correlationId: "corr-1",
+      hasImages: true,
+      imageCount: 2,
+      imageMediaTypes: ["image/jpeg", "image/png"],
+      key: "chat-1",
+      messageCount: 2,
+      subscribe: false,
+      textChars: "hello\ncaption".length,
+      textPreview: "hello\ncaption",
+    });
+    const reply = formatIngressDryRunReply(summary);
+    expect(reply).toContain("Layer 1 only");
+    expect(reply).toContain("fragments=2");
+    expect(reply).toContain("images=2");
+    expect(reply).toContain("image/jpeg");
+    expect(
+      formatIngressDryRunReply({
+        ...summary,
+        hasImages: false,
+        imageCount: 0,
+        imageMediaTypes: [],
+      })
+    ).toContain("images=0 (none attached)");
+  });
+
+  it("uses concurrent delivery plus app quiet-window coalesce", async () => {
+    await handleTelegramWebhook(
+      new Request("https://worker.test/"),
+      createWebhookEnv(createDurableObjectNamespace("coalesce-concurrency")),
+      createExecutionContext()
+    );
+
+    expect(chatConstructors.at(-1)).toEqual(
+      expect.objectContaining({
+        concurrency: TELEGRAM_MESSAGE_CONCURRENCY,
+      })
+    );
+    expect(TELEGRAM_MESSAGE_CONCURRENCY).toEqual({
+      strategy: "concurrent",
+    });
+    expect(TELEGRAM_COALESCE_QUIET_MS).toBe(1200);
+  });
+
+  it("collects images from every message in a batch", async () => {
+    const first = new Uint8Array([1, 2]);
+    const second = new Uint8Array([3, 4, 5]);
+    await expect(
+      collectTurnImages([
+        {
+          attachments: [
+            {
+              data: first,
+              mimeType: "image/jpeg",
+              type: "image",
+            },
+          ],
+          text: "first",
+        },
+        {
+          attachments: [
+            {
+              data: second,
+              mimeType: "image/png",
+              name: "b.png",
+              type: "image",
+            },
+          ],
+          text: "caption",
+        },
+      ])
+    ).resolves.toEqual([
+      {
+        dataBase64: btoa(String.fromCharCode(1, 2)),
+        mediaType: "image/jpeg",
+      },
+      {
+        dataBase64: btoa(String.fromCharCode(3, 4, 5)),
+        filename: "b.png",
+        mediaType: "image/png",
+      },
+    ]);
+  });
+
+  it("rejects oversized raw images before the DO hop", async () => {
+    const huge = new Uint8Array(TELEGRAM_MAX_RAW_IMAGE_BYTES + 1);
+    await expect(
+      collectTurnImages([
+        {
+          attachments: [{ data: huge, mimeType: "image/jpeg", type: "image" }],
+          text: "",
+        },
+      ])
+    ).rejects.toBeInstanceOf(TelegramAttachmentLimitError);
+  });
+
+  it("rejects turns that exceed the max image count", async () => {
+    const tiny = new Uint8Array([1]);
+    const messages = Array.from(
+      { length: TELEGRAM_MAX_TURN_IMAGES + 1 },
+      () =>
+        ({
+          attachments: [
+            { data: tiny, mimeType: "image/jpeg", type: "image" as const },
+          ],
+          text: "",
+        }) as const
+    );
+    await expect(collectTurnImages(messages)).rejects.toBeInstanceOf(
+      TelegramAttachmentLimitError
+    );
+  });
+
+  it("rejects turns that exceed total raw image bytes", async () => {
+    const chunk = new Uint8Array(
+      Math.floor(TELEGRAM_MAX_TURN_RAW_IMAGE_BYTES / 2) + 1
+    );
+    await expect(
+      collectTurnImages([
+        {
+          attachments: [
+            { data: chunk, mimeType: "image/jpeg", type: "image" },
+            { data: chunk, mimeType: "image/jpeg", type: "image" },
+          ],
+          text: "",
+        },
+      ])
+    ).rejects.toBeInstanceOf(TelegramAttachmentLimitError);
+  });
+
+  it("treats telegram photos and image documents as image attachments", () => {
+    expect(isImageAttachment({ type: "image" })).toBe(true);
+    expect(isImageAttachment({ mimeType: "image/png", type: "file" })).toBe(
+      true
+    );
+    expect(
+      isImageAttachment({ mimeType: "application/pdf", type: "file" })
+    ).toBe(false);
+    expect(isImageAttachment({ type: "video" })).toBe(false);
+  });
+
+  it("materializes image attachments as base64 payloads", async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    await expect(
+      collectTurnImageAttachments({
+        attachments: [
+          {
+            fetchData: () => Promise.resolve(bytes),
+            mimeType: "image/png",
+            name: "shot.png",
+            type: "image",
+          },
+          {
+            data: new Uint8Array([9]),
+            mimeType: "application/pdf",
+            type: "file",
+          },
+        ],
+        text: "caption",
+      })
+    ).resolves.toEqual([
+      {
+        dataBase64: btoa(String.fromCharCode(1, 2, 3, 4)),
+        filename: "shot.png",
+        mediaType: "image/png",
+      },
+    ]);
+  });
+
   it("subscribes mention threads and posts development notice before replies", async () => {
     const posts: string[] = [];
     const scopes: Array<string | undefined> = [];
@@ -111,6 +318,69 @@ describe("telegram conversation handling", () => {
     expect(subscribe).toHaveBeenCalledOnce();
     expect(posts).toEqual(["🧪 DEVELOPMENT ENVIRONMENT", "channel-1:hello"]);
     expect(scopes).toEqual(["telegram:user:user-1"]);
+  });
+
+  it("delivers image-only messages with default jpeg media type", async () => {
+    const delivered: Array<{
+      attachments?: readonly { mediaType: string; dataBase64: string }[];
+      text: string;
+    }> = [];
+
+    await replyToThread({
+      env,
+      deliverTurn: (_channelId, text, options) => {
+        delivered.push({
+          text,
+          ...(options?.attachments
+            ? { attachments: [...options.attachments] }
+            : {}),
+        });
+        return resolved;
+      },
+      message: {
+        attachments: [
+          {
+            data: new Uint8Array([10, 20]),
+            type: "image",
+          },
+        ],
+        text: "",
+      },
+      thread: {
+        channelId: "channel-1",
+        post: () => resolved,
+        subscribe: () => resolved,
+      },
+    });
+
+    expect(delivered).toEqual([
+      {
+        attachments: [
+          {
+            dataBase64: btoa(String.fromCharCode(10, 20)),
+            mediaType: "image/jpeg",
+          },
+        ],
+        text: "",
+      },
+    ]);
+  });
+
+  it("ignores empty messages with no text and no images", async () => {
+    const deliverTurn = vi.fn();
+
+    await replyToThread({
+      env,
+      deliverTurn,
+      message: { text: "" },
+      thread: {
+        channelId: "channel-1",
+        post: () => resolved,
+        subscribe: () => resolved,
+      },
+    });
+
+    expect(deliverTurn).not.toHaveBeenCalled();
   });
 
   it("does not post an assistant-output fallback after agent delivery", async () => {
@@ -160,9 +430,7 @@ describe("telegram conversation handling", () => {
   });
 
   it("does not leak internal failures to the chat thread", async () => {
-    const errorLog = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
+    vi.mocked(logError).mockClear();
     const error = new Error("internal secret failure");
     const posts: string[] = [];
 
@@ -187,7 +455,10 @@ describe("telegram conversation handling", () => {
       "🧪 DEVELOPMENT ENVIRONMENT",
       "처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
     ]);
-    expect(errorLog).toHaveBeenCalledWith("telegram handler failed", error);
+    expect(logError).toHaveBeenCalled();
+    const [logged] = vi.mocked(logError).mock.calls[0] ?? [];
+    expect(logged).toBeInstanceOf(Error);
+    expect((logged as Error).message).toContain("Telegram message handling");
   });
 
   it("recreates the cached bot when Durable Object namespace changes", async () => {

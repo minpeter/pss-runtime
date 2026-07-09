@@ -1,6 +1,9 @@
 import type { AgentEvent, RuntimeInput } from "../protocol/events";
 import { base64ToBytes } from "./attachment-base64";
-import { prepareAttachmentBytesForStorage } from "./attachment-image-compress";
+import {
+  notifyImageOmitDiagnostics,
+  prepareAttachmentBytesForStorage,
+} from "./attachment-image-compress";
 import {
   decodeRuntimeAttachmentData,
   encodeRuntimeAttachmentData,
@@ -206,6 +209,9 @@ async function stageFilePart(
       bytes,
       maxImageBytes: options.maxImageBytes,
       mediaType: part.mediaType,
+      ...(options.onImagePrepare
+        ? { onImagePrepare: options.onImagePrepare }
+        : {}),
     });
 
     const ref = await store.put({
@@ -222,7 +228,15 @@ async function stageFilePart(
     };
   } catch (error) {
     // Safety limits: omit this image, keep the rest of the turn (text + other files).
+    // Hosts observe omits via the returned text notice; no hand-rolled stdout trees.
     if (error instanceof RuntimeAttachmentImageLimitError) {
+      const omit = {
+        filename: part.filename,
+        limit: error.limit,
+        mediaType: part.mediaType,
+      };
+      options.onImageOmit?.(omit);
+      notifyImageOmitDiagnostics(omit);
       return imageLimitOmittedTextPart(part.filename, error);
     }
     throw error;

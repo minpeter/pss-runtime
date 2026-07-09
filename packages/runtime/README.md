@@ -120,7 +120,7 @@ inputs, and notifications. Image byte inputs are normalized on every host before
 attachments are always `image/jpeg` or `image/png` (never HEIC/AVIF/WebP/etc.).
 Policy: keep small valid JPEG/PNG as-is; otherwise decode and re-encode —
 opaque → JPEG, transparent → PNG (with JPEG fallback if PNG cannot fit the
-budget). Default max size is 1MB (`maxImageBytes`). Non-image files are left
+budget). Default max size is 240KB (`maxImageBytes`). Non-image files are left
 unchanged. Refs are hydrated back into
 bytes immediately before model generation. Custom hosts that accept byte inputs
 must provide an `attachmentStore` with `put`, `get`, and `delete`; remote

@@ -16,6 +16,7 @@ export const TuiTurnOutputSchema = z.discriminatedUnion("delivered", [
   z
     .object({
       delivered: z.literal(true),
+      mode: z.enum(["send", "steer"]).optional(),
       messages: z
         .array(
           z
@@ -34,6 +35,7 @@ export const TuiTurnOutputSchema = z.discriminatedUnion("delivered", [
     .object({
       delivered: z.literal(false),
       error: z.literal("missing_send_message"),
+      mode: z.enum(["send", "steer"]).optional(),
     })
     .strict(),
 ]);

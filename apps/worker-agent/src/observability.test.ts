@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createTurnEventCollector,
   createTurnObservabilityPlugin,
   describeEvent,
   type TurnObservabilityEntry,
@@ -35,6 +36,27 @@ describe("describeEvent", () => {
     expect(
       describeEvent({ type: "assistant-output", text: "secret" })
     ).toBeUndefined();
+  });
+});
+
+describe("createTurnEventCollector", () => {
+  it("summarizes steps and tool calls for a wide event", () => {
+    const collector = createTurnEventCollector();
+    collector.record({ event: "turn-start", label: "dev" });
+    collector.record({ event: "step-start", label: "dev" });
+    collector.record({
+      event: "tool-call",
+      label: "dev",
+      toolName: "send_message",
+    });
+    collector.record({ event: "step-end", label: "dev" });
+    collector.record({ event: "turn-end", label: "dev" });
+
+    expect(collector.summary()).toEqual({
+      errors: [],
+      steps: 1,
+      toolCalls: ["send_message"],
+    });
   });
 });
 

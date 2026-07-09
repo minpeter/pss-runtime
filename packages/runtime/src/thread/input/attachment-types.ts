@@ -1,3 +1,5 @@
+import type { ImagePrepareDiagnostics } from "./attachment-image-encode";
+
 export interface RuntimeAttachmentReference {
   readonly id: string;
   readonly schemaVersion: 1;
@@ -21,12 +23,32 @@ export interface HostAttachmentStore {
   put(input: RuntimeAttachmentPutInput): Promise<RuntimeAttachmentReference>;
 }
 
+export interface ImageOmitDiagnostics {
+  readonly filename?: string;
+  readonly limit:
+    | "decoded_pixels"
+    | "input_bytes"
+    | "invalid_dimensions"
+    | "storage_budget";
+  readonly mediaType: string;
+}
+
 export interface RuntimeAttachmentStagingOptions {
   /**
    * Max stored size for image byte inputs after compression.
-   * Defaults to 1_000_000 (1MB) for all hosts.
+   * Defaults to 240_000 (240KB) for all hosts.
    */
   readonly maxImageBytes?: number;
+  /**
+   * Per-staging callback when an image is soft-omitted for safety limits.
+   * Hosts should log via their logger (e.g. evlog), not expect runtime stdout.
+   */
+  readonly onImageOmit?: (diagnostics: ImageOmitDiagnostics) => void;
+  /**
+   * Per-staging callback for image-prepare diagnostics (request-scoped).
+   * Prefer this when the host owns the staging call site.
+   */
+  readonly onImagePrepare?: (diagnostics: ImagePrepareDiagnostics) => void;
   readonly stagedRefs?: RuntimeAttachmentReference[];
   readonly trustRuntimeAttachmentRefs?: boolean;
 }
