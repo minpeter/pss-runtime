@@ -1,9 +1,9 @@
 import type { Agent, AgentTurn } from "@minpeter/pss-runtime";
 import type {
-  ExecutionHost,
+  AgentHost,
   ResumeThreadOptions,
 } from "@minpeter/pss-runtime/execution";
-import { createInMemoryExecutionHost } from "@minpeter/pss-runtime/platform/memory";
+import { createInMemoryHost } from "@minpeter/pss-runtime/platform/memory";
 
 const defaultResumeTimeoutMs = 60_000;
 
@@ -23,7 +23,7 @@ interface ThreadPromptWaiter {
   resolve(prompt: LocalThreadPrompt): void;
 }
 
-export interface LocalHost extends ExecutionHost {
+export interface LocalHost extends AgentHost {
   resumeThread(options?: { readonly timeoutMs?: number }): Promise<AgentTurn>;
 }
 
@@ -39,13 +39,13 @@ export function localHost({
 }: {
   readonly agent: () => Agent;
 }): LocalHost {
-  const baseHost = createInMemoryExecutionHost();
+  const baseHost = createInMemoryHost();
   const promptState: LocalThreadPromptState = {
     pendingErrors: [],
     pendingPrompts: [],
     waiters: [],
   };
-  const host: ExecutionHost = {
+  const host: AgentHost = {
     ...baseHost,
     scheduler: {
       enqueueRun: async (runId, options) => {

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { resumeRun } from "../../execution/resume/resume";
 import type { RuntimeToolExecutionCheckpoint } from "../../llm/llm";
 import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution";
-import { createInMemoryExecutionHost } from "../../platform/memory";
+import { createInMemoryHost } from "../../platform/memory";
 import {
   createCheckpointSpyHost,
   createQueuedUserTurnRun,
@@ -86,7 +86,7 @@ describe("resumeRun checkpoint recovery", () => {
   });
 
   it("stops for manual recovery when resuming from a pending tool checkpoint", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     const pendingToolCall: RuntimeToolExecutionCheckpoint = {
       attempt: 1,
       idempotencyKey: "run-1:call-tool-1",

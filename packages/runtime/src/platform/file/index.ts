@@ -7,14 +7,10 @@ export {
   type NodeFileAgentContextOptions,
 } from "./host/agent-context";
 export {
-  createNodeFileExecutionHost,
-  createNodeFileScheduler,
-  type NodeFileExecutionHostOptions,
-} from "./host/file-execution-host";
-export {
-  createNodeFileThreadHost,
-  type NodeFileThreadHostOptions,
-} from "./host/file-thread-host";
+  createFileHost,
+  createFileScheduler,
+  type FileHostOptions,
+} from "./host/file-host";
 export { drainScheduledNodeWork } from "./host/scheduled-work-drainer";
 export {
   ackScheduledNodeRun,
@@ -35,10 +31,11 @@ export type {
 export { FileAttachmentStore } from "./storage/file-attachment-store";
 export { FileExecutionStore } from "./storage/file-execution-store";
 export {
-  inspectNodeFileThread,
-  type NodeFileThreadInspection,
-  type NodeFileThreadInspectionCompaction,
-  type NodeFileThreadInspectionOptions,
-  nodeFileThreadStorageFile,
+  fileThreadStorageHint,
+  fileThreadStoragePath,
+  inspectFileThread,
+  type FileThreadInspection,
+  type FileThreadInspectionCompaction,
+  type FileThreadInspectionOptions,
 } from "./storage/file-thread-inspection";
 export { FileThreadStore } from "./storage/file-thread-store";

@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describeExecutionSchedulerContract } from "../../../contracts/execution-scheduler/contract";
-import { createNodeFileScheduler } from "./file-execution-host";
+import { createFileScheduler } from "./file-host";
 import {
   ackScheduledNodeRun,
   ackScheduledNodeThreadPrompt,
@@ -23,7 +23,7 @@ describeExecutionSchedulerContract({
       listRuns: (options) => listScheduledNodeRuns(directory, options),
       listThreadPrompts: (options) =>
         listScheduledNodeThreadPrompts(directory, options),
-      scheduler: createNodeFileScheduler({ directory }),
+      scheduler: createFileScheduler({ directory }),
     };
   },
   name: "node file",

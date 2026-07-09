@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   type ClaimedThreadInput,
-  type ExecutionStore,
+  type HostStore,
   ThreadInputDuplicateConflictError,
 } from "../../execution";
 import { describeThreadInputInboxRecoveryContract } from "./thread-input-recovery-contract";
 
 export interface ThreadInputInboxContractOptions {
-  readonly createStore: () => ExecutionStore;
+  readonly createStore: () => HostStore;
 }
 
 export function describeThreadInputInboxContract({

@@ -1,78 +1,11 @@
-import type { ExecutionHost } from "../../../execution";
-import type { ThreadStore } from "../../../thread/store/types";
-import { createCloudflareDurableObjectHost } from "../host/durable-object-host";
-import { createCloudflareAgentsFiberRetryScheduler } from "./retry-scheduler";
-import {
-  type CloudflareAgentsFiberSchedulerOptions,
-  createCloudflareAgentsFiberScheduler,
-} from "./scheduler";
-import type {
-  CloudflareAgentsDefaultResumeAgent,
-  CloudflareAgentsDurableObjectContext,
-  CloudflareAgentsResumeRun,
-  CloudflareAgentsTurnDrainOptions,
-} from "./types";
+import type { CloudflareHostOptions } from "../host/create-cloudflare-host";
+import type { CloudflareAgentsDefaultResumeAgent } from "./types";
 
-const defaultPrefix = "pss-runtime";
-
-interface CloudflareAgentsExecutionHostBaseOptions<
-  TAgent extends CloudflareAgentsDefaultResumeAgent,
-> {
-  readonly cloudflareAgent: TAgent;
-  readonly drain?: CloudflareAgentsTurnDrainOptions;
-  readonly durableObjectContext: CloudflareAgentsDurableObjectContext;
-  readonly maxPayloadBytes?: number;
-  readonly prefix?: string;
-  readonly resume: CloudflareAgentsResumeRun;
-  readonly retryMaxAttempts?: number;
-  readonly retryMaxRunAfterMs?: number;
-  readonly retryRunAfterMs?: number;
-  readonly threadStore?: ThreadStore;
-}
-
-export type CloudflareAgentsExecutionHostOptions<
+/**
+ * @deprecated Use {@link CloudflareHostOptions} from
+ * `create-cloudflare-host` / platform cloudflare exports.
+ */
+export type CloudflareAgentsHostOptions<
   TAgent extends
     CloudflareAgentsDefaultResumeAgent = CloudflareAgentsDefaultResumeAgent,
-> = CloudflareAgentsExecutionHostBaseOptions<TAgent> &
-  Pick<CloudflareAgentsFiberSchedulerOptions<TAgent>, "delayedResumeCallback">;
-
-export function createCloudflareAgentsExecutionHost<
-  TAgent extends
-    CloudflareAgentsDefaultResumeAgent = CloudflareAgentsDefaultResumeAgent,
->({
-  cloudflareAgent,
-  delayedResumeCallback,
-  drain,
-  durableObjectContext,
-  maxPayloadBytes,
-  prefix = defaultPrefix,
-  retryMaxAttempts,
-  retryMaxRunAfterMs,
-  retryRunAfterMs,
-  resume,
-  threadStore,
-}: CloudflareAgentsExecutionHostOptions<TAgent>): ExecutionHost {
-  const retry = createCloudflareAgentsFiberRetryScheduler({
-    cloudflareAgent,
-    delayedResumeCallback,
-    retryMaxAttempts,
-    retryMaxRunAfterMs,
-    retryRunAfterMs,
-    storage: durableObjectContext.storage,
-  });
-  return createCloudflareDurableObjectHost({
-    maxPayloadBytes,
-    prefix,
-    scheduler: createCloudflareAgentsFiberScheduler({
-      cloudflareAgent,
-      delayedResumeCallback,
-      drain,
-      prefix,
-      retry,
-      resume,
-      storage: durableObjectContext.storage,
-    }),
-    storage: durableObjectContext.storage,
-    threadStore,
-  });
-}
+> = CloudflareHostOptions<TAgent>;

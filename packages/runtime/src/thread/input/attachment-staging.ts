@@ -5,12 +5,14 @@ import {
   encodeRuntimeAttachmentData,
   isRuntimeAttachmentData,
 } from "./attachment-refs";
+import { prepareAttachmentBytesForStorage } from "./attachment-image-compress";
 import type {
   RuntimeAttachmentReference,
   RuntimeAttachmentStagingOptions,
-  RuntimeAttachmentStore,
+  HostAttachmentStore,
 } from "./attachment-types";
 import {
+  RuntimeAttachmentImageLimitError,
   RuntimeAttachmentSecurityError,
   RuntimeAttachmentStagingError,
 } from "./attachment-types";
@@ -18,11 +20,13 @@ import type {
   UserInput,
   UserMessageContentPart,
   UserMessageFileData,
+  UserMessageFilePart,
+  UserMessageTextPart,
 } from "./input";
 
 export async function stageUserInputAttachments(
   input: UserInput,
-  store: RuntimeAttachmentStore | undefined,
+  store: HostAttachmentStore | undefined,
   options: RuntimeAttachmentStagingOptions = {}
 ): Promise<UserInput> {
   if (!("content" in input)) {
@@ -36,10 +40,7 @@ export async function stageUserInputAttachments(
       continue;
     }
 
-    content.push({
-      ...part,
-      data: await stageFileData(part.data, part, store, options),
-    });
+    content.push(await stageFilePart(part, store, options));
   }
 
   return {
@@ -49,7 +50,7 @@ export async function stageUserInputAttachments(
 }
 
 export async function cleanupStagedRuntimeAttachments(
-  store: RuntimeAttachmentStore | undefined,
+  store: HostAttachmentStore | undefined,
   refs: readonly RuntimeAttachmentReference[]
 ): Promise<void> {
   if (!store || refs.length === 0) {
@@ -60,7 +61,7 @@ export async function cleanupStagedRuntimeAttachments(
 }
 
 export async function cleanupUnreferencedStagedRuntimeAttachments(
-  store: RuntimeAttachmentStore | undefined,
+  store: HostAttachmentStore | undefined,
   refs: readonly RuntimeAttachmentReference[],
   retained: readonly (AgentEvent | UserInput)[]
 ): Promise<void> {
@@ -112,7 +113,7 @@ export function userInputContainsRuntimeAttachmentRefs(
 
 export async function stageAgentEventAttachments(
   event: AgentEvent,
-  store: RuntimeAttachmentStore | undefined,
+  store: HostAttachmentStore | undefined,
   options: RuntimeAttachmentStagingOptions = {}
 ): Promise<AgentEvent> {
   if (event.type === "user-input") {
@@ -131,7 +132,7 @@ export async function stageAgentEventAttachments(
 
 export async function stageAgentEventsAttachments(
   events: readonly AgentEvent[],
-  store: RuntimeAttachmentStore | undefined,
+  store: HostAttachmentStore | undefined,
   options: RuntimeAttachmentStagingOptions = {}
 ): Promise<AgentEvent[]> {
   const staged: AgentEvent[] = [];
@@ -174,25 +175,24 @@ function runtimeAttachmentRefsForUserInput(
   return refs;
 }
 
-async function stageFileData(
-  data: UserMessageFileData,
-  part: { readonly filename?: string; readonly mediaType: string },
-  store: RuntimeAttachmentStore | undefined,
+async function stageFilePart(
+  part: UserMessageFilePart,
+  store: HostAttachmentStore | undefined,
   options: RuntimeAttachmentStagingOptions
-): Promise<UserMessageFileData> {
-  const runtimeRef = runtimeAttachmentDataRef(data);
+): Promise<UserMessageContentPart> {
+  const runtimeRef = runtimeAttachmentDataRef(part.data);
   if (runtimeRef !== undefined) {
     if (options.trustRuntimeAttachmentRefs === true) {
-      return runtimeRef;
+      return { ...part, data: runtimeRef };
     }
     throw new RuntimeAttachmentSecurityError(
       "External input cannot contain runtime attachment refs."
     );
   }
 
-  const bytes = fileDataBytes(data);
+  const bytes = fileDataBytes(part.data);
   if (!bytes) {
-    return structuredClone(data);
+    return structuredClone(part);
   }
 
   if (!store) {
@@ -201,13 +201,51 @@ async function stageFileData(
     );
   }
 
-  const ref = await store.put({
-    bytes,
-    filename: part.filename,
-    mediaType: part.mediaType,
-  });
-  options.stagedRefs?.push(ref);
-  return encodeRuntimeAttachmentData(ref);
+  try {
+    const prepared = await prepareAttachmentBytesForStorage({
+      bytes,
+      maxImageBytes: options.maxImageBytes,
+      mediaType: part.mediaType,
+    });
+
+    const ref = await store.put({
+      bytes: prepared.bytes,
+      filename: part.filename,
+      mediaType: prepared.mediaType,
+    });
+    options.stagedRefs?.push(ref);
+    return {
+      ...part,
+      // Keep part mediaType aligned with stored bytes (e.g. heic → image/jpeg).
+      data: encodeRuntimeAttachmentData(ref),
+      mediaType: prepared.mediaType,
+    };
+  } catch (error) {
+    // Safety limits: omit this image, keep the rest of the turn (text + other files).
+    if (error instanceof RuntimeAttachmentImageLimitError) {
+      return imageLimitOmittedTextPart(part.filename, error);
+    }
+    throw error;
+  }
+}
+
+function imageLimitOmittedTextPart(
+  filename: string | undefined,
+  error: RuntimeAttachmentImageLimitError
+): UserMessageTextPart {
+  const label = filename?.trim() || "image";
+  const reason =
+    error.limit === "input_bytes"
+      ? "file too large to process safely"
+      : error.limit === "decoded_pixels"
+        ? "resolution too high to process safely"
+        : error.limit === "storage_budget"
+          ? "storage budget invalid or too high"
+          : "invalid image dimensions";
+  return {
+    type: "text",
+    text: `[Attachment omitted: ${label} (${reason})]`,
+  };
 }
 
 function fileDataBytes(data: UserMessageFileData): Uint8Array | undefined {

@@ -1,7 +1,7 @@
 import {
   prepareScheduledNotificationRetry,
   shouldRetryNotClaimableScheduledRun,
-} from "../alarm/scheduled-work-context";
+} from "../host/scheduled-work-retry";
 import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import { scheduleCloudflareAgentsDelayedPayload } from "./delayed-schedule";
 import {

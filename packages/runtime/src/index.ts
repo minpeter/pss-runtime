@@ -18,16 +18,31 @@ export type {
 export type { AgentToolChoice } from "./llm/llm";
 export { ThreadEventReplayUnsupportedError } from "./thread/handle/thread-event-replay";
 export {
+  DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,
   decodeRuntimeAttachmentData,
   encodeRuntimeAttachmentData,
+  getInstalledImageCodecWasm,
+  installImageCodecWasm,
+  installImageCodecWasmFromNodeModules,
+  isCompressibleImageMediaType,
   isRuntimeAttachmentData,
+  isStoredImageMediaType,
+  type ImageCodecWasmModules,
+  MAX_IMAGE_DECODED_PIXELS,
+  MAX_IMAGE_INPUT_BYTES,
+  MAX_IMAGE_STORAGE_BUDGET_BYTES,
+  prepareAttachmentBytesForStorage,
+  type PreparedAttachmentBytes,
   type RuntimeAttachmentBlob,
   RuntimeAttachmentHydrationError,
+  RuntimeAttachmentImageLimitError,
   type RuntimeAttachmentPutInput,
   type RuntimeAttachmentReference,
   RuntimeAttachmentSecurityError,
   RuntimeAttachmentStagingError,
-  type RuntimeAttachmentStore,
+  STORED_IMAGE_MEDIA_TYPES,
+  type StoredImageMediaType,
+  type HostAttachmentStore,
 } from "./thread/input/attachments";
 export { delegateUserInput } from "./thread/input/delegate-input";
 export type { AgentInput, ThreadInput } from "./thread/input/input";

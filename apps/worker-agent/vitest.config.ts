@@ -6,6 +6,13 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: /^@minpeter\/pss-runtime\/platform\/cloudflare\/image-codecs$/,
+        replacement: resolve(
+          import.meta.dirname,
+          "src/image-codecs-test-shim.ts"
+        ),
+      },
+      {
         find: /^@minpeter\/pss-runtime\/platform\/cloudflare$/,
         replacement: resolve(
           import.meta.dirname,
@@ -32,6 +39,10 @@ export default defineConfig({
           import.meta.dirname,
           "src/cloudflare-workers-test-shim.ts"
         ),
+      },
+      {
+        find: /^agents$/,
+        replacement: resolve(import.meta.dirname, "src/agents-test-shim.ts"),
       },
     ],
     conditions: ["@minpeter/pss-source", "import", "module", "default"],

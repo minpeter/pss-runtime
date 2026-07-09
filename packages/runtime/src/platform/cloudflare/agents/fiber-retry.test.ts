@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ExecutionHost } from "../../../execution";
+import type { AgentHost } from "../../../execution";
 import {
   createRetryHost,
   expectActiveLeasedNotification,
@@ -70,7 +70,7 @@ describe("Cloudflare Agents fiber retries", () => {
   it("reschedules non-notification runs when draining hits the event budget", async () => {
     const cloudflareAgent = createFakeCloudflareAgent();
     const runId = "background:bg_user_event_budget";
-    let host: ExecutionHost;
+    let host: AgentHost;
     host = createRetryHost(
       cloudflareAgent,
       async (payload) => {
@@ -108,7 +108,7 @@ describe("Cloudflare Agents fiber retries", () => {
 
   it("reschedules notifications completed before drain when draining hits the event budget", async () => {
     const cloudflareAgent = createFakeCloudflareAgent();
-    let host: ExecutionHost;
+    let host: AgentHost;
     host = createRetryHost(
       cloudflareAgent,
       async (payload) => {
@@ -170,7 +170,7 @@ describe("Cloudflare Agents fiber retries", () => {
     const cloudflareAgent = createFakeCloudflareAgent();
     cloudflareAgent.schedule = () =>
       Promise.reject(new Error("schedule failed"));
-    let host: ExecutionHost;
+    let host: AgentHost;
     host = createRetryHost(
       cloudflareAgent,
       async (payload) => {

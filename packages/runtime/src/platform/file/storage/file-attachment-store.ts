@@ -5,7 +5,7 @@ import type {
   RuntimeAttachmentBlob,
   RuntimeAttachmentPutInput,
   RuntimeAttachmentReference,
-  RuntimeAttachmentStore,
+  HostAttachmentStore,
 } from "../../../thread/input/attachments";
 
 interface FileAttachmentMetadata {
@@ -25,7 +25,7 @@ class FileAttachmentStoreError extends Error {
 const attachmentIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export class FileAttachmentStore implements RuntimeAttachmentStore {
+export class FileAttachmentStore implements HostAttachmentStore {
   readonly #directory: string;
 
   constructor(directory: string) {

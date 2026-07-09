@@ -2,10 +2,10 @@ import type {
   RuntimeAttachmentBlob,
   RuntimeAttachmentPutInput,
   RuntimeAttachmentReference,
-  RuntimeAttachmentStore,
+  HostAttachmentStore,
 } from "../../../thread/input/attachments";
 
-export class MemoryAttachmentStore implements RuntimeAttachmentStore {
+export class MemoryAttachmentStore implements HostAttachmentStore {
   readonly #attachments = new Map<string, RuntimeAttachmentBlob>();
 
   delete(ref: RuntimeAttachmentReference): Promise<void> {

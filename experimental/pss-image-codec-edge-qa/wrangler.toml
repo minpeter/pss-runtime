@@ -1,0 +1,7 @@
+name = "pss-image-codec-edge-qa"
+main = "src/index.ts"
+compatibility_date = "2026-06-08"
+compatibility_flags = ["nodejs_compat"]
+
+# Temporary QA worker — safe to delete after verification.
+workers_dev = true

@@ -18,7 +18,7 @@ import {
   eventTypes,
 } from "../../../testing/test-fixtures";
 import { collect } from "../../../thread/handle/test-support";
-import { createNodeFileExecutionHost } from "./file-execution-host";
+import { createFileHost } from "./file-host";
 import { drainScheduledNodeWork } from "./scheduled-work-drainer";
 import {
   ackScheduledNodeRun,
@@ -32,11 +32,11 @@ import {
 const malformedScheduledWorkPattern =
   /Invalid Node scheduled work file .*invalid JSON/;
 
-describe("createNodeFileExecutionHost", () => {
+describe("createFileHost", () => {
   it("persists resumable notification runs across reconstructed hosts", async () => {
     const directory = await tempDir();
     try {
-      const firstHost = createNodeFileExecutionHost({ directory });
+      const firstHost = createFileHost({ directory });
       const dispatched = await dispatchAgentNotification({
         host: firstHost,
         idempotencyKey: "local-reminder:1",
@@ -59,7 +59,7 @@ describe("createNodeFileExecutionHost", () => {
         }),
       ]);
 
-      const secondHost = createNodeFileExecutionHost({ directory });
+      const secondHost = createFileHost({ directory });
       const createAgent = () =>
         new Agent({
           host: secondHost,
@@ -178,7 +178,7 @@ describe("createNodeFileExecutionHost", () => {
   it("keeps scheduled work pending when the run is still leased", async () => {
     const directory = await tempDir();
     try {
-      const host = createNodeFileExecutionHost({ directory });
+      const host = createFileHost({ directory });
       const agent = new Agent({
         host,
         model: createCallbackModel(() =>

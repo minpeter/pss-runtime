@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createInMemoryExecutionHost } from "../../platform/memory";
+import { createInMemoryHost } from "../../platform/memory";
 import type { AgentEvent } from "../../thread/protocol/events";
 import { StoredAgentTurn } from "./stored-agent-turn";
 
@@ -13,7 +13,7 @@ async function collectRunEvents(run: StoredAgentTurn): Promise<AgentEvent[]> {
 
 describe("stored AgentTurn events", () => {
   it("replays stored events from cursor without thread runs", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     await host.store.turns.create({
       checkpointVersion: 0,
       kind: "user-turn",
@@ -39,7 +39,7 @@ describe("stored AgentTurn events", () => {
   });
 
   it("rejects concurrent event iteration for one run", () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     const run = new StoredAgentTurn({
       eventStore: host.store.events,
       runId: "run-1",

@@ -1,9 +1,9 @@
-import type { ExecutionHost } from "../../execution/host/types";
+import type { AgentHost } from "../../execution/host/types";
 import {
   cleanupStagedRuntimeAttachments,
   cleanupUnreferencedStagedRuntimeAttachments,
   type RuntimeAttachmentReference,
-  type RuntimeAttachmentStore,
+  type HostAttachmentStore,
   stageUserInputAttachments,
 } from "../input/attachments";
 import type { AgentInput } from "../input/input";
@@ -42,10 +42,10 @@ export async function admitThreadSendInput({
   threadKey,
 }: {
   readonly awaitBoundaries: boolean;
-  readonly attachmentStore: RuntimeAttachmentStore | undefined;
+  readonly attachmentStore: HostAttachmentStore | undefined;
   readonly drain: () => Promise<void>;
   readonly events: ThreadEventDispatcher;
-  readonly executionHost: ExecutionHost | undefined;
+  readonly executionHost: AgentHost | undefined;
   readonly input: AgentInput;
   readonly inputQueue: QueuedInput[];
   readonly pendingOverlays: QueuedRuntimeInput[];
@@ -78,7 +78,7 @@ export async function recoverThreadDurableInputClaims({
   state,
   threadKey,
 }: {
-  readonly executionHost: ExecutionHost | undefined;
+  readonly executionHost: AgentHost | undefined;
   readonly state: DurableInputRecoveryState;
   readonly threadKey: string;
 }): Promise<void> {
@@ -118,9 +118,9 @@ export async function createQueuedSendInput({
   threadKey,
 }: {
   readonly awaitBoundaries: boolean;
-  readonly attachmentStore: RuntimeAttachmentStore | undefined;
+  readonly attachmentStore: HostAttachmentStore | undefined;
   readonly events: ThreadEventDispatcher;
-  readonly executionHost: ExecutionHost | undefined;
+  readonly executionHost: AgentHost | undefined;
   readonly input: AgentInput;
   readonly pendingOverlays: QueuedRuntimeInput[];
   readonly pendingRuntimeInputs: QueuedRuntimeInput[];
@@ -199,7 +199,7 @@ export async function claimOrphanDurableThreadInput({
   executionHost,
   threadKey,
 }: {
-  readonly executionHost: ExecutionHost | undefined;
+  readonly executionHost: AgentHost | undefined;
   readonly threadKey: string;
 }): Promise<QueuedInput | undefined> {
   const claimed = await claimDurableThreadInput({
@@ -227,7 +227,7 @@ export async function prepareQueuedDurableInput({
   item,
   threadKey,
 }: {
-  readonly executionHost: ExecutionHost | undefined;
+  readonly executionHost: AgentHost | undefined;
   readonly item: QueuedInput;
   readonly threadKey: string;
 }): Promise<QueuedInput | undefined> {

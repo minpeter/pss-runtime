@@ -1,24 +1,28 @@
 // biome-ignore-all lint/performance/noBarrelFile: Public package subpath entrypoint required by package exports.
 
 export {
-  type CloudflareAgentsPlatformContext,
-  type CloudflareAgentsPlatformContextOptions,
-  type CloudflareAgentsPlatformFactoryOptions,
-  type CloudflareAgentsPlatformPrefixGuard,
-  type CloudflareAgentsPlatformPrefixGuardOptions,
+  type CloudflarePlatformContext,
+  type CloudflarePlatformContextOptions,
+  type CloudflarePlatformFactoryOptions,
+  type CloudflarePlatformPrefixGuard,
+  type CloudflarePlatformPrefixGuardOptions,
   type CloudflareAgentsResumableAgent,
-  createCloudflareAgentsPlatformContext,
+  createCloudflarePlatformContext,
 } from "./agents/context";
+/** Lazy so Node tests can import the cloudflare entry without loading .wasm. */
+export async function installCloudflareImageCodecs(): Promise<void> {
+  const { installCloudflareImageCodecs: install } = await import(
+    "./image-codecs-edge.js"
+  );
+  install();
+}
 export {
   type RecoverCloudflareAgentsFiberOptions,
   recoverCloudflareAgentsFiber,
   type StartCloudflareAgentsResumeFiberOptions,
   startCloudflareAgentsResumeFiber,
 } from "./agents/fiber";
-export {
-  type CloudflareAgentsExecutionHostOptions,
-  createCloudflareAgentsExecutionHost,
-} from "./agents/host";
+export type { CloudflareAgentsHostOptions } from "./agents/host";
 export {
   ackScheduledCloudflareAgentsRun,
   ackScheduledCloudflareAgentsThreadPrompt,
@@ -90,35 +94,11 @@ export type {
   CloudflareAgentsTurnDrainOptions,
 } from "./agents/types";
 export type {
-  CloudflareAlarmContinuationReason,
-  CloudflareAlarmDrainBudget,
-  FailedScheduledWork,
-} from "./alarm/budget";
-export type {
-  CloudflareAlarmAgent,
-  CloudflareAlarmAgentForRun,
-  CloudflareAlarmDrainSummary,
-  CloudflareAlarmEventHandler,
-  CloudflareAlarmRunContext,
-  CloudflareAlarmRunSource,
-} from "./alarm/drainer";
-export {
-  CloudflareAlarmDrainFailureError,
-  drainCloudflareAlarm,
-} from "./alarm/drainer";
-export type {
   AgentTurnDrainResult,
   AgentTurnDrainStopReason,
   CloudflareAgentTurnDrainOptions,
-} from "./alarm/run-drain";
-export { drainAgentTurn, drainAgentTurnWithBudget } from "./alarm/run-drain";
-export type {
-  CloudflareAgentContext,
-  CloudflareAgentContextFactoryOptions,
-  CloudflareAgentContextOptions,
-  CloudflareAgentContextPrefixOptions,
-} from "./context/agent-context";
-export { createCloudflareAgentContext } from "./context/agent-context";
+} from "./turn-drain";
+export { drainAgentTurn, drainAgentTurnWithBudget } from "./turn-drain";
 export type {
   DispatchCloudflareAgentNotificationInput,
   SourceCloudflareAgentNotificationIdempotencyKeyInput,
@@ -146,13 +126,19 @@ export type {
 export {
   ackScheduledCloudflareRun,
   ackScheduledCloudflareThreadPrompt,
-  createCloudflareAlarmScheduler,
-  createCloudflareDurableObjectHost,
+  createCloudflareScheduledWorkScheduler,
+  createCloudflareStorageHost,
+  type CloudflareStorageHostOptions,
   InMemoryCloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
   listScheduledCloudflareThreadPrompts,
-  rescheduleCloudflareAlarm,
 } from "./host/durable-object-host";
+export {
+  type CloudflareHostAgentsOptions,
+  type CloudflareHostOptions,
+  createCloudflareAgentsHost,
+  createCloudflareHost,
+} from "./host/create-cloudflare-host";
 export type {
   SqlStorage,
   SqlStorageCursorLike,

@@ -1,15 +1,16 @@
 import {
   type DispatchedAgentNotification,
   dispatchAgentNotification,
-  type ExecutionHost,
+  type AgentHost,
 } from "../../../execution";
 import type { AgentEvent, UserInput } from "../../../thread/protocol/events";
 import type { CloudflareScheduledThreadPrompt } from "../host/scheduled-work-queue";
 import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import {
-  type CloudflareAgentsExecutionHostOptions,
-  createCloudflareAgentsExecutionHost,
-} from "./host";
+  type CloudflareHostOptions,
+  createCloudflareHost,
+} from "../host/create-cloudflare-host";
+import type { CloudflareAgentsHostOptions } from "./host";
 import {
   ackListedCloudflareAgentsScheduledRun,
   ackListedCloudflareAgentsScheduledThreadPrompt,
@@ -36,15 +37,15 @@ export type DispatchCloudflareAgentsNotificationInput<
 > = DispatchCloudflareAgentsNotificationBase &
   (
     | ({
-        readonly host: ExecutionHost;
-      } & ForbiddenCloudflareAgentsExecutionHostOptions<TAgent>)
-    | ({ readonly host?: never } & CloudflareAgentsExecutionHostOptions<TAgent>)
+        readonly host: AgentHost;
+      } & ForbiddenCloudflareAgentsHostOptions<TAgent>)
+    | ({ readonly host?: never } & CloudflareAgentsHostOptions<TAgent>)
   );
 
-type ForbiddenCloudflareAgentsExecutionHostOptions<
+type ForbiddenCloudflareAgentsHostOptions<
   TAgent extends CloudflareAgentsDefaultResumeAgent,
 > = {
-  readonly [Key in keyof CloudflareAgentsExecutionHostOptions<TAgent>]?: never;
+  readonly [Key in keyof CloudflareAgentsHostOptions<TAgent>]?: never;
 };
 
 export function listScheduledCloudflareAgentsRuns(
@@ -100,9 +101,9 @@ export function dispatchCloudflareAgentsNotification<
 
 function dispatchHost<TAgent extends CloudflareAgentsDefaultResumeAgent>(
   input: DispatchCloudflareAgentsNotificationInput<TAgent>
-): ExecutionHost {
+): AgentHost {
   if ("host" in input && input.host !== undefined) {
     return input.host;
   }
-  return createCloudflareAgentsExecutionHost(input);
+  return createCloudflareHost(input as CloudflareHostOptions<TAgent>);
 }

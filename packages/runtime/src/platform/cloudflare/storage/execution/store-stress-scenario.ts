@@ -2,7 +2,7 @@ import type { TurnRecord } from "../../../../execution";
 import type { AgentEvent } from "../../../../index";
 import {
   type CloudflareDurableObjectStorage,
-  createCloudflareDurableObjectHost,
+  createCloudflareStorageHost,
 } from "../../index";
 
 const assistantDefaultPayloadBytes = 1536;
@@ -38,7 +38,7 @@ export async function runMockAgentStorageScenario(
   storage: CloudflareDurableObjectStorage,
   config: MockAgentStorageScenarioConfig
 ): Promise<MockAgentStorageScenarioResult> {
-  const host = createCloudflareDurableObjectHost({
+  const host = createCloudflareStorageHost({
     maxPayloadBytes: config.maxPayloadBytes,
     prefix: config.prefix,
     storage,
@@ -92,7 +92,7 @@ interface WriteThreadTurnsInput {
   readonly assistantPayloadBytes: number;
   readonly checkpointPayloadBytes: number;
   readonly eventPayloadBytes: number;
-  readonly host: ReturnType<typeof createCloudflareDurableObjectHost>;
+  readonly host: ReturnType<typeof createCloudflareStorageHost>;
   readonly largeAssistantStride: number;
   readonly notificationPayloadBytes: number;
   readonly threadCommitStride: number;

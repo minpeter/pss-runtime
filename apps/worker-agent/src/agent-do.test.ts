@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { Agent as CloudflareAgent } from "agents";
 import type { AgentEvent, AgentTurn } from "@minpeter/pss-runtime";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { AgentDurableObject } from "./agent-do";
@@ -18,12 +19,19 @@ import type { Env } from "./env";
 import { SEND_MESSAGE_TOOL_NAME } from "./tools";
 
 describe("AgentDurableObject Cloudflare contract", () => {
-  it("declares the exported class as a DurableObject subclass", () => {
+  it("declares the exported class as a Cloudflare Agents Agent subclass", () => {
     expectTypeOf<InstanceType<typeof AgentDurableObject>>().toExtend<
       DurableObject<Env>
     >();
+    expectTypeOf<InstanceType<typeof AgentDurableObject>>().toExtend<
+      CloudflareAgent<Env>
+    >();
     expect(Object.getPrototypeOf(AgentDurableObject.prototype)).toBe(
-      DurableObject.prototype
+      CloudflareAgent.prototype
+    );
+    expect(typeof AgentDurableObject.prototype.onRequest).toBe("function");
+    expect(typeof AgentDurableObject.prototype.resumePssRuntimeFiber).toBe(
+      "function"
     );
   });
 });

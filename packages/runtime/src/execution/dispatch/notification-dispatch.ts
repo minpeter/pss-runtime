@@ -7,13 +7,13 @@ import {
 } from "../../thread/input/attachments";
 import type { AgentEvent, UserInput } from "../../thread/protocol/events";
 import type {
-  ExecutionHost,
+  AgentHost,
   NotificationRecord,
   TurnRecord,
 } from "../host/types";
 
 export interface DispatchAgentNotificationInput {
-  readonly host: ExecutionHost;
+  readonly host: AgentHost;
   readonly idempotencyKey: string;
   readonly input: UserInput;
   readonly namespace: string;
@@ -178,7 +178,7 @@ async function queuedNotificationRun({
   threadKey,
   storageIdempotencyKey,
 }: {
-  readonly host: ExecutionHost;
+  readonly host: AgentHost;
   readonly idempotencyKey: string;
   readonly ownerNamespace: string;
   readonly threadKey: string;
@@ -208,7 +208,7 @@ async function queuedNotificationRun({
 }
 
 function scheduleAgentNotification(
-  host: ExecutionHost,
+  host: AgentHost,
   notification: SchedulableAgentNotification
 ): Promise<void> {
   return host.scheduler.resumeThread(notification.threadKey, {

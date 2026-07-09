@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { solidTestPng, solidTestPngBase64 } from "../../testing/valid-image-fixture";
 import type {
   RuntimeAttachmentReference,
-  RuntimeAttachmentStore,
+  HostAttachmentStore,
 } from "./attachments";
 import {
   addSteeringInput,
@@ -26,7 +27,7 @@ describe("runtime input", () => {
       resolvePut = resolve;
     });
     const deletedRefs: RuntimeAttachmentReference[] = [];
-    const store: RuntimeAttachmentStore = {
+    const store: HostAttachmentStore = {
       delete: (ref) => {
         deletedRefs.push(ref);
         return Promise.resolve();
@@ -42,7 +43,7 @@ describe("runtime input", () => {
       runtimeInput,
       [
         {
-          data: new Uint8Array([1, 2, 3]),
+          data: solidTestPng(),
           mediaType: "image/png",
           type: "file",
         },

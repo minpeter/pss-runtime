@@ -2,7 +2,7 @@ import type { LanguageModel, ToolSet } from "ai";
 import type { AgentHost } from "../../execution/host/types";
 import type { AgentToolChoice, ModelContextGateOptions } from "../../llm/llm";
 import { assertNoUnsupportedToolApproval } from "../../llm/tool-approval";
-import type { RuntimeAttachmentStore } from "../../thread/input/attachments";
+import type { HostAttachmentStore } from "../../thread/input/attachments";
 import type { AgentInput, UserInput } from "../../thread/input/input";
 import type { AgentPlugin } from "../../thread/plugins/pipeline";
 
@@ -16,7 +16,7 @@ export interface AgentAutoCompactionOptions {
 export type AgentContextGateOptions = ModelContextGateOptions;
 
 export interface AgentOptions {
-  readonly attachmentStore?: RuntimeAttachmentStore;
+  readonly attachmentStore?: HostAttachmentStore;
   readonly autoCompaction?: AgentAutoCompactionOptions | false;
   readonly host?: AgentHost;
   readonly instructions?: string;

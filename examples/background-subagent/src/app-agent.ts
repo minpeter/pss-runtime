@@ -1,6 +1,6 @@
 import type { Agent, AgentInput, AgentTurn } from "@minpeter/pss-runtime";
 import type {
-  ExecutionHost,
+  AgentHost,
   NotificationRecord,
   TurnRecord,
 } from "@minpeter/pss-runtime/execution";
@@ -9,7 +9,7 @@ import { readerChildName } from "./delegate-tool";
 
 export function createAppAgent(options: {
   readonly coordinator: Agent;
-  readonly host: ExecutionHost;
+  readonly host: AgentHost;
   readonly ownerNamespace: string;
   readonly parentThreadKey: string;
   readonly reader: Agent;
@@ -50,7 +50,7 @@ async function resumeBackgroundDelegation({
   reader,
   run,
 }: {
-  readonly host: ExecutionHost;
+  readonly host: AgentHost;
   readonly ownerNamespace: string;
   readonly parentThreadKey: string;
   readonly reader: Agent;
@@ -116,7 +116,7 @@ async function enqueueCompletionNotification({
   run,
   state,
 }: {
-  readonly host: ExecutionHost;
+  readonly host: AgentHost;
   readonly run: TurnRecord;
   readonly state: NonNullable<
     ReturnType<typeof readDurableBackgroundDelegationState>
@@ -173,7 +173,7 @@ async function resumeCompletionNotification({
 }: {
   readonly coordinator: Agent;
   readonly dedupeKey: string;
-  readonly host: ExecutionHost;
+  readonly host: AgentHost;
   readonly ownerNamespace: string;
   readonly parentThreadKey: string;
   readonly run: TurnRecord;
@@ -212,7 +212,7 @@ async function claimOwnedNotification({
   ownerNamespace,
   parentThreadKey,
 }: {
-  readonly host: ExecutionHost;
+  readonly host: AgentHost;
   readonly idempotencyKey: string;
   readonly ownerNamespace: string;
   readonly parentThreadKey: string;

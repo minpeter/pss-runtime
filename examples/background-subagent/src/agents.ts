@@ -1,5 +1,4 @@
 import { Agent, type AgentHost } from "@minpeter/pss-runtime";
-import type { ExecutionHost } from "@minpeter/pss-runtime/execution";
 import { parentThreadNamespace } from "@minpeter/pss-runtime/namespace";
 import type { LanguageModel } from "ai";
 import { createBackgroundOutputTool } from "./background-output-tool";
@@ -23,7 +22,7 @@ export function createReaderAgent(model: LanguageModel, host: AgentHost) {
 export function createCoordinatorAgent(
   model: LanguageModel,
   options: {
-    readonly executionHost: ExecutionHost;
+    readonly executionHost: AgentHost;
     readonly host: AgentHost;
     readonly threadKey: string;
   }

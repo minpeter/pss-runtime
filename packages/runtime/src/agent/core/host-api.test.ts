@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type {
-  DurableBackgroundHost,
-  ExecutionHost,
-  ExecutionScheduler,
-  ThreadHost,
-} from "../../execution";
-import { createInMemoryExecutionHost } from "../../platform/memory";
+import { solidTestPng } from "../../testing/valid-image-fixture";
+import type { AgentHost } from "../../execution";
+import { createInMemoryHost } from "../../platform/memory";
 import { MemoryAttachmentStore } from "../../platform/memory/storage/memory-attachment-store";
+import { hostWithThreads } from "../../testing/host-with-threads";
 import {
   createMockLanguageModelV4,
   mockLanguageModelV4Text,
@@ -20,13 +17,13 @@ import type {
   RuntimeAttachmentBlob,
   RuntimeAttachmentPutInput,
   RuntimeAttachmentReference,
-  RuntimeAttachmentStore,
+  HostAttachmentStore,
 } from "../../thread/input/attachments";
-import { Agent, type AgentHost, type AgentOptions } from "./agent";
+import { Agent, type AgentOptions } from "./agent";
 
 const fakeModel = createMockLanguageModelV4([mockLanguageModelV4Text("DONE")]);
 
-const inProcessHost = createInMemoryExecutionHost() satisfies AgentHost;
+const inProcessHost = createInMemoryHost() satisfies AgentHost;
 
 const acceptsHostOptions: AgentOptions = {
   host: inProcessHost,
@@ -36,21 +33,6 @@ const runtimeModel = () => Promise.resolve([assistantMessage("RUNTIME MODEL")]);
 const functionModelOptions = {
   model: runtimeModel,
 } as const;
-const aggregateHost = createInMemoryExecutionHost();
-const acceptsThreadHost = {
-  kind: "thread",
-  threadStore: new SpyStore(),
-} satisfies ThreadHost;
-const acceptsDurableBackgroundHost = {
-  backgroundScheduler: aggregateHost.scheduler,
-  checkpointStore: aggregateHost.store.checkpoints,
-  eventStore: aggregateHost.store.events,
-  kind: "durable-background",
-  notificationInbox: aggregateHost.store.notifications,
-  turnStore: aggregateHost.store.turns,
-  threadStore: aggregateHost.store.threads,
-  transaction: aggregateHost.store.transaction.bind(aggregateHost.store),
-} satisfies DurableBackgroundHost;
 
 type IsAssignable<Source, Target> = Source extends Target ? true : false;
 type AssertFalse<T extends false> = T;
@@ -71,79 +53,34 @@ type RejectsSessionsOptionKey = AssertFalse<
 type RejectsBareThreadStoreAsHost = AssertFalse<
   IsAssignable<{ readonly threadStore: SpyStore }, AgentHost>
 >;
-type RejectsExecutionHostThreadStoreKey = AssertFalse<
-  IsAssignable<{ readonly threadStore: SpyStore }, ExecutionHost>
+type RejectsKindKeyOnHost = AssertFalse<
+  "kind" extends keyof AgentHost ? true : false
 >;
-type RequiresHostKindKey = "kind" extends keyof AgentHost ? true : false;
-type AcceptsThreadHostAsAgentHost = IsAssignable<
-  typeof acceptsThreadHost,
+type AcceptsInMemoryHostAsAgentHost = IsAssignable<
+  typeof inProcessHost,
   AgentHost
->;
-type AcceptsExecutionHostAsAgentHost = IsAssignable<
-  typeof aggregateHost,
-  AgentHost
->;
-type RejectsLegacyKindAsAgentHost = AssertFalse<
-  IsAssignable<
-    { readonly kind: "legacy"; readonly threadStore: SpyStore },
-    AgentHost
-  >
->;
-type RejectsLegacyStoreOnlyDurableBackgroundHost = AssertFalse<
-  IsAssignable<
-    {
-      readonly backgroundScheduler: typeof aggregateHost.scheduler;
-      readonly eventStore: typeof aggregateHost.store.events;
-      readonly kind: "durable-background";
-      readonly notificationInbox: typeof aggregateHost.store.notifications;
-      readonly legacyStore: SpyStore;
-      readonly checkpointStore: typeof aggregateHost.store.checkpoints;
-      readonly transaction: typeof aggregateHost.store.transaction;
-      readonly turnStore: typeof aggregateHost.store.turns;
-    },
-    AgentHost
-  >
->;
-type DurableSchedulerMatchesExecutionScheduler = IsAssignable<
-  DurableBackgroundHost["backgroundScheduler"],
-  ExecutionScheduler
 >;
 
-const typeFixtures = [
-  acceptsDurableBackgroundHost,
-  acceptsHostOptions,
-  acceptsThreadHost,
-];
 const acceptsHostOptionAssertion: AcceptsHostOption = true;
-const rejectsRuntimeModelOptionAssertion: AssertFalse<AcceptsRuntimeModelOption> = false;
+const rejectsRuntimeModelOptionAssertion: AssertFalse<AcceptsRuntimeModelOption> =
+  false;
 const llmOptionAssertion: RejectsLlmOptionKey = false;
 const runtimeOptionAssertion: RejectsRuntimeOptionKey = false;
 const sessionsOptionAssertion: RejectsSessionsOptionKey = false;
 const hostThreadStoreAssertion: RejectsBareThreadStoreAsHost = false;
-const executionThreadStoreAssertion: RejectsExecutionHostThreadStoreKey = false;
-const hostKindAssertion: RequiresHostKindKey = true;
-const acceptsThreadHostAssertion: AcceptsThreadHostAsAgentHost = true;
-const acceptsExecutionHostAssertion: AcceptsExecutionHostAsAgentHost = true;
-const rejectsLegacyKindAssertion: RejectsLegacyKindAsAgentHost = false;
-const rejectsLegacyStoreOnlyDurableBackgroundHostAssertion: RejectsLegacyStoreOnlyDurableBackgroundHost = false;
-const durableSchedulerAssertion: DurableSchedulerMatchesExecutionScheduler = true;
+const hostKindAssertion: RejectsKindKeyOnHost = false;
+const acceptsInMemoryHostAssertion: AcceptsInMemoryHostAsAgentHost = true;
 
 describe("Agent host public API", () => {
   it("accepts host option and keeps unsupported option keys out of AgentOptions", () => {
-    expect(typeFixtures).toHaveLength(3);
     expect(acceptsHostOptionAssertion).toBe(true);
     expect(rejectsRuntimeModelOptionAssertion).toBe(false);
     expect(llmOptionAssertion).toBe(false);
     expect(runtimeOptionAssertion).toBe(false);
     expect(sessionsOptionAssertion).toBe(false);
     expect(hostThreadStoreAssertion).toBe(false);
-    expect(executionThreadStoreAssertion).toBe(false);
-    expect(hostKindAssertion).toBe(true);
-    expect(acceptsThreadHostAssertion).toBe(true);
-    expect(acceptsExecutionHostAssertion).toBe(true);
-    expect(rejectsLegacyKindAssertion).toBe(false);
-    expect(rejectsLegacyStoreOnlyDurableBackgroundHostAssertion).toBe(false);
-    expect(durableSchedulerAssertion).toBe(true);
+    expect(hostKindAssertion).toBe(false);
+    expect(acceptsInMemoryHostAssertion).toBe(true);
     expect(new Agent({ host: inProcessHost, model: fakeModel })).toBeInstanceOf(
       Agent
     );
@@ -186,7 +123,7 @@ describe("Agent host public API", () => {
   it("uses host thread store for thread snapshots", async () => {
     const threadStore = new SpyStore();
     const agent = new Agent({
-      host: { kind: "thread", threadStore },
+      host: hostWithThreads(threadStore),
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
       ),
@@ -200,7 +137,7 @@ describe("Agent host public API", () => {
   it("includes scoped thread addresses in the stored thread key", async () => {
     const threadStore = new SpyStore();
     const agent = new Agent({
-      host: { kind: "thread", threadStore },
+      host: hostWithThreads(threadStore),
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
       ),
@@ -216,7 +153,7 @@ describe("Agent host public API", () => {
   });
 
   it("uses a caller-provided host attachment store before an option store", async () => {
-    const baseHost = createInMemoryExecutionHost();
+    const baseHost = createInMemoryHost();
     const hostAttachmentStore = new TrackingAttachmentStore();
     const optionAttachmentStore = new TrackingAttachmentStore();
     const agent = new Agent({
@@ -230,7 +167,7 @@ describe("Agent host public API", () => {
     await collect(
       await agent.send([
         {
-          data: new Uint8Array([1, 2, 3]),
+          data: solidTestPng(),
           mediaType: "image/png",
           type: "file",
         },
@@ -253,7 +190,7 @@ describe("Agent host public API", () => {
     await collect(
       await agent.send([
         {
-          data: new Uint8Array([1, 2, 3]),
+          data: solidTestPng(),
           mediaType: "image/png",
           type: "file",
         },
@@ -262,9 +199,14 @@ describe("Agent host public API", () => {
 
     expect(attachmentStore.putCount).toBe(1);
   });
+
+  it("always reports resume support for the single host contract", () => {
+    const agent = new Agent({ host: inProcessHost, model: fakeModel });
+    expect(agent.supportsResume).toBe(true);
+  });
 });
 
-class TrackingAttachmentStore implements RuntimeAttachmentStore {
+class TrackingAttachmentStore implements HostAttachmentStore {
   readonly #store = new MemoryAttachmentStore();
   #putCount = 0;
 

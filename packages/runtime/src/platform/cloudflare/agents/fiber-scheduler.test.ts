@@ -4,7 +4,7 @@ import {
   cloudflareAgentsFiberIdempotencyKey,
   cloudflareAgentsRunPayload,
   cloudflareAgentsThreadPayload,
-  createCloudflareAgentsExecutionHost,
+  createCloudflareHost,
   createCloudflareAgentsFiberScheduler,
   resumeScheduledCloudflareAgentsFiber,
 } from "./index";
@@ -226,7 +226,7 @@ describe("Cloudflare Agents fiber platform adapter", () => {
 
   it("builds an execution host over the Cloudflare Agents Durable Object storage", async () => {
     const cloudflareAgent = createFakeCloudflareAgent();
-    const host = createCloudflareAgentsExecutionHost({
+    const host = createCloudflareHost({
       cloudflareAgent,
       durableObjectContext: cloudflareAgent.durableObjectContext,
       prefix: "tenant-a",

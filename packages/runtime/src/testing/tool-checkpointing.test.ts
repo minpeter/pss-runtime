@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RuntimeToolExecutionCheckpoint } from "../llm/llm";
-import { createInMemoryExecutionHost } from "../platform/memory";
+import { createInMemoryHost } from "../platform/memory";
 import {
   checkpointedTool,
   createQueuedUserTurnRun,
@@ -29,7 +29,7 @@ describe("tool checkpointing", () => {
 
   it("persists before-tool before executing idempotent tool", async () => {
     const runModelStep = await loadModelStepRunner();
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     const order: string[] = [];
     const signal = new AbortController().signal;
     await host.store.turns.create(createQueuedUserTurnRun());
@@ -106,7 +106,7 @@ describe("tool checkpointing", () => {
 
   it("manual recovery tool is not retried after rollback", async () => {
     const runModelStep = await loadModelStepRunner();
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     const signal = new AbortController().signal;
     let executions = 0;
     await host.store.turns.create({

@@ -10,6 +10,7 @@ import {
 } from "../../testing/test-fixtures";
 import { userTextToModelMessage } from "../protocol/mapping";
 import { collect, SpyStore } from "./test-support";
+import { hostWithThreads } from "../../testing/host-with-threads";
 
 const timeoutMarker = Symbol("timeout");
 
@@ -136,7 +137,7 @@ describe("Agent thread terminal state", () => {
     const llmStarted = createDeferred();
     const store = new BlockingDeleteStore();
     const agent = new Agent({
-      host: { kind: "thread", threadStore: store },
+      host: hostWithThreads(store),
       model: createCallbackModel(() => {
         llmStarted.resolve();
         return new Promise<never>(() => undefined);
@@ -166,7 +167,7 @@ describe("Agent thread terminal state", () => {
   it("rejects new input while thread delete is pending", async () => {
     const store = new BlockingDeleteStore();
     const thread = new Agent({
-      host: { kind: "thread", threadStore: store },
+      host: hostWithThreads(store),
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
       ),

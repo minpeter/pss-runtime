@@ -1,5 +1,5 @@
 import {
-  type RuntimeAttachmentStore,
+  type HostAttachmentStore,
   stageAgentEventsAttachments,
   stageUserInputAttachments,
 } from "../input/attachments";
@@ -26,7 +26,7 @@ export interface NotifyOptions {
 interface QueueThreadNotificationOptions {
   readonly activeRun: BufferedAgentTurn | undefined;
   readonly activeRuntimeInput: RuntimeInputState | undefined;
-  readonly attachmentStore: RuntimeAttachmentStore | undefined;
+  readonly attachmentStore: HostAttachmentStore | undefined;
   readonly drain: () => Promise<void>;
   emitObserverEvent(
     run: BufferedAgentTurn | undefined,
@@ -115,7 +115,7 @@ export function startThreadQueueDrain(
 
 async function createNotificationOverlays(
   overlays: readonly (AgentInput | UserInput)[],
-  attachmentStore: RuntimeAttachmentStore | undefined
+  attachmentStore: HostAttachmentStore | undefined
 ): Promise<QueuedRuntimeInput[]> {
   const queued: QueuedRuntimeInput[] = [];
   for (const input of overlays) {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { TurnRecord } from "../../../../execution";
 import type { AgentEvent } from "../../../../index";
-import { createCloudflareDurableObjectHost } from "../../index";
+import { createCloudflareStorageHost } from "../../index";
 import { InMemorySqlStorage } from "../../sql/node-test/node-sqlite-storage";
 import { InMemoryCloudflareDurableObjectStorage } from "../durable-object/durable-object-storage";
 import {
@@ -23,7 +23,7 @@ describe("DurableObjectExecutionStore oversized payload stress", () => {
   it("round-trips large user input, assistant responses, tool output, and checkpoint state", async () => {
     const sql = new InMemorySqlStorage();
     const storage = new InMemoryCloudflareDurableObjectStorage({ sql });
-    const host = createCloudflareDurableObjectHost({
+    const host = createCloudflareStorageHost({
       maxPayloadBytes: payloadBudget,
       prefix,
       storage,
@@ -112,7 +112,7 @@ describe("DurableObjectExecutionStore oversized payload stress", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
-    const host = createCloudflareDurableObjectHost({
+    const host = createCloudflareStorageHost({
       maxPayloadBytes: payloadBudget,
       prefix: "oversized-payload-latency",
       storage,

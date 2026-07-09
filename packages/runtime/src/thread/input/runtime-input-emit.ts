@@ -3,7 +3,7 @@ import type { BufferedAgentTurn } from "../protocol/turn";
 import type { ThreadEventDispatcher } from "../runtime/events";
 import type { ThreadState } from "../state/thread-state";
 import {
-  type RuntimeAttachmentStore,
+  type HostAttachmentStore,
   stageUserInputAttachments,
 } from "./attachments";
 import type { UserInput } from "./input";
@@ -25,7 +25,7 @@ export async function commitPreUserRuntimeInputs(
   events: ThreadEventDispatcher,
   state: ThreadState,
   runtimeInputs: readonly QueuedRuntimeInput[],
-  attachmentStore: RuntimeAttachmentStore | undefined,
+  attachmentStore: HostAttachmentStore | undefined,
   options: {
     readonly commitRecordedEvents?: () => Promise<void>;
     readonly recordEvent?: (event: AgentEvent) => void;
@@ -77,7 +77,7 @@ export async function emitRuntimeInputEvent(
   state: ThreadState,
   queued: QueuedRuntimeInput,
   options: {
-    readonly attachmentStore?: RuntimeAttachmentStore;
+    readonly attachmentStore?: HostAttachmentStore;
     readonly commit?: () => Promise<void>;
     readonly onHandled?: () => Promise<void>;
     readonly recordEvent?: (event: AgentEvent) => void;

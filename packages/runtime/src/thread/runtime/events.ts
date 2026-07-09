@@ -5,7 +5,7 @@ import type {
 } from "../../llm/llm";
 import {
   type RuntimeAttachmentReference,
-  type RuntimeAttachmentStore,
+  type HostAttachmentStore,
   stageAgentEventAttachments,
 } from "../input/attachments";
 import {
@@ -17,7 +17,7 @@ import type { AgentEvent, BeforeToolCall } from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
 
 interface ThreadEventDispatcherOptions {
-  readonly attachmentStore?: RuntimeAttachmentStore;
+  readonly attachmentStore?: HostAttachmentStore;
   readonly history: () => readonly ModelMessage[];
   readonly plugins: readonly AgentPlugin[];
   readonly signal: () => AbortSignal | undefined;
@@ -28,7 +28,7 @@ interface InterceptEventOptions {
 }
 
 export class ThreadEventDispatcher {
-  readonly #attachmentStore: RuntimeAttachmentStore | undefined;
+  readonly #attachmentStore: HostAttachmentStore | undefined;
   readonly #history: () => readonly ModelMessage[];
   #observerEventBuffer?: AgentEvent[];
   readonly #plugins: readonly AgentPlugin[];

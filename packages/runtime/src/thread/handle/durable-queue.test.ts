@@ -1,16 +1,17 @@
 import { describe, expect, it } from "vitest";
+import { solidTestPng } from "../../testing/valid-image-fixture";
 import type {
-  ExecutionHost,
+  AgentHost,
   ThreadInputInbox,
   ThreadInputRecord,
 } from "../../execution/host/types";
-import { createInMemoryExecutionHost } from "../../platform/memory";
+import { createInMemoryHost } from "../../platform/memory";
 import { MemoryAttachmentStore } from "../../platform/memory/storage/memory-attachment-store";
 import type {
   RuntimeAttachmentBlob,
   RuntimeAttachmentPutInput,
   RuntimeAttachmentReference,
-  RuntimeAttachmentStore,
+  HostAttachmentStore,
 } from "../input/attachments";
 import type { UserInput } from "../input/input";
 import type { AgentPlugin } from "../plugins/pipeline";
@@ -66,7 +67,7 @@ describe("createQueuedSendInput", () => {
       executionHost: undefined,
       input: [
         {
-          data: new Uint8Array([4, 5, 6]),
+          data: solidTestPng(),
           filename: "discarded.png",
           mediaType: "image/png",
           type: "file",
@@ -101,7 +102,7 @@ function transformTextToFileInputPlugin(): AgentPlugin {
         event: {
           content: [
             {
-              data: new Uint8Array([1, 2, 3]),
+              data: solidTestPng(),
               filename: "plugin.png",
               mediaType: "image/png",
               type: "file",
@@ -132,8 +133,8 @@ function transformAnyInputToTextPlugin(): AgentPlugin {
   };
 }
 
-function duplicateAdmissionHost(): ExecutionHost {
-  const base = createInMemoryExecutionHost();
+function duplicateAdmissionHost(): AgentHost {
+  const base = createInMemoryHost();
   return {
     ...base,
     store: {
@@ -175,7 +176,7 @@ function threadInputRecord(
   };
 }
 
-class TrackingAttachmentStore implements RuntimeAttachmentStore {
+class TrackingAttachmentStore implements HostAttachmentStore {
   readonly #store = new MemoryAttachmentStore();
   readonly deletedRefs: RuntimeAttachmentReference[] = [];
   #putCount = 0;

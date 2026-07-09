@@ -1,4 +1,4 @@
-import type { ExecutionScheduler } from "../../../execution";
+import type { HostScheduler } from "../../../execution";
 import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import { scheduleCloudflareAgentsDelayedPayload } from "./delayed-schedule";
 import { startCloudflareAgentsResumeFiber } from "./fiber";
@@ -44,7 +44,7 @@ export type CloudflareAgentsFiberSchedulerOptions<
 export function createCloudflareAgentsFiberScheduler<
   TAgent extends
     CloudflareAgentsDefaultResumeAgent = CloudflareAgentsDefaultResumeAgent,
->(options: CloudflareAgentsFiberSchedulerOptions<TAgent>): ExecutionScheduler {
+>(options: CloudflareAgentsFiberSchedulerOptions<TAgent>): HostScheduler {
   const {
     cloudflareAgent,
     deadlineMs,

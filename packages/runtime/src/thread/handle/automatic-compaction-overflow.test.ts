@@ -12,6 +12,7 @@ import {
   storedAssistantOutput,
 } from "./automatic-compaction.test-support";
 import { collect, SpyStore } from "./test-support";
+import { hostWithThreads } from "../../testing/host-with-threads";
 
 describe("Agent thread automatic compaction overflow recovery", () => {
   it("rejects before provider calls when the context gate overflows with error", async () => {
@@ -63,7 +64,7 @@ describe("Agent thread automatic compaction overflow recovery", () => {
         minMessages: 5,
         retainMessages: 2,
       },
-      host: { kind: "thread", threadStore: store },
+      host: hostWithThreads(store),
       model: createCallbackModel(({ history }) => {
         calls += 1;
         providerHistories.push([...history]);
@@ -112,7 +113,7 @@ describe("Agent thread automatic compaction overflow recovery", () => {
     let calls = 0;
     const agent = agentWithAutoCompaction({
       autoCompaction: { minMessages: 5, retainMessages: 2 },
-      host: { kind: "thread", threadStore: store },
+      host: hostWithThreads(store),
       model: createCallbackModel(({ history }) => {
         calls += 1;
         if (calls === 1) {

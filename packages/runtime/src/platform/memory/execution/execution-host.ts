@@ -1,7 +1,7 @@
 import type { ResumeThreadOptions } from "../../../execution/host/scheduler-options";
 import type {
-  ExecutionHost,
-  ExecutionScheduler,
+  AgentHost,
+  HostScheduler,
 } from "../../../execution/host/types";
 import {
   applyListLimit,
@@ -18,14 +18,13 @@ export interface MemoryScheduledWorkListOptions {
   readonly nowMs?: number;
 }
 
-export interface InMemoryExecutionHost extends ExecutionHost {
+export interface InMemoryHost extends AgentHost {
   readonly scheduler: InMemoryExecutionScheduler;
 }
 
-export function createInMemoryExecutionHost(): InMemoryExecutionHost {
+export function createInMemoryHost(): InMemoryHost {
   return {
     attachmentStore: new MemoryAttachmentStore(),
-    kind: "execution",
     store: new InMemoryExecutionStore(),
     scheduler: new InMemoryExecutionScheduler(),
   };
@@ -38,7 +37,7 @@ interface StoredScheduledWork<T> {
   readonly workId: string;
 }
 
-export class InMemoryExecutionScheduler implements ExecutionScheduler {
+export class InMemoryExecutionScheduler implements HostScheduler {
   readonly #runs = new Map<string, StoredScheduledWork<string>>();
   readonly #threadPrompts = new Map<
     string,

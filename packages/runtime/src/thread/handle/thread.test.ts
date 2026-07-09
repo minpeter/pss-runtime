@@ -1,5 +1,6 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
+import { solidTestPng, solidTestPngBase64 } from "../../testing/valid-image-fixture";
 import { Agent } from "../../agent/core/agent";
 import {
   assistantMessage,
@@ -68,7 +69,7 @@ describe("Agent thread API", () => {
 
     const input = [
       { type: "text", text: "describe this" },
-      { type: "file", data: "iVBORw0KGgo=", mediaType: "image/png" },
+      { type: "file", data: solidTestPngBase64(), mediaType: "image/png" },
       {
         type: "file",
         data: { type: "text", text: "inline document" },
@@ -88,7 +89,7 @@ describe("Agent thread API", () => {
               type: "text",
             },
             {
-              data: new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+              data: solidTestPng(),
               filename: undefined,
               mediaType: "image/png",
               providerOptions: undefined,
@@ -191,7 +192,7 @@ describe("Agent thread API", () => {
     await collect(
       await agent.thread("custom").send([
         { type: "text", text: "summarize" },
-        { type: "file", data: "iVBORw0KGgo=", mediaType: "image/png" },
+        { type: "file", data: solidTestPngBase64(), mediaType: "image/png" },
       ])
     );
 
@@ -205,7 +206,7 @@ describe("Agent thread API", () => {
               type: "text",
             },
             {
-              data: new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+              data: solidTestPng(),
               filename: undefined,
               mediaType: "image/png",
               providerOptions: undefined,

@@ -1,9 +1,12 @@
-import { DurableObject } from "cloudflare:workers";
-import type { Agent } from "@minpeter/pss-runtime";
+import { Agent as CloudflareAgent } from "agents";
+import type { Agent as PssAgent } from "@minpeter/pss-runtime";
 import {
-  type CloudflareAgentContext,
-  createCloudflareAgentContext,
+  type CloudflareAgentsFiberRecoveryContext,
+  type CloudflareAgentsFiberRecoveryResult,
+  type CloudflarePlatformContext,
+  createCloudflarePlatformContext,
 } from "@minpeter/pss-runtime/platform/cloudflare";
+import { installCloudflareImageCodecs } from "@minpeter/pss-runtime/platform/cloudflare/image-codecs";
 
 import { createConfiguredAgent } from "./agent";
 import { deliverToolOnlyTurn, withCapturedMessages } from "./agent-do-delivery";
@@ -40,31 +43,56 @@ import {
   SessionTranscriptReadRequestSchema,
 } from "./session-transcript-client";
 
-export class AgentDurableObject extends DurableObject<Env> {
-  readonly #context: CloudflareAgentContext<Agent>;
+// DO isolate may load this module without executing worker entry side-effects.
+// Install static AVIF/WebP/HEIF wasm so attachment staging never hits
+// "wasm not installed" on the Durable Object path.
+installCloudflareImageCodecs();
+
+/**
+ * Channel agent Durable Object implemented on the Cloudflare Agents SDK.
+ * Scheduling/resume uses Agents fibers; HTTP remains app-owned via onRequest.
+ */
+export class AgentDurableObject extends CloudflareAgent<Env> {
+  readonly #platform: CloudflarePlatformContext<PssAgent>;
   readonly #env: Env;
   readonly #storage: DurableObjectStorage;
   readonly #sessionIndexClient: SessionIndexClient;
   readonly #sessionTranscriptClient: SessionTranscriptReader;
   #sessionIndexStore: SessionIndexStore | undefined;
 
-  constructor(state: DurableObjectState, env: Env) {
-    super(state, env);
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
     this.#env = env;
-    this.#storage = state.storage;
+    this.#storage = ctx.storage;
     this.#sessionIndexClient = createSessionIndexClient(env);
     this.#sessionTranscriptClient = createSessionTranscriptClient(env);
-    this.#context = createCloudflareAgentContext({
+    this.#platform = createCloudflarePlatformContext({
+      cloudflareAgent: this,
       createAgent: ({ env: agentEnv, host }) =>
         createConfiguredAgent(agentEnv, host, {
           sendMessage: createSendMessageToolOptions(agentEnv, () => undefined),
         }),
+      durableObjectContext: this.ctx,
       env,
-      storage: state.storage,
     });
   }
 
-  async fetch(request: Request): Promise<Response> {
+  /** Agents scheduler callback for delayed PSS run/thread resumes. */
+  async resumePssRuntimeFiber(payload: unknown): Promise<void> {
+    await this.#platform.resumeScheduledFiber(payload);
+  }
+
+  override async onFiberRecovered(
+    ctx: CloudflareAgentsFiberRecoveryContext
+  ): Promise<void | CloudflareAgentsFiberRecoveryResult> {
+    const result = await this.#platform.recoverFiber(ctx);
+    if (result === false) {
+      return;
+    }
+    return result;
+  }
+
+  override async onRequest(request: Request): Promise<Response> {
     if (request.method !== "POST") {
       return new Response("method not allowed", { status: 405 });
     }
@@ -92,7 +120,7 @@ export class AgentDurableObject extends DurableObject<Env> {
     );
     const binding = durableObjectChannelBinding(payload.channel);
     const sessionScopeKey = payload.sessionScopeKey;
-    const agent = createConfiguredAgent(this.#env, this.#context.host(), {
+    const agent = createConfiguredAgent(this.#env, this.#platform.host(), {
       sendMessage: sendMessage.options,
       sessionTools: {
         currentConversationKey: () => binding.channelKey,
@@ -120,10 +148,6 @@ export class AgentDurableObject extends DurableObject<Env> {
     );
   }
 
-  async alarm(): Promise<void> {
-    await this.#context.drainAlarm();
-  }
-
   async #handleSessionTranscriptRequest(request: Request): Promise<Response> {
     let body: unknown;
     try {
@@ -139,7 +163,7 @@ export class AgentDurableObject extends DurableObject<Env> {
 
     const transcript = await createThreadStoreSessionTranscriptReader({
       resolveThreadKey: () => CHANNEL_DURABLE_OBJECT_THREAD_KEY,
-      store: this.#context.host().store.threads,
+      store: this.#platform.host().store.threads,
     }).read(parsed.data.conversationKey, {
       ...(parsed.data.before === undefined
         ? {}

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { encode as encodePng } from "fast-png";
 import { MemoryAttachmentStore } from "../../platform/memory";
 import {
   collectRun,
@@ -8,12 +9,26 @@ import {
 } from "../../testing/llm-test-utils";
 import { assistantMessage } from "../../testing/test-fixtures";
 import { SpyStore } from "../handle/test-support";
+import { hostWithThreads } from "../../testing/host-with-threads";
 import {
   encodeRuntimeAttachmentData,
   isRuntimeAttachmentData,
 } from "../input/attachments";
 
 const generateTextMock = getGenerateTextMock();
+
+/** Valid tiny PNG so attachment normalization can passthrough. */
+function solidPngBytes(size = 8): Uint8Array {
+  const data = new Uint8Array(size * size * 4);
+  data.fill(255);
+  return encodePng({
+    width: size,
+    height: size,
+    data,
+    channels: 4,
+    depth: 8,
+  });
+}
 
 describe("runtime attachment staging", () => {
   beforeEach(() => {
@@ -26,11 +41,11 @@ describe("runtime attachment staging", () => {
   it("stores file bytes as an internal ref before committing user history", async () => {
     const threadStore = new SpyStore();
     const attachmentStore = new MemoryAttachmentStore();
-    const imageBytes = new Uint8Array([11, 22, 33, 44]);
+    const imageBytes = solidPngBytes();
     const Agent = await loadAgent();
     const agent = new Agent({
       attachmentStore,
-      host: { attachmentStore, kind: "thread", threadStore },
+      host: hostWithThreads(threadStore, attachmentStore),
       model: fakeModel,
     });
 
@@ -60,8 +75,8 @@ describe("runtime attachment staging", () => {
     const committedState = threadStore.commits.at(0)?.next.state;
     const committedJson = JSON.stringify(committedState);
     expect(committedJson).toContain("pss-attachment:");
-    expect(committedJson).not.toContain('"0":11');
-    expect(committedJson).not.toContain('"1":22');
+    // Raw pixel/png payload must not be embedded in thread JSON.
+    expect(committedJson).not.toContain(Buffer.from(imageBytes).toString("base64"));
 
     const committedPart = filePartFromStoredState(committedState);
     expect(isRuntimeAttachmentData(committedPart.data)).toBe(true);
@@ -86,10 +101,12 @@ describe("runtime attachment staging", () => {
   it("stores base64 file strings as an internal ref before committing user history", async () => {
     const threadStore = new SpyStore();
     const attachmentStore = new MemoryAttachmentStore();
+    const imageBytes = solidPngBytes();
+    const base64 = Buffer.from(imageBytes).toString("base64");
     const Agent = await loadAgent();
     const agent = new Agent({
       attachmentStore,
-      host: { attachmentStore, kind: "thread", threadStore },
+      host: hostWithThreads(threadStore, attachmentStore),
       model: fakeModel,
     });
 
@@ -97,7 +114,7 @@ describe("runtime attachment staging", () => {
       await agent.send([
         { text: "describe", type: "text" },
         {
-          data: "AQIDBA==",
+          data: base64,
           filename: "photo.png",
           mediaType: "image/png",
           type: "file",
@@ -126,7 +143,7 @@ describe("runtime attachment staging", () => {
         content: [
           { text: "describe", type: "text" },
           {
-            data: new Uint8Array([1, 2, 3, 4]),
+            data: imageBytes,
             filename: "photo.png",
             mediaType: "image/png",
             type: "file",
@@ -143,7 +160,7 @@ describe("runtime attachment staging", () => {
     const Agent = await loadAgent();
     const agent = new Agent({
       attachmentStore,
-      host: { attachmentStore, kind: "thread", threadStore },
+      host: hostWithThreads(threadStore, attachmentStore),
       model: fakeModel,
     });
 
@@ -170,7 +187,7 @@ describe("runtime attachment staging", () => {
     const Agent = await loadAgent();
     const agent = new Agent({
       attachmentStore,
-      host: { attachmentStore, kind: "thread", threadStore },
+      host: hostWithThreads(threadStore, attachmentStore),
       model: fakeModel,
     });
 
@@ -200,7 +217,7 @@ describe("runtime attachment staging", () => {
     const Agent = await loadAgent();
     const agent = new Agent({
       attachmentStore,
-      host: { attachmentStore, kind: "thread", threadStore },
+      host: hostWithThreads(threadStore, attachmentStore),
       model: fakeModel,
     });
 
@@ -230,7 +247,7 @@ describe("runtime attachment staging", () => {
     const Agent = await loadAgent();
     const agent = new Agent({
       attachmentStore,
-      host: { attachmentStore, kind: "thread", threadStore },
+      host: hostWithThreads(threadStore, attachmentStore),
       model: fakeModel,
     });
 
@@ -261,7 +278,10 @@ describe("runtime attachment staging", () => {
     const threadStore = new SpyStore();
     const Agent = await loadAgent();
     const agent = new Agent({
-      host: { kind: "thread", threadStore },
+      host: {
+        ...hostWithThreads(threadStore),
+        attachmentStore: undefined,
+      },
       model: fakeModel,
     });
 

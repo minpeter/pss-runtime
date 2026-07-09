@@ -1,4 +1,4 @@
-import type { ExecutionHost } from "../../execution/host/types";
+import type { AgentHost } from "../../execution/host/types";
 import {
   closeRuntimeInput,
   type RuntimeInputState,
@@ -30,7 +30,7 @@ export async function closeTurnWithDurableTerminalEvent({
   readonly completeExecution: () => Promise<void>;
   readonly deactivateRun: () => void;
   readonly events: ThreadEventDispatcher;
-  readonly executionHost?: ExecutionHost;
+  readonly executionHost?: AgentHost;
   readonly recordEvent: (event: AgentEvent) => void;
   readonly result: "aborted" | "completed";
   readonly run: BufferedAgentTurn;
@@ -83,7 +83,7 @@ async function closeWithTerminalError({
   readonly buffer: DurableThreadEventBuffer;
   readonly completeExecution: () => Promise<void>;
   readonly error: unknown;
-  readonly executionHost?: ExecutionHost;
+  readonly executionHost?: AgentHost;
   readonly recordEvent: (event: AgentEvent) => void;
   readonly run: BufferedAgentTurn;
   readonly runtimeInput: RuntimeInputState;

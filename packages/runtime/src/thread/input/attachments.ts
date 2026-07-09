@@ -2,6 +2,24 @@
 
 export { hydrateRuntimeAttachments } from "./attachment-hydration";
 export {
+  getInstalledImageCodecWasm,
+  installImageCodecWasm,
+  installImageCodecWasmFromNodeModules,
+  type ImageCodecWasmModules,
+} from "./attachment-image-codec-registry";
+export {
+  DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,
+  isCompressibleImageMediaType,
+  isStoredImageMediaType,
+  MAX_IMAGE_DECODED_PIXELS,
+  MAX_IMAGE_INPUT_BYTES,
+  MAX_IMAGE_STORAGE_BUDGET_BYTES,
+  prepareAttachmentBytesForStorage,
+  type PreparedAttachmentBytes,
+  STORED_IMAGE_MEDIA_TYPES,
+  type StoredImageMediaType,
+} from "./attachment-image-compress";
+export {
   decodeRuntimeAttachmentData,
   encodeRuntimeAttachmentData,
   isRuntimeAttachmentData,
@@ -19,10 +37,11 @@ export {
 export {
   type RuntimeAttachmentBlob,
   RuntimeAttachmentHydrationError,
+  RuntimeAttachmentImageLimitError,
   type RuntimeAttachmentPutInput,
   type RuntimeAttachmentReference,
   RuntimeAttachmentSecurityError,
   RuntimeAttachmentStagingError,
   type RuntimeAttachmentStagingOptions,
-  type RuntimeAttachmentStore,
+  type HostAttachmentStore,
 } from "./attachment-types";

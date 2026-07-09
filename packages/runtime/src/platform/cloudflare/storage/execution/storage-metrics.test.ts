@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createCloudflareDurableObjectHost } from "../../index";
+import { createCloudflareStorageHost } from "../../index";
 import { InMemorySqlStorage } from "../../sql/node-test/node-sqlite-storage";
 import { InMemoryCloudflareDurableObjectStorage } from "../durable-object/durable-object-storage";
 import {
@@ -11,7 +11,7 @@ describe("storage metrics", () => {
   it("collects row counts, chunk bytes, and scheduled backlog", async () => {
     const sql = new InMemorySqlStorage();
     const storage = new InMemoryCloudflareDurableObjectStorage({ sql });
-    const host = createCloudflareDurableObjectHost({
+    const host = createCloudflareStorageHost({
       maxPayloadBytes: 220,
       prefix: "metrics-test",
       storage,

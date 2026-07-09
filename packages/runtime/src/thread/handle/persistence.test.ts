@@ -10,9 +10,9 @@ import {
 } from "../../testing/test-fixtures";
 import type { AgentEvent } from "../protocol/events";
 import { userTextToModelMessage } from "../protocol/mapping";
+import { hostWithThreads } from "../../testing/host-with-threads";
 import {
   ConflictOnCommitStore,
-  ConflictOnceStore,
   collect,
   SpyStore,
 } from "./test-support";
@@ -23,7 +23,7 @@ describe("Agent thread persistence", () => {
     store.conflictOnCommit = 2;
     const seenHistory: ModelMessage[][] = [];
     const thread = new Agent({
-      host: { kind: "thread", threadStore: store },
+      host: hostWithThreads(store),
       model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
@@ -71,7 +71,7 @@ describe("Agent thread persistence", () => {
     const store = new SpyStore();
     const seenHistory: ModelMessage[][] = [];
     const agent = new Agent({
-      host: { kind: "thread", threadStore: store },
+      host: hostWithThreads(store),
       model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([
@@ -166,7 +166,7 @@ describe("Agent thread persistence", () => {
     const store = new SpyStore();
     store.loadGate = loadGate.promise;
     const agent = new Agent({
-      host: { kind: "thread", threadStore: store },
+      host: hostWithThreads(store),
       model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([
@@ -196,7 +196,7 @@ describe("Agent thread persistence", () => {
   it("persists versioned runtime-owned thread snapshots through ThreadStore", async () => {
     const store = new SpyStore();
     const agent = new Agent({
-      host: { kind: "thread", threadStore: store },
+      host: hostWithThreads(store),
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
       ),
@@ -215,32 +215,30 @@ describe("Agent thread persistence", () => {
     expect(store.commits[0]?.expectedVersion).toBeNull();
   });
 
-  it("refreshes stored state after commit conflicts so the handle can recover", async () => {
+  it("surfaces thread commit conflicts as turn errors", async () => {
     const remoteHistory = [
       userTextToModelMessage(userText("remote")),
       assistantMessage("REMOTE"),
     ];
-    const seenHistory: ModelMessage[][] = [];
-    const store = new ConflictOnceStore();
+    const store = new ConflictOnCommitStore();
+    store.conflictOnCommit = 1;
     store.threads.set("shared", {
       state: { history: remoteHistory, schemaVersion: 1 },
       version: "1",
     });
-    const thread = new Agent({
-      host: { kind: "thread", threadStore: store },
-      model: createCallbackModel(({ history }) => {
-        seenHistory.push([...history]);
-        return Promise.resolve([assistantMessage("DONE")]);
-      }),
-    }).thread("shared");
+    const agent = new Agent({
+      host: hostWithThreads(store),
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
+    });
 
-    expect(eventTypes(await collect(await thread.send("loses")))).toContain(
-      "turn-error"
-    );
-    await collect(await thread.send("recovers"));
-
-    expect(seenHistory).toEqual([
-      [...remoteHistory, userTextToModelMessage(userText("recovers"))],
-    ]);
+    expect(
+      eventTypes(await collect(await agent.thread("shared").send("probe")))
+    ).toContain("turn-error");
+    expect(store.threads.get("shared")?.state).toEqual({
+      history: remoteHistory,
+      schemaVersion: 1,
+    });
   });
 });

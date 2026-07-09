@@ -1,8 +1,8 @@
 import { expect } from "vitest";
-import type { ExecutionHost, TurnStatus } from "../../../execution";
+import type { AgentHost, TurnStatus } from "../../../execution";
 import {
   type CloudflareAgentsResumeRun,
-  createCloudflareAgentsExecutionHost,
+  createCloudflareHost,
   listScheduledCloudflareAgentsRuns,
 } from "./index";
 import type { FakeCloudflareAgent } from "./test-support";
@@ -11,8 +11,8 @@ export function createRetryHost(
   cloudflareAgent: FakeCloudflareAgent,
   resume: CloudflareAgentsResumeRun,
   drain?: { readonly maxEvents?: number }
-): ExecutionHost {
-  return createCloudflareAgentsExecutionHost({
+): AgentHost {
+  return createCloudflareHost({
     cloudflareAgent,
     drain,
     durableObjectContext: cloudflareAgent.durableObjectContext,
@@ -27,7 +27,7 @@ export interface SeedRetryableNotificationOptions {
 }
 
 export async function seedRetryableNotification(
-  host: ExecutionHost,
+  host: AgentHost,
   runId: string,
   options: SeedRetryableNotificationOptions = {}
 ): Promise<void> {
@@ -58,7 +58,7 @@ export async function seedRetryableNotification(
 }
 
 export async function expectActiveLeasedNotification(
-  host: ExecutionHost,
+  host: AgentHost,
   runId: string,
   leaseUntilMs: number
 ): Promise<void> {
@@ -84,7 +84,7 @@ export async function expectRetryScheduled({
   runId,
 }: {
   readonly cloudflareAgent: FakeCloudflareAgent;
-  readonly host: ExecutionHost;
+  readonly host: AgentHost;
   readonly runId: string;
 }): Promise<void> {
   expect(cloudflareAgent.scheduled).toEqual([
@@ -121,7 +121,7 @@ export async function expectRetryScheduled({
 }
 
 export async function expectCompletedNotification(
-  host: ExecutionHost,
+  host: AgentHost,
   runId: string
 ): Promise<void> {
   const run = await host.store.turns.get(runId);

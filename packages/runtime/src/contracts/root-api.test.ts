@@ -1,27 +1,24 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type {
+  AgentHost,
   CheckpointStore,
-  DurableBackgroundHost,
   EventStore,
-  ExecutionHost,
-  ExecutionScheduler,
-  ExecutionStore,
-  ExecutionStoreTransaction,
+  HostScheduler,
+  HostStore,
+  HostStoreTransaction,
   NotificationInbox,
   NotificationRecord,
   StoredThreadEvent,
   ThreadEventLog,
   ThreadEventReadOptions,
-  ThreadHost,
   TurnRecord,
   TurnStore,
 } from "../execution";
 import type {
   AgentAutoCompactionOptions,
-  AgentHost,
   AgentInput,
   AgentOptions,
-  RuntimeAttachmentStore,
+  HostAttachmentStore,
   ThreadCompactionInput,
   ThreadHandle,
 } from "../index";
@@ -66,14 +63,15 @@ describe("runtime public exports", () => {
     expect(runtime).toHaveProperty("runPluginsForEvent", runPluginsForEvent);
     expect(runtime).not.toHaveProperty("runPluginsForToolCall");
     expect(runtime).toHaveProperty("threadStoreKey", runtimeThreadStoreKey);
-    expect(runtime).not.toHaveProperty("createInMemoryExecutionHost");
-    expect(runtime).not.toHaveProperty("createCloudflareDurableObjectHost");
-    expect(runtime).not.toHaveProperty("createCloudflareAgentContext");
-    expect(runtime).not.toHaveProperty("createCloudflareAgentsExecutionHost");
-    expect(runtime).not.toHaveProperty("createCloudflareAgentsPlatformContext");
-    expect(runtime).not.toHaveProperty("createNodeFileExecutionHost");
+    expect(runtime).not.toHaveProperty("createInMemoryHost");
+    expect(runtime).not.toHaveProperty("createCloudflareHost");
+    expect(runtime).not.toHaveProperty("createCloudflareStorageHost");
+    expect(runtime).not.toHaveProperty("createCloudflarePlatformContext");
+    expect(runtime).not.toHaveProperty("createCloudflareAgentsHost");
+    expect(runtime).not.toHaveProperty("createCloudflarePlatformContext");
+    expect(runtime).not.toHaveProperty("createFileHost");
     expect(runtime).not.toHaveProperty("createNodeFileAgentContext");
-    expect(runtime).not.toHaveProperty("createNodeFileThreadHost");
+    expect(runtime).not.toHaveProperty("createFileHost");
     expect(runtime).not.toHaveProperty("FileExecutionStore");
     expect(runtime).not.toHaveProperty("FileThreadStore");
     expect(runtime).not.toHaveProperty("executionHost");
@@ -109,7 +107,7 @@ describe("runtime public exports", () => {
       retainMessages: 4,
     } satisfies AgentAutoCompactionOptions;
     const model = {} as AgentOptions["model"];
-    const attachmentStore = {} as RuntimeAttachmentStore;
+    const attachmentStore = {} as HostAttachmentStore;
     const enabledOptions = {
       attachmentStore,
       autoCompaction,
@@ -156,20 +154,20 @@ describe("runtime public exports", () => {
   });
 
   it("types advanced host contracts", () => {
+    expectTypeOf<AgentHost["scheduler"]>().toEqualTypeOf<HostScheduler>();
+    expectTypeOf<AgentHost["store"]>().toEqualTypeOf<HostStore>();
     expectTypeOf<
-      ExecutionHost["scheduler"]
-    >().toEqualTypeOf<ExecutionScheduler>();
-    expectTypeOf<ExecutionHost["store"]>().toEqualTypeOf<ExecutionStore>();
-    expectTypeOf<
-      ExecutionStore["notifications"]
+      HostStore["notifications"]
     >().toEqualTypeOf<NotificationInbox>();
-    expectTypeOf<ExecutionHost["kind"]>().toEqualTypeOf<"execution">();
-    expectTypeOf<ExecutionStore["turns"]>().toEqualTypeOf<TurnStore>();
+    expectTypeOf<AgentHost["attachmentStore"]>().toEqualTypeOf<
+      HostAttachmentStore | undefined
+    >();
+    expectTypeOf<HostStore["turns"]>().toEqualTypeOf<TurnStore>();
     expectTypeOf<
-      ExecutionStore["checkpoints"]
+      HostStore["checkpoints"]
     >().toEqualTypeOf<CheckpointStore>();
-    expectTypeOf<ExecutionStore["events"]>().toEqualTypeOf<EventStore>();
-    expectTypeOf<ExecutionStore["threadEvents"]>().toEqualTypeOf<
+    expectTypeOf<HostStore["events"]>().toEqualTypeOf<EventStore>();
+    expectTypeOf<HostStore["threadEvents"]>().toEqualTypeOf<
       ThreadEventLog | undefined
     >();
     expectTypeOf<
@@ -179,57 +177,24 @@ describe("runtime public exports", () => {
       Awaited<ReturnType<TurnStore["get"]>>
     >().toEqualTypeOf<TurnRecord | null>();
     expectTypeOf<
-      ExecutionStoreTransaction["turns"]
+      HostStoreTransaction["turns"]
     >().toEqualTypeOf<TurnStore>();
     expectTypeOf<
-      ExecutionStoreTransaction["notifications"]
+      HostStoreTransaction["notifications"]
     >().toEqualTypeOf<NotificationInbox>();
-    expectTypeOf<ExecutionStoreTransaction["threadEvents"]>().toEqualTypeOf<
+    expectTypeOf<HostStoreTransaction["threadEvents"]>().toEqualTypeOf<
       ThreadEventLog | undefined
     >();
-    const threadHost = {
-      attachmentStore: {} as RuntimeAttachmentStore,
-      kind: "thread",
-      threadStore: {} as ThreadHost["threadStore"],
-    } satisfies ThreadHost;
-    const agentHost = threadHost satisfies AgentHost;
-    expectTypeOf<
-      DurableBackgroundHost["turnStore"]
-    >().toEqualTypeOf<TurnStore>();
-    expectTypeOf<
-      DurableBackgroundHost["checkpointStore"]
-    >().toEqualTypeOf<CheckpointStore>();
-    expectTypeOf<
-      DurableBackgroundHost["eventStore"]
-    >().toEqualTypeOf<EventStore>();
-    expectTypeOf<
-      DurableBackgroundHost["notificationInbox"]
-    >().toEqualTypeOf<NotificationInbox>();
-    expectTypeOf<
-      DurableBackgroundHost["backgroundScheduler"]
-    >().toEqualTypeOf<ExecutionScheduler>();
-    expectTypeOf<DurableBackgroundHost["transaction"]>().toEqualTypeOf<
-      ExecutionStore["transaction"]
-    >();
-    expectTypeOf<ThreadHost["attachmentStore"]>().toEqualTypeOf<
-      RuntimeAttachmentStore | undefined
-    >();
-    expectTypeOf<ExecutionHost["attachmentStore"]>().toEqualTypeOf<
-      RuntimeAttachmentStore | undefined
-    >();
-    expectTypeOf<DurableBackgroundHost["attachmentStore"]>().toEqualTypeOf<
-      RuntimeAttachmentStore | undefined
-    >();
-    expect(agentHost.kind).toBe("thread");
+    expectTypeOf<AgentHost>().not.toHaveProperty("kind");
   });
 
-  it("exports Node file thread inspection from the file adapter only", async () => {
+  it("exports file thread inspection from the file adapter only", async () => {
     const runtime = await import("../index");
     const fileAdapter = await import("../platform/file");
 
-    expect(runtime).not.toHaveProperty("inspectNodeFileThread");
-    expect(runtime).not.toHaveProperty("nodeFileThreadStorageFile");
-    expect(fileAdapter).toHaveProperty("inspectNodeFileThread");
-    expect(fileAdapter).toHaveProperty("nodeFileThreadStorageFile");
+    expect(runtime).not.toHaveProperty("inspectFileThread");
+    expect(runtime).not.toHaveProperty("fileThreadStorageHint");
+    expect(fileAdapter).toHaveProperty("inspectFileThread");
+    expect(fileAdapter).toHaveProperty("fileThreadStorageHint");
   });
 });

@@ -21,6 +21,11 @@
       "types": "./dist/platform/cloudflare/index.d.ts",
       "import": "./dist/platform/cloudflare/index.js"
     },
+    "./platform/cloudflare/image-codecs": {
+      "@minpeter/pss-source": "./src/platform/cloudflare/image-codecs-edge.ts",
+      "types": "./dist/platform/cloudflare/image-codecs-edge.d.ts",
+      "import": "./dist/platform/cloudflare/image-codecs-edge.js"
+    },
     "./platform/file": {
       "@minpeter/pss-source": "./src/platform/file/index.ts",
       "types": "./dist/platform/file/index.d.ts",
@@ -69,7 +74,13 @@
     "lint": "ultracite check ."
   },
   "dependencies": {
-    "ai": "7.0.16"
+    "@jsquash/avif": "^2.1.1",
+    "@jsquash/webp": "^1.5.0",
+    "ai": "7.0.16",
+    "fast-png": "^8.0.0",
+    "heic-decode": "^2.1.0",
+    "jpeg-js": "^0.4.4",
+    "libheif-js": "^1.19.8"
   },
   "devDependencies": {
     "agents": "0.17.3",

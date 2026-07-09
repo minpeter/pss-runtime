@@ -3,12 +3,12 @@ import {
   decodeRuntimeAttachmentData,
   isRuntimeAttachmentData,
 } from "./attachment-refs";
-import type { RuntimeAttachmentStore } from "./attachment-types";
+import type { HostAttachmentStore } from "./attachment-types";
 import { RuntimeAttachmentHydrationError } from "./attachment-types";
 
 export async function hydrateRuntimeAttachments(
   history: readonly ModelMessage[],
-  store: RuntimeAttachmentStore | undefined
+  store: HostAttachmentStore | undefined
 ): Promise<ModelMessage[]> {
   const hydrated: ModelMessage[] = [];
   for (const message of history) {

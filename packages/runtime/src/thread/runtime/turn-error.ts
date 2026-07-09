@@ -1,5 +1,5 @@
 import type { ModelMessage } from "ai";
-import type { ExecutionHost } from "../../execution/host/types";
+import type { AgentHost } from "../../execution/host/types";
 import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution";
 import {
   closeRuntimeInput,
@@ -89,7 +89,7 @@ export async function recoverTurnProcessingError({
 }: {
   readonly durableEvents: DurableThreadEventBuffer;
   readonly error: unknown;
-  readonly executionHost?: ExecutionHost;
+  readonly executionHost?: AgentHost;
   readonly executionRun?: ThreadExecutionRun;
   readonly historySnapshot: ModelMessage[];
   readonly recordEvent: (event: AgentEvent) => void;

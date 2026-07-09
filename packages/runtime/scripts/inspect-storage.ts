@@ -1,11 +1,11 @@
 import type {
   Checkpoint,
-  ExecutionHost,
+  AgentHost,
   NotificationRecord,
   TurnRecord,
 } from "../src/execution";
 import {
-  createCloudflareDurableObjectHost,
+  createCloudflareStorageHost,
   listScheduledCloudflareRuns,
   listScheduledCloudflareThreadPrompts,
 } from "../src/platform/cloudflare/host/durable-object-host";
@@ -42,7 +42,7 @@ const ids: DemoIds = {
 
 const sql = new InMemorySqlStorage();
 const storage = new InMemoryCloudflareDurableObjectStorage({ sql });
-const host = createCloudflareDurableObjectHost({
+const host = createCloudflareStorageHost({
   maxPayloadBytes: 64_000,
   prefix,
   storage,
@@ -57,7 +57,7 @@ printLatencySummary(timings);
 printTableSamples(sql);
 await printLoadResults(host);
 
-async function writeDemoScenario(runtimeHost: ExecutionHost): Promise<void> {
+async function writeDemoScenario(runtimeHost: AgentHost): Promise<void> {
   await runtimeHost.store.threads.commit(
     ids.threadKey,
     {
@@ -162,7 +162,7 @@ async function writeDemoScenario(runtimeHost: ExecutionHost): Promise<void> {
   });
 }
 
-async function printLoadResults(runtimeHost: ExecutionHost): Promise<void> {
+async function printLoadResults(runtimeHost: AgentHost): Promise<void> {
   printSection("Load/read results");
   const thread = await runtimeHost.store.threads.load(ids.threadKey);
   console.log(`threads.load(${ids.threadKey})`);

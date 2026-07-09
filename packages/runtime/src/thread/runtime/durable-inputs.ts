@@ -1,7 +1,7 @@
 import type {
   AdmitReceipt,
   ClaimedThreadInput,
-  ExecutionHost,
+  AgentHost,
   RecoverThreadInputClaimsResult,
   ThreadInputBoundary,
   ThreadInputKind,
@@ -40,7 +40,7 @@ export async function admitDurableThreadInput({
   placement,
   threadKey,
 }: {
-  readonly executionHost: ExecutionHost | undefined;
+  readonly executionHost: AgentHost | undefined;
   readonly input: UserInput;
   readonly kind: ThreadInputKind;
   readonly placement?: ThreadInputPlacement;
@@ -74,7 +74,7 @@ export async function claimDurableThreadInput({
   threadKey,
 }: {
   readonly boundary: ThreadInputBoundary;
-  readonly executionHost: ExecutionHost | undefined;
+  readonly executionHost: AgentHost | undefined;
   readonly messageId?: string;
   readonly threadKey: string;
 }): Promise<DurableInputClaim> {
@@ -101,7 +101,7 @@ export async function promoteAndAckDurableThreadInput({
   executionHost,
   record,
 }: {
-  readonly executionHost: ExecutionHost | undefined;
+  readonly executionHost: AgentHost | undefined;
   readonly record: ClaimedThreadInput;
 }): Promise<ThreadInputRecord | null> {
   if (!executionHost) {
@@ -123,7 +123,7 @@ export async function commitAndAckDurableThreadInput({
   threadKey,
 }: {
   readonly buffer: DurableThreadEventBuffer;
-  readonly executionHost: ExecutionHost | undefined;
+  readonly executionHost: AgentHost | undefined;
   readonly record: ClaimedThreadInput;
   readonly state: ThreadState;
   readonly threadKey: string;
@@ -182,7 +182,7 @@ export async function ackDurableThreadInput({
   executionHost,
   record,
 }: {
-  readonly executionHost: ExecutionHost | undefined;
+  readonly executionHost: AgentHost | undefined;
   readonly record: ClaimedThreadInput;
 }): Promise<void> {
   if (!executionHost) {
@@ -206,7 +206,7 @@ export async function recoverDurableThreadInputs({
   executionHost,
   threadKey,
 }: {
-  readonly executionHost: ExecutionHost | undefined;
+  readonly executionHost: AgentHost | undefined;
   readonly threadKey: string;
 }): Promise<RecoverThreadInputClaimsResult> {
   if (!executionHost) {
@@ -227,7 +227,7 @@ export async function releaseDurableThreadInputClaim({
   executionHost,
   record,
 }: {
-  readonly executionHost: ExecutionHost | undefined;
+  readonly executionHost: AgentHost | undefined;
   readonly record: ClaimedThreadInput;
 }): Promise<void> {
   if (!executionHost) {

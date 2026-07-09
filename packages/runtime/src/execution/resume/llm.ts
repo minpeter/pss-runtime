@@ -7,7 +7,7 @@ import {
 } from "../../llm/llm";
 import { persistedToolExecutionCheckpoint } from "../../llm/tool-execution";
 import { modelMessageToAgentEvents } from "../../thread/protocol/mapping";
-import type { ExecutionHost } from "../host/types";
+import type { AgentHost } from "../host/types";
 import {
   appendCheckpoint,
   resumeStateCheckpointReference,
@@ -47,7 +47,7 @@ export async function createResumeToolExecution({
   threadSnapshot,
   stepNumber,
 }: {
-  readonly host: ExecutionHost;
+  readonly host: AgentHost;
   readonly runId: string;
   readonly threadSnapshot: ResumeRunState;
   readonly stepNumber: number;
@@ -103,7 +103,7 @@ export async function emitModelOutputEvents({
   output,
   runId,
 }: {
-  readonly host: ExecutionHost;
+  readonly host: AgentHost;
   readonly output: ModelStepOutput;
   readonly runId: string;
 }): Promise<boolean> {

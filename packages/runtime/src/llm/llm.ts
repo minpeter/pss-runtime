@@ -2,7 +2,7 @@ import type { LanguageModel, ModelMessage, ToolChoice, ToolSet } from "ai";
 import { generateText } from "ai";
 import {
   hydrateRuntimeAttachments,
-  type RuntimeAttachmentStore,
+  type HostAttachmentStore,
 } from "../thread/input/attachments";
 import { assertNoUnsupportedToolApproval } from "./tool-approval";
 import type { RuntimeToolExecutionContext } from "./tool-execution";
@@ -67,7 +67,7 @@ export class ContextBudgetExceededError extends Error {
 }
 
 export interface ModelGenerationOptions {
-  attachmentStore?: RuntimeAttachmentStore;
+  attachmentStore?: HostAttachmentStore;
   contextGate?: false | ModelContextGateOptions;
   instructions?: string;
   model: LanguageModel;

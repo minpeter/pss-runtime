@@ -1,4 +1,4 @@
-import type { ExecutionHost, ExecutionScheduler } from "../../../execution";
+import type { AgentHost, HostScheduler } from "../../../execution";
 import type { ThreadStore } from "../../../index";
 import { CloudflareAttachmentStore } from "../storage/attachment-store";
 import {
@@ -44,19 +44,27 @@ export interface CloudflareDurableObjectState {
 
 export class InMemoryCloudflareDurableObjectStorage extends BaseInMemoryCloudflareDurableObjectStorage {}
 
-export function createCloudflareDurableObjectHost({
+export interface CloudflareStorageHostOptions {
+  readonly maxPayloadBytes?: number;
+  readonly prefix?: string;
+  readonly scheduler?: HostScheduler;
+  readonly storage: CloudflareDurableObjectStorage;
+  readonly threadStore?: ThreadStore;
+}
+
+/**
+ * Low-level DO storage host (store + attachments + optional scheduler).
+ *
+ * Defaults to a queue-only scheduler (no DO alarm wake). Product agent
+ * deployments should use {@link createCloudflareHost} (Agents SDK fibers).
+ */
+export function createCloudflareStorageHost({
   maxPayloadBytes,
   prefix = defaultPrefix,
   threadStore,
   storage,
-  scheduler = createCloudflareAlarmScheduler({ prefix, storage }),
-}: {
-  readonly maxPayloadBytes?: number;
-  readonly prefix?: string;
-  readonly scheduler?: ExecutionScheduler;
-  readonly threadStore?: ThreadStore;
-  readonly storage: CloudflareDurableObjectStorage;
-}): ExecutionHost {
+  scheduler = createCloudflareScheduledWorkScheduler({ prefix, storage }),
+}: CloudflareStorageHostOptions): AgentHost {
   const store = new DurableObjectExecutionStore({
     maxPayloadBytes,
     prefix,
@@ -64,23 +72,25 @@ export function createCloudflareDurableObjectHost({
   });
   return {
     attachmentStore: new CloudflareAttachmentStore({ prefix, storage }),
-    kind: "execution",
     scheduler,
     store: threadStore ? executionStoreWithThreads(store, threadStore) : store,
   };
 }
 
-export function createCloudflareAlarmScheduler({
+/**
+ * Queue-only HostScheduler backed by DO storage scheduled-work rows.
+ * Does not arm Durable Object alarms — wake/resume is Agents SDK owned.
+ */
+export function createCloudflareScheduledWorkScheduler({
   prefix = defaultPrefix,
   storage,
 }: {
   readonly prefix?: string;
   readonly storage: CloudflareDurableObjectStorage;
-}): ExecutionScheduler {
+}): HostScheduler {
   return {
-    enqueueRun: async (runId, options) => {
+    enqueueRun: async (runId) => {
       await appendScheduledRun(storage, prefix, runId);
-      await setAlarm(storage, options?.runAfterMs ?? 0);
     },
     resumeThread: async (threadKey, options) => {
       await appendScheduledThreadPrompt(storage, prefix, {
@@ -89,7 +99,6 @@ export function createCloudflareAlarmScheduler({
         runId: options?.runId,
         threadKey,
       });
-      await setAlarm(storage, 0);
     },
   };
 }
@@ -145,24 +154,11 @@ export async function claimScheduledCloudflareThreadPrompt(
   );
 }
 
-export async function rescheduleCloudflareAlarm(
-  storage: CloudflareDurableObjectStorage,
-  options: { readonly runAfterMs?: number } = {}
-): Promise<void> {
-  await setAlarm(storage, options.runAfterMs ?? 0);
-}
-
-async function setAlarm(
-  storage: CloudflareDurableObjectStorage,
-  runAfterMs: number
-): Promise<void> {
-  await storage.setAlarm?.(Date.now() + Math.max(0, runAfterMs));
-}
 
 function executionStoreWithThreads(
-  store: ExecutionHost["store"],
+  store: AgentHost["store"],
   threads: ThreadStore
-): ExecutionHost["store"] {
+): AgentHost["store"] {
   return {
     events: store.events,
     inputs: store.inputs,

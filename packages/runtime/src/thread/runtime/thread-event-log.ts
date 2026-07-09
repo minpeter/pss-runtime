@@ -1,6 +1,6 @@
 import type {
-  ExecutionHost,
-  ExecutionStoreTransaction,
+  AgentHost,
+  HostStoreTransaction,
   ThreadEventLog,
 } from "../../execution/host/types";
 import type { AgentEvent } from "../protocol/events";
@@ -20,7 +20,7 @@ export class ThreadEventTransactionUnsupportedError extends Error {
 
   constructor() {
     super(
-      "ExecutionStore.transaction() must provide threadEvents when the store enables durable thread event replay."
+      "HostStore.transaction() must provide threadEvents when the store enables durable thread event replay."
     );
   }
 }
@@ -49,7 +49,7 @@ export async function appendDurableThreadEvents(
 }
 
 export function transactionalThreadEvents(
-  tx: ExecutionStoreTransaction
+  tx: HostStoreTransaction
 ): ThreadEventLog {
   if (!tx.threadEvents) {
     throw new ThreadEventTransactionUnsupportedError();
@@ -64,7 +64,7 @@ export async function commitThreadStateAndEvents({
   threadKey,
 }: {
   readonly buffer: DurableThreadEventBuffer;
-  readonly executionHost?: ExecutionHost;
+  readonly executionHost?: AgentHost;
   readonly state: ThreadState;
   readonly threadKey: string;
 }): Promise<void> {
@@ -111,7 +111,7 @@ export async function flushDurableThreadEvents({
   threadKey,
 }: {
   readonly buffer: DurableThreadEventBuffer;
-  readonly executionHost?: ExecutionHost;
+  readonly executionHost?: AgentHost;
   readonly threadKey: string;
 }): Promise<void> {
   const pendingEvents = takeDurableThreadEvents(buffer);

@@ -48,20 +48,25 @@ describe("runtime package subpaths", () => {
 
   it("exports the combined Cloudflare platform facade from the canonical subpath", async () => {
     const cloudflarePlatform = await import("../platform/cloudflare");
-    const canonicalAgentsExports = [
-      "createCloudflareAgentsExecutionHost",
+    const canonicalCloudflareExports = [
+      "createCloudflareHost",
+      "createCloudflareStorageHost",
+      "createCloudflareScheduledWorkScheduler",
       "createCloudflareAgentsFiberScheduler",
+      "createCloudflarePlatformContext",
       "recoverCloudflareAgentsFiber",
       "startCloudflareAgentsResumeFiber",
+      "drainAgentTurn",
     ] as const;
 
-    expect(cloudflarePlatform).toHaveProperty(
-      "createCloudflareDurableObjectHost"
-    );
-    expect(cloudflarePlatform).toHaveProperty("drainCloudflareAlarm");
-    for (const exportName of canonicalAgentsExports) {
+    for (const exportName of canonicalCloudflareExports) {
       expect(cloudflarePlatform).toHaveProperty(exportName);
     }
+    // Deprecated alias kept for migration; same implementation as createCloudflareHost.
+    expect(cloudflarePlatform).toHaveProperty("createCloudflareAgentsHost");
+    expect(cloudflarePlatform.createCloudflareAgentsHost).toBe(
+      cloudflarePlatform.createCloudflareHost
+    );
   });
 
   it("declares the file adapter as a platform implementation subpath", async () => {

@@ -8,6 +8,9 @@
       "@minpeter/pss-runtime/platform/cloudflare": [
         "../../packages/runtime/src/platform/cloudflare/index.ts"
       ],
+      "@minpeter/pss-runtime/platform/cloudflare/image-codecs": [
+        "../../packages/runtime/src/platform/cloudflare/image-codecs-edge.ts"
+      ],
       "@minpeter/pss-runtime/platform/file": [
         "../../packages/runtime/src/platform/file/index.ts"
       ],
@@ -15,5 +18,10 @@
       "chat/*": ["./node_modules/chat/*"]
     }
   },
-  "include": ["src/**/*.ts", "scripts/**/*.ts", "types/**/*.d.ts"]
+  "include": [
+    "src/**/*.ts",
+    "scripts/**/*.ts",
+    "types/**/*.d.ts",
+    "../../packages/runtime/src/types/**/*.d.ts"
+  ]
 }

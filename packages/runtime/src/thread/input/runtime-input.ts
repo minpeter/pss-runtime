@@ -4,7 +4,7 @@ import type { BufferedAgentTurn } from "../protocol/turn";
 import {
   cleanupStagedRuntimeAttachments,
   type RuntimeAttachmentReference,
-  type RuntimeAttachmentStore,
+  type HostAttachmentStore,
   stageUserInputAttachments,
   userInputRequiresAttachmentProcessing,
 } from "./attachments";
@@ -53,7 +53,7 @@ export function createRuntimeInputState(
 export function addSteeringInput(
   runtimeInput: RuntimeInputState,
   input: AgentInput,
-  attachmentStore: RuntimeAttachmentStore | undefined
+  attachmentStore: HostAttachmentStore | undefined
 ): Promise<void> {
   const placement = currentSteeringPlacement(runtimeInput);
   const next = runtimeInput.pending.then(async () => {

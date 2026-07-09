@@ -1,8 +1,8 @@
 import { expect, it } from "vitest";
-import type { ClaimedThreadInput, ExecutionStore } from "../../execution";
+import type { ClaimedThreadInput, HostStore } from "../../execution";
 
 export interface ThreadInputInboxRecoveryContractOptions {
-  readonly createStore: () => ExecutionStore;
+  readonly createStore: () => HostStore;
 }
 
 export function describeThreadInputInboxRecoveryContract({

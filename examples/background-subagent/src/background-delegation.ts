@@ -1,6 +1,6 @@
 import type { AgentInput } from "@minpeter/pss-runtime";
 import type {
-  ExecutionHost,
+  AgentHost,
   TurnRecord,
 } from "@minpeter/pss-runtime/execution";
 
@@ -9,7 +9,7 @@ const backgroundDelegationStateKind = "background-delegation" as const;
 interface BackgroundChildRunInput {
   readonly delegateToolCallId?: string;
   readonly description?: string;
-  readonly executionHost: ExecutionHost;
+  readonly executionHost: AgentHost;
   readonly ownerNamespace?: string;
   readonly parentThreadKey?: string;
   readonly prompt: AgentInput;

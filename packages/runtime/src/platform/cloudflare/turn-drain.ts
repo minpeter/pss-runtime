@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentTurn } from "../../../index";
+import type { AgentEvent, AgentTurn } from "../../index";
 
 export type AgentTurnDrainStopReason = "deadline" | "event-budget";
 

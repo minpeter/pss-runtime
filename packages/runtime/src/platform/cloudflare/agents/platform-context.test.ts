@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { ExecutionHost } from "../../../execution";
+import type { AgentHost } from "../../../execution";
 import {
   type CloudflareAgentsResumeRun,
   cloudflareAgentsFiberIdempotencyKey,
   cloudflareAgentsRunPayload,
-  createCloudflareAgentsPlatformContext,
+  createCloudflarePlatformContext,
 } from "./index";
 import { createFakeCloudflareAgent, runWithText } from "./test-support";
 
@@ -18,7 +18,7 @@ describe("Cloudflare Agents platform context", () => {
       runIds.push(payload.runId);
       return Promise.resolve(runWithText(payload.runId));
     };
-    const context = createCloudflareAgentsPlatformContext({
+    const context = createCloudflarePlatformContext({
       cloudflareAgent,
       createAgent: ({ host, prefix }) => ({
         host,
@@ -65,7 +65,7 @@ describe("Cloudflare Agents platform context", () => {
   it("rejects delayed callbacks outside the allowed prefix set", async () => {
     const cloudflareAgent = createFakeCloudflareAgent();
     const resumed: string[] = [];
-    const context = createCloudflareAgentsPlatformContext({
+    const context = createCloudflarePlatformContext({
       cloudflareAgent,
       createAgent: ({ prefix }) => ({
         prefix,
@@ -97,7 +97,7 @@ describe("Cloudflare Agents platform context", () => {
   it("uses allowPrefix to authorize multi-prefix delayed callbacks", async () => {
     const cloudflareAgent = createFakeCloudflareAgent();
     const resumed: string[] = [];
-    const context = createCloudflareAgentsPlatformContext({
+    const context = createCloudflarePlatformContext({
       allowPrefix: ({ prefix }) => prefix.startsWith("tenant-"),
       cloudflareAgent,
       createAgent: ({ prefix }) => ({
@@ -127,7 +127,7 @@ describe("Cloudflare Agents platform context", () => {
 
   it("reschedules allowed scheduled payloads using the payload prefix", async () => {
     const cloudflareAgent = createFakeCloudflareAgent();
-    const context = createCloudflareAgentsPlatformContext({
+    const context = createCloudflarePlatformContext({
       cloudflareAgent,
       createAgent: ({ prefix }) => ({
         prefix,
@@ -202,7 +202,7 @@ function runFiberKey(prefix: string, runId: string): string {
 }
 
 async function seedRetryableNotification(
-  host: ExecutionHost,
+  host: AgentHost,
   runId: string
 ): Promise<void> {
   const dedupeKey = dedupeKeyFor(runId);

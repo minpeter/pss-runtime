@@ -1,8 +1,8 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
-import type { ExecutionHost } from "../../execution/host/types";
+import type { AgentHost } from "../../execution/host/types";
 import { resumeRun } from "../../execution/resume/resume";
-import { createInMemoryExecutionHost } from "../../platform/memory";
+import { createInMemoryHost } from "../../platform/memory";
 import { createQueuedUserTurnRun } from "../../testing/execution-checkpoint-test-support";
 import {
   createMockLanguageModelV4,
@@ -20,7 +20,7 @@ import type { AgentEvent } from "../../thread/protocol/events";
 import { userTextToModelMessage } from "../../thread/protocol/mapping";
 
 const collectEvents = async (
-  host: ExecutionHost,
+  host: AgentHost,
   runId = "run-1"
 ): Promise<AgentEvent[]> => {
   const events: AgentEvent[] = [];
@@ -33,7 +33,7 @@ const queuedUserMessage = () => userTextToModelMessage(userText("queued"));
 
 describe("resumeRun", () => {
   it("suspends without calling the model when maxSteps is zero", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     const model = createScriptedModelOptions([[assistantMessage("DONE")]]);
     await host.store.turns.create(createQueuedUserTurnRun());
 
@@ -53,7 +53,7 @@ describe("resumeRun", () => {
   });
 
   it("aborts before writing a step when signal is already aborted", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     const controller = new AbortController();
     controller.abort();
     const model = createScriptedModelOptions([[assistantMessage("DONE")]]);
@@ -76,7 +76,7 @@ describe("resumeRun", () => {
   });
 
   it("suspends after maxSteps and resumes to completion", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     const toolCall = toolCallPart("call-tool-1");
     const initialUserMessage = queuedUserMessage();
     const history: ModelMessage[] = [initialUserMessage];
@@ -140,7 +140,7 @@ describe("resumeRun", () => {
   });
 
   it("rolls back to before model when model output was not committed", async () => {
-    const host = createInMemoryExecutionHost();
+    const host = createInMemoryHost();
     const initialUserMessage = queuedUserMessage();
     const history: ModelMessage[] = [initialUserMessage];
     let modelCalls = 0;
