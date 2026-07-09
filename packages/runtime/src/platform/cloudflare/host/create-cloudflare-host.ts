@@ -1,4 +1,4 @@
-import type { AgentHost, HostScheduler } from "../../../execution";
+import type { AgentHost } from "../../../execution";
 import type { ThreadStore } from "../../../thread/store/types";
 import { createCloudflareAgentsFiberRetryScheduler } from "../agents/retry-scheduler";
 import {
@@ -11,17 +11,11 @@ import type {
   CloudflareAgentsResumeRun,
   CloudflareAgentsTurnDrainOptions,
 } from "../agents/types";
-import {
-  createCloudflareAlarmScheduler,
-  createCloudflareStorageHost,
-  type CloudflareStorageHostOptions,
-} from "./durable-object-host";
+import { createCloudflareStorageHost } from "./durable-object-host";
 
 const defaultPrefix = "pss-runtime";
 
-export type { CloudflareStorageHostOptions };
-
-interface CloudflareHostAgentsBaseOptions<
+interface CloudflareHostBaseOptions<
   TAgent extends CloudflareAgentsDefaultResumeAgent,
 > {
   readonly cloudflareAgent: TAgent;
@@ -36,41 +30,33 @@ interface CloudflareHostAgentsBaseOptions<
   readonly threadStore?: ThreadStore;
 }
 
-/** Agents SDK fiber/schedule host options (superset path). */
+/**
+ * Cloudflare Agents SDK host options.
+ *
+ * This is the supported product path: DO storage + fiber/schedule scheduler.
+ * For store/alarm-only assembly without the Agents SDK, use
+ * {@link createCloudflareStorageHost}.
+ */
+export type CloudflareHostOptions<
+  TAgent extends
+    CloudflareAgentsDefaultResumeAgent = CloudflareAgentsDefaultResumeAgent,
+> = CloudflareHostBaseOptions<TAgent> &
+  Pick<CloudflareAgentsFiberSchedulerOptions<TAgent>, "delayedResumeCallback">;
+
+/** @deprecated Use {@link CloudflareHostOptions}. */
 export type CloudflareHostAgentsOptions<
   TAgent extends
     CloudflareAgentsDefaultResumeAgent = CloudflareAgentsDefaultResumeAgent,
-> = CloudflareHostAgentsBaseOptions<TAgent> &
-  Pick<CloudflareAgentsFiberSchedulerOptions<TAgent>, "delayedResumeCallback">;
-
-/** Plain DO storage + alarm host options. */
-export type CloudflareHostStorageOptions = CloudflareStorageHostOptions;
+> = CloudflareHostOptions<TAgent>;
 
 /**
- * Create a Cloudflare AgentHost.
+ * Create the supported Cloudflare `AgentHost` (Agents SDK fibers + schedule).
  *
- * - Storage-only: DO storage + alarm scheduler.
- * - With `cloudflareAgent` + `resume` + `durableObjectContext`: Agents fiber
- *   scheduler on the same DO storage (superset path).
+ * Requires an Agents SDK agent instance, DO context, and resume callback.
+ * Storage/attachment ports are DO-backed; scheduling uses fibers with optional
+ * delayed `schedule()` and retry.
  */
 export function createCloudflareHost<
-  TAgent extends CloudflareAgentsDefaultResumeAgent,
->(options: CloudflareHostAgentsOptions<TAgent>): AgentHost;
-export function createCloudflareHost(
-  options: CloudflareHostStorageOptions
-): AgentHost;
-export function createCloudflareHost<
-  TAgent extends CloudflareAgentsDefaultResumeAgent,
->(
-  options: CloudflareHostAgentsOptions<TAgent> | CloudflareHostStorageOptions
-): AgentHost {
-  if (isAgentsHostOptions(options)) {
-    return createAgentsCloudflareHost(options);
-  }
-  return createCloudflareStorageHost(options);
-}
-
-function createAgentsCloudflareHost<
   TAgent extends CloudflareAgentsDefaultResumeAgent,
 >({
   cloudflareAgent,
@@ -84,7 +70,7 @@ function createAgentsCloudflareHost<
   retryRunAfterMs,
   resume,
   threadStore,
-}: CloudflareHostAgentsOptions<TAgent>): AgentHost {
+}: CloudflareHostOptions<TAgent>): AgentHost {
   const retry = createCloudflareAgentsFiberRetryScheduler({
     cloudflareAgent,
     delayedResumeCallback,
@@ -109,20 +95,3 @@ function createAgentsCloudflareHost<
     threadStore,
   });
 }
-
-function isAgentsHostOptions<TAgent extends CloudflareAgentsDefaultResumeAgent>(
-  options: CloudflareHostAgentsOptions<TAgent> | CloudflareHostStorageOptions
-): options is CloudflareHostAgentsOptions<TAgent> {
-  return (
-    "cloudflareAgent" in options &&
-    "resume" in options &&
-    "durableObjectContext" in options
-  );
-}
-
-export {
-  createCloudflareAlarmScheduler,
-  type CloudflareStorageHostOptions as CloudflareHostBaseOptions,
-};
-
-export type { HostScheduler };

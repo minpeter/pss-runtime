@@ -65,6 +65,7 @@ describe("runtime public exports", () => {
     expect(runtime).toHaveProperty("threadStoreKey", runtimeThreadStoreKey);
     expect(runtime).not.toHaveProperty("createInMemoryHost");
     expect(runtime).not.toHaveProperty("createCloudflareHost");
+    expect(runtime).not.toHaveProperty("createCloudflareStorageHost");
     expect(runtime).not.toHaveProperty("createCloudflareAgentContext");
     expect(runtime).not.toHaveProperty("createCloudflareAgentsHost");
     expect(runtime).not.toHaveProperty("createCloudflareAgentsPlatformContext");

@@ -9,7 +9,7 @@ import {
   type CloudflareDurableObjectState,
   type CloudflareDurableObjectStorage,
   type CloudflareDurableObjectStub,
-  createCloudflareHost,
+  createCloudflareStorageHost,
   drainAgentTurn,
   drainCloudflareAlarm,
   InMemoryCloudflareDurableObjectStorage,
@@ -36,7 +36,7 @@ describe("Cloudflare Durable Object host adapter", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
-    const host = createCloudflareHost({ storage });
+    const host = createCloudflareStorageHost({ storage });
     const runId = "background:bg_cloudflare_delayed";
     const idempotencyKey = "background-complete:example:bg_delayed";
     const notificationRunId = "notification-run-delayed";
@@ -106,7 +106,7 @@ describe("Cloudflare Durable Object host adapter", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
-    const host = createCloudflareHost({ storage });
+    const host = createCloudflareStorageHost({ storage });
 
     await host.scheduler.enqueueRun("run-a");
     await host.scheduler.enqueueRun("run-b");
@@ -122,7 +122,7 @@ describe("Cloudflare Durable Object host adapter", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
-    const host = createCloudflareHost({ storage });
+    const host = createCloudflareStorageHost({ storage });
 
     await host.scheduler.enqueueRun("run-a");
     await host.scheduler.resumeThread("thread-a", { runId: "run-a" });
@@ -160,7 +160,7 @@ describe("Cloudflare Durable Object host adapter", () => {
 
   it("uses the SQLite scheduled queue with default in-memory Durable Object storage", async () => {
     const storage = new InMemoryCloudflareDurableObjectStorage();
-    const host = createCloudflareHost({ storage });
+    const host = createCloudflareStorageHost({ storage });
 
     await host.scheduler.enqueueRun("default-sql-run");
     await host.scheduler.resumeThread("default-sql-thread", {
@@ -182,7 +182,7 @@ describe("Cloudflare Durable Object host adapter", () => {
       sql: new InMemorySqlStorage(),
     });
     const cloudflareLikeStorage = withoutTransactionSql(storage);
-    const host = createCloudflareHost({
+    const host = createCloudflareStorageHost({
       storage: cloudflareLikeStorage,
     });
     const prompt = {
@@ -220,7 +220,7 @@ describe("Cloudflare Durable Object host adapter", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
-    const host = createCloudflareHost({ storage });
+    const host = createCloudflareStorageHost({ storage });
     const runId = "background:bg_retry";
 
     await host.store.turns.create(notificationRunRecord(runId));
@@ -245,7 +245,7 @@ describe("Cloudflare Durable Object host adapter", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
-    const host = createCloudflareHost({ storage });
+    const host = createCloudflareStorageHost({ storage });
     const idempotencyKey = "background-complete:demo:bg_unclaimable";
     const runId = "notification:bg_unclaimable";
     const prompt = {

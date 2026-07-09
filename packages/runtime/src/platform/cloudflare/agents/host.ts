@@ -1,20 +1,11 @@
-import type { AgentHost } from "../../../execution";
-import {
-  createCloudflareHost,
-  type CloudflareHostAgentsOptions,
-} from "../host/create-cloudflare-host";
+import type { CloudflareHostOptions } from "../host/create-cloudflare-host";
 import type { CloudflareAgentsDefaultResumeAgent } from "./types";
 
-/** @deprecated Use {@link createCloudflareHost} with agents options. */
+/**
+ * @deprecated Use {@link CloudflareHostOptions} from
+ * `create-cloudflare-host` / platform cloudflare exports.
+ */
 export type CloudflareAgentsHostOptions<
   TAgent extends
     CloudflareAgentsDefaultResumeAgent = CloudflareAgentsDefaultResumeAgent,
-> = CloudflareHostAgentsOptions<TAgent>;
-
-/** @deprecated Use {@link createCloudflareHost} with agents options. */
-export function createCloudflareAgentsHost<
-  TAgent extends
-    CloudflareAgentsDefaultResumeAgent = CloudflareAgentsDefaultResumeAgent,
->(options: CloudflareHostAgentsOptions<TAgent>): AgentHost {
-  return createCloudflareHost(options);
-}
+> = CloudflareHostOptions<TAgent>;

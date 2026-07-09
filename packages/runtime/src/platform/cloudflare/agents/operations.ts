@@ -7,9 +7,10 @@ import type { AgentEvent, UserInput } from "../../../thread/protocol/events";
 import type { CloudflareScheduledThreadPrompt } from "../host/scheduled-work-queue";
 import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import {
-  type CloudflareAgentsHostOptions,
-  createCloudflareAgentsHost,
-} from "./host";
+  type CloudflareHostOptions,
+  createCloudflareHost,
+} from "../host/create-cloudflare-host";
+import type { CloudflareAgentsHostOptions } from "./host";
 import {
   ackListedCloudflareAgentsScheduledRun,
   ackListedCloudflareAgentsScheduledThreadPrompt,
@@ -104,5 +105,5 @@ function dispatchHost<TAgent extends CloudflareAgentsDefaultResumeAgent>(
   if ("host" in input && input.host !== undefined) {
     return input.host;
   }
-  return createCloudflareAgentsHost(input);
+  return createCloudflareHost(input as CloudflareHostOptions<TAgent>);
 }

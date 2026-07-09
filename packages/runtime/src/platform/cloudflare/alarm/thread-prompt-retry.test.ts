@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AgentEvent, AgentTurn } from "../../../index";
 import {
-  createCloudflareHost,
+  createCloudflareStorageHost,
   drainCloudflareAlarm,
   InMemoryCloudflareDurableObjectStorage,
   listScheduledCloudflareThreadPrompts,
@@ -85,7 +85,7 @@ async function completeAndClaimNotification({
   idempotencyKey,
   runId,
 }: {
-  readonly host: ReturnType<typeof createCloudflareHost>;
+  readonly host: ReturnType<typeof createCloudflareStorageHost>;
   readonly idempotencyKey: string;
   readonly runId: string;
 }): Promise<void> {
@@ -106,7 +106,7 @@ async function completeAndClaimNotification({
 }
 
 async function createScheduledNotification(idempotencyKey: string): Promise<{
-  readonly host: ReturnType<typeof createCloudflareHost>;
+  readonly host: ReturnType<typeof createCloudflareStorageHost>;
   readonly idempotencyKey: string;
   readonly runId: string;
   readonly threadKey: string;
@@ -115,7 +115,7 @@ async function createScheduledNotification(idempotencyKey: string): Promise<{
   const storage = new InMemoryCloudflareDurableObjectStorage({
     sql: new InMemorySqlStorage(),
   });
-  const host = createCloudflareHost({ storage });
+  const host = createCloudflareStorageHost({ storage });
   const runId = `${idempotencyKey}:run`;
   const threadKey = "room:1:user:2";
 

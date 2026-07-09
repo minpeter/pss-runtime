@@ -5,7 +5,7 @@ import {
 } from "../../../execution/dispatch/notification-dispatch";
 import type { AgentHost } from "../../../execution/host/types";
 import type { AgentEvent, UserInput } from "../../../thread/protocol/events";
-import { createCloudflareHost } from "../host/create-cloudflare-host";
+import { createCloudflareStorageHost } from "../host/durable-object-host";
 import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 
 interface DispatchCloudflareAgentNotificationBase {
@@ -43,7 +43,7 @@ export function dispatchCloudflareAgentNotification({
   return dispatchAgentNotification({
     host:
       host ??
-      createCloudflareHost({
+      createCloudflareStorageHost({
         prefix,
         storage,
       }),

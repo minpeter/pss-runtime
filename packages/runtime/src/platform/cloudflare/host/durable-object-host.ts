@@ -52,7 +52,13 @@ export interface CloudflareStorageHostOptions {
   readonly threadStore?: ThreadStore;
 }
 
-/** Low-level DO storage host. Prefer {@link createCloudflareHost}. */
+/**
+ * Low-level DO storage host (store + attachments + optional scheduler).
+ *
+ * Defaults to the alarm scheduler. Product agent deployments should use
+ * {@link createCloudflareHost} (Agents SDK fibers). Prefer this helper for
+ * store inspection, alarm-drain tests, and non-Agents DO tooling.
+ */
 export function createCloudflareStorageHost({
   maxPayloadBytes,
   prefix = defaultPrefix,

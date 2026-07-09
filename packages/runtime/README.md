@@ -432,8 +432,8 @@ There is a single host contract: `AgentHost` (`HostStore` + `HostScheduler` + op
 `HostAttachmentStore`). When `host` is omitted, `Agent` defaults to
 `createInMemoryHost()`. Platform factories (`createInMemoryHost`,
 `createFileHost`, `createCloudflareHost`) all return that same shape.
-`createCloudflareHost` accepts either plain DO storage options or Agents SDK
-fiber options (the agents path is a superset of the storage path).
+`createCloudflareHost` is the Cloudflare Agents SDK path (fibers + schedule).
+For store/alarm-only DO tooling use `createCloudflareStorageHost`.
 
 Automatic compaction can also enforce a pre-provider context budget:
 
@@ -512,16 +512,17 @@ core runtime code. Use `@minpeter/pss-runtime/platform/cloudflare` as the
 canonical Cloudflare adapter for Durable Object storage, alarms, dispatch, and
 Cloudflare Agents SDK fiber, schedule, recovery, and context helpers.
 
-**Recommended for agent products:** implement the Worker DO as a Cloudflare
-Agents SDK `Agent` subclass and wire PSS through
+**Cloudflare agent products use the Agents SDK path only.** Implement the
+Worker DO as a Cloudflare Agents SDK `Agent` subclass and wire PSS through
 `createCloudflareAgentsPlatformContext` / `createCloudflareHost({ cloudflareAgent,
 durableObjectContext: this.ctx, resume, ... })`. Immediate run/thread resumes map
 to `startFiber()`, delayed resumes to SDK `schedule()`, and recovery to
 `onFiberRecovered()`. HTTP app routes should use `onRequest` (PartyServer entry).
 Scheduled callback and recovery payloads are prefix-guarded by default; pass
 `allowedPrefixes` or `allowPrefix` for multi-namespace Workers. The
-`worker-agent` app follows this Agents SDK path while owning session, channel,
-webhook, and prompt-routing behavior.
+`worker-agent` app is the reference. Low-level `createCloudflareStorageHost` +
+`drainCloudflareAlarm` remain available for store inspection and plain DO
+alarm tooling, not as the product agent host API.
 
 ### Platform adapter parity
 
@@ -537,8 +538,10 @@ timers.
 | ------------------------------------- | ----------------- | ------------------------ | ----------------------------- |
 | Thread + execution stores             | yes               | yes                      | yes                           |
 | Scheduled runs and thread prompts     | list/ack, deduped | list/ack, deduped        | list/ack/claim, deduped       |
-| Delayed runs (`runAfterMs`)           | due-time filtered | due-time filtered        | Durable Object alarm          |
-| Drain helper                          | app-driven        | `drainScheduledNodeWork` | `drainCloudflareAlarm`        |
+| Delayed runs (`runAfterMs`)           | due-time filtered | due-time filtered        | Agents `schedule()` / fibers  |
+| Product host factory                  | `createInMemoryHost` | `createFileHost`      | `createCloudflareHost`        |
+| Low-level storage host                | —                 | —                        | `createCloudflareStorageHost` |
+| Drain helper                          | app-driven        | `drainScheduledNodeWork` | fiber resume / `drainCloudflareAlarm` |
 | Scheduled fiber retry backoff         | —                 | —                        | Cloudflare Agents SDK adapter |
 
 The same core API supports room/user/thread routing through stable thread keys.

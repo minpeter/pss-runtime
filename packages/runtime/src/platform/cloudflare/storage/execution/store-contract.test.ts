@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { describeExecutionStoreContract } from "../../../../contracts/execution-store/contract";
 import type { NotificationRecord, TurnRecord } from "../../../../execution";
-import { createCloudflareHost } from "../../host/create-cloudflare-host";
+import { createCloudflareStorageHost } from "../../host/durable-object-host";
 import { InMemoryCloudflareDurableObjectStorage as PublicInMemoryCloudflareDurableObjectStorage } from "../../host/durable-object-host";
 import { InMemorySqlStorage } from "../../sql/node-test/node-sqlite-storage";
 import type {
@@ -161,7 +161,7 @@ describe("DurableObjectExecutionStore payload guards", () => {
   });
 
   it("round-trips thread inputs with the public default Durable Object SQL test storage", async () => {
-    const host = createCloudflareHost({
+    const host = createCloudflareStorageHost({
       prefix: "default-sql-thread-input-test",
       storage: new PublicInMemoryCloudflareDurableObjectStorage(),
     });

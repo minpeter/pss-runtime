@@ -15,10 +15,7 @@ export {
   type StartCloudflareAgentsResumeFiberOptions,
   startCloudflareAgentsResumeFiber,
 } from "./agents/fiber";
-export {
-  type CloudflareAgentsHostOptions,
-  createCloudflareAgentsHost,
-} from "./agents/host";
+export type { CloudflareAgentsHostOptions } from "./agents/host";
 export {
   ackScheduledCloudflareAgentsRun,
   ackScheduledCloudflareAgentsThreadPrompt,
@@ -147,6 +144,8 @@ export {
   ackScheduledCloudflareRun,
   ackScheduledCloudflareThreadPrompt,
   createCloudflareAlarmScheduler,
+  createCloudflareStorageHost,
+  type CloudflareStorageHostOptions,
   InMemoryCloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
   listScheduledCloudflareThreadPrompts,
@@ -154,7 +153,7 @@ export {
 } from "./host/durable-object-host";
 export {
   type CloudflareHostAgentsOptions,
-  type CloudflareHostStorageOptions,
+  type CloudflareHostOptions,
   createCloudflareHost,
 } from "./host/create-cloudflare-host";
 export type {

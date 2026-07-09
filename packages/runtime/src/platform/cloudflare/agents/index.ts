@@ -15,11 +15,12 @@ export {
   type StartCloudflareAgentsResumeFiberOptions,
   startCloudflareAgentsResumeFiber,
 } from "./fiber";
+export type { CloudflareAgentsHostOptions } from "./host";
 export {
-  type CloudflareAgentsHostOptions,
-  createCloudflareAgentsHost,
-} from "./host";
-export { createCloudflareHost } from "../host/create-cloudflare-host";
+  type CloudflareHostAgentsOptions,
+  type CloudflareHostOptions,
+  createCloudflareHost,
+} from "../host/create-cloudflare-host";
 export {
   ackScheduledCloudflareAgentsRun,
   ackScheduledCloudflareAgentsThreadPrompt,

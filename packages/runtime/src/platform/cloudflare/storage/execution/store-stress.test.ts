@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ackScheduledCloudflareRun,
   ackScheduledCloudflareThreadPrompt,
-  createCloudflareHost,
+  createCloudflareStorageHost,
   listScheduledCloudflareRuns,
   listScheduledCloudflareThreadPrompts,
 } from "../../index";
@@ -81,7 +81,7 @@ describe("DurableObjectExecutionStore storage stress", () => {
       const storage = new InMemoryCloudflareDurableObjectStorage({
         sql: new InMemorySqlStorage(),
       });
-      const host = createCloudflareHost({
+      const host = createCloudflareStorageHost({
         prefix: "stress-runtime",
         storage,
       });

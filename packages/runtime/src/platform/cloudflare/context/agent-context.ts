@@ -5,7 +5,7 @@ import type {
   CloudflareAlarmDrainSummary,
 } from "../alarm/drainer";
 import { drainCloudflareAlarm } from "../alarm/drainer";
-import { createCloudflareHost } from "../host/create-cloudflare-host";
+import { createCloudflareStorageHost } from "../host/durable-object-host";
 import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 
 const defaultContextPrefix = "pss-runtime";
@@ -59,7 +59,7 @@ export function createCloudflareAgentContext<
   storage,
 }: CloudflareAgentContextOptions<Env, Agent>): CloudflareAgentContext<Agent> {
   const createHost = (prefix = defaultPrefix) =>
-    createCloudflareHost({ prefix, storage });
+    createCloudflareStorageHost({ prefix, storage });
   const createContextAgent = (prefix = defaultPrefix) =>
     createAgent({
       env,

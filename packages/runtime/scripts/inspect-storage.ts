@@ -5,7 +5,7 @@ import type {
   TurnRecord,
 } from "../src/execution";
 import {
-  createCloudflareHost,
+  createCloudflareStorageHost,
   listScheduledCloudflareRuns,
   listScheduledCloudflareThreadPrompts,
 } from "../src/platform/cloudflare/host/durable-object-host";
@@ -42,7 +42,7 @@ const ids: DemoIds = {
 
 const sql = new InMemorySqlStorage();
 const storage = new InMemoryCloudflareDurableObjectStorage({ sql });
-const host = createCloudflareHost({
+const host = createCloudflareStorageHost({
   maxPayloadBytes: 64_000,
   prefix,
   storage,

@@ -48,18 +48,18 @@ describe("runtime package subpaths", () => {
 
   it("exports the combined Cloudflare platform facade from the canonical subpath", async () => {
     const cloudflarePlatform = await import("../platform/cloudflare");
-    const canonicalAgentsExports = [
-      "createCloudflareAgentsHost",
+    const canonicalCloudflareExports = [
+      "createCloudflareHost",
+      "createCloudflareStorageHost",
       "createCloudflareAgentsFiberScheduler",
+      "createCloudflareAgentsPlatformContext",
       "recoverCloudflareAgentsFiber",
       "startCloudflareAgentsResumeFiber",
+      "drainCloudflareAlarm",
     ] as const;
 
-    expect(cloudflarePlatform).toHaveProperty(
-      "createCloudflareHost"
-    );
-    expect(cloudflarePlatform).toHaveProperty("drainCloudflareAlarm");
-    for (const exportName of canonicalAgentsExports) {
+    expect(cloudflarePlatform).not.toHaveProperty("createCloudflareAgentsHost");
+    for (const exportName of canonicalCloudflareExports) {
       expect(cloudflarePlatform).toHaveProperty(exportName);
     }
   });

@@ -1,5 +1,5 @@
 import type { TurnRecord, TurnStatus } from "../../../execution";
-import { createCloudflareHost } from "../host/create-cloudflare-host";
+import { createCloudflareStorageHost } from "../host/durable-object-host";
 import type { CloudflareScheduledThreadPrompt } from "../host/scheduled-work-queue";
 import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import type { CloudflareAlarmRunContext } from "./run-context";
@@ -9,7 +9,7 @@ export async function scheduledRunContext(
   prefix: string,
   runId: string
 ): Promise<CloudflareAlarmRunContext> {
-  const run = await createCloudflareHost({
+  const run = await createCloudflareStorageHost({
     prefix,
     storage,
   }).store.turns.get(runId);
@@ -44,7 +44,7 @@ export async function shouldRetryScheduledRun(
   prefix: string,
   runId: string
 ): Promise<boolean> {
-  const run = await createCloudflareHost({
+  const run = await createCloudflareStorageHost({
     prefix,
     storage,
   }).store.turns.get(runId);
@@ -56,7 +56,7 @@ export async function shouldRetryNotClaimableScheduledRun(
   prefix: string,
   runId: string
 ): Promise<boolean> {
-  const run = await createCloudflareHost({
+  const run = await createCloudflareStorageHost({
     prefix,
     storage,
   }).store.turns.get(runId);
@@ -89,7 +89,7 @@ export async function prepareScheduledNotificationRetry(
   prefix: string,
   runId: string
 ): Promise<boolean> {
-  const host = createCloudflareHost({ prefix, storage });
+  const host = createCloudflareStorageHost({ prefix, storage });
   let prepared = false;
   await host.store.transaction(async (tx) => {
     const run = await tx.turns.get(runId);
@@ -116,7 +116,7 @@ async function scheduledThreadPromptRunId(
     return;
   }
 
-  const notification = await createCloudflareHost({
+  const notification = await createCloudflareStorageHost({
     prefix,
     storage,
   }).store.notifications.getByIdempotencyKey(prompt.idempotencyKey);

@@ -3,7 +3,7 @@ import type { AgentEvent, AgentTurn } from "../../../index";
 import {
   type CloudflareAlarmAgent,
   CloudflareAlarmDrainFailureError,
-  createCloudflareHost,
+  createCloudflareStorageHost,
   drainCloudflareAlarm,
   InMemoryCloudflareDurableObjectStorage,
   listScheduledCloudflareRuns,
@@ -16,7 +16,7 @@ describe("Cloudflare alarm drain budgets", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
-    const host = createCloudflareHost({ storage });
+    const host = createCloudflareStorageHost({ storage });
 
     await enqueueStoredRun(host, "run-a");
     await enqueueStoredRun(host, "run-b");
@@ -44,7 +44,7 @@ describe("Cloudflare alarm drain budgets", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
-    const host = createCloudflareHost({ storage });
+    const host = createCloudflareStorageHost({ storage });
 
     await host.scheduler.enqueueRun("run-a");
     await host.scheduler.enqueueRun("run-b");
@@ -67,7 +67,7 @@ describe("Cloudflare alarm drain budgets", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
-    const host = createCloudflareHost({ storage });
+    const host = createCloudflareStorageHost({ storage });
 
     await host.scheduler.resumeThread("thread-a", { runId: "run-a" });
     await host.scheduler.resumeThread("thread-b", { runId: "run-b" });
@@ -92,7 +92,7 @@ describe("Cloudflare alarm drain budgets", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
-    const host = createCloudflareHost({ storage });
+    const host = createCloudflareStorageHost({ storage });
     let yieldedEvents = 0;
 
     await enqueueStoredRun(host, "run-events");
@@ -130,7 +130,7 @@ describe("Cloudflare alarm drain budgets", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
-    const host = createCloudflareHost({ storage });
+    const host = createCloudflareStorageHost({ storage });
 
     await enqueueStoredRun(host, "run-deadline");
 
@@ -161,7 +161,7 @@ describe("Cloudflare alarm drain budgets", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
-    const host = createCloudflareHost({ storage });
+    const host = createCloudflareStorageHost({ storage });
 
     await enqueueStoredRun(host, "run-unclaimable");
 
@@ -183,7 +183,7 @@ describe("Cloudflare alarm drain budgets", () => {
     const storage = new InMemoryCloudflareDurableObjectStorage({
       sql: new InMemorySqlStorage(),
     });
-    const host = createCloudflareHost({ storage });
+    const host = createCloudflareStorageHost({ storage });
 
     await enqueueStoredRun(host, "run-user-turn", "user-turn");
 
@@ -207,7 +207,7 @@ function agentWithEvents(events: readonly AgentEvent[]): CloudflareAlarmAgent {
 }
 
 async function enqueueStoredRun(
-  host: ReturnType<typeof createCloudflareHost>,
+  host: ReturnType<typeof createCloudflareStorageHost>,
   runId: string,
   kind: "notification" | "user-turn" = "notification"
 ): Promise<void> {
