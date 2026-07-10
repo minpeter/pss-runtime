@@ -18,6 +18,7 @@ import type {
   AgentAutoCompactionOptions,
   AgentInput,
   AgentOptions,
+  AgentPrepareStep,
   HostAttachmentStore,
   ThreadCompactionInput,
   ThreadHandle,
@@ -108,11 +109,15 @@ describe("runtime public exports", () => {
     } satisfies AgentAutoCompactionOptions;
     const model = {} as AgentOptions["model"];
     const attachmentStore = {} as HostAttachmentStore;
+    const prepareStep: AgentPrepareStep = async () => ({
+      activeTools: undefined,
+    });
     const enabledOptions = {
       attachmentStore,
       autoCompaction,
       model,
       notificationOverlays: ["runtime context"],
+      prepareStep,
     } satisfies AgentOptions;
     const disabledOptions = {
       autoCompaction: false,
@@ -149,6 +154,7 @@ describe("runtime public exports", () => {
     expect(enabledOptions.autoCompaction).toEqual(autoCompaction);
     expect(enabledOptions.attachmentStore).toBe(attachmentStore);
     expect(enabledOptions.notificationOverlays).toEqual(["runtime context"]);
+    expect(enabledOptions.prepareStep).toBe(prepareStep);
     expect(disabledOptions.autoCompaction).toBe(false);
     expect(compaction.startSeq).toBe(0);
   });

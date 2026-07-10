@@ -57,7 +57,30 @@ has a cursor, so callers can persist `record.cursor` and resume with
 
 `model` is the single public constructor key for model execution. Pass an AI SDK
 `LanguageModel` object and configure runtime-owned prompting through
-`instructions`, `tools`, and `toolChoice`:
+`instructions`, `tools`, `toolChoice`, and optional `prepareStep` (AI SDK
+passthrough for per-call `activeTools` selection, e.g. toolpick).
+
+Because the runtime owns the multi-step tool loop and each `generateText` call
+uses the AI SDK default of one model step, `prepareStep` usually observes
+`stepNumber === 0` and empty `steps` on every outer-loop iteration. Tool
+miss-paging that depends on AI SDK multi-step counters needs host-side state
+across PSS steps.
+
+```ts
+import { createToolIndex } from "toolpick";
+
+const tools = { /* full ToolSet */ };
+const index = createToolIndex(tools, { strategy: "hybrid" });
+
+const agent = new Agent({
+  model,
+  tools,
+  prepareStep: index.prepareStep({ alwaysActive: ["send_message"] }),
+});
+```
+
+Configure runtime-owned prompting through `instructions`, `tools`, and
+`toolChoice`:
 
 ```ts
 import { openai } from "@ai-sdk/openai";

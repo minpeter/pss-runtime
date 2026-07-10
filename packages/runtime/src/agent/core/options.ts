@@ -1,4 +1,4 @@
-import type { LanguageModel, ToolSet } from "ai";
+import type { LanguageModel, PrepareStepFunction, ToolSet } from "ai";
 import type { AgentHost } from "../../execution/host/types";
 import type { AgentToolChoice, ModelContextGateOptions } from "../../llm/llm";
 import { assertNoUnsupportedToolApproval } from "../../llm/tool-approval";
@@ -15,6 +15,17 @@ export interface AgentAutoCompactionOptions {
 
 export type AgentContextGateOptions = ModelContextGateOptions;
 
+/**
+ * AI SDK `prepareStep` hook (e.g. toolpick `activeTools` selection).
+ *
+ * Passed through to each `generateText` call. Because the runtime drives the
+ * multi-step tool loop itself (`stopWhen` defaults to one model step per call),
+ * `prepareStep` usually sees `stepNumber === 0` and `steps === []` on every
+ * outer-loop iteration — miss-paging that depends on AI SDK multi-step counters
+ * will not advance across PSS steps unless the host tracks that state itself.
+ */
+export type AgentPrepareStep = PrepareStepFunction<ToolSet>;
+
 export interface AgentOptions {
   readonly attachmentStore?: HostAttachmentStore;
   readonly autoCompaction?: AgentAutoCompactionOptions | false;
@@ -24,13 +35,23 @@ export interface AgentOptions {
   readonly namespace?: string;
   readonly notificationOverlays?: readonly (AgentInput | UserInput)[];
   readonly plugins?: readonly AgentPlugin[];
+  /**
+   * AI SDK prepareStep passthrough for per-model-call tool filtering
+   * (`activeTools`). See {@link AgentPrepareStep} for outer-loop step notes.
+   */
+  readonly prepareStep?: AgentPrepareStep;
   readonly toolChoice?: AgentToolChoice;
   readonly tools?: ToolSet;
 }
 
 export type AgentModelOptions = Pick<
   AgentOptions,
-  "attachmentStore" | "instructions" | "model" | "toolChoice" | "tools"
+  | "attachmentStore"
+  | "instructions"
+  | "model"
+  | "prepareStep"
+  | "toolChoice"
+  | "tools"
 > & {
   readonly contextGate?: false | AgentContextGateOptions;
 };

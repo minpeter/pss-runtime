@@ -5,6 +5,7 @@ import {
   type AgentEvent,
   type AgentHost,
   type AgentPlugin,
+  type AgentPrepareStep,
   type AgentTurn,
 } from "@minpeter/pss-runtime";
 import { drainAgentTurn } from "@minpeter/pss-runtime/platform/cloudflare";
@@ -13,6 +14,11 @@ import type { EnvironmentName } from "./env";
 import { createTurnObservabilityPlugin } from "./observability";
 import type { WorkerAgentSessionToolOptions } from "./session-tools";
 import { createSessionTools } from "./session-tools";
+import {
+  createWorkerAgentPrepareStep,
+  isToolpickEnabled,
+  type ToolpickSelectionMetric,
+} from "./toolpick";
 import {
   createWorkerAgentTools,
   isDeliveredSendMessageToolOutput,
@@ -106,6 +112,13 @@ export interface WorkerAgentRuntimeOptions {
   };
   readonly sendMessage?: WorkerAgentSendMessageToolOptions;
   readonly sessionTools?: WorkerAgentSessionToolOptions;
+  /**
+   * Optional toolpick selection metrics. Used when TOOLPICK_ENABLED is on and
+   * a full tools set is present.
+   */
+  readonly toolpick?: {
+    readonly onSelect?: (metric: ToolpickSelectionMetric) => void;
+  };
 }
 
 export interface WorkerAgentModelEnv {
@@ -113,6 +126,7 @@ export interface WorkerAgentModelEnv {
   readonly AI_BASE_URL?: string;
   readonly AI_MODEL?: string;
   readonly ENVIRONMENT: EnvironmentName;
+  readonly TOOLPICK_ENABLED?: string;
 }
 
 export interface WorkerAgentTurnDelivery {
@@ -142,6 +156,11 @@ export function createConfiguredAgent(
     }),
   ];
   const tools = createWorkerAgentToolSet(options);
+  const prepareStep = createOptionalWorkerAgentPrepareStep(
+    env,
+    tools,
+    options.toolpick?.onSelect
+  );
 
   return new Agent({
     autoCompaction: WORKER_AGENT_AUTO_COMPACTION,
@@ -149,6 +168,7 @@ export function createConfiguredAgent(
     instructions: WORKER_AGENT_INSTRUCTIONS,
     model: provider(env.AI_MODEL?.trim() || DEFAULT_MODEL),
     plugins,
+    ...(prepareStep ? { prepareStep } : {}),
     ...(tools ? { tools } : {}),
   });
 }
@@ -163,6 +183,19 @@ function createWorkerAgentToolSet(
     ...(options.sendMessage ? createWorkerAgentTools(options.sendMessage) : {}),
     ...(options.sessionTools ? createSessionTools(options.sessionTools) : {}),
   };
+}
+
+function createOptionalWorkerAgentPrepareStep(
+  env: WorkerAgentModelEnv,
+  tools: WorkerAgentToolSet | undefined,
+  onSelect?: (metric: ToolpickSelectionMetric) => void
+): AgentPrepareStep | undefined {
+  if (!(isToolpickEnabled(env) && tools)) {
+    return;
+  }
+  return createWorkerAgentPrepareStep(tools, {
+    ...(onSelect ? { onSelect } : {}),
+  });
 }
 
 export async function collectTurnDelivery(

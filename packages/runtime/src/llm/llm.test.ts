@@ -132,6 +132,32 @@ describe("generateModelStep", () => {
     );
   });
 
+  it("passes prepareStep through to generateText", async () => {
+    const runModelStep = await loadModelStepRunner();
+    const signal = new AbortController().signal;
+    const history = [{ role: "user" as const, content: "hello" }];
+    const prepareStep = vi.fn(async () => ({
+      activeTools: ["injected"] as const,
+    }));
+
+    await expect(
+      runModelStep(
+        {
+          model: fakeModel,
+          prepareStep,
+          tools: { injected: createNoopTool() },
+        },
+        { history, signal }
+      )
+    ).resolves.toEqual([assistantMessage("DONE")]);
+
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prepareStep,
+      })
+    );
+  });
+
   it("rejects tools using AI SDK tool approval before generateText", async () => {
     const runModelStep = await loadModelStepRunner();
     const signal = new AbortController().signal;
@@ -202,6 +228,27 @@ describe("Agent tool wiring", () => {
       expect.objectContaining({
         model: fakeModel,
         toolChoice: "required",
+      })
+    );
+  });
+
+  it("passes AgentOptions prepareStep into generateText", async () => {
+    const Agent = await loadAgent();
+    const prepareStep = vi.fn(async () => ({
+      activeTools: ["injected"] as const,
+    }));
+    const agent = new Agent({
+      model: fakeModel,
+      prepareStep,
+      tools: { injected: createNoopTool() },
+    });
+
+    await drainRun(await agent.send("select active tools"));
+
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: fakeModel,
+        prepareStep,
       })
     );
   });

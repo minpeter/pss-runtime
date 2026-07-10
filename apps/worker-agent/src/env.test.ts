@@ -7,6 +7,7 @@ import {
   readWebhookSecretToken,
   WorkerAgentConfigError,
 } from "./env";
+import { isToolpickEnabled } from "./toolpick";
 
 const DURABLE_OBJECT_NAME_PATTERN = /^tg-v1-[A-Za-z0-9_-]*$/u;
 
@@ -26,6 +27,11 @@ describe("worker-agent env helpers", () => {
     expect(isTelegramIngressDryRun({ TELEGRAM_INGRESS_DRY_RUN: "true" })).toBe(
       true
     );
+  });
+
+  it("detects toolpick enable flags", () => {
+    expect(isToolpickEnabled({})).toBe(false);
+    expect(isToolpickEnabled({ TOOLPICK_ENABLED: "1" })).toBe(true);
   });
 
   it("rejects missing webhook secrets", () => {

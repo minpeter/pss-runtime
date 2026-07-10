@@ -23,7 +23,11 @@ import {
 
 export type { AgentHost } from "../../execution/host/types";
 export type { ThreadCompactionInput } from "../../thread/handle/thread";
-export type { AgentAutoCompactionOptions, AgentOptions } from "./options";
+export type {
+  AgentAutoCompactionOptions,
+  AgentOptions,
+  AgentPrepareStep,
+} from "./options";
 export type {
   ThreadAddress,
   ThreadHandle,
@@ -66,6 +70,7 @@ export class Agent {
       contextGate: this.#autoCompaction?.contextGate,
       instructions: options.instructions,
       model: options.model,
+      prepareStep: options.prepareStep,
       toolChoice: options.toolChoice,
       tools: options.tools,
     };

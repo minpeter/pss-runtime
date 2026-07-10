@@ -473,6 +473,16 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
           this.#observability?.record(entry);
         },
       },
+      toolpick: {
+        onSelect: (metric) => {
+          logInfo({
+            activeTools: metric.activeTools,
+            event: "toolpick.select",
+            layer: AGENT_TURN_ADMISSION_LAYER,
+            stepNumber: metric.stepNumber,
+          });
+        },
+      },
     });
     this.#turnSession = createTurnSession(this.#agent.thread(binding.thread));
     return this.#turnSession;

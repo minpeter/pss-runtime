@@ -1,4 +1,10 @@
-import type { LanguageModel, ModelMessage, ToolChoice, ToolSet } from "ai";
+import type {
+  LanguageModel,
+  ModelMessage,
+  PrepareStepFunction,
+  ToolChoice,
+  ToolSet,
+} from "ai";
 import { generateText } from "ai";
 import {
   type HostAttachmentStore,
@@ -21,6 +27,12 @@ export type {
 } from "./tool-execution";
 
 export type AgentToolChoice = ToolChoice<ToolSet>;
+/**
+ * AI SDK prepareStep hook. See AgentOptions.prepareStep for outer-loop notes:
+ * PSS calls generateText once per outer step (`stopWhen` default = 1), so
+ * `stepNumber` / `steps` are typically always 0 / [] for miss-paging logic.
+ */
+export type ModelPrepareStep = PrepareStepFunction<ToolSet>;
 export type ModelStepOutput = Awaited<
   ReturnType<typeof generateText>
 >["responseMessages"];
@@ -71,6 +83,7 @@ export interface ModelGenerationOptions {
   contextGate?: false | ModelContextGateOptions;
   instructions?: string;
   model: LanguageModel;
+  prepareStep?: ModelPrepareStep;
   toolChoice?: AgentToolChoice;
   tools?: ToolSet;
 }
@@ -87,6 +100,7 @@ export async function generateModelStep({
   history,
   model,
   instructions,
+  prepareStep,
   signal,
   toolChoice,
   toolExecution,
@@ -109,6 +123,8 @@ export async function generateModelStep({
     instructions: prompt.instructions,
     messages,
     model,
+    // AI SDK multi-step counters reset every outer-loop call (see ModelPrepareStep).
+    prepareStep,
     toolChoice,
     tools: normalizeToolCallIds(tools, toolCallIds, toolExecution),
   });
