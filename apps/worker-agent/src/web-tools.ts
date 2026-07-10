@@ -61,7 +61,10 @@ export interface WebFetchToolResult {
 
 export interface WebToolsOptions {
   readonly fetchImpl?: typeof fetch;
-  /** Firecrawl API key. Free tier (~1k credits/mo). Optional if keyless free tier works. */
+  /**
+   * Optional Firecrawl API key. Search/scrape work keyless on Firecrawl's free
+   * tier; a key only raises limits / attribution for a personal account.
+   */
   readonly firecrawlApiKey?: string;
   readonly firecrawlBaseUrl?: string;
   readonly jinaReaderBaseUrl?: string;
@@ -87,7 +90,7 @@ export function createWebTools(
   return {
     [WEB_SEARCH_TOOL_NAME]: {
       description:
-        "Search the public web for current information, news, docs, or links (Firecrawl free tier). Use for live facts not in chat history. Prefer web_fetch after picking a concrete URL.",
+        "Search the public web for current information, news, docs, or links via Firecrawl (keyless free tier). Use for live facts not in chat history. Prefer web_fetch after picking a concrete URL.",
       execute: async (input: unknown): Promise<WebSearchToolResult> => {
         const parsed = WebSearchInputSchema.parse(input);
         const query = parsed.query.trim();
@@ -145,7 +148,7 @@ async function firecrawlSearch(options: {
   if (!response.ok) {
     const detail = await safeErrorBody(response);
     throw new WebToolError(
-      `Firecrawl search failed (${response.status})${detail ? `: ${detail}` : ""}. Set FIRECRAWL_API_KEY for free-tier credits if needed.`
+      `Firecrawl search failed (${response.status})${detail ? `: ${detail}` : ""}. Free keyless tier may be rate-limited; optional FIRECRAWL_API_KEY raises limits.`
     );
   }
   const body = (await response.json()) as {

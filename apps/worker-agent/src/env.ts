@@ -20,9 +20,9 @@ export interface Env {
   readonly CF_VERSION_METADATA?: WorkerVersionMetadata;
   readonly ENVIRONMENT: EnvironmentName;
   /**
-   * Optional Firecrawl API key for web_search / preferred web_fetch.
-   * Free tier (~1k credits/mo). Without a key, search may fail; fetch falls
-   * back to Jina Reader / direct GET.
+   * Optional Firecrawl API key. web_search / Firecrawl scrape work keyless on
+   * the free tier; set a key only for higher personal limits. web_fetch still
+   * falls back to Jina Reader / direct GET if Firecrawl scrape fails.
    */
   readonly FIRECRAWL_API_KEY?: string;
   readonly TELEGRAM_BOT_TOKEN: string;
