@@ -47,8 +47,10 @@ describe("web tools", () => {
     )) as WebSearchToolResult;
 
     expect(result).toEqual({
+      ok: true,
       provider: "firecrawl",
       query: "firecrawl docs",
+      resultCount: 1,
       results: [
         {
           description: "Docs",

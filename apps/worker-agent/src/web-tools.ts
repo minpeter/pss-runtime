@@ -47,8 +47,10 @@ export interface WebSearchResultItem {
 }
 
 export interface WebSearchToolResult {
+  readonly ok: true;
   readonly provider: "firecrawl";
   readonly query: string;
+  readonly resultCount: number;
   readonly results: readonly WebSearchResultItem[];
 }
 
@@ -95,16 +97,23 @@ export function createWebTools(
         const parsed = WebSearchInputSchema.parse(input);
         const query = parsed.query.trim();
         const limit = parsed.limit ?? DEFAULT_SEARCH_LIMIT;
-        const results = await firecrawlSearch({
+        const results = await firecrawlSearchWithRetry({
           apiKey,
           baseUrl: firecrawlBaseUrl,
           fetchImpl,
           limit,
           query,
         });
+        if (results.length === 0) {
+          throw new WebToolError(
+            `web_search returned 0 results for "${query}". Retry with a shorter English query, or pass a concrete URL to web_fetch.`
+          );
+        }
         return {
+          ok: true,
           provider: "firecrawl",
           query,
+          resultCount: results.length,
           results,
         };
       },
@@ -130,6 +139,33 @@ export function createWebTools(
   };
 }
 
+async function firecrawlSearchWithRetry(options: {
+  readonly apiKey: string | undefined;
+  readonly baseUrl: string;
+  readonly fetchImpl: typeof fetch;
+  readonly limit: number;
+  readonly query: string;
+}): Promise<WebSearchResultItem[]> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const results = await firecrawlSearch(options);
+      if (results.length > 0 || attempt === 1) {
+        return results;
+      }
+    } catch (error) {
+      lastError = error;
+      if (attempt === 1) {
+        break;
+      }
+    }
+  }
+  if (lastError instanceof Error) {
+    throw lastError;
+  }
+  return [];
+}
+
 async function firecrawlSearch(options: {
   readonly apiKey: string | undefined;
   readonly baseUrl: string;
@@ -148,35 +184,81 @@ async function firecrawlSearch(options: {
   if (!response.ok) {
     const detail = await safeErrorBody(response);
     throw new WebToolError(
-      `Firecrawl search failed (${response.status})${detail ? `: ${detail}` : ""}. Free keyless tier may be rate-limited; optional FIRECRAWL_API_KEY raises limits.`
+      `Firecrawl search failed (${response.status})${detail ? `: ${detail}` : ""}. Optional FIRECRAWL_API_KEY raises free-tier limits if keyless is throttled.`
     );
   }
   const body = (await response.json()) as {
-    readonly data?: {
-      readonly web?: readonly {
-        readonly description?: string;
-        readonly title?: string;
-        readonly url?: string;
-      }[];
-    };
-    // older shapes
-    readonly web?: readonly {
-      readonly description?: string;
-      readonly title?: string;
-      readonly url?: string;
-    }[];
+    readonly data?: unknown;
+    readonly success?: boolean;
+    readonly web?: unknown;
   };
-  const rows = body.data?.web ?? body.web ?? [];
-  return rows
-    .filter(
-      (row): row is { url: string; title?: string; description?: string } =>
-        Boolean(row.url)
-    )
-    .map((row) => ({
-      description: row.description ?? null,
-      title: row.title ?? null,
-      url: row.url,
-    }));
+  if (body.success === false) {
+    throw new WebToolError("Firecrawl search returned success=false.");
+  }
+  const rows = extractFirecrawlWebRows(body);
+  return rows.map((row) => ({
+    description: row.description ?? null,
+    title: row.title ?? null,
+    url: row.url,
+  }));
+}
+
+function extractFirecrawlWebRows(body: {
+  readonly data?: unknown;
+  readonly web?: unknown;
+}): Array<{
+  readonly description?: string;
+  readonly title?: string;
+  readonly url: string;
+}> {
+  const candidates = [body.data, body.web];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return filterWebRows(candidate);
+    }
+    if (
+      candidate &&
+      typeof candidate === "object" &&
+      "web" in candidate &&
+      Array.isArray(candidate.web)
+    ) {
+      return filterWebRows(candidate.web);
+    }
+  }
+  return [];
+}
+
+function filterWebRows(
+  rows: readonly unknown[]
+): Array<{
+  readonly description?: string;
+  readonly title?: string;
+  readonly url: string;
+}> {
+  const out: Array<{
+    readonly description?: string;
+    readonly title?: string;
+    readonly url: string;
+  }> = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object" || !("url" in row)) {
+      continue;
+    }
+    const url = row.url;
+    if (typeof url !== "string" || !url) {
+      continue;
+    }
+    out.push({
+      url,
+      ...("description" in row && typeof row.description === "string"
+        ? { description: row.description }
+        : {}),
+      ...("title" in row && typeof row.title === "string"
+        ? { title: row.title }
+        : {}),
+    });
+  }
+  return out;
 }
 
 async function fetchPageMarkdown(options: {

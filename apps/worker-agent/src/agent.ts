@@ -107,6 +107,8 @@ Information tools:
 - get_weather looks up current conditions and today's forecast for a place (Open-Meteo).
 - get_current_time returns the current time in a time zone; calculate evaluates basic arithmetic.
 - Use tools when the user needs live facts, a page, weather, time, or math. For ordinary chat, just send_message.
+- When web_search returns results (resultCount > 0), summarize the top titles/URLs for the user with send_message. Do not claim search failed if results were returned.
+- If a tool error says 0 results, retry once with a shorter query; if it still fails, say that plainly.
 - After tool results, answer the user with send_message; do not dump raw tool JSON.`.trim();
 
 export interface WorkerAgentRuntimeOptions {
