@@ -90,7 +90,7 @@ export function createWebTools(
   return {
     [WEB_SEARCH_TOOL_NAME]: {
       description:
-        "Search the public web for current information, news, docs, or links via Firecrawl (keyless free tier). Use for live facts not in chat history. Prefer web_fetch after picking a concrete URL.",
+        "Search the public web / 웹 검색 / 인터넷 검색 / 뉴스 검색 for current information, news, docs, or links via Firecrawl (keyless free tier). Use when the user says 검색해줘, 찾아줘, look up, google, or asks for live facts not in chat. Prefer web_fetch after picking a concrete URL.",
       execute: async (input: unknown): Promise<WebSearchToolResult> => {
         const parsed = WebSearchInputSchema.parse(input);
         const query = parsed.query.trim();
@@ -112,7 +112,7 @@ export function createWebTools(
     },
     [WEB_FETCH_TOOL_NAME]: {
       description:
-        "Fetch a specific web page as readable markdown/text. Use after web_search or when the user provides a URL. Tries Firecrawl scrape, then free Jina Reader, then a plain GET.",
+        "Fetch / scrape / 페이지 읽기 / 링크 열기 for a specific web page as readable markdown/text. Use after web_search or when the user provides a URL (http/https). Tries Firecrawl scrape, then free Jina Reader, then a plain GET.",
       execute: async (input: unknown): Promise<WebFetchToolResult> => {
         const parsed = WebFetchInputSchema.parse(input);
         const url = parsed.url.trim();

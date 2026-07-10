@@ -11,10 +11,17 @@ import {
   countOuterToolMisses,
   createWorkerAgentPrepareStep,
   hasStickySessionTools,
+  intentToolsForQuery,
   WORKER_AGENT_TOOLPICK_ALWAYS_ACTIVE,
   WORKER_AGENT_TOOLPICK_RELATED_TOOLS,
 } from "./toolpick";
 import { SEND_MESSAGE_TOOL_NAME, type WorkerAgentToolSet } from "./tools";
+import {
+  CALCULATE_TOOL_NAME,
+  GET_CURRENT_TIME_TOOL_NAME,
+} from "./utility-tools";
+import { GET_WEATHER_TOOL_NAME } from "./weather-tools";
+import { WEB_FETCH_TOOL_NAME, WEB_SEARCH_TOOL_NAME } from "./web-tools";
 
 const EmptyInputSchema = z.object({}).strict();
 
@@ -27,6 +34,9 @@ function stubTool(description: string): WorkerAgentToolSet[string] {
 }
 
 const allTools = {
+  [CALCULATE_TOOL_NAME]: stubTool("Evaluate arithmetic 계산 math."),
+  [GET_CURRENT_TIME_TOOL_NAME]: stubTool("Current time 지금 몇 시 timezone."),
+  [GET_WEATHER_TOOL_NAME]: stubTool("Weather 날씨 forecast temperature."),
   [LIST_SESSIONS_TOOL_NAME]: stubTool(
     "List other recent conversations past chats previous sessions."
   ),
@@ -37,6 +47,12 @@ const allTools = {
     "Search other conversation transcripts by keywords past chats recall."
   ),
   [SEND_MESSAGE_TOOL_NAME]: stubTool("Send a user-visible message."),
+  [WEB_FETCH_TOOL_NAME]: stubTool(
+    "Fetch scrape page 페이지 읽기 URL markdown."
+  ),
+  [WEB_SEARCH_TOOL_NAME]: stubTool(
+    "Search the public web 웹 검색 인터넷 뉴스 look up."
+  ),
 } satisfies WorkerAgentToolSet;
 
 function prepareStepArgs(messages: ModelMessage[]) {
@@ -54,6 +70,20 @@ function prepareStepArgs(messages: ModelMessage[]) {
   };
 }
 
+describe("intentToolsForQuery", () => {
+  it("maps Korean search chat to web tools", () => {
+    expect(intentToolsForQuery("이거 검색해줘")).toEqual(
+      expect.arrayContaining([WEB_SEARCH_TOOL_NAME, WEB_FETCH_TOOL_NAME])
+    );
+  });
+
+  it("maps weather chat", () => {
+    expect(intentToolsForQuery("서울 날씨 어때")).toContain(
+      GET_WEATHER_TOOL_NAME
+    );
+  });
+});
+
 describe("countOuterToolMisses / sticky session", () => {
   it("counts text-only assistant steps after the last user message", () => {
     const messages: ModelMessage[] = [
@@ -64,7 +94,36 @@ describe("countOuterToolMisses / sticky session", () => {
     expect(countOuterToolMisses(messages)).toBe(2);
   });
 
-  it("resets misses after a tool-call assistant step", () => {
+  it("counts send_message-only steps as misses", () => {
+    const messages: ModelMessage[] = [
+      { role: "user", content: "검색해줘" },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "tool-call",
+            toolCallId: "1",
+            toolName: SEND_MESSAGE_TOOL_NAME,
+            input: { text: "ok" },
+          },
+        ],
+      },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "tool-call",
+            toolCallId: "2",
+            toolName: SEND_MESSAGE_TOOL_NAME,
+            input: { text: "still no search" },
+          },
+        ],
+      },
+    ];
+    expect(countOuterToolMisses(messages)).toBe(2);
+  });
+
+  it("resets misses after an informative tool-call assistant step", () => {
     const messages: ModelMessage[] = [
       { role: "user", content: "find last chat" },
       {
@@ -103,6 +162,20 @@ describe("createWorkerAgentPrepareStep", () => {
     );
 
     expect(result?.activeTools).toEqual([SEND_MESSAGE_TOOL_NAME]);
+  });
+
+  it("activates web_search for Korean search requests", async () => {
+    const prepareStep = createWorkerAgentPrepareStep(allTools);
+    const result = await prepareStep(
+      prepareStepArgs([
+        { role: "user", content: "미니맥스 관련 뉴스 검색해줘" },
+      ])
+    );
+    const active = new Set(result?.activeTools ?? []);
+
+    expect(active.has(SEND_MESSAGE_TOOL_NAME)).toBe(true);
+    expect(active.has(WEB_SEARCH_TOOL_NAME)).toBe(true);
+    expect(active.has(WEB_FETCH_TOOL_NAME)).toBe(true);
   });
 
   it("always keeps send_message active on recall queries", async () => {
@@ -186,13 +259,33 @@ describe("createWorkerAgentPrepareStep", () => {
     );
   });
 
-  it("falls back to all tools after two outer-step misses", async () => {
+  it("falls back to all tools after two delivery-only outer steps", async () => {
     const prepareStep = createWorkerAgentPrepareStep(allTools);
     const result = await prepareStep(
       prepareStepArgs([
         { role: "user", content: "find that prior conversation" },
-        { role: "assistant", content: "thinking" },
-        { role: "assistant", content: "still thinking" },
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "tool-call",
+              toolCallId: "1",
+              toolName: SEND_MESSAGE_TOOL_NAME,
+              input: { text: "thinking" },
+            },
+          ],
+        },
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "tool-call",
+              toolCallId: "2",
+              toolName: SEND_MESSAGE_TOOL_NAME,
+              input: { text: "still thinking" },
+            },
+          ],
+        },
       ])
     );
 

@@ -17,7 +17,7 @@ import { WEB_FETCH_TOOL_NAME, WEB_SEARCH_TOOL_NAME } from "./web-tools";
 
 /**
  * Always expose delivery — user-visible replies depend on send_message.
- * Other tools are selected by hybrid ranking (or sticky/fallback).
+ * Other tools are selected by hybrid ranking, intent boost, sticky, or fallback.
  */
 export const WORKER_AGENT_TOOLPICK_ALWAYS_ACTIVE = [
   SEND_MESSAGE_TOOL_NAME,
@@ -28,6 +28,100 @@ export const WORKER_AGENT_SESSION_TOOL_NAMES = [
   SEARCH_SESSIONS_TOOL_NAME,
   READ_SESSION_TOOL_NAME,
 ] as const;
+
+/** Delivery-only tool calls do not clear miss-fallback (model still "missed" info tools). */
+export const WORKER_AGENT_TOOLPICK_IGNORE_FOR_MISS = [
+  SEND_MESSAGE_TOOL_NAME,
+] as const;
+
+/**
+ * Explicit KO/EN intent → tools. Hybrid keyword search is English-biased; this
+ * covers short chat intents like "검색해줘" that otherwise leave only send_message.
+ */
+export const WORKER_AGENT_INTENT_TOOL_PATTERNS: readonly {
+  readonly patterns: readonly RegExp[];
+  readonly tools: readonly string[];
+}[] = [
+  {
+    patterns: [
+      /검색/u,
+      /서치/u,
+      /찾아/u,
+      /알아봐/u,
+      /look\s*up/iu,
+      /\bsearch\b/iu,
+      /\bgoogle\b/iu,
+      /\bweb\b/iu,
+      /뉴스/u,
+      /\bnews\b/iu,
+      /인터넷/u,
+    ],
+    tools: [WEB_SEARCH_TOOL_NAME, WEB_FETCH_TOOL_NAME],
+  },
+  {
+    patterns: [
+      /페이지/u,
+      /읽어/u,
+      /\bfetch\b/iu,
+      /\bscrape\b/iu,
+      /https?:\/\//iu,
+      /url/iu,
+      /링크/u,
+    ],
+    tools: [WEB_FETCH_TOOL_NAME, WEB_SEARCH_TOOL_NAME],
+  },
+  {
+    patterns: [
+      /날씨/u,
+      /기온/u,
+      /비\s*와/u,
+      /\bweather\b/iu,
+      /\bforecast\b/iu,
+      /\btemperature\b/iu,
+    ],
+    tools: [GET_WEATHER_TOOL_NAME, GET_CURRENT_TIME_TOOL_NAME],
+  },
+  {
+    patterns: [
+      /몇\s*시/u,
+      /시간/u,
+      /지금/u,
+      /\btime\b/iu,
+      /\btimezone\b/iu,
+      /시계/u,
+    ],
+    tools: [GET_CURRENT_TIME_TOOL_NAME],
+  },
+  {
+    patterns: [
+      /계산/u,
+      /더하/u,
+      /나눠/u,
+      /곱하/u,
+      /\bcalc/iu,
+      /\bmath\b/iu,
+      /[\d.]+\s*[+\-*/^%]/u,
+    ],
+    tools: [CALCULATE_TOOL_NAME],
+  },
+  {
+    patterns: [
+      /지난\s*대화/u,
+      /이전\s*채팅/u,
+      /예전에/u,
+      /기억/u,
+      /회상/u,
+      /\bsession\b/iu,
+      /\brecall\b/iu,
+      /다른\s*대화/u,
+    ],
+    tools: [
+      LIST_SESSIONS_TOOL_NAME,
+      SEARCH_SESSIONS_TOOL_NAME,
+      READ_SESSION_TOOL_NAME,
+    ],
+  },
+];
 
 export const WORKER_AGENT_TOOLPICK_RELATED_TOOLS: Readonly<
   Record<string, readonly string[]>
@@ -46,23 +140,22 @@ export const WORKER_AGENT_TOOLPICK_RELATED_TOOLS: Readonly<
   ],
   [WEB_SEARCH_TOOL_NAME]: [WEB_FETCH_TOOL_NAME],
   [WEB_FETCH_TOOL_NAME]: [WEB_SEARCH_TOOL_NAME],
-  // Keep lightweight utilities from isolating each other when one ranks.
   [CALCULATE_TOOL_NAME]: [GET_CURRENT_TIME_TOOL_NAME],
   [GET_CURRENT_TIME_TOOL_NAME]: [CALCULATE_TOOL_NAME],
   [GET_WEATHER_TOOL_NAME]: [GET_CURRENT_TIME_TOOL_NAME],
 };
 
 /**
- * Search ceiling before alwaysActive + relatedTools expansion.
- * ~10 product tools: allow a small ranked set so chat stays lean.
+ * Search ceiling before alwaysActive + relatedTools + intent expansion.
  */
-export const WORKER_AGENT_TOOLPICK_MAX_TOOLS = 3;
+export const WORKER_AGENT_TOOLPICK_MAX_TOOLS = 4;
 
-/** After this many no-tool outer steps in the open turn, expose the full set. */
+/** After this many delivery-only / no-info-tool outer steps, expose the full set. */
 export const WORKER_AGENT_TOOLPICK_MISS_FALLBACK = 2;
 
 export type ToolpickSelectionReason =
   | "hybrid"
+  | "intent"
   | "miss-fallback"
   | "sticky-session";
 
@@ -82,12 +175,9 @@ export interface CreateWorkerAgentPrepareStepOptions {
 /**
  * Hybrid toolpick prepareStep tuned for the worker-agent tool surface.
  *
- * - Default path: only `send_message` (+ hybrid hits), so casual chat does not
- *   pay session-tool schema tokens or accidental recall calls.
- * - Sticky: after any session tool runs in the open turn, keep the session
- *   cluster active so list/search → read can continue across PSS outer steps.
- * - Miss fallback: after two no-tool outer steps, expose all tools (PSS does
- *   not advance AI SDK stepNumber, so we infer misses from message history).
+ * - Intent patterns boost KO/EN chat phrases hybrid often misses.
+ * - Delivery-only send_message steps count toward miss-fallback.
+ * - Sticky keeps session tools after a session tool runs in the open turn.
  */
 export function createWorkerAgentPrepareStep(
   tools: WorkerAgentToolSet,
@@ -128,14 +218,24 @@ export function createWorkerAgentPrepareStep(
       reason = "sticky-session";
       activeTools = uniqueNames([...alwaysActive, ...sessionToolsPresent]);
     } else {
-      const selected = query
+      const hybridSelected = query
         ? await index.select(query, {
             alwaysActive,
             maxTools,
             relatedTools,
           })
         : [...alwaysActive];
-      activeTools = selected.filter((name) => toolNameSet.has(name));
+      const intentTools = intentToolsForQuery(query).filter((name) =>
+        toolNameSet.has(name)
+      );
+      activeTools = uniqueNames([
+        ...hybridSelected.filter((name) => toolNameSet.has(name)),
+        ...intentTools,
+        ...alwaysActive,
+      ]);
+      if (intentTools.length > 0) {
+        reason = "intent";
+      }
       if (activeTools.length === 0) {
         activeTools = [...alwaysActive];
       }
@@ -152,10 +252,31 @@ export function createWorkerAgentPrepareStep(
   };
 }
 
-/** Exported for unit tests: consecutive no-tool assistant steps after last user. */
+/** Match KO/EN chat intents to product tools present in the catalog. */
+export function intentToolsForQuery(query: string): string[] {
+  const text = query.trim();
+  if (!text) {
+    return [];
+  }
+  const selected: string[] = [];
+  for (const entry of WORKER_AGENT_INTENT_TOOL_PATTERNS) {
+    if (entry.patterns.some((pattern) => pattern.test(text))) {
+      selected.push(...entry.tools);
+    }
+  }
+  return uniqueNames(selected);
+}
+
+/**
+ * Consecutive outer steps after the last user message that did not call any
+ * non-delivery tool. send_message-only steps count as misses so miss-fallback
+ * still works when the model keeps chatting without web/session tools.
+ */
 export function countOuterToolMisses(
-  messages: readonly ModelMessage[]
+  messages: readonly ModelMessage[],
+  ignoreToolNames: readonly string[] = WORKER_AGENT_TOOLPICK_IGNORE_FOR_MISS
 ): number {
+  const ignore = new Set(ignoreToolNames);
   let lastUser = -1;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     if (messages[index]?.role === "user") {
@@ -173,11 +294,13 @@ export function countOuterToolMisses(
     if (message?.role !== "assistant") {
       continue;
     }
-    if (assistantHasToolCalls(message)) {
+    const toolNames = assistantToolCallNames(message);
+    const informative = toolNames.filter((name) => !ignore.has(name));
+    if (informative.length > 0) {
       misses = 0;
       continue;
     }
-    if (assistantHasText(message)) {
+    if (toolNames.length > 0 || assistantHasText(message)) {
       misses += 1;
     }
   }
@@ -220,10 +343,6 @@ export function hasStickySessionTools(
 
 function uniqueNames(names: readonly string[]): string[] {
   return [...new Set(names)];
-}
-
-function assistantHasToolCalls(message: ModelMessage): boolean {
-  return assistantToolCallNames(message).length > 0;
 }
 
 function assistantToolCallNames(message: ModelMessage): string[] {

@@ -65,7 +65,7 @@ export function createWeatherTools(
   return {
     [GET_WEATHER_TOOL_NAME]: {
       description:
-        "Get current weather and today's forecast for a place using free Open-Meteo data (no API key). Use for temperature, rain, wind, or conditions in a city — not for web search or chat.",
+        "Get current weather / 날씨 / 기온 / forecast for a place using free Open-Meteo data (no API key). Use when the user asks 날씨 어때, temperature, rain, wind, or conditions in a city — not for web search or chat.",
       execute: async (input: unknown): Promise<GetWeatherToolResult> => {
         const parsed = GetWeatherInputSchema.parse(input);
         const locationName = parsed.location.trim();

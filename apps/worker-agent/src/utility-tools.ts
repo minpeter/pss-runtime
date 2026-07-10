@@ -50,7 +50,7 @@ export function createUtilityTools(): WorkerAgentToolSet {
   return {
     [CALCULATE_TOOL_NAME]: {
       description:
-        "Evaluate a basic arithmetic expression (add, subtract, multiply, divide, remainder, power). Use for math, percentages, unit arithmetic, or totals — not for weather, web, or chat replies.",
+        "Evaluate a basic arithmetic expression / 계산 (add, subtract, multiply, divide, remainder, power). Use for math, percentages, unit arithmetic, or totals — not for weather, web, or chat replies.",
       execute: (input: unknown): Promise<CalculateToolResult> => {
         const parsed = CalculateInputSchema.parse(input);
         const expression = parsed.expression.trim();
@@ -61,7 +61,7 @@ export function createUtilityTools(): WorkerAgentToolSet {
     },
     [GET_CURRENT_TIME_TOOL_NAME]: {
       description:
-        "Get the current date and time in ISO format for a time zone. Use for 'what time is it', today/now, schedules, or converting to a city time zone.",
+        "Get the current date and time / 지금 몇 시 / 시간 in ISO format for a time zone. Use for 'what time is it', today/now, schedules, or converting to a city time zone.",
       execute: (input: unknown): Promise<GetCurrentTimeToolResult> => {
         const parsed = GetCurrentTimeInputSchema.parse(input);
         const timeZone = parsed.timeZone?.trim() || "UTC";
