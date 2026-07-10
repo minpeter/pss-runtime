@@ -9,9 +9,6 @@ import {
 } from "./session-tools";
 import { SEND_MESSAGE_TOOL_NAME, type WorkerAgentToolSet } from "./tools";
 
-/** Env flag. Default on; set `"0"` / `"false"` / `"no"` to disable. */
-export const TOOLPICK_ENABLED_ENV = "TOOLPICK_ENABLED";
-
 /**
  * Always expose delivery — user-visible replies depend on send_message.
  * Session tools are selected only when hybrid ranks them (or sticky/fallback).
@@ -69,19 +66,6 @@ export interface CreateWorkerAgentPrepareStepOptions {
   readonly maxTools?: number;
   /** Optional host metrics (wide-event / log) for each prepareStep selection. */
   readonly onSelect?: (metric: ToolpickSelectionMetric) => void;
-}
-
-export function isToolpickEnabled(env: {
-  readonly TOOLPICK_ENABLED?: string;
-}): boolean {
-  const value = env.TOOLPICK_ENABLED?.trim().toLowerCase();
-  if (value === undefined || value === "") {
-    return true;
-  }
-  if (value === "0" || value === "false" || value === "no" || value === "off") {
-    return false;
-  }
-  return value === "1" || value === "true" || value === "yes" || value === "on";
 }
 
 /**

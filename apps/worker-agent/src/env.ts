@@ -27,11 +27,6 @@ export interface Env {
    */
   readonly TELEGRAM_INGRESS_DRY_RUN?: string;
   readonly TELEGRAM_WEBHOOK_SECRET_TOKEN: string;
-  /**
-   * Hybrid toolpick `prepareStep` (per-step activeTools). Default on.
-   * Set `"0"` / `"false"` / `"no"` / `"off"` to disable.
-   */
-  readonly TOOLPICK_ENABLED?: string;
   readonly WORKER_AGENT_TUI_TOKEN?: string;
 }
 

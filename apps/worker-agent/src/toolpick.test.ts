@@ -11,7 +11,6 @@ import {
   countOuterToolMisses,
   createWorkerAgentPrepareStep,
   hasStickySessionTools,
-  isToolpickEnabled,
   WORKER_AGENT_TOOLPICK_ALWAYS_ACTIVE,
   WORKER_AGENT_TOOLPICK_RELATED_TOOLS,
 } from "./toolpick";
@@ -54,25 +53,6 @@ function prepareStepArgs(messages: ModelMessage[]) {
     toolsContext: {},
   };
 }
-
-describe("isToolpickEnabled", () => {
-  it("defaults to on", () => {
-    expect(isToolpickEnabled({})).toBe(true);
-    expect(isToolpickEnabled({ TOOLPICK_ENABLED: "" })).toBe(true);
-  });
-
-  it("accepts explicit opt-out", () => {
-    expect(isToolpickEnabled({ TOOLPICK_ENABLED: "0" })).toBe(false);
-    expect(isToolpickEnabled({ TOOLPICK_ENABLED: "false" })).toBe(false);
-    expect(isToolpickEnabled({ TOOLPICK_ENABLED: "off" })).toBe(false);
-  });
-
-  it("accepts explicit opt-in", () => {
-    expect(isToolpickEnabled({ TOOLPICK_ENABLED: "1" })).toBe(true);
-    expect(isToolpickEnabled({ TOOLPICK_ENABLED: "true" })).toBe(true);
-    expect(isToolpickEnabled({ TOOLPICK_ENABLED: "YES" })).toBe(true);
-  });
-});
 
 describe("countOuterToolMisses / sticky session", () => {
   it("counts text-only assistant steps after the last user message", () => {

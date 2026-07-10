@@ -5,7 +5,6 @@ import {
   type AgentEvent,
   type AgentHost,
   type AgentPlugin,
-  type AgentPrepareStep,
   type AgentTurn,
 } from "@minpeter/pss-runtime";
 import { drainAgentTurn } from "@minpeter/pss-runtime/platform/cloudflare";
@@ -16,7 +15,6 @@ import type { WorkerAgentSessionToolOptions } from "./session-tools";
 import { createSessionTools } from "./session-tools";
 import {
   createWorkerAgentPrepareStep,
-  isToolpickEnabled,
   type ToolpickSelectionMetric,
 } from "./toolpick";
 import {
@@ -112,10 +110,7 @@ export interface WorkerAgentRuntimeOptions {
   };
   readonly sendMessage?: WorkerAgentSendMessageToolOptions;
   readonly sessionTools?: WorkerAgentSessionToolOptions;
-  /**
-   * Optional toolpick selection metrics. Used when toolpick is enabled
-   * (default on; TOOLPICK_ENABLED=0 to disable) and tools are present.
-   */
+  /** Optional toolpick selection metrics (tools present → prepareStep always on). */
   readonly toolpick?: {
     readonly onSelect?: (metric: ToolpickSelectionMetric) => void;
   };
@@ -126,7 +121,6 @@ export interface WorkerAgentModelEnv {
   readonly AI_BASE_URL?: string;
   readonly AI_MODEL?: string;
   readonly ENVIRONMENT: EnvironmentName;
-  readonly TOOLPICK_ENABLED?: string;
 }
 
 export interface WorkerAgentTurnDelivery {
@@ -156,11 +150,13 @@ export function createConfiguredAgent(
     }),
   ];
   const tools = createWorkerAgentToolSet(options);
-  const prepareStep = createOptionalWorkerAgentPrepareStep(
-    env,
-    tools,
-    options.toolpick?.onSelect
-  );
+  const prepareStep = tools
+    ? createWorkerAgentPrepareStep(tools, {
+        ...(options.toolpick?.onSelect
+          ? { onSelect: options.toolpick.onSelect }
+          : {}),
+      })
+    : undefined;
 
   return new Agent({
     autoCompaction: WORKER_AGENT_AUTO_COMPACTION,
@@ -183,19 +179,6 @@ function createWorkerAgentToolSet(
     ...(options.sendMessage ? createWorkerAgentTools(options.sendMessage) : {}),
     ...(options.sessionTools ? createSessionTools(options.sessionTools) : {}),
   };
-}
-
-function createOptionalWorkerAgentPrepareStep(
-  env: WorkerAgentModelEnv,
-  tools: WorkerAgentToolSet | undefined,
-  onSelect?: (metric: ToolpickSelectionMetric) => void
-): AgentPrepareStep | undefined {
-  if (!(isToolpickEnabled(env) && tools)) {
-    return;
-  }
-  return createWorkerAgentPrepareStep(tools, {
-    ...(onSelect ? { onSelect } : {}),
-  });
 }
 
 export async function collectTurnDelivery(
