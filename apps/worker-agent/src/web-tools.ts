@@ -228,9 +228,7 @@ function extractFirecrawlWebRows(body: {
   return [];
 }
 
-function filterWebRows(
-  rows: readonly unknown[]
-): Array<{
+function filterWebRows(rows: readonly unknown[]): Array<{
   readonly description?: string;
   readonly title?: string;
   readonly url: string;
