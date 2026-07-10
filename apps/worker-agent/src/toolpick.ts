@@ -8,10 +8,16 @@ import {
   SEARCH_SESSIONS_TOOL_NAME,
 } from "./session-tools";
 import { SEND_MESSAGE_TOOL_NAME, type WorkerAgentToolSet } from "./tools";
+import {
+  CALCULATE_TOOL_NAME,
+  GET_CURRENT_TIME_TOOL_NAME,
+} from "./utility-tools";
+import { GET_WEATHER_TOOL_NAME } from "./weather-tools";
+import { WEB_FETCH_TOOL_NAME, WEB_SEARCH_TOOL_NAME } from "./web-tools";
 
 /**
  * Always expose delivery — user-visible replies depend on send_message.
- * Session tools are selected only when hybrid ranks them (or sticky/fallback).
+ * Other tools are selected by hybrid ranking (or sticky/fallback).
  */
 export const WORKER_AGENT_TOOLPICK_ALWAYS_ACTIVE = [
   SEND_MESSAGE_TOOL_NAME,
@@ -38,14 +44,19 @@ export const WORKER_AGENT_TOOLPICK_RELATED_TOOLS: Readonly<
     LIST_SESSIONS_TOOL_NAME,
     READ_SESSION_TOOL_NAME,
   ],
+  [WEB_SEARCH_TOOL_NAME]: [WEB_FETCH_TOOL_NAME],
+  [WEB_FETCH_TOOL_NAME]: [WEB_SEARCH_TOOL_NAME],
+  // Keep lightweight utilities from isolating each other when one ranks.
+  [CALCULATE_TOOL_NAME]: [GET_CURRENT_TIME_TOOL_NAME],
+  [GET_CURRENT_TIME_TOOL_NAME]: [CALCULATE_TOOL_NAME],
+  [GET_WEATHER_TOOL_NAME]: [GET_CURRENT_TIME_TOOL_NAME],
 };
 
 /**
  * Search ceiling before alwaysActive + relatedTools expansion.
- * With 4 product tools, 1 keeps pure chat on send_message-only while still
- * promoting a ranked session tool (and its related cluster) on recall queries.
+ * ~10 product tools: allow a small ranked set so chat stays lean.
  */
-export const WORKER_AGENT_TOOLPICK_MAX_TOOLS = 1;
+export const WORKER_AGENT_TOOLPICK_MAX_TOOLS = 3;
 
 /** After this many no-tool outer steps in the open turn, expose the full set. */
 export const WORKER_AGENT_TOOLPICK_MISS_FALLBACK = 2;

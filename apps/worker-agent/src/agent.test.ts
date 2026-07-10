@@ -64,6 +64,17 @@ describe("worker-agent instructions", () => {
       expect(WORKER_AGENT_INSTRUCTIONS).toContain(rule);
     }
 
+    const informationRules = [
+      "web_search finds current public web results",
+      "get_weather looks up current conditions",
+      "get_current_time returns the current time",
+      "calculate evaluates basic arithmetic",
+    ] as const;
+
+    for (const rule of informationRules) {
+      expect(WORKER_AGENT_INSTRUCTIONS).toContain(rule);
+    }
+
     const excludedSurfaces = [
       "sendmessageto_agent",
       "subagent",

@@ -24,6 +24,9 @@ import {
   type WorkerAgentSendMessageToolOptions,
   type WorkerAgentToolSet,
 } from "./tools";
+import { createUtilityTools } from "./utility-tools";
+import { createWeatherTools } from "./weather-tools";
+import { createWebTools } from "./web-tools";
 
 const DEFAULT_BASE_URL = "https://apis.opengateway.ai/v1";
 
@@ -89,7 +92,7 @@ Platform and product boundaries:
 - Do not invent product facts, security claims, launch details, prices, or URLs.
 - If the user asks about capabilities this worker does not have, be direct about the limitation instead of pretending to dispatch work elsewhere.
 - If the user asks for future reminders, scheduled messages, or background follow-up, explicitly say this worker cannot schedule or send future reminders.
-- Do not claim to remember, retrieve, or store private context beyond what is present in the conversation.
+- Do not claim to remember, retrieve, or store private context beyond what is present in the conversation unless a tool returned it.
 
 Session search tools:
 - You can recall other recent conversations with list_sessions, search_sessions, and read_session.
@@ -97,9 +100,18 @@ Session search tools:
 - When the user asks what you talked about before, or refers to another chat, call search_sessions with relevant keywords (or list_sessions for the most recent ones), then call read_session for the selected conversation before answering details.
 - Only state cross-conversation facts that a tool result actually returned. Do not invent or embellish past conversations.
 - If the tools return nothing relevant, say you do not have a record of that instead of guessing.
-- Do not expose raw channel keys, scores, cursors, or tool mechanics to the user; speak naturally about what was discussed.`.trim();
+- Do not expose raw channel keys, scores, cursors, or tool mechanics to the user; speak naturally about what was discussed.
+
+Information tools:
+- web_search finds current public web results; web_fetch reads a specific URL as text/markdown.
+- get_weather looks up current conditions and today's forecast for a place (Open-Meteo).
+- get_current_time returns the current time in a time zone; calculate evaluates basic arithmetic.
+- Use tools when the user needs live facts, a page, weather, time, or math. For ordinary chat, just send_message.
+- After tool results, answer the user with send_message; do not dump raw tool JSON.`.trim();
 
 export interface WorkerAgentRuntimeOptions {
+  /** When false, omit utility/weather/web tools (tests). Default true. */
+  readonly informationTools?: boolean;
   readonly observability?: {
     readonly log?: (entry: {
       readonly event: AgentEvent["type"];
@@ -121,6 +133,7 @@ export interface WorkerAgentModelEnv {
   readonly AI_BASE_URL?: string;
   readonly AI_MODEL?: string;
   readonly ENVIRONMENT: EnvironmentName;
+  readonly FIRECRAWL_API_KEY?: string;
 }
 
 export interface WorkerAgentTurnDelivery {
@@ -149,7 +162,7 @@ export function createConfiguredAgent(
       ...(options.observability?.log ? { log: options.observability.log } : {}),
     }),
   ];
-  const tools = createWorkerAgentToolSet(options);
+  const tools = createWorkerAgentToolSet(env, options);
   const prepareStep = tools
     ? createWorkerAgentPrepareStep(tools, {
         ...(options.toolpick?.onSelect
@@ -170,14 +183,28 @@ export function createConfiguredAgent(
 }
 
 function createWorkerAgentToolSet(
+  env: WorkerAgentModelEnv,
   options: WorkerAgentRuntimeOptions
 ): WorkerAgentToolSet | undefined {
-  if (!(options.sendMessage || options.sessionTools)) {
+  const informationTools = options.informationTools !== false;
+  const hasCore = Boolean(options.sendMessage || options.sessionTools);
+  if (!(hasCore || informationTools)) {
     return;
   }
   return {
     ...(options.sendMessage ? createWorkerAgentTools(options.sendMessage) : {}),
     ...(options.sessionTools ? createSessionTools(options.sessionTools) : {}),
+    ...(informationTools
+      ? {
+          ...createUtilityTools(),
+          ...createWeatherTools(),
+          ...createWebTools({
+            ...(env.FIRECRAWL_API_KEY?.trim()
+              ? { firecrawlApiKey: env.FIRECRAWL_API_KEY.trim() }
+              : {}),
+          }),
+        }
+      : {}),
   };
 }
 
