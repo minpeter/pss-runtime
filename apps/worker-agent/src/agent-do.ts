@@ -177,7 +177,7 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
     const turnEvents = createTurnEventCollector();
     const imagePrepares: ImagePrepareDiagnostics[] = [];
     const imageOmits: ImageOmitDiagnostics[] = [];
-    // AI SDK V4 here — log model id only until evlog/ai supports V4 wrap.
+    // Seed model id; createAILogger middleware merges richer `ai.*` on generate.
     const modelId = this.#env.AI_MODEL?.trim() || DEFAULT_MODEL;
 
     log.set({
@@ -251,7 +251,7 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
       this.#channel = payload.channel;
       this.#sessionScopeKey = payload.sessionScopeKey;
       const binding = durableObjectChannelBinding(payload.channel);
-      const session = this.#ensureTurnSession(binding);
+      const session = this.#ensureTurnSession(binding, log);
       const sendMessage = this.#sendMessageSetup(payload.channel);
       const agentInput = this.#parseAgentInput(payload, log);
       if (agentInput instanceof Response) {
@@ -490,13 +490,19 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
     return this.#sessionIndexStore;
   }
 
-  #ensureTurnSession(binding: ChannelRuntimeBinding): TurnSession {
-    if (this.#turnSession) {
+  #ensureTurnSession(
+    binding: ChannelRuntimeBinding,
+    requestLog: ReturnType<typeof createTurnLogger>
+  ): TurnSession {
+    // Keep the live session while a turn is active so mid-turn steer still works.
+    if (this.#turnSession?.isActive()) {
       return this.#turnSession;
     }
 
+    // Fresh agent + AI logger each idle send so wide-event `ai.*` is per-turn.
     const sendMessage = this.#longLivedSendMessageOptions();
     this.#agent = createConfiguredAgent(this.#env, this.#platform.host(), {
+      requestLog,
       sendMessage,
       sessionTools: {
         currentConversationKey: () => {

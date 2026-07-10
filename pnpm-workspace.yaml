@@ -18,3 +18,4 @@ minimumReleaseAgeExclude:
   - typescript
   - '@typescript/*'
   - rolldown-plugin-dts
+  - '@ai-sdk-tool/middleware@0.1.0'

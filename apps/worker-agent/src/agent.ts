@@ -8,7 +8,9 @@ import {
   type AgentTurn,
 } from "@minpeter/pss-runtime";
 import { drainAgentTurn } from "@minpeter/pss-runtime/platform/cloudflare";
+import type { RequestLogger } from "evlog";
 
+import { wrapModelWithAiLogger } from "./ai-logger";
 import type { EnvironmentName } from "./env";
 import { createTurnObservabilityPlugin } from "./observability";
 import type { WorkerAgentSessionToolOptions } from "./session-tools";
@@ -122,6 +124,11 @@ export interface WorkerAgentRuntimeOptions {
       readonly toolName?: string;
     }) => void;
   };
+  /**
+   * Per-turn evlog RequestLogger. When set, wraps the model with
+   * `createAILogger` so AI tokens/tools/timing merge into the wide event.
+   */
+  readonly requestLog?: RequestLogger;
   readonly sendMessage?: WorkerAgentSendMessageToolOptions;
   readonly sessionTools?: WorkerAgentSessionToolOptions;
   /** Optional toolpick selection metrics (tools present → prepareStep always on). */
@@ -157,6 +164,10 @@ export function createConfiguredAgent(
     baseURL: env.AI_BASE_URL?.trim() || DEFAULT_BASE_URL,
     name: "custom",
   });
+  const baseModel = provider(env.AI_MODEL?.trim() || DEFAULT_MODEL);
+  const model = options.requestLog
+    ? wrapModelWithAiLogger(baseModel, options.requestLog)
+    : baseModel;
 
   const plugins: readonly AgentPlugin[] = [
     createTurnObservabilityPlugin({
@@ -177,7 +188,7 @@ export function createConfiguredAgent(
     autoCompaction: WORKER_AGENT_AUTO_COMPACTION,
     host,
     instructions: WORKER_AGENT_INSTRUCTIONS,
-    model: provider(env.AI_MODEL?.trim() || DEFAULT_MODEL),
+    model,
     plugins,
     ...(prepareStep ? { prepareStep } : {}),
     ...(tools ? { tools } : {}),

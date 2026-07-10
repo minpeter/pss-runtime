@@ -96,6 +96,9 @@ importers:
 
   apps/worker-agent:
     dependencies:
+      '@ai-sdk-tool/middleware':
+        specifier: 0.1.0
+        version: 0.1.0(@ai-sdk/provider@4.0.2)(ai@7.0.16(zod@4.4.3))(evlog@2.20.0(ai@7.0.16(zod@4.4.3))(express@5.2.1)(hono@4.12.27)(react@19.2.7)(vite@8.1.0(@types/node@26.1.0)(esbuild@0.28.1)(tsx@4.22.4)(yaml@2.9.0)))
       '@ai-sdk/openai-compatible':
         specifier: 3.0.2
         version: 3.0.2(zod@4.4.3)
@@ -389,6 +392,19 @@ importers:
         version: 4.1.9(@opentelemetry/api@1.9.1)(@types/node@26.1.0)(jsdom@29.1.1)(vite@8.1.0(@types/node@26.1.0)(esbuild@0.28.1)(tsx@4.22.4)(yaml@2.9.0))
 
 packages:
+
+  '@ai-sdk-tool/middleware@0.1.0':
+    resolution: {integrity: sha512-z4Fe00MezUeM+F6gEdsCxEbB2Smojkn+4T0ErrFpBosypiZEKIEndmeaLJiezB9gBG+PVFp57KVspbjwHzA/Ug==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      '@ai-sdk/provider': ^4.0.0
+      ai: '>=7.0.0 <8.0.0'
+      evlog: '>=2.0.0'
+    peerDependenciesMeta:
+      ai:
+        optional: true
+      evlog:
+        optional: true
 
   '@ai-sdk/gateway@4.0.12':
     resolution: {integrity: sha512-Y7Fy8xJwPz7ZC0DhSQG3HIVk+drup42hrIj6yqKlib3CxwiR0F7nYyUI8+kPrEtbZEoyKoRstvT4/o0HEyFBHA==}
@@ -4226,6 +4242,13 @@ packages:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
 snapshots:
+
+  '@ai-sdk-tool/middleware@0.1.0(@ai-sdk/provider@4.0.2)(ai@7.0.16(zod@4.4.3))(evlog@2.20.0(ai@7.0.16(zod@4.4.3))(express@5.2.1)(hono@4.12.27)(react@19.2.7)(vite@8.1.0(@types/node@26.1.0)(esbuild@0.28.1)(tsx@4.22.4)(yaml@2.9.0)))':
+    dependencies:
+      '@ai-sdk/provider': 4.0.2
+    optionalDependencies:
+      ai: 7.0.16(zod@4.4.3)
+      evlog: 2.20.0(ai@7.0.16(zod@4.4.3))(express@5.2.1)(hono@4.12.27)(react@19.2.7)(vite@8.1.0(@types/node@26.1.0)(esbuild@0.28.1)(tsx@4.22.4)(yaml@2.9.0))
 
   '@ai-sdk/gateway@4.0.12(zod@4.4.3)':
     dependencies:
