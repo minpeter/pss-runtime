@@ -376,6 +376,7 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
         ...(turnSummary.errors.length > 0
           ? { errors: turnSummary.errors }
           : {}),
+        ...(turnSummary.toolpick ? { toolpick: turnSummary.toolpick } : {}),
       },
       ...summarizeImagePrepares(imagePrepares),
       ...summarizeImageOmits(imageOmits),
@@ -475,10 +476,9 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
       },
       toolpick: {
         onSelect: (metric) => {
-          logInfo({
+          this.#observability?.recordToolpick({
             activeTools: metric.activeTools,
-            event: "toolpick.select",
-            layer: AGENT_TURN_ADMISSION_LAYER,
+            reason: metric.reason,
             stepNumber: metric.stepNumber,
           });
         },

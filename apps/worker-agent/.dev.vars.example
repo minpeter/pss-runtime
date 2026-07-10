@@ -12,5 +12,5 @@ WORKER_PUBLIC_URL=https://pss-worker-agent.<account>.workers.dev
 # Layer 1 only (optional): reassembly + Telegram summary, no agent.
 # Prefer: pnpm dev:ingress
 # TELEGRAM_INGRESS_DRY_RUN=1
-# Phase 1 toolpick (optional): hybrid activeTools selection via prepareStep.
-# TOOLPICK_ENABLED=1
+# Toolpick is on by default (hybrid activeTools). Opt out with:
+# TOOLPICK_ENABLED=0

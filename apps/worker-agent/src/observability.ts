@@ -19,19 +19,28 @@ export interface TurnObservabilityOptions {
   readonly log?: (entry: TurnObservabilityEntry) => void;
 }
 
+export interface ToolpickSelectionSummary {
+  readonly activeTools: readonly string[];
+  readonly reason: string;
+  readonly stepNumber: number;
+}
+
 export interface TurnObservabilitySummary {
   readonly errors: readonly string[];
   readonly steps: number;
   readonly toolCalls: readonly string[];
+  readonly toolpick?: readonly ToolpickSelectionSummary[];
 }
 
 /** Accumulate lifecycle/tool events for one wide event instead of N log lines. */
 export function createTurnEventCollector(): {
   readonly record: (entry: TurnObservabilityEntry) => void;
+  readonly recordToolpick: (selection: ToolpickSelectionSummary) => void;
   readonly summary: () => TurnObservabilitySummary;
 } {
   const toolCalls: string[] = [];
   const errors: string[] = [];
+  const toolpick: ToolpickSelectionSummary[] = [];
   let steps = 0;
 
   return {
@@ -46,11 +55,19 @@ export function createTurnEventCollector(): {
         errors.push(entry.message);
       }
     },
+    recordToolpick(selection) {
+      toolpick.push({
+        activeTools: [...selection.activeTools],
+        reason: selection.reason,
+        stepNumber: selection.stepNumber,
+      });
+    },
     summary() {
       return {
         errors: [...errors],
         steps,
         toolCalls: [...toolCalls],
+        ...(toolpick.length > 0 ? { toolpick: [...toolpick] } : {}),
       };
     },
   };

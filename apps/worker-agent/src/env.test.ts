@@ -29,8 +29,9 @@ describe("worker-agent env helpers", () => {
     );
   });
 
-  it("detects toolpick enable flags", () => {
-    expect(isToolpickEnabled({})).toBe(false);
+  it("detects toolpick enable flags (default on, explicit opt-out)", () => {
+    expect(isToolpickEnabled({})).toBe(true);
+    expect(isToolpickEnabled({ TOOLPICK_ENABLED: "0" })).toBe(false);
     expect(isToolpickEnabled({ TOOLPICK_ENABLED: "1" })).toBe(true);
   });
 

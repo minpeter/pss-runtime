@@ -113,8 +113,8 @@ export interface WorkerAgentRuntimeOptions {
   readonly sendMessage?: WorkerAgentSendMessageToolOptions;
   readonly sessionTools?: WorkerAgentSessionToolOptions;
   /**
-   * Optional toolpick selection metrics. Used when TOOLPICK_ENABLED is on and
-   * a full tools set is present.
+   * Optional toolpick selection metrics. Used when toolpick is enabled
+   * (default on; TOOLPICK_ENABLED=0 to disable) and tools are present.
    */
   readonly toolpick?: {
     readonly onSelect?: (metric: ToolpickSelectionMetric) => void;

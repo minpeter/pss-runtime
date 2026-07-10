@@ -58,6 +58,23 @@ describe("createTurnEventCollector", () => {
       toolCalls: ["send_message"],
     });
   });
+
+  it("includes toolpick selections when recorded", () => {
+    const collector = createTurnEventCollector();
+    collector.recordToolpick({
+      activeTools: ["send_message"],
+      reason: "hybrid",
+      stepNumber: 0,
+    });
+
+    expect(collector.summary().toolpick).toEqual([
+      {
+        activeTools: ["send_message"],
+        reason: "hybrid",
+        stepNumber: 0,
+      },
+    ]);
+  });
 });
 
 describe("createTurnObservabilityPlugin", () => {

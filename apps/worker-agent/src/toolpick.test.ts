@@ -8,7 +8,9 @@ import {
   SEARCH_SESSIONS_TOOL_NAME,
 } from "./session-tools";
 import {
+  countOuterToolMisses,
   createWorkerAgentPrepareStep,
+  hasStickySessionTools,
   isToolpickEnabled,
   WORKER_AGENT_TOOLPICK_ALWAYS_ACTIVE,
   WORKER_AGENT_TOOLPICK_RELATED_TOOLS,
@@ -26,20 +28,24 @@ function stubTool(description: string): WorkerAgentToolSet[string] {
 }
 
 const allTools = {
-  [LIST_SESSIONS_TOOL_NAME]: stubTool("List recent conversations."),
-  [READ_SESSION_TOOL_NAME]: stubTool("Read a conversation transcript."),
+  [LIST_SESSIONS_TOOL_NAME]: stubTool(
+    "List other recent conversations past chats previous sessions."
+  ),
+  [READ_SESSION_TOOL_NAME]: stubTool(
+    "Read a conversation transcript from a prior session."
+  ),
   [SEARCH_SESSIONS_TOOL_NAME]: stubTool(
-    "Search other conversation transcripts by keywords."
+    "Search other conversation transcripts by keywords past chats recall."
   ),
   [SEND_MESSAGE_TOOL_NAME]: stubTool("Send a user-visible message."),
 } satisfies WorkerAgentToolSet;
 
-function prepareStepArgs(content: string) {
+function prepareStepArgs(messages: ModelMessage[]) {
   return {
     initialInstructions: undefined,
     initialMessages: [] as ModelMessage[],
     instructions: undefined,
-    messages: [{ role: "user" as const, content }],
+    messages,
     model: {} as never,
     responseMessages: [],
     runtimeContext: {},
@@ -50,24 +56,81 @@ function prepareStepArgs(content: string) {
 }
 
 describe("isToolpickEnabled", () => {
-  it("defaults to off", () => {
-    expect(isToolpickEnabled({})).toBe(false);
-    expect(isToolpickEnabled({ TOOLPICK_ENABLED: "0" })).toBe(false);
-    expect(isToolpickEnabled({ TOOLPICK_ENABLED: "false" })).toBe(false);
+  it("defaults to on", () => {
+    expect(isToolpickEnabled({})).toBe(true);
+    expect(isToolpickEnabled({ TOOLPICK_ENABLED: "" })).toBe(true);
   });
 
-  it("accepts 1/true/yes", () => {
+  it("accepts explicit opt-out", () => {
+    expect(isToolpickEnabled({ TOOLPICK_ENABLED: "0" })).toBe(false);
+    expect(isToolpickEnabled({ TOOLPICK_ENABLED: "false" })).toBe(false);
+    expect(isToolpickEnabled({ TOOLPICK_ENABLED: "off" })).toBe(false);
+  });
+
+  it("accepts explicit opt-in", () => {
     expect(isToolpickEnabled({ TOOLPICK_ENABLED: "1" })).toBe(true);
     expect(isToolpickEnabled({ TOOLPICK_ENABLED: "true" })).toBe(true);
     expect(isToolpickEnabled({ TOOLPICK_ENABLED: "YES" })).toBe(true);
   });
 });
 
+describe("countOuterToolMisses / sticky session", () => {
+  it("counts text-only assistant steps after the last user message", () => {
+    const messages: ModelMessage[] = [
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "hey" },
+      { role: "assistant", content: "still here" },
+    ];
+    expect(countOuterToolMisses(messages)).toBe(2);
+  });
+
+  it("resets misses after a tool-call assistant step", () => {
+    const messages: ModelMessage[] = [
+      { role: "user", content: "find last chat" },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "tool-call",
+            toolCallId: "1",
+            toolName: SEARCH_SESSIONS_TOOL_NAME,
+            input: {},
+          },
+        ],
+      },
+      {
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId: "1",
+            toolName: SEARCH_SESSIONS_TOOL_NAME,
+            output: { type: "json", value: {} },
+          },
+        ],
+      },
+    ];
+    expect(countOuterToolMisses(messages)).toBe(0);
+    expect(hasStickySessionTools(messages)).toBe(true);
+  });
+});
+
 describe("createWorkerAgentPrepareStep", () => {
-  it("always keeps send_message active", async () => {
+  it("keeps pure chat on send_message-only", async () => {
     const prepareStep = createWorkerAgentPrepareStep(allTools);
     const result = await prepareStep(
-      prepareStepArgs("search past chats about flights")
+      prepareStepArgs([{ role: "user", content: "just say hi" }])
+    );
+
+    expect(result?.activeTools).toEqual([SEND_MESSAGE_TOOL_NAME]);
+  });
+
+  it("always keeps send_message active on recall queries", async () => {
+    const prepareStep = createWorkerAgentPrepareStep(allTools);
+    const result = await prepareStep(
+      prepareStepArgs([
+        { role: "user", content: "search past chats about flights" },
+      ])
     );
 
     expect(result?.activeTools).toEqual(
@@ -76,11 +139,14 @@ describe("createWorkerAgentPrepareStep", () => {
   });
 
   it("pulls related session tools when one session tool ranks", async () => {
-    const prepareStep = createWorkerAgentPrepareStep(allTools, {
-      maxTools: 2,
-    });
+    const prepareStep = createWorkerAgentPrepareStep(allTools);
     const result = await prepareStep(
-      prepareStepArgs("search sessions for yesterday dinner plans")
+      prepareStepArgs([
+        {
+          role: "user",
+          content: "search sessions for yesterday dinner plans recall",
+        },
+      ])
     );
     const active = new Set(result?.activeTools ?? []);
 
@@ -92,7 +158,6 @@ describe("createWorkerAgentPrepareStep", () => {
     ].filter((name) => active.has(name));
     expect(sessionSelected.length).toBeGreaterThan(0);
 
-    // relatedTools should expand any selected session tool toward the group.
     for (const selected of sessionSelected) {
       for (const related of WORKER_AGENT_TOOLPICK_RELATED_TOOLS[selected] ??
         []) {
@@ -101,16 +166,74 @@ describe("createWorkerAgentPrepareStep", () => {
     }
   });
 
-  it("emits selection metrics", async () => {
+  it("keeps session tools sticky after a session tool call in the open turn", async () => {
+    const prepareStep = createWorkerAgentPrepareStep(allTools);
+    const result = await prepareStep(
+      prepareStepArgs([
+        { role: "user", content: "what did we talk about last week?" },
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "tool-call",
+              toolCallId: "1",
+              toolName: SEARCH_SESSIONS_TOOL_NAME,
+              input: { query: "last week" },
+            },
+          ],
+        },
+        {
+          role: "tool",
+          content: [
+            {
+              type: "tool-result",
+              toolCallId: "1",
+              toolName: SEARCH_SESSIONS_TOOL_NAME,
+              output: { type: "json", value: { sessions: [] } },
+            },
+          ],
+        },
+      ])
+    );
+
+    expect(result?.activeTools).toEqual(
+      expect.arrayContaining([
+        SEND_MESSAGE_TOOL_NAME,
+        LIST_SESSIONS_TOOL_NAME,
+        SEARCH_SESSIONS_TOOL_NAME,
+        READ_SESSION_TOOL_NAME,
+      ])
+    );
+  });
+
+  it("falls back to all tools after two outer-step misses", async () => {
+    const prepareStep = createWorkerAgentPrepareStep(allTools);
+    const result = await prepareStep(
+      prepareStepArgs([
+        { role: "user", content: "find that prior conversation" },
+        { role: "assistant", content: "thinking" },
+        { role: "assistant", content: "still thinking" },
+      ])
+    );
+
+    expect(new Set(result?.activeTools)).toEqual(
+      new Set(Object.keys(allTools))
+    );
+  });
+
+  it("emits selection metrics with reason", async () => {
     const onSelect = vi.fn();
     const prepareStep = createWorkerAgentPrepareStep(allTools, { onSelect });
 
-    await prepareStep(prepareStepArgs("just say hi"));
+    await prepareStep(
+      prepareStepArgs([{ role: "user", content: "just say hi" }])
+    );
 
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelect).toHaveBeenCalledWith(
       expect.objectContaining({
-        activeTools: expect.arrayContaining([SEND_MESSAGE_TOOL_NAME]),
+        activeTools: [SEND_MESSAGE_TOOL_NAME],
+        reason: "hybrid",
         stepNumber: 0,
       })
     );

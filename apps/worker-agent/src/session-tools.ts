@@ -123,7 +123,7 @@ export function createSessionTools(
   const tools: WorkerAgentToolSet = {
     [LIST_SESSIONS_TOOL_NAME]: {
       description:
-        "List other recent conversations (across messaging surfaces) with a short snippet. Use this to recall what you discussed elsewhere instead of guessing.",
+        "List other recent conversations (across messaging surfaces) with a short snippet. Use to recall past chats, earlier talks, previous sessions, or what you discussed elsewhere — not for ordinary small talk.",
       execute: async (input: unknown): Promise<ListSessionsToolResult> => {
         const parsed = ListSessionsToolInputSchema.parse(input);
         const summaries = await options.reader.list({
@@ -136,7 +136,7 @@ export function createSessionTools(
     },
     [SEARCH_SESSIONS_TOOL_NAME]: {
       description:
-        "Search other recent conversations by keyword and return matching snippets. Use this to find what you actually said in another chat before claiming you remember it.",
+        "Search other recent conversations by keyword and return matching snippets. Use when the user asks what you talked about before, to find prior chats, memories, topics, people, or places mentioned in another session.",
       execute: async (input: unknown): Promise<SearchSessionsToolResult> => {
         const parsed = SearchSessionsToolInputSchema.parse(input);
         const query = parsed.query.trim();
@@ -153,7 +153,7 @@ export function createSessionTools(
   if (options.transcriptReader) {
     tools[READ_SESSION_TOOL_NAME] = {
       description:
-        "Read a capped transcript from a specific channel returned by list_sessions or search_sessions. Use this after selecting a likely prior conversation, before answering details from it.",
+        "Read a capped transcript from a specific channel returned by list_sessions or search_sessions. Use after picking a prior conversation to open the full thread details before answering from memory.",
       execute: async (input: unknown): Promise<ReadSessionToolResult> => {
         const parsed = ReadSessionToolInputSchema.parse(input);
         const canRead = await options.reader.canRead(
