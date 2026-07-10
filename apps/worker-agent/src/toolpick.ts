@@ -205,7 +205,11 @@ export function createWorkerAgentPrepareStep(
 
   return async (stepOptions) => {
     const { messages, stepNumber, steps } = stepOptions;
+    // Full conversation query (anchor+recent) for hybrid ranking.
     const query = extractQuery(messages, steps, stepNumber);
+    // Intent must use only the latest user text — otherwise old "검색해줘"
+    // anchors keep web tools active for later "야" / "응" turns.
+    const latestUserText = latestUserMessageText(messages);
     const misses = countOuterToolMisses(messages);
 
     let reason: ToolpickSelectionReason = "hybrid";
@@ -217,6 +221,10 @@ export function createWorkerAgentPrepareStep(
     } else if (hasStickySessionTools(messages, sessionToolsPresent)) {
       reason = "sticky-session";
       activeTools = uniqueNames([...alwaysActive, ...sessionToolsPresent]);
+    } else if (isCasualChitchat(latestUserText)) {
+      // Short ack/greeting — do not inherit prior search/weather tool sets.
+      reason = "hybrid";
+      activeTools = [...alwaysActive];
     } else {
       const hybridSelected = query
         ? await index.select(query, {
@@ -225,7 +233,7 @@ export function createWorkerAgentPrepareStep(
             relatedTools,
           })
         : [...alwaysActive];
-      const intentTools = intentToolsForQuery(query).filter((name) =>
+      const intentTools = intentToolsForQuery(latestUserText).filter((name) =>
         toolNameSet.has(name)
       );
       activeTools = uniqueNames([
@@ -243,7 +251,7 @@ export function createWorkerAgentPrepareStep(
 
     options.onSelect?.({
       activeTools,
-      query,
+      query: latestUserText || query,
       reason,
       stepNumber,
     });
@@ -266,6 +274,63 @@ export function intentToolsForQuery(query: string): string[] {
   }
   return uniqueNames(selected);
 }
+
+/** Latest user text only (ignores older search anchors). */
+export function latestUserMessageText(
+  messages: readonly ModelMessage[]
+): string {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role !== "user") {
+      continue;
+    }
+    return modelMessageText(message);
+  }
+  return "";
+}
+
+function modelMessageText(message: ModelMessage): string {
+  if (typeof message.content === "string") {
+    return message.content.trim();
+  }
+  if (!Array.isArray(message.content)) {
+    return "";
+  }
+  return message.content
+    .filter(
+      (part): part is { type: "text"; text: string } =>
+        typeof part === "object" &&
+        part !== null &&
+        "type" in part &&
+        part.type === "text" &&
+        "text" in part &&
+        typeof part.text === "string"
+    )
+    .map((part) => part.text)
+    .join(" ")
+    .trim();
+}
+
+/**
+ * Short greetings/acks that should not re-open web/session tools from history.
+ * "야", "응", "ㅎㅎ", "ok" etc.
+ */
+export function isCasualChitchat(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return true;
+  }
+  if (intentToolsForQuery(trimmed).length > 0) {
+    return false;
+  }
+  if (trimmed.length <= 6) {
+    return CASUAL_CHITCHAT_PATTERN.test(trimmed);
+  }
+  return false;
+}
+
+const CASUAL_CHITCHAT_PATTERN =
+  /^(?:ㅎ+|ㅋ+|ㅇㅋ|ㅇㅇ|ㄱㄱ|야+|응+|어+|헐|와+|네+|넹|웅|음+|아+|오+|예|yes|yep|ok|okay|hey|hi|hello|yo)[\s!?.~…]*$/iu;
 
 /**
  * Consecutive outer steps after the last user message that did not call any

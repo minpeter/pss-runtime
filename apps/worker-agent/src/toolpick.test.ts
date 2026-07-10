@@ -164,6 +164,29 @@ describe("createWorkerAgentPrepareStep", () => {
     expect(result?.activeTools).toEqual([SEND_MESSAGE_TOOL_NAME]);
   });
 
+  it("does not inherit prior search tools for casual '야'", async () => {
+    const prepareStep = createWorkerAgentPrepareStep(allTools);
+    const result = await prepareStep(
+      prepareStepArgs([
+        { role: "user", content: "minpeter에 대해서 검색 좀 해봐" },
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "tool-call",
+              toolCallId: "1",
+              toolName: SEND_MESSAGE_TOOL_NAME,
+              input: { text: "ok" },
+            },
+          ],
+        },
+        { role: "user", content: "야" },
+      ])
+    );
+
+    expect(result?.activeTools).toEqual([SEND_MESSAGE_TOOL_NAME]);
+  });
+
   it("activates web_search for Korean search requests", async () => {
     const prepareStep = createWorkerAgentPrepareStep(allTools);
     const result = await prepareStep(

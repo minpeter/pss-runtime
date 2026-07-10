@@ -286,7 +286,33 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
         turnEvents,
       });
     } catch (error) {
-      log.error(error instanceof Error ? error : new Error(String(error)));
+      const failure = error instanceof Error ? error : new Error(String(error));
+      log.error(failure);
+
+      // AI gateway timeouts should not crash the telegram path with a silent 500.
+      // Try one direct channel message so the user sees a retry hint.
+      if (isAiGatewayTimeoutError(failure)) {
+        const recovered = await this.#trySendGatewayTimeoutNotice(payload);
+        if (recovered) {
+          log.set({
+            delivery: {
+              delivered: true,
+              mode: "send",
+              outcome: "gateway_timeout_notice",
+            },
+            turn: turnEvents.summary(),
+            ...summarizeImagePrepares(imagePrepares),
+            ...summarizeImageOmits(imageOmits),
+          });
+          log.emit({ status: 200 });
+          return Response.json({
+            delivered: true,
+            mode: "send",
+            outcome: "gateway_timeout_notice",
+          });
+        }
+      }
+
       log.set({
         delivery: { delivered: false, outcome: "error" },
         turn: turnEvents.summary(),
@@ -295,6 +321,21 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
       });
       log.emit({ status: 500 });
       throw error;
+    }
+  }
+
+  async #trySendGatewayTimeoutNotice(
+    payload: NonNullable<Awaited<ReturnType<typeof parseAgentRequest>>>
+  ): Promise<boolean> {
+    try {
+      const setup = this.#sendMessageSetup(payload.channel);
+      await setup.options.sink.send(
+        payload.channel,
+        "모델 응답이 지연됐어. 잠시 후 다시 한 번 보내줄래?"
+      );
+      return true;
+    } catch {
+      return false;
     }
   }
 
@@ -571,4 +612,14 @@ function normalizeIndexError(error: unknown): Error {
     : new AgentDurableObjectInvariantError(
         `Non-Error thrown: ${String(error)}`
       );
+}
+
+function isAiGatewayTimeoutError(error: Error): boolean {
+  const text = `${error.name} ${error.message}`.toLowerCase();
+  return (
+    text.includes("gateway timeout") ||
+    text.includes("ai_apicallerror") ||
+    (text.includes("failed after") && text.includes("timeout")) ||
+    text.includes("etimedout")
+  );
 }
