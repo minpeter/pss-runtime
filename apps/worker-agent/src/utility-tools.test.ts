@@ -18,6 +18,8 @@ function toolContext() {
   };
 }
 
+const INVALID_CHARACTER_PATTERN = /Invalid character/;
+
 describe("evaluateArithmeticExpression", () => {
   it("evaluates nested arithmetic", () => {
     expect(evaluateArithmeticExpression("(12.5 + 3) * 2")).toBe(31);
@@ -27,7 +29,7 @@ describe("evaluateArithmeticExpression", () => {
 
   it("rejects unsafe input", () => {
     expect(() => evaluateArithmeticExpression("Math.sin(1)")).toThrow(
-      /Invalid character/
+      INVALID_CHARACTER_PATTERN
     );
   });
 });
