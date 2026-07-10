@@ -22,13 +22,13 @@ describe("worker-agent TUI config", () => {
   it("resolves remote mode from environment without a local model key", () => {
     const config = resolveWorkerAgentTuiConfig({
       WORKER_AGENT_TUI_CHANNEL_ID: "dev-shell",
-      WORKER_AGENT_TUI_ENDPOINT: "http://127.0.0.1:8792/trpc",
+      WORKER_AGENT_TUI_ENDPOINT: "http://127.0.0.1:8802/trpc",
       WORKER_AGENT_TUI_TOKEN: " secret-token ",
     });
 
     expect(config).toEqual({
       channel: { id: "dev-shell", kind: "tui" },
-      endpoint: "http://127.0.0.1:8792/trpc",
+      endpoint: "http://127.0.0.1:8802/trpc",
       mode: "remote",
       token: "secret-token",
     });
@@ -37,7 +37,7 @@ describe("worker-agent TUI config", () => {
   it("lets a CLI remote flag override the environment endpoint", () => {
     const config = resolveWorkerAgentTuiConfig(
       {
-        WORKER_AGENT_TUI_ENDPOINT: "http://127.0.0.1:8792/trpc",
+        WORKER_AGENT_TUI_ENDPOINT: "http://127.0.0.1:8802/trpc",
       },
       ["--remote", "https://worker.example.com/trpc"]
     );

@@ -71,7 +71,7 @@ describe("telegram local relay", () => {
       secret: "secret",
       signal: new AbortController().signal,
       updates: [{ update_id: 10 }, { update_id: 11 }, { update_id: 12 }],
-      webhookUrl: "http://127.0.0.1:8792/",
+      webhookUrl: "http://127.0.0.1:8802/",
     });
 
     await vi.waitFor(() => {
@@ -101,7 +101,7 @@ describe("telegram local relay", () => {
         secret: "secret",
         signal: new AbortController().signal,
         updates: [{ update_id: 10 }, { update_id: 11 }, { update_id: 12 }],
-        webhookUrl: "http://127.0.0.1:8792/",
+        webhookUrl: "http://127.0.0.1:8802/",
       })
     ).resolves.toBe(11);
     expect(fetch).toHaveBeenCalledTimes(3);
@@ -131,7 +131,7 @@ describe("telegram local relay", () => {
         secret: "secret",
         signal: new AbortController().signal,
         updates: [{ update_id: 10 }, { update_id: 11 }, { update_id: 12 }],
-        webhookUrl: "http://127.0.0.1:8792/",
+        webhookUrl: "http://127.0.0.1:8802/",
       })
     ).resolves.toBe(11);
     expect(fetch).toHaveBeenCalledTimes(3);

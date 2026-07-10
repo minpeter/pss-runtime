@@ -6,7 +6,7 @@ import { assertWebhookSecretToken } from "../src/env";
 import { logError, logTagged } from "../src/worker-log";
 
 const SECRET_HEADER = "x-telegram-bot-api-secret-token";
-const LOCAL_WEBHOOK = "http://127.0.0.1:8792/";
+const LOCAL_WEBHOOK = "http://127.0.0.1:8802/";
 const TRAILING_SLASHES_PATTERN = /\/+$/;
 /** Backoff after Telegram getUpdates network blips (ECONNRESET, etc.). */
 const RELAY_RETRY_MS = 1000;

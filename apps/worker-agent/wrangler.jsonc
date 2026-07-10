@@ -43,8 +43,9 @@
     }
   },
   "dev": {
+    // Avoid clashing with bori local MGW (often on 8792).
     "ip": "127.0.0.1",
-    "port": 8792
+    "port": 8802
   },
   "observability": {
     "logs": {

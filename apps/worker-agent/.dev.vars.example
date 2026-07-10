@@ -9,7 +9,7 @@ TELEGRAM_BOT_USERNAME=your_bot
 # Separate from TELEGRAM_BOT_TOKEN. Allowed: A-Z a-z 0-9 _ -
 # Generate: openssl rand -hex 32
 TELEGRAM_WEBHOOK_SECRET_TOKEN=...
-LOCAL_WEBHOOK_URL=http://127.0.0.1:8792/
+LOCAL_WEBHOOK_URL=http://127.0.0.1:8802/
 WORKER_PUBLIC_URL=https://pss-worker-agent.<account>.workers.dev
 # Layer 1 only (optional): reassembly + Telegram summary, no agent.
 # Prefer: pnpm dev:ingress
