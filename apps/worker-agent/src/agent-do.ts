@@ -106,7 +106,8 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
   #channel: ChannelAddress | undefined;
   #sessionScopeKey: string | undefined;
   #observability: ReturnType<typeof createTurnEventCollector> | undefined;
-  #tuiMessageCapture: WorkerAgentDeliveredMessage[] = [];
+  /** Delivered send_message texts for the current idle send (index + response). */
+  #deliveredMessageCapture: WorkerAgentDeliveredMessage[] = [];
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -263,7 +264,6 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
         session,
         agentInput,
         turnEvents,
-        payload.channel.kind,
         assistantMessages
       );
 
@@ -361,7 +361,6 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
     session: TurnSession,
     agentInput: AgentInput,
     turnEvents: ReturnType<typeof createTurnEventCollector>,
-    channelKind: ChannelAddress["kind"],
     assistantMessages: string[]
   ): Promise<Awaited<ReturnType<TurnSession["deliver"]>>> {
     const previousObservability = this.#observability;
@@ -374,9 +373,7 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
         onSendStarted: () => {
           ownsObservability = true;
           this.#observability = turnEvents;
-          if (channelKind === "tui") {
-            this.#tuiMessageCapture = [];
-          }
+          this.#deliveredMessageCapture = [];
         },
       });
     } finally {
@@ -402,6 +399,7 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
     readonly turnEvents: ReturnType<typeof createTurnEventCollector>;
   }): Response {
     const turnSummary = turnEvents.summary();
+    const deliveredMessages = sendMessage.messages();
     log.set({
       delivery: {
         delivered: delivery.delivered,
@@ -430,7 +428,7 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
         {
           ...withCapturedMessages(
             { delivered: false, error: delivery.error },
-            sendMessage.messages()
+            deliveredMessages
           ),
           mode: delivery.mode,
         },
@@ -440,7 +438,7 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
 
     log.emit({ status: 200 });
     return Response.json({
-      ...withCapturedMessages({ delivered: true }, sendMessage.messages()),
+      ...withCapturedMessages({ delivered: true }, deliveredMessages),
       mode: delivery.mode,
     });
   }
@@ -542,27 +540,22 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
         send: async (channel, text) => {
           const setup = createRequestSendMessageToolSetup(this.#env, channel);
           const sent = await setup.options.sink.send(channel, text);
-          if (channel.kind === "tui") {
-            this.#tuiMessageCapture.push({
-              channel: sent.channel,
-              messageId: sent.messageId,
-              text,
-            });
-          }
+          this.#deliveredMessageCapture.push({
+            channel: sent.channel,
+            messageId: sent.messageId,
+            text,
+          });
           return sent;
         },
       },
     };
   }
 
-  #sendMessageSetup(channel: ChannelAddress): SendMessageToolSetup {
-    if (channel.kind === "tui") {
-      return {
-        messages: () => this.#tuiMessageCapture,
-        options: this.#longLivedSendMessageOptions(),
-      };
-    }
-    return createRequestSendMessageToolSetup(this.#env, channel);
+  #sendMessageSetup(_channel: ChannelAddress): SendMessageToolSetup {
+    return {
+      messages: () => this.#deliveredMessageCapture,
+      options: this.#longLivedSendMessageOptions(),
+    };
   }
 
   async #indexTurn(

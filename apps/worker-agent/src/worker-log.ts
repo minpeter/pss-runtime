@@ -53,14 +53,65 @@ export function ensureWorkerLogger(
   initialized = true;
 }
 
+/** Turn-scoped wide-event logger (`set` / `emit` / `error`). */
+export interface WorkerTurnLogger {
+  readonly emit: (overrides?: {
+    readonly status?: number;
+    readonly _forceKeep?: boolean;
+  }) => unknown;
+  readonly error: (
+    error: Error | string | Record<string, unknown>,
+    context?: Record<string, unknown>
+  ) => void;
+  readonly set: (data: Record<string, unknown>) => void;
+}
+
 export function createTurnLogger(
   request: Request,
   options?: { readonly executionCtx?: WorkerExecutionContext }
-) {
+): WorkerTurnLogger {
   ensureWorkerLogger();
-  return createWorkersLogger(request, {
-    ...(options?.executionCtx ? { executionCtx: options.executionCtx } : {}),
-  });
+  return sealPostEmitAiFlushes(
+    createWorkersLogger(request, {
+      ...(options?.executionCtx ? { executionCtx: options.executionCtx } : {}),
+    })
+  );
+}
+
+type WorkersRequestLogger = ReturnType<typeof createWorkersLogger>;
+
+/**
+ * Drop `log.set({ ai })` after emit. createAILogger can flush once more after
+ * the response is emitted; Workers mark drain started immediately so those
+ * sets only produce noisy post-emit warnings.
+ */
+export function sealPostEmitAiFlushes(
+  log: WorkersRequestLogger
+): WorkerTurnLogger {
+  let emitted = false;
+  return {
+    set(data) {
+      if (emitted) {
+        const keys = Object.keys(data);
+        if (keys.length === 1 && keys[0] === "ai") {
+          return;
+        }
+      }
+      (log.set as (value: Record<string, unknown>) => void)(data);
+    },
+    emit(overrides) {
+      const result = log.emit(overrides);
+      emitted = true;
+      return result;
+    },
+    error(err, context) {
+      if (context) {
+        log.error(err as never, context as never);
+        return;
+      }
+      log.error(err as never);
+    },
+  };
 }
 
 export function newCorrelationId(): string {

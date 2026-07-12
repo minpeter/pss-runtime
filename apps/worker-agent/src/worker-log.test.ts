@@ -5,11 +5,42 @@ import {
   attachmentLogFields,
   imagePrepareLogEvent,
   logError,
+  sealPostEmitAiFlushes,
   summarizeImageOmits,
   summarizeImagePrepares,
 } from "./worker-log";
 
 const TREE_CHARS_PATTERN = /[├└]/u;
+
+describe("sealPostEmitAiFlushes", () => {
+  it("ignores ai-only set after emit", () => {
+    const sets: Record<string, unknown>[] = [];
+    const base = {
+      set(data: Record<string, unknown>) {
+        sets.push(data);
+      },
+      emit() {
+        return { ok: true };
+      },
+      error() {
+        return;
+      },
+    };
+    const log = sealPostEmitAiFlushes(
+      base as unknown as Parameters<typeof sealPostEmitAiFlushes>[0]
+    );
+
+    log.set({ ai: { model: "before" } });
+    log.emit({ status: 200 });
+    log.set({ ai: { model: "late-flush" } });
+    log.set({ extra: "still forwarded" });
+
+    expect(sets).toEqual([
+      { ai: { model: "before" } },
+      { extra: "still forwarded" },
+    ]);
+  });
+});
 
 describe("attachmentLogFields", () => {
   it("nests media types and approximate payload size under attachments", () => {

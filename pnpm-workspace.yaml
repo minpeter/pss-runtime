@@ -18,4 +18,6 @@ minimumReleaseAgeExclude:
   - typescript
   - '@typescript/*'
   - rolldown-plugin-dts
-  - '@ai-sdk-tool/middleware@0.1.0'
+  - '@ai-sdk-tool/middleware'
+patchedDependencies:
+  evlog@2.20.0: patches/evlog@2.20.0.patch

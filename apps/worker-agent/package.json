@@ -27,7 +27,7 @@
     "lint": "ultracite check ."
   },
   "dependencies": {
-    "@ai-sdk-tool/middleware": "0.1.0",
+    "@ai-sdk-tool/middleware": "0.1.1",
     "@ai-sdk/openai-compatible": "3.0.2",
     "@chat-adapter/state-memory": "4.32.0",
     "@chat-adapter/telegram": "4.32.0",

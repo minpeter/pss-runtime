@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { resolveFetchImpl } from "./fetch-impl";
 import type { WorkerAgentToolSet } from "./tools";
 
 export const WEB_SEARCH_TOOL_NAME = "web_search";
@@ -82,7 +83,7 @@ export class WebToolError extends Error {
 export function createWebTools(
   options: WebToolsOptions = {}
 ): WorkerAgentToolSet {
-  const fetchImpl = options.fetchImpl ?? fetch;
+  const fetchImpl = resolveFetchImpl(options.fetchImpl);
   const firecrawlBaseUrl =
     options.firecrawlBaseUrl?.trim() || DEFAULT_FIRECRAWL_BASE_URL;
   const jinaReaderBaseUrl =
@@ -173,12 +174,13 @@ async function firecrawlSearch(options: {
   readonly limit: number;
   readonly query: string;
 }): Promise<WebSearchResultItem[]> {
-  const response = await options.fetchImpl(`${options.baseUrl}/search`, {
+  const { apiKey, baseUrl, fetchImpl, limit, query } = options;
+  const response = await fetchImpl(`${baseUrl}/search`, {
     body: JSON.stringify({
-      limit: options.limit,
-      query: options.query,
+      limit,
+      query,
     }),
-    headers: firecrawlHeaders(options.apiKey),
+    headers: firecrawlHeaders(apiKey),
     method: "POST",
   });
   if (!response.ok) {
@@ -285,18 +287,16 @@ async function firecrawlScrape(options: {
   readonly firecrawlBaseUrl: string;
   readonly url: string;
 }): Promise<WebFetchToolResult> {
-  const response = await options.fetchImpl(
-    `${options.firecrawlBaseUrl}/scrape`,
-    {
-      body: JSON.stringify({
-        formats: [{ type: "markdown" }],
-        onlyMainContent: true,
-        url: options.url,
-      }),
-      headers: firecrawlHeaders(options.apiKey),
-      method: "POST",
-    }
-  );
+  const { apiKey, fetchImpl, firecrawlBaseUrl, url } = options;
+  const response = await fetchImpl(`${firecrawlBaseUrl}/scrape`, {
+    body: JSON.stringify({
+      formats: [{ type: "markdown" }],
+      onlyMainContent: true,
+      url,
+    }),
+    headers: firecrawlHeaders(apiKey),
+    method: "POST",
+  });
   if (!response.ok) {
     throw new WebToolError(`Firecrawl scrape failed (${response.status}).`);
   }
@@ -314,7 +314,7 @@ async function firecrawlScrape(options: {
     markdown,
     provider: "firecrawl",
     title: body.data?.metadata?.title ?? null,
-    url: options.url,
+    url,
   };
 }
 
@@ -323,8 +323,9 @@ async function jinaFetch(options: {
   readonly jinaReaderBaseUrl: string;
   readonly url: string;
 }): Promise<WebFetchToolResult> {
-  const response = await options.fetchImpl(
-    `${options.jinaReaderBaseUrl.replace(TRAILING_SLASH_PATTERN, "")}/${options.url}`,
+  const { fetchImpl, jinaReaderBaseUrl, url } = options;
+  const response = await fetchImpl(
+    `${jinaReaderBaseUrl.replace(TRAILING_SLASH_PATTERN, "")}/${url}`,
     {
       headers: {
         accept: "text/plain",
@@ -343,7 +344,7 @@ async function jinaFetch(options: {
     markdown,
     provider: "jina",
     title: null,
-    url: options.url,
+    url,
   };
 }
 
@@ -351,7 +352,8 @@ async function directFetch(options: {
   readonly fetchImpl: typeof fetch;
   readonly url: string;
 }): Promise<WebFetchToolResult> {
-  const response = await options.fetchImpl(options.url, {
+  const { fetchImpl, url } = options;
+  const response = await fetchImpl(url, {
     headers: {
       accept: "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8",
       "user-agent":
@@ -361,7 +363,7 @@ async function directFetch(options: {
   });
   if (!response.ok) {
     throw new WebToolError(
-      `Direct fetch failed (${response.status}) for ${options.url}.`
+      `Direct fetch failed (${response.status}) for ${url}.`
     );
   }
   const contentType = response.headers.get("content-type") ?? "";
@@ -376,7 +378,7 @@ async function directFetch(options: {
     markdown,
     provider: "direct",
     title: null,
-    url: options.url,
+    url,
   };
 }
 

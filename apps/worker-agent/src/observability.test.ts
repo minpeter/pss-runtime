@@ -19,6 +19,35 @@ describe("describeEvent", () => {
     ).toEqual({ event: "tool-call", label: "production", toolName: "search" });
   });
 
+  it("captures tool-result execute errors without dumping success payloads", () => {
+    expect(
+      describeEvent({
+        type: "tool-result",
+        output: {
+          type: "error-text",
+          value:
+            "TypeError: Illegal invocation: function called with incorrect `this` reference.",
+        },
+        toolCallId: "1",
+        toolName: "web_search",
+      })
+    ).toEqual({
+      event: "tool-result",
+      message:
+        "TypeError: Illegal invocation: function called with incorrect `this` reference.",
+      toolName: "web_search",
+    });
+
+    expect(
+      describeEvent({
+        type: "tool-result",
+        output: { type: "json", value: { ok: true, resultCount: 3 } },
+        toolCallId: "2",
+        toolName: "web_search",
+      })
+    ).toEqual({ event: "tool-result", toolName: "web_search" });
+  });
+
   it("captures turn-error with its message", () => {
     expect(
       describeEvent({ type: "turn-error", message: "boom" }, "dev")
@@ -73,6 +102,19 @@ describe("createTurnEventCollector", () => {
         reason: "hybrid",
         stepNumber: 0,
       },
+    ]);
+  });
+
+  it("records tool-result errors for the wide event", () => {
+    const collector = createTurnEventCollector();
+    collector.record({
+      event: "tool-result",
+      message: "TypeError: Illegal invocation",
+      toolName: "web_search",
+    });
+
+    expect(collector.summary().errors).toEqual([
+      "web_search: TypeError: Illegal invocation",
     ]);
   });
 });

@@ -50,10 +50,13 @@ const SearchSessionsToolInputSchema = z
 
 const ReadSessionToolInputSchema = z
   .object({
+    // Cap max so JSON Schema does not emit Number.MAX_SAFE_INTEGER (zod int default),
+    // which some providers treat poorly in tool grammars.
     before: z
       .number()
       .int()
       .min(0)
+      .max(1_000_000_000)
       .optional()
       .describe(
         "Read messages before this transcript cursor when paging older context."

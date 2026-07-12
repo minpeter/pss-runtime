@@ -54,6 +54,9 @@ export function createTurnEventCollector(): {
       if (entry.event === "turn-error" && entry.message) {
         errors.push(entry.message);
       }
+      if (entry.event === "tool-result" && entry.message && entry.toolName) {
+        errors.push(`${entry.toolName}: ${entry.message}`);
+      }
     },
     recordToolpick(selection) {
       toolpick.push({
@@ -78,7 +81,16 @@ export function describeEvent(
   label?: string
 ): TurnObservabilityEntry | undefined {
   if (isToolAgentEvent(event)) {
-    return { event: event.type, label, toolName: event.toolName };
+    const errorMessage =
+      event.type === "tool-result"
+        ? toolResultErrorMessage(event.output)
+        : undefined;
+    return {
+      event: event.type,
+      label,
+      toolName: event.toolName,
+      ...(errorMessage ? { message: errorMessage } : {}),
+    };
   }
 
   if (isLifecycleAgentEvent(event)) {
@@ -87,6 +99,30 @@ export function describeEvent(
       : { event: event.type, label };
   }
 
+  return;
+}
+
+function toolResultErrorMessage(output: unknown): string | undefined {
+  if (!output || typeof output !== "object") {
+    return;
+  }
+  if (
+    "type" in output &&
+    (output.type === "error-text" || output.type === "error-json") &&
+    "value" in output
+  ) {
+    const value = output.value;
+    if (typeof value === "string" && value.trim()) {
+      return value.slice(0, 300);
+    }
+    if (value !== undefined) {
+      try {
+        return JSON.stringify(value).slice(0, 300);
+      } catch {
+        return "tool error";
+      }
+    }
+  }
   return;
 }
 

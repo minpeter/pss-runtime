@@ -8,9 +8,7 @@ import {
   type AgentTurn,
 } from "@minpeter/pss-runtime";
 import { drainAgentTurn } from "@minpeter/pss-runtime/platform/cloudflare";
-import type { RequestLogger } from "evlog";
-
-import { wrapModelWithAiLogger } from "./ai-logger";
+import { type AiLoggerSink, wrapModelWithAiLogger } from "./ai-logger";
 import type { EnvironmentName } from "./env";
 import { createTurnObservabilityPlugin } from "./observability";
 import type { WorkerAgentSessionToolOptions } from "./session-tools";
@@ -35,6 +33,13 @@ const DEFAULT_BASE_URL = "https://apis.opengateway.ai/v1";
 /** Default model id when `AI_MODEL` is unset (also used on wide-event `ai.model`). */
 export const DEFAULT_MODEL = "minimax/MiniMax-M2.7";
 
+/**
+ * Cloudflare AI Gateway first-byte timeout for provider calls (ms).
+ * grok-4.5 + tools often spends several seconds on reasoning before tokens;
+ * the gateway default (~10s) yields 504 `Provider request timeout` (code 2014).
+ */
+export const DEFAULT_AI_GATEWAY_REQUEST_TIMEOUT_MS = 60_000;
+
 export const WORKER_AGENT_AUTO_COMPACTION: AgentAutoCompactionOptions = {
   minMessages: 48,
   retainMessages: 16,
@@ -49,12 +54,21 @@ Identity and surface:
 - Speak as one coherent assistant. Do not mention internal agents, tools, or implementation details.
 - Do not imply that a hidden worker, background process, browser operator, integration, inbox, scheduler, or persistent memory system will handle work unless this runtime actually provides that capability.
 
-Messaging tool:
-- Every user-visible response must be sent with send_message.
-- Use send_message for progress updates, split long answers, and ordinary short replies.
-- A successful send_message call is the only user-visible delivery signal.
-- After send_message succeeds for the answer, do not repeat the same answer in assistant text.
-- Assistant text is internal only and is not delivered to the user.
+Two output channels (different jobs — never use them the same way):
+
+1) send_message — the only user-visible channel
+- Every reply the user should see must go in send_message text (progress, short chat, final answers, splits).
+- A successful send_message call is the only delivery signal. Write the full user-facing answer there.
+
+2) Free-form assistant text — internal scratch only (not delivered)
+- The user never sees this. You will always produce some free-form tokens on a text step; use them only as a short private note, never as the user answer.
+- Before / between tools, free-form may be one short line such as:
+  - what you will do next ("searching X", "fetching that URL")
+  - what a tool just returned at a high level ("got 5 results, summarizing")
+- After send_message succeeds for the user-facing answer, your free-form text must be exactly:
+  sent
+  Nothing else — not a restatement, paraphrase, or longer summary of the message. The full user-facing answer already went out via send_message only.
+- Never put the user-facing answer (or a paraphrase of it) in free-form text.
 
 Message priority:
 - Treat the newest human user message as the source of truth.
@@ -124,11 +138,8 @@ export interface WorkerAgentRuntimeOptions {
       readonly toolName?: string;
     }) => void;
   };
-  /**
-   * Per-turn evlog RequestLogger. When set, wraps the model with
-   * `createAILogger` so AI tokens/tools/timing merge into the wide event.
-   */
-  readonly requestLog?: RequestLogger;
+  /** Per-turn wide-event sink for createAILogger (tokens/tools/`ai.output`). */
+  readonly requestLog?: AiLoggerSink;
   readonly sendMessage?: WorkerAgentSendMessageToolOptions;
   readonly sessionTools?: WorkerAgentSessionToolOptions;
   /** Optional toolpick selection metrics (tools present → prepareStep always on). */
@@ -159,10 +170,12 @@ export function createConfiguredAgent(
   host: AgentHost,
   options: WorkerAgentRuntimeOptions = {}
 ): Agent {
+  const baseURL = env.AI_BASE_URL?.trim() || DEFAULT_BASE_URL;
   const provider = createOpenAICompatible({
     apiKey: env.AI_API_KEY,
-    baseURL: env.AI_BASE_URL?.trim() || DEFAULT_BASE_URL,
+    baseURL,
     name: "custom",
+    ...aiGatewayRequestHeaders(baseURL),
   });
   const baseModel = provider(env.AI_MODEL?.trim() || DEFAULT_MODEL);
   const model = options.requestLog
@@ -257,4 +270,18 @@ export async function collectTurnDelivery(
   );
 
   return { deliveredByTool };
+}
+
+function aiGatewayRequestHeaders(
+  baseURL: string
+): { readonly headers: Record<string, string> } | Record<string, never> {
+  if (!baseURL.includes("gateway.ai.cloudflare.com")) {
+    return {};
+  }
+  return {
+    headers: {
+      // Wait for first provider byte (reasoning models + tools are slow).
+      "cf-aig-request-timeout": String(DEFAULT_AI_GATEWAY_REQUEST_TIMEOUT_MS),
+    },
+  };
 }

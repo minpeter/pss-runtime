@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { resolveFetchImpl } from "./fetch-impl";
 import type { WorkerAgentToolSet } from "./tools";
 
 export const GET_WEATHER_TOOL_NAME = "get_weather";
@@ -58,7 +59,7 @@ export class WeatherToolError extends Error {
 export function createWeatherTools(
   options: WeatherToolsOptions = {}
 ): WorkerAgentToolSet {
-  const fetchImpl = options.fetchImpl ?? fetch;
+  const fetchImpl = resolveFetchImpl(options.fetchImpl);
   const geocodeUrl = options.geocodeUrl ?? DEFAULT_GEOCODE_URL;
   const forecastUrl = options.forecastUrl ?? DEFAULT_FORECAST_URL;
 

@@ -132,6 +132,21 @@ describe("agent delivery request", () => {
       requestAgentDelivery(webhookEnv, "channel-1", "second")
     ).resolves.toBeUndefined();
   });
+
+  it("accepts gateway timeout soft-recovery payloads", async () => {
+    const webhookEnv = createWebhookEnv(createDurableObjectNamespace("agent"));
+    durableObjectMock.responses.push(
+      Response.json({
+        delivered: true,
+        mode: "send",
+        outcome: "gateway_timeout_notice",
+      })
+    );
+
+    await expect(
+      requestAgentDelivery(webhookEnv, "channel-1", "hello")
+    ).resolves.toBeUndefined();
+  });
 });
 
 function createWebhookEnv(namespace: DurableObjectNamespace): Env {

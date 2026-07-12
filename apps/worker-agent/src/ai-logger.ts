@@ -2,22 +2,27 @@ import { createAILogger } from "@ai-sdk-tool/middleware/evlog";
 import type { LanguageModel } from "ai";
 import type { RequestLogger } from "evlog";
 
+/** Cap for tool-call input strings on the wide-event tree. */
+export const AI_LOG_TEXT_MAX_LENGTH = 800;
+
+/** `log.set` surface used by createAILogger. */
+export interface AiLoggerSink {
+  readonly set: (data: Record<string, unknown>) => void;
+}
+
 /**
- * Wrap a LanguageModelV4 with evlog AI middleware so generateText tokens,
- * timing, and tool-call inputs land on the request wide event (`log.set({ ai })`).
- *
- * Create a fresh wrapper per turn so token counters do not accumulate across
- * long-lived Durable Object agent instances.
+ * Per-turn model wrapper: tokens, tools, steps, and free-form text (`ai.output`)
+ * merge into the request wide event. Fresh wrap each turn (DO-safe).
  */
 export function wrapModelWithAiLogger(
   model: LanguageModel,
-  log: RequestLogger,
+  log: AiLoggerSink,
   options?: {
     readonly toolInputs?: boolean | { readonly maxLength?: number };
   }
 ): LanguageModel {
-  const ai = createAILogger(log, {
-    toolInputs: options?.toolInputs ?? { maxLength: 800 },
+  const ai = createAILogger(log as RequestLogger, {
+    toolInputs: options?.toolInputs ?? { maxLength: AI_LOG_TEXT_MAX_LENGTH },
   });
   return ai.wrap(model as Parameters<typeof ai.wrap>[0]) as LanguageModel;
 }

@@ -44,9 +44,11 @@ describe("worker-agent instructions", () => {
       "If the user asks for future reminders, scheduled messages, or background follow-up, explicitly say this worker cannot schedule or send future reminders",
       "Do not mention internal agents, tools, or implementation details",
       "The user sees only messages you send by calling send_message",
-      "Every user-visible response must be sent with send_message",
-      "A successful send_message call is the only user-visible delivery signal",
-      "Assistant text is internal only",
+      "Every reply the user should see must go in send_message text",
+      "A successful send_message call is the only delivery signal",
+      "Free-form assistant text — internal scratch only",
+      "After send_message succeeds for the user-facing answer, your free-form text must be exactly:",
+      "Never put the user-facing answer",
       "Avoid botty phrases",
     ] as const;
 

@@ -1,0 +1,18 @@
+diff --git a/dist/audit-BXCYMjcC.mjs b/dist/audit-BXCYMjcC.mjs
+index 6b23ec9d6da54b307608e040919a2bdbbd051481..7ad4789d020e06c993e5ad07e7933a9541b8f6ec 100644
+--- a/dist/audit-BXCYMjcC.mjs
++++ b/dist/audit-BXCYMjcC.mjs
+@@ -870,6 +870,13 @@ function buildAIEntries(ai) {
+ 			value: parts.join(" · ")
+ 		});
+ 	}
++	if (typeof ai.output === "string" && ai.output.length > 0) {
++		const out = ai.output.length > 200 ? `${ai.output.slice(0, 200)}…` : ai.output;
++		entries.push({
++			key: "ai.output",
++			value: out.replace(/\n/g, "\\n")
++		});
++	}
+ 	if (ai.finishReason) entries.push({
+ 		key: "ai.finishReason",
+ 		value: String(ai.finishReason)

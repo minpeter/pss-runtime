@@ -83,6 +83,8 @@ const AgentDeliverySchema = z.discriminatedUnion("delivered", [
     .object({
       delivered: z.literal(true),
       mode: z.enum(["send", "steer"]).optional(),
+      // Present on soft recoveries (e.g. AI Gateway timeout → user notice).
+      outcome: z.string().optional(),
       messages: z
         .array(
           z
@@ -102,6 +104,7 @@ const AgentDeliverySchema = z.discriminatedUnion("delivered", [
       delivered: z.literal(false),
       error: z.literal(MISSING_SEND_MESSAGE_ERROR),
       mode: z.enum(["send", "steer"]).optional(),
+      outcome: z.string().optional(),
     })
     .strict(),
 ]);

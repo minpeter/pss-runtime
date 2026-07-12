@@ -1,6 +1,10 @@
 # pnpm ship → wrangler secret bulk .dev.vars (whole file)
 AI_API_KEY=...
 AI_BASE_URL=https://apis.opengateway.ai/v1
+# Cloudflare AI Gateway example:
+# AI_BASE_URL=https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/compat
+# AI_MODEL=dynamic/grok-4.5
+# (worker sets cf-aig-request-timeout=60000 — raise gateway limits in CF dashboard if needed)
 AI_MODEL=minimax/MiniMax-M2.7
 # Optional — Firecrawl is keyless free by default; set only for personal limits
 # FIRECRAWL_API_KEY=fc-...
