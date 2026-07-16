@@ -463,6 +463,20 @@ const agent = new Agent({
 retries once. Provider-thrown context-window errors still use the same blocking
 compaction fallback.
 
+Model steps default to non-streaming `generateText`. When a provider or
+gateway route only behaves well for streaming requests, opt into the
+stream-and-collect transport. Every model step the agent issues (turn steps
+and auto-compaction summaries) is then sent as a `streamText` call with the
+same parameters and awaited to completion before the step returns — no
+behavior, output shape, or error change is observable to callers:
+
+```ts
+const agent = new Agent({
+  llmTransport: "stream-collect",
+  model,
+});
+```
+
 Hosts that need durable runs pass `host:` into `Agent`. The execution subpath
 exports the same `AgentHost` contract used by platform factories:
 

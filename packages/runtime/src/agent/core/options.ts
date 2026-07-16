@@ -1,6 +1,10 @@
 import type { LanguageModel, ToolSet } from "ai";
 import type { AgentHost } from "../../execution/host/types";
-import type { AgentToolChoice, ModelContextGateOptions } from "../../llm/llm";
+import type {
+  AgentToolChoice,
+  ModelContextGateOptions,
+  ModelStepTransport,
+} from "../../llm/llm";
 import { assertNoUnsupportedToolApproval } from "../../llm/tool-approval";
 import type { HostAttachmentStore } from "../../thread/input/attachments";
 import type { AgentInput, UserInput } from "../../thread/input/input";
@@ -20,6 +24,14 @@ export interface AgentOptions {
   readonly autoCompaction?: AgentAutoCompactionOptions | false;
   readonly host?: AgentHost;
   readonly instructions?: string;
+  /**
+   * How model steps reach the provider. Defaults to `"generate"`
+   * (non-streaming `generateText`, the existing behavior).
+   * `"stream-collect"` routes the same request through `streamText` and
+   * awaits the full result before the step returns; it applies to every
+   * model step this agent issues, including auto-compaction summaries.
+   */
+  readonly llmTransport?: ModelStepTransport;
   readonly model: LanguageModel;
   readonly namespace?: string;
   readonly notificationOverlays?: readonly (AgentInput | UserInput)[];
@@ -33,6 +45,7 @@ export type AgentModelOptions = Pick<
   "attachmentStore" | "instructions" | "model" | "toolChoice" | "tools"
 > & {
   readonly contextGate?: false | AgentContextGateOptions;
+  readonly transport?: ModelStepTransport;
 };
 
 export function assertAgentOptions(
@@ -54,10 +67,26 @@ export function assertAgentOptions(
 
   const candidate = options as {
     readonly autoCompaction?: AgentOptions["autoCompaction"];
+    readonly llmTransport?: AgentOptions["llmTransport"];
     readonly tools?: AgentOptions["tools"];
   };
   assertNoUnsupportedToolApproval(candidate.tools);
   normalizeAgentAutoCompactionOptions(candidate.autoCompaction);
+  assertAgentLlmTransport(candidate.llmTransport);
+}
+
+function assertAgentLlmTransport(
+  value: AgentOptions["llmTransport"]
+): asserts value is ModelStepTransport | undefined {
+  if (
+    value !== undefined &&
+    value !== "generate" &&
+    value !== "stream-collect"
+  ) {
+    throw new TypeError(
+      "Agent: options.llmTransport must be 'generate' or 'stream-collect'."
+    );
+  }
 }
 
 export function normalizeAgentAutoCompactionOptions(

@@ -8,8 +8,9 @@ import {
   mockLanguageModelV4Empty,
 } from "./mock-language-model-v4-test-utils";
 
-const { generateTextMock } = vi.hoisted(() => ({
+const { generateTextMock, streamTextMock } = vi.hoisted(() => ({
   generateTextMock: vi.fn(),
+  streamTextMock: vi.fn(),
 }));
 
 vi.mock("ai", async (importOriginal) => {
@@ -18,6 +19,7 @@ vi.mock("ai", async (importOriginal) => {
   return {
     ...actual,
     generateText: generateTextMock,
+    streamText: streamTextMock,
   };
 });
 
@@ -27,6 +29,10 @@ export const fakeModel = createMockLanguageModelV4([
 
 export function getGenerateTextMock(): Mock {
   return generateTextMock;
+}
+
+export function getStreamTextMock(): Mock {
+  return streamTextMock;
 }
 
 export const createNoopTool = (): Tool =>

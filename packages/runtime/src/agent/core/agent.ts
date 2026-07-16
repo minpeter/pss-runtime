@@ -68,6 +68,7 @@ export class Agent {
       model: options.model,
       toolChoice: options.toolChoice,
       tools: options.tools,
+      transport: options.llmTransport,
     };
   }
 

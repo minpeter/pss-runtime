@@ -187,6 +187,7 @@ async function summarizeCompactionRange({
     instructions: model.instructions,
     model: model.model,
     signal: new AbortController().signal,
+    transport: model.transport,
   });
   return output
     .flatMap((message) =>

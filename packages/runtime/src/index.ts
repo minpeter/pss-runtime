@@ -15,7 +15,7 @@ export type {
   ThreadEventCursor,
   ThreadEventReadOptions,
 } from "./execution/host/types";
-export type { AgentToolChoice } from "./llm/llm";
+export type { AgentToolChoice, ModelStepTransport } from "./llm/llm";
 export { ThreadEventReplayUnsupportedError } from "./thread/handle/thread-event-replay";
 export {
   DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,

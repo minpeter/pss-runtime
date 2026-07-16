@@ -1,5 +1,5 @@
 import type { LanguageModel, ModelMessage, ToolChoice, ToolSet } from "ai";
-import { generateText } from "ai";
+import { generateText, streamText } from "ai";
 import {
   type HostAttachmentStore,
   hydrateRuntimeAttachments,
@@ -25,6 +25,19 @@ export type ModelStepOutput = Awaited<
   ReturnType<typeof generateText>
 >["responseMessages"];
 export type ModelStepOutputPart = ModelStepOutput[number];
+
+/**
+ * How a single model step reaches the provider.
+ *
+ * - `"generate"` (default): one non-streaming `generateText` call. This is the
+ *   existing behavior and stays byte-identical.
+ * - `"stream-collect"`: a `streamText` call with the same parameters that is
+ *   fully awaited before the step returns. No partial output is exposed; the
+ *   step resolves to the same response messages the `"generate"` path
+ *   produces. Useful when a provider or gateway route only behaves well for
+ *   streaming requests.
+ */
+export type ModelStepTransport = "generate" | "stream-collect";
 
 export interface ModelContextTokenEstimateInput {
   readonly instructions?: string;
@@ -73,6 +86,7 @@ export interface ModelGenerationOptions {
   model: LanguageModel;
   toolChoice?: AgentToolChoice;
   tools?: ToolSet;
+  transport?: ModelStepTransport;
 }
 
 export interface ModelStepOptions extends ModelGenerationOptions {
@@ -91,6 +105,7 @@ export async function generateModelStep({
   toolChoice,
   toolExecution,
   tools,
+  transport,
 }: ModelStepOptions): Promise<ModelStepOutput> {
   const toolCallIds = new Map<string, string>();
   const prompt = promptForModel({ history, instructions });
@@ -104,18 +119,61 @@ export async function generateModelStep({
     messages,
   });
   assertNoUnsupportedToolApproval(tools);
-  const { responseMessages } = await generateText({
+  const request = {
     abortSignal: signal,
     instructions: prompt.instructions,
     messages,
     model,
     toolChoice,
     tools: normalizeToolCallIds(tools, toolCallIds, toolExecution),
-  });
+  };
+  const responseMessages =
+    transport === "stream-collect"
+      ? await collectStreamedResponseMessages(request)
+      : (await generateText(request)).responseMessages;
 
   return responseMessages.map((message) =>
     rewriteMessageToolCallIds(message, toolCallIds)
   );
+}
+
+interface ModelStepRequest {
+  readonly abortSignal: AbortSignal;
+  readonly instructions?: string;
+  readonly messages: ModelMessage[];
+  readonly model: LanguageModel;
+  readonly toolChoice?: AgentToolChoice;
+  readonly tools?: ToolSet;
+}
+
+async function collectStreamedResponseMessages(
+  request: ModelStepRequest
+): Promise<ModelStepOutput> {
+  // streamText reports model errors through `onError` (default: console.error)
+  // and rejects its awaited promises with NoOutputGeneratedError instead of
+  // the original failure. Capture the first original error and rethrow it so
+  // callers observe the exact same failures as the generateText transport.
+  let streamedError: unknown;
+  let hasStreamedError = false;
+  const result = streamText({
+    ...request,
+    onError: ({ error }) => {
+      if (!hasStreamedError) {
+        hasStreamedError = true;
+        streamedError = error;
+      }
+    },
+  });
+
+  try {
+    const responseMessages = await result.responseMessages;
+    if (hasStreamedError) {
+      throw streamedError;
+    }
+    return responseMessages;
+  } catch (error) {
+    throw hasStreamedError ? streamedError : error;
+  }
 }
 
 function enforceContextGate({
