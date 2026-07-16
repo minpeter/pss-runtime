@@ -69,7 +69,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "3.0.2",
-    "@earendil-works/pi-tui": "^0.80.2",
+    "@earendil-works/pi-tui": "^0.80.7",
     "@minpeter/opensearch": "0.0.4",
     "@minpeter/pss-runtime": "workspace:^",
     "@t3-oss/env-core": "^0.13.11",
