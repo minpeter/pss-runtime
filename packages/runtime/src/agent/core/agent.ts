@@ -163,13 +163,19 @@ export class Agent {
       delete: async () => {
         thread.kill();
         this.#evictThreadHandle(key);
-        await thread.delete();
-        this.#pluginRuntime?.clearThread(key);
+        try {
+          await thread.delete();
+        } finally {
+          this.#pluginRuntime?.clearThread(key);
+        }
       },
       dispose: async () => {
         this.#evictThreadHandle(key);
-        await thread.dispose();
-        this.#pluginRuntime?.clearThread(key);
+        try {
+          await thread.dispose();
+        } finally {
+          this.#pluginRuntime?.clearThread(key);
+        }
       },
       events: (options) => thread.events(options),
       interrupt: () => thread.interrupt(),

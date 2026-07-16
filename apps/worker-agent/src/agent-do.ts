@@ -100,8 +100,8 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
   readonly #sessionTranscriptClient: SessionTranscriptReader;
   #sessionIndexStore: SessionIndexStore | undefined;
   /** Layer 2: reused so send/steer share in-memory active-run state. */
-  #agent: Agent | undefined;
   #turnSession: TurnSession | undefined;
+  #turnSessionPromise: Promise<TurnSession> | undefined;
   #channel: ChannelAddress | undefined;
   #sessionScopeKey: string | undefined;
   #observability: ReturnType<typeof createTurnEventCollector> | undefined;
@@ -453,34 +453,54 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
     if (this.#turnSession) {
       return this.#turnSession;
     }
+    if (this.#turnSessionPromise) {
+      return await this.#turnSessionPromise;
+    }
 
-    const sendMessage = this.#longLivedSendMessageOptions();
-    this.#agent = await createConfiguredAgent(
-      this.#env,
-      this.#platform.host(),
-      {
-        sendMessage,
-        sessionTools: {
-          currentConversationKey: () => {
-            const channel = this.#channel;
-            if (!channel) {
-              return binding.channelKey;
-            }
-            return durableObjectChannelBinding(channel).channelKey;
+    const initializing = (async () => {
+      const sendMessage = this.#longLivedSendMessageOptions();
+      const agent = await createConfiguredAgent(
+        this.#env,
+        this.#platform.host(),
+        {
+          sendMessage,
+          sessionTools: {
+            currentConversationKey: () => {
+              const channel = this.#channel;
+              if (!channel) {
+                return binding.channelKey;
+              }
+              return durableObjectChannelBinding(channel).channelKey;
+            },
+            currentSessionScopeKey: () => this.#sessionScopeKey,
+            reader: this.#sessionIndexClient,
+            transcriptReader: this.#sessionTranscriptClient,
           },
-          currentSessionScopeKey: () => this.#sessionScopeKey,
-          reader: this.#sessionIndexClient,
-          transcriptReader: this.#sessionTranscriptClient,
-        },
-        observability: {
-          log: (entry) => {
-            this.#observability?.record(entry);
+          observability: {
+            log: (entry) => {
+              this.#observability?.record(entry);
+            },
           },
-        },
+        }
+      );
+      try {
+        const session = createTurnSession(agent.thread(binding.thread));
+        this.#turnSession = session;
+        return session;
+      } catch (error) {
+        await agent.dispose().catch(() => undefined);
+        throw error;
       }
-    );
-    this.#turnSession = createTurnSession(this.#agent.thread(binding.thread));
-    return this.#turnSession;
+    })();
+    this.#turnSessionPromise = initializing;
+    try {
+      return await initializing;
+    } catch (error) {
+      if (this.#turnSessionPromise === initializing) {
+        this.#turnSessionPromise = undefined;
+      }
+      throw error;
+    }
   }
 
   #longLivedSendMessageOptions(): WorkerAgentSendMessageToolOptions {

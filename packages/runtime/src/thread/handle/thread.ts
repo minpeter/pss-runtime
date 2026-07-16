@@ -212,7 +212,11 @@ export class AgentThread {
 
   async dispose(): Promise<void> {
     this.kill();
-    await this.#shutdownThread();
+    try {
+      await this.#drainPromise;
+    } finally {
+      await this.#shutdownThread();
+    }
   }
 
   kill(): void {

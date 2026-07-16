@@ -2,6 +2,8 @@ import type { Agent } from "../../../agent/core/agent";
 import type { AgentHost } from "../../../execution";
 import { createFileHost, type FileHostOptions } from "./file-host";
 
+type MaybePromise<T> = PromiseLike<T> | T;
+
 export interface NodeFileAgentContextFactoryOptions {
   readonly directory: string;
   readonly host: AgentHost;
@@ -10,12 +12,12 @@ export interface NodeFileAgentContextFactoryOptions {
 export interface NodeFileAgentContextOptions<CreatedAgent extends Agent> {
   readonly createAgent: (
     options: NodeFileAgentContextFactoryOptions
-  ) => CreatedAgent;
+  ) => MaybePromise<CreatedAgent>;
   readonly directory: string;
 }
 
 export interface NodeFileAgentContext<CreatedAgent extends Agent> {
-  agent(): CreatedAgent;
+  agent(): Promise<CreatedAgent>;
   readonly directory: string;
   host(): AgentHost;
 }
@@ -28,8 +30,8 @@ export function createNodeFileAgentContext<CreatedAgent extends Agent>({
   const createContextHost = () => createHost({ directory });
 
   return {
-    agent: () =>
-      createAgent({
+    agent: async () =>
+      await createAgent({
         directory,
         host: createContextHost(),
       }),

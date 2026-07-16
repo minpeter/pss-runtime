@@ -10,6 +10,7 @@ import {
 import {
   assistantMessage,
   createCallbackModel,
+  createDeferred,
   createScriptedModelOptions,
   sentUserText,
   toolCallPart,
@@ -168,6 +169,36 @@ describe("factory plugin API", () => {
     expect(creates).toBe(2);
   });
 
+  it("clears thread-scoped state when a shutdown hook fails", async () => {
+    const counts: number[] = [];
+    const plugin = definePlugin((pss) => {
+      const state = pss.provide(threadScope(() => ({ count: 0 })));
+      pss.on("input.accept", (_event, context) => {
+        const current = state.get(context.thread);
+        current.count += 1;
+        counts.push(current.count);
+        return { action: "continue" };
+      });
+      pss.on("thread.shutdown", () => {
+        throw new Error("shutdown failed");
+      });
+    });
+    const agent = await createAgent({
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
+      plugins: [plugin],
+    });
+
+    const first = agent.thread("reused");
+    await collect(await first.send("one"));
+    await expect(first.dispose()).rejects.toThrow("thread.shutdown");
+    await collect(await agent.thread("reused").send("two"));
+
+    expect(counts).toEqual([1, 1]);
+    await agent.dispose().catch(() => undefined);
+  });
+
   it("dispatches the complete lifecycle in deterministic order", async () => {
     const seen: string[] = [];
     const plugin = definePlugin((pss) => {
@@ -238,6 +269,49 @@ describe("factory plugin API", () => {
       "message.end",
       "step.end",
       "turn.end",
+      "turn.settled",
+      "thread.shutdown",
+    ]);
+  });
+
+  it("settles an active turn before agent disposal shuts down its thread", async () => {
+    const modelStarted = createDeferred();
+    const seen: string[] = [];
+    const plugin = definePlugin((pss) => {
+      for (const event of [
+        "turn.start",
+        "turn.abort",
+        "turn.settled",
+        "thread.shutdown",
+      ] as const) {
+        pss.on(event, () => {
+          seen.push(event);
+        });
+      }
+    });
+    const agent = await createAgent({
+      model: createCallbackModel(
+        ({ signal }) =>
+          new Promise((resolve) => {
+            modelStarted.resolve();
+            signal?.addEventListener(
+              "abort",
+              () => resolve([assistantMessage("IGNORED")]),
+              { once: true }
+            );
+          })
+      ),
+      plugins: [plugin],
+    });
+
+    const collecting = collect(await agent.send("hello"));
+    await modelStarted.promise;
+    await agent.dispose();
+    await collecting;
+
+    expect(seen).toEqual([
+      "turn.start",
+      "turn.abort",
       "turn.settled",
       "thread.shutdown",
     ]);

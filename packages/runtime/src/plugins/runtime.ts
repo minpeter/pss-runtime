@@ -698,7 +698,8 @@ export class PluginRuntime {
           } as PluginEventContext)
         ),
         this.#hookTimeoutMs,
-        context.signal
+        context.signal,
+        { abortOnSignal: !isTerminalNotification(eventName) }
       );
     } catch (cause) {
       await this.#throwHookFailure(registration, eventName, cause);
@@ -1006,9 +1007,11 @@ function subscriptionFor(dispose: () => void): Subscription {
 async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
-  signal: AbortSignal
+  signal: AbortSignal,
+  options: { readonly abortOnSignal?: boolean } = {}
 ): Promise<T> {
-  if (signal.aborted) {
+  const abortOnSignal = options.abortOnSignal ?? true;
+  if (abortOnSignal && signal.aborted) {
     throw signal.reason ?? new Error("Aborted");
   }
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -1018,8 +1021,10 @@ async function withTimeout<T>(
       () => reject(new Error("Plugin operation timed out.")),
       timeoutMs
     );
-    abort = () => reject(signal.reason ?? new Error("Aborted"));
-    signal.addEventListener("abort", abort, { once: true });
+    if (abortOnSignal) {
+      abort = () => reject(signal.reason ?? new Error("Aborted"));
+      signal.addEventListener("abort", abort, { once: true });
+    }
   });
   try {
     return await Promise.race([promise, timeout]);
@@ -1031,4 +1036,13 @@ async function withTimeout<T>(
       signal.removeEventListener("abort", abort);
     }
   }
+}
+
+function isTerminalNotification(event: keyof PluginEventMap): boolean {
+  return (
+    event === "turn.abort" ||
+    event === "turn.end" ||
+    event === "turn.error" ||
+    event === "turn.settled"
+  );
 }
