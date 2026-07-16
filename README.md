@@ -104,6 +104,9 @@ Submitting while idle starts a normal new turn.
 
 ## Develop
 
+Use Node.js 24 or later. The repository's supported development version is
+recorded in `.node-version`.
+
 ```sh
 pnpm install
 pnpm dev
@@ -135,11 +138,10 @@ shared conversation key.
 ## Release
 
 ```sh
-pnpm changeset
-pnpm version-packages
-pnpm build
-pnpm verify:release
-pnpm release
+pnpm tegami
 ```
 
-Releases use Changesets and npm Trusted Publishing.
+Commit the generated `.tegami/*.md` changelog with the feature or fix. On
+`main`, `pnpm tegami ci` opens or updates the Version Packages pull request.
+After that PR merges, the next release run publishes from the committed Tegami
+publish lock using npm Trusted Publishing.

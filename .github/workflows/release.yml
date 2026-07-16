@@ -4,8 +4,8 @@ on:
   push:
     branches:
       - main
-      - v0.1
-  workflow_dispatch:
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
   contents: write
@@ -14,12 +14,14 @@ permissions:
 
 jobs:
   release:
-    name: Changesets release
+    name: Version and publish
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -27,25 +29,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version-file: .node-version
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
-
-      - name: Verify npm trusted publishing prerequisites
-        run: |
-          node --version
-          npm --version
-          node <<'NODE'
-          const { execFileSync } = require("node:child_process");
-          const version = execFileSync("npm", ["--version"], {
-            encoding: "utf8",
-          }).trim();
-          const [major, minor, patch] = version.split(".").map(Number);
-          const valid = major > 11 || (major === 11 && (minor > 5 || (minor === 5 && patch >= 1)));
-          if (!valid) {
-            throw new Error(`npm CLI 11.5.1+ is required for trusted publishing; found ${version}`);
-          }
-          NODE
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -68,21 +54,10 @@ jobs:
       - name: Verify release artifacts
         run: pnpm verify:release
 
-      - name: Create release pull request or publish
-        if: github.ref_name == 'main'
-        uses: changesets/action@v1
-        with:
-          publish: pnpm release
+      - name: Version or publish packages
+        run: pnpm tegami ci
         env:
           # npm publish is authenticated by npm Trusted Publishing/OIDC.
-          # Configure each package on npm with repository minpeter/pss-next
+          # Configure each package on npm with repository minpeter/pss-runtime
           # and workflow filename release.yml; do not add NPM_TOKEN.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create v0.1 release pull request or publish
-        if: github.ref_name == 'v0.1'
-        uses: changesets/action@v1
-        with:
-          publish: pnpm release:v0.1
-        env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

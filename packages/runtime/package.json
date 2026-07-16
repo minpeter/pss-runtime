@@ -56,7 +56,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/minpeter/pss-next.git",
+    "url": "git+https://github.com/minpeter/pss-runtime.git",
     "directory": "packages/runtime"
   },
   "publishConfig": {
