@@ -1,0 +1,24 @@
+core:changelogs:
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: minor\n---\n\n## Introduce a factory-based plugin runtime\n\nReplace object plugins with an async factory registration kernel built around\n`definePlugin`, typed `on` events, and extensible `provide` capabilities. Add\nsequential async factory initialization, fail-closed hooks, subscriptions,\nthread-scoped state, and index-based host diagnostics. Use `model.context` for\nephemeral model-input guards and add an atomic `model.step.before` transform\nbefore generated messages enter history or emit mapped output events.\nDispatch the declared thread, turn, step, message, provider, compaction, and tool\nlifecycle hooks at their runtime boundaries, including model-context hooks for\nautomatic-compaction requests. Apply typed request decisions for input\nhandling, transforms, compaction cancellation, tool blocking, and manual tool\nrecovery, and reject malformed runtime decisions with `PluginHookError`.\nPlugin hook names use lowercase dotted paths, including\n`provider.request.before`, `provider.response.after`,\n`model.step.before`, `thread.compaction.before`, `thread.compaction.after`,\n`tool.call.before`, and `turn.start.before`.\n\nKeep thread-state shape validation inside the runtime and leave persisted\nhistory repair to a separate version-checked recovery job with an auditable\nbefore/after object diff.\n\nReplace the root `Agent` constructor and `Agent.create()` surface with the async\n`createAgent()` factory. `Agent` remains available as a type, while all plugin\nfactories finish initialization before `createAgent()` resolves.\n\nFlatten event-backed plugin hook payloads so handlers receive their narrowed\nevent directly, and expose `registerTool()` as the tool capability helper.\n"
+    filename: 2026-07-16-calm-states-guard.md
+    v: 0.0.0
+core:packages:
+  - id: npm:@minpeter/pss-coding-agent
+    updated: true
+  - changelogIds:
+      - 2026-07-16-calm-states-guard.md
+    id: npm:@minpeter/pss-runtime
+    updated: true
+npm:packages:
+  - distTag: next
+    id: npm:@minpeter/pss-coding-agent
+  - distTag: next
+    id: npm:@minpeter/pss-runtime
+  - id: npm:@minpeter/pss-worker-agent
+  - id: npm:@minpeter/pss-example-background-subagent
+  - id: npm:@minpeter/pss-example-basic
+  - id: npm:@minpeter/pss-example-evals
+  - id: npm:@minpeter/pss-example-local-file-agent
+  - id: npm:@minpeter/pss-example-plugin
+  - id: npm:@minpeter/pss-example-sync-subagent
+  - id: npm:@minpeter/pss-runtime-edge-image-qa
