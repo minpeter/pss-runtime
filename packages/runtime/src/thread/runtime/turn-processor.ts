@@ -76,6 +76,18 @@ export async function processQueuedInput({
             signal
           )
       : undefined;
+  const transformModelStep = pluginRuntime
+    ? (
+        messages: Parameters<typeof pluginRuntime.transformModelStep>[1],
+        signal: AbortSignal
+      ) =>
+        pluginRuntime.transformModelStep(
+          threadKey,
+          messages,
+          state.modelSnapshot(),
+          signal
+        )
+    : undefined;
 
   try {
     executionRun = await startThreadExecutionRun({
@@ -185,6 +197,7 @@ export async function processQueuedInput({
           signal: activeAbort.signal,
           toolExecution: executionRun?.toolExecution,
           transformModelContext,
+          transformModelStep,
         }),
       state,
       transformModelContext,

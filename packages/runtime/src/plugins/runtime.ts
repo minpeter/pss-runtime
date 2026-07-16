@@ -4,11 +4,10 @@ import {
   type ToolSet,
   wrapLanguageModel,
 } from "ai";
-import type { CanonicalHistoryPolicy } from "../thread/plugins/canonical-history";
+import type { ModelStepOutput } from "../llm/llm";
 import type { AgentEvent, ToolResult } from "../thread/protocol/events";
 import type { ThreadCompactionInput } from "../thread/state/thread-state";
 import type {
-  HistoryPolicyCapability,
   InputAcceptEvent,
   PluginAPI,
   PluginCapability,
@@ -33,7 +32,6 @@ interface RegisteredHandler {
 
 interface PluginRegistration {
   readonly handlers: RegisteredHandler[];
-  readonly histories: HistoryPolicyCapability[];
   readonly index: number;
   state: "active" | "disposed" | "loading";
   readonly subscriptions: Subscription[];
@@ -128,14 +126,6 @@ export class PluginRuntime {
       throw cause;
     }
     return runtime;
-  }
-
-  get canonicalHistoryPolicies(): readonly CanonicalHistoryPolicy[] {
-    return this.#registrations.flatMap((registration) =>
-      registration.state === "active"
-        ? registration.histories.map((capability) => capability.policy)
-        : []
-    );
   }
 
   get tools(): ToolSet {
@@ -462,6 +452,51 @@ export class PluginRuntime {
     return current;
   }
 
+  async transformModelStep(
+    threadKey: string,
+    messages: readonly ModelStepOutput[number][],
+    history: readonly ModelMessage[],
+    signal: AbortSignal = this.#abort.signal
+  ): Promise<ModelStepOutput> {
+    let current: ModelStepOutput = structuredClone([...messages]);
+    for (const { registered, registration } of this.#handlers(
+      "model.step.before"
+    )) {
+      const result = await this.#invoke(
+        registration,
+        "model.step.before",
+        registered,
+        { messages: structuredClone(current) },
+        { history, signal, threadKey }
+      );
+      const decision = result as
+        | PluginRequestResultMap["model.step.before"]
+        | undefined;
+      await this.#validateRequestResult(
+        registration,
+        "model.step.before",
+        decision,
+        ["continue", "transform"]
+      );
+      if (decision?.action === "transform") {
+        try {
+          assertModelStep(
+            decision.value,
+            "Plugin model.step.before transform must return a messages array."
+          );
+        } catch (cause) {
+          await this.#throwHookFailure(
+            registration,
+            "model.step.before",
+            cause
+          );
+        }
+        current = structuredClone([...decision.value.messages]);
+      }
+    }
+    return current;
+  }
+
   wrapModel(model: LanguageModel, threadKey: string): LanguageModel {
     return wrapLanguageModel({
       middleware: {
@@ -507,7 +542,6 @@ export class PluginRuntime {
   ): Promise<void> {
     const registration: PluginRegistration = {
       handlers: [],
-      histories: [],
       index,
       state: "loading",
       subscriptions: [],
@@ -561,9 +595,7 @@ export class PluginRuntime {
         if (capability.kind === "thread-scope") {
           return this.#threadScope(capability);
         }
-        if (capability.kind === "history-policy") {
-          registration.histories.push(capability);
-        } else if (capability.kind === "tool") {
+        if (capability.kind === "tool") {
           if (registration.tools.has(capability.name)) {
             throw new TypeError(
               `Duplicate tool name ${JSON.stringify(capability.name)}.`
@@ -574,13 +606,6 @@ export class PluginRuntime {
           throw new TypeError("Unknown plugin capability.");
         }
         const subscription = subscriptionFor(() => {
-          if (capability.kind === "history-policy") {
-            const index = registration.histories.indexOf(capability);
-            if (index >= 0) {
-              registration.histories.splice(index, 1);
-            }
-            return;
-          }
           registration.tools.delete(capability.name);
           if (this.#tools[capability.name] === capability.tool) {
             delete this.#tools[capability.name];
@@ -864,18 +889,58 @@ function assertToolResultEvent(value: unknown): asserts value is ToolResult {
 function assertModelContextEvent(
   value: unknown
 ): asserts value is { readonly messages: readonly ModelMessage[] } {
+  assertModelMessages(
+    value,
+    "Plugin model.context transform must return a messages array."
+  );
+}
+
+function assertModelStep(
+  value: unknown,
+  message: string
+): asserts value is { readonly messages: ModelStepOutput } {
+  if (!(value && typeof value === "object" && "messages" in value)) {
+    throw new TypeError(message);
+  }
   if (
     !(
-      value &&
-      typeof value === "object" &&
-      "messages" in value &&
-      Array.isArray(value.messages)
+      Array.isArray(value.messages) &&
+      value.messages.every(
+        (item) =>
+          isModelMessage(item) &&
+          (item.role === "assistant" || item.role === "tool")
+      )
     )
   ) {
-    throw new TypeError(
-      "Plugin model.context transform must return a messages array."
-    );
+    throw new TypeError(message);
   }
+}
+
+function assertModelMessages(
+  value: unknown,
+  message: string
+): asserts value is { readonly messages: readonly ModelMessage[] } {
+  if (!(value && typeof value === "object" && "messages" in value)) {
+    throw new TypeError(message);
+  }
+  if (
+    !(Array.isArray(value.messages) && value.messages.every(isModelMessage))
+  ) {
+    throw new TypeError(message);
+  }
+}
+
+function isModelMessage(value: unknown): value is ModelMessage {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "role" in value &&
+      (value.role === "system" ||
+        value.role === "user" ||
+        value.role === "assistant" ||
+        value.role === "tool") &&
+      "content" in value
+  );
 }
 
 function assertProviderBeforeRequestEvent(

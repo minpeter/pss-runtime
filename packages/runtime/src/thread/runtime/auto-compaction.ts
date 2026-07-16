@@ -150,7 +150,7 @@ async function compactThreadOnce({
     }
 
     const summary = await summarizeCompactionRange({
-      history: summaryHistoryForRange({ compactions, history, range, state }),
+      history: summaryHistoryForRange({ compactions, history, range }),
       model,
       transformModelContext,
     });
@@ -256,33 +256,24 @@ function summaryHistoryForRange({
   compactions,
   history,
   range,
-  state,
 }: {
   readonly compactions: readonly ThreadCompactionRecord[];
   readonly history: readonly ModelMessage[];
   readonly range: AutoCompactionRange;
-  readonly state: ThreadState;
 }): ModelMessage[] {
   const prefixHistory = history.slice(range.startSeq, range.endSeqExclusive);
   if (range.startSeq !== 0) {
-    return state.projectModelContext(
-      { compactions: [], history: prefixHistory },
-      prefixHistory
-    );
+    return structuredClone(prefixHistory);
   }
 
   const prefixCompactions = compactions.filter(
     (record) => record.endSeqExclusive <= range.endSeqExclusive
   );
-  const modelContext = new ModelMessageHistory(
+  return new ModelMessageHistory(
     prefixHistory,
     undefined,
     prefixCompactions
   ).modelContextSnapshot();
-  return state.projectModelContext(
-    { compactions: prefixCompactions, history: prefixHistory },
-    modelContext
-  );
 }
 
 function sameRange(

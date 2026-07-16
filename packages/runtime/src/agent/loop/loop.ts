@@ -10,7 +10,6 @@ import { modelMessageToAgentEvents } from "../../thread/protocol/mapping";
 
 interface ModelHistory {
   appendModelMessage(message: ModelMessage): void;
-  beforeAppendModelStep(messages: readonly ModelMessage[]): void;
   modelContextSnapshot(): ModelMessage[];
   modelSnapshot(): ModelMessage[];
 }
@@ -26,6 +25,10 @@ interface RunAgentLoopOptions {
     messages: readonly ModelMessage[],
     signal: AbortSignal
   ) => Promise<readonly ModelMessage[]>;
+  transformModelStep?: (
+    messages: ModelStepOutput,
+    signal: AbortSignal
+  ) => Promise<ModelStepOutput>;
 }
 
 type AgentLoopResult = "completed" | "aborted";
@@ -60,6 +63,7 @@ export async function runAgentLoop({
   signal = new AbortController().signal,
   toolExecution,
   transformModelContext,
+  transformModelStep,
 }: RunAgentLoopOptions): Promise<AgentLoopResult> {
   while (true) {
     if (signal.aborted) {
@@ -97,6 +101,7 @@ export async function runAgentLoop({
       history,
       output,
       signal,
+      transformModelStep,
     });
 
     if (result === "aborted") {
@@ -214,17 +219,23 @@ async function appendCapturedStepOutput({
   history,
   output,
   signal,
-}: Pick<RunAgentLoopOptions, "emit"> & { history: ModelHistory } & {
+  transformModelStep,
+}: Pick<RunAgentLoopOptions, "emit" | "transformModelStep"> & {
+  history: ModelHistory;
+} & {
   capturedOutput: ObserverEventCaptureResult<ModelStepOutput | "aborted">;
   output: ModelStepOutput;
   signal: AbortSignal;
 }): Promise<StepOutputResult> {
   try {
+    const transformedOutput = transformModelStep
+      ? await transformModelStep(output, signal)
+      : output;
     return await appendStepOutput({
       emit,
       history,
       observerEvents: capturedOutput.events,
-      output,
+      output: transformedOutput,
       signal,
     });
   } finally {
@@ -246,8 +257,6 @@ async function appendStepOutput({
   if (signal.aborted) {
     return "aborted";
   }
-
-  history.beforeAppendModelStep(output);
 
   let shouldContinue = false;
   const pendingObserverEvents = observerEvents;

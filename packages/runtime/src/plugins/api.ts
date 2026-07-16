@@ -1,5 +1,5 @@
 import type { LanguageModelMiddleware, ModelMessage, Tool } from "ai";
-import type { CanonicalHistoryPolicy } from "../thread/plugins/canonical-history";
+import type { ModelStepOutput } from "../llm/llm";
 import type { AgentEvent } from "../thread/protocol/events";
 import type { ThreadCompactionInput } from "../thread/state/thread-state";
 
@@ -54,6 +54,10 @@ export interface ModelContextEvent {
   readonly messages: readonly ModelMessage[];
 }
 
+export interface ModelStepBeforeEvent {
+  readonly messages: readonly ModelStepOutput[number][];
+}
+
 export interface ProviderBeforeRequestEvent {
   readonly params: ProviderCallOptions;
 }
@@ -68,6 +72,7 @@ export interface PluginEventMap {
   readonly "message.start": PluginMessageEvent;
   readonly "message.update": PluginMessageEvent;
   readonly "model.context": ModelContextEvent;
+  readonly "model.step.before": ModelStepBeforeEvent;
   readonly "provider.request.before": ProviderBeforeRequestEvent;
   readonly "provider.response.after": { readonly response: unknown };
   readonly "step.end": AgentEventOf<"step-end">;
@@ -106,6 +111,9 @@ export interface PluginRequestResultMap {
   readonly "model.context":
     | PluginContinue
     | PluginEventTransform<ModelContextEvent>;
+  readonly "model.step.before":
+    | PluginContinue
+    | PluginEventTransform<ModelStepBeforeEvent>;
   readonly "provider.request.before":
     | PluginContinue
     | PluginEventTransform<ProviderBeforeRequestEvent>;
@@ -147,22 +155,13 @@ export interface ToolCapability {
   readonly [capabilityDescriptor]: "tool";
 }
 
-export interface HistoryPolicyCapability {
-  readonly kind: "history-policy";
-  readonly policy: CanonicalHistoryPolicy;
-  readonly [capabilityDescriptor]: "history-policy";
-}
-
 export interface ThreadScopeCapability<T> {
   readonly create: () => T;
   readonly kind: "thread-scope";
   readonly [capabilityDescriptor]: "thread-scope";
 }
 
-export type PluginCapability =
-  | HistoryPolicyCapability
-  | ThreadScopeCapability<unknown>
-  | ToolCapability;
+export type PluginCapability = ThreadScopeCapability<unknown> | ToolCapability;
 
 export interface ThreadStateHandle<T> {
   get(thread: PluginThread): T;
@@ -177,14 +176,6 @@ export const registerTool = (input: {
   ...input,
 });
 
-export const historyPolicy = (
-  policy: CanonicalHistoryPolicy
-): HistoryPolicyCapability => ({
-  [capabilityDescriptor]: "history-policy",
-  kind: "history-policy",
-  policy,
-});
-
 export const threadScope = <T>(create: () => T): ThreadScopeCapability<T> => ({
   [capabilityDescriptor]: "thread-scope",
   create,
@@ -196,7 +187,7 @@ export interface PluginAPI {
     event: E,
     handler: PluginHandler<E>
   ): Subscription;
-  provide(capability: HistoryPolicyCapability | ToolCapability): Subscription;
+  provide(capability: ToolCapability): Subscription;
   provide<T>(capability: ThreadScopeCapability<T>): ThreadStateHandle<T>;
 }
 

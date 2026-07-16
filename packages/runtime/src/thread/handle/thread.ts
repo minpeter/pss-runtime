@@ -80,13 +80,7 @@ export class AgentThread {
       : model;
     this.#execution = execution;
     this.#threadKey = persistence.key;
-    const legacyHistoryPolicies = plugins.flatMap((plugin) =>
-      plugin.canonicalHistory ? [plugin.canonicalHistory] : []
-    );
-    this.#state = new ThreadState(persistence, () => [
-      ...legacyHistoryPolicies,
-      ...(execution.pluginRuntime?.canonicalHistoryPolicies ?? []),
-    ]);
+    this.#state = new ThreadState(persistence);
     this.#events = new ThreadEventDispatcher({
       attachmentStore: model.attachmentStore,
       history: () => this.#state.modelSnapshot(),

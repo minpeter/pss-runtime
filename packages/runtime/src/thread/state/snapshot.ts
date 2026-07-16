@@ -33,11 +33,18 @@ export class ThreadCompactionValidationError extends Error {
   }
 }
 
+export class ThreadStateValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ThreadStateValidationError";
+  }
+}
+
 export function encodeThreadSnapshot(
   history: ModelMessage[],
   compactions: readonly ThreadCompactionRecord[] = []
 ): AgentThreadSnapshot {
-  const clonedHistory = structuredClone(history);
+  const clonedHistory = history.map(validateModelMessage);
   if (compactions.length === 0) {
     return { schemaVersion: 1, history: clonedHistory };
   }
@@ -67,11 +74,14 @@ export function decodeStoredThreadState(
 
   const snapshot = stored.state;
   if (isThreadSnapshotV1(snapshot)) {
-    return { compactions: [], history: structuredClone(snapshot.history) };
+    return {
+      compactions: [],
+      history: snapshot.history.map(validateModelMessage),
+    };
   }
 
   if (isThreadSnapshotV2(snapshot)) {
-    const history = structuredClone(snapshot.history);
+    const history = snapshot.history.map(validateModelMessage);
     const compactions = snapshot.compactions.map((record) =>
       validateThreadCompactionRecord(record, history.length)
     );
@@ -121,6 +131,15 @@ export function validateThreadCompactionRecord(
   }
 
   return structuredClone(record);
+}
+
+export function validateModelMessage(message: unknown): ModelMessage {
+  if (!isModelMessage(message)) {
+    throw new ThreadStateValidationError(
+      "Thread history must contain only model messages"
+    );
+  }
+  return structuredClone(message);
 }
 
 function isThreadSnapshotV1(value: unknown): value is AgentThreadSnapshotV1 {

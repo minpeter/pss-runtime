@@ -1,6 +1,7 @@
 import { jsonSchema, type Tool, tool } from "ai";
 import { describe, expect, it, vi } from "vitest";
 import { createAgent } from "../agent/core/agent";
+import type { ModelStepOutput } from "../llm/llm";
 import { createInMemoryHost } from "../platform/memory";
 import {
   createMockLanguageModelV4,
@@ -15,7 +16,7 @@ import {
   toolResultFor,
 } from "../testing/test-fixtures";
 import { collect } from "../thread/handle/test-support";
-import { definePlugin, historyPolicy, registerTool, threadScope } from "./api";
+import { definePlugin, registerTool, threadScope } from "./api";
 import {
   PluginHookError,
   PluginInitializationError,
@@ -207,6 +208,10 @@ describe("factory plugin API", () => {
         seen.push("model.context");
         return { action: "continue" };
       });
+      pss.on("model.step.before", () => {
+        seen.push("model.step.before");
+        return { action: "continue" };
+      });
     });
     const agent = await createAgent({
       model: createCallbackModel(() =>
@@ -227,6 +232,7 @@ describe("factory plugin API", () => {
       "model.context",
       "provider.request.before",
       "provider.response.after",
+      "model.step.before",
       "message.start",
       "message.update",
       "message.end",
@@ -454,6 +460,47 @@ describe("factory plugin API", () => {
     ]);
   });
 
+  it("uses model.context as an ephemeral read guard for stored history", async () => {
+    const host = createInMemoryHost();
+    await host.store.threads.commit(
+      "read-guard",
+      {
+        state: {
+          history: [assistantMessage("raw-protocol")],
+          schemaVersion: 1,
+        },
+      },
+      { expectedVersion: null }
+    );
+    const seen: string[] = [];
+    const plugin = definePlugin((pss) => {
+      pss.on("model.context", ({ messages }) => ({
+        action: "transform",
+        value: {
+          messages: messages.filter(
+            (message) => !JSON.stringify(message).includes("raw-protocol")
+          ),
+        },
+      }));
+    });
+    const agent = await createAgent({
+      host,
+      model: createCallbackModel(({ history }) => {
+        seen.push(JSON.stringify(history));
+        return Promise.resolve([assistantMessage("DONE")]);
+      }),
+      plugins: [plugin],
+    });
+
+    await collect(await agent.thread("read-guard").send("hello"));
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).not.toContain("raw-protocol");
+    expect(
+      JSON.stringify(await host.store.threads.load("read-guard"))
+    ).toContain("raw-protocol");
+  });
+
   it("applies model context hooks to automatic-compaction model calls", async () => {
     let contextCalls = 0;
     let modelCalls = 0;
@@ -482,48 +529,80 @@ describe("factory plugin API", () => {
     expect(contextCalls).toBe(3);
   });
 
-  it("registers invariant history policies", async () => {
-    const plugin = definePlugin((pss) => {
-      pss.provide(historyPolicy({}));
+  it("chains model.step.before transforms before append and event emission", async () => {
+    const host = createInMemoryHost();
+    const seen: string[] = [];
+    const first = definePlugin((pss) => {
+      pss.on("model.step.before", ({ messages }) => ({
+        action: "transform",
+        value: { messages: replaceAssistantText(messages, "intermediate") },
+      }));
     });
-    const runtime = await PluginRuntime.create([plugin], {
-      diagnostics: { report: () => undefined },
-      factoryTimeoutMs: 1000,
-      hookTimeoutMs: 1000,
-    });
-
-    expect(runtime.canonicalHistoryPolicies).toHaveLength(1);
-    await runtime.dispose();
-  });
-
-  it("removes a history policy from already-created threads on unsubscribe", async () => {
-    let commits = 0;
-    let unsubscribe: (() => void) | undefined;
-    const plugin = definePlugin((pss) => {
-      const subscription = pss.provide(
-        historyPolicy({
-          beforeCommit: () => {
-            commits += 1;
-          },
-        })
-      );
-      unsubscribe = () => subscription.unsubscribe();
+    const second = definePlugin((pss) => {
+      pss.on("model.step.before", ({ messages }) => {
+        seen.push(JSON.stringify(messages));
+        return {
+          action: "transform",
+          value: { messages: replaceAssistantText(messages, "sanitized") },
+        };
+      });
     });
     const agent = await createAgent({
+      host,
       model: createCallbackModel(() =>
-        Promise.resolve([assistantMessage("DONE")])
+        Promise.resolve([assistantMessage("raw-protocol")])
+      ),
+      plugins: [first, second],
+    });
+
+    const events = await collect(await agent.send("hello"));
+    const eventJson = JSON.stringify(events);
+    const storedJson = JSON.stringify(await host.store.threads.load("default"));
+
+    expect(seen).toEqual([expect.stringContaining("intermediate")]);
+    expect(eventJson).toContain("sanitized");
+    expect(eventJson).not.toContain("raw-protocol");
+    expect(eventJson).not.toContain("intermediate");
+    expect(storedJson).toContain("sanitized");
+    expect(storedJson).not.toContain("raw-protocol");
+    expect(storedJson).not.toContain("intermediate");
+  });
+
+  it("fails model.step.before closed before append or output events", async () => {
+    const host = createInMemoryHost();
+    const plugin = definePlugin((pss) => {
+      pss.on("model.step.before", ({ messages }) => {
+        if (JSON.stringify(messages).includes("raw-protocol")) {
+          throw new Error("model step rejected");
+        }
+        return { action: "continue" };
+      });
+    });
+    const agent = await createAgent({
+      host,
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("raw-protocol")])
       ),
       plugins: [plugin],
     });
-    const thread = agent.thread("policy-unsubscribe");
-    await collect(await thread.send("first"));
-    const commitsBeforeUnsubscribe = commits;
 
-    unsubscribe?.();
-    await collect(await thread.send("second"));
+    const events = await collect(await agent.send("hello"));
 
-    expect(commitsBeforeUnsubscribe).toBeGreaterThan(0);
-    expect(commits).toBe(commitsBeforeUnsubscribe);
+    expect(events).toContainEqual(
+      expect.objectContaining({ type: "turn-error" })
+    );
+    expect(
+      events.some(
+        (event) =>
+          event.type === "assistant-output" ||
+          event.type === "assistant-reasoning" ||
+          event.type === "tool-call" ||
+          event.type === "tool-result"
+      )
+    ).toBe(false);
+    expect(
+      JSON.stringify(await host.store.threads.load("default"))
+    ).not.toContain("raw-protocol");
   });
 
   it("fails closed with the factory index and cleans up loaded plugins", async () => {
@@ -679,3 +758,12 @@ describe("factory plugin API", () => {
     await runtime.dispose();
   });
 });
+
+function replaceAssistantText(
+  messages: readonly ModelStepOutput[number][],
+  text: string
+): ModelStepOutput {
+  return messages.map((message) =>
+    message.role === "assistant" ? { ...message, content: text } : message
+  );
+}

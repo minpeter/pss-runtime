@@ -20,8 +20,6 @@ export type {
 export type { AgentToolChoice } from "./llm/llm";
 export {
   definePlugin,
-  type HistoryPolicyCapability,
-  historyPolicy,
   type PluginAPI,
   type PluginDefinition,
   type PluginEventContext,
@@ -94,16 +92,6 @@ export {
   stripInputMeta,
   userInputFromEvent,
 } from "./thread/input/input-meta";
-export type {
-  CanonicalHistoryAppendContext,
-  CanonicalHistoryCommitContext,
-  CanonicalHistoryCompactionContext,
-  CanonicalHistoryLoadedStateContext,
-  CanonicalHistoryModelContext,
-  CanonicalHistoryPolicy,
-  CanonicalHistoryState,
-  CanonicalHistoryStepContext,
-} from "./thread/plugins/canonical-history";
 export type {
   AgentEvent,
   AgentEventListener,

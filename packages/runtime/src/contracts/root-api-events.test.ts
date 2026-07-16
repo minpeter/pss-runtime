@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type {
   AgentEvent,
-  CanonicalHistoryPolicy,
   ControlAgentEvent,
   LifecycleAgentEvent,
   PluginRequestResultMap,
@@ -82,18 +81,14 @@ describe("runtime root event API exports", () => {
     expect(recoveryResult.action).toBe("needs-recovery");
   });
 
-  it("types canonical-history plugin capabilities from the package root", () => {
-    const policy = {
-      beforeAppendModelStep: ({ messages }) => {
-        expect(messages).toHaveLength(1);
+  it("types atomic model step transforms from the package root", () => {
+    const result = {
+      action: "transform",
+      value: {
+        messages: [{ content: "sanitized", role: "assistant" }],
       },
-      beforeAppendModelMessage: ({ message, threadKey }) => {
-        expect(message.role).toBe("assistant");
-        expect(threadKey).toBe("thread-1");
-      },
-      projectModelContext: ({ messages }) => messages,
-    } satisfies CanonicalHistoryPolicy;
+    } satisfies PluginRequestResultMap["model.step.before"];
 
-    expect(policy.projectModelContext).toBeDefined();
+    expect(result.value.messages).toHaveLength(1);
   });
 });

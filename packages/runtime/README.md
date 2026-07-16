@@ -92,7 +92,6 @@ typed lifecycle handlers and `provide()` for capabilities:
 import {
   createAgent,
   definePlugin,
-  historyPolicy,
   threadScope,
 } from "@minpeter/pss-runtime";
 
@@ -104,14 +103,7 @@ const protocolGuard = definePlugin(async (pss, { signal }) => {
     return { action: "continue" };
   });
 
-  pss.provide(
-    historyPolicy({
-      beforeCommit: ({ state }) => {
-        // Throw to fail closed when canonical history is invalid.
-        void state;
-      },
-    })
-  );
+  pss.on("model.context", () => ({ action: "continue" }));
 
   signal.throwIfAborted();
 });
@@ -249,74 +241,81 @@ const agent = await createAgent({
 });
 ```
 
-### Canonical history policies
+### Model context and step interception
 
-Provide a `historyPolicy(...)` capability when a plugin must enforce an invariant
-before model messages or compactions can enter thread state. Unlike `on`, these
-hooks run inside the state transition rather than after an event is emitted:
+Use `model.context` as an ephemeral read guard immediately before each model
+call. Its result changes only the provider-visible messages; it does not rewrite
+stored thread history. The same hook runs for automatic-compaction model calls.
+
+Use `model.step.before` to validate or transform a complete model step after
+generation and before any message from that step is appended or any mapped
+output event is emitted. Multiple transforms chain in plugin registration
+order, and failures stop the turn without partially appending the step.
 
 ```ts
-import { definePlugin, historyPolicy } from "@minpeter/pss-runtime";
+import { definePlugin } from "@minpeter/pss-runtime";
 
-const canonicalHistoryGuard = definePlugin((pss) => {
-  pss.provide(
-    historyPolicy({
-      beforeAppendModelMessage: ({ message }) => {
-        if (containsRejectedContent(message)) {
-          throw new Error("Rejected model output");
-        }
-      },
-      beforeAppendModelStep: ({ messages }) => {
-        if (!isValidModelStep(messages)) {
-          throw new Error("Rejected model step");
-        }
-      },
-      beforeRecordCompaction: ({ record }) => {
-        if (containsRejectedContent(record.summary)) {
-          throw new Error("Rejected compaction summary");
-        }
-      },
-    })
+const protocolGuard = definePlugin((pss) => {
+  pss.on("model.context", ({ messages }) => ({
+    action: "transform",
+    value: { messages: sanitizeModelContext(messages) },
+  }));
+
+  pss.on("model.step.before", ({ messages }) => ({
+    action: "transform",
+    value: { messages: sanitizeModelStep(messages) },
+  }));
+
+  pss.on("thread.compaction.before", ({ input }) =>
+    isUnsafeCompaction(input) ? { action: "cancel" } : undefined
   );
 });
 ```
 
-Canonical history policies support six boundaries:
+Thread-state shape validation remains an internal runtime invariant at decode,
+in-memory append, and encode boundaries. Plugins do not receive a loaded-state
+or pre-commit mutation capability.
 
-- `projectLoadedState` runs after stored state is decoded and before it becomes
-  the thread's in-memory state.
-- `beforeAppendModelMessage` runs before an assistant or tool model message is
-  appended.
-- `beforeAppendModelStep` validates the complete model step before any message
-  is appended or any corresponding event is emitted.
-- `beforeRecordCompaction` runs before a compaction enters thread state.
-- `beforeCommit` validates the exact snapshot immediately before persistence.
-- `projectModelContext` runs before any thread history is passed to a model,
-  including auto-compaction summarization.
+Persisted-history repair belongs in a separate recovery job. The job should
+load a versioned snapshot, produce an auditable object diff before writing, and
+commit only with the loaded version as `expectedVersion`:
 
-Hooks are synchronous so state transitions remain atomic. Throwing fails the
-operation closed. Policies run in plugin registration order and receive cloned
-inputs, so mutating a hook argument does not mutate thread state. A projection
-returned by `projectLoadedState` becomes the in-memory canonical state and may
-be persisted by the next successful commit; `projectModelContext` is ephemeral
-and changes only the model input.
+```ts
+interface StoredThreadRecoveryPlan {
+  readonly threadKey: string;
+  readonly expectedVersion: string;
+  readonly before: {
+    readonly history: readonly unknown[];
+    readonly compactions: readonly unknown[];
+  };
+  readonly after: {
+    readonly history: readonly unknown[];
+    readonly compactions: readonly unknown[];
+  };
+  readonly quarantined: readonly {
+    readonly reason: string;
+    readonly seq: number;
+  }[];
+}
+```
 
-Keep provider-specific parsing and model retry outside this capability. A
-canonical history policy should enforce a generic state invariant after a model
-adapter has produced structured messages.
+On a version conflict, the recovery job must reload and recompute the diff; it
+must not overwrite a thread that changed after inspection.
 
 ### Observe vs intercept
 
 Notification events are observe-only. Request events such as `input.accept`,
-`model.context`, `provider.request.before`, `thread.compaction.before`,
-`tool.call.before`, `tool.result`, and `turn.start.before` may return a typed
-decision. Invalid runtime results fail closed with `PluginHookError`.
+`model.context`, `model.step.before`, `provider.request.before`,
+`thread.compaction.before`, `tool.call.before`, `tool.result`, and
+`turn.start.before` may return a typed decision. Invalid runtime results fail
+closed with `PluginHookError`.
 
 Request hooks cover these boundaries:
 
 - `input.accept` for `user-input` and `runtime-input`
 - `turn.start.before` before `turn.start`
 - `model.context` before each model call
+- `model.step.before` after generation and before atomic step append
 - `provider.request.before` immediately before the provider request
 - `thread.compaction.before` before manual, background, or overflow compaction
 - `tool.call.before` is plugin-only; it is synthesized after the `before-tool`
@@ -327,7 +326,8 @@ Return one of:
 
 - `{ action: "continue" }` — continue with the current value (default when omitted)
 - `{ action: "transform", value: event }` — replace the value for transformable
-  input, context, provider, compaction, tool-result, and turn-start requests
+  input, context, model-step, provider, compaction, tool-result, and turn-start
+  requests
 - `{ action: "handled" }` — skip emit; for `thread.send`, close the run without
   starting a turn (`user-input` and `runtime-input` only)
 - `{ action: "cancel" }` — cancel compaction without changing thread state

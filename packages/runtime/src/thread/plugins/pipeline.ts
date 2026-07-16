@@ -6,7 +6,6 @@ import type {
   UserMessage,
   UserText,
 } from "../protocol/events";
-import type { CanonicalHistoryPolicy } from "./canonical-history";
 
 export type {
   InputEventMeta,
@@ -34,7 +33,6 @@ export interface AgentEventContext {
 }
 
 export interface AgentPlugin {
-  readonly canonicalHistory?: CanonicalHistoryPolicy;
   readonly name?: string;
   readonly on?: (context: AgentEventContext) => MaybePromise<AgentPluginResult>;
 }
