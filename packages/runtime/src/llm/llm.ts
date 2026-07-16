@@ -4,6 +4,10 @@ import {
   type HostAttachmentStore,
   hydrateRuntimeAttachments,
 } from "../thread/input/attachments";
+import {
+  compactionContextForModel,
+  type ThreadContextMessage,
+} from "../thread/state/context";
 import { assertNoUnsupportedToolApproval } from "./tool-approval";
 import type { RuntimeToolExecutionContext } from "./tool-execution";
 import {
@@ -77,7 +81,7 @@ export interface ModelGenerationOptions {
 }
 
 export interface ModelStepOptions extends ModelGenerationOptions {
-  history: readonly ModelMessage[];
+  history: readonly ThreadContextMessage[];
   signal: AbortSignal;
   toolExecution?: RuntimeToolExecutionContext;
 }
@@ -188,7 +192,7 @@ function promptForModel({
   history,
   instructions,
 }: {
-  readonly history: readonly ModelMessage[];
+  readonly history: readonly ThreadContextMessage[];
   readonly instructions?: string;
 }): {
   readonly instructions?: string;
@@ -197,6 +201,10 @@ function promptForModel({
   const messages: ModelMessage[] = [];
   const systemContents: string[] = instructions ? [instructions] : [];
   for (const message of history) {
+    if (message.role === "compaction") {
+      messages.push(compactionContextForModel(message));
+      continue;
+    }
     if (message.role === "system") {
       systemContents.push(systemContentText(message.content));
       continue;

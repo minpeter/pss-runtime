@@ -57,7 +57,7 @@ describe("Agent thread automatic compaction overflow recovery", () => {
     const agent = agentWithAutoCompaction({
       autoCompaction: {
         contextGate: {
-          estimateTokens: ({ messages }) => (messages.length > 3 ? 100 : 1),
+          estimateTokens: ({ messages }) => (messages.length > 4 ? 100 : 1),
           maxInputTokens: 10,
           onOverflow: "compact",
         },
@@ -100,7 +100,11 @@ describe("Agent thread automatic compaction overflow recovery", () => {
       userTextToModelMessage(userText("next")),
     ]);
     expect(providerHistories.at(-1)).toEqual([
-      { content: "old exchange summarized", role: "system" },
+      expect.objectContaining({
+        content:
+          "The conversation history before this point was compacted into the following summary:\n<summary>\nold exchange summarized\n</summary>",
+        role: "user",
+      }),
       userTextToModelMessage(userText("tail")),
       assistantMessage("tail done"),
       userTextToModelMessage(userText("next")),
@@ -144,7 +148,11 @@ describe("Agent thread automatic compaction overflow recovery", () => {
       type: "assistant-output",
     });
     expect(retryHistory[0]).toEqual([
-      { content: "old exchange summarized", role: "system" },
+      expect.objectContaining({
+        content:
+          "The conversation history before this point was compacted into the following summary:\n<summary>\nold exchange summarized\n</summary>",
+        role: "user",
+      }),
       userTextToModelMessage(userText("tail")),
       assistantMessage("tail done"),
       userTextToModelMessage(userText("next")),

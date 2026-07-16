@@ -1,6 +1,7 @@
 import type { ModelMessage } from "ai";
 import type { UserInput } from "../input/input";
 import { userInputToModelMessage } from "../protocol/mapping";
+import { compactionContextMessage, type ThreadContextMessage } from "./context";
 import {
   type ThreadCompactionRecord,
   validateModelMessage,
@@ -33,7 +34,7 @@ export class ModelMessageHistory {
 
   modelContextSnapshot(
     options: { readonly maxMessages?: number } = {}
-  ): ModelMessage[] {
+  ): ThreadContextMessage[] {
     const compacted = applyCompactions(
       this.#modelHistory,
       this.#compactions,
@@ -102,7 +103,7 @@ function applyCompactions(
   history: readonly ModelMessage[],
   compactions: readonly ThreadCompactionRecord[],
   transientMessages: readonly TransientModelMessage[] = []
-): ModelMessage[] {
+): ThreadContextMessage[] {
   const kept = nonOverlappedCompactions(history.length, compactions);
   if (kept.length === 0) {
     return applyTransientMessages(
@@ -117,12 +118,12 @@ function applyCompactions(
     byStart.set(record.startSeq, record);
   }
 
-  const output: ModelMessage[] = [];
+  const output: ThreadContextMessage[] = [];
   for (let index = 0; index < history.length; ) {
     appendTransientMessages(output, transientMessages, index);
     const record = byStart.get(index);
     if (record) {
-      output.push(structuredClone(record.summary));
+      output.push(compactionContextMessage(record));
       index = record.endSeqExclusive;
       continue;
     }
@@ -164,7 +165,7 @@ function applyTransientMessages(
 }
 
 function appendTransientMessages(
-  output: ModelMessage[],
+  output: ThreadContextMessage[],
   transientMessages: readonly TransientModelMessage[],
   index: number
 ): void {

@@ -4,6 +4,7 @@ import {
   type ModelContextGateOptions,
   type ModelGenerationOptions,
 } from "../../llm/llm";
+import type { ThreadContextMessage } from "../state/context";
 import { ModelMessageHistory } from "../state/history";
 import type { ThreadCompactionRecord } from "../state/snapshot";
 import type { ThreadCompactionInput, ThreadState } from "../state/thread-state";
@@ -17,9 +18,9 @@ export interface ThreadAutoCompactionOptions {
 }
 
 export type ThreadModelContextTransform = (
-  messages: readonly ModelMessage[],
+  messages: readonly ThreadContextMessage[],
   signal: AbortSignal
-) => Promise<readonly ModelMessage[]>;
+) => Promise<readonly ThreadContextMessage[]>;
 
 interface AutoCompactionRange {
   readonly endSeqExclusive: number;
@@ -221,12 +222,12 @@ async function summarizeCompactionRange({
   model,
   transformModelContext,
 }: {
-  readonly history: readonly ModelMessage[];
+  readonly history: readonly ThreadContextMessage[];
   readonly model: ModelGenerationOptions;
   readonly transformModelContext?: ThreadModelContextTransform;
 }): Promise<string> {
   const signal = new AbortController().signal;
-  const summaryHistory: readonly ModelMessage[] = [
+  const summaryHistory: readonly ThreadContextMessage[] = [
     {
       content:
         "Summarize the following prior thread messages for future turns. Preserve durable facts, user preferences, decisions, unresolved tasks, and tool results. Be concise.",
@@ -260,7 +261,7 @@ function summaryHistoryForRange({
   readonly compactions: readonly ThreadCompactionRecord[];
   readonly history: readonly ModelMessage[];
   readonly range: AutoCompactionRange;
-}): ModelMessage[] {
+}): ThreadContextMessage[] {
   const prefixHistory = history.slice(range.startSeq, range.endSeqExclusive);
   if (range.startSeq !== 0) {
     return structuredClone(prefixHistory);
