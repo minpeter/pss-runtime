@@ -5,7 +5,7 @@ import {
   createMockLanguageModelV4,
   mockLanguageModelV4Text,
 } from "../../testing/mock-language-model-v4-test-utils";
-import { Agent, type AgentOptions } from "./agent";
+import { Agent, type AgentOptions, createAgent } from "./agent";
 import { threadStoreKey } from "./thread-entry";
 
 const fakeModel = createMockLanguageModelV4([mockLanguageModelV4Text("DONE")]);
@@ -81,8 +81,10 @@ describe("Agent", () => {
     expect(new Agent({ model: fakeModel })).toBeInstanceOf(Agent);
   });
 
-  it("does not expose a static factory", () => {
-    expect(Object.hasOwn(Agent, "create")).toBe(false);
+  it("exposes an async factory for plugin initialization", async () => {
+    await expect(createAgent({ model: fakeModel })).resolves.toBeInstanceOf(
+      Agent
+    );
   });
 
   it("does not expose legacy agent description metadata", () => {

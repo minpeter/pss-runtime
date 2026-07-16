@@ -25,13 +25,21 @@ export type RuntimePersistedToolExecutionCheckpoint =
   RuntimeToolExecutionCheckpointMetadata;
 
 export type RuntimeToolExecutionDecision =
+  | { readonly output: unknown; readonly status: "blocked" }
   | { readonly status: "needs-recovery" }
   | undefined;
+
+export interface RuntimeToolExecutionResult {
+  readonly output: unknown;
+}
 
 export interface RuntimeToolExecutionContext {
   readonly afterTool?: (
     checkpoint: RuntimeToolExecutionCheckpoint & { readonly output: unknown }
-  ) => Promise<void> | void;
+  ) =>
+    | Promise<RuntimeToolExecutionResult | undefined>
+    | RuntimeToolExecutionResult
+    | undefined;
   readonly attempt: number;
   readonly beforeTool?: (
     checkpoint: RuntimeToolExecutionCheckpoint
@@ -137,6 +145,9 @@ function wrapToolExecute(
       if (decision?.status === "needs-recovery") {
         throw new ToolExecutionNeedsRecoveryError(checkpoint);
       }
+      if (decision?.status === "blocked") {
+        return decision.output;
+      }
 
       const output = await execute(input, {
         ...options,
@@ -148,8 +159,11 @@ function wrapToolExecute(
           : { signal: options.abortSignal }),
         toolCallId,
       });
-      await toolExecution.afterTool?.({ ...checkpoint, output });
-      return output;
+      const transformed = await toolExecution.afterTool?.({
+        ...checkpoint,
+        output,
+      });
+      return transformed ? transformed.output : output;
     },
   };
 }

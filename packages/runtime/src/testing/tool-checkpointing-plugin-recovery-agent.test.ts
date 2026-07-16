@@ -54,7 +54,7 @@ describe("plugin-forced tool recovery through Agent", () => {
       plugins: [
         {
           on: ({ event }) => {
-            if (event.type !== "before-tool-call") {
+            if (event.type !== "tool.call.before") {
               return;
             }
 
@@ -115,7 +115,7 @@ describe("plugin-forced tool recovery through Agent", () => {
       plugins: [
         {
           on: ({ event }) =>
-            event.type === "before-tool-call"
+            event.type === "tool.call.before"
               ? { action: "needs-recovery" }
               : undefined,
         },

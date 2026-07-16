@@ -1,11 +1,12 @@
 import type { ModelMessage } from "ai";
+import type { PluginToolCallBeforeEvent } from "../../plugins/api";
 import type {
   AgentEvent,
   RuntimeInput,
   UserMessage,
   UserText,
 } from "../protocol/events";
-import { isBeforeToolCallEvent as isBeforeToolCall } from "../protocol/events";
+import type { CanonicalHistoryPolicy } from "./canonical-history";
 
 export type {
   InputEventMeta,
@@ -16,6 +17,7 @@ type MaybePromise<T> = PromiseLike<T> | T;
 type AgentEventHistory = readonly ModelMessage[];
 
 export type InterceptableAgentEvent = RuntimeInput | UserMessage | UserText;
+export type AgentPluginEvent = AgentEvent | PluginToolCallBeforeEvent;
 
 export type AgentPluginInterceptResult =
   | { readonly action: "continue" }
@@ -26,18 +28,19 @@ export type AgentPluginInterceptResult =
 export type AgentPluginResult = AgentPluginInterceptResult | undefined;
 
 export interface AgentEventContext {
-  readonly event: AgentEvent;
+  readonly event: AgentPluginEvent;
   readonly history: AgentEventHistory;
   readonly signal?: AbortSignal;
 }
 
 export interface AgentPlugin {
+  readonly canonicalHistory?: CanonicalHistoryPolicy;
   readonly name?: string;
   readonly on?: (context: AgentEventContext) => MaybePromise<AgentPluginResult>;
 }
 
 export type PluginPipelineResult =
-  | { readonly event: AgentEvent; readonly kind: "emit" }
+  | { readonly event: AgentPluginEvent; readonly kind: "emit" }
   | { readonly kind: "handled" }
   | { readonly kind: "needs-recovery" };
 
@@ -50,7 +53,7 @@ export function runPluginsForEvent(
 }
 
 function isInterceptableEvent(
-  event: AgentEvent
+  event: AgentPluginEvent
 ): event is InterceptableAgentEvent {
   return event.type === "user-input" || event.type === "runtime-input";
 }
@@ -77,16 +80,19 @@ function normalizeInterceptResult(
   return;
 }
 
-function eventForPluginHandler(event: AgentEvent): AgentEvent {
-  return isBeforeToolCall(event) ? structuredClone(event) : event;
+function eventForPluginHandler(event: AgentPluginEvent): AgentPluginEvent {
+  return isPluginToolCallBeforeEvent(event) ? structuredClone(event) : event;
 }
 
-function canInterceptEvent(event: AgentEvent, observeOnly: boolean): boolean {
+function canInterceptEvent(
+  event: AgentPluginEvent,
+  observeOnly: boolean
+): boolean {
   if (observeOnly) {
     return false;
   }
 
-  return isInterceptableEvent(event) || isBeforeToolCall(event);
+  return isInterceptableEvent(event) || isPluginToolCallBeforeEvent(event);
 }
 
 function beforeToolCallPipelineResult(
@@ -125,7 +131,7 @@ async function runPluginPipeline(
       continue;
     }
 
-    if (isBeforeToolCall(currentEvent)) {
+    if (isPluginToolCallBeforeEvent(currentEvent)) {
       const resultForBeforeTool = beforeToolCallPipelineResult(intercept);
       if (resultForBeforeTool) {
         return resultForBeforeTool;
@@ -147,4 +153,10 @@ async function runPluginPipeline(
   }
 
   return { kind: "emit", event: currentEvent };
+}
+
+function isPluginToolCallBeforeEvent(
+  event: AgentPluginEvent
+): event is PluginToolCallBeforeEvent {
+  return event.type === "tool.call.before";
 }

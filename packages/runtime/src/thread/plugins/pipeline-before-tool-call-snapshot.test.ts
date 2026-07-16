@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { BeforeToolCall } from "../protocol/events";
+import type { PluginToolCallBeforeEvent } from "../../plugins/api";
 import type { AgentEventContext } from "./pipeline";
 import { runPluginsForEvent } from "./pipeline";
 
@@ -26,7 +26,7 @@ function isMutableToolInput(value: unknown): value is MutableToolInput {
   );
 }
 
-function beforeToolCallEvent(input: unknown): BeforeToolCall {
+function beforeToolCallEvent(input: unknown): PluginToolCallBeforeEvent {
   return {
     attempt: 1,
     idempotencyKey: "run-1:call_tool-1",
@@ -34,23 +34,23 @@ function beforeToolCallEvent(input: unknown): BeforeToolCall {
     policy: "manual-recovery",
     toolCallId: "call_tool-1",
     toolName: "write_file",
-    type: "before-tool-call",
+    type: "tool.call.before",
   };
 }
 
-describe("before-tool-call plugin snapshots", () => {
+describe("tool.call.before plugin snapshots", () => {
   it("keeps plugin input mutations out of the source event and later plugins", async () => {
     const input = {
       nested: { value: "original" },
       path: "/tmp/example.txt",
     };
-    let observedBySecond: Pick<BeforeToolCall, "input"> | undefined;
+    let observedBySecond: Pick<PluginToolCallBeforeEvent, "input"> | undefined;
 
     const result = await runPluginsForEvent(
       [
         {
           on: ({ event }) => {
-            if (event.type !== "before-tool-call") {
+            if (event.type !== "tool.call.before") {
               return;
             }
 
@@ -62,7 +62,7 @@ describe("before-tool-call plugin snapshots", () => {
         },
         {
           on: ({ event }) => {
-            if (event.type !== "before-tool-call") {
+            if (event.type !== "tool.call.before") {
               return;
             }
 

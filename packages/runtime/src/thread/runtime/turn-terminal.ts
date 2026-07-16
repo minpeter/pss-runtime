@@ -27,7 +27,9 @@ export async function closeTurnWithDurableTerminalEvent({
   threadKey,
 }: {
   readonly buffer: DurableThreadEventBuffer;
-  readonly completeExecution: () => Promise<void>;
+  readonly completeExecution: (
+    status: "cancelled" | "completed" | "error"
+  ) => Promise<void>;
   readonly deactivateRun: () => void;
   readonly events: ThreadEventDispatcher;
   readonly executionHost?: AgentHost;
@@ -48,6 +50,7 @@ export async function closeTurnWithDurableTerminalEvent({
       buffer,
       completeExecution,
       error: terminalError,
+      events,
       executionHost,
       recordEvent,
       run,
@@ -65,7 +68,7 @@ export async function closeTurnWithDurableTerminalEvent({
     state,
     threadKey,
   });
-  await completeExecution();
+  await completeExecution(result === "aborted" ? "cancelled" : "completed");
   events.emitProcessedEvent(run, terminalEvent);
 }
 
@@ -73,6 +76,7 @@ async function closeWithTerminalError({
   buffer,
   completeExecution,
   error,
+  events,
   executionHost,
   recordEvent,
   run,
@@ -81,8 +85,11 @@ async function closeWithTerminalError({
   threadKey,
 }: {
   readonly buffer: DurableThreadEventBuffer;
-  readonly completeExecution: () => Promise<void>;
+  readonly completeExecution: (
+    status: "cancelled" | "completed" | "error"
+  ) => Promise<void>;
   readonly error: unknown;
+  readonly events: ThreadEventDispatcher;
   readonly executionHost?: AgentHost;
   readonly recordEvent: (event: AgentEvent) => void;
   readonly run: BufferedAgentTurn;
@@ -90,10 +97,18 @@ async function closeWithTerminalError({
   readonly state: ThreadState;
   readonly threadKey: string;
 }): Promise<void> {
-  const event: AgentEvent = {
+  let event: AgentEvent = {
     message: errorMessage(error),
     type: "turn-error",
   };
+  try {
+    await events.observeRunEvent(event);
+  } catch (hookError) {
+    event = {
+      message: `${event.message}; turn.error plugin failed: ${errorMessage(hookError)}`,
+      type: "turn-error",
+    };
+  }
   recordEvent(event);
   await commitThreadStateAndEvents({
     buffer,
@@ -101,7 +116,7 @@ async function closeWithTerminalError({
     state,
     threadKey,
   });
-  await completeExecution();
+  await completeExecution("error");
   run.emit(event);
   closeRuntimeInput(runtimeInput, "turn-error");
 }

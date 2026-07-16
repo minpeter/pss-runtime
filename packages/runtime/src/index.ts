@@ -1,7 +1,9 @@
 export {
-  Agent,
+  type Agent,
   type AgentAutoCompactionOptions,
   type AgentOptions,
+  type CreateAgentOptions,
+  createAgent,
   type ThreadAddress,
   type ThreadCompactionInput,
   type ThreadHandle,
@@ -16,6 +18,38 @@ export type {
   ThreadEventReadOptions,
 } from "./execution/host/types";
 export type { AgentToolChoice } from "./llm/llm";
+export {
+  definePlugin,
+  type HistoryPolicyCapability,
+  historyPolicy,
+  type PluginAPI,
+  type PluginDefinition,
+  type PluginEventContext,
+  type PluginEventMap,
+  type PluginFactory,
+  type PluginFactoryContext,
+  type PluginHandler,
+  type PluginRequestResultMap,
+  type PluginToolCallBeforeEvent,
+  type PluginToolCallRetryPolicy,
+  registerTool,
+  type Subscription,
+  type ThreadScopeCapability,
+  type ThreadStateHandle,
+  type ToolCapability,
+  threadScope,
+} from "./plugins/api";
+export {
+  noopRuntimeDiagnostics,
+  type RuntimeDiagnostic,
+  type RuntimeDiagnosticLevel,
+  type RuntimeDiagnosticsSink,
+} from "./plugins/diagnostics";
+export {
+  PluginHookError,
+  PluginInitializationError,
+  PluginRegistrationClosedError,
+} from "./plugins/runtime";
 export { ThreadEventReplayUnsupportedError } from "./thread/handle/thread-event-replay";
 export {
   DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,
@@ -61,21 +95,20 @@ export {
   userInputFromEvent,
 } from "./thread/input/input-meta";
 export type {
-  AgentEventContext,
-  AgentPlugin,
-  AgentPluginInterceptResult,
-  AgentPluginResult,
-  InterceptableAgentEvent,
-  PluginPipelineResult,
-} from "./thread/plugins/pipeline";
-export { runPluginsForEvent } from "./thread/plugins/pipeline";
+  CanonicalHistoryAppendContext,
+  CanonicalHistoryCommitContext,
+  CanonicalHistoryCompactionContext,
+  CanonicalHistoryLoadedStateContext,
+  CanonicalHistoryModelContext,
+  CanonicalHistoryPolicy,
+  CanonicalHistoryState,
+  CanonicalHistoryStepContext,
+} from "./thread/plugins/canonical-history";
 export type {
   AgentEvent,
   AgentEventListener,
   AssistantOutput,
   AssistantReasoning,
-  BeforeToolCall,
-  BeforeToolCallRetryPolicy,
   ControlAgentEvent,
   InputEventMeta,
   InputSource,
@@ -97,7 +130,6 @@ export type {
   VisibleAgentEvent,
 } from "./thread/protocol/events";
 export {
-  isBeforeToolCallEvent,
   isControlAgentEvent,
   isLifecycleAgentEvent,
   isTelemetryAgentEvent,

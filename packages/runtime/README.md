@@ -11,7 +11,7 @@ Minimal, platform-agnostic agent runtime with keyed threads, synchronized
 
 ```ts
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { Agent } from "@minpeter/pss-runtime";
+import { createAgent } from "@minpeter/pss-runtime";
 import { createEnv } from "@t3-oss/env-core";
 import { config as loadEnv } from "dotenv";
 import { z } from "zod";
@@ -32,7 +32,7 @@ const provider = createOpenAICompatible({
   baseURL: env.AI_BASE_URL,
 });
 
-const agent = new Agent({
+const agent = await createAgent({
   instructions: "Answer briefly.",
   model: provider(env.AI_MODEL),
 });
@@ -61,11 +61,11 @@ has a cursor, so callers can persist `record.cursor` and resume with
 
 ```ts
 import { openai } from "@ai-sdk/openai";
-import { Agent } from "@minpeter/pss-runtime";
+import { createAgent } from "@minpeter/pss-runtime";
 
 const model = openai("gpt-4.1-mini");
 
-const agent = new Agent({
+const agent = await createAgent({
   instructions: "Answer with concise operational notes.",
   model,
 });
@@ -82,6 +82,61 @@ for await (const event of turn.events()) {
 ```
 
 `agent.send(...)` is shorthand for `agent.thread("default").send(...)`.
+
+## Plugins
+
+Plugins are async factories. The public plugin kernel stays fixed at `on()` for
+typed lifecycle handlers and `provide()` for capabilities:
+
+```ts
+import {
+  createAgent,
+  definePlugin,
+  historyPolicy,
+  threadScope,
+} from "@minpeter/pss-runtime";
+
+const protocolGuard = definePlugin(async (pss, { signal }) => {
+  const state = pss.provide(threadScope(() => ({ findings: 0 })));
+
+  pss.on("input.accept", (_event, context) => {
+    state.get(context.thread).findings += 1;
+    return { action: "continue" };
+  });
+
+  pss.provide(
+    historyPolicy({
+      beforeCommit: ({ state }) => {
+        // Throw to fail closed when canonical history is invalid.
+        void state;
+      },
+    })
+  );
+
+  signal.throwIfAborted();
+});
+
+const agent = await createAgent({ model, plugins: [protocolGuard] });
+```
+
+Factories initialize sequentially in registration order and all finish before
+`createAgent()` resolves. Factory and hook failures fail closed: they abort agent
+creation or the current operation. `pluginFactoryTimeoutMs` and
+`pluginHookTimeoutMs` configure the runtime-wide timeouts. `on()` and non-state
+`provide()` calls return an idempotent `Subscription`. Registration closes when
+the factory resolves; retaining `pss` and attempting a later `on()` or
+`provide()` throws `PluginRegistrationClosedError`. Subscriptions remain usable
+after initialization, including for tools and history policies already attached
+to active threads.
+
+Register an AI SDK tool from a plugin with the `registerTool()` capability
+helper:
+
+```ts
+import { registerTool } from "@minpeter/pss-runtime";
+
+pss.provide(registerTool({ name: "weather", tool: weatherTool }));
+```
 
 For model providers that support multimodal input, send JSON-serializable content
 parts through the same API. String input and `readonly string[]` remain supported
@@ -138,13 +193,13 @@ Delegation is app-owned. Build ordinary tools that call another `Agent`,
 return the compact result shape your product wants the model to see.
 
 ```ts
-const reader = new Agent({
+const reader = await createAgent({
   instructions: "Read knowledge-base files and cite paths.",
   model,
   namespace: "reader",
 });
 
-const coordinator = new Agent({
+const coordinator = await createAgent({
   instructions: "Coordinate work and delegate knowledge-base reads.",
   model,
   namespace: "coordinator",
@@ -174,86 +229,146 @@ delegation tools or own child-agent lifecycle semantics. See
 the sync and background example packages for app-owned blocking and background
 delegation patterns.
 
-## Plugins
+## Plugin event semantics
 
-Pass `plugins: [...]` on `Agent` to observe or intercept runtime events. Each
-plugin exposes one handler:
+Use `pss.on(...)` inside a plugin factory to observe or intercept typed runtime
+events:
 
 ```ts
-import type { AgentPlugin } from "@minpeter/pss-runtime";
-import { Agent } from "@minpeter/pss-runtime";
+import { createAgent, definePlugin } from "@minpeter/pss-runtime";
 
-const tracePlugin: AgentPlugin = {
-  name: "trace",
-  on: ({ event }) => {
-    if (event.type === "turn-end") {
-      console.log("turn finished");
-    }
-  },
-};
+const tracePlugin = definePlugin((pss) => {
+  pss.on("turn.end", (event) => {
+    console.log(event.type); // "turn-end"
+  });
+});
 
-const agent = new Agent({
+const agent = await createAgent({
   model,
   plugins: [tracePlugin],
 });
 ```
 
+### Canonical history policies
+
+Provide a `historyPolicy(...)` capability when a plugin must enforce an invariant
+before model messages or compactions can enter thread state. Unlike `on`, these
+hooks run inside the state transition rather than after an event is emitted:
+
+```ts
+import { definePlugin, historyPolicy } from "@minpeter/pss-runtime";
+
+const canonicalHistoryGuard = definePlugin((pss) => {
+  pss.provide(
+    historyPolicy({
+      beforeAppendModelMessage: ({ message }) => {
+        if (containsRejectedContent(message)) {
+          throw new Error("Rejected model output");
+        }
+      },
+      beforeAppendModelStep: ({ messages }) => {
+        if (!isValidModelStep(messages)) {
+          throw new Error("Rejected model step");
+        }
+      },
+      beforeRecordCompaction: ({ record }) => {
+        if (containsRejectedContent(record.summary)) {
+          throw new Error("Rejected compaction summary");
+        }
+      },
+    })
+  );
+});
+```
+
+Canonical history policies support six boundaries:
+
+- `projectLoadedState` runs after stored state is decoded and before it becomes
+  the thread's in-memory state.
+- `beforeAppendModelMessage` runs before an assistant or tool model message is
+  appended.
+- `beforeAppendModelStep` validates the complete model step before any message
+  is appended or any corresponding event is emitted.
+- `beforeRecordCompaction` runs before a compaction enters thread state.
+- `beforeCommit` validates the exact snapshot immediately before persistence.
+- `projectModelContext` runs before any thread history is passed to a model,
+  including auto-compaction summarization.
+
+Hooks are synchronous so state transitions remain atomic. Throwing fails the
+operation closed. Policies run in plugin registration order and receive cloned
+inputs, so mutating a hook argument does not mutate thread state. A projection
+returned by `projectLoadedState` becomes the in-memory canonical state and may
+be persisted by the next successful commit; `projectModelContext` is ephemeral
+and changes only the model input.
+
+Keep provider-specific parsing and model retry outside this capability. A
+canonical history policy should enforce a generic state invariant after a model
+adapter has produced structured messages.
+
 ### Observe vs intercept
 
-For most events, `on` is observe-only: return nothing (or `{ action: "continue" }`)
-and the runtime emits the event unchanged.
+Notification events are observe-only. Request events such as `input.accept`,
+`model.context`, `provider.request.before`, `thread.compaction.before`,
+`tool.call.before`, `tool.result`, and `turn.start.before` may return a typed
+decision. Invalid runtime results fail closed with `PluginHookError`.
 
-Three event types support intercept returns:
+Request hooks cover these boundaries:
 
-- `user-input`
-- `runtime-input`
-- `before-tool-call` (plugin-only; synthesized after the `before-tool`
-  checkpoint and before tool `execute`, not emitted on `turn.events()`)
+- `input.accept` for `user-input` and `runtime-input`
+- `turn.start.before` before `turn.start`
+- `model.context` before each model call
+- `provider.request.before` immediately before the provider request
+- `thread.compaction.before` before manual, background, or overflow compaction
+- `tool.call.before` is plugin-only; it is synthesized after the `before-tool`
+  checkpoint and before tool `execute`, and is not emitted on `turn.events()`
+- `tool.result` after tool execution and before its result returns to the model
 
 Return one of:
 
-- `{ action: "continue" }` — emit the current event (default when omitted)
-- `{ action: "transform", event }` — emit a replacement input event (`user-input`
-  and `runtime-input` only)
+- `{ action: "continue" }` — continue with the current value (default when omitted)
+- `{ action: "transform", value: event }` — replace the value for transformable
+  input, context, provider, compaction, tool-result, and turn-start requests
 - `{ action: "handled" }` — skip emit; for `thread.send`, close the run without
   starting a turn (`user-input` and `runtime-input` only)
+- `{ action: "cancel" }` — cancel compaction without changing thread state
+- `{ action: "block", reason? }` — skip tool execution and synthesize a blocked
+  tool result so the model loop can continue
 - `{ action: "needs-recovery" }` — stop before real tool execution and mark the
-  durable run for manual recovery (`before-tool-call` only)
+  durable run for manual recovery (`tool.call.before` only)
 
 Plugins run in registration order. Each `transform` updates the event seen by
 later plugins, so transforms chain sequentially.
 
 ### Tool-call interception
 
-Handle `before-tool-call` in the same `on` handler after the runtime writes the
+Handle `tool.call.before` after the runtime writes the
 `before-tool` checkpoint and before the tool's `execute` function runs:
 
 ```ts
-import type { AgentPlugin } from "@minpeter/pss-runtime";
+import { definePlugin } from "@minpeter/pss-runtime";
 
-const approvalPlugin: AgentPlugin = {
-  name: "approval",
-  on: ({ event }) => {
-    if (event.type !== "before-tool-call") {
-      return;
-    }
-
+const approvalPlugin = definePlugin((pss) =>
+  pss.on("tool.call.before", (event) => {
     if (event.toolName === "write_file") {
       return { action: "needs-recovery" };
     }
     return { action: "continue" };
-  },
-};
+  })
+);
 ```
 
-`before-tool-call` events carry `toolName`, `toolCallId`, `input`, `policy`,
+`tool.call.before` events carry `toolName`, `toolCallId`, `input`, `policy`,
 `attempt`, and `idempotencyKey`. Plugin handlers also receive current
-model-message `history` and `signal` through `AgentEventContext`. The runtime
-snapshots `before-tool-call` payloads before each plugin runs, so input mutations
+model-message `history` and `signal` through `PluginEventContext`. The runtime
+snapshots `tool.call.before` payloads before each plugin runs, so input mutations
 do not affect later plugins or tool execution. Keep tool inputs
 structured-cloneable and reasonably sized, because the runtime clones the input
 once per plugin before tool execution. `transform` and `handled` returns are
-ignored for `before-tool-call`.
+not valid for `tool.call.before`; invalid decisions fail closed.
+
+`tool.execution.start` runs only after every `tool.call.before` handler continues.
+`tool.result` transforms chain in registration order, followed by the
+observe-only `tool.execution.end` event carrying the final result.
 
 ### Input `meta.source`
 
@@ -276,12 +391,10 @@ Child agents receive delegated prompts with `meta.source === "delegate"`. Wrap o
 rewrite text input with a plugin instead of agent-level prompt shims:
 
 ```ts
-import type { AgentPlugin, UserText } from "@minpeter/pss-runtime";
-import { Agent } from "@minpeter/pss-runtime";
+import { createAgent, definePlugin, type UserText } from "@minpeter/pss-runtime";
 
-const pokeTagsPlugin: AgentPlugin = {
-  name: "poke-tags",
-  on: ({ event }) => {
+const pokeTagsPlugin = definePlugin((pss) => {
+  pss.on("input.accept", (event) => {
     if (
       event.type !== "user-input" ||
       event.meta?.source !== "delegate" ||
@@ -295,15 +408,15 @@ const pokeTagsPlugin: AgentPlugin = {
 
     return {
       action: "transform",
-      event: {
+      value: {
         ...event,
         text: `<poke>\n${text}\n</poke>`,
       } satisfies UserText,
     };
-  },
-};
+  });
+});
 
-const executionAgent = new Agent({
+const executionAgent = await createAgent({
   namespace: "execution",
   plugins: [pokeTagsPlugin],
   model,
@@ -399,7 +512,7 @@ key.
 ```ts
 import { createInMemoryHost } from "@minpeter/pss-runtime/platform/memory";
 
-const agent = new Agent({
+const agent = await createAgent({
   host: createInMemoryHost(),
   model,
   namespace: "support-agent",
@@ -413,7 +526,7 @@ transcripts:
 ```ts
 import { createFileHost } from "@minpeter/pss-runtime/platform/file";
 
-const agent = new Agent({
+const agent = await createAgent({
   host: createFileHost({ directory: ".pss/threads" }),
   model,
   namespace: "support-agent",
@@ -444,7 +557,7 @@ For store/alarm-only DO tooling use `createCloudflareStorageHost`.
 Automatic compaction can also enforce a pre-provider context budget:
 
 ```ts
-const agent = new Agent({
+const agent = await createAgent({
   autoCompaction: {
     contextGate: {
       maxInputTokens: 120_000,
@@ -467,13 +580,13 @@ Hosts that need durable runs pass `host:` into `Agent`. The execution subpath
 exports the same `AgentHost` contract used by platform factories:
 
 ```ts
-import { Agent } from "@minpeter/pss-runtime";
+import { createAgent } from "@minpeter/pss-runtime";
 import type { AgentHost } from "@minpeter/pss-runtime/execution";
 import { createInMemoryHost } from "@minpeter/pss-runtime/platform/memory";
 
 const host: AgentHost = createInMemoryHost();
 
-const agent = new Agent({
+const agent = await createAgent({
   host,
   model,
   namespace: "support-agent",
@@ -484,7 +597,7 @@ const agent = new Agent({
 
 The runtime supports both long-running Node.js processes and edge hosts that
 reconstruct runtime objects between turns. The same public DX stays centered on
-`new Agent({ model, tools, host })`; host-specific durability and scheduling live
+`await createAgent({ model, tools, host })`; host-specific durability and scheduling live
 behind the `host` boundary.
 
 Long-running Node.js can keep an `Agent` and `ThreadHandle` alive across turns.
@@ -492,10 +605,10 @@ Use `@minpeter/pss-runtime/platform/file` when a local process should persist
 thread snapshots on disk between restarts:
 
 ```ts
-import { Agent } from "@minpeter/pss-runtime";
+import { createAgent } from "@minpeter/pss-runtime";
 import { createFileHost } from "@minpeter/pss-runtime/platform/file";
 
-const agent = new Agent({
+const agent = await createAgent({
   host: createFileHost({ directory: ".pss-local-threads" }),
   model,
 });

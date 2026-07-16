@@ -1,5 +1,6 @@
 import type { ModelMessage } from "ai";
 import type { UserInput } from "../input/input";
+import type { CanonicalHistoryPolicyPipeline } from "../plugins/canonical-history";
 import { userInputToModelMessage } from "../protocol/mapping";
 import {
   type ThreadCompactionRecord,
@@ -10,12 +11,14 @@ export class ModelMessageHistory {
   readonly #compactions: ThreadCompactionRecord[] = [];
   readonly #modelHistory: ModelMessage[] = [];
   readonly #onChange?: (snapshot: ModelMessage[]) => void;
+  readonly #policy?: CanonicalHistoryPolicyPipeline;
   readonly #transientMessages: TransientModelMessage[] = [];
 
   constructor(
     history?: ModelMessage[],
     onChange?: (snapshot: ModelMessage[]) => void,
-    compactions: readonly ThreadCompactionRecord[] = []
+    compactions: readonly ThreadCompactionRecord[] = [],
+    policy?: CanonicalHistoryPolicyPipeline
   ) {
     if (history) {
       this.#modelHistory = structuredClone(history);
@@ -24,6 +27,7 @@ export class ModelMessageHistory {
       validateThreadCompactionRecord(record, this.#modelHistory.length)
     );
     this.#onChange = onChange;
+    this.#policy = policy;
   }
 
   modelSnapshot(): ModelMessage[] {
@@ -33,11 +37,17 @@ export class ModelMessageHistory {
   modelContextSnapshot(
     options: { readonly maxMessages?: number } = {}
   ): ModelMessage[] {
-    const compacted = applyCompactions(
+    let compacted = applyCompactions(
       this.#modelHistory,
       this.#compactions,
       this.#transientMessages
     );
+    if (this.#policy?.active) {
+      compacted = this.#policy.projectModelContext(
+        this.#canonicalState(),
+        compacted
+      );
+    }
     if (
       options.maxMessages === undefined ||
       compacted.length <= options.maxMessages
@@ -52,9 +62,12 @@ export class ModelMessageHistory {
   }
 
   recordCompaction(record: ThreadCompactionRecord): void {
-    this.#compactions.push(
-      validateThreadCompactionRecord(record, this.#modelHistory.length)
+    const validated = validateThreadCompactionRecord(
+      record,
+      this.#modelHistory.length
     );
+    this.#policy?.beforeRecordCompaction(this.#canonicalState(), validated);
+    this.#compactions.push(validated);
     this.#triggerChange();
   }
 
@@ -71,8 +84,14 @@ export class ModelMessageHistory {
   }
 
   appendModelMessage(message: ModelMessage): void {
-    this.#modelHistory.push(structuredClone(message));
+    const candidate = structuredClone(message);
+    this.#policy?.beforeAppendModelMessage(this.#canonicalState(), candidate);
+    this.#modelHistory.push(candidate);
     this.#triggerChange();
+  }
+
+  beforeAppendModelStep(messages: readonly ModelMessage[]): void {
+    this.#policy?.beforeAppendModelStep(this.#canonicalState(), messages);
   }
 
   clearTransientInputs(): void {
@@ -94,6 +113,13 @@ export class ModelMessageHistory {
 
   #triggerChange(): void {
     this.#onChange?.(this.modelSnapshot());
+  }
+
+  #canonicalState() {
+    return {
+      compactions: this.#compactions,
+      history: this.#modelHistory,
+    };
   }
 }
 

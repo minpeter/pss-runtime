@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { BeforeToolCall } from "../protocol/events";
+import type { PluginToolCallBeforeEvent } from "../../plugins/api";
 import type { AgentEventContext } from "./pipeline";
 import { type AgentPlugin, runPluginsForEvent } from "./pipeline";
 
@@ -98,7 +98,7 @@ describe("runPluginsForEvent", () => {
   });
 });
 
-describe("before-tool-call interception", () => {
+describe("tool.call.before interception", () => {
   const beforeToolCall = {
     attempt: 1,
     idempotencyKey: "run-1:call_tool-1",
@@ -106,8 +106,8 @@ describe("before-tool-call interception", () => {
     policy: "manual-recovery",
     toolCallId: "call_tool-1",
     toolName: "write_file",
-    type: "before-tool-call",
-  } satisfies BeforeToolCall;
+    type: "tool.call.before",
+  } satisfies PluginToolCallBeforeEvent;
 
   it("stops at the first plugin that requests recovery", async () => {
     const calls: string[] = [];
@@ -142,7 +142,7 @@ describe("before-tool-call interception", () => {
     expect(calls).toEqual(["first", "second"]);
   });
 
-  it("continues after handled returns on before-tool-call", async () => {
+  it("continues after handled returns on tool.call.before", async () => {
     const calls: string[] = [];
     const result = await runPluginsForEvent(
       [
@@ -201,7 +201,7 @@ describe("before-tool-call interception", () => {
     ]);
   });
 
-  it("ignores transform returns on before-tool-call", async () => {
+  it("ignores transform returns on tool.call.before", async () => {
     const result = await runPluginsForEvent(
       [
         {

@@ -1,5 +1,5 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { Agent } from "@minpeter/pss-runtime";
+import { createAgent } from "@minpeter/pss-runtime";
 import { createEnv } from "@t3-oss/env-core";
 import { config as loadEnv } from "dotenv";
 import { z } from "zod";
@@ -21,7 +21,9 @@ const provider = createOpenAICompatible({
   baseURL: env.AI_BASE_URL,
 });
 
-export const thread = new Agent({
-  instructions: "Answer briefly.",
-  model: provider(env.AI_MODEL),
-}).thread("default");
+export const thread = (
+  await createAgent({
+    instructions: "Answer briefly.",
+    model: provider(env.AI_MODEL),
+  })
+).thread("default");

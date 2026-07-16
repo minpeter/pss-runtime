@@ -15,16 +15,19 @@ import type {
   TurnStore,
 } from "../execution";
 import type {
+  Agent,
   AgentAutoCompactionOptions,
+  AgentEvent,
   AgentInput,
   AgentOptions,
   HostAttachmentStore,
+  PluginEventMap,
   ThreadCompactionInput,
   ThreadHandle,
 } from "../index";
 import {
-  Agent,
-  runPluginsForEvent,
+  createAgent,
+  registerTool,
   threadStoreKey as runtimeThreadStoreKey,
   ThreadEventReplayUnsupportedError,
 } from "../index";
@@ -59,8 +62,12 @@ describe("runtime public exports", () => {
     const runtime = await import("../index");
     const runStreamExport = ["Agent", "Run", "Stream"].join("");
 
-    expect(runtime).toHaveProperty("Agent", Agent);
-    expect(runtime).toHaveProperty("runPluginsForEvent", runPluginsForEvent);
+    expect(runtime).toHaveProperty("createAgent", createAgent);
+    expect(runtime).toHaveProperty("registerTool", registerTool);
+    expect(runtime).not.toHaveProperty("pluginTool");
+    expect(runtime).not.toHaveProperty("Agent");
+    expect(runtime).not.toHaveProperty("tool");
+    expect(runtime).not.toHaveProperty("runPluginsForEvent");
     expect(runtime).not.toHaveProperty("runPluginsForToolCall");
     expect(runtime).toHaveProperty("threadStoreKey", runtimeThreadStoreKey);
     expect(runtime).not.toHaveProperty("createInMemoryHost");
@@ -79,6 +86,21 @@ describe("runtime public exports", () => {
     expect(runtime).not.toHaveProperty("ToolExecutionNeedsRecoveryError");
     expect(runtime).not.toHaveProperty(runStreamExport);
     expect(emptyHostIsRejected).toBe(false);
+  });
+
+  it("types flattened plugin event payloads by event name", () => {
+    expectTypeOf<PluginEventMap["turn.end"]>().toEqualTypeOf<{
+      type: "turn-end";
+    }>();
+    expectTypeOf<PluginEventMap["input.accept"]["type"]>().toEqualTypeOf<
+      "runtime-input" | "user-input"
+    >();
+    expectTypeOf<
+      PluginEventMap["tool.call.before"]["type"]
+    >().toEqualTypeOf<"tool.call.before">();
+    expectTypeOf<
+      Extract<AgentEvent, { type: "tool.call.before" }>
+    >().toEqualTypeOf<never>();
   });
 
   it("does not expose runtime-owned subagent helpers from the package root", async () => {

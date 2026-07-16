@@ -12,6 +12,7 @@ import {
   ThreadCommitConflictError,
   type ThreadState,
 } from "../state/thread-state";
+import type { ThreadEventDispatcher } from "./events";
 import type {
   ThreadExecutionRun,
   ThreadExecutionTerminalStatus,
@@ -25,19 +26,22 @@ export async function emitTurnErrorAfterRecovery({
   error,
   historySnapshot,
   persistEvent,
+  observeEvent,
   run,
   runtimeInput,
   state,
 }: {
   readonly error: unknown;
   readonly historySnapshot: ModelMessage[];
+  readonly observeEvent?: (event: AgentEvent) => Promise<void>;
   readonly persistEvent?: (event: AgentEvent) => Promise<void>;
   readonly run: BufferedAgentTurn;
   readonly runtimeInput: RuntimeInputState;
   readonly state: ThreadState;
 }): Promise<void> {
   if (error instanceof ThreadCommitConflictError) {
-    const event: AgentEvent = { type: "turn-error", message: error.message };
+    let event: AgentEvent = { type: "turn-error", message: error.message };
+    event = await observeTurnError(event, observeEvent);
     try {
       await persistEvent?.(event);
     } finally {
@@ -48,10 +52,11 @@ export async function emitTurnErrorAfterRecovery({
   }
 
   state.rollback(historySnapshot);
-  const event: AgentEvent = {
+  let event: AgentEvent = {
     type: "turn-error",
     message: errorMessage(error),
   };
+  event = await observeTurnError(event, observeEvent);
   try {
     if (persistEvent) {
       await persistEvent(event);
@@ -80,6 +85,7 @@ export async function recoverTurnProcessingError({
   error,
   executionHost,
   executionRun,
+  events,
   historySnapshot,
   recordEvent,
   run,
@@ -91,6 +97,7 @@ export async function recoverTurnProcessingError({
   readonly error: unknown;
   readonly executionHost?: AgentHost;
   readonly executionRun?: ThreadExecutionRun;
+  readonly events?: ThreadEventDispatcher;
   readonly historySnapshot: ModelMessage[];
   readonly recordEvent: (event: AgentEvent) => void;
   readonly run: BufferedAgentTurn;
@@ -103,6 +110,7 @@ export async function recoverTurnProcessingError({
   await emitTurnErrorAfterRecovery({
     error: turnError,
     historySnapshot,
+    observeEvent: events ? (event) => events.observeRunEvent(event) : undefined,
     persistEvent: async (event) => {
       recordEvent(event);
       await commitThreadStateAndEvents({
@@ -116,6 +124,24 @@ export async function recoverTurnProcessingError({
     runtimeInput,
     state,
   });
+}
+
+async function observeTurnError(
+  event: AgentEvent,
+  observeEvent: ((event: AgentEvent) => Promise<void>) | undefined
+): Promise<AgentEvent> {
+  if (!observeEvent) {
+    return event;
+  }
+  try {
+    await observeEvent(event);
+    return event;
+  } catch (hookError) {
+    return {
+      message: `${"message" in event ? event.message : "Turn failed"}; turn.error plugin failed: ${errorMessage(hookError)}`,
+      type: "turn-error",
+    };
+  }
 }
 
 function executionStatusForError(error: Error): ThreadExecutionTerminalStatus {

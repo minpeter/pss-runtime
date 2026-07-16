@@ -8,7 +8,7 @@ import {
   Text,
   TUI,
 } from "@earendil-works/pi-tui";
-import { Agent, type AgentOptions } from "@minpeter/pss-runtime";
+import { type AgentOptions, createAgent } from "@minpeter/pss-runtime";
 import { createFileHost } from "@minpeter/pss-runtime/platform/file";
 import type { ToolSet } from "ai";
 import { createCodingLanguageModel } from "./model";
@@ -34,7 +34,7 @@ export async function startTui(options: StartTuiOptions = {}): Promise<void> {
     autoCompaction: threadConfig.autoCompaction,
     tools: resolveStartTuiTools(options.tools),
   };
-  const agent = new Agent(agentOptions);
+  const agent = await createAgent(agentOptions);
   const thread = agent.thread(threadConfig.key);
 
   const terminal = new ProcessTerminal();

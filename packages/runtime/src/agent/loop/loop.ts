@@ -10,6 +10,7 @@ import { modelMessageToAgentEvents } from "../../thread/protocol/mapping";
 
 interface ModelHistory {
   appendModelMessage(message: ModelMessage): void;
+  beforeAppendModelStep(messages: readonly ModelMessage[]): void;
   modelContextSnapshot(): ModelMessage[];
   modelSnapshot(): ModelMessage[];
 }
@@ -21,6 +22,10 @@ interface RunAgentLoopOptions {
   model: ModelGenerationOptions;
   signal?: AbortSignal;
   toolExecution?: RuntimeToolExecutionContext;
+  transformModelContext?: (
+    messages: readonly ModelMessage[],
+    signal: AbortSignal
+  ) => Promise<readonly ModelMessage[]>;
 }
 
 type AgentLoopResult = "completed" | "aborted";
@@ -54,6 +59,7 @@ export async function runAgentLoop({
   model,
   signal = new AbortController().signal,
   toolExecution,
+  transformModelContext,
 }: RunAgentLoopOptions): Promise<AgentLoopResult> {
   while (true) {
     if (signal.aborted) {
@@ -71,7 +77,13 @@ export async function runAgentLoop({
     }
 
     const capturedOutput = await captureObserverEvents(() =>
-      readModelOutput({ history, model, signal, toolExecution })
+      readModelOutput({
+        history,
+        model,
+        signal,
+        toolExecution,
+        transformModelContext,
+      })
     );
     const output = capturedOutput.value;
 
@@ -172,13 +184,17 @@ async function readModelOutput({
   model,
   signal,
   toolExecution,
-}: Pick<RunAgentLoopOptions, "history" | "model"> & {
+  transformModelContext,
+}: Pick<RunAgentLoopOptions, "history" | "model" | "transformModelContext"> & {
   signal: AbortSignal;
   toolExecution?: RuntimeToolExecutionContext;
 }): Promise<ModelStepOutput | "aborted"> {
   try {
+    const snapshot = history.modelContextSnapshot();
     return await generateModelStep({
-      history: history.modelContextSnapshot(),
+      history: transformModelContext
+        ? await transformModelContext(snapshot, signal)
+        : snapshot,
       ...model,
       signal,
       toolExecution,
@@ -230,6 +246,8 @@ async function appendStepOutput({
   if (signal.aborted) {
     return "aborted";
   }
+
+  history.beforeAppendModelStep(output);
 
   let shouldContinue = false;
   const pendingObserverEvents = observerEvents;

@@ -7,7 +7,7 @@ import { createExampleRuntime } from "./setup";
 const notificationPollMs = 300;
 const notificationTimeoutMs = 1000;
 
-const runtime = createExampleRuntime();
+const runtime = await createExampleRuntime();
 let active = true;
 const backgroundWatchers = new Set<Promise<void>>();
 

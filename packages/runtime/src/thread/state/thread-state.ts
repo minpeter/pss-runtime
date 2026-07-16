@@ -1,4 +1,9 @@
 import type { ModelMessage } from "ai";
+import {
+  type CanonicalHistoryPolicy,
+  CanonicalHistoryPolicyPipeline,
+  type CanonicalHistoryState,
+} from "../plugins/canonical-history";
 import type {
   CommitResult,
   ExpectedThreadVersion,
@@ -43,17 +48,28 @@ export class ThreadCommitConflictError extends Error {
 }
 
 export class ThreadState {
+  readonly #canonicalHistory: CanonicalHistoryPolicyPipeline;
   readonly #persistence: ThreadPersistenceOptions;
   #deleteRequested = false;
-  #history = new ModelMessageHistory();
+  #history: ModelMessageHistory;
   #deleted = false;
   #loadPromise?: Promise<void>;
   #loaded = false;
   #storeVersion: string | undefined;
   #writeQueue: Promise<void> = Promise.resolve();
 
-  constructor(persistence: ThreadPersistenceOptions) {
+  constructor(
+    persistence: ThreadPersistenceOptions,
+    canonicalHistoryPolicies:
+      | readonly CanonicalHistoryPolicy[]
+      | (() => readonly CanonicalHistoryPolicy[]) = []
+  ) {
     this.#persistence = persistence;
+    this.#canonicalHistory = new CanonicalHistoryPolicyPipeline(
+      persistence.key,
+      canonicalHistoryPolicies
+    );
+    this.#history = this.#createHistory();
   }
 
   get history(): ModelMessageHistory {
@@ -84,6 +100,13 @@ export class ThreadState {
 
   modelContextSnapshot(): ModelMessage[] {
     return this.#history.modelContextSnapshot();
+  }
+
+  projectModelContext(
+    state: CanonicalHistoryState,
+    messages: readonly ModelMessage[]
+  ): ModelMessage[] {
+    return this.#canonicalHistory.projectModelContext(state, messages);
   }
 
   compactionSnapshot(): ThreadCompactionRecord[] {
@@ -141,9 +164,8 @@ export class ThreadState {
     } catch (error) {
       if (!(error instanceof ThreadCommitConflictError)) {
         this.#storeVersion = previous.storeVersion;
-        this.#history = new ModelMessageHistory(
+        this.#history = this.#createHistory(
           previous.history,
-          undefined,
           previous.compactions
         );
       }
@@ -174,8 +196,13 @@ export class ThreadState {
         return;
       }
 
+      const expectedVersion = this.#storeVersion ?? null;
+      this.#canonicalHistory.beforeCommit(
+        { compactions, history: snapshot },
+        expectedVersion
+      );
       const result = await commit({
-        expectedVersion: this.#storeVersion ?? null,
+        expectedVersion,
         key: this.#persistence.key,
         next: { state: encodeThreadSnapshot(snapshot, compactions) },
       });
@@ -210,9 +237,8 @@ export class ThreadState {
         this.#deleteRequested = false;
         this.#loaded = previous.loaded;
         this.#storeVersion = previous.storeVersion;
-        this.#history = new ModelMessageHistory(
+        this.#history = this.#createHistory(
           previous.history,
-          undefined,
           previous.compactions
         );
         throw error;
@@ -222,7 +248,7 @@ export class ThreadState {
       this.#loadPromise = undefined;
       this.#loaded = true;
       this.#storeVersion = undefined;
-      this.#history = new ModelMessageHistory();
+      this.#history = this.#createHistory();
     });
   }
 
@@ -243,12 +269,24 @@ export class ThreadState {
 
   async #replaceWithStoredThread(): Promise<void> {
     const stored = await this.#persistence.store.load(this.#persistence.key);
+    const decoded = decodeStoredThreadState(stored);
+    const state = this.#canonicalHistory.projectLoadedState(
+      decoded,
+      stored?.version ?? null
+    );
     this.#storeVersion = stored?.version;
-    const state = decodeStoredThreadState(stored);
-    this.#history = new ModelMessageHistory(
-      state.history,
+    this.#history = this.#createHistory(state.history, state.compactions);
+  }
+
+  #createHistory(
+    history?: ModelMessage[],
+    compactions: readonly ThreadCompactionRecord[] = []
+  ): ModelMessageHistory {
+    return new ModelMessageHistory(
+      history,
       undefined,
-      state.compactions
+      compactions,
+      this.#canonicalHistory
     );
   }
 }

@@ -1,4 +1,5 @@
 import type { AgentHost, HostScheduler } from "../../../execution";
+import { noopRuntimeDiagnostics } from "../../../plugins/diagnostics";
 import { FileAttachmentStore } from "../storage/file-attachment-store";
 import { FileExecutionStore } from "../storage/file-execution-store";
 import {
@@ -13,6 +14,7 @@ export interface FileHostOptions {
 export function createFileHost({ directory }: FileHostOptions): AgentHost {
   return {
     attachmentStore: new FileAttachmentStore(directory),
+    diagnostics: noopRuntimeDiagnostics,
     scheduler: createFileScheduler({ directory }),
     store: new FileExecutionStore(directory),
   };

@@ -5,6 +5,7 @@ import {
   type ScheduledThreadPrompt,
   threadPromptScheduledWorkId,
 } from "../../../execution/scheduled-work";
+import { noopRuntimeDiagnostics } from "../../../plugins/diagnostics";
 import { MemoryAttachmentStore } from "../storage/memory-attachment-store";
 import { InMemoryExecutionStore } from "./store";
 
@@ -22,6 +23,7 @@ export interface InMemoryHost extends AgentHost {
 export function createInMemoryHost(): InMemoryHost {
   return {
     attachmentStore: new MemoryAttachmentStore(),
+    diagnostics: noopRuntimeDiagnostics,
     store: new InMemoryExecutionStore(),
     scheduler: new InMemoryExecutionScheduler(),
   };

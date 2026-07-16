@@ -59,6 +59,9 @@ export class AgentThread {
   #killed = false;
   #running = false;
   #runToCloseOnKill?: BufferedAgentTurn;
+  #shutdownPromise?: Promise<void>;
+  #startPromise?: Promise<void>;
+  #started = false;
 
   constructor(
     model: ModelGenerationOptions,
@@ -66,15 +69,31 @@ export class AgentThread {
     plugins: readonly AgentPlugin[] = [],
     execution: ThreadExecutionOptions = {}
   ) {
-    this.#model = model;
+    this.#model = execution.pluginRuntime
+      ? {
+          ...model,
+          model: execution.pluginRuntime.wrapModel(
+            model.model,
+            persistence.key
+          ),
+        }
+      : model;
     this.#execution = execution;
     this.#threadKey = persistence.key;
-    this.#state = new ThreadState(persistence);
+    const legacyHistoryPolicies = plugins.flatMap((plugin) =>
+      plugin.canonicalHistory ? [plugin.canonicalHistory] : []
+    );
+    this.#state = new ThreadState(persistence, () => [
+      ...legacyHistoryPolicies,
+      ...(execution.pluginRuntime?.canonicalHistoryPolicies ?? []),
+    ]);
     this.#events = new ThreadEventDispatcher({
       attachmentStore: model.attachmentStore,
       history: () => this.#state.modelSnapshot(),
+      pluginRuntime: execution.pluginRuntime,
       plugins,
       signal: () => this.#activeAbort?.signal,
+      threadKey: persistence.key,
     });
   }
 
@@ -82,7 +101,7 @@ export class AgentThread {
     this.#assertOpen();
 
     const run = new BufferedAgentTurn();
-    const loaded = this.#state.ensureLoaded();
+    const loaded = this.#ensureStarted();
     await this.#enqueueInputAdmission(async () => {
       await loaded;
       await this.#admitSend(input, run);
@@ -125,7 +144,7 @@ export class AgentThread {
   ): Promise<AgentTurn> {
     this.#assertOpen();
 
-    await this.#state.ensureLoaded();
+    await this.#ensureStarted();
     await this.#recoverDurableInputClaims();
 
     this.#assertOpen();
@@ -164,12 +183,12 @@ export class AgentThread {
   async compact(input: ThreadCompactionInput): Promise<void> {
     this.#assertOpen();
 
-    await this.#state.ensureLoaded();
+    await this.#ensureStarted();
     await this.#recoverDurableInputClaims();
 
     this.#assertOpen();
 
-    await this.#state.compact(input);
+    await this.#events.compact(this.#state, input);
   }
 
   events(options?: ThreadEventReadOptions): AsyncIterable<StoredThreadEvent> {
@@ -189,12 +208,17 @@ export class AgentThread {
   delete(): Promise<void> {
     if (!this.#deletePromise) {
       this.kill();
-      this.#deletePromise = this.#state.delete().catch((error: unknown) => {
+      this.#deletePromise = this.#deleteThread().catch((error: unknown) => {
         this.#deletePromise = undefined;
         throw error;
       });
     }
     return this.#deletePromise;
+  }
+
+  async dispose(): Promise<void> {
+    this.kill();
+    await this.#shutdownThread();
   }
 
   kill(): void {
@@ -213,6 +237,36 @@ export class AgentThread {
       message: killedError.message,
       runToClose: this.#runToCloseOnKill ?? this.#activeRun,
     });
+  }
+
+  async #deleteThread(): Promise<void> {
+    await this.#shutdownThread();
+    await this.#state.delete();
+  }
+
+  #ensureStarted(): Promise<void> {
+    this.#startPromise ??= this.#state.ensureLoaded().then(async () => {
+      await this.#events.startThread();
+      this.#started = true;
+    });
+    return this.#startPromise;
+  }
+
+  async #shutdownThread(): Promise<void> {
+    if (this.#shutdownPromise) {
+      return await this.#shutdownPromise;
+    }
+    if (!this.#startPromise) {
+      return;
+    }
+    this.#shutdownPromise = this.#startPromise.then(async () => {
+      if (!this.#started) {
+        return;
+      }
+      await this.#events.shutdownThread();
+      this.#started = false;
+    });
+    return await this.#shutdownPromise;
   }
 
   async #drainInputQueue(): Promise<void> {

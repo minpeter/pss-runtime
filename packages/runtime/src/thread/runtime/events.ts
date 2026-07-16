@@ -2,7 +2,13 @@ import type { ModelMessage } from "ai";
 import type {
   RuntimeToolExecutionCheckpoint,
   RuntimeToolExecutionDecision,
+  RuntimeToolExecutionResult,
 } from "../../llm/llm";
+import type {
+  InputAcceptEvent,
+  PluginToolCallBeforeEvent,
+} from "../../plugins/api";
+import type { PluginRuntime } from "../../plugins/runtime";
 import {
   type HostAttachmentStore,
   type RuntimeAttachmentReference,
@@ -10,17 +16,21 @@ import {
 } from "../input/attachments";
 import {
   type AgentPlugin,
+  type AgentPluginEvent,
   type PluginPipelineResult,
   runPluginsForEvent,
 } from "../plugins/pipeline";
-import type { AgentEvent, BeforeToolCall } from "../protocol/events";
+import type { AgentEvent, ToolResult } from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
+import type { ThreadCompactionInput, ThreadState } from "../state/thread-state";
 
 interface ThreadEventDispatcherOptions {
   readonly attachmentStore?: HostAttachmentStore;
   readonly history: () => readonly ModelMessage[];
+  readonly pluginRuntime?: PluginRuntime;
   readonly plugins: readonly AgentPlugin[];
   readonly signal: () => AbortSignal | undefined;
+  readonly threadKey: string;
 }
 
 interface InterceptEventOptions {
@@ -31,14 +41,18 @@ export class ThreadEventDispatcher {
   readonly #attachmentStore: HostAttachmentStore | undefined;
   readonly #history: () => readonly ModelMessage[];
   #observerEventBuffer?: AgentEvent[];
+  readonly #pluginRuntime: PluginRuntime | undefined;
   readonly #plugins: readonly AgentPlugin[];
   readonly #signal: () => AbortSignal | undefined;
+  readonly #threadKey: string;
 
   constructor(options: ThreadEventDispatcherOptions) {
     this.#attachmentStore = options.attachmentStore;
     this.#history = options.history;
+    this.#pluginRuntime = options.pluginRuntime;
     this.#plugins = options.plugins;
     this.#signal = options.signal;
+    this.#threadKey = options.threadKey;
   }
 
   async captureObserverEvents<T>(
@@ -94,13 +108,22 @@ export class ThreadEventDispatcher {
     event: AgentEvent,
     options: { readonly awaitAck?: boolean } = {}
   ): Promise<void> {
-    await this.observeRunEvent(event);
+    const processed =
+      event.type === "turn-start" && this.#pluginRuntime
+        ? await this.#pluginRuntime.beforeTurnStart(
+            this.#threadKey,
+            event,
+            this.#history(),
+            this.#activeSignal()
+          )
+        : event;
+    await this.observeRunEvent(processed);
     if (options.awaitAck === false) {
-      run.emit(event);
+      run.emit(processed);
       return;
     }
 
-    await run.emitBoundary(event);
+    await run.emitBoundary(processed);
   }
 
   async observeRunEvent(event: AgentEvent): Promise<void> {
@@ -112,6 +135,12 @@ export class ThreadEventDispatcher {
         signal: this.#signal(),
       },
       { observeOnly: true }
+    );
+    await this.#pluginRuntime?.observeAgentEvent(
+      this.#threadKey,
+      event,
+      this.#history(),
+      this.#activeSignal()
     );
   }
 
@@ -131,29 +160,119 @@ export class ThreadEventDispatcher {
   async interceptBeforeToolCall(
     checkpoint: RuntimeToolExecutionCheckpoint
   ): Promise<RuntimeToolExecutionDecision> {
-    const pipeline = await this.#runInterceptPipeline(
-      beforeToolCallEvent(checkpoint)
-    );
+    const event = beforeToolCallEvent(checkpoint);
+    const legacy = await this.#runLegacyPipeline(event);
+    if (legacy.kind === "needs-recovery") {
+      return { status: "needs-recovery" };
+    }
 
-    return pipeline.kind === "needs-recovery"
-      ? { status: "needs-recovery" }
-      : undefined;
+    return await this.#pluginRuntime?.beforeToolExecution(
+      this.#threadKey,
+      event,
+      this.#history(),
+      this.#activeSignal()
+    );
+  }
+
+  async interceptAfterToolCall(
+    checkpoint: RuntimeToolExecutionCheckpoint & { readonly output: unknown }
+  ): Promise<RuntimeToolExecutionResult | undefined> {
+    if (!this.#pluginRuntime) {
+      return;
+    }
+    const event: ToolResult = {
+      output: checkpoint.output,
+      toolCallId: checkpoint.toolCallId,
+      toolName: checkpoint.toolName,
+      type: "tool-result",
+    };
+    const transformed = await this.#pluginRuntime.afterToolExecution(
+      this.#threadKey,
+      event,
+      this.#history(),
+      this.#activeSignal()
+    );
+    return { output: transformed.output };
+  }
+
+  async compact(
+    state: ThreadState,
+    input: ThreadCompactionInput
+  ): Promise<boolean> {
+    const decision = this.#pluginRuntime
+      ? await this.#pluginRuntime.beforeCompact(
+          this.#threadKey,
+          input,
+          this.#history(),
+          this.#activeSignal()
+        )
+      : { cancelled: false, input };
+    if (decision.cancelled) {
+      return false;
+    }
+
+    await state.compact(decision.input);
+    await this.#pluginRuntime?.notifyCompacted(
+      this.#threadKey,
+      decision.input,
+      this.#history(),
+      this.#activeSignal()
+    );
+    return true;
+  }
+
+  startThread(): Promise<void> {
+    return (
+      this.#pluginRuntime?.startThread(
+        this.#threadKey,
+        this.#history(),
+        new AbortController().signal
+      ) ?? Promise.resolve()
+    );
+  }
+
+  shutdownThread(): Promise<void> {
+    return (
+      this.#pluginRuntime?.shutdownThread(
+        this.#threadKey,
+        this.#history(),
+        new AbortController().signal
+      ) ?? Promise.resolve()
+    );
   }
 
   async interceptEvent(
     event: AgentEvent,
     options: InterceptEventOptions = {}
   ): Promise<AgentEvent | "handled"> {
-    const pipeline = await this.#runInterceptPipeline(event);
-    if (pipeline.kind === "handled") {
+    const legacy = await this.#runLegacyPipeline(event);
+    if (legacy.kind === "handled") {
       return "handled";
     }
 
-    if (pipeline.kind === "needs-recovery") {
-      return event;
+    const legacyEvent =
+      legacy.kind === "emit" ? assertAgentEvent(legacy.event) : event;
+    let processed: AgentEvent | "handled" = legacyEvent;
+    if (isInputAcceptEvent(legacyEvent) && this.#pluginRuntime) {
+      processed = await this.#pluginRuntime.interceptInput(
+        this.#threadKey,
+        legacyEvent,
+        this.#history(),
+        this.#activeSignal()
+      );
+    } else {
+      await this.#pluginRuntime?.observeAgentEvent(
+        this.#threadKey,
+        legacyEvent,
+        this.#history(),
+        this.#activeSignal()
+      );
     }
 
-    return stageAgentEventAttachments(pipeline.event, this.#attachmentStore, {
+    if (processed === "handled") {
+      return "handled";
+    }
+    return stageAgentEventAttachments(processed, this.#attachmentStore, {
       stagedRefs: options.stagedRefs,
       trustRuntimeAttachmentRefs: true,
     });
@@ -163,18 +282,22 @@ export class ThreadEventDispatcher {
     run.emit(event);
   }
 
-  #runInterceptPipeline(event: AgentEvent): Promise<PluginPipelineResult> {
+  #runLegacyPipeline(event: AgentPluginEvent): Promise<PluginPipelineResult> {
     return runPluginsForEvent(this.#plugins, {
       event,
       history: this.#history(),
       signal: this.#signal(),
     });
   }
+
+  #activeSignal(): AbortSignal {
+    return this.#signal() ?? new AbortController().signal;
+  }
 }
 
 function beforeToolCallEvent(
   checkpoint: RuntimeToolExecutionCheckpoint
-): BeforeToolCall {
+): PluginToolCallBeforeEvent {
   return {
     attempt: checkpoint.attempt,
     idempotencyKey: checkpoint.idempotencyKey,
@@ -182,6 +305,19 @@ function beforeToolCallEvent(
     policy: checkpoint.policy,
     toolCallId: checkpoint.toolCallId,
     toolName: checkpoint.toolName,
-    type: "before-tool-call",
+    type: "tool.call.before",
   };
+}
+
+function assertAgentEvent(event: AgentPluginEvent): AgentEvent {
+  if (event.type === "tool.call.before") {
+    throw new TypeError(
+      "Plugin-only tool.call.before events cannot enter the AgentEvent stream."
+    );
+  }
+  return event;
+}
+
+function isInputAcceptEvent(event: AgentEvent): event is InputAcceptEvent {
+  return event.type === "runtime-input" || event.type === "user-input";
 }

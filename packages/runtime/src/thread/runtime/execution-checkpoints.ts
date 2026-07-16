@@ -4,6 +4,7 @@ import type {
   RuntimeToolExecutionCheckpoint,
   RuntimeToolExecutionContext,
   RuntimeToolExecutionDecision,
+  RuntimeToolExecutionResult,
 } from "../../llm/llm";
 import { persistedToolExecutionCheckpoint } from "../../llm/tool-execution";
 import type { ThreadState } from "../state/thread-state";
@@ -13,6 +14,13 @@ const maxCheckpointWriteAttempts = 5;
 export type ThreadToolCallInterceptor = (
   checkpoint: RuntimeToolExecutionCheckpoint
 ) => Promise<RuntimeToolExecutionDecision> | RuntimeToolExecutionDecision;
+
+export type ThreadToolResultInterceptor = (
+  checkpoint: RuntimeToolExecutionCheckpoint & { readonly output: unknown }
+) =>
+  | Promise<RuntimeToolExecutionResult | undefined>
+  | RuntimeToolExecutionResult
+  | undefined;
 
 export class ThreadExecutionCheckpointError extends Error {
   constructor(runId: string, expectedVersion: number, currentVersion: number) {
@@ -26,24 +34,28 @@ export class ThreadExecutionCheckpointError extends Error {
 export function createThreadToolExecutionContext({
   executionHost,
   interceptToolCall,
+  interceptToolResult,
   runId,
   state,
 }: {
   readonly executionHost: AgentHost;
   readonly interceptToolCall?: ThreadToolCallInterceptor;
+  readonly interceptToolResult?: ThreadToolResultInterceptor;
   readonly runId: string;
   readonly state: ThreadState;
 }): RuntimeToolExecutionContext {
   return {
     attempt: 1,
-    afterTool: (checkpoint) =>
-      appendThreadToolExecutionCheckpoint({
+    afterTool: async (checkpoint) => {
+      await appendThreadToolExecutionCheckpoint({
         executionHost,
         phase: "after-tool",
         runId,
         state,
         toolCall: checkpoint,
-      }),
+      });
+      return await interceptToolResult?.(checkpoint);
+    },
     beforeTool: async (checkpoint) => {
       await appendThreadToolExecutionCheckpoint({
         executionHost,

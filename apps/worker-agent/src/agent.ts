@@ -1,11 +1,12 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import {
-  Agent,
+  type Agent,
   type AgentAutoCompactionOptions,
   type AgentEvent,
   type AgentHost,
-  type AgentPlugin,
   type AgentTurn,
+  createAgent,
+  type PluginDefinition,
 } from "@minpeter/pss-runtime";
 import { drainAgentTurn } from "@minpeter/pss-runtime/platform/cloudflare";
 
@@ -124,18 +125,18 @@ export interface CollectTurnDeliveryOptions {
   readonly onEvent?: (event: AgentEvent) => void;
 }
 
-export function createConfiguredAgent(
+export async function createConfiguredAgent(
   env: WorkerAgentModelEnv,
   host: AgentHost,
   options: WorkerAgentRuntimeOptions = {}
-): Agent {
+): Promise<Agent> {
   const provider = createOpenAICompatible({
     apiKey: env.AI_API_KEY,
     baseURL: env.AI_BASE_URL?.trim() || DEFAULT_BASE_URL,
     name: "custom",
   });
 
-  const plugins: readonly AgentPlugin[] = [
+  const plugins: readonly PluginDefinition[] = [
     createTurnObservabilityPlugin({
       label: env.ENVIRONMENT,
       ...(options.observability?.log ? { log: options.observability.log } : {}),
@@ -143,7 +144,7 @@ export function createConfiguredAgent(
   ];
   const tools = createWorkerAgentToolSet(options);
 
-  return new Agent({
+  return await createAgent({
     autoCompaction: WORKER_AGENT_AUTO_COMPACTION,
     host,
     instructions: WORKER_AGENT_INSTRUCTIONS,

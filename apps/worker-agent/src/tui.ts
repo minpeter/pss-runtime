@@ -102,7 +102,7 @@ async function configureTuiTurnDelivery(
       );
       const binding = localChannelBinding(config.channel);
       const sessionScopeKey = TUI_SESSION_SCOPE_KEY;
-      const agent = createConfiguredAgent(config.env, host, {
+      const agent = await createConfiguredAgent(config.env, host, {
         sendMessage: {
           channel: () => config.channel,
           sink: createTuiMessageSink(output),

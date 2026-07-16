@@ -3,7 +3,6 @@ import type {
   AgentInput,
   ImageOmitDiagnostics,
   ImagePrepareDiagnostics,
-  Agent as PssAgent,
 } from "@minpeter/pss-runtime";
 import {
   IMAGE_PREPARE_LOG_MESSAGE,
@@ -94,7 +93,7 @@ installCloudflareImageCodecs();
  * telegram.ts / telegram-message-coalesce.ts and never inside this DO.
  */
 export class AgentDurableObject extends CloudflareAgent<Env> {
-  readonly #platform: CloudflarePlatformContext<PssAgent>;
+  readonly #platform: CloudflarePlatformContext<Agent>;
   readonly #env: Env;
   readonly #storage: DurableObjectStorage;
   readonly #sessionIndexClient: SessionIndexClient;
@@ -251,7 +250,7 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
       this.#channel = payload.channel;
       this.#sessionScopeKey = payload.sessionScopeKey;
       const binding = durableObjectChannelBinding(payload.channel);
-      const session = this.#ensureTurnSession(binding);
+      const session = await this.#ensureTurnSession(binding);
       const sendMessage = this.#sendMessageSetup(payload.channel);
       const agentInput = this.#parseAgentInput(payload, log);
       if (agentInput instanceof Response) {
@@ -448,32 +447,38 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
     return this.#sessionIndexStore;
   }
 
-  #ensureTurnSession(binding: ChannelRuntimeBinding): TurnSession {
+  async #ensureTurnSession(
+    binding: ChannelRuntimeBinding
+  ): Promise<TurnSession> {
     if (this.#turnSession) {
       return this.#turnSession;
     }
 
     const sendMessage = this.#longLivedSendMessageOptions();
-    this.#agent = createConfiguredAgent(this.#env, this.#platform.host(), {
-      sendMessage,
-      sessionTools: {
-        currentConversationKey: () => {
-          const channel = this.#channel;
-          if (!channel) {
-            return binding.channelKey;
-          }
-          return durableObjectChannelBinding(channel).channelKey;
+    this.#agent = await createConfiguredAgent(
+      this.#env,
+      this.#platform.host(),
+      {
+        sendMessage,
+        sessionTools: {
+          currentConversationKey: () => {
+            const channel = this.#channel;
+            if (!channel) {
+              return binding.channelKey;
+            }
+            return durableObjectChannelBinding(channel).channelKey;
+          },
+          currentSessionScopeKey: () => this.#sessionScopeKey,
+          reader: this.#sessionIndexClient,
+          transcriptReader: this.#sessionTranscriptClient,
         },
-        currentSessionScopeKey: () => this.#sessionScopeKey,
-        reader: this.#sessionIndexClient,
-        transcriptReader: this.#sessionTranscriptClient,
-      },
-      observability: {
-        log: (entry) => {
-          this.#observability?.record(entry);
+        observability: {
+          log: (entry) => {
+            this.#observability?.record(entry);
+          },
         },
-      },
-    });
+      }
+    );
     this.#turnSession = createTurnSession(this.#agent.thread(binding.thread));
     return this.#turnSession;
   }

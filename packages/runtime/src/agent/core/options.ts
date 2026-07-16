@@ -2,9 +2,9 @@ import type { LanguageModel, ToolSet } from "ai";
 import type { AgentHost } from "../../execution/host/types";
 import type { AgentToolChoice, ModelContextGateOptions } from "../../llm/llm";
 import { assertNoUnsupportedToolApproval } from "../../llm/tool-approval";
+import type { PluginDefinition } from "../../plugins/api";
 import type { HostAttachmentStore } from "../../thread/input/attachments";
 import type { AgentInput, UserInput } from "../../thread/input/input";
-import type { AgentPlugin } from "../../thread/plugins/pipeline";
 
 export interface AgentAutoCompactionOptions {
   readonly background?: boolean;
@@ -23,9 +23,34 @@ export interface AgentOptions {
   readonly model: LanguageModel;
   readonly namespace?: string;
   readonly notificationOverlays?: readonly (AgentInput | UserInput)[];
-  readonly plugins?: readonly AgentPlugin[];
+  readonly pluginFactoryTimeoutMs?: number;
+  readonly pluginHookTimeoutMs?: number;
+  readonly plugins?: readonly PluginDefinition[];
   readonly toolChoice?: AgentToolChoice;
   readonly tools?: ToolSet;
+}
+
+export type CreateAgentOptions = AgentOptions;
+
+export interface NormalizedPluginTimeoutOptions {
+  readonly factoryTimeoutMs: number;
+  readonly hookTimeoutMs: number;
+}
+
+export function normalizePluginTimeoutOptions(
+  options: Pick<AgentOptions, "pluginFactoryTimeoutMs" | "pluginHookTimeoutMs">
+): NormalizedPluginTimeoutOptions {
+  const factoryTimeoutMs = options.pluginFactoryTimeoutMs ?? 10_000;
+  const hookTimeoutMs = options.pluginHookTimeoutMs ?? 10_000;
+  for (const [name, value] of [
+    ["pluginFactoryTimeoutMs", factoryTimeoutMs],
+    ["pluginHookTimeoutMs", hookTimeoutMs],
+  ] as const) {
+    if (!(Number.isFinite(value) && value >= 0)) {
+      throw new TypeError(`Agent: options.${name} must be non-negative.`);
+    }
+  }
+  return { factoryTimeoutMs, hookTimeoutMs };
 }
 
 export type AgentModelOptions = Pick<

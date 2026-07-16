@@ -181,6 +181,7 @@ function createTracedExecutionHost(): {
   return {
     host: {
       attachmentStore: base.attachmentStore,
+      diagnostics: base.diagnostics,
       scheduler: base.scheduler,
       store,
     },
