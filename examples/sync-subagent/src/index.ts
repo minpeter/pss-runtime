@@ -3,7 +3,7 @@ import { createInterface } from "node:readline/promises";
 import { drainRunForCli } from "./print-run";
 import { createExampleRuntime } from "./setup";
 
-const runtime = createExampleRuntime();
+const runtime = await createExampleRuntime();
 
 output.write(
   [

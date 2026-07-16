@@ -1,5 +1,6 @@
 import type { AgentHost, HostScheduler } from "../../../execution";
 import type { ThreadStore } from "../../../index";
+import { noopRuntimeDiagnostics } from "../../../plugins/diagnostics";
 import { CloudflareAttachmentStore } from "../storage/attachment-store";
 import {
   InMemoryCloudflareDurableObjectStorage as BaseInMemoryCloudflareDurableObjectStorage,
@@ -72,6 +73,7 @@ export function createCloudflareStorageHost({
   });
   return {
     attachmentStore: new CloudflareAttachmentStore({ prefix, storage }),
+    diagnostics: noopRuntimeDiagnostics,
     scheduler,
     store: threadStore ? executionStoreWithThreads(store, threadStore) : store,
   };

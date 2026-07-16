@@ -146,7 +146,8 @@ describe("examples workspace packages", () => {
     expect(pluginSource).toContain(".send(");
     expect(pluginSource.trim()).toMatch(finalRunEventsLoopPattern);
     expect(pluginSource).toContain("plugins:");
-    expect(pluginSource).toContain("on:");
+    expect(pluginSource).toContain("definePlugin(");
+    expect(pluginSource).toContain("pss.on(");
     expect(pluginSource).toContain("event.type");
     expect(pluginSource).not.toContain("process.argv");
   });

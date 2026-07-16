@@ -27,6 +27,7 @@ describe("createQueuedSendInput", () => {
       history: () => [],
       plugins: [transformTextToFileInputPlugin()],
       signal: () => undefined,
+      threadKey: "plugin-duplicate",
     });
 
     const result = await createQueuedSendInput({
@@ -58,6 +59,7 @@ describe("createQueuedSendInput", () => {
       history: () => [],
       plugins: [transformAnyInputToTextPlugin()],
       signal: () => undefined,
+      threadKey: "plugin-transform",
     });
 
     const result = await createQueuedSendInput({

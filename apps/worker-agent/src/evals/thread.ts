@@ -1,9 +1,9 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import {
-  Agent,
   type AgentEvent,
   type AgentOptions,
   type AgentTurn,
+  createAgent,
 } from "@minpeter/pss-runtime";
 import type {
   AgentTurnLike,
@@ -48,11 +48,11 @@ export interface WorkerEvalThreadOptions {
 
 let cachedRealModel: ReturnType<ReturnType<typeof createOpenAICompatible>>;
 
-export function workerEvalThread(
+export async function workerEvalThread(
   options: WorkerEvalThreadOptions
-): EvalThreadLike {
+): Promise<EvalThreadLike> {
   const tools = createEvalTools(options);
-  const agent = new Agent({
+  const agent = await createAgent({
     instructions: WORKER_AGENT_INSTRUCTIONS,
     model: evalModel(options.scriptedResults),
     tools,
@@ -69,10 +69,10 @@ export function deliveryThread(
   };
 }
 
-export function rawWorkerEvalThread(
+export async function rawWorkerEvalThread(
   options: WorkerEvalThreadOptions
-): EvalThreadLike {
-  const agent = new Agent({
+): Promise<EvalThreadLike> {
+  const agent = await createAgent({
     instructions: WORKER_AGENT_INSTRUCTIONS,
     model: evalModel(options.scriptedResults),
     tools: createEvalTools(options),

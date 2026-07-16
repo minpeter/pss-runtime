@@ -16,7 +16,7 @@ export function assertNoUnsupportedToolApproval(
     ) {
       throw new TypeError(
         `Agent tools.${toolName}.needsApproval is not supported. ` +
-          "Use pss before-tool-call checkpoint recovery instead of AI SDK tool approval."
+          "Use the pss tool.call.before checkpoint recovery hook instead of AI SDK tool approval."
       );
     }
   }

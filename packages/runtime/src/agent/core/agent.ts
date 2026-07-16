@@ -1,5 +1,8 @@
 import type { AgentHost, NotificationRecord } from "../../execution/host/types";
 import { createInMemoryHost } from "../../platform/memory";
+import type { PluginDefinition } from "../../plugins/api";
+import { noopRuntimeDiagnostics } from "../../plugins/diagnostics";
+import { PluginRuntime } from "../../plugins/runtime";
 import { type AgentInput, AgentThread } from "../../thread/handle/thread";
 import type { AgentPlugin } from "../../thread/plugins/pipeline";
 import type { AgentTurn } from "../../thread/protocol/turn";
@@ -12,7 +15,9 @@ import {
   type AgentModelOptions,
   type AgentOptions,
   assertAgentOptions,
+  type CreateAgentOptions,
   normalizeAgentAutoCompactionOptions,
+  normalizePluginTimeoutOptions,
 } from "./options";
 import {
   type AgentThreadEntry,
@@ -23,13 +28,21 @@ import {
 
 export type { AgentHost } from "../../execution/host/types";
 export type { ThreadCompactionInput } from "../../thread/handle/thread";
-export type { AgentAutoCompactionOptions, AgentOptions } from "./options";
+export type {
+  AgentAutoCompactionOptions,
+  AgentOptions,
+  CreateAgentOptions,
+} from "./options";
 export type {
   ThreadAddress,
   ThreadHandle,
   ThreadKey,
   ThreadMetadata,
 } from "./thread-entry";
+
+type InternalAgentOptions = Omit<AgentOptions, "plugins"> & {
+  readonly plugins?: readonly (AgentPlugin | PluginDefinition)[];
+};
 
 export class Agent {
   readonly #modelOptions: AgentModelOptions;
@@ -38,12 +51,14 @@ export class Agent {
   readonly #store: ThreadStore;
   readonly #host: AgentHost;
   readonly #plugins: readonly AgentPlugin[];
+  readonly #pluginRuntime?: PluginRuntime;
   readonly #notificationOverlays?: AgentOptions["notificationOverlays"];
   readonly #autoCompaction?: AgentAutoCompactionOptions;
   readonly host: AgentHost;
   readonly namespace?: string;
-  constructor(options: AgentOptions) {
+  constructor(options: InternalAgentOptions, pluginRuntime?: PluginRuntime) {
     assertAgentOptions(options);
+    const internalPlugins = (options as InternalAgentOptions).plugins ?? [];
 
     const providedHost = options.host;
     this.namespace = options.namespace;
@@ -53,7 +68,8 @@ export class Agent {
     this.#host = providedHost ?? createInMemoryHost();
     this.host = this.#host;
     this.#store = threadStoreForHost(this.#host);
-    this.#plugins = options.plugins ?? [];
+    this.#pluginRuntime = pluginRuntime;
+    this.#plugins = internalPlugins.filter(isLegacyPlugin);
     this.#notificationOverlays = options.notificationOverlays;
     this.#autoCompaction = normalizeAgentAutoCompactionOptions(
       options.autoCompaction
@@ -67,7 +83,7 @@ export class Agent {
       instructions: options.instructions,
       model: options.model,
       toolChoice: options.toolChoice,
-      tools: options.tools,
+      tools: pluginRuntime?.tools ?? options.tools,
     };
   }
 
@@ -109,6 +125,22 @@ export class Agent {
     return this.#threadEntry(threadStoreKey(thread)).publicHandle;
   }
 
+  async dispose(): Promise<void> {
+    let failure: unknown;
+    for (const entry of [...this.#threads.values()]) {
+      try {
+        await entry.publicHandle.dispose();
+      } catch (error) {
+        failure ??= error;
+      }
+    }
+    this.#threads.clear();
+    await this.#pluginRuntime?.dispose();
+    if (failure !== undefined) {
+      throw failure;
+    }
+  }
+
   #threadEntry(key: string): AgentThreadEntry {
     const existing = this.#threads.get(key);
     if (existing) {
@@ -119,10 +151,11 @@ export class Agent {
     thread = new AgentThread(
       this.#modelOptions,
       { key, store: this.#store },
-      this.#plugins,
+      [...this.#plugins],
       {
         autoCompaction: this.#autoCompaction,
         executionHost: this.#host,
+        pluginRuntime: this.#pluginRuntime,
       }
     );
     const publicHandle: ThreadHandle = {
@@ -130,12 +163,19 @@ export class Agent {
       delete: async () => {
         thread.kill();
         this.#evictThreadHandle(key);
-        await thread.delete();
+        try {
+          await thread.delete();
+        } finally {
+          this.#pluginRuntime?.clearThread(key);
+        }
       },
-      dispose: () => {
-        thread.kill();
+      dispose: async () => {
         this.#evictThreadHandle(key);
-        return Promise.resolve();
+        try {
+          await thread.dispose();
+        } finally {
+          this.#pluginRuntime?.clearThread(key);
+        }
       },
       events: (options) => thread.events(options),
       interrupt: () => thread.interrupt(),
@@ -170,4 +210,36 @@ export class Agent {
       }
     );
   }
+}
+
+export async function createAgent(options: CreateAgentOptions): Promise<Agent> {
+  assertAgentOptions(options);
+  const definitions = options.plugins ?? [];
+  if (definitions.length === 0) {
+    return new Agent(options);
+  }
+  const timeouts = normalizePluginTimeoutOptions(options);
+  const runtime = await PluginRuntime.create(definitions, {
+    diagnostics: options.host?.diagnostics ?? noopRuntimeDiagnostics,
+    ...timeouts,
+    tools: options.tools,
+  });
+  try {
+    return new Agent(options, runtime);
+  } catch (cause) {
+    await runtime.dispose();
+    throw cause;
+  }
+}
+
+function isPluginDefinition(
+  plugin: AgentPlugin | PluginDefinition
+): plugin is PluginDefinition {
+  return typeof plugin === "function";
+}
+
+function isLegacyPlugin(
+  plugin: AgentPlugin | PluginDefinition
+): plugin is AgentPlugin {
+  return !isPluginDefinition(plugin);
 }

@@ -36,6 +36,7 @@ function createCheckpointSpyCloudflareHost(maxPayloadBytes: number): {
   return {
     checkpoints,
     host: {
+      diagnostics: { report: () => undefined },
       scheduler: {
         enqueueRun: async () => undefined,
         resumeThread: async () => undefined,

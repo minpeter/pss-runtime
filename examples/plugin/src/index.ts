@@ -1,6 +1,5 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import type { AgentPlugin } from "@minpeter/pss-runtime";
-import { Agent } from "@minpeter/pss-runtime";
+import { createAgent, definePlugin } from "@minpeter/pss-runtime";
 import { createEnv } from "@t3-oss/env-core";
 import { config as loadEnv } from "dotenv";
 import { z } from "zod";
@@ -20,18 +19,15 @@ const provider = createOpenAICompatible({
   apiKey: env.AI_API_KEY,
   baseURL: env.AI_BASE_URL,
 });
-const tracePlugin: AgentPlugin = {
-  name: "trace-plugin",
-  on: ({ event }) => {
-    if (event.type === "turn-end") {
-      console.log("");
-      console.log("// plugin:turn-end //");
-      console.log("");
-    }
-  },
-};
+const tracePlugin = definePlugin((pss) => {
+  pss.on("turn.end", (event) => {
+    console.log("");
+    console.log(`// plugin:${event.type} //`);
+    console.log("");
+  });
+});
 
-const agent = new Agent({
+const agent = await createAgent({
   model: provider(env.AI_MODEL),
   instructions: "Answer briefly.",
   plugins: [tracePlugin],

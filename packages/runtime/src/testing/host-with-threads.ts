@@ -11,6 +11,7 @@ export function hostWithThreads(
   const base = createInMemoryHost();
   return {
     attachmentStore: attachmentStore ?? base.attachmentStore,
+    diagnostics: base.diagnostics,
     scheduler: base.scheduler,
     store: {
       checkpoints: base.store.checkpoints,

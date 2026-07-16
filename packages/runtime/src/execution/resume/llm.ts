@@ -55,8 +55,8 @@ export async function createResumeToolExecution({
   const run = await host.store.turns.get(runId);
   return {
     attempt: run?.lease?.attempt ?? 1,
-    afterTool: (checkpoint) =>
-      appendCheckpoint({
+    afterTool: async (checkpoint) => {
+      await appendCheckpoint({
         host,
         pendingToolCall: persistedToolExecutionCheckpoint(checkpoint),
         phase: "after-tool",
@@ -67,7 +67,9 @@ export async function createResumeToolExecution({
           toolName: checkpoint.toolName,
         },
         threadSnapshot: resumeStateCheckpointReference(threadSnapshot),
-      }),
+      });
+      return;
+    },
     beforeTool: async (checkpoint) => {
       await appendCheckpoint({
         host,

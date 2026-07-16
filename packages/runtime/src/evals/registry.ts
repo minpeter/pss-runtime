@@ -16,7 +16,8 @@ const registry: EvalDefinition[] = [];
  * @example
  * ```ts
  * defineEval("weather", {
- *   thread: () => new Agent({ model, instructions, tools }).thread("eval"),
+ *   thread: async () =>
+ *     (await createAgent({ model, instructions, tools })).thread("eval"),
  * }, (it) => {
  *   it("calls get_weather", async (t) => {
  *     await t.run("서울 날씨 어때?");

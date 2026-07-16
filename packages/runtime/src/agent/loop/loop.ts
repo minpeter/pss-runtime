@@ -21,6 +21,14 @@ interface RunAgentLoopOptions {
   model: ModelGenerationOptions;
   signal?: AbortSignal;
   toolExecution?: RuntimeToolExecutionContext;
+  transformModelContext?: (
+    messages: readonly ModelMessage[],
+    signal: AbortSignal
+  ) => Promise<readonly ModelMessage[]>;
+  transformModelStep?: (
+    messages: ModelStepOutput,
+    signal: AbortSignal
+  ) => Promise<ModelStepOutput>;
 }
 
 type AgentLoopResult = "completed" | "aborted";
@@ -54,6 +62,8 @@ export async function runAgentLoop({
   model,
   signal = new AbortController().signal,
   toolExecution,
+  transformModelContext,
+  transformModelStep,
 }: RunAgentLoopOptions): Promise<AgentLoopResult> {
   while (true) {
     if (signal.aborted) {
@@ -71,7 +81,13 @@ export async function runAgentLoop({
     }
 
     const capturedOutput = await captureObserverEvents(() =>
-      readModelOutput({ history, model, signal, toolExecution })
+      readModelOutput({
+        history,
+        model,
+        signal,
+        toolExecution,
+        transformModelContext,
+      })
     );
     const output = capturedOutput.value;
 
@@ -85,6 +101,7 @@ export async function runAgentLoop({
       history,
       output,
       signal,
+      transformModelStep,
     });
 
     if (result === "aborted") {
@@ -172,13 +189,17 @@ async function readModelOutput({
   model,
   signal,
   toolExecution,
-}: Pick<RunAgentLoopOptions, "history" | "model"> & {
+  transformModelContext,
+}: Pick<RunAgentLoopOptions, "history" | "model" | "transformModelContext"> & {
   signal: AbortSignal;
   toolExecution?: RuntimeToolExecutionContext;
 }): Promise<ModelStepOutput | "aborted"> {
   try {
+    const snapshot = history.modelContextSnapshot();
     return await generateModelStep({
-      history: history.modelContextSnapshot(),
+      history: transformModelContext
+        ? await transformModelContext(snapshot, signal)
+        : snapshot,
       ...model,
       signal,
       toolExecution,
@@ -198,17 +219,23 @@ async function appendCapturedStepOutput({
   history,
   output,
   signal,
-}: Pick<RunAgentLoopOptions, "emit"> & { history: ModelHistory } & {
+  transformModelStep,
+}: Pick<RunAgentLoopOptions, "emit" | "transformModelStep"> & {
+  history: ModelHistory;
+} & {
   capturedOutput: ObserverEventCaptureResult<ModelStepOutput | "aborted">;
   output: ModelStepOutput;
   signal: AbortSignal;
 }): Promise<StepOutputResult> {
   try {
+    const transformedOutput = transformModelStep
+      ? await transformModelStep(output, signal)
+      : output;
     return await appendStepOutput({
       emit,
       history,
       observerEvents: capturedOutput.events,
-      output,
+      output: transformedOutput,
       signal,
     });
   } finally {

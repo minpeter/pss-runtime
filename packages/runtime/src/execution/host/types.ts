@@ -1,3 +1,4 @@
+import type { RuntimeDiagnosticsSink } from "../../plugins/diagnostics";
 import type { HostAttachmentStore } from "../../thread/input/attachments";
 import type { AgentEvent, UserInput } from "../../thread/protocol/events";
 import type { ThreadStore } from "../../thread/store/types";
@@ -6,6 +7,7 @@ import type { ResumeThreadOptions } from "./scheduler-options";
 /** Single host contract: persistence, scheduling, and optional attachments. */
 export interface AgentHost {
   readonly attachmentStore?: HostAttachmentStore;
+  readonly diagnostics: RuntimeDiagnosticsSink;
   readonly scheduler: HostScheduler;
   readonly store: HostStore;
 }

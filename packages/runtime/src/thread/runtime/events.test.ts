@@ -17,6 +17,7 @@ function createDispatcher(
     history: () => [],
     plugins,
     signal: () => undefined,
+    threadKey: "test-thread",
   });
 }
 

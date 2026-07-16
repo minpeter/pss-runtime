@@ -3,7 +3,6 @@ import type {
   AgentInput,
   ImageOmitDiagnostics,
   ImagePrepareDiagnostics,
-  Agent as PssAgent,
 } from "@minpeter/pss-runtime";
 import {
   IMAGE_PREPARE_LOG_MESSAGE,
@@ -94,15 +93,15 @@ installCloudflareImageCodecs();
  * telegram.ts / telegram-message-coalesce.ts and never inside this DO.
  */
 export class AgentDurableObject extends CloudflareAgent<Env> {
-  readonly #platform: CloudflarePlatformContext<PssAgent>;
+  readonly #platform: CloudflarePlatformContext<Agent>;
   readonly #env: Env;
   readonly #storage: DurableObjectStorage;
   readonly #sessionIndexClient: SessionIndexClient;
   readonly #sessionTranscriptClient: SessionTranscriptReader;
   #sessionIndexStore: SessionIndexStore | undefined;
   /** Layer 2: reused so send/steer share in-memory active-run state. */
-  #agent: Agent | undefined;
   #turnSession: TurnSession | undefined;
+  #turnSessionPromise: Promise<TurnSession> | undefined;
   #channel: ChannelAddress | undefined;
   #sessionScopeKey: string | undefined;
   #observability: ReturnType<typeof createTurnEventCollector> | undefined;
@@ -251,7 +250,7 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
       this.#channel = payload.channel;
       this.#sessionScopeKey = payload.sessionScopeKey;
       const binding = durableObjectChannelBinding(payload.channel);
-      const session = this.#ensureTurnSession(binding);
+      const session = await this.#ensureTurnSession(binding);
       const sendMessage = this.#sendMessageSetup(payload.channel);
       const agentInput = this.#parseAgentInput(payload, log);
       if (agentInput instanceof Response) {
@@ -448,34 +447,60 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
     return this.#sessionIndexStore;
   }
 
-  #ensureTurnSession(binding: ChannelRuntimeBinding): TurnSession {
+  async #ensureTurnSession(
+    binding: ChannelRuntimeBinding
+  ): Promise<TurnSession> {
     if (this.#turnSession) {
       return this.#turnSession;
     }
+    if (this.#turnSessionPromise) {
+      return await this.#turnSessionPromise;
+    }
 
-    const sendMessage = this.#longLivedSendMessageOptions();
-    this.#agent = createConfiguredAgent(this.#env, this.#platform.host(), {
-      sendMessage,
-      sessionTools: {
-        currentConversationKey: () => {
-          const channel = this.#channel;
-          if (!channel) {
-            return binding.channelKey;
-          }
-          return durableObjectChannelBinding(channel).channelKey;
-        },
-        currentSessionScopeKey: () => this.#sessionScopeKey,
-        reader: this.#sessionIndexClient,
-        transcriptReader: this.#sessionTranscriptClient,
-      },
-      observability: {
-        log: (entry) => {
-          this.#observability?.record(entry);
-        },
-      },
-    });
-    this.#turnSession = createTurnSession(this.#agent.thread(binding.thread));
-    return this.#turnSession;
+    const initializing = (async () => {
+      const sendMessage = this.#longLivedSendMessageOptions();
+      const agent = await createConfiguredAgent(
+        this.#env,
+        this.#platform.host(),
+        {
+          sendMessage,
+          sessionTools: {
+            currentConversationKey: () => {
+              const channel = this.#channel;
+              if (!channel) {
+                return binding.channelKey;
+              }
+              return durableObjectChannelBinding(channel).channelKey;
+            },
+            currentSessionScopeKey: () => this.#sessionScopeKey,
+            reader: this.#sessionIndexClient,
+            transcriptReader: this.#sessionTranscriptClient,
+          },
+          observability: {
+            log: (entry) => {
+              this.#observability?.record(entry);
+            },
+          },
+        }
+      );
+      try {
+        const session = createTurnSession(agent.thread(binding.thread));
+        this.#turnSession = session;
+        return session;
+      } catch (error) {
+        await agent.dispose().catch(() => undefined);
+        throw error;
+      }
+    })();
+    this.#turnSessionPromise = initializing;
+    try {
+      return await initializing;
+    } catch (error) {
+      if (this.#turnSessionPromise === initializing) {
+        this.#turnSessionPromise = undefined;
+      }
+      throw error;
+    }
   }
 
   #longLivedSendMessageOptions(): WorkerAgentSendMessageToolOptions {

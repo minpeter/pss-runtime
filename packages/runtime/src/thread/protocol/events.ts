@@ -33,25 +33,6 @@ export interface AssistantReasoning {
   text: string;
   type: "assistant-reasoning";
 }
-export type BeforeToolCallRetryPolicy =
-  | "idempotent"
-  | "manual-recovery"
-  | "pure";
-
-/**
- * Plugin-only pre-execution tool event. The runtime synthesizes this after the
- * `before-tool` checkpoint and before tool `execute`; it is not emitted on
- * `turn.events()`.
- */
-export interface BeforeToolCall {
-  readonly attempt: number;
-  readonly idempotencyKey: string;
-  readonly input: unknown;
-  readonly policy: BeforeToolCallRetryPolicy;
-  readonly toolCallId: string;
-  readonly toolName: string;
-  readonly type: "before-tool-call";
-}
 
 export interface ToolCall {
   input: unknown;
@@ -87,8 +68,6 @@ export type AgentEvent =
   | AssistantReasoning
   /** The model produced visible assistant text. */
   | AssistantOutput
-  /** A tool call is about to execute after the `before-tool` checkpoint. */
-  | BeforeToolCall
   /** The model requested a tool call. */
   | ToolCall
   /** A tool call returned a result. */
@@ -113,7 +92,6 @@ const lifecycleAgentEventTypes = {
 } satisfies Partial<Record<AgentEvent["type"], true>>;
 
 const toolAgentEventTypes = {
-  "before-tool-call": true,
   "tool-call": true,
   "tool-result": true,
 } satisfies Partial<Record<AgentEvent["type"], true>>;
@@ -155,12 +133,6 @@ export function isLifecycleAgentEvent(
 
 export function isToolAgentEvent(event: AgentEvent): event is ToolAgentEvent {
   return event.type in toolAgentEventTypes;
-}
-
-export function isBeforeToolCallEvent(
-  event: AgentEvent
-): event is BeforeToolCall {
-  return event.type === "before-tool-call";
 }
 
 export function isTelemetryAgentEvent(

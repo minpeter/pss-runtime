@@ -5,9 +5,9 @@ Model wiring and the `pss` TUI for pss-next. The TUI includes OpenSearch-backed
 
 ```ts
 import { createCodingLanguageModel } from "@minpeter/pss-coding-agent/model";
-import { Agent } from "@minpeter/pss-runtime";
+import { createAgent } from "@minpeter/pss-runtime";
 
-const agent = new Agent({
+const agent = await createAgent({
   model: createCodingLanguageModel(),
 });
 

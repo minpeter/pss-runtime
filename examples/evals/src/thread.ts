@@ -1,4 +1,4 @@
-import { Agent } from "@minpeter/pss-runtime";
+import { createAgent } from "@minpeter/pss-runtime";
 import { realModel } from "./real-model";
 import {
   createScriptedModel,
@@ -15,9 +15,9 @@ const REAL = process.env.PSS_EVAL_REAL === "1";
  * same evals run against your configured model. Each call builds a fresh thread
  * so cases never share conversation state.
  */
-export function evalThread(scriptedResults: readonly ScriptedResult[]) {
+export async function evalThread(scriptedResults: readonly ScriptedResult[]) {
   const model = REAL ? realModel() : createScriptedModel(scriptedResults);
-  return new Agent({ instructions, model, tools }).thread("eval");
+  return (await createAgent({ instructions, model, tools })).thread("eval");
 }
 
 /**

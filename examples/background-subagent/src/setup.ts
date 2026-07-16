@@ -34,7 +34,9 @@ export interface ExampleRuntime {
   readonly threadKey: string;
 }
 
-export function createExampleRuntime(threadKey = "default"): ExampleRuntime {
+export async function createExampleRuntime(
+  threadKey = "default"
+): Promise<ExampleRuntime> {
   let coordinator!: Agent;
   let reader!: Agent;
   const coordinatorNamespace = "coordinator";
@@ -51,8 +53,8 @@ export function createExampleRuntime(threadKey = "default"): ExampleRuntime {
       }),
   });
 
-  reader = createReaderAgent(model, host);
-  coordinator = createCoordinatorAgent(model, {
+  reader = await createReaderAgent(model, host);
+  coordinator = await createCoordinatorAgent(model, {
     executionHost: host,
     host,
     threadKey,

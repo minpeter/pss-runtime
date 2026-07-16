@@ -30,9 +30,11 @@ export interface ExampleRuntime {
   readonly threadKey: string;
 }
 
-export function createExampleRuntime(threadKey = "default"): ExampleRuntime {
-  const reader = createReaderAgent(model);
-  const coordinator = createCoordinatorAgent(model, {
+export async function createExampleRuntime(
+  threadKey = "default"
+): Promise<ExampleRuntime> {
+  const reader = await createReaderAgent(model);
+  const coordinator = await createCoordinatorAgent(model, {
     readerAgent: reader,
     threadKey,
   });

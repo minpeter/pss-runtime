@@ -75,7 +75,7 @@ describe("tool-call plugin snapshots through Agent", () => {
       plugins: [
         {
           on: ({ event }) => {
-            if (event.type !== "before-tool-call") {
+            if (event.type !== "tool.call.before") {
               return;
             }
 
@@ -100,7 +100,7 @@ describe("tool-call plugin snapshots through Agent", () => {
     });
   });
 
-  it("keeps before-tool-call events out of public turn events", async () => {
+  it("keeps tool.call.before events out of public turn events", async () => {
     const Agent = await loadAgent();
     const { host } = createCheckpointSpyHost();
     const signal = new AbortController().signal;
@@ -131,7 +131,7 @@ describe("tool-call plugin snapshots through Agent", () => {
       plugins: [
         {
           on: ({ event }) => {
-            if (event.type !== "before-tool-call") {
+            if (event.type !== "tool.call.before") {
               return;
             }
 
@@ -147,6 +147,6 @@ describe("tool-call plugin snapshots through Agent", () => {
     const events = await collectRun(await agent.send("use the tool"));
 
     expect(interceptedToolNames).toEqual(["checked_tool"]);
-    expect(events.map((event) => event.type)).not.toContain("before-tool-call");
+    expect(events.map((event) => event.type)).not.toContain("tool.call.before");
   });
 });

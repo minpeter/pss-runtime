@@ -9,7 +9,10 @@ import {
   emitCommittedRuntimeInputs,
 } from "../input/runtime-input-emit";
 import type { AgentEvent } from "../protocol/events";
-import { scheduleThreadAutoCompaction } from "./auto-compaction";
+import {
+  scheduleThreadAutoCompaction,
+  type ThreadModelContextTransform,
+} from "./auto-compaction";
 import { drainRuntimeInput } from "./drain";
 import {
   commitAndAckDurableThreadInput,
@@ -62,12 +65,37 @@ export async function processQueuedInput({
   const durableEvents: DurableThreadEventBuffer = [];
   const recordEvent = (event: AgentEvent) =>
     recordDurableThreadEvent(durableEvents, event);
+  const pluginRuntime = execution.pluginRuntime;
+  const transformModelContext: ThreadModelContextTransform | undefined =
+    pluginRuntime
+      ? (messages, signal) =>
+          pluginRuntime.transformModelContext(
+            threadKey,
+            messages,
+            state.modelSnapshot(),
+            signal
+          )
+      : undefined;
+  const transformModelStep = pluginRuntime
+    ? (
+        messages: Parameters<typeof pluginRuntime.transformModelStep>[1],
+        signal: AbortSignal
+      ) =>
+        pluginRuntime.transformModelStep(
+          threadKey,
+          messages,
+          state.modelSnapshot(),
+          signal
+        )
+    : undefined;
 
   try {
     executionRun = await startThreadExecutionRun({
       executionHost: execution.executionHost,
       interceptToolCall: (checkpoint) =>
         events.interceptBeforeToolCall(checkpoint),
+      interceptToolResult: (checkpoint) =>
+        events.interceptAfterToolCall(checkpoint),
       threadKey,
       state,
       turnId,
@@ -143,6 +171,7 @@ export async function processQueuedInput({
     });
 
     const result = await runAgentLoopWithOverflowCompaction({
+      compact: (input) => events.compact(state, input),
       execution,
       model,
       runLoop: () =>
@@ -167,17 +196,17 @@ export async function processQueuedInput({
             events.captureObserverEvents(run, callback),
           signal: activeAbort.signal,
           toolExecution: executionRun?.toolExecution,
+          transformModelContext,
+          transformModelStep,
         }),
       state,
+      transformModelContext,
     });
 
     state.clearTransientInputs();
     await closeTurnWithDurableTerminalEvent({
       buffer: durableEvents,
-      completeExecution: async () =>
-        await executionRun?.complete(
-          result === "aborted" ? "cancelled" : "completed"
-        ),
+      completeExecution: async (status) => await executionRun?.complete(status),
       deactivateRun,
       events,
       executionHost: execution.executionHost,
@@ -190,9 +219,11 @@ export async function processQueuedInput({
     });
     if (result === "completed" && input) {
       scheduleThreadAutoCompaction({
+        compact: (compactionInput) => events.compact(state, compactionInput),
         model,
         policy: execution.autoCompaction,
         state,
+        transformModelContext,
       });
     }
   } catch (error) {
@@ -208,6 +239,7 @@ export async function processQueuedInput({
       error,
       executionHost: execution.executionHost,
       executionRun,
+      events,
       historySnapshot,
       recordEvent,
       run,

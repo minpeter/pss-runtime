@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("Tegami release configuration", () => {
-  it("targets the repository's stable main release lane", () => {
+  it("targets the repository's next prerelease lane", () => {
     const script = readFileSync("scripts/tegami.mts", "utf8");
 
     expect(script).toContain('from "tegami"');
@@ -12,8 +12,10 @@ describe("Tegami release configuration", () => {
     expect(script).toContain('repo: "minpeter/pss-runtime"');
     expect(script).toContain('base: "main"');
     expect(script).toContain('workflow: "release.yml"');
-    expect(script).not.toContain("prerelease:");
-    expect(script).not.toContain("distTag:");
+    expect(script.match(/prerelease: "next"/g)).toHaveLength(2);
+    expect(script.match(/distTag: "next"/g)).toHaveLength(2);
+    expect(script).toContain('"@minpeter/pss-runtime"');
+    expect(script).toContain('"@minpeter/pss-coding-agent"');
   });
 
   it("excludes every private workspace from release planning", () => {

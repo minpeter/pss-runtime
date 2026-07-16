@@ -1,5 +1,5 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { Agent } from "@minpeter/pss-runtime";
+import { createAgent } from "@minpeter/pss-runtime";
 import { createFileHost } from "@minpeter/pss-runtime/platform/file";
 import { createEnv } from "@t3-oss/env-core";
 import { config as loadEnv } from "dotenv";
@@ -28,8 +28,10 @@ const provider = createOpenAICompatible({
   name: "custom",
 });
 
-export const thread = new Agent({
-  host: createFileHost({ directory: env.PSS_EXAMPLE_THREAD_DIR }),
-  instructions: "Answer briefly and remember useful context in the thread.",
-  model: provider(env.AI_MODEL),
-}).thread(env.PSS_EXAMPLE_THREAD_KEY);
+export const thread = (
+  await createAgent({
+    host: createFileHost({ directory: env.PSS_EXAMPLE_THREAD_DIR }),
+    instructions: "Answer briefly and remember useful context in the thread.",
+    model: provider(env.AI_MODEL),
+  })
+).thread(env.PSS_EXAMPLE_THREAD_KEY);

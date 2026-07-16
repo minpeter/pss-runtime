@@ -7,6 +7,7 @@ import {
   decodeStoredThreadState,
   encodeThreadSnapshot,
   ThreadCompactionValidationError,
+  ThreadStateValidationError,
 } from "./snapshot";
 
 describe("thread snapshot", () => {
@@ -146,6 +147,23 @@ describe("thread snapshot", () => {
         version: "1",
       })
     ).toThrow(ThreadCompactionValidationError);
+  });
+
+  it("keeps model-message shape validation inside thread state", () => {
+    const malformed = { role: "assistant" } as never;
+
+    expect(() => encodeThreadSnapshot([malformed])).toThrow(
+      ThreadStateValidationError
+    );
+    expect(() =>
+      decodeStoredThreadState({
+        state: { history: [malformed], schemaVersion: 1 },
+        version: "1",
+      })
+    ).toThrow(ThreadStateValidationError);
+    expect(() =>
+      new ModelMessageHistory().appendModelMessage(malformed)
+    ).toThrow(ThreadStateValidationError);
   });
 
   it("rejects unsupported stored thread state versions", () => {

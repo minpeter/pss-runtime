@@ -6,7 +6,7 @@ import {
 } from "../../llm/llm";
 import { ModelMessageHistory } from "../state/history";
 import type { ThreadCompactionRecord } from "../state/snapshot";
-import type { ThreadState } from "../state/thread-state";
+import type { ThreadCompactionInput, ThreadState } from "../state/thread-state";
 import { messageContentText } from "./auto-compaction-message-text";
 
 export interface ThreadAutoCompactionOptions {
@@ -16,6 +16,11 @@ export interface ThreadAutoCompactionOptions {
   readonly retainMessages: number;
 }
 
+export type ThreadModelContextTransform = (
+  messages: readonly ModelMessage[],
+  signal: AbortSignal
+) => Promise<readonly ModelMessage[]>;
+
 interface AutoCompactionRange {
   readonly endSeqExclusive: number;
   readonly startSeq: number;
@@ -24,13 +29,17 @@ interface AutoCompactionRange {
 const activeCompactions = new WeakSet<ThreadState>();
 
 export function scheduleThreadAutoCompaction({
+  compact,
   model,
   policy,
   state,
+  transformModelContext,
 }: {
+  readonly compact?: ThreadCompactionHandler;
   readonly model: ModelGenerationOptions;
   readonly policy?: ThreadAutoCompactionOptions;
   readonly state: ThreadState;
+  readonly transformModelContext?: ThreadModelContextTransform;
 }): void {
   if (!policy || policy.background === false) {
     return;
@@ -42,9 +51,11 @@ export function scheduleThreadAutoCompaction({
   activeCompactions.add(state);
   queueMicrotask(() => {
     const backgroundCompaction = compactThreadInBackground({
+      compact,
       model,
       policy,
       state,
+      transformModelContext,
     }).finally(() => {
       activeCompactions.delete(state);
     });
@@ -53,18 +64,34 @@ export function scheduleThreadAutoCompaction({
 }
 
 async function compactThreadInBackground({
+  compact,
   model,
   policy,
   state,
+  transformModelContext,
 }: {
+  readonly compact?: ThreadCompactionHandler;
   readonly model: ModelGenerationOptions;
   readonly policy: ThreadAutoCompactionOptions;
   readonly state: ThreadState;
+  readonly transformModelContext?: ThreadModelContextTransform;
 }): Promise<void> {
   try {
-    let compacted = await compactThreadOnce({ model, policy, state });
+    let compacted = await compactThreadOnce({
+      compact,
+      model,
+      policy,
+      state,
+      transformModelContext,
+    });
     while (compacted) {
-      compacted = await compactThreadOnce({ model, policy, state });
+      compacted = await compactThreadOnce({
+        compact,
+        model,
+        policy,
+        state,
+        transformModelContext,
+      });
     }
   } catch {
     return;
@@ -72,29 +99,43 @@ async function compactThreadInBackground({
 }
 
 export async function compactThreadBlocking({
+  compact,
   model,
   policy,
   state,
+  transformModelContext,
 }: {
+  readonly compact?: ThreadCompactionHandler;
   readonly model: ModelGenerationOptions;
   readonly policy?: ThreadAutoCompactionOptions;
   readonly state: ThreadState;
+  readonly transformModelContext?: ThreadModelContextTransform;
 }): Promise<boolean> {
   if (!policy) {
     return false;
   }
 
-  return await compactThreadOnce({ model, policy, state });
+  return await compactThreadOnce({
+    compact,
+    model,
+    policy,
+    state,
+    transformModelContext,
+  });
 }
 
 async function compactThreadOnce({
+  compact,
   model,
   policy,
   state,
+  transformModelContext,
 }: {
+  readonly compact?: ThreadCompactionHandler;
   readonly model: ModelGenerationOptions;
   readonly policy: ThreadAutoCompactionOptions;
   readonly state: ThreadState;
+  readonly transformModelContext?: ThreadModelContextTransform;
 }): Promise<boolean> {
   for (;;) {
     const history = state.modelSnapshot();
@@ -111,6 +152,7 @@ async function compactThreadOnce({
     const summary = await summarizeCompactionRange({
       history: summaryHistoryForRange({ compactions, history, range }),
       model,
+      transformModelContext,
     });
     if (summary.length === 0) {
       return false;
@@ -125,10 +167,18 @@ async function compactThreadOnce({
       continue;
     }
 
-    await state.compact({ ...range, summary });
+    const input = { ...range, summary };
+    if (compact) {
+      return await compact(input);
+    }
+    await state.compact(input);
     return true;
   }
 }
+
+type ThreadCompactionHandler = (
+  input: ThreadCompactionInput
+) => Promise<boolean>;
 
 export function selectAutoCompactionRange({
   compactions,
@@ -169,24 +219,30 @@ export function selectAutoCompactionRange({
 async function summarizeCompactionRange({
   history,
   model,
+  transformModelContext,
 }: {
   readonly history: readonly ModelMessage[];
   readonly model: ModelGenerationOptions;
+  readonly transformModelContext?: ThreadModelContextTransform;
 }): Promise<string> {
+  const signal = new AbortController().signal;
+  const summaryHistory: readonly ModelMessage[] = [
+    {
+      content:
+        "Summarize the following prior thread messages for future turns. Preserve durable facts, user preferences, decisions, unresolved tasks, and tool results. Be concise.",
+      role: "system",
+    },
+    ...history,
+  ];
   const output = await generateModelStep({
     attachmentStore: model.attachmentStore,
     contextGate: false,
-    history: [
-      {
-        content:
-          "Summarize the following prior thread messages for future turns. Preserve durable facts, user preferences, decisions, unresolved tasks, and tool results. Be concise.",
-        role: "system",
-      },
-      ...history,
-    ],
+    history: transformModelContext
+      ? await transformModelContext(summaryHistory, signal)
+      : summaryHistory,
     instructions: model.instructions,
     model: model.model,
-    signal: new AbortController().signal,
+    signal,
   });
   return output
     .flatMap((message) =>
@@ -207,7 +263,7 @@ function summaryHistoryForRange({
 }): ModelMessage[] {
   const prefixHistory = history.slice(range.startSeq, range.endSeqExclusive);
   if (range.startSeq !== 0) {
-    return prefixHistory.map((message) => structuredClone(message));
+    return structuredClone(prefixHistory);
   }
 
   const prefixCompactions = compactions.filter(

@@ -3,6 +3,7 @@ import type { UserInput } from "../input/input";
 import { userInputToModelMessage } from "../protocol/mapping";
 import {
   type ThreadCompactionRecord,
+  validateModelMessage,
   validateThreadCompactionRecord,
 } from "./snapshot";
 
@@ -18,7 +19,7 @@ export class ModelMessageHistory {
     compactions: readonly ThreadCompactionRecord[] = []
   ) {
     if (history) {
-      this.#modelHistory = structuredClone(history);
+      this.#modelHistory = history.map(validateModelMessage);
     }
     this.#compactions = compactions.map((record) =>
       validateThreadCompactionRecord(record, this.#modelHistory.length)
@@ -71,7 +72,7 @@ export class ModelMessageHistory {
   }
 
   appendModelMessage(message: ModelMessage): void {
-    this.#modelHistory.push(structuredClone(message));
+    this.#modelHistory.push(validateModelMessage(message));
     this.#triggerChange();
   }
 
@@ -81,7 +82,7 @@ export class ModelMessageHistory {
 
   rollback(snapshot: ModelMessage[]): void {
     this.#modelHistory.length = 0;
-    this.#modelHistory.push(...structuredClone(snapshot));
+    this.#modelHistory.push(...snapshot.map(validateModelMessage));
     this.clearTransientInputs();
     for (let index = this.#compactions.length - 1; index >= 0; index -= 1) {
       const record = this.#compactions[index];

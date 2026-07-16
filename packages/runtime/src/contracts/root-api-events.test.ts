@@ -1,15 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type {
   AgentEvent,
-  AgentPluginInterceptResult,
-  BeforeToolCall,
   ControlAgentEvent,
   LifecycleAgentEvent,
+  PluginRequestResultMap,
+  PluginToolCallBeforeEvent,
   TelemetryAgentEvent,
   VisibleAgentEvent,
 } from "../index";
 import {
-  isBeforeToolCallEvent,
   isControlAgentEvent,
   isLifecycleAgentEvent,
   isTelemetryAgentEvent,
@@ -30,10 +29,7 @@ describe("runtime root event API exports", () => {
       isTelemetryAgentEvent
     );
     expect(runtime).toHaveProperty("isControlAgentEvent", isControlAgentEvent);
-    expect(runtime).toHaveProperty(
-      "isBeforeToolCallEvent",
-      isBeforeToolCallEvent
-    );
+    expect(runtime).not.toHaveProperty("isBeforeToolCallEvent");
   });
 
   it("types event classifier exports from the package root", () => {
@@ -62,7 +58,7 @@ describe("runtime root event API exports", () => {
     ]);
   });
 
-  it("types before-tool-call plugin interception results", () => {
+  it("types plugin-only tool.call.before interception results", () => {
     const event = {
       attempt: 1,
       idempotencyKey: "run-1:call_tool-1",
@@ -70,18 +66,29 @@ describe("runtime root event API exports", () => {
       policy: "manual-recovery",
       toolCallId: "call_tool-1",
       toolName: "write_file",
-      type: "before-tool-call",
-    } satisfies BeforeToolCall;
+      type: "tool.call.before",
+    } satisfies PluginToolCallBeforeEvent;
     const continueResult = {
       action: "continue",
-    } satisfies AgentPluginInterceptResult;
+    } satisfies PluginRequestResultMap["tool.call.before"];
     const recoveryResult = {
       action: "needs-recovery",
-    } satisfies AgentPluginInterceptResult;
+    } satisfies PluginRequestResultMap["tool.call.before"];
 
     expect(event.toolName).toBe("write_file");
-    expect(isBeforeToolCallEvent(event)).toBe(true);
+    expect(event.type).toBe("tool.call.before");
     expect(continueResult.action).toBe("continue");
     expect(recoveryResult.action).toBe("needs-recovery");
+  });
+
+  it("types atomic model step transforms from the package root", () => {
+    const result = {
+      action: "transform",
+      value: {
+        messages: [{ content: "sanitized", role: "assistant" }],
+      },
+    } satisfies PluginRequestResultMap["model.step.before"];
+
+    expect(result.value.messages).toHaveLength(1);
   });
 });

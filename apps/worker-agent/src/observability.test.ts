@@ -1,3 +1,4 @@
+import type { PluginAPI, PluginEventContext } from "@minpeter/pss-runtime";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -6,8 +7,6 @@ import {
   describeEvent,
   type TurnObservabilityEntry,
 } from "./observability";
-
-const HISTORY = [] as const;
 
 describe("describeEvent", () => {
   it("captures tool events with the tool name", () => {
@@ -67,20 +66,44 @@ describe("createTurnObservabilityPlugin", () => {
       label: "dev",
       log: (entry) => entries.push(entry),
     });
+    const handlers = new Map<
+      string,
+      (event: unknown, context: PluginEventContext) => unknown
+    >();
+    await plugin(
+      {
+        on: (event, handler) => {
+          handlers.set(
+            event,
+            handler as (event: unknown, context: PluginEventContext) => unknown
+          );
+          return { unsubscribe: () => undefined };
+        },
+        provide: () => {
+          throw new Error("not used");
+        },
+      } as PluginAPI,
+      { signal: new AbortController().signal }
+    );
+    const context: PluginEventContext = {
+      history: [],
+      signal: new AbortController().signal,
+      thread: { key: "test" },
+    };
 
-    const toolResult = await plugin.on?.({
-      event: {
+    const toolResult = await handlers.get("tool.execution.end")?.(
+      {
         type: "tool-result",
         output: {},
         toolCallId: "1",
         toolName: "x",
       },
-      history: HISTORY,
-    });
-    const userInput = await plugin.on?.({
-      event: { type: "assistant-output", text: "hi" },
-      history: HISTORY,
-    });
+      context
+    );
+    const userInput = await handlers.get("message.update")?.(
+      { type: "assistant-output", text: "hi" },
+      context
+    );
 
     expect(toolResult).toBeUndefined();
     expect(userInput).toBeUndefined();

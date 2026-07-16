@@ -1,4 +1,4 @@
-import { Agent, type AgentHost } from "@minpeter/pss-runtime";
+import { type AgentHost, createAgent } from "@minpeter/pss-runtime";
 import { parentThreadNamespace } from "@minpeter/pss-runtime/namespace";
 import type { LanguageModel } from "ai";
 import { createBackgroundOutputTool } from "./background-output-tool";
@@ -6,8 +6,8 @@ import { createConversationTagPlugin } from "./conversation-plugin";
 import { createDelegateToReaderTool } from "./delegate-tool";
 import { createReadFileTool } from "./read-file-tool";
 
-export function createReaderAgent(model: LanguageModel, host: AgentHost) {
-  return new Agent({
+export async function createReaderAgent(model: LanguageModel, host: AgentHost) {
+  return await createAgent({
     host,
     instructions:
       "fixtures/kb/ 문서를 read_file로 읽는다. 요청과 관련된 파일만 골라 읽고, 답변에 근거 파일 경로를 반드시 적어.",
@@ -19,7 +19,7 @@ export function createReaderAgent(model: LanguageModel, host: AgentHost) {
   });
 }
 
-export function createCoordinatorAgent(
+export async function createCoordinatorAgent(
   model: LanguageModel,
   options: {
     readonly executionHost: AgentHost;
@@ -29,7 +29,7 @@ export function createCoordinatorAgent(
 ) {
   const coordinatorNamespace = "coordinator";
 
-  return new Agent({
+  return await createAgent({
     host: options.host,
     instructions: [
       "대화를 조율한다.",

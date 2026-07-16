@@ -17,6 +17,7 @@ export type {
   RuntimeToolExecutionCheckpointMetadata,
   RuntimeToolExecutionContext,
   RuntimeToolExecutionDecision,
+  RuntimeToolExecutionResult,
   RuntimeToolRetryPolicy,
 } from "./tool-execution";
 

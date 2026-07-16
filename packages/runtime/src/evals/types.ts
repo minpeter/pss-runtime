@@ -2,6 +2,8 @@ import type { LanguageModel } from "ai";
 import type { AgentEvent } from "../thread/protocol/events";
 import type { StandardSchemaV1 } from "./standard-schema";
 
+type MaybePromise<T> = PromiseLike<T> | T;
+
 export type { AgentEvent } from "../thread/protocol/events";
 
 /**
@@ -51,7 +53,7 @@ export interface EvalDefinition {
   readonly id: string;
   readonly judge?: { readonly model: () => LanguageModel };
   readonly tags: readonly string[];
-  readonly thread: () => EvalThreadLike;
+  readonly thread: () => MaybePromise<EvalThreadLike>;
 }
 
 /** A single named check inside an eval. Receives the recording scope `t`. */
@@ -74,7 +76,7 @@ export interface EvalOptions {
    * Factory returning a fresh agent thread for each case. Building per case
    * keeps conversation state isolated between checks.
    */
-  readonly thread: () => EvalThreadLike;
+  readonly thread: () => MaybePromise<EvalThreadLike>;
 }
 
 export type AssertionSeverity = "gate" | "soft";

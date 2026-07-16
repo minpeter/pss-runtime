@@ -51,6 +51,7 @@ describe("durable input atomic commits", () => {
 
 function executionHostWithFailingAck(base: AgentHost): AgentHost {
   return {
+    diagnostics: base.diagnostics,
     scheduler: base.scheduler,
     store: {
       checkpoints: base.store.checkpoints,
