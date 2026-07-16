@@ -75,14 +75,18 @@ export class Agent {
       options.autoCompaction
     );
     this.#modelOptions = {
+      alwaysActiveTools: options.alwaysActiveTools,
       attachmentStore:
         providedHost?.attachmentStore ??
         options.attachmentStore ??
         this.#host.attachmentStore,
       contextGate: this.#autoCompaction?.contextGate,
+      diagnostics: this.#host.diagnostics,
       instructions: options.instructions,
       model: options.model,
+      prepareModelStep: options.prepareModelStep,
       toolChoice: options.toolChoice,
+      toolOrder: options.toolOrder,
       tools: pluginRuntime?.tools ?? options.tools,
     };
   }

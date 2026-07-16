@@ -15,21 +15,30 @@ import {
 import type { ResumeRunState } from "./types";
 
 export async function readModelOutput({
+  diagnostics,
   history,
   model,
+  runtimeStepIndex,
   signal,
+  threadKey,
   toolExecution,
 }: {
+  readonly diagnostics: AgentHost["diagnostics"];
   readonly history: readonly ModelMessage[];
   readonly model: ModelGenerationOptions;
+  readonly runtimeStepIndex: number;
   readonly signal: AbortSignal;
+  readonly threadKey?: string;
   readonly toolExecution: RuntimeToolExecutionContext;
 }): Promise<ModelStepOutput | "aborted"> {
   try {
     return await generateModelStep({
+      diagnostics,
       history,
       ...model,
+      runtimeStepIndex,
       signal,
+      threadKey,
       toolExecution,
     });
   } catch (error) {

@@ -71,6 +71,60 @@ const agent = await createAgent({
 });
 ```
 
+### Cache-aware dynamic tools
+
+PSS owns the logical outer model loop, so use `prepareModelStep` instead of AI
+SDK `prepareStep` when a selection must follow PSS steps across separate
+`generateText()` calls:
+
+```ts
+const agent = await createAgent({
+  alwaysActiveTools: ["status"],
+  model,
+  prepareModelStep: async ({
+    history,
+    runtimeStepIndex,
+    signal,
+    threadKey,
+    tools,
+  }) => ({
+    activeTools:
+      runtimeStepIndex === 0
+        ? await selectTools({ history, signal, threadKey, tools })
+        : [],
+  }),
+  toolOrder: ["status", "search", "fetch"],
+  tools: { fetch, search, status },
+});
+```
+
+`runtimeStepIndex` is zero-based and counts completed logical PSS steps. A
+context-overflow retry and a durable retry before state commit reuse the same
+index; a suspended durable run continues at the next index. Automatic
+compaction summaries are separate maintenance calls and do not invoke
+`prepareModelStep`. `history` is the full transformed model context after
+`model.context` hooks and before prompt normalization or attachment hydration,
+including system/compaction messages.
+
+`alwaysActiveTools` is a membership list. Its selected entries form the fixed
+prefix; `prepareModelStep.activeTools` selects the dynamic suffix. Returning
+`undefined` for `activeTools` selects every non-always-active registry tool,
+while `[]` selects none of them. `toolOrder` controls ordering within the
+always-active and dynamic groups: listed names come first and omitted registry
+names follow alphabetically, while the always-active group remains the prefix.
+Without configuration, all tool names are ordered alphabetically. The runtime
+passes the effective order through AI SDK 7 `toolOrder` and rejects duplicate,
+unknown, overlapping, or inactive named-tool selections before provider work.
+
+Stable ordering reduces accidental tool-definition reordering, but dynamic
+selection is not inherently cache-safe: changing the active set still changes
+the provider request. Hosts with a diagnostics sink receive best-effort,
+non-blocking `model.tool_cache_fingerprint` records. These contain only counts,
+the logical step index, and SHA-256 hashes of registry/selection/order tool-name
+lists. They do not contain prompts, tool inputs, definitions, or thread keys.
+The registry hash covers names only, so schema or description changes require
+separate versioning and are not detected by this diagnostic.
+
 Per-key conversations use `thread(key)`:
 
 ```ts

@@ -1,8 +1,10 @@
 import type { LanguageModel, ToolSet } from "ai";
 import type { AgentHost } from "../../execution/host/types";
 import type { AgentToolChoice, ModelContextGateOptions } from "../../llm/llm";
+import type { PrepareModelStep } from "../../llm/model-step-preparation";
 import { assertNoUnsupportedToolApproval } from "../../llm/tool-approval";
 import type { PluginDefinition } from "../../plugins/api";
+import type { RuntimeDiagnosticsSink } from "../../plugins/diagnostics";
 import type { HostAttachmentStore } from "../../thread/input/attachments";
 import type { AgentInput, UserInput } from "../../thread/input/input";
 
@@ -16,6 +18,7 @@ export interface AgentAutoCompactionOptions {
 export type AgentContextGateOptions = ModelContextGateOptions;
 
 export interface AgentOptions {
+  readonly alwaysActiveTools?: readonly string[];
   readonly attachmentStore?: HostAttachmentStore;
   readonly autoCompaction?: AgentAutoCompactionOptions | false;
   readonly host?: AgentHost;
@@ -26,7 +29,9 @@ export interface AgentOptions {
   readonly pluginFactoryTimeoutMs?: number;
   readonly pluginHookTimeoutMs?: number;
   readonly plugins?: readonly PluginDefinition[];
+  readonly prepareModelStep?: PrepareModelStep;
   readonly toolChoice?: AgentToolChoice;
+  readonly toolOrder?: readonly string[];
   readonly tools?: ToolSet;
 }
 
@@ -55,9 +60,17 @@ export function normalizePluginTimeoutOptions(
 
 export type AgentModelOptions = Pick<
   AgentOptions,
-  "attachmentStore" | "instructions" | "model" | "toolChoice" | "tools"
+  | "alwaysActiveTools"
+  | "attachmentStore"
+  | "instructions"
+  | "model"
+  | "prepareModelStep"
+  | "toolChoice"
+  | "toolOrder"
+  | "tools"
 > & {
   readonly contextGate?: false | AgentContextGateOptions;
+  readonly diagnostics?: RuntimeDiagnosticsSink;
 };
 
 export function assertAgentOptions(
@@ -78,11 +91,46 @@ export function assertAgentOptions(
   }
 
   const candidate = options as {
+    readonly alwaysActiveTools?: AgentOptions["alwaysActiveTools"];
     readonly autoCompaction?: AgentOptions["autoCompaction"];
+    readonly prepareModelStep?: AgentOptions["prepareModelStep"];
+    readonly toolOrder?: AgentOptions["toolOrder"];
     readonly tools?: AgentOptions["tools"];
   };
   assertNoUnsupportedToolApproval(candidate.tools);
+  assertToolNameList(candidate.alwaysActiveTools, "alwaysActiveTools");
+  assertToolNameList(candidate.toolOrder, "toolOrder");
+  if (
+    candidate.prepareModelStep !== undefined &&
+    typeof candidate.prepareModelStep !== "function"
+  ) {
+    throw new TypeError("Agent: options.prepareModelStep must be a function.");
+  }
   normalizeAgentAutoCompactionOptions(candidate.autoCompaction);
+}
+
+function assertToolNameList(
+  value: readonly string[] | undefined,
+  field: "alwaysActiveTools" | "toolOrder"
+): void {
+  if (value === undefined) {
+    return;
+  }
+  if (!Array.isArray(value)) {
+    throw new TypeError(`Agent: options.${field} must be an array.`);
+  }
+  const seen = new Set<string>();
+  for (const name of value) {
+    if (typeof name !== "string") {
+      throw new TypeError(`Agent: options.${field} must contain only strings.`);
+    }
+    if (seen.has(name)) {
+      throw new TypeError(
+        `Agent: options.${field} contains duplicate tool ${JSON.stringify(name)}.`
+      );
+    }
+    seen.add(name);
+  }
 }
 
 export function normalizeAgentAutoCompactionOptions(

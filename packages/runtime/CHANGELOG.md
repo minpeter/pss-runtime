@@ -1,5 +1,14 @@
 ## @minpeter/pss-runtime@0.3.0-next.0 (next)
 
+### Add cache-aware model-step preparation
+
+Add a PSS-owned, zero-based `prepareModelStep` callback that persists logical
+step indices across outer-loop overflow retries and durable resume. Support AI
+SDK 7 `toolOrder`, fixed always-active prefixes, deterministic dynamic suffixes,
+and fail-closed tool-name validation. Export metadata-only tool-name cache
+fingerprint diagnostics without prompts, tool inputs, definitions, or thread
+keys. Automatic-compaction summary calls remain outside model-step selection.
+
 ### Introduce a factory-based plugin runtime
 
 Replace object plugins with an async factory registration kernel built around

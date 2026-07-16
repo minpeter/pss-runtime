@@ -14,6 +14,9 @@ const invalidModelPattern = /invalid options\.model/;
 const missingModelPattern = /missing options\.model/;
 const missingOptionsPattern = /Agent options are required/;
 const unsupportedApprovalPattern = /needsApproval.*not supported/;
+const prepareModelStepPattern = /prepareModelStep/;
+const duplicateToolOrderPattern = /toolOrder.*duplicate/;
+const duplicateAlwaysActiveToolsPattern = /alwaysActiveTools.*duplicate/;
 const agentOptionsSourceUrl = new URL("./options.ts", import.meta.url);
 const agentSourceUrl = new URL("./agent.ts", import.meta.url);
 const forbiddenAgentSubagentSurface = [
@@ -186,6 +189,28 @@ describe("Agent", () => {
           tools,
         })
     ).toThrow(unsupportedApprovalPattern);
+  });
+
+  it("rejects malformed model-step preparation options", () => {
+    expect(() =>
+      Reflect.construct(Agent, [
+        { model: fakeModel, prepareModelStep: "invalid" },
+      ])
+    ).toThrow(prepareModelStepPattern);
+    expect(
+      () =>
+        new Agent({
+          model: fakeModel,
+          toolOrder: ["duplicate", "duplicate"],
+        })
+    ).toThrow(duplicateToolOrderPattern);
+    expect(
+      () =>
+        new Agent({
+          alwaysActiveTools: ["duplicate", "duplicate"],
+          model: fakeModel,
+        })
+    ).toThrow(duplicateAlwaysActiveToolsPattern);
   });
 
   it("does not implement legacy llm configuration", () => {

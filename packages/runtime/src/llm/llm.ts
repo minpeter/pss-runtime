@@ -1,9 +1,16 @@
-import type { LanguageModel, ModelMessage, ToolChoice, ToolSet } from "ai";
+import type { LanguageModel, ModelMessage, ToolSet } from "ai";
 import { generateText } from "ai";
+import type { RuntimeDiagnosticsSink } from "../plugins/diagnostics";
 import {
   type HostAttachmentStore,
   hydrateRuntimeAttachments,
 } from "../thread/input/attachments";
+import {
+  ModelToolSelectionError,
+  type PreparedModelToolChoice,
+  type PrepareModelStep,
+  resolveModelStepOptions,
+} from "./model-step-preparation";
 import { assertNoUnsupportedToolApproval } from "./tool-approval";
 import type { RuntimeToolExecutionContext } from "./tool-execution";
 import {
@@ -20,8 +27,7 @@ export type {
   RuntimeToolExecutionResult,
   RuntimeToolRetryPolicy,
 } from "./tool-execution";
-
-export type AgentToolChoice = ToolChoice<ToolSet>;
+export type AgentToolChoice = PreparedModelToolChoice;
 export type ModelStepOutput = Awaited<
   ReturnType<typeof generateText>
 >["responseMessages"];
@@ -68,31 +74,48 @@ export class ContextBudgetExceededError extends Error {
 }
 
 export interface ModelGenerationOptions {
+  alwaysActiveTools?: readonly string[];
   attachmentStore?: HostAttachmentStore;
   contextGate?: false | ModelContextGateOptions;
+  diagnostics?: RuntimeDiagnosticsSink;
   instructions?: string;
   model: LanguageModel;
+  prepareModelStep?: PrepareModelStep;
   toolChoice?: AgentToolChoice;
+  toolOrder?: readonly string[];
   tools?: ToolSet;
 }
 
 export interface ModelStepOptions extends ModelGenerationOptions {
   history: readonly ModelMessage[];
+  runtimeStepIndex?: number;
   signal: AbortSignal;
+  threadKey?: string;
   toolExecution?: RuntimeToolExecutionContext;
 }
 
 export async function generateModelStep({
+  alwaysActiveTools,
   attachmentStore,
   contextGate,
+  diagnostics,
   history,
   model,
   instructions,
+  prepareModelStep,
+  runtimeStepIndex = 0,
   signal,
+  threadKey,
   toolChoice,
+  toolOrder,
   toolExecution,
   tools,
 }: ModelStepOptions): Promise<ModelStepOutput> {
+  if (prepareModelStep && threadKey === undefined) {
+    throw new ModelToolSelectionError(
+      "prepareModelStep requires a runtime threadKey."
+    );
+  }
   const toolCallIds = new Map<string, string>();
   const prompt = promptForModel({ history, instructions });
   const messages = await hydrateRuntimeAttachments(
@@ -104,14 +127,29 @@ export async function generateModelStep({
     instructions: prompt.instructions,
     messages,
   });
-  assertNoUnsupportedToolApproval(tools);
+  const prepared = await resolveModelStepOptions({
+    alwaysActiveTools,
+    diagnostics,
+    history,
+    model,
+    prepareModelStep,
+    runtimeStepIndex,
+    signal,
+    threadKey: threadKey ?? "",
+    toolChoice,
+    toolOrder,
+    tools,
+  });
+  assertNoUnsupportedToolApproval(prepared.tools);
   const { responseMessages } = await generateText({
+    activeTools: prepared.activeTools,
     abortSignal: signal,
     instructions: prompt.instructions,
     messages,
-    model,
-    toolChoice,
-    tools: normalizeToolCallIds(tools, toolCallIds, toolExecution),
+    model: prepared.model,
+    toolChoice: prepared.toolChoice,
+    toolOrder: prepared.toolOrder,
+    tools: normalizeToolCallIds(prepared.tools, toolCallIds, toolExecution),
   });
 
   return responseMessages.map((message) =>

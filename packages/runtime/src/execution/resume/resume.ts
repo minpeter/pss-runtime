@@ -34,6 +34,7 @@ export async function resumeRun(
   throwIfManualToolRecoveryRequired(initialCheckpoint);
   let nextStep = resumeStepFromCheckpoint(initialCheckpoint);
   let steps = 0;
+  const resumedRun = await options.host.store.turns.get(options.runId);
 
   while (steps < options.budget.maxSteps) {
     if (signal.aborted) {
@@ -62,9 +63,12 @@ export async function resumeRun(
       stepNumber: nextStep.stepNumber,
     });
     const output = await readModelOutput({
+      diagnostics: options.host.diagnostics,
       history: stateBeforeModel.history,
       model: options.model,
+      runtimeStepIndex: nextStep.stepNumber - 1,
       signal,
+      threadKey: resumedRun?.threadKey,
       toolExecution,
     });
     if (output === "aborted") {

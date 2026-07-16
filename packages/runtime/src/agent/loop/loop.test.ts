@@ -88,6 +88,38 @@ describe("runAgentLoop", () => {
     ]);
   });
 
+  it("owns a zero-based runtime step index across generated tool steps", async () => {
+    const history = new ModelMessageHistory();
+    seedUserTurn(history);
+    const toolCall = toolCallPart("call-tool-index");
+    const indices: number[] = [];
+    const model = {
+      ...createScriptedModelOptions([
+        [assistantMessage([toolCall]), toolResultFor(toolCall)],
+        [assistantMessage("DONE")],
+      ]),
+      prepareModelStep: ({
+        runtimeStepIndex,
+      }: {
+        runtimeStepIndex: number;
+      }) => {
+        indices.push(runtimeStepIndex);
+        return;
+      },
+    };
+
+    await expect(
+      runAgentLoop({
+        emit: () => undefined,
+        history,
+        model,
+        threadKey: "indexed-thread",
+      })
+    ).resolves.toBe("completed");
+
+    expect(indices).toEqual([0, 1]);
+  });
+
   it("returns aborted when the LLM rejects after the signal is aborted", async () => {
     const events: AgentEvent[] = [];
     const history = new ModelMessageHistory();

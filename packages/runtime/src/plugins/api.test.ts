@@ -336,6 +336,34 @@ describe("factory plugin API", () => {
     expect(temperatures).toEqual([0.25]);
   });
 
+  it("keeps provider middleware on prepareModelStep model overrides", async () => {
+    const baseModel = createMockLanguageModelV4(() =>
+      Promise.resolve(mockLanguageModelV4Text("BASE"))
+    );
+    const temperatures: Array<number | undefined> = [];
+    const overrideModel = createMockLanguageModelV4((params) => {
+      temperatures.push(params.temperature);
+      return Promise.resolve(mockLanguageModelV4Text("OVERRIDE"));
+    });
+    const plugin = definePlugin((pss) => {
+      pss.on("provider.request.before", ({ params }) => ({
+        action: "transform",
+        value: { params: { ...params, temperature: 0.5 } },
+      }));
+    });
+    const agent = await createAgent({
+      model: baseModel,
+      plugins: [plugin],
+      prepareModelStep: () => ({ model: overrideModel }),
+    });
+
+    await collect(await agent.send("hello"));
+
+    expect(baseModel.doGenerateCalls).toHaveLength(0);
+    expect(overrideModel.doGenerateCalls).toHaveLength(1);
+    expect(temperatures).toEqual([0.5]);
+  });
+
   it("blocks a tool call without executing the tool", async () => {
     const call = toolCallPart("call-blocked", "dangerous_tool");
     const model = createScriptedModelOptions([
@@ -500,6 +528,7 @@ describe("factory plugin API", () => {
 
   it("chains model context transforms before model generation", async () => {
     const seen: unknown[] = [];
+    const preparedHistory: unknown[] = [];
     const first = definePlugin((pss) => {
       pss.on("model.context", ({ messages }) => ({
         action: "transform",
@@ -522,6 +551,10 @@ describe("factory plugin API", () => {
         return Promise.resolve([assistantMessage("DONE")]);
       }),
       plugins: [first, second],
+      prepareModelStep: ({ history }) => {
+        preparedHistory.push(history);
+        return;
+      },
     });
 
     await collect(await agent.send("hello"));
@@ -529,6 +562,13 @@ describe("factory plugin API", () => {
     expect(seen).toEqual([
       [
         { content: "second\n\nfirst", role: "system" },
+        expect.objectContaining({ content: "hello", role: "user" }),
+      ],
+    ]);
+    expect(preparedHistory).toEqual([
+      [
+        { content: "second", role: "system" },
+        { content: "first", role: "system" },
         expect.objectContaining({ content: "hello", role: "user" }),
       ],
     ]);

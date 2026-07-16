@@ -19,7 +19,9 @@ interface RunAgentLoopOptions {
   emit: AgentLoopEventListener;
   history: ModelHistory;
   model: ModelGenerationOptions;
+  runtimeState?: AgentLoopRuntimeState;
   signal?: AbortSignal;
+  threadKey?: string;
   toolExecution?: RuntimeToolExecutionContext;
   transformModelContext?: (
     messages: readonly ModelMessage[],
@@ -29,6 +31,10 @@ interface RunAgentLoopOptions {
     messages: ModelStepOutput,
     signal: AbortSignal
   ) => Promise<ModelStepOutput>;
+}
+
+export interface AgentLoopRuntimeState {
+  runtimeStepIndex: number;
 }
 
 type AgentLoopResult = "completed" | "aborted";
@@ -60,7 +66,9 @@ export async function runAgentLoop({
   emit,
   history,
   model,
+  runtimeState = { runtimeStepIndex: 0 },
   signal = new AbortController().signal,
+  threadKey,
   toolExecution,
   transformModelContext,
   transformModelStep,
@@ -84,7 +92,9 @@ export async function runAgentLoop({
       readModelOutput({
         history,
         model,
+        runtimeStepIndex: runtimeState.runtimeStepIndex,
         signal,
+        threadKey,
         toolExecution,
         transformModelContext,
       })
@@ -117,6 +127,7 @@ export async function runAgentLoop({
     if (stepEndDecision === "aborted") {
       return "aborted";
     }
+    runtimeState.runtimeStepIndex += 1;
 
     // Runtime input after step-end intentionally forces another inference step,
     // even after final-looking assistant text. Unconditional insertion on every
@@ -187,10 +198,16 @@ function releaseNoObserverEvents(): void {
 async function readModelOutput({
   history,
   model,
+  runtimeStepIndex,
   signal,
+  threadKey,
   toolExecution,
   transformModelContext,
-}: Pick<RunAgentLoopOptions, "history" | "model" | "transformModelContext"> & {
+}: Pick<
+  RunAgentLoopOptions,
+  "history" | "model" | "threadKey" | "transformModelContext"
+> & {
+  runtimeStepIndex: number;
   signal: AbortSignal;
   toolExecution?: RuntimeToolExecutionContext;
 }): Promise<ModelStepOutput | "aborted"> {
@@ -201,7 +218,9 @@ async function readModelOutput({
         ? await transformModelContext(snapshot, signal)
         : snapshot,
       ...model,
+      runtimeStepIndex,
       signal,
+      threadKey,
       toolExecution,
     });
   } catch (error) {

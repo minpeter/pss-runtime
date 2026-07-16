@@ -1,3 +1,4 @@
+import type { LanguageModel } from "ai";
 import type {
   StoredThreadEvent,
   ThreadEventReadOptions,
@@ -69,13 +70,27 @@ export class AgentThread {
     plugins: readonly AgentPlugin[] = [],
     execution: ThreadExecutionOptions = {}
   ) {
-    this.#model = execution.pluginRuntime
+    const pluginRuntime = execution.pluginRuntime;
+    this.#model = pluginRuntime
       ? {
           ...model,
-          model: execution.pluginRuntime.wrapModel(
-            model.model,
-            persistence.key
-          ),
+          model: pluginRuntime.wrapModel(model.model, persistence.key),
+          ...(model.prepareModelStep
+            ? {
+                prepareModelStep: async (...args) => {
+                  const prepared = await model.prepareModelStep?.(...args);
+                  return prepared?.model
+                    ? {
+                        ...prepared,
+                        model: pluginRuntime.wrapModel(
+                          prepared.model,
+                          persistence.key
+                        ) as Exclude<LanguageModel, string>,
+                      }
+                    : prepared;
+                },
+              }
+            : {}),
         }
       : model;
     this.#execution = execution;

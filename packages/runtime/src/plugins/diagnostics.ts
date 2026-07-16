@@ -1,11 +1,27 @@
 export type RuntimeDiagnosticLevel = "error" | "info" | "warning";
 
+export interface ModelToolCacheFingerprintMetadata {
+  readonly activeToolCount: number;
+  readonly activeToolsFingerprint: string;
+  readonly alwaysActiveToolCount: number;
+  readonly orderedToolNamesFingerprint: string;
+  readonly registeredToolCount: number;
+  readonly registryToolNamesFingerprint: string;
+  readonly runtimeStepIndex: number;
+}
+
 export interface RuntimeDiagnostic {
   readonly cause?: unknown;
   readonly code: string;
   readonly event?: string;
   readonly level: RuntimeDiagnosticLevel;
-  readonly phase: "activation" | "factory" | "handler" | "registration";
+  readonly metadata?: ModelToolCacheFingerprintMetadata;
+  readonly phase:
+    | "activation"
+    | "factory"
+    | "handler"
+    | "model-step"
+    | "registration";
   readonly pluginIndex?: number;
   readonly threadKey?: string;
 }

@@ -19,6 +19,12 @@ export type {
 } from "./execution/host/types";
 export type { AgentToolChoice } from "./llm/llm";
 export {
+  ModelToolSelectionError,
+  type PrepareModelStep,
+  type PrepareModelStepInput,
+  type PrepareModelStepResult,
+} from "./llm/model-step-preparation";
+export {
   definePlugin,
   type PluginAPI,
   type PluginDefinition,
@@ -38,6 +44,7 @@ export {
   threadScope,
 } from "./plugins/api";
 export {
+  type ModelToolCacheFingerprintMetadata,
   noopRuntimeDiagnostics,
   type RuntimeDiagnostic,
   type RuntimeDiagnosticLevel,
