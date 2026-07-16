@@ -5,6 +5,16 @@ This directory records a small live-provider campaign for the runtime
 [snapshot](./2026-07-17-freerouter.json) contains metadata and token counts
 only: no credential, prompt, request or response body, or model output.
 
+The follow-up [long-context policy campaign](./2026-07-17-broad-context.md)
+adds 144 logical eval turns executed through 173 HTTP attempts across large
+repository search, long conversation, and conflicting-source research
+workloads. Its [sanitized per-turn
+snapshot](./2026-07-17-broad-context.json) and [visual
+summary](./2026-07-17-broad-context.png) compare rewriting context every turn
+with preserving a stable prefix until a projected token high-water mark. That
+campaign is a raw protocol policy control, not a PSS automatic-compaction E2E
+run.
+
 ## Method
 
 The campaign ran on 2026-07-17 against the OpenAI-compatible Freerouter

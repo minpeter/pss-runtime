@@ -9,9 +9,10 @@ per-attempt cache traces, preserve unreported-versus-zero counts, aggregate
 cache statistics at turn, case, and report levels, and expose
 `cacheHitRateAtLeast()` with warmup and sample-coverage support. Internal
 automatic-compaction summary requests remain outside the public turn event
-stream. Add a reproducible live-provider eval script and a sanitized evidence
-snapshot that distinguish raw unreported cache fields from explicit zeroes and
-document the OpenAI-compatible adapter's omitted-field normalization boundary.
+stream. Add a reproducible live-provider eval script and sanitized evidence
+snapshots that distinguish raw unreported cache fields from explicit zeroes,
+document the OpenAI-compatible adapter's omitted-field normalization boundary,
+and record long-context cache, accuracy, latency, and uncached-token tradeoffs.
 
 ### Introduce a factory-based plugin runtime
 
