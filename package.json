@@ -17,6 +17,7 @@
     "dev": "pnpm --filter @minpeter/pss-example-basic start",
     "dev:tui": "tsx --conditions=@minpeter/pss-source apps/coding-agent/src/tui.ts",
     "build": "turbo run build",
+    "benchmark:cache-stable-tools": "tsx scripts/benchmark-cache-stable-tools.mts",
     "typecheck": "turbo run typecheck && tsc -p tsconfig.json --noEmit",
     "test": "turbo run test && vitest run scripts/*.test.mjs",
     "inspect:runtime-storage": "tsx packages/runtime/scripts/inspect-storage.ts",
