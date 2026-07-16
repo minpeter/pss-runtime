@@ -115,8 +115,8 @@ importers:
         specifier: 11.18.0
         version: 11.18.0(typescript@7.0.2)
       agents:
-        specifier: 0.17.3
-        version: 0.17.3(@babel/core@8.0.1)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260715.1)(ai@7.0.16(zod@4.4.3))(chat@4.32.0(ai@7.0.16(zod@4.4.3))(zod@4.4.3))(react@19.2.7)(rolldown@1.1.5)(vite@8.1.0(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1)(yaml@2.9.0))(zod@4.4.3)
+        specifier: 0.17.4
+        version: 0.17.4(@babel/core@8.0.1)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260715.1)(ai@7.0.16(zod@4.4.3))(chat@4.32.0(ai@7.0.16(zod@4.4.3))(zod@4.4.3))(react@19.2.7)(rolldown@1.1.5)(vite@8.1.0(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1)(yaml@2.9.0))(zod@4.4.3)
       chat:
         specifier: 4.32.0
         version: 4.32.0(ai@7.0.16(zod@4.4.3))(zod@4.4.3)
@@ -370,8 +370,8 @@ importers:
         version: 1.19.8
     devDependencies:
       agents:
-        specifier: 0.17.3
-        version: 0.17.3(@babel/core@8.0.1)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260715.1)(ai@7.0.16(zod@4.4.3))(chat@4.32.0(ai@7.0.16(zod@4.4.3))(zod@4.4.3))(react@19.2.7)(rolldown@1.1.5)(vite@8.1.0(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1)(yaml@2.9.0))(zod@4.4.3)
+        specifier: 0.17.4
+        version: 0.17.4(@babel/core@8.0.1)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260715.1)(ai@7.0.16(zod@4.4.3))(chat@4.32.0(ai@7.0.16(zod@4.4.3))(zod@4.4.3))(react@19.2.7)(rolldown@1.1.5)(vite@8.1.0(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1)(yaml@2.9.0))(zod@4.4.3)
       tsdown:
         specifier: ^0.22.4
         version: 0.22.8(tsx@4.23.1)(typescript@7.0.2)
@@ -1744,8 +1744,8 @@ packages:
     engines: {node: '>=0.4.0'}
     hasBin: true
 
-  agents@0.17.3:
-    resolution: {integrity: sha512-h0rc+dXwe/B6WblHH+Q3625nN/aryZntj6NIJX7tf+VSjmnI1EZyWtVBYMdX4FJZLShpl/vcx/A1AkxytWCPNQ==}
+  agents@0.17.4:
+    resolution: {integrity: sha512-K6YRbpD3VcwdTOPBlDgI4dILAwkhXo5cdxTlVF0IvUwQEKfMPawmH8E/QMXTN8CPGHqVYgYFACxTyk6nKlK+vg==}
     hasBin: true
     peerDependencies:
       '@ai-sdk/react': ^3.0.204
@@ -4985,7 +4985,7 @@ snapshots:
 
   acorn@8.17.0: {}
 
-  agents@0.17.3(@babel/core@8.0.1)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260715.1)(ai@7.0.16(zod@4.4.3))(chat@4.32.0(ai@7.0.16(zod@4.4.3))(zod@4.4.3))(react@19.2.7)(rolldown@1.1.5)(vite@8.1.0(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1)(yaml@2.9.0))(zod@4.4.3):
+  agents@0.17.4(@babel/core@8.0.1)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260715.1)(ai@7.0.16(zod@4.4.3))(chat@4.32.0(ai@7.0.16(zod@4.4.3))(zod@4.4.3))(react@19.2.7)(rolldown@1.1.5)(vite@8.1.0(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1)(yaml@2.9.0))(zod@4.4.3):
     dependencies:
       '@babel/plugin-proposal-decorators': 8.0.2(@babel/core@8.0.1)
       '@cfworker/json-schema': 4.1.1
