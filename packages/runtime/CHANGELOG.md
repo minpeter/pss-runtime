@@ -1,5 +1,16 @@
 ## @minpeter/pss-runtime@0.3.0-next.0 (next)
 
+### Trace model-request prompt cache usage
+
+Emit normalized, metadata-only `model-usage` events for successful agent-loop
+model attempts, including provider/model/finish metadata, response latency, and
+provider-reported reasoning and prompt-cache token counts. Eval runs now retain
+per-attempt cache traces, preserve unreported-versus-zero counts, aggregate
+cache statistics at turn, case, and report levels, and expose
+`cacheHitRateAtLeast()` with warmup and sample-coverage support. Internal
+automatic-compaction summary requests remain outside the public turn event
+stream.
+
 ### Introduce a factory-based plugin runtime
 
 Replace object plugins with an async factory registration kernel built around

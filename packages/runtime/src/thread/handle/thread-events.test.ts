@@ -42,11 +42,14 @@ describe("AgentThread durable event replay", () => {
       thread.events({ after: lastRecord.cursor })
     );
     expect(secondPage.map((record) => record.event.type)).toEqual([
+      "model-usage",
       "assistant-output",
       "step-end",
       "turn-end",
     ]);
-    expect(secondPage.map((record) => record.cursor.offset)).toEqual([4, 5, 6]);
+    expect(secondPage.map((record) => record.cursor.offset)).toEqual([
+      4, 5, 6, 7,
+    ]);
   });
 
   it("replays failed turns with their durable turn-error event", async () => {

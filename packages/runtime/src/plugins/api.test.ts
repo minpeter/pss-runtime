@@ -219,6 +219,7 @@ describe("factory plugin API", () => {
         "message.start",
         "message.update",
         "message.end",
+        "model.usage",
         "step.end",
         "turn.end",
         "turn.settled",
@@ -263,6 +264,7 @@ describe("factory plugin API", () => {
       "model.context",
       "provider.request.before",
       "provider.response.after",
+      "model.usage",
       "model.step.before",
       "message.start",
       "message.update",
@@ -677,6 +679,12 @@ describe("factory plugin API", () => {
     expect(
       JSON.stringify(await host.store.threads.load("default"))
     ).not.toContain("raw-protocol");
+    const usageIndex = events.findIndex(
+      (event) => event.type === "model-usage"
+    );
+    const errorIndex = events.findIndex((event) => event.type === "turn-error");
+    expect(usageIndex).toBeGreaterThan(-1);
+    expect(errorIndex).toBeGreaterThan(usageIndex);
   });
 
   it("fails closed with the factory index and cleans up loaded plugins", async () => {

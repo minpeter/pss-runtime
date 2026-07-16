@@ -80,6 +80,8 @@ defineEval("weather", {
 - `thread` builds a **fresh** agent thread per case, so cases never share state.
 - `t.run(input)` drives one turn; call it multiple times for a multi-turn case.
   The scope accumulates tool calls, results, and events across turns.
+- Every run records agent-loop `model-usage` attempt events plus an aggregate
+  `cache` object. Case and report JSON include the same cache totals.
 - Assertions RECORD results (they don't throw on the first failure), so a run
   reports every failing assertion (eve-style multi-verdict). Each returns a
   handle: `.gate()` (hard fail, default) / `.soft()` (tracked) / `.atLeast(n)`
@@ -88,6 +90,34 @@ defineEval("weather", {
   RegExp / predicate matchers), `notCalledTool`, `toolOrder`, `usedNoTools`,
   `maxToolCalls`.
 - Value assertions: `t.check(value, includes(...)/equals(...)/matches(schema)/similarity(...))`.
+
+## Prompt-cache tracing
+
+Use one case and one thread for a long-running cache workload. Exclude cold
+warmup turns when gating the steady-state hit rate:
+
+```ts
+it("keeps the long-session prefix hot", async (t) => {
+  for (const input of workload) {
+    await t.run(input);
+  }
+
+  t.cacheHitRateAtLeast(0.8, {
+    minTrackedRequests: 10,
+    warmupRuns: 2,
+  });
+});
+```
+
+Each `run.modelUsage` entry is one successful agent-loop model attempt, while
+`run.cache`, `case.cache`, and `report.cache` aggregate the provider-reported
+counts. `cacheHitRate` is the sum of paired `cacheReadTokens` divided by the sum
+of paired `inputTokens`; `trackedRequests` reports its sample coverage.
+`cacheHitRate` remains absent when either count is unreported or tracked input
+is zero, so unsupported telemetry cannot silently look like a zero-percent hit
+rate. Individual aggregate token fields likewise remain absent until at least
+one provider reports them. Internal automatic-compaction summary calls are not
+part of a turn's event stream and are excluded.
 
 ## CLI
 

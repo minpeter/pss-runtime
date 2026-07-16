@@ -1,4 +1,5 @@
 import type { LanguageModel } from "ai";
+import { summarizeCacheUsage } from "./cache";
 import { runAgent } from "./harness";
 import { deepEqual } from "./matchers";
 import { createJudgeScope } from "./scope-judge";
@@ -17,6 +18,8 @@ import type {
   AgentEvent,
   AssertionHandle,
   AssertionRecord,
+  CacheHitRateOptions,
+  EvalCacheStats,
   EvalRun,
   EvalScope,
   EvalThreadLike,
@@ -46,6 +49,10 @@ export class EvalScopeImpl implements EvalScope {
 
   get reply(): string {
     return this.#runs.at(-1)?.output ?? "";
+  }
+
+  get cache(): EvalCacheStats {
+    return summarizeCacheUsage(this.#runs.flatMap((run) => run.modelUsage));
   }
 
   get events(): readonly AgentEvent[] {
@@ -79,6 +86,38 @@ export class EvalScopeImpl implements EvalScope {
   }
 
   // --- run-level assertions ---
+
+  cacheHitRateAtLeast(
+    minimum: number,
+    options: CacheHitRateOptions = {}
+  ): AssertionHandle {
+    assertRate(minimum);
+    const warmupRuns = options.warmupRuns ?? 0;
+    const minTrackedRequests = options.minTrackedRequests ?? 1;
+    assertNonNegativeInteger("warmupRuns", warmupRuns);
+    assertNonNegativeInteger("minTrackedRequests", minTrackedRequests);
+
+    const cache = summarizeCacheUsage(
+      this.#runs.slice(warmupRuns).flatMap((run) => run.modelUsage)
+    );
+    const rate = cache.cacheHitRate;
+    const enoughRequests = cache.trackedRequests >= minTrackedRequests;
+    const pass = rate !== undefined && enoughRequests && rate >= minimum;
+    const detail = cacheHitRateFailure({
+      cache,
+      enoughRequests,
+      minTrackedRequests,
+      minimum,
+      rate,
+    });
+    return this.record(
+      `cacheHitRateAtLeast(${minimum})`,
+      "gate",
+      pass,
+      pass ? undefined : detail,
+      rate
+    );
+  }
 
   completed(): AssertionHandle {
     return this.record("completed", "gate", !this.failed);
@@ -257,4 +296,40 @@ export class EvalScopeImpl implements EvalScope {
   async resolvePending(): Promise<void> {
     await this.#recorder.resolvePending();
   }
+}
+
+function assertRate(value: number): void {
+  if (!(Number.isFinite(value) && value >= 0 && value <= 1)) {
+    throw new RangeError("cache hit rate must be between 0 and 1");
+  }
+}
+
+function assertNonNegativeInteger(name: string, value: number): void {
+  if (!(Number.isInteger(value) && value >= 0)) {
+    throw new RangeError(`${name} must be a non-negative integer`);
+  }
+}
+
+function cacheHitRateFailure({
+  cache,
+  enoughRequests,
+  minTrackedRequests,
+  minimum,
+  rate,
+}: {
+  readonly cache: EvalCacheStats;
+  readonly enoughRequests: boolean;
+  readonly minTrackedRequests: number;
+  readonly minimum: number;
+  readonly rate: number | undefined;
+}): string {
+  if (!enoughRequests) {
+    return `provider cache usage tracked for ${cache.trackedRequests} request(s); expected at least ${minTrackedRequests}`;
+  }
+  if (rate === undefined) {
+    return cache.trackedInputTokens === 0
+      ? "provider-reported tracked input token total was zero"
+      : "provider did not report cache-read and input token counts";
+  }
+  return `cache hit rate ${rate.toFixed(4)} was below ${minimum.toFixed(4)} (${cache.trackedCacheReadTokens}/${cache.trackedInputTokens} tokens)`;
 }

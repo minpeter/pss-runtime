@@ -1,3 +1,4 @@
+import { summarizeCacheUsage } from "./cache";
 import { getEvals } from "./registry";
 import { EvalScopeImpl } from "./scope";
 import type {
@@ -85,6 +86,7 @@ export async function runEvals(
           : { passed: false, scored: false };
       results.push({
         assertions: records,
+        cache: scope.cache,
         durationMs: Date.now() - started,
         error,
         evalId: def.id,
@@ -98,6 +100,9 @@ export async function runEvals(
 
   const passed = results.filter((r) => r.passed).length;
   return {
+    cache: summarizeCacheUsage(
+      results.flatMap((result) => result.runs.flatMap((run) => run.modelUsage))
+    ),
     failed: results.length - passed,
     passed,
     results,

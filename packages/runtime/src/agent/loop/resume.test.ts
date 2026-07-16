@@ -129,11 +129,13 @@ describe("resumeRun", () => {
     expect(model.model.doGenerateCalls).toHaveLength(2);
     expect(eventTypes(await collectEvents(host))).toEqual([
       "step-start",
+      "model-usage",
       "assistant-output",
       "tool-call",
       "tool-result",
       "step-end",
       "step-start",
+      "model-usage",
       "assistant-output",
       "step-end",
     ]);
@@ -195,6 +197,8 @@ describe("resumeRun", () => {
     expect(model.doGenerateCalls).toHaveLength(2);
     expect(eventTypes(await collectEvents(host))).toEqual([
       "step-start",
+      "model-usage",
+      "model-usage",
       "assistant-output",
       "step-end",
     ]);

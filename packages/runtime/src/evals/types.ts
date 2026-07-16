@@ -1,5 +1,5 @@
 import type { LanguageModel } from "ai";
-import type { AgentEvent } from "../thread/protocol/events";
+import type { AgentEvent, ModelUsage } from "../thread/protocol/events";
 import type { StandardSchemaV1 } from "./standard-schema";
 
 type MaybePromise<T> = PromiseLike<T> | T;
@@ -12,18 +12,47 @@ export type { AgentEvent } from "../thread/protocol/events";
  * these across multi-turn cases and assert against the aggregated state.
  */
 export interface EvalRun {
+  /** Aggregate prompt-cache telemetry for this turn. */
+  readonly cache: EvalCacheStats;
   /** Set when the turn ended in an unrecoverable runtime failure. */
   readonly error?: string;
   /** The raw runtime events, for advanced assertions or debugging. */
   readonly events: readonly AgentEvent[];
   /** User input that drove this turn. */
   readonly input: string;
+  /** One usage record per successful agent-loop attempt, in attempt order. */
+  readonly modelUsage: readonly ModelUsage[];
   /** Visible assistant text, concatenated across the turn. */
   readonly output: string;
   /** Every tool the model requested, in call order. */
   readonly toolCalls: readonly EvalToolCall[];
   /** Every tool result that came back, in completion order. */
   readonly toolResults: readonly EvalToolResult[];
+}
+
+/**
+ * Provider-reported cache totals. The hit rate is paired cache-read tokens
+ * divided by paired input tokens and exists only when tracked input is nonzero.
+ */
+export interface EvalCacheStats {
+  readonly cacheHitRate?: number;
+  readonly cacheReadTokens?: number;
+  readonly cacheWriteTokens?: number;
+  readonly inputTokens?: number;
+  readonly noCacheTokens?: number;
+  readonly requests: number;
+  /** Cache-read tokens from requests used in `cacheHitRate`. */
+  readonly trackedCacheReadTokens?: number;
+  /** Input tokens from requests used in `cacheHitRate`. */
+  readonly trackedInputTokens?: number;
+  readonly trackedRequests: number;
+}
+
+export interface CacheHitRateOptions {
+  /** Require at least this many attempts with both input and cache-read counts. */
+  readonly minTrackedRequests?: number;
+  /** Exclude this many initial `t.run()` calls from the steady-state rate. */
+  readonly warmupRuns?: number;
 }
 
 export interface EvalToolCall {
@@ -144,6 +173,8 @@ export type SchemaInput = StandardSchemaV1;
 /** The outcome of one case within a run. */
 export interface CaseResult {
   readonly assertions: readonly AssertionRecord[];
+  /** Cache totals across every `t.run()` in this case. */
+  readonly cache: EvalCacheStats;
   readonly durationMs: number;
   /** Non-assertion exception thrown by the case body. */
   readonly error?: string;
@@ -159,6 +190,8 @@ export interface CaseResult {
 
 /** The full result of a {@link runEvals} invocation. */
 export interface EvalReport {
+  /** Cache totals across all selected cases. */
+  readonly cache: EvalCacheStats;
   readonly failed: number;
   readonly passed: number;
   readonly results: readonly CaseResult[];
@@ -206,6 +239,13 @@ export interface JudgeSurface {
  * throwing, so a single run reports every failing assertion.
  */
 export interface EvalScope {
+  /** Provider-reported cache totals across all completed `run` calls. */
+  readonly cache: EvalCacheStats;
+  /** Require a steady-state cacheReadTokens / inputTokens rate between 0 and 1. */
+  cacheHitRateAtLeast(
+    minimum: number,
+    options?: CacheHitRateOptions
+  ): AssertionHandle;
   /** A matching tool call happened, with optional input/output/times constraints. */
   calledTool(name: string, options?: ToolCallMatcherOptions): AssertionHandle;
 

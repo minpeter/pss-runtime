@@ -87,6 +87,9 @@ describe("Agent thread automatic compaction overflow recovery", () => {
     const events = await collect(await thread.send("next"));
 
     expect(eventTypes(events)).toContain("turn-end");
+    expect(eventTypes(events).filter((type) => type === "model-usage")).toEqual(
+      ["model-usage"]
+    );
     expect(events).toContainEqual({
       text: "after gated compaction",
       type: "assistant-output",
@@ -139,6 +142,9 @@ describe("Agent thread automatic compaction overflow recovery", () => {
     const events = await collect(await thread.send("next"));
 
     expect(eventTypes(events)).toContain("turn-end");
+    expect(eventTypes(events).filter((type) => type === "model-usage")).toEqual(
+      ["model-usage"]
+    );
     expect(events).toContainEqual({
       text: "after blocking compaction",
       type: "assistant-output",

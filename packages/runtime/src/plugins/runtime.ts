@@ -394,6 +394,9 @@ export class PluginRuntime {
       case "step-end":
         await this.#notify("step.end", event, context);
         return;
+      case "model-usage":
+        await this.#notify("model.usage", event, context);
+        return;
       case "turn-start":
         await this.#notify("turn.start", event, context);
         return;

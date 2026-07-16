@@ -1,8 +1,9 @@
 import type { ModelMessage } from "ai";
 import {
-  generateModelStep,
+  generateModelStepResult,
   type ModelGenerationOptions,
   type ModelStepOutput,
+  type ModelStepResult,
 } from "../../llm/llm";
 import type { RuntimeToolExecutionContext } from "../../llm/tool-execution";
 import type { AgentEvent } from "../../thread/protocol/events";
@@ -92,6 +93,7 @@ export async function runAgentLoop({
     const output = capturedOutput.value;
 
     if (output === "aborted") {
+      capturedOutput.release();
       return "aborted";
     }
 
@@ -193,10 +195,10 @@ async function readModelOutput({
 }: Pick<RunAgentLoopOptions, "history" | "model" | "transformModelContext"> & {
   signal: AbortSignal;
   toolExecution?: RuntimeToolExecutionContext;
-}): Promise<ModelStepOutput | "aborted"> {
+}): Promise<ModelStepResult | "aborted"> {
   try {
     const snapshot = history.modelContextSnapshot();
-    return await generateModelStep({
+    return await generateModelStepResult({
       history: transformModelContext
         ? await transformModelContext(snapshot, signal)
         : snapshot,
@@ -223,14 +225,15 @@ async function appendCapturedStepOutput({
 }: Pick<RunAgentLoopOptions, "emit" | "transformModelStep"> & {
   history: ModelHistory;
 } & {
-  capturedOutput: ObserverEventCaptureResult<ModelStepOutput | "aborted">;
-  output: ModelStepOutput;
+  capturedOutput: ObserverEventCaptureResult<ModelStepResult | "aborted">;
+  output: ModelStepResult;
   signal: AbortSignal;
 }): Promise<StepOutputResult> {
   try {
+    await emit(output.usage);
     const transformedOutput = transformModelStep
-      ? await transformModelStep(output, signal)
-      : output;
+      ? await transformModelStep(output.messages, signal)
+      : output.messages;
     return await appendStepOutput({
       emit,
       history,

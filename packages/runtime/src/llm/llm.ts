@@ -1,9 +1,16 @@
-import type { LanguageModel, ModelMessage, ToolChoice, ToolSet } from "ai";
+import type {
+  LanguageModel,
+  LanguageModelUsage,
+  ModelMessage,
+  ToolChoice,
+  ToolSet,
+} from "ai";
 import { generateText } from "ai";
 import {
   type HostAttachmentStore,
   hydrateRuntimeAttachments,
 } from "../thread/input/attachments";
+import type { ModelUsage } from "../thread/protocol/events";
 import { assertNoUnsupportedToolApproval } from "./tool-approval";
 import type { RuntimeToolExecutionContext } from "./tool-execution";
 import {
@@ -26,6 +33,11 @@ export type ModelStepOutput = Awaited<
   ReturnType<typeof generateText>
 >["responseMessages"];
 export type ModelStepOutputPart = ModelStepOutput[number];
+
+export interface ModelStepResult {
+  readonly messages: ModelStepOutput;
+  readonly usage: ModelUsage;
+}
 
 export interface ModelContextTokenEstimateInput {
   readonly instructions?: string;
@@ -93,6 +105,37 @@ export async function generateModelStep({
   toolExecution,
   tools,
 }: ModelStepOptions): Promise<ModelStepOutput> {
+  return (
+    await generateModelStepResult({
+      attachmentStore,
+      contextGate,
+      history,
+      instructions,
+      model,
+      signal,
+      toolChoice,
+      toolExecution,
+      tools,
+    })
+  ).messages;
+}
+
+/**
+ * Generate one model step while retaining the provider's normalized usage.
+ * Runtime turn loops use this form to expose cache telemetry; callers that
+ * only need messages can keep using {@link generateModelStep}.
+ */
+export async function generateModelStepResult({
+  attachmentStore,
+  contextGate,
+  history,
+  model,
+  instructions,
+  signal,
+  toolChoice,
+  toolExecution,
+  tools,
+}: ModelStepOptions): Promise<ModelStepResult> {
   const toolCallIds = new Map<string, string>();
   const prompt = promptForModel({ history, instructions });
   const messages = await hydrateRuntimeAttachments(
@@ -105,18 +148,84 @@ export async function generateModelStep({
     messages,
   });
   assertNoUnsupportedToolApproval(tools);
-  const { responseMessages } = await generateText({
-    abortSignal: signal,
-    instructions: prompt.instructions,
-    messages,
-    model,
-    toolChoice,
-    tools: normalizeToolCallIds(tools, toolCallIds, toolExecution),
-  });
+  const { finalStep, finishReason, response, responseMessages, usage } =
+    await generateText({
+      abortSignal: signal,
+      instructions: prompt.instructions,
+      messages,
+      model,
+      toolChoice,
+      tools: normalizeToolCallIds(tools, toolCallIds, toolExecution),
+    });
 
-  return responseMessages.map((message) =>
-    rewriteMessageToolCallIds(message, toolCallIds)
-  );
+  return {
+    messages: responseMessages.map((message) =>
+      rewriteMessageToolCallIds(message, toolCallIds)
+    ),
+    usage: modelUsageEvent({
+      durationMs: finalStep?.performance.responseTimeMs,
+      finishReason,
+      modelId:
+        finalStep?.model.modelId ??
+        response?.modelId ??
+        configuredModelId(model),
+      provider: finalStep?.model.provider ?? configuredProvider(model),
+      usage,
+    }),
+  };
+}
+
+function modelUsageEvent({
+  durationMs,
+  finishReason,
+  modelId,
+  provider,
+  usage,
+}: {
+  readonly durationMs?: number;
+  readonly finishReason?: ModelUsage["finishReason"];
+  readonly modelId?: string;
+  readonly provider?: string;
+  readonly usage?: LanguageModelUsage;
+}): ModelUsage {
+  const inputDetails = usage?.inputTokenDetails;
+  const outputDetails = usage?.outputTokenDetails;
+  return {
+    ...(inputDetails?.cacheReadTokens === undefined
+      ? {}
+      : { cacheReadTokens: inputDetails.cacheReadTokens }),
+    ...(inputDetails?.cacheWriteTokens === undefined
+      ? {}
+      : { cacheWriteTokens: inputDetails.cacheWriteTokens }),
+    ...(durationMs === undefined ? {} : { durationMs }),
+    ...(finishReason === undefined ? {} : { finishReason }),
+    ...(usage?.inputTokens === undefined
+      ? {}
+      : { inputTokens: usage.inputTokens }),
+    ...(modelId === undefined ? {} : { modelId }),
+    ...(inputDetails?.noCacheTokens === undefined
+      ? {}
+      : { noCacheTokens: inputDetails.noCacheTokens }),
+    ...(usage?.outputTokens === undefined
+      ? {}
+      : { outputTokens: usage.outputTokens }),
+    ...(provider === undefined ? {} : { provider }),
+    ...(outputDetails?.reasoningTokens === undefined
+      ? {}
+      : { reasoningTokens: outputDetails.reasoningTokens }),
+    ...(usage?.totalTokens === undefined
+      ? {}
+      : { totalTokens: usage.totalTokens }),
+    type: "model-usage",
+  };
+}
+
+function configuredModelId(model: LanguageModel): string | undefined {
+  return typeof model === "string" ? model : model.modelId;
+}
+
+function configuredProvider(model: LanguageModel): string | undefined {
+  return typeof model === "string" ? undefined : model.provider;
 }
 
 function enforceContextGate({

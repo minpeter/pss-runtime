@@ -50,12 +50,20 @@ describe("thread event protocol boundary", () => {
         text: "internal reasoning",
         type: "assistant-reasoning",
       },
+      {
+        cacheReadTokens: 80,
+        inputTokens: 100,
+        type: "model-usage",
+      },
     ] satisfies readonly AgentEvent[];
 
     expect(events.filter(isVisibleAgentEvent)).toEqual([events[0]]);
     expect(events.filter(isLifecycleAgentEvent)).toEqual([events[1]]);
     expect(events.filter(isToolAgentEvent)).toEqual([events[2]]);
-    expect(events.filter(isTelemetryAgentEvent)).toEqual([events[3]]);
+    expect(events.filter(isTelemetryAgentEvent)).toEqual([
+      events[3],
+      events[4],
+    ]);
     expect(events.filter(isControlAgentEvent)).toEqual(events.slice(1));
   });
 });

@@ -178,6 +178,20 @@ The public transcript protocol is `AgentEvent`: live turns emit runtime-defined
 events through `turn.events()`. Provider/model message history is internal
 continuation state, not a public history API.
 
+Every successful agent-loop model attempt emits a metadata-only `model-usage`
+event before its generated message events. It normalizes the AI SDK fields as
+`provider`, `modelId`, `finishReason`, `durationMs`, `inputTokens`,
+`cacheReadTokens`, `cacheWriteTokens`, `noCacheTokens`, `outputTokens`,
+`reasoningTokens`, and `totalTokens`. `durationMs` is the AI SDK response wait
+time and excludes client-side tool execution; provider-reported token fields
+stay absent when unsupported, preserving the difference between missing and
+zero. Plugins can observe the same record through `model.usage`.
+
+The event is scoped to attempts in the public turn loop. Internal automatic
+compaction summary requests run outside that stream and do not emit it. Durable
+resume retries emit one record per successful provider attempt, including an
+attempt whose generated state later fails to commit and is retried.
+
 ## Delegation
 
 Delegation is app-owned. Build ordinary tools that call another `Agent`,
@@ -310,12 +324,13 @@ Notification events are observe-only. Request events such as `input.accept`,
 `turn.start.before` may return a typed decision. Invalid runtime results fail
 closed with `PluginHookError`.
 
-Request hooks cover these boundaries:
+Request and telemetry hooks cover these boundaries:
 
 - `input.accept` for `user-input` and `runtime-input`
 - `turn.start.before` before `turn.start`
 - `model.context` before each model call
 - `model.step.before` after generation and before atomic step append
+- `model.usage` after a successful agent-loop model attempt and before output
 - `provider.request.before` immediately before the provider request
 - `thread.compaction.before` before manual, background, or overflow compaction
 - `tool.call.before` is plugin-only; it is synthesized after the `before-tool`

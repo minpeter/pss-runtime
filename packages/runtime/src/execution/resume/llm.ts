@@ -1,8 +1,9 @@
 import type { ModelMessage } from "ai";
 import {
-  generateModelStep,
+  generateModelStepResult,
   type ModelGenerationOptions,
   type ModelStepOutput,
+  type ModelStepResult,
   type RuntimeToolExecutionContext,
 } from "../../llm/llm";
 import { persistedToolExecutionCheckpoint } from "../../llm/tool-execution";
@@ -24,9 +25,9 @@ export async function readModelOutput({
   readonly model: ModelGenerationOptions;
   readonly signal: AbortSignal;
   readonly toolExecution: RuntimeToolExecutionContext;
-}): Promise<ModelStepOutput | "aborted"> {
+}): Promise<ModelStepResult | "aborted"> {
   try {
-    return await generateModelStep({
+    return await generateModelStepResult({
       history,
       ...model,
       signal,
