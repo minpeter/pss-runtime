@@ -548,7 +548,7 @@ console.log(report.messageCount, report.compactionCount, report.storageFile);
 ```
 
 There is a single host contract: `AgentHost` (`HostStore` + `HostScheduler` + optional
-`HostAttachmentStore`). When `host` is omitted, `Agent` defaults to
+`HostAttachmentStore`). When `host` is omitted, `createAgent()` defaults to
 `createInMemoryHost()`. Platform factories (`createInMemoryHost`,
 `createFileHost`, `createCloudflareHost`) all return that same shape.
 `createCloudflareHost` is the Cloudflare Agents SDK path (fibers + schedule).
@@ -576,7 +576,7 @@ const agent = await createAgent({
 retries once. Provider-thrown context-window errors still use the same blocking
 compaction fallback.
 
-Hosts that need durable runs pass `host:` into `Agent`. The execution subpath
+Hosts that need durable runs pass `host:` into `createAgent()`. The execution subpath
 exports the same `AgentHost` contract used by platform factories:
 
 ```ts
@@ -617,8 +617,8 @@ const agent = await createAgent({
 App-owned background work still needs its own durable task/output storage if it
 must survive process restarts.
 
-Cloudflare Durable Objects and similar edge hosts should reconstruct `Agent`
-objects per turn and persist opaque thread state through a durable `threadStore`.
+Cloudflare Durable Objects and similar edge hosts should call `createAgent()` per
+turn and persist opaque thread state through a durable `threadStore`.
 Use `@minpeter/pss-runtime/platform/cloudflare` for the packaged Cloudflare Durable
 Object adapter. See the sync example package for blocking app-owned delegation
 and the background example package for durable background delegation in a local
@@ -702,7 +702,7 @@ child link is committed, and when a run suspends. If a process is killed inside 
 provider call or unsafe tool execution, resume rolls back to the last committed
 checkpoint and may re-enter the operation.
 
-When `Agent` receives an `AgentHost`, high-level model turns create a
+When `createAgent()` receives an `AgentHost`, high-level model turns create a
 `user-turn` run record and thread tool execution context into managed model
 calls. Tools are checkpointed before and after execution and receive stable
 `attempt`, `idempotencyKey`, `retryPolicy`, `signal`, and public `toolCallId`
