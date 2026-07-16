@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -30,25 +29,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version-file: .node-version
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
-
-      - name: Verify npm trusted publishing prerequisites
-        run: |
-          node --version
-          npm --version
-          node <<'NODE'
-          const { execFileSync } = require("node:child_process");
-          const version = execFileSync("npm", ["--version"], {
-            encoding: "utf8",
-          }).trim();
-          const [major, minor, patch] = version.split(".").map(Number);
-          const valid = major > 11 || (major === 11 && (minor > 5 || (minor === 5 && patch >= 1)));
-          if (!valid) {
-            throw new Error(`npm CLI 11.5.1+ is required for trusted publishing; found ${version}`);
-          }
-          NODE
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -78,4 +61,3 @@ jobs:
           # Configure each package on npm with repository minpeter/pss-runtime
           # and workflow filename release.yml; do not add NPM_TOKEN.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_CONFIG_PROVENANCE: "true"

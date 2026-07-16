@@ -104,6 +104,9 @@ Submitting while idle starts a normal new turn.
 
 ## Develop
 
+Use Node.js 24 or later. The repository's supported development version is
+recorded in `.node-version`.
+
 ```sh
 pnpm install
 pnpm dev

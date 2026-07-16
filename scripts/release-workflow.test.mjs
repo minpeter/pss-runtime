@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 describe("release workflow", () => {
   it("versions or publishes main through Tegami", () => {
+    const ciWorkflow = readFileSync(".github/workflows/ci.yml", "utf8");
     const workflow = readFileSync(".github/workflows/release.yml", "utf8");
     const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 
@@ -12,11 +13,19 @@ describe("release workflow", () => {
     expect(packageJson.scripts["release:v0.1"]).toBeUndefined();
     expect(packageJson.devDependencies.tegami).toBe("1.2.5");
     expect(packageJson.devDependencies["@changesets/cli"]).toBeUndefined();
+    expect(packageJson.engines.node).toBe(">=24");
+    expect(readFileSync(".node-version", "utf8").trim()).toBe("24");
     expect(workflow).toContain("      - main\n");
     expect(workflow).not.toContain("      - v0.1\n");
+    expect(workflow).not.toContain("workflow_dispatch:");
     expect(workflow).toContain("fetch-depth: 0");
+    expect(workflow).toContain("node-version-file: .node-version");
+    expect(ciWorkflow).toContain("node-version-file: .node-version");
     expect(workflow).toContain("pnpm tegami ci");
-    expect(workflow).toContain('NPM_CONFIG_PROVENANCE: "true"');
+    expect(workflow).not.toContain(
+      "Verify npm trusted publishing prerequisites"
+    );
+    expect(workflow).not.toContain("NPM_CONFIG_PROVENANCE");
     expect(workflow).not.toContain("changesets/action");
   });
 });
