@@ -2,15 +2,15 @@
 
 Small agent runtime workspace.
 
-- `@minpeter/pss-runtime`: runtime, sessions, model loop.
-- `@minpeter/pss-coding-agent`: model wiring and the `pss` TUI. It ships no
-  built-in tools; pass your own tool set when needed.
+- `@minpeter/pss-runtime`: runtime, threads, model loop, and plugin kernel.
+- `@minpeter/pss-coding-agent`: model wiring and the `pss` TUI, with
+  OpenSearch-backed `web_search` and `web_fetch` tools enabled by default.
 
 ## Use
 
 ```ts
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { Agent } from "@minpeter/pss-runtime";
+import { createAgent } from "@minpeter/pss-runtime";
 import { createEnv } from "@t3-oss/env-core";
 import { config as loadEnv } from "dotenv";
 import { z } from "zod";
@@ -31,31 +31,33 @@ const provider = createOpenAICompatible({
   baseURL: env.AI_BASE_URL,
 });
 
-const agent = new Agent({
+const agent = await createAgent({
   instructions: "Keep every answer under 3 lines.",
   model: provider(env.AI_MODEL),
 });
-const run = await agent.send("Hello");
-for await (const event of run.events()) {
+const turn = await agent.send("Hello");
+for await (const event of turn.events()) {
   console.dir(event, { depth: null });
 }
 ```
 
-`run.events()` is synchronized and drives the run. Consume it to let the runtime
-cross lifecycle boundaries such as `turn-start`, `step-start`, and `step-end`.
-Use `session.send(input)` for a new user turn. If a run is already active, the
-turn is queued until the active run finishes. Use `session.steer(input)` when the
-input should steer the active run; if no run is active, it starts a normal run.
+`turn.events()` is synchronized and drives the turn. Consume it to let the
+runtime cross lifecycle boundaries such as `turn-start`, `step-start`, and
+`step-end`.
+Use `thread.send(input)` for a new user turn. If a turn is already active, the
+new turn is queued until the active turn finishes. Use `thread.steer(input)` when
+the input should steer the active turn; if no turn is active, it starts a normal
+turn.
 
 ```ts
-const session = agent.session("default");
-const run = await session.send("Write a two sentence summary.");
+const thread = agent.thread("default");
+const turn = await thread.send("Write a two sentence summary.");
 let addedConstraint = false;
 
-for await (const event of run.events()) {
+for await (const event of turn.events()) {
   if (event.type === "step-end" && !addedConstraint) {
     addedConstraint = true;
-    await session.steer("Keep the second sentence under 10 words.");
+    await thread.steer("Keep the second sentence under 10 words.");
   }
 }
 ```
@@ -65,8 +67,36 @@ current turn before the next model snapshot, even after final-looking assistant
 text. Adding input on every `step-end` can keep a turn running indefinitely.
 
 Steering additions appear as `runtime-input` events: runtime/API-originated input
-mapped internally to the model's user role, separate from human `user-text` and
-`user-message` events.
+mapped internally to the model's user role, separate from human `user-input`
+events.
+
+## Plugins
+
+Plugins are async factories. Register typed lifecycle handlers with `on()` and
+capabilities such as tools with `provide()`:
+
+```ts
+import {
+  createAgent,
+  definePlugin,
+  registerTool,
+} from "@minpeter/pss-runtime";
+
+const appPlugin = definePlugin((pss) => {
+  pss.on("turn.end", (event) => {
+    console.log(event.type);
+  });
+  pss.provide(registerTool({ name: "weather", tool: weatherTool }));
+});
+
+const agent = await createAgent({ model, plugins: [appPlugin] });
+```
+
+Plugin factories initialize sequentially before `createAgent()` resolves.
+`Agent` remains available as a type, but agent creation must go through the async
+factory. Factory and hook failures fail closed. See
+[`packages/runtime/README.md`](packages/runtime/README.md#plugins) for lifecycle
+hooks, request decisions, thread-scoped state, and host integrations.
 
 The runtime `send` API also accepts JSON-serializable multimodal content parts
 for model providers that support them:
@@ -131,9 +161,10 @@ The `pss` TUI enables OpenSearch-backed `web_search` and `web_fetch` tools by
 default. Applications can still provide their own tools explicitly to the runtime
 or TUI entrypoint.
 
-The `pss` TUI stores sessions in `~/.pss/sessions` by default. Override with
-`PSS_SESSION_DIR` and `PSS_SESSION_KEY` when you want repo-local storage or a
-shared conversation key.
+The `pss` TUI stores threads in `~/.pss/threads` by default. Override with
+`PSS_THREAD_DIR` and `PSS_THREAD_KEY` when you want repo-local storage or a
+shared conversation key. `PSS_SESSION_DIR` and `PSS_SESSION_KEY` remain accepted
+as legacy aliases.
 
 ## Release
 
