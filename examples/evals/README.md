@@ -119,6 +119,11 @@ rate. Individual aggregate token fields likewise remain absent until at least
 one provider reports them. Internal automatic-compaction summary calls are not
 part of a turn's event stream and are excluded.
 
+A metadata-only [live-provider evidence campaign](./evidence/cache-telemetry/README.md)
+records the observed event fields, cache aggregates, raw protocol control, and
+the OpenAI-compatible adapter's omitted-field boundary. Reproduce the PSS path
+with `pnpm --filter @minpeter/pss-example-evals eval:cache-live -- <model-id>`.
+
 ## CLI
 
 The runtime also ships a `pss-eval` CLI that discovers `*.eval.ts` under a

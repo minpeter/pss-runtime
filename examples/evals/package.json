@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "eval": "tsx --conditions=@minpeter/pss-source src/run.ts",
+    "eval:cache-live": "tsx --conditions=@minpeter/pss-source src/live-cache-telemetry.ts",
     "eval:json": "tsx --conditions=@minpeter/pss-source src/run.ts --json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
