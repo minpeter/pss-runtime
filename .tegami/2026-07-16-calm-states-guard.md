@@ -1,6 +1,9 @@
 ---
-"@minpeter/pss-runtime": minor
+packages:
+  "npm:@minpeter/pss-runtime": minor
 ---
+
+## Introduce a factory-based plugin runtime
 
 Replace object plugins with an async factory registration kernel built around
 `definePlugin`, typed `on` events, and extensible `provide` capabilities. Add

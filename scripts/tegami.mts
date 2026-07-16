@@ -16,6 +16,20 @@ const paper = tegami({
       workflow: "release.yml",
     },
   },
+  packages: {
+    "@minpeter/pss-runtime": {
+      prerelease: "next",
+      npm: {
+        distTag: "next",
+      },
+    },
+    "@minpeter/pss-coding-agent": {
+      prerelease: "next",
+      npm: {
+        distTag: "next",
+      },
+    },
+  },
   plugins: [
     github({
       repo: "minpeter/pss-runtime",
