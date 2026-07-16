@@ -68,7 +68,7 @@
     "lint": "ultracite check ."
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "3.0.2",
+    "@ai-sdk/openai-compatible": "3.0.11",
     "@earendil-works/pi-tui": "^0.80.7",
     "@minpeter/opensearch": "0.0.4",
     "@minpeter/pss-runtime": "workspace:^",
