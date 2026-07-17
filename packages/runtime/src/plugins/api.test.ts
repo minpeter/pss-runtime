@@ -219,6 +219,7 @@ describe("factory plugin API", () => {
         "message.start",
         "message.update",
         "message.end",
+        "model.usage",
         "step.end",
         "turn.end",
         "turn.settled",
@@ -263,6 +264,7 @@ describe("factory plugin API", () => {
       "model.context",
       "provider.request.before",
       "provider.response.after",
+      "model.usage",
       "model.step.before",
       "message.start",
       "message.update",
@@ -362,6 +364,42 @@ describe("factory plugin API", () => {
     expect(baseModel.doGenerateCalls).toHaveLength(0);
     expect(overrideModel.doGenerateCalls).toHaveLength(1);
     expect(temperatures).toEqual([0.5]);
+  });
+
+  it("rejects accessor-backed model overrides before plugin middleware", async () => {
+    const baseModel = createMockLanguageModelV4(() =>
+      Promise.resolve(mockLanguageModelV4Text("BASE"))
+    );
+    const overrideModel = createMockLanguageModelV4(() =>
+      Promise.resolve(mockLanguageModelV4Text("OVERRIDE"))
+    );
+    const modelGetter = vi.fn(() => overrideModel);
+    const prepared: Record<string, unknown> = {};
+    Object.defineProperty(prepared, "model", {
+      enumerable: true,
+      get: modelGetter,
+    });
+    const providerRequest = vi.fn(() => undefined);
+    const plugin = definePlugin((pss) => {
+      pss.on("provider.request.before", providerRequest);
+    });
+    const agent = await createAgent({
+      model: baseModel,
+      plugins: [plugin],
+      prepareModelStep: () => prepared as never,
+    });
+
+    const events = await collect(await agent.send("hello"));
+
+    expect(events.at(-1)).toEqual({
+      message: 'prepareModelStep field "model" must be a data property.',
+      type: "turn-error",
+    });
+
+    expect(modelGetter).not.toHaveBeenCalled();
+    expect(providerRequest).not.toHaveBeenCalled();
+    expect(baseModel.doGenerateCalls).toHaveLength(0);
+    expect(overrideModel.doGenerateCalls).toHaveLength(0);
   });
 
   it("blocks a tool call without executing the tool", async () => {
@@ -615,6 +653,97 @@ describe("factory plugin API", () => {
     ).toContain("raw-protocol");
   });
 
+  it("exposes typed compaction provenance and can remove it ephemerally", async () => {
+    const host = createInMemoryHost();
+    await host.store.threads.commit(
+      "compaction-read-guard",
+      {
+        state: {
+          compactions: [
+            {
+              endSeqExclusive: 2,
+              schemaVersion: 1,
+              startSeq: 0,
+              summary: { content: "raw-protocol", role: "system" },
+            },
+          ],
+          history: [
+            { content: "old", role: "user" },
+            assistantMessage("old done"),
+          ],
+          schemaVersion: 2,
+        },
+      },
+      { expectedVersion: null }
+    );
+    const contexts: unknown[] = [];
+    const providerHistory: unknown[] = [];
+    const plugin = definePlugin((pss) => {
+      pss.on("model.context", ({ messages }) => {
+        contexts.push(structuredClone(messages));
+        return {
+          action: "transform",
+          value: {
+            messages: messages.filter(
+              (message) => message.role !== "compaction"
+            ),
+          },
+        };
+      });
+    });
+    const agent = await createAgent({
+      host,
+      model: createCallbackModel(({ history }) => {
+        providerHistory.push(structuredClone(history));
+        return Promise.resolve([assistantMessage("DONE")]);
+      }),
+      plugins: [plugin],
+    });
+
+    await collect(await agent.thread("compaction-read-guard").send("tail"));
+
+    expect(contexts[0]).toContainEqual({
+      endSeqExclusive: 2,
+      role: "compaction",
+      startSeq: 0,
+      summary: "raw-protocol",
+    });
+    expect(JSON.stringify(providerHistory)).not.toContain("raw-protocol");
+    expect(
+      JSON.stringify(await host.store.threads.load("compaction-read-guard"))
+    ).toContain("raw-protocol");
+  });
+
+  it("blocks contaminated compaction before persistence", async () => {
+    const host = createInMemoryHost();
+    const plugin = definePlugin((pss) => {
+      pss.on("thread.compaction.before", ({ input }) =>
+        input.summary.includes("raw-protocol")
+          ? { action: "cancel" }
+          : { action: "continue" }
+      );
+    });
+    const agent = await createAgent({
+      host,
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
+      plugins: [plugin],
+    });
+    const thread = agent.thread("compaction-write-guard");
+    await collect(await thread.send("hello"));
+
+    await thread.compact({
+      endSeqExclusive: 2,
+      startSeq: 0,
+      summary: "raw-protocol",
+    });
+
+    const stored = await host.store.threads.load("compaction-write-guard");
+    expect(JSON.stringify(stored)).not.toContain("raw-protocol");
+    expect(stored?.state).not.toHaveProperty("compactions");
+  });
+
   it("applies model context hooks to automatic-compaction model calls", async () => {
     let contextCalls = 0;
     let modelCalls = 0;
@@ -717,6 +846,12 @@ describe("factory plugin API", () => {
     expect(
       JSON.stringify(await host.store.threads.load("default"))
     ).not.toContain("raw-protocol");
+    const usageIndex = events.findIndex(
+      (event) => event.type === "model-usage"
+    );
+    const errorIndex = events.findIndex((event) => event.type === "turn-error");
+    expect(usageIndex).toBeGreaterThan(-1);
+    expect(errorIndex).toBeGreaterThan(usageIndex);
   });
 
   it("fails closed with the factory index and cleans up loaded plugins", async () => {

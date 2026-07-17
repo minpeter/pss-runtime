@@ -78,6 +78,36 @@ describe("runPluginsForEvent", () => {
     expect(result).toEqual({ kind: "emit", event: { type: "turn-start" } });
   });
 
+  it("gives each observe-only plugin an isolated event snapshot", async () => {
+    const usage = {
+      attemptId: "attempt-1",
+      cacheReadTokens: 80,
+      inputTokens: 100,
+      type: "model-usage",
+    } as const;
+    const observed: unknown[] = [];
+
+    await runPluginsForEvent(
+      [
+        {
+          on: ({ event }) => {
+            (event as { cacheReadTokens?: number }).cacheReadTokens = 999;
+          },
+        },
+        {
+          on: ({ event }) => {
+            observed.push(event);
+          },
+        },
+      ],
+      { event: usage, history: emptyHistory },
+      { observeOnly: true }
+    );
+
+    expect(usage.cacheReadTokens).toBe(80);
+    expect(observed).toEqual([usage]);
+  });
+
   it("ignores invalid JavaScript plugin returns", async () => {
     const invalidReturns: unknown[] = [null, false, 0, "continue"];
 

@@ -84,6 +84,7 @@ describe("createFileHost", () => {
         "turn-start",
         "runtime-input",
         "step-start",
+        "model-usage",
         "assistant-output",
         "step-end",
         "turn-end",

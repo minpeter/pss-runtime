@@ -58,7 +58,7 @@ describe("Agent thread automatic compaction overflow recovery", () => {
     const agent = agentWithAutoCompaction({
       autoCompaction: {
         contextGate: {
-          estimateTokens: ({ messages }) => (messages.length > 3 ? 100 : 1),
+          estimateTokens: ({ messages }) => (messages.length > 4 ? 100 : 1),
           maxInputTokens: 10,
           onOverflow: "compact",
         },
@@ -88,6 +88,9 @@ describe("Agent thread automatic compaction overflow recovery", () => {
     const events = await collect(await thread.send("next"));
 
     expect(eventTypes(events)).toContain("turn-end");
+    expect(eventTypes(events).filter((type) => type === "model-usage")).toEqual(
+      ["model-usage"]
+    );
     expect(events).toContainEqual({
       text: "after gated compaction",
       type: "assistant-output",
@@ -101,7 +104,11 @@ describe("Agent thread automatic compaction overflow recovery", () => {
       userTextToModelMessage(userText("next")),
     ]);
     expect(providerHistories.at(-1)).toEqual([
-      { content: "old exchange summarized", role: "system" },
+      expect.objectContaining({
+        content:
+          "The conversation history before this point was compacted into the following summary:\n<summary>\nold exchange summarized\n</summary>",
+        role: "user",
+      }),
       userTextToModelMessage(userText("tail")),
       assistantMessage("tail done"),
       userTextToModelMessage(userText("next")),
@@ -145,13 +152,20 @@ describe("Agent thread automatic compaction overflow recovery", () => {
     const events = await collect(await thread.send("next"));
 
     expect(eventTypes(events)).toContain("turn-end");
+    expect(eventTypes(events).filter((type) => type === "model-usage")).toEqual(
+      ["model-usage"]
+    );
     expect(events).toContainEqual({
       text: "after blocking compaction",
       type: "assistant-output",
     });
     expect(preparedStepIndices).toEqual([0, 0, 0, 0]);
     expect(retryHistory[0]).toEqual([
-      { content: "old exchange summarized", role: "system" },
+      expect.objectContaining({
+        content:
+          "The conversation history before this point was compacted into the following summary:\n<summary>\nold exchange summarized\n</summary>",
+        role: "user",
+      }),
       userTextToModelMessage(userText("tail")),
       assistantMessage("tail done"),
       userTextToModelMessage(userText("next")),

@@ -39,6 +39,7 @@ describe("AgentThread durable inputs", () => {
       "user-input",
       "turn-start",
       "step-start",
+      "model-usage",
       "assistant-output",
       "step-end",
       "turn-end",

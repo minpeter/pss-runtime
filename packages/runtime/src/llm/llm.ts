@@ -1,10 +1,20 @@
-import type { LanguageModel, ModelMessage, ToolSet } from "ai";
+import type {
+  LanguageModel,
+  LanguageModelUsage,
+  ModelMessage,
+  ToolSet,
+} from "ai";
 import { generateText } from "ai";
 import type { RuntimeDiagnosticsSink } from "../plugins/diagnostics";
 import {
   type HostAttachmentStore,
   hydrateRuntimeAttachments,
 } from "../thread/input/attachments";
+import type { ModelUsage } from "../thread/protocol/events";
+import {
+  compactionContextForModel,
+  type ThreadContextMessage,
+} from "../thread/state/context";
 import {
   ModelToolSelectionError,
   type PreparedModelToolChoice,
@@ -32,6 +42,11 @@ export type ModelStepOutput = Awaited<
   ReturnType<typeof generateText>
 >["responseMessages"];
 export type ModelStepOutputPart = ModelStepOutput[number];
+
+export interface ModelStepResult {
+  readonly messages: ModelStepOutput;
+  readonly usage: ModelUsage;
+}
 
 export interface ModelContextTokenEstimateInput {
   readonly instructions?: string;
@@ -87,14 +102,36 @@ export interface ModelGenerationOptions {
 }
 
 export interface ModelStepOptions extends ModelGenerationOptions {
-  history: readonly ModelMessage[];
+  history: readonly ThreadContextMessage[];
   runtimeStepIndex?: number;
   signal: AbortSignal;
   threadKey?: string;
   toolExecution?: RuntimeToolExecutionContext;
 }
 
-export async function generateModelStep({
+const SAFE_TELEMETRY_IDENTIFIER_PATTERN =
+  /^[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,199}$/u;
+const FINISH_REASONS = new Set<ModelUsage["finishReason"]>([
+  "content-filter",
+  "error",
+  "length",
+  "other",
+  "stop",
+  "tool-calls",
+]);
+
+export async function generateModelStep(
+  options: ModelStepOptions
+): Promise<ModelStepOutput> {
+  return (await generateModelStepResult(options)).messages;
+}
+
+/**
+ * Generate one model step while retaining the provider's normalized usage.
+ * Runtime turn loops use this form to expose cache telemetry; callers that
+ * only need messages can keep using {@link generateModelStep}.
+ */
+export async function generateModelStepResult({
   alwaysActiveTools,
   attachmentStore,
   contextGate,
@@ -110,7 +147,7 @@ export async function generateModelStep({
   toolOrder,
   toolExecution,
   tools,
-}: ModelStepOptions): Promise<ModelStepOutput> {
+}: ModelStepOptions): Promise<ModelStepResult> {
   if (prepareModelStep && threadKey === undefined) {
     throw new ModelToolSelectionError(
       "prepareModelStep requires a runtime threadKey."
@@ -144,25 +181,192 @@ export async function generateModelStep({
     messages,
   });
   assertNoUnsupportedToolApproval(prepared.tools);
-  const { responseMessages } = await generateText({
-    activeTools: prepared.activeTools,
-    abortSignal: signal,
-    instructions: prompt.instructions,
-    messages,
-    model: prepared.model,
-    toolChoice: prepared.toolChoice,
-    toolOrder: prepared.toolOrder,
-    tools: normalizeToolCallIds(prepared.tools, toolCallIds, toolExecution),
-  });
+  const { finalStep, finishReason, response, responseMessages, usage } =
+    await generateText({
+      activeTools: prepared.activeTools,
+      abortSignal: signal,
+      instructions: prompt.instructions,
+      messages,
+      model: prepared.model,
+      toolChoice: prepared.toolChoice,
+      toolOrder: prepared.toolOrder,
+      tools: normalizeToolCallIds(prepared.tools, toolCallIds, toolExecution),
+    });
 
-  return responseMessages.map((message) =>
-    rewriteMessageToolCallIds(message, toolCallIds)
-  );
+  return {
+    messages: responseMessages.map((message) =>
+      rewriteMessageToolCallIds(message, toolCallIds)
+    ),
+    usage: modelUsageEvent({
+      attemptId,
+      durationMs: finalStep?.performance.responseTimeMs,
+      finishReason,
+      modelId: firstSafeTelemetryIdentifier(
+        response?.modelId ??
+          finalStep?.model.modelId ??
+          configuredModelId(prepared.model),
+        finalStep?.model.modelId,
+        configuredModelId(prepared.model)
+      ),
+      provider: firstSafeTelemetryIdentifier(
+        finalStep?.model.provider,
+        configuredProvider(prepared.model)
+      ),
+      usage,
+    }),
+  };
+}
+
+function modelUsageEvent({
+  attemptId,
+  durationMs,
+  finishReason,
+  modelId,
+  provider,
+  usage,
+}: {
+  readonly attemptId: string;
+  readonly durationMs?: number;
+  readonly finishReason?: ModelUsage["finishReason"];
+  readonly modelId?: string;
+  readonly provider?: string;
+  readonly usage?: LanguageModelUsage;
+}): ModelUsage {
+  const { cacheReadTokens, cacheWriteTokens, noCacheTokens } =
+    usage?.inputTokenDetails ?? {};
+  const { reasoningTokens } = usage?.outputTokenDetails ?? {};
+  const { inputTokens, outputTokens, totalTokens } = usage ?? {};
+  const normalized = {
+    cacheReadTokens: safeTokenCount(cacheReadTokens),
+    cacheWriteTokens: safeTokenCount(cacheWriteTokens),
+    durationMs: safeDuration(durationMs),
+    finishReason: safeFinishReason(finishReason),
+    inputTokens: safeTokenCount(inputTokens),
+    modelId: safeTelemetryIdentifier(modelId),
+    noCacheTokens: safeTokenCount(noCacheTokens),
+    outputTokens: safeTokenCount(outputTokens),
+    provider: safeTelemetryIdentifier(provider),
+    reasoningTokens: safeTokenCount(reasoningTokens),
+    totalTokens: safeTokenCount(totalTokens),
+  };
+
+  return {
+    attemptId,
+    ...(normalized.cacheReadTokens === undefined
+      ? {}
+      : { cacheReadTokens: normalized.cacheReadTokens }),
+    ...(normalized.cacheWriteTokens === undefined
+      ? {}
+      : { cacheWriteTokens: normalized.cacheWriteTokens }),
+    ...(normalized.durationMs === undefined
+      ? {}
+      : { durationMs: normalized.durationMs }),
+    ...(normalized.finishReason === undefined
+      ? {}
+      : { finishReason: normalized.finishReason }),
+    ...(normalized.inputTokens === undefined
+      ? {}
+      : { inputTokens: normalized.inputTokens }),
+    ...(normalized.modelId === undefined
+      ? {}
+      : { modelId: normalized.modelId }),
+    ...(normalized.noCacheTokens === undefined
+      ? {}
+      : { noCacheTokens: normalized.noCacheTokens }),
+    ...(normalized.outputTokens === undefined
+      ? {}
+      : { outputTokens: normalized.outputTokens }),
+    ...(normalized.provider === undefined
+      ? {}
+      : { provider: normalized.provider }),
+    ...(normalized.reasoningTokens === undefined
+      ? {}
+      : { reasoningTokens: normalized.reasoningTokens }),
+    ...(normalized.totalTokens === undefined
+      ? {}
+      : { totalTokens: normalized.totalTokens }),
+    type: "model-usage",
+  };
+}
+
+function safeTokenCount(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : undefined;
+}
+
+function safeDuration(value: unknown): number | undefined {
+  if (!(typeof value === "number" && Number.isFinite(value) && value >= 0)) {
+    return;
+  }
+  const rounded = Math.round(value);
+  return Number.isSafeInteger(rounded) ? rounded : undefined;
+}
+
+function safeFinishReason(
+  value: unknown
+): ModelUsage["finishReason"] | undefined {
+  return typeof value === "string" &&
+    FINISH_REASONS.has(value as ModelUsage["finishReason"])
+    ? (value as ModelUsage["finishReason"])
+    : undefined;
+}
+
+function safeTelemetryIdentifier(value: unknown): string | undefined {
+  return typeof value === "string" &&
+    SAFE_TELEMETRY_IDENTIFIER_PATTERN.test(value)
+    ? value
+    : undefined;
+}
+
+function firstSafeTelemetryIdentifier(
+  ...values: readonly unknown[]
+): string | undefined {
+  for (const value of values) {
+    const safe = safeTelemetryIdentifier(value);
+    if (safe !== undefined) {
+      return safe;
+    }
+  }
+  return;
+}
+
+function configuredModelId(model: LanguageModel): string | undefined {
+  return typeof model === "string"
+    ? model
+    : dataPropertyStringInPrototypeChain(model, "modelId");
+}
+
+function configuredProvider(model: LanguageModel): string | undefined {
+  return typeof model === "string"
+    ? undefined
+    : dataPropertyStringInPrototypeChain(model, "provider");
+}
+
+function dataPropertyStringInPrototypeChain(
+  value: object,
+  property: string
+): string | undefined {
+  try {
+    let current: object | null = value;
+    while (current !== null) {
+      const descriptor = Object.getOwnPropertyDescriptor(current, property);
+      if (descriptor) {
+        return "value" in descriptor && typeof descriptor.value === "string"
+          ? descriptor.value
+          : undefined;
+      }
+      current = Object.getPrototypeOf(current);
+    }
+  } catch {
+    // Provider model objects may be proxies. Telemetry must fail closed.
+  }
+  return;
 }
 
 function snapshotModelHistory(
-  history: readonly ModelMessage[]
-): readonly ModelMessage[] {
+  history: readonly ThreadContextMessage[]
+): readonly ThreadContextMessage[] {
   if (!Array.isArray(history)) {
     throw new TypeError("history must be an array of model messages.");
   }
@@ -183,7 +387,7 @@ function snapshotModelHistory(
   ) {
     throw new TypeError("history has an invalid length.");
   }
-  const snapshot: ModelMessage[] = [];
+  const snapshot: ThreadContextMessage[] = [];
   for (let index = 0; index < lengthDescriptor.value; index += 1) {
     let descriptor: PropertyDescriptor | undefined;
     try {
@@ -196,7 +400,7 @@ function snapshotModelHistory(
         "history must be a dense array of data-property model messages."
       );
     }
-    snapshot.push(descriptor.value as ModelMessage);
+    snapshot.push(descriptor.value as ThreadContextMessage);
   }
   return Object.freeze(snapshot);
 }
@@ -270,7 +474,7 @@ function promptForModel({
   history,
   instructions,
 }: {
-  readonly history: readonly ModelMessage[];
+  readonly history: readonly ThreadContextMessage[];
   readonly instructions?: string;
 }): {
   readonly instructions?: string;
@@ -279,6 +483,10 @@ function promptForModel({
   const messages: ModelMessage[] = [];
   const systemContents: string[] = instructions ? [instructions] : [];
   for (const message of history) {
+    if (message.role === "compaction") {
+      messages.push(compactionContextForModel(message));
+      continue;
+    }
     if (message.role === "system") {
       systemContents.push(systemContentText(message.content));
       continue;

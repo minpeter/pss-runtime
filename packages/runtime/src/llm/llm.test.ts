@@ -161,6 +161,63 @@ describe("generateModelStep", () => {
     expect(generateTextMock).not.toHaveBeenCalled();
   });
 
+  it("lowers typed compaction context to a user-scoped summary", async () => {
+    const runModelStep = await loadModelStepRunner();
+    const signal = new AbortController().signal;
+    const userProtocolLiteral = "<tool_call>literal user text</tool_call>";
+    const selectorHistories: unknown[] = [];
+
+    await expect(
+      runModelStep(
+        {
+          instructions: "base",
+          model: fakeModel,
+          prepareModelStep: ({ history }) => {
+            selectorHistories.push(history);
+          },
+        },
+        {
+          history: [
+            {
+              endSeqExclusive: 4,
+              role: "compaction",
+              startSeq: 0,
+              summary: "old turns summarized",
+            },
+            { content: userProtocolLiteral, role: "user" },
+          ],
+          signal,
+          threadKey: "thread-1",
+        }
+      )
+    ).resolves.toEqual([assistantMessage("DONE")]);
+
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        instructions: "base",
+        messages: [
+          {
+            content:
+              "The conversation history before this point was compacted into the following summary:\n<summary>\nold turns summarized\n</summary>",
+            role: "user",
+          },
+          { content: userProtocolLiteral, role: "user" },
+        ],
+      })
+    );
+    expect(selectorHistories).toEqual([
+      [
+        {
+          endSeqExclusive: 4,
+          role: "compaction",
+          startSeq: 0,
+          summary: "old turns summarized",
+        },
+        { content: userProtocolLiteral, role: "user" },
+      ],
+    ]);
+  });
+
   it("passes configured toolChoice to generateText", async () => {
     const runModelStep = await loadModelStepRunner();
     const signal = new AbortController().signal;
@@ -965,6 +1022,28 @@ describe("generateModelStep", () => {
     ).toBeGreaterThanOrEqual(0);
   });
 
+  it("correlates selection diagnostics and usage with one attempt ID", async () => {
+    const diagnostics: Array<{
+      readonly metadata?: { readonly attemptId?: string };
+    }> = [];
+    const { generateModelStepResult } = await import("./llm");
+
+    const result = await generateModelStepResult({
+      diagnostics: {
+        report: (diagnostic) => {
+          diagnostics.push(diagnostic);
+        },
+      },
+      history: [],
+      model: fakeModel,
+      signal: new AbortController().signal,
+      tools: { tool: createNoopTool() },
+    });
+
+    await vi.waitFor(() => expect(diagnostics).toHaveLength(1));
+    expect(diagnostics[0]?.metadata?.attemptId).toBe(result.usage.attemptId);
+  });
+
   it("selects and fingerprints special-name tools through own properties", async () => {
     const runModelStep = await loadModelStepRunner();
     const specialNames = ["constructor", "toString", "__proto__"];
@@ -1344,6 +1423,111 @@ describe("generateModelStep", () => {
     );
 
     expect(digest).not.toHaveBeenCalled();
+  });
+
+  it("attributes usage to the provider response model before the configured model", async () => {
+    generateTextMock.mockResolvedValue({
+      finalStep: {
+        model: { modelId: "configured-step-model", provider: "provider-a" },
+        performance: { responseTimeMs: 125 },
+      },
+      finishReason: "stop",
+      response: { modelId: "provider-routed-model" },
+      responseMessages: [assistantMessage("DONE")],
+      usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12 },
+    });
+    const { generateModelStepResult } = await import("./llm");
+
+    const result = await generateModelStepResult({
+      history: [{ role: "user", content: "hello" }],
+      model: fakeModel,
+      signal: new AbortController().signal,
+    });
+
+    expect(result.usage).toMatchObject({
+      modelId: "provider-routed-model",
+      provider: "provider-a",
+      type: "model-usage",
+    });
+  });
+
+  it("drops malformed usage metadata and falls back to safe model attribution", async () => {
+    generateTextMock.mockResolvedValue({
+      finalStep: {
+        model: { modelId: "safe/fallback-model", provider: "safe.provider" },
+        performance: { responseTimeMs: 12.6 },
+      },
+      finishReason: "provider-secret\ninvalid",
+      response: { modelId: "routed-model\ninvalid" },
+      responseMessages: [assistantMessage("DONE")],
+      usage: {
+        inputTokenDetails: {
+          cacheReadTokens: 1.5,
+          cacheWriteTokens: 2,
+          noCacheTokens: Number.NaN,
+        },
+        inputTokens: -1,
+        outputTokenDetails: { reasoningTokens: 3 },
+        outputTokens: 0,
+        totalTokens: Number.MAX_SAFE_INTEGER + 1,
+      },
+    });
+    const { generateModelStepResult } = await import("./llm");
+
+    const result = await generateModelStepResult({
+      history: [{ role: "user", content: "hello" }],
+      model: fakeModel,
+      signal: new AbortController().signal,
+    });
+
+    expect(result.usage).toEqual({
+      attemptId: expect.any(String),
+      cacheWriteTokens: 2,
+      durationMs: 13,
+      modelId: "safe/fallback-model",
+      outputTokens: 0,
+      provider: "safe.provider",
+      reasoningTokens: 3,
+      type: "model-usage",
+    });
+  });
+
+  it("falls back to the prepared model for usage attribution", async () => {
+    const preparedModel = {
+      ...fakeModel,
+      modelId: "prepared-model",
+      provider: "prepared-provider",
+      supportedUrls: {},
+    };
+    const { generateModelStepResult } = await import("./llm");
+
+    const result = await generateModelStepResult({
+      history: [{ role: "user", content: "hello" }],
+      model: fakeModel,
+      prepareModelStep: () => ({ model: preparedModel }),
+      signal: new AbortController().signal,
+      threadKey: "thread",
+    });
+
+    expect(result.usage).toMatchObject({
+      modelId: "prepared-model",
+      provider: "prepared-provider",
+    });
+  });
+
+  it("creates one distinct opaque attempt ID per runtime model-step invocation", async () => {
+    const { generateModelStepResult } = await import("./llm");
+    const options = {
+      history: [{ role: "user" as const, content: "hello" }],
+      model: fakeModel,
+      signal: new AbortController().signal,
+    };
+
+    const first = await generateModelStepResult(options);
+    const second = await generateModelStepResult(options);
+
+    expect(first.usage.attemptId).toMatch(uuidPattern);
+    expect(second.usage.attemptId).not.toBe(first.usage.attemptId);
   });
 
   it("rejects tools using AI SDK tool approval before generateText", async () => {

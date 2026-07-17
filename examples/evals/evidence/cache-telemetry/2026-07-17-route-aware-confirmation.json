@@ -1,0 +1,2169 @@
+{
+  "assembledAt": "2026-07-17T07:13:13.293Z",
+  "byScenario": {
+    "file-search": {
+      "uniform": {
+        "accuracyRate": 0,
+        "cacheHitRate": 0.19132490876085198,
+        "cacheAttributionEligibleWarmRequests": 10,
+        "cacheWriteTelemetryCoverage": 0,
+        "correctResponses": 0,
+        "failures": 0,
+        "httpAttempts": 12,
+        "logicalTurns": 12,
+        "lengthFinishes": 0,
+        "maxInputTokens": 51870,
+        "medianLatencyMs": 4584,
+        "missingFinishReasons": 0,
+        "p95LatencyMs": 7792,
+        "successfulTurns": 12,
+        "telemetryCoverage": 1,
+        "tokenRecallCorrectResponses": 12,
+        "tokenRecallRate": 1,
+        "trackedCacheReadTokens": 70720,
+        "trackedCacheWriteTokens": null,
+        "trackedInputTokens": 369633,
+        "trackedRequests": 10,
+        "trackedWarmCoordinates": [
+          "mistralai/ministral-14b-latest:1:1",
+          "mistralai/ministral-14b-latest:1:2",
+          "mistralai/ministral-14b-latest:1:3",
+          "mistralai/ministral-14b-latest:1:4",
+          "mistralai/ministral-14b-latest:1:5",
+          "mistralai/ministral-14b-latest:2:1",
+          "mistralai/ministral-14b-latest:2:2",
+          "mistralai/ministral-14b-latest:2:3",
+          "mistralai/ministral-14b-latest:2:4",
+          "mistralai/ministral-14b-latest:2:5"
+        ],
+        "trackedUncachedTokens": 298913,
+        "responseModelAudit": {
+          "exactRequestedModel": 12,
+          "mismatched": 0,
+          "missingOrInvalid": 0,
+          "turns": 12
+        },
+        "warmSuccessfulTurns": 10
+      },
+      "route-aware": {
+        "accuracyRate": 0,
+        "cacheHitRate": 0.23430843940917567,
+        "cacheAttributionEligibleWarmRequests": 10,
+        "cacheWriteTelemetryCoverage": 0,
+        "correctResponses": 0,
+        "failures": 0,
+        "httpAttempts": 12,
+        "logicalTurns": 12,
+        "lengthFinishes": 0,
+        "maxInputTokens": 62263,
+        "medianLatencyMs": 5021,
+        "missingFinishReasons": 0,
+        "p95LatencyMs": 8492,
+        "successfulTurns": 12,
+        "telemetryCoverage": 1,
+        "tokenRecallCorrectResponses": 12,
+        "tokenRecallRate": 1,
+        "trackedCacheReadTokens": 92736,
+        "trackedCacheWriteTokens": null,
+        "trackedInputTokens": 395786,
+        "trackedRequests": 10,
+        "trackedWarmCoordinates": [
+          "mistralai/ministral-14b-latest:1:1",
+          "mistralai/ministral-14b-latest:1:2",
+          "mistralai/ministral-14b-latest:1:3",
+          "mistralai/ministral-14b-latest:1:4",
+          "mistralai/ministral-14b-latest:1:5",
+          "mistralai/ministral-14b-latest:2:1",
+          "mistralai/ministral-14b-latest:2:2",
+          "mistralai/ministral-14b-latest:2:3",
+          "mistralai/ministral-14b-latest:2:4",
+          "mistralai/ministral-14b-latest:2:5"
+        ],
+        "trackedUncachedTokens": 303050,
+        "responseModelAudit": {
+          "exactRequestedModel": 12,
+          "mismatched": 0,
+          "missingOrInvalid": 0,
+          "turns": 12
+        },
+        "warmSuccessfulTurns": 10
+      }
+    },
+    "conversation": {
+      "uniform": {
+        "accuracyRate": 1,
+        "cacheHitRate": 0.13257880228085603,
+        "cacheAttributionEligibleWarmRequests": 10,
+        "cacheWriteTelemetryCoverage": 0,
+        "correctResponses": 12,
+        "failures": 0,
+        "httpAttempts": 12,
+        "logicalTurns": 12,
+        "lengthFinishes": 0,
+        "maxInputTokens": 50545,
+        "medianLatencyMs": 6405,
+        "missingFinishReasons": 0,
+        "p95LatencyMs": 9880,
+        "successfulTurns": 12,
+        "telemetryCoverage": 1,
+        "tokenRecallCorrectResponses": 12,
+        "tokenRecallRate": 1,
+        "trackedCacheReadTokens": 49152,
+        "trackedCacheWriteTokens": null,
+        "trackedInputTokens": 370738,
+        "trackedRequests": 10,
+        "trackedWarmCoordinates": [
+          "minimaxai/minimax-m2.7:1:1",
+          "minimaxai/minimax-m2.7:1:2",
+          "minimaxai/minimax-m2.7:1:3",
+          "minimaxai/minimax-m2.7:1:4",
+          "minimaxai/minimax-m2.7:1:5",
+          "minimaxai/minimax-m2.7:2:1",
+          "minimaxai/minimax-m2.7:2:2",
+          "minimaxai/minimax-m2.7:2:3",
+          "minimaxai/minimax-m2.7:2:4",
+          "minimaxai/minimax-m2.7:2:5"
+        ],
+        "trackedUncachedTokens": 321586,
+        "responseModelAudit": {
+          "exactRequestedModel": 12,
+          "mismatched": 0,
+          "missingOrInvalid": 0,
+          "turns": 12
+        },
+        "warmSuccessfulTurns": 10
+      },
+      "route-aware": {
+        "accuracyRate": 0.9166666666666666,
+        "cacheHitRate": 0.2960974048103436,
+        "cacheAttributionEligibleWarmRequests": 9,
+        "cacheWriteTelemetryCoverage": 0,
+        "correctResponses": 11,
+        "failures": 1,
+        "httpAttempts": 12,
+        "logicalTurns": 12,
+        "lengthFinishes": 1,
+        "maxInputTokens": 67306,
+        "medianLatencyMs": 6716,
+        "missingFinishReasons": 0,
+        "p95LatencyMs": 14298,
+        "successfulTurns": 11,
+        "telemetryCoverage": 1,
+        "tokenRecallCorrectResponses": 11,
+        "tokenRecallRate": 0.9166666666666666,
+        "trackedCacheReadTokens": 114688,
+        "trackedCacheWriteTokens": null,
+        "trackedInputTokens": 387332,
+        "trackedRequests": 9,
+        "trackedWarmCoordinates": [
+          "minimaxai/minimax-m2.7:1:1",
+          "minimaxai/minimax-m2.7:1:2",
+          "minimaxai/minimax-m2.7:1:3",
+          "minimaxai/minimax-m2.7:1:5",
+          "minimaxai/minimax-m2.7:2:1",
+          "minimaxai/minimax-m2.7:2:2",
+          "minimaxai/minimax-m2.7:2:3",
+          "minimaxai/minimax-m2.7:2:4",
+          "minimaxai/minimax-m2.7:2:5"
+        ],
+        "trackedUncachedTokens": 272644,
+        "responseModelAudit": {
+          "exactRequestedModel": 12,
+          "mismatched": 0,
+          "missingOrInvalid": 0,
+          "turns": 12
+        },
+        "warmSuccessfulTurns": 9
+      }
+    }
+  },
+  "campaignCanonicalSha256": {
+    "file-search": "77079086f52c8559fb57f1f82e302045ca60855e854f3461ac929eaaf2e4c315",
+    "conversation": "c31ac0c8f4ce4b640942cc317ef851cfca72f73558d508bf3069f881d7031546"
+  },
+  "campaigns": {
+    "file-search": {
+      "benchmarkSource": {
+        "files": [
+          {
+            "path": "broad-context-cache-benchmark.mjs",
+            "sha256": "d2b923bb981e6941e3ed283f60f22edb04318dba5e288aee9b433993b6b21597"
+          },
+          {
+            "path": "broad-context-cache-response.mjs",
+            "sha256": "7dc47e23e853ca714f718cf0301234c80b901325760b61ae0d8f76ea37098ede"
+          },
+          {
+            "path": "freerouter-url.mjs",
+            "sha256": "cc4656c55a97f7ca04995b5aee7f4d58b24aa6292355121f84ac3ac95d237417"
+          }
+        ],
+        "manifestSha256": "46551e734d0398aa1ec8873147d6a87b19264fe9a9db6d5d092bd02e0a1c8b1e"
+      },
+      "checkedInContent": {
+        "modelOutputs": false,
+        "perTurnTelemetry": true,
+        "prompts": false,
+        "rawBodies": false
+      },
+      "config": {
+        "confirmationMode": true,
+        "correctness": {
+          "strict": "Trimmed response must parse as one JSON object with exactly the requested keys and exact values.",
+          "tokenRecallProxy": "Legacy expected-token containment is retained as a separate recall proxy and never substitutes for strict correctness."
+        },
+        "highWaterTokens": 75000,
+        "maximumHttpAttemptsPerTurn": 1,
+        "models": [
+          {
+            "contextLength": 262144,
+            "id": "mistralai/ministral-14b-latest",
+            "maxOutputTokens": 160
+          }
+        ],
+        "steps": 6,
+        "targetChunkCharacters": 60000,
+        "confirmationOrder": [
+          "uniform",
+          "route-aware",
+          "route-aware",
+          "uniform"
+        ]
+      },
+      "campaignCompletedAt": "2026-07-17T07:08:52.372Z",
+      "campaignStartedAt": "2026-07-17T07:06:38.178Z",
+      "credentialRecorded": false,
+      "endpoint": "https://freerouter.minpeter.workers.dev/v1",
+      "fixture": {
+        "chunks": [
+          {
+            "characters": 64839,
+            "expectedTokenCount": 1,
+            "step": 0
+          },
+          {
+            "characters": 62541,
+            "expectedTokenCount": 1,
+            "step": 1
+          },
+          {
+            "characters": 63038,
+            "expectedTokenCount": 1,
+            "step": 2
+          },
+          {
+            "characters": 67859,
+            "expectedTokenCount": 1,
+            "step": 3
+          },
+          {
+            "characters": 67038,
+            "expectedTokenCount": 1,
+            "step": 4
+          },
+          {
+            "characters": 64506,
+            "expectedTokenCount": 1,
+            "step": 5
+          }
+        ],
+        "highWaterTokens": 75000,
+        "scenario": "file-search",
+        "steps": 6,
+        "targetChunkCharacters": 60000,
+        "fixtureSha256": "1b90e71c309eb51e296aaf65d1d14d8be6b1dbc77c1ca35660168b1d846964c1",
+        "schemaVersion": 1
+      },
+      "modelCatalog": {
+        "available": true,
+        "checkedAt": "2026-07-17T07:06:38.178Z",
+        "httpStatus": 200,
+        "presentModelIds": ["mistralai/ministral-14b-latest"],
+        "requestedModelIds": ["mistralai/ministral-14b-latest"],
+        "status": "passed"
+      },
+      "runs": [
+        {
+          "accuracyRate": 0,
+          "cacheHitRate": 0.10735698361507327,
+          "cacheAttributionEligibleWarmRequests": 5,
+          "cacheWriteTelemetryCoverage": 0,
+          "cacheIsolationKeySha256": "1922851b144028c5f0862b3a8856788b6710f768de4defa77d4c36e9a953807a",
+          "trackedCacheWriteTokens": null,
+          "arm": "uniform",
+          "compactionTriggers": [45932],
+          "compactions": 1,
+          "failures": 0,
+          "highWaterTokens": 60000,
+          "maxInputTokens": 51865,
+          "missingFinishReasons": 0,
+          "medianLatencyMs": 4054,
+          "modelId": "mistralai/ministral-14b-latest",
+          "maxOutputTokens": 160,
+          "orderIndex": 0,
+          "p95LatencyMs": 7792,
+          "policy": "high-water-stable-prefix",
+          "replicate": 1,
+          "responseModelAudit": {
+            "exactRequestedModel": 6,
+            "mismatched": 0,
+            "missingOrInvalid": 0,
+            "observedModels": {
+              "mistralai/ministral-14b-latest": 6
+            },
+            "requestedModel": "mistralai/ministral-14b-latest",
+            "turns": 6
+          },
+          "tokenRecallRate": 1,
+          "turns": [
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 15548,
+              "latencyMs": 4054,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 0,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 31077,
+              "latencyMs": 4788,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 1,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 45932,
+              "latencyMs": 7792,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 2,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 64,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 19811,
+              "latencyMs": 3896,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 3,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 19776,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 36119,
+              "latencyMs": 3666,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 4,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 51865,
+              "latencyMs": 7270,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 5,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            }
+          ],
+          "telemetryCoverage": 1,
+          "trackedCacheReadTokens": 19840,
+          "trackedInputTokens": 184804,
+          "trackedRequests": 5
+        },
+        {
+          "accuracyRate": 0,
+          "cacheHitRate": 0.07923754080632284,
+          "cacheAttributionEligibleWarmRequests": 5,
+          "cacheWriteTelemetryCoverage": 0,
+          "cacheIsolationKeySha256": "4ca4480fc750dfa272e850ce88a50c71fe1b6a59f3c9dbbefe6efb6ea7103b70",
+          "trackedCacheWriteTokens": null,
+          "arm": "route-aware",
+          "compactionTriggers": [62253],
+          "compactions": 1,
+          "failures": 0,
+          "highWaterTokens": 75000,
+          "maxInputTokens": 62253,
+          "missingFinishReasons": 0,
+          "medianLatencyMs": 5021,
+          "modelId": "mistralai/ministral-14b-latest",
+          "maxOutputTokens": 160,
+          "orderIndex": 1,
+          "p95LatencyMs": 7171,
+          "policy": "high-water-stable-prefix",
+          "replicate": 1,
+          "responseModelAudit": {
+            "exactRequestedModel": 6,
+            "mismatched": 0,
+            "missingOrInvalid": 0,
+            "observedModels": {
+              "mistralai/ministral-14b-latest": 6
+            },
+            "requestedModel": "mistralai/ministral-14b-latest",
+            "turns": 6
+          },
+          "tokenRecallRate": 1,
+          "turns": [
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 15551,
+              "latencyMs": 3941,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 0,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 31076,
+              "latencyMs": 5021,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 1,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 45927,
+              "latencyMs": 7046,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 2,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 15552,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 62253,
+              "latencyMs": 6761,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 3,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 64,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 21442,
+              "latencyMs": 3551,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 4,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 64,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 37188,
+              "latencyMs": 7171,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 5,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            }
+          ],
+          "telemetryCoverage": 1,
+          "trackedCacheReadTokens": 15680,
+          "trackedInputTokens": 197886,
+          "trackedRequests": 5
+        },
+        {
+          "accuracyRate": 0,
+          "cacheHitRate": 0.38936836786255685,
+          "cacheAttributionEligibleWarmRequests": 5,
+          "cacheWriteTelemetryCoverage": 0,
+          "cacheIsolationKeySha256": "6060bc53d2a68511e1a3507c34e1b8d1bf58a05af12c7b40a0f85e92977bd876",
+          "trackedCacheWriteTokens": null,
+          "arm": "route-aware",
+          "compactionTriggers": [62263],
+          "compactions": 1,
+          "failures": 0,
+          "highWaterTokens": 75000,
+          "maxInputTokens": 62263,
+          "missingFinishReasons": 0,
+          "medianLatencyMs": 4165,
+          "modelId": "mistralai/ministral-14b-latest",
+          "maxOutputTokens": 160,
+          "orderIndex": 2,
+          "p95LatencyMs": 8492,
+          "policy": "high-water-stable-prefix",
+          "replicate": 2,
+          "responseModelAudit": {
+            "exactRequestedModel": 6,
+            "mismatched": 0,
+            "missingOrInvalid": 0,
+            "observedModels": {
+              "mistralai/ministral-14b-latest": 6
+            },
+            "requestedModel": "mistralai/ministral-14b-latest",
+            "turns": 6
+          },
+          "tokenRecallRate": 1,
+          "turns": [
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 15549,
+              "latencyMs": 3259,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 0,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 31078,
+              "latencyMs": 4165,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 1,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 31040,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 45933,
+              "latencyMs": 4013,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 2,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 45952,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 62263,
+              "latencyMs": 5184,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 3,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 64,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 21440,
+              "latencyMs": 8492,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 4,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 37186,
+              "latencyMs": 5213,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 5,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            }
+          ],
+          "telemetryCoverage": 1,
+          "trackedCacheReadTokens": 77056,
+          "trackedInputTokens": 197900,
+          "trackedRequests": 5
+        },
+        {
+          "accuracyRate": 0,
+          "cacheHitRate": 0.27528147639169176,
+          "cacheAttributionEligibleWarmRequests": 5,
+          "cacheWriteTelemetryCoverage": 0,
+          "cacheIsolationKeySha256": "dd61f0b0474c6235580d7a33d3ac19566cd531aa72bcbb6ccc77b81c61fc3493",
+          "trackedCacheWriteTokens": null,
+          "arm": "uniform",
+          "compactionTriggers": [45937],
+          "compactions": 1,
+          "failures": 0,
+          "highWaterTokens": 60000,
+          "maxInputTokens": 51870,
+          "missingFinishReasons": 0,
+          "medianLatencyMs": 4584,
+          "modelId": "mistralai/ministral-14b-latest",
+          "maxOutputTokens": 160,
+          "orderIndex": 3,
+          "p95LatencyMs": 5692,
+          "policy": "high-water-stable-prefix",
+          "replicate": 2,
+          "responseModelAudit": {
+            "exactRequestedModel": 6,
+            "mismatched": 0,
+            "missingOrInvalid": 0,
+            "observedModels": {
+              "mistralai/ministral-14b-latest": 6
+            },
+            "requestedModel": "mistralai/ministral-14b-latest",
+            "turns": 6
+          },
+          "tokenRecallRate": 1,
+          "turns": [
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 15553,
+              "latencyMs": 3758,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 0,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 31082,
+              "latencyMs": 4584,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 1,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 31040,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 45937,
+              "latencyMs": 5692,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 2,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 19816,
+              "latencyMs": 3367,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 3,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 64,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 36124,
+              "latencyMs": 5029,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 4,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 19776,
+              "correct": false,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 51870,
+              "latencyMs": 5569,
+              "requestSuccessful": true,
+              "responseModel": "mistralai/ministral-14b-latest",
+              "responseModelMatchesRequested": true,
+              "step": 5,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            }
+          ],
+          "telemetryCoverage": 1,
+          "trackedCacheReadTokens": 50880,
+          "trackedInputTokens": 184829,
+          "trackedRequests": 5
+        }
+      ],
+      "scenario": "file-search",
+      "schemaVersion": 2
+    },
+    "conversation": {
+      "benchmarkSource": {
+        "files": [
+          {
+            "path": "broad-context-cache-benchmark.mjs",
+            "sha256": "d2b923bb981e6941e3ed283f60f22edb04318dba5e288aee9b433993b6b21597"
+          },
+          {
+            "path": "broad-context-cache-response.mjs",
+            "sha256": "7dc47e23e853ca714f718cf0301234c80b901325760b61ae0d8f76ea37098ede"
+          },
+          {
+            "path": "freerouter-url.mjs",
+            "sha256": "cc4656c55a97f7ca04995b5aee7f4d58b24aa6292355121f84ac3ac95d237417"
+          }
+        ],
+        "manifestSha256": "46551e734d0398aa1ec8873147d6a87b19264fe9a9db6d5d092bd02e0a1c8b1e"
+      },
+      "checkedInContent": {
+        "modelOutputs": false,
+        "perTurnTelemetry": true,
+        "prompts": false,
+        "rawBodies": false
+      },
+      "config": {
+        "confirmationMode": true,
+        "correctness": {
+          "strict": "Trimmed response must parse as one JSON object with exactly the requested keys and exact values.",
+          "tokenRecallProxy": "Legacy expected-token containment is retained as a separate recall proxy and never substitutes for strict correctness."
+        },
+        "highWaterTokens": 75000,
+        "maximumHttpAttemptsPerTurn": 1,
+        "models": [
+          {
+            "contextLength": 204800,
+            "id": "minimaxai/minimax-m2.7",
+            "maxOutputTokens": 256
+          }
+        ],
+        "steps": 6,
+        "targetChunkCharacters": 60000,
+        "confirmationOrder": [
+          "uniform",
+          "route-aware",
+          "route-aware",
+          "uniform"
+        ]
+      },
+      "campaignCompletedAt": "2026-07-17T07:12:22.229Z",
+      "campaignStartedAt": "2026-07-17T07:09:25.837Z",
+      "credentialRecorded": false,
+      "endpoint": "https://freerouter.minpeter.workers.dev/v1",
+      "fixture": {
+        "chunks": [
+          {
+            "characters": 60063,
+            "expectedTokenCount": 2,
+            "step": 0
+          },
+          {
+            "characters": 60094,
+            "expectedTokenCount": 2,
+            "step": 1
+          },
+          {
+            "characters": 60064,
+            "expectedTokenCount": 2,
+            "step": 2
+          },
+          {
+            "characters": 60094,
+            "expectedTokenCount": 2,
+            "step": 3
+          },
+          {
+            "characters": 60063,
+            "expectedTokenCount": 2,
+            "step": 4
+          },
+          {
+            "characters": 60094,
+            "expectedTokenCount": 2,
+            "step": 5
+          }
+        ],
+        "highWaterTokens": 75000,
+        "scenario": "conversation",
+        "steps": 6,
+        "targetChunkCharacters": 60000,
+        "fixtureSha256": "18122b3d3b00aef1211079ff2cadd821b6b00acd65ad7a20ad19731a7c2d6295",
+        "schemaVersion": 1
+      },
+      "modelCatalog": {
+        "available": true,
+        "checkedAt": "2026-07-17T07:09:25.837Z",
+        "httpStatus": 200,
+        "presentModelIds": ["minimaxai/minimax-m2.7"],
+        "requestedModelIds": ["minimaxai/minimax-m2.7"],
+        "status": "passed"
+      },
+      "runs": [
+        {
+          "accuracyRate": 1,
+          "cacheHitRate": 0.08839063654853554,
+          "cacheAttributionEligibleWarmRequests": 5,
+          "cacheWriteTelemetryCoverage": 0,
+          "cacheIsolationKeySha256": "92374f0279ec594fdcceead7585861abefa497e5c437c05a40c5ab099266626c",
+          "trackedCacheWriteTokens": null,
+          "arm": "uniform",
+          "compactionTriggers": [50486],
+          "compactions": 1,
+          "failures": 0,
+          "highWaterTokens": 60000,
+          "maxInputTokens": 50541,
+          "missingFinishReasons": 0,
+          "medianLatencyMs": 5860,
+          "modelId": "minimaxai/minimax-m2.7",
+          "maxOutputTokens": 512,
+          "orderIndex": 0,
+          "p95LatencyMs": 9880,
+          "policy": "high-water-stable-prefix",
+          "replicate": 1,
+          "responseModelAudit": {
+            "exactRequestedModel": 6,
+            "mismatched": 0,
+            "missingOrInvalid": 0,
+            "observedModels": {
+              "minimaxai/minimax-m2.7": 6
+            },
+            "requestedModel": "minimaxai/minimax-m2.7",
+            "turns": 6
+          },
+          "tokenRecallRate": 1,
+          "turns": [
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 16868,
+              "latencyMs": 4752,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 0,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 33681,
+              "latencyMs": 7080,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 1,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 50486,
+              "latencyMs": 9334,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 2,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 16923,
+              "latencyMs": 5140,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 3,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 16384,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 33728,
+              "latencyMs": 5860,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 4,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 50541,
+              "latencyMs": 9880,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 5,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            }
+          ],
+          "telemetryCoverage": 1,
+          "trackedCacheReadTokens": 16384,
+          "trackedInputTokens": 185359,
+          "trackedRequests": 5
+        },
+        {
+          "accuracyRate": 0.8333333333333334,
+          "cacheHitRate": 0.26541676566516187,
+          "cacheAttributionEligibleWarmRequests": 4,
+          "cacheWriteTelemetryCoverage": 0,
+          "cacheIsolationKeySha256": "7fddd612d6b642f280ff58c59c754d71afa3a9ea95b676a252a75f8f9461acbe",
+          "trackedCacheWriteTokens": null,
+          "arm": "route-aware",
+          "compactionTriggers": [67301],
+          "compactions": 1,
+          "failures": 1,
+          "highWaterTokens": 75000,
+          "maxInputTokens": 67301,
+          "missingFinishReasons": 0,
+          "medianLatencyMs": 6716,
+          "modelId": "minimaxai/minimax-m2.7",
+          "maxOutputTokens": 256,
+          "orderIndex": 1,
+          "p95LatencyMs": 14298,
+          "policy": "high-water-stable-prefix",
+          "replicate": 1,
+          "responseModelAudit": {
+            "exactRequestedModel": 6,
+            "mismatched": 0,
+            "missingOrInvalid": 0,
+            "observedModels": {
+              "minimaxai/minimax-m2.7": 6
+            },
+            "requestedModel": "minimaxai/minimax-m2.7",
+            "turns": 6
+          },
+          "tokenRecallRate": 0.8333333333333334,
+          "turns": [
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 16870,
+              "latencyMs": 5578,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 0,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 33683,
+              "latencyMs": 6684,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 1,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 16384,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 50488,
+              "latencyMs": 14298,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 2,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 32768,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 67301,
+              "latencyMs": 9042,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 3,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": false,
+              "errorClass": "non-stop-finish-reason",
+              "finishReason": "length",
+              "httpStatus": 200,
+              "inputTokens": 16917,
+              "latencyMs": 5206,
+              "requestSuccessful": false,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 4,
+              "tokenRecallCorrect": false,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 33716,
+              "latencyMs": 6716,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 5,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            }
+          ],
+          "telemetryCoverage": 1,
+          "trackedCacheReadTokens": 49152,
+          "trackedInputTokens": 185188,
+          "trackedRequests": 4
+        },
+        {
+          "accuracyRate": 1,
+          "cacheHitRate": 0.3242045274655691,
+          "cacheAttributionEligibleWarmRequests": 5,
+          "cacheWriteTelemetryCoverage": 0,
+          "cacheIsolationKeySha256": "b291c2043de681632ed6d358f0fe6998ac717ee6a73acc0bccc21ae81c82a98c",
+          "trackedCacheWriteTokens": null,
+          "arm": "route-aware",
+          "compactionTriggers": [67306],
+          "compactions": 1,
+          "failures": 0,
+          "highWaterTokens": 75000,
+          "maxInputTokens": 67306,
+          "missingFinishReasons": 0,
+          "medianLatencyMs": 6695,
+          "modelId": "minimaxai/minimax-m2.7",
+          "maxOutputTokens": 256,
+          "orderIndex": 2,
+          "p95LatencyMs": 8561,
+          "policy": "high-water-stable-prefix",
+          "replicate": 2,
+          "responseModelAudit": {
+            "exactRequestedModel": 6,
+            "mismatched": 0,
+            "missingOrInvalid": 0,
+            "observedModels": {
+              "minimaxai/minimax-m2.7": 6
+            },
+            "requestedModel": "minimaxai/minimax-m2.7",
+            "turns": 6
+          },
+          "tokenRecallRate": 1,
+          "turns": [
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 16875,
+              "latencyMs": 4806,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 0,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 33688,
+              "latencyMs": 8561,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 1,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 16384,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 50493,
+              "latencyMs": 7781,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 2,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 49152,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 67306,
+              "latencyMs": 7366,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 3,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 16922,
+              "latencyMs": 4789,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 4,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 33735,
+              "latencyMs": 6695,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 5,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            }
+          ],
+          "telemetryCoverage": 1,
+          "trackedCacheReadTokens": 65536,
+          "trackedInputTokens": 202144,
+          "trackedRequests": 5
+        },
+        {
+          "accuracyRate": 1,
+          "cacheHitRate": 0.1767622006807675,
+          "cacheAttributionEligibleWarmRequests": 5,
+          "cacheWriteTelemetryCoverage": 0,
+          "cacheIsolationKeySha256": "6e1387b45f6844213c523c06b1029c9a35400092e81443f9cd562803d6abd38a",
+          "trackedCacheWriteTokens": null,
+          "arm": "uniform",
+          "compactionTriggers": [50490],
+          "compactions": 1,
+          "failures": 0,
+          "highWaterTokens": 60000,
+          "maxInputTokens": 50545,
+          "missingFinishReasons": 0,
+          "medianLatencyMs": 6405,
+          "modelId": "minimaxai/minimax-m2.7",
+          "maxOutputTokens": 512,
+          "orderIndex": 3,
+          "p95LatencyMs": 9004,
+          "policy": "high-water-stable-prefix",
+          "replicate": 2,
+          "responseModelAudit": {
+            "exactRequestedModel": 6,
+            "mismatched": 0,
+            "missingOrInvalid": 0,
+            "observedModels": {
+              "minimaxai/minimax-m2.7": 6
+            },
+            "requestedModel": "minimaxai/minimax-m2.7",
+            "turns": 6
+          },
+          "tokenRecallRate": 1,
+          "turns": [
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 16872,
+              "latencyMs": 5650,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 0,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 33685,
+              "latencyMs": 7032,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 1,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 50490,
+              "latencyMs": 9004,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 2,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 16927,
+              "latencyMs": 4873,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 3,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 0,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 33732,
+              "latencyMs": 6817,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 4,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            },
+            {
+              "attempts": 1,
+              "cacheFieldReported": true,
+              "cacheWriteFieldReported": false,
+              "cacheWriteTokens": null,
+              "cachedTokens": 32768,
+              "correct": true,
+              "errorClass": null,
+              "finishReason": "stop",
+              "httpStatus": 200,
+              "inputTokens": 50545,
+              "latencyMs": 6405,
+              "requestSuccessful": true,
+              "responseModel": "minimaxai/minimax-m2.7",
+              "responseModelMatchesRequested": true,
+              "step": 5,
+              "tokenRecallCorrect": true,
+              "usageFieldAudit": {
+                "cacheRead": "valid",
+                "cacheWrite": "absent",
+                "input": "valid"
+              },
+              "usageEnvelopeValid": true
+            }
+          ],
+          "telemetryCoverage": 1,
+          "trackedCacheReadTokens": 32768,
+          "trackedInputTokens": 185379,
+          "trackedRequests": 5
+        }
+      ],
+      "scenario": "conversation",
+      "schemaVersion": 2
+    }
+  },
+  "checkedInContent": {
+    "modelOutputs": false,
+    "perTurnTelemetry": true,
+    "prompts": false,
+    "rawBodies": false
+  },
+  "confirmationDesign": {
+    "arms": {
+      "route-aware": {
+        "conversation": "75K high-water / 256 max output tokens",
+        "file-search": "75K high-water / 160 max output tokens"
+      },
+      "uniform": {
+        "conversation": "60K high-water / 512 max output tokens",
+        "file-search": "60K high-water / 160 max output tokens"
+      }
+    },
+    "httpAttemptsPerTurn": 1,
+    "guardrails": {
+      "exactResponseModelCoverage": 1,
+      "minTelemetryCoverage": 0.6,
+      "minTrackedWarmRequests": 6,
+      "requireIdenticalTrackedCoordinates": true,
+      "requireEqualTrackedRequests": true,
+      "requireKnownFinishReasons": true,
+      "requireNoCacheHitRegression": true,
+      "requireNoLengthFinishes": true,
+      "requireNoP95Regression": true,
+      "requireNoStrictCorrectnessRegression": true,
+      "requireNoTrackedUncachedTokenRegression": true,
+      "requirePerfectStrictCorrectness": true
+    },
+    "order": ["uniform", "route-aware", "route-aware", "uniform"],
+    "replicatesPerArmPerScenario": 2,
+    "turnsPerRun": 6
+  },
+  "credentialRecorded": false,
+  "deltas": {
+    "accuracyRate": -0.041666666666666685,
+    "cacheHitRate": 0.10296139026753498,
+    "p95LatencyMs": -292,
+    "trackedUncachedTokens": -44805
+  },
+  "endpoint": "https://freerouter.minpeter.workers.dev/v1",
+  "evidenceToolSource": {
+    "files": [
+      {
+        "path": "assemble-cache-confirmation.mjs",
+        "sha256": "78adc7730ebabb2143731051e4783ab35bcb2cdcc2097f9df3424b5de1c7e392"
+      },
+      {
+        "path": "cache-confirmation-evidence.mjs",
+        "sha256": "20228ed72112e69b906b6b961817e8e347030161f520d8efa34125ac98c7d9f5"
+      },
+      {
+        "path": "cache-confirmation-independent-verifier.mjs",
+        "sha256": "a6b862256c20b776849a931887e1d11521058e55581f5bce0e115a368f6118e1"
+      },
+      {
+        "path": "verify-cache-evidence.mjs",
+        "sha256": "f40dac02c6cb923bb069239be15023ba6cb1ec20c3c37db15c535071c37c1973"
+      }
+    ],
+    "manifestSha256": "ac423d69660bb9e61894756401eb50642f721ff01b06b746a3cc23a1ca700c26"
+  },
+  "confirmationConclusion": {
+    "reason": "At least one route had a directly observed correctness, completion, or comparable-metric guardrail failure: conversation, file-search.",
+    "status": "fail"
+  },
+  "routeGuardrails": {
+    "conversation": {
+      "failedGuardrails": [
+        "perfect-strict-correctness",
+        "strict-correctness-regression",
+        "length-finish-present"
+      ],
+      "indeterminateReasons": [
+        "route-aware:not-all-turns-succeeded",
+        "route-aware:warm-attribution-incomplete",
+        "arms:tracked-request-count-mismatch",
+        "arms:tracked-coordinate-mismatch"
+      ],
+      "observed": {
+        "route-aware": {
+          "accuracyRate": 0.9166666666666666,
+          "cacheAttributionEligibleWarmRequests": 9,
+          "cacheHitRate": 0.2960974048103436,
+          "exactResponseModelCoverage": 1,
+          "lengthFinishes": 1,
+          "logicalTurns": 12,
+          "missingFinishReasons": 0,
+          "p95LatencyMs": 14298,
+          "successfulTurns": 11,
+          "telemetryCoverage": 1,
+          "trackedRequests": 9,
+          "trackedWarmCoordinates": [
+            "minimaxai/minimax-m2.7:1:1",
+            "minimaxai/minimax-m2.7:1:2",
+            "minimaxai/minimax-m2.7:1:3",
+            "minimaxai/minimax-m2.7:1:5",
+            "minimaxai/minimax-m2.7:2:1",
+            "minimaxai/minimax-m2.7:2:2",
+            "minimaxai/minimax-m2.7:2:3",
+            "minimaxai/minimax-m2.7:2:4",
+            "minimaxai/minimax-m2.7:2:5"
+          ],
+          "trackedUncachedTokens": 272644
+        },
+        "uniform": {
+          "accuracyRate": 1,
+          "cacheAttributionEligibleWarmRequests": 10,
+          "cacheHitRate": 0.13257880228085603,
+          "exactResponseModelCoverage": 1,
+          "lengthFinishes": 0,
+          "logicalTurns": 12,
+          "missingFinishReasons": 0,
+          "p95LatencyMs": 9880,
+          "successfulTurns": 12,
+          "telemetryCoverage": 1,
+          "trackedRequests": 10,
+          "trackedWarmCoordinates": [
+            "minimaxai/minimax-m2.7:1:1",
+            "minimaxai/minimax-m2.7:1:2",
+            "minimaxai/minimax-m2.7:1:3",
+            "minimaxai/minimax-m2.7:1:4",
+            "minimaxai/minimax-m2.7:1:5",
+            "minimaxai/minimax-m2.7:2:1",
+            "minimaxai/minimax-m2.7:2:2",
+            "minimaxai/minimax-m2.7:2:3",
+            "minimaxai/minimax-m2.7:2:4",
+            "minimaxai/minimax-m2.7:2:5"
+          ],
+          "trackedUncachedTokens": 321586
+        }
+      },
+      "status": "fail"
+    },
+    "file-search": {
+      "failedGuardrails": [
+        "perfect-strict-correctness",
+        "tracked-uncached-token-regression",
+        "p95-latency-regression"
+      ],
+      "indeterminateReasons": [],
+      "observed": {
+        "route-aware": {
+          "accuracyRate": 0,
+          "cacheAttributionEligibleWarmRequests": 10,
+          "cacheHitRate": 0.23430843940917567,
+          "exactResponseModelCoverage": 1,
+          "lengthFinishes": 0,
+          "logicalTurns": 12,
+          "missingFinishReasons": 0,
+          "p95LatencyMs": 8492,
+          "successfulTurns": 12,
+          "telemetryCoverage": 1,
+          "trackedRequests": 10,
+          "trackedWarmCoordinates": [
+            "mistralai/ministral-14b-latest:1:1",
+            "mistralai/ministral-14b-latest:1:2",
+            "mistralai/ministral-14b-latest:1:3",
+            "mistralai/ministral-14b-latest:1:4",
+            "mistralai/ministral-14b-latest:1:5",
+            "mistralai/ministral-14b-latest:2:1",
+            "mistralai/ministral-14b-latest:2:2",
+            "mistralai/ministral-14b-latest:2:3",
+            "mistralai/ministral-14b-latest:2:4",
+            "mistralai/ministral-14b-latest:2:5"
+          ],
+          "trackedUncachedTokens": 303050
+        },
+        "uniform": {
+          "accuracyRate": 0,
+          "cacheAttributionEligibleWarmRequests": 10,
+          "cacheHitRate": 0.19132490876085198,
+          "exactResponseModelCoverage": 1,
+          "lengthFinishes": 0,
+          "logicalTurns": 12,
+          "missingFinishReasons": 0,
+          "p95LatencyMs": 7792,
+          "successfulTurns": 12,
+          "telemetryCoverage": 1,
+          "trackedRequests": 10,
+          "trackedWarmCoordinates": [
+            "mistralai/ministral-14b-latest:1:1",
+            "mistralai/ministral-14b-latest:1:2",
+            "mistralai/ministral-14b-latest:1:3",
+            "mistralai/ministral-14b-latest:1:4",
+            "mistralai/ministral-14b-latest:1:5",
+            "mistralai/ministral-14b-latest:2:1",
+            "mistralai/ministral-14b-latest:2:2",
+            "mistralai/ministral-14b-latest:2:3",
+            "mistralai/ministral-14b-latest:2:4",
+            "mistralai/ministral-14b-latest:2:5"
+          ],
+          "trackedUncachedTokens": 298913
+        }
+      },
+      "status": "fail"
+    }
+  },
+  "schemaVersion": 1,
+  "summary": {
+    "uniform": {
+      "accuracyRate": 0.5,
+      "cacheHitRate": 0.16190801638637925,
+      "cacheAttributionEligibleWarmRequests": 20,
+      "cacheWriteTelemetryCoverage": 0,
+      "correctResponses": 12,
+      "failures": 0,
+      "httpAttempts": 24,
+      "logicalTurns": 24,
+      "lengthFinishes": 0,
+      "maxInputTokens": 51870,
+      "medianLatencyMs": 5569,
+      "missingFinishReasons": 0,
+      "p95LatencyMs": 9334,
+      "successfulTurns": 24,
+      "telemetryCoverage": 1,
+      "tokenRecallCorrectResponses": 24,
+      "tokenRecallRate": 1,
+      "trackedCacheReadTokens": 119872,
+      "trackedCacheWriteTokens": null,
+      "trackedInputTokens": 740371,
+      "trackedRequests": 20,
+      "trackedWarmCoordinates": [
+        "minimaxai/minimax-m2.7:1:1",
+        "minimaxai/minimax-m2.7:1:2",
+        "minimaxai/minimax-m2.7:1:3",
+        "minimaxai/minimax-m2.7:1:4",
+        "minimaxai/minimax-m2.7:1:5",
+        "minimaxai/minimax-m2.7:2:1",
+        "minimaxai/minimax-m2.7:2:2",
+        "minimaxai/minimax-m2.7:2:3",
+        "minimaxai/minimax-m2.7:2:4",
+        "minimaxai/minimax-m2.7:2:5",
+        "mistralai/ministral-14b-latest:1:1",
+        "mistralai/ministral-14b-latest:1:2",
+        "mistralai/ministral-14b-latest:1:3",
+        "mistralai/ministral-14b-latest:1:4",
+        "mistralai/ministral-14b-latest:1:5",
+        "mistralai/ministral-14b-latest:2:1",
+        "mistralai/ministral-14b-latest:2:2",
+        "mistralai/ministral-14b-latest:2:3",
+        "mistralai/ministral-14b-latest:2:4",
+        "mistralai/ministral-14b-latest:2:5"
+      ],
+      "trackedUncachedTokens": 620499,
+      "responseModelAudit": {
+        "exactRequestedModel": 24,
+        "mismatched": 0,
+        "missingOrInvalid": 0,
+        "turns": 24
+      },
+      "warmSuccessfulTurns": 20
+    },
+    "route-aware": {
+      "accuracyRate": 0.4583333333333333,
+      "cacheHitRate": 0.26486940665391423,
+      "cacheAttributionEligibleWarmRequests": 19,
+      "cacheWriteTelemetryCoverage": 0,
+      "correctResponses": 11,
+      "failures": 1,
+      "httpAttempts": 24,
+      "logicalTurns": 24,
+      "lengthFinishes": 1,
+      "maxInputTokens": 67306,
+      "medianLatencyMs": 6684,
+      "missingFinishReasons": 0,
+      "p95LatencyMs": 9042,
+      "successfulTurns": 23,
+      "telemetryCoverage": 1,
+      "tokenRecallCorrectResponses": 23,
+      "tokenRecallRate": 0.9583333333333334,
+      "trackedCacheReadTokens": 207424,
+      "trackedCacheWriteTokens": null,
+      "trackedInputTokens": 783118,
+      "trackedRequests": 19,
+      "trackedWarmCoordinates": [
+        "minimaxai/minimax-m2.7:1:1",
+        "minimaxai/minimax-m2.7:1:2",
+        "minimaxai/minimax-m2.7:1:3",
+        "minimaxai/minimax-m2.7:1:5",
+        "minimaxai/minimax-m2.7:2:1",
+        "minimaxai/minimax-m2.7:2:2",
+        "minimaxai/minimax-m2.7:2:3",
+        "minimaxai/minimax-m2.7:2:4",
+        "minimaxai/minimax-m2.7:2:5",
+        "mistralai/ministral-14b-latest:1:1",
+        "mistralai/ministral-14b-latest:1:2",
+        "mistralai/ministral-14b-latest:1:3",
+        "mistralai/ministral-14b-latest:1:4",
+        "mistralai/ministral-14b-latest:1:5",
+        "mistralai/ministral-14b-latest:2:1",
+        "mistralai/ministral-14b-latest:2:2",
+        "mistralai/ministral-14b-latest:2:3",
+        "mistralai/ministral-14b-latest:2:4",
+        "mistralai/ministral-14b-latest:2:5"
+      ],
+      "trackedUncachedTokens": 575694,
+      "responseModelAudit": {
+        "exactRequestedModel": 24,
+        "mismatched": 0,
+        "missingOrInvalid": 0,
+        "turns": 24
+      },
+      "warmSuccessfulTurns": 19
+    }
+  }
+}

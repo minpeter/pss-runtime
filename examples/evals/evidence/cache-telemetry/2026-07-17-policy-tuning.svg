@@ -1,0 +1,596 @@
+<svg
+  aria-labelledby="title desc"
+  height="1050"
+  role="img"
+  viewBox="0 0 1400 1050"
+  width="1400"
+  xmlns="http://www.w3.org/2000/svg"
+>
+  <title id="title">Live cache-policy tuning follow-up</title>
+  <desc id="desc">
+    A comparison of the original 75K stable-prefix policy, a uniform 60K policy,
+    and an exploratory route-aware policy across combined evidence from 312
+    logical turns and 341 HTTP attempts. The route-aware measured composite
+    reached 100 percent exact-token accuracy, 38.34 percent cache hit, and a
+    12.798 second p95.
+  </desc>
+  <defs>
+    <linearGradient id="selected" x1="0" x2="1">
+      <stop offset="0" stop-color="#0f766e" />
+      <stop offset="1" stop-color="#10b981" />
+    </linearGradient>
+    <linearGradient id="uniform" x1="0" x2="1">
+      <stop offset="0" stop-color="#1d4ed8" />
+      <stop offset="1" stop-color="#38bdf8" />
+    </linearGradient>
+    <filter height="130%" id="shadow" width="130%" x="-15%" y="-15%">
+      <feDropShadow
+        dx="0"
+        dy="4"
+        flood-color="#0f172a"
+        flood-opacity="0.08"
+        stdDeviation="8"
+      />
+    </filter>
+    <style>
+    text {
+      font-family: Inter, Arial, sans-serif;
+    }
+    .title {
+      font-size: 34px;
+      font-weight: 750;
+      fill: #0f172a;
+    }
+    .subtitle {
+      font-size: 16px;
+      fill: #475569;
+    }
+    .panel-title {
+      font-size: 20px;
+      font-weight: 700;
+      fill: #0f172a;
+    }
+    .card-title {
+      font-size: 17px;
+      font-weight: 700;
+      fill: #334155;
+    }
+    .metric-label {
+      font-size: 13px;
+      font-weight: 500;
+      fill: #64748b;
+    }
+    .metric {
+      font-size: 25px;
+      font-weight: 750;
+      fill: #0f172a;
+    }
+    .metric-selected {
+      font-size: 25px;
+      font-weight: 750;
+      fill: #047857;
+    }
+    .small {
+      font-size: 13px;
+      fill: #64748b;
+    }
+    .label {
+      font-size: 14px;
+      font-weight: 650;
+      fill: #334155;
+    }
+    .value {
+      font-size: 14px;
+      font-weight: 700;
+      fill: #0f172a;
+    }
+    .good {
+      font-size: 14px;
+      font-weight: 700;
+      fill: #047857;
+    }
+    .warn {
+      font-size: 13px;
+      font-weight: 650;
+      fill: #b45309;
+    }
+    .axis {
+      stroke: #94a3b8;
+      stroke-width: 1.2;
+    }
+    .grid {
+      stroke: #e2e8f0;
+      stroke-width: 1;
+      stroke-dasharray: 4 5;
+    }
+    </style>
+  </defs>
+
+  <rect fill="#f4f7fb" height="1050" width="1400" />
+  <text class="title" x="38" y="50">
+    Cache policy tuning: beyond one global threshold
+  </text>
+  <text class="subtitle" x="38" y="78">
+    312 logical turns · 341 HTTP attempts · real hosted models · 3 fast-growing
+    workloads
+  </text>
+  <rect fill="#d1fae5" height="30" rx="15" width="260" x="1104" y="38" />
+  <text
+    fill="#047857"
+    font-family="Inter, Arial, sans-serif"
+    font-size="13"
+    font-weight="700"
+    text-anchor="middle"
+    x="1234"
+    y="58"
+  >
+    EXPLORATORY MEASURED COMPOSITE
+  </text>
+
+  <rect
+    fill="#ffffff"
+    filter="url(#shadow)"
+    height="230"
+    rx="18"
+    width="1328"
+    x="36"
+    y="104"
+  />
+  <text class="panel-title" x="62" y="138">Measured policy progression</text>
+  <text class="small" x="62" y="160">
+    Comparable 54-turn aggregates; warm cache fields only
+  </text>
+
+  <rect
+    fill="#f8fafc"
+    height="132"
+    rx="14"
+    stroke="#e2e8f0"
+    width="385"
+    x="62"
+    y="180"
+  />
+  <text class="card-title" x="82" y="208">75K global stable prefix</text>
+  <text class="metric-label" x="82" y="235">ACCURACY</text>
+  <text class="metric" x="82" y="264">87.0%</text>
+  <text class="metric-label" x="182" y="235">CACHE HIT</text>
+  <text class="metric" x="182" y="264">44.82%</text>
+  <text class="metric-label" x="292" y="235">P95</text>
+  <text class="metric" x="292" y="264">18.77s</text>
+  <text class="small" x="82" y="293">
+    6 truncations · 9 compactions · 63.7K median max
+  </text>
+
+  <text
+    fill="#94a3b8"
+    font-family="Inter, Arial, sans-serif"
+    font-size="28"
+    font-weight="700"
+    x="458"
+    y="253"
+  >
+    →
+  </text>
+
+  <rect
+    fill="#eff6ff"
+    height="132"
+    rx="14"
+    stroke="#bfdbfe"
+    width="385"
+    x="492"
+    y="180"
+  />
+  <text class="card-title" x="512" y="208">Uniform 60K + MiniMax 512</text>
+  <text class="metric-label" x="512" y="235">ACCURACY</text>
+  <text
+    fill="#1d4ed8"
+    font-family="Inter, Arial, sans-serif"
+    font-size="25"
+    font-weight="750"
+    x="512"
+    y="264"
+  >
+    100%
+  </text>
+  <text class="metric-label" x="612" y="235">CACHE HIT</text>
+  <text
+    fill="#1d4ed8"
+    font-family="Inter, Arial, sans-serif"
+    font-size="25"
+    font-weight="750"
+    x="612"
+    y="264"
+  >
+    31.92%
+  </text>
+  <text class="metric-label" x="722" y="235">P95</text>
+  <text
+    fill="#1d4ed8"
+    font-family="Inter, Arial, sans-serif"
+    font-size="25"
+    font-weight="750"
+    x="722"
+    y="264"
+  >
+    12.80s
+  </text>
+  <text class="small" x="512" y="293">
+    0 truncations · 11 compactions · 50.5K median max
+  </text>
+
+  <text
+    fill="#0f766e"
+    font-family="Inter, Arial, sans-serif"
+    font-size="28"
+    font-weight="700"
+    x="888"
+    y="253"
+  >
+    →
+  </text>
+
+  <rect
+    fill="#ecfdf5"
+    height="132"
+    rx="14"
+    stroke="#6ee7b7"
+    stroke-width="2"
+    width="421"
+    x="923"
+    y="180"
+  />
+  <text
+    fill="#047857"
+    font-family="Inter, Arial, sans-serif"
+    font-size="17"
+    font-weight="750"
+    x="943"
+    y="208"
+  >
+    Route-aware measured composite
+  </text>
+  <text class="metric-label" x="943" y="235">ACCURACY</text>
+  <text class="metric-selected" x="943" y="264">100%</text>
+  <text class="metric-label" x="1043" y="235">CACHE HIT</text>
+  <text class="metric-selected" x="1043" y="264">38.34%</text>
+  <text class="metric-label" x="1153" y="235">P95</text>
+  <text class="metric-selected" x="1153" y="264">12.80s</text>
+  <text class="small" x="943" y="293">
+    vs uniform: +6.41 pp hit · −7.3% uncached · −14.4% p50
+  </text>
+
+  <rect
+    fill="#ffffff"
+    filter="url(#shadow)"
+    height="236"
+    rx="18"
+    width="650"
+    x="36"
+    y="360"
+  />
+  <text class="panel-title" x="62" y="394">
+    Two measured exceptions to the 60K fallback
+  </text>
+  <text class="small" x="62" y="417">
+    Cell = projected high-water / max output tokens
+  </text>
+  <text class="label" text-anchor="middle" x="330" y="450">MiniMax</text>
+  <text class="label" text-anchor="middle" x="462" y="450">Ministral</text>
+  <text class="label" text-anchor="middle" x="594" y="450">GLM</text>
+
+  <text class="label" x="62" y="484">File search</text>
+  <rect fill="#eff6ff" height="32" rx="8" width="112" x="274" y="462" />
+  <text class="value" text-anchor="middle" x="330" y="483">60K / 512</text>
+  <rect
+    fill="#d1fae5"
+    height="32"
+    rx="8"
+    stroke="#6ee7b7"
+    width="112"
+    x="406"
+    y="462"
+  />
+  <text
+    fill="#047857"
+    font-family="Inter, Arial, sans-serif"
+    font-size="14"
+    font-weight="750"
+    text-anchor="middle"
+    x="462"
+    y="483"
+  >
+    75K / 160
+  </text>
+  <rect fill="#eff6ff" height="32" rx="8" width="112" x="538" y="462" />
+  <text class="value" text-anchor="middle" x="594" y="483">60K / 160</text>
+
+  <text class="label" x="62" y="526">Conversation</text>
+  <rect
+    fill="#d1fae5"
+    height="32"
+    rx="8"
+    stroke="#6ee7b7"
+    width="112"
+    x="274"
+    y="504"
+  />
+  <text
+    fill="#047857"
+    font-family="Inter, Arial, sans-serif"
+    font-size="14"
+    font-weight="750"
+    text-anchor="middle"
+    x="330"
+    y="525"
+  >
+    75K / 256
+  </text>
+  <rect fill="#eff6ff" height="32" rx="8" width="112" x="406" y="504" />
+  <text class="value" text-anchor="middle" x="462" y="525">60K / 160</text>
+  <rect fill="#eff6ff" height="32" rx="8" width="112" x="538" y="504" />
+  <text class="value" text-anchor="middle" x="594" y="525">60K / 160</text>
+
+  <text class="label" x="62" y="568">Deep research</text>
+  <rect fill="#eff6ff" height="32" rx="8" width="112" x="274" y="546" />
+  <text class="value" text-anchor="middle" x="330" y="567">60K / 512</text>
+  <rect fill="#eff6ff" height="32" rx="8" width="112" x="406" y="546" />
+  <text class="value" text-anchor="middle" x="462" y="567">60K / 160</text>
+  <rect fill="#eff6ff" height="32" rx="8" width="112" x="538" y="546" />
+  <text class="value" text-anchor="middle" x="594" y="567">60K / 160</text>
+
+  <rect
+    fill="#ffffff"
+    filter="url(#shadow)"
+    height="236"
+    rx="18"
+    width="650"
+    x="714"
+    y="360"
+  />
+  <text class="panel-title" x="740" y="394">
+    Why output budget mattered for MiniMax
+  </text>
+  <text class="small" x="740" y="417">
+    60K high-water · 18 live turns per output setting
+  </text>
+
+  <text class="label" x="740" y="466">256</text>
+  <rect fill="#e2e8f0" height="24" rx="7" width="330" x="790" y="447" />
+  <rect fill="#94a3b8" height="24" rx="7" width="257" x="790" y="447" />
+  <text
+    fill="#ffffff"
+    font-family="Inter, Arial, sans-serif"
+    font-size="13"
+    font-weight="700"
+    x="806"
+    y="464"
+  >
+    77.8% correct
+  </text>
+  <rect fill="#fee2e2" height="26" rx="13" width="124" x="1180" y="446" />
+  <text
+    fill="#b91c1c"
+    font-family="Inter, Arial, sans-serif"
+    font-size="13"
+    font-weight="700"
+    text-anchor="middle"
+    x="1242"
+    y="464"
+  >
+    6 length
+  </text>
+
+  <text class="label" x="740" y="514">384</text>
+  <rect fill="#e2e8f0" height="24" rx="7" width="330" x="790" y="495" />
+  <rect fill="#60a5fa" height="24" rx="7" width="275" x="790" y="495" />
+  <text
+    fill="#ffffff"
+    font-family="Inter, Arial, sans-serif"
+    font-size="13"
+    font-weight="700"
+    x="806"
+    y="512"
+  >
+    83.3% correct
+  </text>
+  <rect fill="#ffedd5" height="26" rx="13" width="124" x="1180" y="494" />
+  <text
+    fill="#c2410c"
+    font-family="Inter, Arial, sans-serif"
+    font-size="13"
+    font-weight="700"
+    text-anchor="middle"
+    x="1242"
+    y="512"
+  >
+    4 length
+  </text>
+
+  <text class="label" x="740" y="562">512</text>
+  <rect fill="#e2e8f0" height="24" rx="7" width="330" x="790" y="543" />
+  <rect fill="#10b981" height="24" rx="7" width="330" x="790" y="543" />
+  <text
+    fill="#ffffff"
+    font-family="Inter, Arial, sans-serif"
+    font-size="13"
+    font-weight="750"
+    x="806"
+    y="560"
+  >
+    100% correct
+  </text>
+  <rect fill="#d1fae5" height="26" rx="13" width="124" x="1180" y="542" />
+  <text
+    fill="#047857"
+    font-family="Inter, Arial, sans-serif"
+    font-size="13"
+    font-weight="700"
+    text-anchor="middle"
+    x="1242"
+    y="560"
+  >
+    0 length
+  </text>
+
+  <rect
+    fill="#ffffff"
+    filter="url(#shadow)"
+    height="378"
+    rx="18"
+    width="820"
+    x="36"
+    y="622"
+  />
+  <text class="panel-title" x="62" y="658">Accuracy–cache frontier</text>
+  <text class="small" x="62" y="681">
+    Higher and farther right is better; each point is a measured 54-turn
+    aggregate
+  </text>
+
+  <line class="grid" x1="100" x2="810" y1="920" y2="920" />
+  <line class="grid" x1="100" x2="810" y1="810" y2="810" />
+  <line class="grid" x1="100" x2="810" y1="700" y2="700" />
+  <line class="grid" x1="100" x2="100" y1="700" y2="920" />
+  <line class="grid" x1="242" x2="242" y1="700" y2="920" />
+  <line class="grid" x1="384" x2="384" y1="700" y2="920" />
+  <line class="grid" x1="526" x2="526" y1="700" y2="920" />
+  <line class="grid" x1="668" x2="668" y1="700" y2="920" />
+  <line class="grid" x1="810" x2="810" y1="700" y2="920" />
+  <line class="axis" x1="100" x2="810" y1="920" y2="920" />
+  <line class="axis" x1="100" x2="100" y1="700" y2="920" />
+
+  <text class="small" text-anchor="end" x="90" y="925">80%</text>
+  <text class="small" text-anchor="end" x="90" y="815">90%</text>
+  <text class="small" text-anchor="end" x="90" y="705">100%</text>
+  <text class="small" text-anchor="middle" x="100" y="944">0%</text>
+  <text class="small" text-anchor="middle" x="242" y="944">10%</text>
+  <text class="small" text-anchor="middle" x="384" y="944">20%</text>
+  <text class="small" text-anchor="middle" x="526" y="944">30%</text>
+  <text class="small" text-anchor="middle" x="668" y="944">40%</text>
+  <text class="small" text-anchor="middle" x="810" y="944">50%</text>
+  <text class="label" text-anchor="middle" x="455" y="976">Warm cache hit</text>
+  <text class="label" transform="rotate(-90 56 810)" x="56" y="810">
+    Exact-token accuracy
+  </text>
+
+  <circle cx="103" cy="741" fill="#64748b" r="7" />
+  <text class="small" x="115" y="737">rewrite</text>
+  <circle cx="428" cy="822" fill="#94a3b8" r="7" />
+  <text class="small" text-anchor="end" x="416" y="845">45K default</text>
+  <circle cx="470" cy="781" fill="#60a5fa" r="7" />
+  <text class="small" x="482" y="787">60K default</text>
+  <circle cx="737" cy="843" fill="#f59e0b" r="8" />
+  <text class="warn" text-anchor="end" x="725" y="866">
+    75K: hit ↑, quality ↓
+  </text>
+  <circle cx="405" cy="720" fill="#0ea5e9" r="8" />
+  <text class="small" text-anchor="end" x="393" y="715">45K + 512</text>
+  <circle
+    cx="553"
+    cy="700"
+    fill="#2563eb"
+    r="9"
+    stroke="#ffffff"
+    stroke-width="3"
+  />
+  <text
+    fill="#1d4ed8"
+    font-family="Inter, Arial, sans-serif"
+    font-size="13"
+    font-weight="700"
+    text-anchor="end"
+    x="540"
+    y="690"
+  >
+    uniform 60K
+  </text>
+  <circle
+    cx="644"
+    cy="700"
+    fill="#059669"
+    r="11"
+    stroke="#ffffff"
+    stroke-width="3"
+  />
+  <text
+    fill="#047857"
+    font-family="Inter, Arial, sans-serif"
+    font-size="14"
+    font-weight="750"
+    x="660"
+    y="690"
+  >
+    route-aware
+  </text>
+  <line
+    stroke="#10b981"
+    stroke-dasharray="4 4"
+    stroke-width="2"
+    x1="564"
+    x2="632"
+    y1="700"
+    y2="700"
+  />
+
+  <rect
+    fill="#ffffff"
+    filter="url(#shadow)"
+    height="378"
+    rx="18"
+    width="480"
+    x="884"
+    y="622"
+  />
+  <text class="panel-title" x="910" y="658">
+    Guardrails, not hit rate alone
+  </text>
+  <text class="small" x="910" y="681">Route-aware vs uniform 60K</text>
+
+  <rect fill="#ecfdf5" height="56" rx="12" width="205" x="910" y="706" />
+  <text class="metric-label" x="926" y="728">CACHE HIT</text>
+  <text class="good" x="926" y="751">+6.41 percentage points</text>
+  <rect fill="#ecfdf5" height="56" rx="12" width="205" x="1131" y="706" />
+  <text class="metric-label" x="1147" y="728">UNCACHED INPUT</text>
+  <text class="good" x="1147" y="751">−7.3%</text>
+
+  <rect fill="#ecfdf5" height="56" rx="12" width="205" x="910" y="776" />
+  <text class="metric-label" x="926" y="798">P50 LATENCY</text>
+  <text class="good" x="926" y="821">−14.4%</text>
+  <rect
+    fill="#f8fafc"
+    height="56"
+    rx="12"
+    stroke="#e2e8f0"
+    width="205"
+    x="1131"
+    y="776"
+  />
+  <text class="metric-label" x="1147" y="798">P95 / ACCURACY</text>
+  <text class="value" x="1147" y="821">same / 100%</text>
+
+  <text class="label" x="910" y="865">Full-coverage control</text>
+  <text class="small" x="910" y="887">
+    75K had a higher hit ratio, but not less uncached work:
+  </text>
+  <text class="small" x="910" y="916">60K</text>
+  <rect fill="#dbeafe" height="18" rx="6" width="355" x="954" y="902" />
+  <text class="value" text-anchor="end" x="1301" y="916">781,925 uncached</text>
+  <text class="small" x="910" y="946">75K</text>
+  <rect fill="#fef3c7" height="18" rx="6" width="353" x="954" y="932" />
+  <text class="value" text-anchor="end" x="1299" y="946">778,108 uncached</text>
+  <text class="warn" x="910" y="978">
+    Caveat: route-aware selection is post-hoc; rerun before rollout.
+  </text>
+
+  <text
+    fill="#64748b"
+    font-family="Inter, Arial, sans-serif"
+    font-size="12"
+    x="38"
+    y="1030"
+  >
+    2026-07-17 · cache fields omitted by providers are excluded, not treated as
+    zero · percentiles use nearest rank
+  </text>
+</svg>

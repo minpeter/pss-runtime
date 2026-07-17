@@ -6,6 +6,10 @@ import {
 } from "ai";
 import type { ModelStepOutput } from "../llm/llm";
 import type { AgentEvent, ToolResult } from "../thread/protocol/events";
+import {
+  isCompactionContextMessage,
+  type ThreadContextMessage,
+} from "../thread/state/context";
 import type { ThreadCompactionInput } from "../thread/state/thread-state";
 import type {
   InputAcceptEvent,
@@ -394,6 +398,9 @@ export class PluginRuntime {
       case "step-end":
         await this.#notify("step.end", event, context);
         return;
+      case "model-usage":
+        await this.#notify("model.usage", event, context);
+        return;
       case "turn-start":
         await this.#notify("turn.start", event, context);
         return;
@@ -416,10 +423,10 @@ export class PluginRuntime {
 
   async transformModelContext(
     threadKey: string,
-    messages: readonly ModelMessage[],
+    messages: readonly ThreadContextMessage[],
     history: readonly ModelMessage[],
     signal: AbortSignal = this.#abort.signal
-  ): Promise<ModelMessage[]> {
+  ): Promise<ThreadContextMessage[]> {
     let current = structuredClone([...messages]);
     for (const { registered, registration } of this.#handlers(
       "model.context"
@@ -497,7 +504,10 @@ export class PluginRuntime {
     return current;
   }
 
-  wrapModel(model: LanguageModel, threadKey: string): LanguageModel {
+  wrapModel(
+    model: LanguageModel,
+    threadKey: string
+  ): Exclude<LanguageModel, string> {
     return wrapLanguageModel({
       middleware: {
         transformParams: async ({ params }) =>
@@ -889,11 +899,22 @@ function assertToolResultEvent(value: unknown): asserts value is ToolResult {
 
 function assertModelContextEvent(
   value: unknown
-): asserts value is { readonly messages: readonly ModelMessage[] } {
-  assertModelMessages(
-    value,
-    "Plugin model.context transform must return a messages array."
-  );
+): asserts value is { readonly messages: readonly ThreadContextMessage[] } {
+  const message =
+    "Plugin model.context transform must return a messages array.";
+  if (!(value && typeof value === "object" && "messages" in value)) {
+    throw new TypeError(message);
+  }
+  if (
+    !(
+      Array.isArray(value.messages) &&
+      value.messages.every(
+        (item) => isModelMessage(item) || isCompactionContextMessage(item)
+      )
+    )
+  ) {
+    throw new TypeError(message);
+  }
 }
 
 function assertModelStep(
@@ -912,20 +933,6 @@ function assertModelStep(
           (item.role === "assistant" || item.role === "tool")
       )
     )
-  ) {
-    throw new TypeError(message);
-  }
-}
-
-function assertModelMessages(
-  value: unknown,
-  message: string
-): asserts value is { readonly messages: readonly ModelMessage[] } {
-  if (!(value && typeof value === "object" && "messages" in value)) {
-    throw new TypeError(message);
-  }
-  if (
-    !(Array.isArray(value.messages) && value.messages.every(isModelMessage))
   ) {
     throw new TypeError(message);
   }

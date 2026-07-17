@@ -1,4 +1,5 @@
-import type { AgentEvent } from "../thread/protocol/events";
+import type { AgentEvent, ModelUsage } from "../thread/protocol/events";
+import { summarizeCacheUsage } from "./cache";
 import type {
   EvalRun,
   EvalThreadLike,
@@ -19,6 +20,7 @@ export async function runAgent(
   const turn = await thread.send(input);
   const events: AgentEvent[] = [];
   const output: string[] = [];
+  const modelUsage: ModelUsage[] = [];
   const toolCalls: EvalToolCall[] = [];
   const toolResults: EvalToolResult[] = [];
   let error: string | undefined;
@@ -28,6 +30,9 @@ export async function runAgent(
     switch (event.type) {
       case "assistant-output":
         output.push(event.text);
+        break;
+      case "model-usage":
+        modelUsage.push(event);
         break;
       case "tool-call":
         toolCalls.push({
@@ -52,9 +57,11 @@ export async function runAgent(
   }
 
   return {
+    cache: summarizeCacheUsage(modelUsage),
     error,
     events,
     input,
+    modelUsage,
     output: output.join(""),
     toolCalls,
     toolResults,

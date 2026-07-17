@@ -39,7 +39,11 @@ describe("Agent thread persistence compaction", () => {
     await collect(await thread.send("tail"));
 
     expect(seenHistory[1]).toEqual([
-      { content: "old exchange summarized", role: "system" },
+      expect.objectContaining({
+        content:
+          "The conversation history before this point was compacted into the following summary:\n<summary>\nold exchange summarized\n</summary>",
+        role: "user",
+      }),
       userTextToModelMessage(userText("tail")),
     ]);
     expect(store.threads.get("compact")?.state).toEqual({

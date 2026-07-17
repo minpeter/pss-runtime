@@ -14,6 +14,8 @@ export type MockLanguageModelV4GenerateResult = Extract<
   MockLanguageModelV4GenerateValue,
   { readonly content: unknown }
 >;
+export type MockLanguageModelV4Usage =
+  MockLanguageModelV4GenerateResult["usage"];
 export type MockLanguageModelV4GenerateFunction = Extract<
   MockLanguageModelV4Generate,
   (...args: never[]) => unknown
@@ -46,12 +48,13 @@ export function createMockLanguageModelV4(
 }
 
 export function mockLanguageModelV4Text(
-  text: string
+  text: string,
+  usage: MockLanguageModelV4Usage = emptyUsage
 ): MockLanguageModelV4GenerateResult {
   return {
     content: [{ type: "text", text }],
     finishReason: { raw: "stop", unified: "stop" },
-    usage: emptyUsage,
+    usage,
     warnings: [],
   };
 }
@@ -60,10 +63,12 @@ export function mockLanguageModelV4ToolCall({
   input,
   toolCallId,
   toolName,
+  usage = emptyUsage,
 }: {
   input: unknown;
   toolCallId: string;
   toolName: string;
+  usage?: MockLanguageModelV4Usage;
 }): MockLanguageModelV4GenerateResult {
   return {
     content: [
@@ -75,7 +80,7 @@ export function mockLanguageModelV4ToolCall({
       },
     ],
     finishReason: { raw: "tool-calls", unified: "tool-calls" },
-    usage: emptyUsage,
+    usage,
     warnings: [],
   };
 }

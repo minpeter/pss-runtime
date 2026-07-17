@@ -108,6 +108,7 @@ export type {
   InputEventMeta,
   InputSource,
   LifecycleAgentEvent,
+  ModelUsage,
   RuntimeInput,
   TelemetryAgentEvent,
   ToolAgentEvent,
@@ -132,6 +133,10 @@ export {
   isVisibleAgentEvent,
 } from "./thread/protocol/events";
 export type { AgentTurn } from "./thread/protocol/turn";
+export type {
+  CompactionContextMessage,
+  ThreadContextMessage,
+} from "./thread/state/context";
 export type {
   CommitResult,
   ExpectedThreadVersion,

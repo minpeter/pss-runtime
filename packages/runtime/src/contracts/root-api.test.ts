@@ -20,13 +20,16 @@ import type {
   AgentEvent,
   AgentInput,
   AgentOptions,
+  CompactionContextMessage,
   HostAttachmentStore,
   ModelToolCacheFingerprintMetadata,
+  ModelUsage,
   PluginEventMap,
   PrepareModelStep,
   PrepareModelStepInput,
   PrepareModelStepResult,
   ThreadCompactionInput,
+  ThreadContextMessage,
   ThreadHandle,
 } from "../index";
 import {
@@ -103,6 +106,7 @@ describe("runtime public exports", () => {
     expectTypeOf<
       PluginEventMap["tool.call.before"]["type"]
     >().toEqualTypeOf<"tool.call.before">();
+    expectTypeOf<PluginEventMap["model.usage"]>().toEqualTypeOf<ModelUsage>();
     expectTypeOf<
       Extract<AgentEvent, { type: "tool.call.before" }>
     >().toEqualTypeOf<never>();
@@ -150,10 +154,19 @@ describe("runtime public exports", () => {
       startSeq: 0,
       summary: "Earlier turns established the durable context.",
     } satisfies ThreadCompactionInput;
+    const contextCompaction = {
+      endSeqExclusive: 8,
+      role: "compaction",
+      startSeq: 0,
+      summary: "Earlier turns established the durable context.",
+    } satisfies CompactionContextMessage;
 
     expectTypeOf<
       Parameters<ThreadHandle["compact"]>[0]
     >().toEqualTypeOf<ThreadCompactionInput>();
+    expectTypeOf<PluginEventMap["model.context"]["messages"]>().toEqualTypeOf<
+      readonly ThreadContextMessage[]
+    >();
     expectTypeOf<
       Parameters<ThreadHandle["overlay"]>[0]
     >().toEqualTypeOf<AgentInput>();
@@ -178,10 +191,14 @@ describe("runtime public exports", () => {
     expect(enabledOptions.notificationOverlays).toEqual(["runtime context"]);
     expect(disabledOptions.autoCompaction).toBe(false);
     expect(compaction.startSeq).toBe(0);
+    expect(contextCompaction.role).toBe("compaction");
   });
 
   it("exports cache-stable model-step contracts from the package root", async () => {
     const runtime = await import("../index");
+    expectTypeOf<PrepareModelStepInput["history"]>().toEqualTypeOf<
+      readonly ThreadContextMessage[]
+    >();
     const prepareModelStep: PrepareModelStep = (input) => {
       expectTypeOf(input).toEqualTypeOf<PrepareModelStepInput>();
       return { activeTools: [] } satisfies PrepareModelStepResult;

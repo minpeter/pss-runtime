@@ -78,7 +78,11 @@ describe("Agent thread automatic compaction", () => {
     expect(preparedStepIndices).toEqual([0, 0, 0]);
 
     expect(seenHistory[3]).toEqual([
-      { content: "old exchange summarized", role: "system" },
+      expect.objectContaining({
+        content:
+          "The conversation history before this point was compacted into the following summary:\n<summary>\nold exchange summarized\n</summary>",
+        role: "user",
+      }),
       userTextToModelMessage(userText("tail")),
       assistantMessage("tail done"),
       userTextToModelMessage(userText("next")),

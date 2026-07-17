@@ -95,7 +95,12 @@ describe("thread snapshot", () => {
         decoded.compactions
       ).modelContextSnapshot()
     ).toEqual([
-      { content: "summary", role: "system" },
+      {
+        endSeqExclusive: 2,
+        role: "compaction",
+        startSeq: 0,
+        summary: "summary",
+      },
       userTextToModelMessage(userText("tail")),
     ]);
   });
@@ -124,7 +129,12 @@ describe("thread snapshot", () => {
 
     expect(modelHistory.modelContextSnapshot()).toEqual([
       userTextToModelMessage(userText("old 1")),
-      { content: "newer summary", role: "system" },
+      {
+        endSeqExclusive: 3,
+        role: "compaction",
+        startSeq: 1,
+        summary: "newer summary",
+      },
       assistantMessage("tail"),
     ]);
   });

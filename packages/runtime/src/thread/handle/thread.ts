@@ -1,9 +1,9 @@
-import type { LanguageModel } from "ai";
 import type {
   StoredThreadEvent,
   ThreadEventReadOptions,
 } from "../../execution/host/types";
 import type { ModelGenerationOptions } from "../../llm/llm";
+import { mapPrepareModelStepModel } from "../../llm/model-step-preparation";
 import type { AgentInput, UserInput } from "../input/input";
 import type {
   QueuedInput,
@@ -77,18 +77,11 @@ export class AgentThread {
           model: pluginRuntime.wrapModel(model.model, persistence.key),
           ...(model.prepareModelStep
             ? {
-                prepareModelStep: async (...args) => {
-                  const prepared = await model.prepareModelStep?.(...args);
-                  return prepared?.model
-                    ? {
-                        ...prepared,
-                        model: pluginRuntime.wrapModel(
-                          prepared.model,
-                          persistence.key
-                        ) as Exclude<LanguageModel, string>,
-                      }
-                    : prepared;
-                },
+                prepareModelStep: mapPrepareModelStepModel(
+                  model.prepareModelStep,
+                  (preparedModel) =>
+                    pluginRuntime.wrapModel(preparedModel, persistence.key)
+                ),
               }
             : {}),
         }

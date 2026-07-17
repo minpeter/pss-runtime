@@ -1,12 +1,13 @@
-import type { ModelMessage } from "ai";
 import {
-  generateModelStep,
+  generateModelStepResult,
   type ModelGenerationOptions,
   type ModelStepOutput,
+  type ModelStepResult,
   type RuntimeToolExecutionContext,
 } from "../../llm/llm";
 import { persistedToolExecutionCheckpoint } from "../../llm/tool-execution";
 import { modelMessageToAgentEvents } from "../../thread/protocol/mapping";
+import type { ThreadContextMessage } from "../../thread/state/context";
 import type { AgentHost } from "../host/types";
 import {
   appendCheckpoint,
@@ -24,18 +25,18 @@ export async function readModelOutput({
   toolExecution,
 }: {
   readonly diagnostics: AgentHost["diagnostics"];
-  readonly history: readonly ModelMessage[];
+  readonly history: readonly ThreadContextMessage[];
   readonly model: ModelGenerationOptions;
   readonly runtimeStepIndex: number;
   readonly signal: AbortSignal;
   readonly threadKey?: string;
   readonly toolExecution: RuntimeToolExecutionContext;
-}): Promise<ModelStepOutput | "aborted"> {
+}): Promise<ModelStepResult | "aborted"> {
   try {
-    return await generateModelStep({
+    return await generateModelStepResult({
+      ...model,
       diagnostics,
       history,
-      ...model,
       runtimeStepIndex,
       signal,
       threadKey,

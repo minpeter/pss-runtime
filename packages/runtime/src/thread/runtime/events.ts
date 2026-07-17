@@ -20,7 +20,7 @@ import {
   type PluginPipelineResult,
   runPluginsForEvent,
 } from "../plugins/pipeline";
-import type { AgentEvent, ToolResult } from "../protocol/events";
+import type { AgentEvent, ModelUsage, ToolResult } from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
 import type { ThreadCompactionInput, ThreadState } from "../state/thread-state";
 
@@ -155,6 +155,25 @@ export class ThreadEventDispatcher {
 
     run.emit(processed);
     return processed;
+  }
+
+  /**
+   * Publish and record billed model usage before notifying legacy or factory
+   * observers. A failing observer must not erase metadata for a provider
+   * response that has already completed.
+   */
+  async emitModelUsageEvent(
+    run: BufferedAgentTurn,
+    event: ModelUsage,
+    persistEvent?: (event: AgentEvent) => Promise<void> | void
+  ): Promise<ModelUsage> {
+    try {
+      await persistEvent?.(event);
+    } finally {
+      run.emit(event);
+    }
+    await this.observeRunEvent(event);
+    return event;
   }
 
   async interceptBeforeToolCall(

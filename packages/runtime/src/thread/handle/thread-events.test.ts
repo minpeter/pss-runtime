@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { Agent } from "../../agent/core/agent";
+import { Agent, createAgent } from "../../agent/core/agent";
+import type { AgentHost, HostStoreTransaction } from "../../execution";
 import { createInMemoryHost, MemoryThreadStore } from "../../platform/memory";
+import { definePlugin } from "../../plugins/api";
 import { hostWithThreads } from "../../testing/host-with-threads";
 import {
   assistantMessage,
@@ -42,11 +44,14 @@ describe("AgentThread durable event replay", () => {
       thread.events({ after: lastRecord.cursor })
     );
     expect(secondPage.map((record) => record.event.type)).toEqual([
+      "model-usage",
       "assistant-output",
       "step-end",
       "turn-end",
     ]);
-    expect(secondPage.map((record) => record.cursor.offset)).toEqual([4, 5, 6]);
+    expect(secondPage.map((record) => record.cursor.offset)).toEqual([
+      4, 5, 6, 7,
+    ]);
   });
 
   it("replays failed turns with their durable turn-error event", async () => {
@@ -72,6 +77,138 @@ describe("AgentThread durable event replay", () => {
       message: "model unavailable",
       type: "turn-error",
     });
+  });
+
+  it("streams and replays billed usage before a model.usage observer failure", async () => {
+    const host = createInMemoryHost();
+    const durableTypesAtObserver: string[] = [];
+    const plugin = definePlugin((pss) => {
+      pss.on("model.usage", async () => {
+        const threadEvents = host.store.threadEvents;
+        if (!threadEvents) {
+          throw new Error("expected durable thread event log");
+        }
+        for await (const record of threadEvents.read(
+          "durable-usage-observer-error"
+        )) {
+          durableTypesAtObserver.push(record.event.type);
+        }
+        throw new Error("usage observer failed");
+      });
+    });
+    const agent = await createAgent({
+      host,
+      model: createCallbackModel(() => [assistantMessage("UNREACHABLE")]),
+      plugins: [plugin],
+    });
+    const thread = agent.thread("durable-usage-observer-error");
+
+    const live = await collect(await thread.send("hello"));
+    const replayed = await collectThreadEvents(thread.events());
+    const liveUsage = live.find((event) => event.type === "model-usage");
+    const replayedUsage = replayed.find(
+      ({ event }) => event.type === "model-usage"
+    )?.event;
+
+    expect(live.map((event) => event.type)).toEqual([
+      "user-input",
+      "turn-start",
+      "step-start",
+      "model-usage",
+      "turn-error",
+    ]);
+    expect(replayed.map(({ event }) => event.type)).toEqual(
+      live.map((event) => event.type)
+    );
+    expect(liveUsage).toMatchObject({
+      attemptId: expect.any(String),
+      type: "model-usage",
+    });
+    expect(replayedUsage).toEqual(liveUsage);
+    expect(durableTypesAtObserver).toEqual([
+      "user-input",
+      "turn-start",
+      "step-start",
+      "model-usage",
+    ]);
+  });
+
+  it("streams and replays billed usage before a legacy observer failure", async () => {
+    const host = createInMemoryHost();
+    const agent = new Agent({
+      host,
+      model: createCallbackModel(() => [assistantMessage("UNREACHABLE")]),
+      plugins: [
+        {
+          on: ({ event }) => {
+            if (event.type === "model-usage") {
+              throw new Error("legacy usage observer failed");
+            }
+          },
+        },
+      ],
+    });
+    const thread = agent.thread("durable-legacy-usage-observer-error");
+
+    const live = await collect(await thread.send("hello"));
+    const replayed = await collectThreadEvents(thread.events());
+    const liveUsage = live.find((event) => event.type === "model-usage");
+
+    expect(live.map((event) => event.type)).toEqual([
+      "user-input",
+      "turn-start",
+      "step-start",
+      "model-usage",
+      "turn-error",
+    ]);
+    expect(replayed.map(({ event }) => event.type)).toEqual(
+      live.map((event) => event.type)
+    );
+    expect(
+      replayed.find(({ event }) => event.type === "model-usage")?.event
+    ).toEqual(liveUsage);
+  });
+
+  it("restores a transient usage flush and persists it once during recovery", async () => {
+    const base = createInMemoryHost();
+    let failedUsageAppend = false;
+    let usageObserverCalls = 0;
+    const host = hostWithOneUsageAppendFailure(base, () => {
+      failedUsageAppend = true;
+    });
+    const plugin = definePlugin((pss) => {
+      pss.on("model.usage", () => {
+        usageObserverCalls += 1;
+      });
+    });
+    const agent = await createAgent({
+      host,
+      model: createCallbackModel(() => [assistantMessage("UNREACHABLE")]),
+      plugins: [plugin],
+    });
+    const thread = agent.thread("durable-usage-transient-flush");
+
+    const live = await collect(await thread.send("hello"));
+    const replayed = await collectThreadEvents(thread.events());
+    const liveUsage = live.filter((event) => event.type === "model-usage");
+    const replayedUsage = replayed
+      .map(({ event }) => event)
+      .filter((event) => event.type === "model-usage");
+
+    expect(failedUsageAppend).toBe(true);
+    expect(usageObserverCalls).toBe(0);
+    expect(live.map((event) => event.type)).toEqual([
+      "user-input",
+      "turn-start",
+      "step-start",
+      "model-usage",
+      "turn-error",
+    ]);
+    expect(replayed.map(({ event }) => event.type)).toEqual(
+      live.map((event) => event.type)
+    );
+    expect(liveUsage).toHaveLength(1);
+    expect(replayedUsage).toEqual(liveUsage);
   });
 
   it("throws a typed error when replay is unsupported by the host", () => {
@@ -106,4 +243,50 @@ async function collectThreadEvents<T>(events: AsyncIterable<T>): Promise<T[]> {
     collected.push(event);
   }
   return collected;
+}
+
+function hostWithOneUsageAppendFailure(
+  base: AgentHost,
+  onFailure: () => void
+): AgentHost {
+  let shouldFail = true;
+  return {
+    ...base,
+    store: {
+      checkpoints: base.store.checkpoints,
+      events: base.store.events,
+      inputs: base.store.inputs,
+      notifications: base.store.notifications,
+      threadEvents: base.store.threadEvents,
+      threads: base.store.threads,
+      transaction: (fn) =>
+        base.store.transaction(async (tx) =>
+          fn(transactionWithOneUsageAppendFailure(tx))
+        ),
+      turns: base.store.turns,
+    },
+  };
+
+  function transactionWithOneUsageAppendFailure(
+    tx: HostStoreTransaction
+  ): HostStoreTransaction {
+    const threadEvents = tx.threadEvents;
+    if (!threadEvents) {
+      return tx;
+    }
+    return {
+      ...tx,
+      threadEvents: {
+        append: async (threadKey, event) => {
+          if (shouldFail && event.type === "model-usage") {
+            shouldFail = false;
+            onFailure();
+            throw new Error("transient usage event append failure");
+          }
+          return await threadEvents.append(threadKey, event);
+        },
+        read: (threadKey, options) => threadEvents.read(threadKey, options),
+      },
+    };
+  }
 }

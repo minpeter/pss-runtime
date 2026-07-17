@@ -62,7 +62,7 @@ export async function resumeRun(
       threadSnapshot: stateBeforeModel,
       stepNumber: nextStep.stepNumber,
     });
-    const output = await readModelOutput({
+    const result = await readModelOutput({
       diagnostics: options.host.diagnostics,
       history: stateBeforeModel.history,
       model: options.model,
@@ -71,9 +71,11 @@ export async function resumeRun(
       threadKey: resumedRun?.threadKey,
       toolExecution,
     });
-    if (output === "aborted") {
+    if (result === "aborted") {
       return { status: "aborted", steps };
     }
+    await options.host.store.events.append(options.runId, result.usage);
+    const output = result.messages;
 
     const stateAfterModel = appendModelOutput(stateBeforeModel, output);
     await options.saveState(stateAfterModel);

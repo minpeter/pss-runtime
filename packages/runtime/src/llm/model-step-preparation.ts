@@ -1,7 +1,6 @@
 import {
   fingerprintTools,
   type LanguageModel,
-  type ModelMessage,
   type ToolChoice,
   type ToolSet,
 } from "ai";
@@ -10,11 +9,12 @@ import {
   noopRuntimeDiagnostics,
   type RuntimeDiagnosticsSink,
 } from "../plugins/diagnostics";
+import type { ThreadContextMessage } from "../thread/state/context";
 
 export type PreparedModelToolChoice = ToolChoice<ToolSet>;
 
 export interface PrepareModelStepInput {
-  readonly history: readonly ModelMessage[];
+  readonly history: readonly ThreadContextMessage[];
   readonly runtimeStepIndex: number;
   readonly signal: AbortSignal;
   readonly threadKey: string;
@@ -33,6 +33,31 @@ export type PrepareModelStep = (input: PrepareModelStepInput) =>
   // biome-ignore lint/suspicious/noConfusingVoidType: async callbacks may intentionally resolve without a result.
   | PromiseLike<PrepareModelStepResult | void>
   | void;
+
+/**
+ * Compose an internal model transform without reading an unvalidated callback
+ * result. This is intentionally not exported from the package root.
+ */
+export function mapPrepareModelStepModel(
+  prepareModelStep: PrepareModelStep,
+  mapModel: (
+    model: Exclude<LanguageModel, string>
+  ) => Exclude<LanguageModel, string>
+): PrepareModelStep {
+  return async (input) => {
+    const prepared = parsePrepareModelStepResult(
+      await prepareModelStep(input),
+      Object.keys(input.tools).length
+    );
+    if (prepared?.model === undefined) {
+      return prepared;
+    }
+    return {
+      ...prepared,
+      model: mapModel(prepared.model),
+    };
+  };
+}
 
 export class ModelToolSelectionError extends TypeError {
   readonly name = "ModelToolSelectionError";
@@ -56,7 +81,7 @@ export interface ResolveModelStepOptions {
   readonly alwaysActiveTools?: readonly string[];
   readonly attemptId: string;
   readonly diagnostics?: RuntimeDiagnosticsSink;
-  readonly history: readonly ModelMessage[];
+  readonly history: readonly ThreadContextMessage[];
   readonly model: LanguageModel;
   readonly prepareModelStep?: PrepareModelStep;
   readonly runtimeStepIndex: number;

@@ -1,0 +1,482 @@
+{
+  "schemaVersion": 1,
+  "campaignDate": "2026-07-17",
+  "runtimeCommit": "447400465751af8f984bbf9f836d42de7c02d404",
+  "endpoint": "https://freerouter.minpeter.workers.dev/v1",
+  "credentialRecorded": false,
+  "contentRecorded": {
+    "modelOutputs": false,
+    "prompts": false,
+    "rawBodies": false
+  },
+  "adapter": {
+    "name": "@ai-sdk/openai-compatible",
+    "version": "3.0.2",
+    "omittedCachedTokensBehavior": "normalized-to-zero",
+    "caveat": "An individual normalized zero cannot distinguish an explicit upstream zero from an omitted raw cached-token field."
+  },
+  "sourceArtifacts": [
+    {
+      "name": "freerouter-runtime-cache-events.json",
+      "observedAt": "2026-07-17T03:55:29+09:00",
+      "sha256": "3042bedfc07ad33c74a986638261be1b1da08923d73f1b4bf4257660113582d1"
+    },
+    {
+      "name": "freerouter-live-ab-results.json",
+      "observedAt": "2026-07-17T03:49:08+09:00",
+      "sha256": "7bada309a0af9539c44a08ddc8702fc86c731ba70532497bf9d694d104577d93"
+    },
+    {
+      "name": "freerouter-live-stable10-results.json",
+      "observedAt": "2026-07-17T03:52:19+09:00",
+      "sha256": "91bafc646f10586497446e8045ecf2848cce44a7cf08adb7a5169b0a78c4eaee"
+    }
+  ],
+  "runtimeTelemetry": {
+    "configuration": {
+      "models": [
+        "minimaxai/minimax-m2.7",
+        "mistralai/ministral-14b-latest",
+        "zai-org/glm-4.7"
+      ],
+      "prefixLines": 180,
+      "turns": 5,
+      "warmupRuns": 1
+    },
+    "models": [
+      {
+        "modelId": "minimaxai/minimax-m2.7",
+        "cacheClassification": "reported-nonzero",
+        "cacheSteadyState": {
+          "cacheHitRate": 0.46995638830560493,
+          "cacheReadTokens": 11638,
+          "inputTokens": 24764,
+          "noCacheTokens": 13126,
+          "requests": 4,
+          "trackedCacheReadTokens": 11638,
+          "trackedInputTokens": 24764,
+          "trackedRequests": 4
+        },
+        "wallLatencyMs": [4227, 3646, 6454, 7328, 4109],
+        "usage": [
+          {
+            "turn": 0,
+            "cacheReadTokens": 0,
+            "durationMs": 4201.774,
+            "finishReason": "length",
+            "inputTokens": 6143,
+            "modelId": "minimaxai/minimax-m2.7",
+            "noCacheTokens": 6143,
+            "outputTokens": 8,
+            "provider": "freerouter-live-cache.chat",
+            "reasoningTokens": 8,
+            "totalTokens": 6151
+          },
+          {
+            "turn": 1,
+            "cacheReadTokens": 5819,
+            "durationMs": 3642.976,
+            "finishReason": "length",
+            "inputTokens": 6162,
+            "modelId": "minimaxai/minimax-m2.7",
+            "noCacheTokens": 343,
+            "outputTokens": 8,
+            "provider": "freerouter-live-cache.chat",
+            "reasoningTokens": 8,
+            "totalTokens": 6170
+          },
+          {
+            "turn": 2,
+            "cacheReadTokens": 0,
+            "durationMs": 6452.793,
+            "finishReason": "length",
+            "inputTokens": 6181,
+            "modelId": "minimaxai/minimax-m2.7",
+            "noCacheTokens": 6181,
+            "outputTokens": 8,
+            "provider": "freerouter-live-cache.chat",
+            "reasoningTokens": 8,
+            "totalTokens": 6189
+          },
+          {
+            "turn": 3,
+            "cacheReadTokens": 0,
+            "durationMs": 7325.551,
+            "finishReason": "length",
+            "inputTokens": 6202,
+            "modelId": "minimaxai/minimax-m2.7",
+            "noCacheTokens": 6202,
+            "outputTokens": 8,
+            "provider": "freerouter-live-cache.chat",
+            "reasoningTokens": 0,
+            "totalTokens": 6210
+          },
+          {
+            "turn": 4,
+            "cacheReadTokens": 5819,
+            "durationMs": 4106.185,
+            "finishReason": "length",
+            "inputTokens": 6219,
+            "modelId": "minimaxai/minimax-m2.7",
+            "noCacheTokens": 400,
+            "outputTokens": 8,
+            "provider": "freerouter-live-cache.chat",
+            "reasoningTokens": 8,
+            "totalTokens": 6227
+          }
+        ]
+      },
+      {
+        "modelId": "mistralai/ministral-14b-latest",
+        "cacheClassification": "reported-nonzero",
+        "cacheSteadyState": {
+          "cacheHitRate": 0.24833891458034338,
+          "cacheReadTokens": 9344,
+          "inputTokens": 37626,
+          "noCacheTokens": 28282,
+          "requests": 4,
+          "trackedCacheReadTokens": 9344,
+          "trackedInputTokens": 37626,
+          "trackedRequests": 4
+        },
+        "wallLatencyMs": [3218, 2389, 2753, 1979, 1817],
+        "usage": [
+          {
+            "turn": 0,
+            "cacheReadTokens": 0,
+            "durationMs": 3191.351,
+            "finishReason": "stop",
+            "inputTokens": 9374,
+            "modelId": "mistralai/ministral-14b-latest",
+            "noCacheTokens": 9374,
+            "outputTokens": 2,
+            "provider": "freerouter-live-cache.chat",
+            "reasoningTokens": 0,
+            "totalTokens": 9376
+          },
+          {
+            "turn": 1,
+            "cacheReadTokens": 0,
+            "durationMs": 2386.825,
+            "finishReason": "stop",
+            "inputTokens": 9387,
+            "modelId": "mistralai/ministral-14b-latest",
+            "noCacheTokens": 9387,
+            "outputTokens": 2,
+            "provider": "freerouter-live-cache.chat",
+            "reasoningTokens": 0,
+            "totalTokens": 9389
+          },
+          {
+            "turn": 2,
+            "cacheReadTokens": 0,
+            "durationMs": 2751.26,
+            "finishReason": "stop",
+            "inputTokens": 9400,
+            "modelId": "mistralai/ministral-14b-latest",
+            "noCacheTokens": 9400,
+            "outputTokens": 2,
+            "provider": "freerouter-live-cache.chat",
+            "reasoningTokens": 0,
+            "totalTokens": 9402
+          },
+          {
+            "turn": 3,
+            "cacheReadTokens": 0,
+            "durationMs": 1977.158,
+            "finishReason": "stop",
+            "inputTokens": 9413,
+            "modelId": "mistralai/ministral-14b-latest",
+            "noCacheTokens": 9413,
+            "outputTokens": 2,
+            "provider": "freerouter-live-cache.chat",
+            "reasoningTokens": 0,
+            "totalTokens": 9415
+          },
+          {
+            "turn": 4,
+            "cacheReadTokens": 9344,
+            "durationMs": 1815.124,
+            "finishReason": "stop",
+            "inputTokens": 9426,
+            "modelId": "mistralai/ministral-14b-latest",
+            "noCacheTokens": 82,
+            "outputTokens": 2,
+            "provider": "freerouter-live-cache.chat",
+            "reasoningTokens": 0,
+            "totalTokens": 9428
+          }
+        ]
+      },
+      {
+        "modelId": "zai-org/glm-4.7",
+        "cacheClassification": "reported-nonzero",
+        "cacheSteadyState": {
+          "cacheHitRate": 0.4985593779289756,
+          "cacheReadTokens": 14362,
+          "inputTokens": 28807,
+          "noCacheTokens": 14445,
+          "requests": 4,
+          "trackedCacheReadTokens": 14362,
+          "trackedInputTokens": 28807,
+          "trackedRequests": 4
+        },
+        "wallLatencyMs": [48945, 4261, 32080, 52942, 9999],
+        "usage": [
+          {
+            "turn": 0,
+            "cacheReadTokens": 2,
+            "durationMs": 48920.33,
+            "finishReason": "length",
+            "inputTokens": 7165,
+            "modelId": "zai-org/glm-4.7",
+            "noCacheTokens": 7163,
+            "outputTokens": 8,
+            "provider": "freerouter-live-cache.chat",
+            "reasoningTokens": 8,
+            "totalTokens": 7173
+          },
+          {
+            "turn": 1,
+            "cacheReadTokens": 0,
+            "durationMs": 4256.956,
+            "finishReason": "length",
+            "inputTokens": 7186,
+            "modelId": "zai-org/glm-4.7",
+            "noCacheTokens": 7186,
+            "outputTokens": 8,
+            "provider": "freerouter-live-cache.chat",
+            "reasoningTokens": 0,
+            "totalTokens": 7194
+          },
+          {
+            "turn": 2,
+            "cacheReadTokens": 0,
+            "durationMs": 32078.886,
+            "finishReason": "length",
+            "inputTokens": 7207,
+            "modelId": "zai-org/glm-4.7",
+            "noCacheTokens": 7207,
+            "outputTokens": 8,
+            "provider": "freerouter-live-cache.chat",
+            "reasoningTokens": 0,
+            "totalTokens": 7215
+          },
+          {
+            "turn": 3,
+            "cacheReadTokens": 7163,
+            "durationMs": 52940.784,
+            "finishReason": "length",
+            "inputTokens": 7201,
+            "modelId": "zai-org/glm-4.7",
+            "noCacheTokens": 38,
+            "outputTokens": 8,
+            "provider": "freerouter-live-cache.chat",
+            "reasoningTokens": 8,
+            "totalTokens": 7209
+          },
+          {
+            "turn": 4,
+            "cacheReadTokens": 7199,
+            "durationMs": 9997.2,
+            "finishReason": "length",
+            "inputTokens": 7213,
+            "modelId": "zai-org/glm-4.7",
+            "noCacheTokens": 14,
+            "outputTokens": 8,
+            "provider": "freerouter-live-cache.chat",
+            "reasoningTokens": 8,
+            "totalTokens": 7221
+          }
+        ]
+      }
+    ]
+  },
+  "rawPolicyAb": {
+    "configuration": {
+      "steps": 10,
+      "warmupRequests": 1,
+      "cacheHitRateDenominator": "paired warm requests only"
+    },
+    "summaries": [
+      {
+        "modelId": "qwen/qwen2.5-7b-instruct",
+        "policy": "legacy-rewrite-every-step",
+        "cacheHitRate": null,
+        "cacheClassification": "N/A (not reported)",
+        "trackedRequests": 0,
+        "failures": 0,
+        "medianLatencyMs": 2627,
+        "p95LatencyMs": 7224,
+        "summaryRewrites": 10
+      },
+      {
+        "modelId": "qwen/qwen2.5-7b-instruct",
+        "policy": "batched-stable-prefix",
+        "cacheHitRate": null,
+        "cacheClassification": "N/A (not reported)",
+        "trackedRequests": 0,
+        "failures": 0,
+        "medianLatencyMs": 2558,
+        "p95LatencyMs": 7110,
+        "summaryRewrites": 2
+      },
+      {
+        "modelId": "minimaxai/minimax-m2.7",
+        "policy": "legacy-rewrite-every-step",
+        "cacheHitRate": 0,
+        "cacheClassification": "reported-zero-only",
+        "trackedRequests": 2,
+        "trackedCacheReadTokens": 0,
+        "trackedInputTokens": 13750,
+        "failures": 0,
+        "medianLatencyMs": 4443,
+        "p95LatencyMs": 6828,
+        "summaryRewrites": 10
+      },
+      {
+        "modelId": "minimaxai/minimax-m2.7",
+        "policy": "batched-stable-prefix",
+        "cacheHitRate": 0.9520771302991635,
+        "cacheClassification": "reported-nonzero",
+        "trackedRequests": 8,
+        "trackedCacheReadTokens": 53720,
+        "trackedInputTokens": 56424,
+        "failures": 0,
+        "medianLatencyMs": 3244,
+        "p95LatencyMs": 9392,
+        "summaryRewrites": 2
+      },
+      {
+        "modelId": "minimaxai/minimax-m2.7",
+        "policy": "stable-entire-10-step-session",
+        "cacheHitRate": 0.9909012664453462,
+        "cacheClassification": "reported-nonzero",
+        "trackedRequests": 9,
+        "trackedCacheReadTokens": 72531,
+        "trackedInputTokens": 73197,
+        "failures": 0,
+        "medianLatencyMs": 3565,
+        "p95LatencyMs": 6416,
+        "summaryRewrites": 1
+      },
+      {
+        "modelId": "mistralai/ministral-14b-latest",
+        "policy": "legacy-rewrite-every-step",
+        "cacheHitRate": 0,
+        "cacheClassification": "reported-zero-only",
+        "trackedRequests": 9,
+        "trackedCacheReadTokens": 0,
+        "trackedInputTokens": 89316,
+        "failures": 0,
+        "medianLatencyMs": 2305,
+        "p95LatencyMs": 4575,
+        "summaryRewrites": 10
+      },
+      {
+        "modelId": "mistralai/ministral-14b-latest",
+        "policy": "batched-stable-prefix",
+        "cacheHitRate": 0.3319124751349815,
+        "cacheClassification": "reported-nonzero",
+        "trackedRequests": 9,
+        "trackedCacheReadTokens": 28032,
+        "trackedInputTokens": 84456,
+        "failures": 0,
+        "medianLatencyMs": 2207,
+        "p95LatencyMs": 2721,
+        "summaryRewrites": 2
+      },
+      {
+        "modelId": "mistralai/ministral-14b-latest",
+        "policy": "stable-entire-10-step-session",
+        "cacheHitRate": 0.44139907743293477,
+        "cacheClassification": "reported-nonzero",
+        "trackedRequests": 9,
+        "trackedCacheReadTokens": 39424,
+        "trackedInputTokens": 89316,
+        "failures": 0,
+        "medianLatencyMs": 2081,
+        "p95LatencyMs": 2979,
+        "summaryRewrites": 1
+      },
+      {
+        "modelId": "zai-org/glm-4.7",
+        "policy": "legacy-rewrite-every-step",
+        "cacheHitRate": 0,
+        "cacheClassification": "reported-zero-only",
+        "trackedRequests": 9,
+        "trackedCacheReadTokens": 0,
+        "trackedInputTokens": 75915,
+        "failures": 0,
+        "medianLatencyMs": 5817,
+        "p95LatencyMs": 43725,
+        "summaryRewrites": 10
+      },
+      {
+        "modelId": "zai-org/glm-4.7",
+        "policy": "batched-stable-prefix",
+        "cacheHitRate": 0.2219261053906723,
+        "cacheClassification": "reported-nonzero",
+        "trackedRequests": 9,
+        "trackedCacheReadTokens": 16488,
+        "trackedInputTokens": 74295,
+        "failures": 0,
+        "medianLatencyMs": 2841,
+        "p95LatencyMs": 51473,
+        "summaryRewrites": 2
+      },
+      {
+        "modelId": "zai-org/glm-4.7",
+        "policy": "stable-entire-10-step-session",
+        "cacheHitRate": 0.44379705861656465,
+        "cacheClassification": "reported-nonzero",
+        "trackedRequests": 9,
+        "trackedCacheReadTokens": 31534,
+        "trackedInputTokens": 71055,
+        "failures": 0,
+        "medianLatencyMs": 2844,
+        "p95LatencyMs": 66617,
+        "summaryRewrites": 1
+      },
+      {
+        "modelId": "meta-llama/llama-4-scout-17b-16e-instruct",
+        "policy": "legacy-rewrite-every-step",
+        "cacheHitRate": 0,
+        "cacheClassification": "reported-zero-only",
+        "trackedRequests": 9,
+        "trackedCacheReadTokens": 0,
+        "trackedInputTokens": 63504,
+        "failures": 0,
+        "medianLatencyMs": 2374,
+        "p95LatencyMs": 3472,
+        "summaryRewrites": 10
+      },
+      {
+        "modelId": "meta-llama/llama-4-scout-17b-16e-instruct",
+        "policy": "batched-stable-prefix",
+        "cacheHitRate": 0,
+        "cacheClassification": "reported-zero-only",
+        "trackedRequests": 9,
+        "trackedCacheReadTokens": 0,
+        "trackedInputTokens": 65124,
+        "failures": 0,
+        "medianLatencyMs": 2553,
+        "p95LatencyMs": 4063,
+        "summaryRewrites": 2
+      },
+      {
+        "modelId": "meta-llama/llama-4-scout-17b-16e-instruct",
+        "policy": "stable-entire-10-step-session",
+        "cacheHitRate": 0,
+        "cacheClassification": "reported-zero-only",
+        "trackedRequests": 9,
+        "trackedCacheReadTokens": 0,
+        "trackedInputTokens": 66744,
+        "failures": 0,
+        "medianLatencyMs": 2258,
+        "p95LatencyMs": 6227,
+        "summaryRewrites": 1
+      }
+    ]
+  }
+}
