@@ -35,14 +35,21 @@ export interface EvalRun {
  * divided by paired input tokens and exists only when tracked input is nonzero.
  */
 export interface EvalCacheStats {
+  /** Runtime model attempts that reached `step-start`. */
+  readonly attemptedRequests: number;
   readonly cacheHitRate?: number;
   readonly cacheReadTokens?: number;
   readonly cacheWriteTokens?: number;
+  /** Extra `model-usage` records that reused an already observed `attemptId`. */
+  readonly duplicateUsageRecords: number;
+  /** Attempts that ended without a `model-usage` record (failed or aborted). */
+  readonly failedRequests: number;
   readonly inputTokens?: number;
   /** Requests that reported both read and input counts but not a valid pair. */
   readonly invalidPairedRequests: number;
   readonly noCacheTokens?: number;
-  readonly requests: number;
+  /** Attempts that produced a `model-usage` record. */
+  readonly successfulRequests: number;
   /** Fraction of attempts with a valid paired cache-read/input observation. */
   readonly telemetryCoverage?: number;
   /** Cache-read tokens from requests used in `cacheHitRate`. */
@@ -50,6 +57,14 @@ export interface EvalCacheStats {
   /** Input tokens from requests used in `cacheHitRate`. */
   readonly trackedInputTokens?: number;
   readonly trackedRequests: number;
+}
+
+export interface CacheUsageSummaryOptions {
+  /**
+   * Runtime model attempts represented by the summary. Defaults to the number
+   * of supplied successful usage records for standalone callers.
+   */
+  readonly attemptedRequests?: number;
 }
 
 export interface CacheHitRateOptions {

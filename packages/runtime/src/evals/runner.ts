@@ -101,7 +101,18 @@ export async function runEvals(
   const passed = results.filter((r) => r.passed).length;
   return {
     cache: summarizeCacheUsage(
-      results.flatMap((result) => result.runs.flatMap((run) => run.modelUsage))
+      results.flatMap((result) => result.runs.flatMap((run) => run.modelUsage)),
+      {
+        attemptedRequests: results.reduce(
+          (total, result) =>
+            total +
+            result.runs.reduce(
+              (runTotal, run) => runTotal + run.cache.attemptedRequests,
+              0
+            ),
+          0
+        ),
+      }
     ),
     failed: results.length - passed,
     passed,

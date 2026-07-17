@@ -52,7 +52,7 @@ export class EvalScopeImpl implements EvalScope {
   }
 
   get cache(): EvalCacheStats {
-    return summarizeCacheUsage(this.#runs.flatMap((run) => run.modelUsage));
+    return summarizeRunsCache(this.#runs);
   }
 
   get events(): readonly AgentEvent[] {
@@ -99,20 +99,29 @@ export class EvalScopeImpl implements EvalScope {
     assertNonNegativeInteger("minTrackedRequests", minTrackedRequests);
     assertRate(minTelemetryCoverage, "minTelemetryCoverage");
 
-    const cache = summarizeCacheUsage(
-      this.#runs.slice(warmupRuns).flatMap((run) => run.modelUsage)
-    );
+    const selectedRuns = this.#runs.slice(warmupRuns);
+    const cache = summarizeRunsCache(selectedRuns);
+    const failedRuns = selectedRuns.filter(
+      (run) => run.error !== undefined
+    ).length;
     const rate = cache.cacheHitRate;
     const enoughRequests = cache.trackedRequests >= minTrackedRequests;
     const enoughCoverage =
       cache.telemetryCoverage !== undefined &&
       cache.telemetryCoverage >= minTelemetryCoverage;
     const pass =
-      rate !== undefined && enoughRequests && enoughCoverage && rate >= minimum;
+      failedRuns === 0 &&
+      cache.failedRequests === 0 &&
+      cache.duplicateUsageRecords === 0 &&
+      rate !== undefined &&
+      enoughRequests &&
+      enoughCoverage &&
+      rate >= minimum;
     const detail = cacheHitRateFailure({
       cache,
       enoughCoverage,
       enoughRequests,
+      failedRuns,
       minTelemetryCoverage,
       minTrackedRequests,
       minimum,
@@ -322,6 +331,7 @@ function cacheHitRateFailure({
   cache,
   enoughCoverage,
   enoughRequests,
+  failedRuns,
   minTelemetryCoverage,
   minTrackedRequests,
   minimum,
@@ -330,11 +340,21 @@ function cacheHitRateFailure({
   readonly cache: EvalCacheStats;
   readonly enoughCoverage: boolean;
   readonly enoughRequests: boolean;
+  readonly failedRuns: number;
   readonly minTelemetryCoverage: number;
   readonly minTrackedRequests: number;
   readonly minimum: number;
   readonly rate: number | undefined;
 }): string {
+  if (failedRuns > 0) {
+    return `${failedRuns} post-warmup run(s) ended with turn-error; cache hit rate is indeterminate`;
+  }
+  if (cache.duplicateUsageRecords > 0) {
+    return `${cache.duplicateUsageRecords} duplicate post-warmup model-usage record(s) reused an attemptId; cache hit rate is indeterminate`;
+  }
+  if (cache.failedRequests > 0) {
+    return `${cache.failedRequests}/${cache.attemptedRequests} post-warmup model attempt(s) ended without model-usage; cache hit rate is indeterminate`;
+  }
   if (!enoughRequests) {
     return `provider cache usage tracked for ${cache.trackedRequests} request(s); expected at least ${minTrackedRequests}`;
   }
@@ -342,7 +362,7 @@ function cacheHitRateFailure({
     const observed = cache.telemetryCoverage;
     return observed === undefined
       ? `provider cache telemetry coverage was unavailable; expected at least ${minTelemetryCoverage.toFixed(4)}`
-      : `provider cache telemetry coverage ${observed.toFixed(4)} was below ${minTelemetryCoverage.toFixed(4)} (${cache.trackedRequests}/${cache.requests} requests)`;
+      : `provider cache telemetry coverage ${observed.toFixed(4)} was below ${minTelemetryCoverage.toFixed(4)} (${cache.trackedRequests}/${cache.attemptedRequests} requests)`;
   }
   if (rate === undefined) {
     if (
@@ -357,4 +377,16 @@ function cacheHitRateFailure({
       : "provider did not report cache-read and input token counts";
   }
   return `cache hit rate ${rate.toFixed(4)} was below ${minimum.toFixed(4)} (${cache.trackedCacheReadTokens}/${cache.trackedInputTokens} tokens)`;
+}
+
+function summarizeRunsCache(runs: readonly EvalRun[]): EvalCacheStats {
+  return summarizeCacheUsage(
+    runs.flatMap((run) => run.modelUsage),
+    {
+      attemptedRequests: runs.reduce(
+        (total, run) => total + run.cache.attemptedRequests,
+        0
+      ),
+    }
+  );
 }

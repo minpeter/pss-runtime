@@ -1,10 +1,16 @@
 import type { ModelUsage } from "../thread/protocol/events";
-import type { EvalCacheStats } from "./types";
+import type { CacheUsageSummaryOptions, EvalCacheStats } from "./types";
 
 /** Aggregate provider-reported prompt-cache usage without inventing missing data. */
 export function summarizeCacheUsage(
-  usages: readonly ModelUsage[]
+  usages: readonly ModelUsage[],
+  options: CacheUsageSummaryOptions = {}
 ): EvalCacheStats {
+  const { duplicateUsageRecords, uniqueUsages } = uniqueUsageRecords(usages);
+  const attemptedRequests = resolveAttemptedRequests(
+    uniqueUsages.length,
+    options.attemptedRequests
+  );
   const cacheReadTokens = tokenAccumulator();
   const cacheWriteTokens = tokenAccumulator();
   const inputTokens = tokenAccumulator();
@@ -15,7 +21,7 @@ export function summarizeCacheUsage(
   let invalidPairedRequests = 0;
   let trackedRequests = 0;
 
-  for (const usage of usages) {
+  for (const usage of uniqueUsages) {
     const cacheRead = safeTokenCount(usage.cacheReadTokens);
     const cacheWrite = safeTokenCount(usage.cacheWriteTokens);
     const input = safeTokenCount(usage.inputTokens);
@@ -25,7 +31,7 @@ export function summarizeCacheUsage(
     addReported(inputTokens, input);
     addReported(noCacheTokens, noCache);
 
-    const pair = cacheInputPair(usage, cacheRead, input);
+    const pair = cacheInputPair(usage, cacheRead, cacheWrite, input);
     if (pair.kind === "absent") {
       continue;
     }
@@ -55,6 +61,7 @@ export function summarizeCacheUsage(
   }
 
   return {
+    attemptedRequests,
     cacheHitRate:
       trackedTokenTotalsOverflowed ||
       trackedInputTokens === undefined ||
@@ -63,16 +70,36 @@ export function summarizeCacheUsage(
         : (trackedCacheReadTokens ?? 0) / trackedInputTokens,
     cacheReadTokens: cacheReadTokens.value,
     cacheWriteTokens: cacheWriteTokens.value,
+    duplicateUsageRecords,
+    failedRequests: attemptedRequests - uniqueUsages.length,
     inputTokens: inputTokens.value,
     invalidPairedRequests,
     noCacheTokens: noCacheTokens.value,
-    requests: usages.length,
     telemetryCoverage:
-      usages.length === 0 ? undefined : trackedRequests / usages.length,
+      attemptedRequests === 0 ? undefined : trackedRequests / attemptedRequests,
+    successfulRequests: uniqueUsages.length,
     trackedCacheReadTokens,
     trackedInputTokens,
     trackedRequests,
   };
+}
+
+function uniqueUsageRecords(usages: readonly ModelUsage[]): {
+  readonly duplicateUsageRecords: number;
+  readonly uniqueUsages: readonly ModelUsage[];
+} {
+  const seenAttemptIds = new Set<string>();
+  const uniqueUsages: ModelUsage[] = [];
+  let duplicateUsageRecords = 0;
+  for (const usage of usages) {
+    if (seenAttemptIds.has(usage.attemptId)) {
+      duplicateUsageRecords += 1;
+      continue;
+    }
+    seenAttemptIds.add(usage.attemptId);
+    uniqueUsages.push(usage);
+  }
+  return { duplicateUsageRecords, uniqueUsages };
 }
 
 interface TokenAccumulator {
@@ -88,6 +115,7 @@ type CacheInputPair =
 function cacheInputPair(
   usage: ModelUsage,
   cacheRead: number | undefined,
+  cacheWrite: number | undefined,
   input: number | undefined
 ): CacheInputPair {
   if (usage.cacheReadTokens === undefined || usage.inputTokens === undefined) {
@@ -96,7 +124,31 @@ function cacheInputPair(
   if (cacheRead === undefined || input === undefined || cacheRead > input) {
     return { kind: "invalid" };
   }
+  if (usage.cacheWriteTokens !== undefined) {
+    if (cacheWrite === undefined || cacheWrite > input) {
+      return { kind: "invalid" };
+    }
+    const cachedTokens = cacheRead + cacheWrite;
+    if (!Number.isSafeInteger(cachedTokens) || cachedTokens > input) {
+      return { kind: "invalid" };
+    }
+  }
   return { cacheRead, input, kind: "valid" };
+}
+
+function resolveAttemptedRequests(
+  successfulRequests: number,
+  attemptedRequests = successfulRequests
+): number {
+  if (
+    !Number.isSafeInteger(attemptedRequests) ||
+    attemptedRequests < successfulRequests
+  ) {
+    throw new RangeError(
+      "attemptedRequests must be a safe integer greater than or equal to the number of usage records"
+    );
+  }
+  return attemptedRequests;
 }
 
 function tokenAccumulator(): TokenAccumulator {

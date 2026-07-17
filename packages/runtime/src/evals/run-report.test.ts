@@ -11,6 +11,7 @@ import {
 import {
   clearEvals,
   defineEval,
+  type EvalThreadLike,
   formatJsonReport,
   formatTextReport,
   runEvals,
@@ -115,10 +116,12 @@ describe("eval run reports", () => {
       [expect.objectContaining({ cacheReadTokens: 210, inputTokens: 240 })],
     ]);
     expect(result.cache).toMatchObject({
+      attemptedRequests: 3,
       cacheHitRate: 370 / 540,
       cacheReadTokens: 370,
+      failedRequests: 0,
       inputTokens: 540,
-      requests: 3,
+      successfulRequests: 3,
       trackedRequests: 3,
     });
     expect(result.assertions).toContainEqual(
@@ -178,8 +181,11 @@ describe("eval run reports", () => {
       passed: false,
     });
     expect(JSON.parse(formatJsonReport(report)).cache).toEqual({
+      attemptedRequests: 1,
+      duplicateUsageRecords: 0,
+      failedRequests: 0,
       invalidPairedRequests: 0,
-      requests: 1,
+      successfulRequests: 1,
       telemetryCoverage: 0,
       trackedRequests: 0,
     });
@@ -216,8 +222,10 @@ describe("eval run reports", () => {
 
     const result = (await runEvals()).results[0];
     expect(result.cache).toMatchObject({
+      attemptedRequests: 4,
       cacheHitRate: 0.9,
-      requests: 4,
+      failedRequests: 0,
+      successfulRequests: 4,
       telemetryCoverage: 0.5,
       trackedRequests: 2,
     });
@@ -260,13 +268,139 @@ describe("eval run reports", () => {
         }),
       ],
       cache: {
+        attemptedRequests: 1,
         cacheReadTokens: 0,
+        failedRequests: 0,
         inputTokens: 0,
         invalidPairedRequests: 0,
-        requests: 1,
+        successfulRequests: 1,
         telemetryCoverage: 1,
         trackedCacheReadTokens: 0,
         trackedInputTokens: 0,
+        trackedRequests: 1,
+      },
+      passed: false,
+    });
+  });
+
+  it("does not let an impossible cache-write envelope pass the cache gate", async () => {
+    clearEvals();
+    defineEval(
+      "cache-invalid-envelope",
+      {
+        thread: () =>
+          new Agent({
+            model: createMockLanguageModelV4([
+              mockLanguageModelV4Text("invalid", cacheUsage(100, 80, 80)),
+            ]),
+          }).thread("cache-invalid-envelope"),
+      },
+      (it) => {
+        it("fails closed", async (t) => {
+          await t.run("hello");
+          t.cacheHitRateAtLeast(0.8);
+        });
+      }
+    );
+
+    const result = (await runEvals()).results[0];
+    expect(result).toMatchObject({
+      assertions: [
+        expect.objectContaining({
+          failure: expect.stringContaining("tracked for 0 request"),
+          passed: false,
+        }),
+      ],
+      cache: {
+        attemptedRequests: 1,
+        cacheReadTokens: 80,
+        cacheWriteTokens: 80,
+        failedRequests: 0,
+        inputTokens: 100,
+        invalidPairedRequests: 1,
+        successfulRequests: 1,
+        telemetryCoverage: 0,
+        trackedRequests: 0,
+      },
+      passed: false,
+    });
+  });
+
+  it("fails a cache gate when earlier model attempts ended without usage", async () => {
+    clearEvals();
+    defineEval(
+      "cache-failed-attempts",
+      { thread: failedAttemptsThenSuccessThread },
+      (it) => {
+        it("keeps failed attempts in the denominator", async (t) => {
+          await t.run("failure one");
+          await t.run("failure two");
+          await t.run("failure three");
+          await t.run("success");
+          t.cacheHitRateAtLeast(0.8);
+        });
+      }
+    );
+
+    const report = await runEvals();
+    const result = report.results[0];
+    expect(result).toMatchObject({
+      assertions: [
+        expect.objectContaining({
+          failure: expect.stringContaining(
+            "3 post-warmup run(s) ended with turn-error"
+          ),
+          passed: false,
+        }),
+      ],
+      cache: {
+        attemptedRequests: 4,
+        cacheHitRate: 0.8,
+        failedRequests: 3,
+        successfulRequests: 1,
+        telemetryCoverage: 0.25,
+        trackedRequests: 1,
+      },
+      passed: false,
+    });
+    expect(report.failed).toBe(1);
+  });
+
+  it("does not let replayed usage satisfy the cache sample gate", async () => {
+    clearEvals();
+    defineEval(
+      "cache-replayed-usage",
+      { thread: duplicateUsageThread },
+      (it) => {
+        it("counts unique attempt ids", async (t) => {
+          await t.run("hello");
+          t.cacheHitRateAtLeast(0.8, { minTrackedRequests: 2 });
+        });
+      }
+    );
+
+    const result = (await runEvals()).results[0];
+    expect(result).toMatchObject({
+      assertions: [
+        expect.objectContaining({
+          failure: expect.stringContaining(
+            "1 duplicate post-warmup model-usage record"
+          ),
+          passed: false,
+        }),
+      ],
+      cache: {
+        attemptedRequests: 1,
+        cacheHitRate: 0.8,
+        cacheReadTokens: 80,
+        duplicateUsageRecords: 1,
+        failedRequests: 0,
+        inputTokens: 100,
+        invalidPairedRequests: 0,
+        successfulRequests: 1,
+        telemetryCoverage: 1,
+        trackedCacheReadTokens: 80,
+        trackedInputTokens: 100,
         trackedRequests: 1,
       },
       passed: false,
@@ -286,14 +420,15 @@ function cacheTraceThread() {
 
 function cacheUsage(
   inputTokens: number,
-  cacheReadTokens: number
+  cacheReadTokens: number,
+  cacheWriteTokens = 0
 ): MockLanguageModelV4Usage {
   const outputTokens = 10;
   return {
     inputTokens: {
       cacheRead: cacheReadTokens,
-      cacheWrite: 0,
-      noCache: inputTokens - cacheReadTokens,
+      cacheWrite: cacheWriteTokens,
+      noCache: Math.max(0, inputTokens - cacheReadTokens - cacheWriteTokens),
       total: inputTokens,
     },
     outputTokens: {
@@ -302,6 +437,62 @@ function cacheUsage(
       total: outputTokens,
     },
     raw: { privateProviderField: "provider-raw-secret" },
+  };
+}
+
+function failedAttemptsThenSuccessThread(): EvalThreadLike {
+  let run = 0;
+  return {
+    send() {
+      const currentRun = run;
+      run += 1;
+      return Promise.resolve({
+        async *events() {
+          await Promise.resolve();
+          yield { type: "turn-start" } as const;
+          yield { type: "step-start" } as const;
+          if (currentRun < 3) {
+            yield {
+              message: `provider failure ${currentRun + 1}`,
+              type: "turn-error",
+            } as const;
+            return;
+          }
+          yield {
+            attemptId: "attempt-success",
+            cacheReadTokens: 80,
+            inputTokens: 100,
+            type: "model-usage",
+          } as const;
+          yield { type: "step-end" } as const;
+          yield { type: "turn-end" } as const;
+        },
+      });
+    },
+  };
+}
+
+function duplicateUsageThread(): EvalThreadLike {
+  return {
+    send() {
+      return Promise.resolve({
+        async *events() {
+          await Promise.resolve();
+          yield { type: "turn-start" } as const;
+          yield { type: "step-start" } as const;
+          const usage = {
+            attemptId: "attempt-replayed",
+            cacheReadTokens: 80,
+            inputTokens: 100,
+            type: "model-usage",
+          } as const;
+          yield usage;
+          yield usage;
+          yield { type: "step-end" } as const;
+          yield { type: "turn-end" } as const;
+        },
+      });
+    },
   };
 }
 

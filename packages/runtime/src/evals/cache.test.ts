@@ -19,27 +19,36 @@ describe("summarizeCacheUsage", () => {
     ]);
 
     expect(unreported).toMatchObject({
+      attemptedRequests: 1,
+      duplicateUsageRecords: 0,
+      failedRequests: 0,
       invalidPairedRequests: 0,
-      requests: 1,
+      successfulRequests: 1,
       telemetryCoverage: 0,
       trackedRequests: 0,
     });
     expect(unreported.cacheReadTokens).toBeUndefined();
     expect(unreported.inputTokens).toBeUndefined();
     expect(JSON.parse(JSON.stringify(unreported))).toEqual({
+      attemptedRequests: 1,
+      duplicateUsageRecords: 0,
+      failedRequests: 0,
       invalidPairedRequests: 0,
-      requests: 1,
+      successfulRequests: 1,
       telemetryCoverage: 0,
       trackedRequests: 0,
     });
 
     expect(zeroes).toMatchObject({
+      attemptedRequests: 1,
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
+      duplicateUsageRecords: 0,
+      failedRequests: 0,
       inputTokens: 0,
       invalidPairedRequests: 0,
       noCacheTokens: 0,
-      requests: 1,
+      successfulRequests: 1,
       telemetryCoverage: 1,
       trackedCacheReadTokens: 0,
       trackedInputTokens: 0,
@@ -75,13 +84,16 @@ describe("summarizeCacheUsage", () => {
     ];
 
     expect(summarizeCacheUsage(usages)).toEqual({
+      attemptedRequests: 4,
       cacheHitRate: 0.8,
       cacheReadTokens: 100,
       cacheWriteTokens: undefined,
+      duplicateUsageRecords: 0,
+      failedRequests: 0,
       inputTokens: 150,
       invalidPairedRequests: 0,
       noCacheTokens: undefined,
-      requests: 4,
+      successfulRequests: 4,
       telemetryCoverage: 0.5,
       trackedCacheReadTokens: 80,
       trackedInputTokens: 100,
@@ -112,13 +124,16 @@ describe("summarizeCacheUsage", () => {
     ] as ModelUsage[];
 
     expect(summarizeCacheUsage(usages)).toEqual({
+      attemptedRequests: 3,
       cacheHitRate: 0.5,
       cacheReadTokens: 126,
       cacheWriteTokens: undefined,
+      duplicateUsageRecords: 0,
+      failedRequests: 0,
       inputTokens: 250,
       invalidPairedRequests: 2,
       noCacheTokens: undefined,
-      requests: 3,
+      successfulRequests: 3,
       telemetryCoverage: 1 / 3,
       trackedCacheReadTokens: 25,
       trackedInputTokens: 50,
@@ -143,17 +158,118 @@ describe("summarizeCacheUsage", () => {
     ] as ModelUsage[];
 
     expect(summarizeCacheUsage(usages)).toEqual({
+      attemptedRequests: 2,
       cacheHitRate: undefined,
       cacheReadTokens: Number.MAX_SAFE_INTEGER,
       cacheWriteTokens: undefined,
+      duplicateUsageRecords: 0,
+      failedRequests: 0,
       inputTokens: undefined,
       invalidPairedRequests: 0,
       noCacheTokens: undefined,
-      requests: 2,
+      successfulRequests: 2,
       telemetryCoverage: 1,
       trackedCacheReadTokens: undefined,
       trackedInputTokens: undefined,
       trackedRequests: 2,
+    });
+  });
+
+  it("uses all attempted model requests as the telemetry denominator", () => {
+    const usages: ModelUsage[] = [
+      {
+        attemptId: "attempt-success",
+        cacheReadTokens: 80,
+        inputTokens: 100,
+        type: "model-usage",
+      },
+    ];
+
+    expect(summarizeCacheUsage(usages, { attemptedRequests: 4 })).toMatchObject(
+      {
+        attemptedRequests: 4,
+        cacheHitRate: 0.8,
+        duplicateUsageRecords: 0,
+        failedRequests: 3,
+        successfulRequests: 1,
+        telemetryCoverage: 0.25,
+        trackedRequests: 1,
+      }
+    );
+  });
+
+  it("counts a replayed attemptId once and reports the duplicate", () => {
+    const first: ModelUsage = {
+      attemptId: "attempt-replayed",
+      cacheReadTokens: 80,
+      inputTokens: 100,
+      type: "model-usage",
+    };
+    const conflictingReplay: ModelUsage = {
+      ...first,
+      cacheReadTokens: 10,
+    };
+
+    expect(summarizeCacheUsage([first, conflictingReplay])).toMatchObject({
+      attemptedRequests: 1,
+      cacheHitRate: 0.8,
+      cacheReadTokens: 80,
+      duplicateUsageRecords: 1,
+      failedRequests: 0,
+      successfulRequests: 1,
+      telemetryCoverage: 1,
+      trackedCacheReadTokens: 80,
+      trackedInputTokens: 100,
+      trackedRequests: 1,
+    });
+  });
+
+  it("rejects malformed and impossible cache-write envelopes", () => {
+    const usages: ModelUsage[] = [
+      {
+        attemptId: "attempt-malformed-write",
+        cacheReadTokens: 10,
+        cacheWriteTokens: Number.NaN,
+        inputTokens: 100,
+        type: "model-usage",
+      },
+      {
+        attemptId: "attempt-write-exceeds-input",
+        cacheReadTokens: 0,
+        cacheWriteTokens: 101,
+        inputTokens: 100,
+        type: "model-usage",
+      },
+      {
+        attemptId: "attempt-sum-exceeds-input",
+        cacheReadTokens: 80,
+        cacheWriteTokens: 80,
+        inputTokens: 100,
+        type: "model-usage",
+      },
+      {
+        attemptId: "attempt-sum-overflows",
+        cacheReadTokens: Number.MAX_SAFE_INTEGER,
+        cacheWriteTokens: Number.MAX_SAFE_INTEGER,
+        inputTokens: Number.MAX_SAFE_INTEGER,
+        type: "model-usage",
+      },
+      {
+        attemptId: "attempt-exact-envelope",
+        cacheReadTokens: 80,
+        cacheWriteTokens: 20,
+        inputTokens: 100,
+        type: "model-usage",
+      },
+    ];
+
+    expect(summarizeCacheUsage(usages)).toMatchObject({
+      cacheHitRate: 0.8,
+      invalidPairedRequests: 4,
+      telemetryCoverage: 0.2,
+      trackedCacheReadTokens: 80,
+      trackedInputTokens: 100,
+      trackedRequests: 1,
     });
   });
 });
