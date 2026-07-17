@@ -26,6 +26,9 @@ const EXPECTED_ORDERED_FINGERPRINTS = [
   "sha256:f7d997c1233bcac1eefa0f5ef285bb050a086df298aa31befe430850e38a8492",
   "sha256:824af4663a8abe6226db9c1ad6965d5184280b568b1ccce136f3254bb03c80d3",
 ];
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 
 const EMPTY_INPUT_SCHEMA = z.object({});
 const TOOL_DEFINITIONS = Object.fromEntries(
@@ -65,23 +68,102 @@ describe("cache-stable tool wire order", () => {
             [...wireNames].sort(compareToolNames)
           ),
           alwaysActiveToolCount: FIXED_TOOL_NAMES.length,
+          attemptId: expect.stringMatching(UUID_PATTERN),
+          dynamicDescriptionToolCount: 0,
+          modelIdentityFingerprint: expect.stringMatching(SHA256_PATTERN),
+          modelIdentityFingerprintUnavailable: true,
+          orderedToolSemanticFingerprint: expect.stringMatching(SHA256_PATTERN),
           orderedToolNamesFingerprint: namesFingerprint(wireNames),
           registeredToolCount: CANONICAL_TOOL_NAMES.length,
           registryToolNamesFingerprint: namesFingerprint(
             [...CANONICAL_TOOL_NAMES].sort(compareToolNames)
           ),
           runtimeStepIndex,
+          selectionDurationMs: expect.any(Number),
+          semanticFingerprintUnavailableToolCount: 0,
+          toolLoadingStrategy: "eager-active-tools",
         });
+      }
+      expect(
+        new Set(result.diagnostics.map((diagnostic) => diagnostic.attemptId))
+          .size
+      ).toBe(2);
+      for (const diagnostic of result.diagnostics) {
+        expect(Number.isFinite(diagnostic.selectionDurationMs)).toBe(true);
+        expect(diagnostic.selectionDurationMs).toBeGreaterThanOrEqual(0);
       }
     }
 
     expect(reverse.requests.map((request) => request.toolsArraySha256)).toEqual(
       forward.requests.map((request) => request.toolsArraySha256)
     );
+    expect(
+      reverse.diagnostics.map(
+        (diagnostic) => diagnostic.orderedToolSemanticFingerprint
+      )
+    ).toEqual(
+      forward.diagnostics.map(
+        (diagnostic) => diagnostic.orderedToolSemanticFingerprint
+      )
+    );
     expect(forward.requests[0]?.toolsArraySha256).not.toBe(
       forward.requests[1]?.toolsArraySha256
     );
     expect(forward.requests.length + reverse.requests.length).toBe(4);
+  });
+
+  it("keeps OpenAI-specific deferral hints eager on the generic compatible adapter", async () => {
+    let capturedBody;
+    const provider = createOpenAICompatible({
+      baseURL: "https://wire.invalid/v1",
+      fetch: (input, init) => {
+        expect(String(input)).toBe("https://wire.invalid/v1/chat/completions");
+        capturedBody = parseRequestBody(init?.body);
+        return Promise.resolve(
+          new Response(JSON.stringify(syntheticResponse(1)), {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          })
+        );
+      },
+      name: "generic-compatible-negative-canary",
+    });
+    const agent = await createAgent({
+      model: provider("generic-compatible-model"),
+      prepareModelStep: () => ({ activeTools: ["deferred_candidate"] }),
+      tools: {
+        deferred_candidate: {
+          description: "A candidate carrying an OpenAI-only deferral hint.",
+          execute: () => ({ ok: true }),
+          inputSchema: EMPTY_INPUT_SCHEMA,
+          providerOptions: { openai: { deferLoading: true } },
+        },
+        inactive_candidate: {
+          description: "This inactive tool must not reach the wire.",
+          execute: () => ({ ok: true }),
+          inputSchema: EMPTY_INPUT_SCHEMA,
+        },
+      },
+    });
+
+    try {
+      const turn = await agent.send("Return DONE without calling a tool.");
+      for await (const _event of turn.events()) {
+        // Drain the single synthetic model step.
+      }
+    } finally {
+      await agent.dispose();
+    }
+
+    const wireTools = requireWireTools(capturedBody?.tools);
+    expect(wireTools.map((entry) => entry.function.name)).toEqual([
+      "deferred_candidate",
+    ]);
+    const serialized = JSON.stringify(capturedBody);
+    expect(serialized).not.toContain("defer_loading");
+    expect(serialized).not.toContain("tool_search");
+    expect(serialized).not.toContain("additional_tools");
+    expect(serialized).not.toContain("inactive_candidate");
   });
 });
 

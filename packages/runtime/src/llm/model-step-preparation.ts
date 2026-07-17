@@ -1,4 +1,10 @@
-import type { LanguageModel, ModelMessage, ToolChoice, ToolSet } from "ai";
+import {
+  fingerprintTools,
+  type LanguageModel,
+  type ModelMessage,
+  type ToolChoice,
+  type ToolSet,
+} from "ai";
 import {
   type ModelToolCacheFingerprintMetadata,
   noopRuntimeDiagnostics,
@@ -32,15 +38,30 @@ export class ModelToolSelectionError extends TypeError {
   readonly name = "ModelToolSelectionError";
 }
 
+const PREPARED_RESULT_KEYS = new Set(["activeTools", "model", "toolChoice"]);
+const SEMANTIC_TOOL_FIELDS = [
+  "args",
+  "description",
+  "id",
+  "inputExamples",
+  "inputSchema",
+  "providerOptions",
+  "strict",
+  "title",
+  "type",
+] as const;
+const SEMANTIC_TOOL_UNAVAILABLE = Symbol("semantic-tool-unavailable");
+
 export interface ResolveModelStepOptions {
   readonly alwaysActiveTools?: readonly string[];
+  readonly attemptId: string;
   readonly diagnostics?: RuntimeDiagnosticsSink;
   readonly history: readonly ModelMessage[];
   readonly model: LanguageModel;
   readonly prepareModelStep?: PrepareModelStep;
   readonly runtimeStepIndex: number;
   readonly signal: AbortSignal;
-  readonly threadKey: string;
+  readonly threadKey?: string;
   readonly toolChoice?: PreparedModelToolChoice;
   readonly toolOrder?: readonly string[];
   readonly tools?: ToolSet;
@@ -56,6 +77,7 @@ export interface ResolvedModelStepOptions {
 
 export async function resolveModelStepOptions({
   alwaysActiveTools = [],
+  attemptId,
   diagnostics,
   history,
   model,
@@ -67,30 +89,51 @@ export async function resolveModelStepOptions({
   toolOrder = [],
   tools,
 }: ResolveModelStepOptions): Promise<ResolvedModelStepOptions> {
-  const registry = tools ? { ...tools } : undefined;
+  const registry = copyToolRegistry(tools);
   const registryNames = Object.keys(registry ?? {});
   const registrySet = new Set(registryNames);
-  validateToolNames(alwaysActiveTools, "alwaysActiveTools", registrySet);
-  validateToolNames(toolOrder, "toolOrder", registrySet);
+  const alwaysActiveToolSnapshot = snapshotToolNames(
+    alwaysActiveTools,
+    "alwaysActiveTools",
+    registryNames.length
+  );
+  const toolOrderSnapshot = snapshotToolNames(
+    toolOrder,
+    "toolOrder",
+    registryNames.length
+  );
+  validateToolNames(alwaysActiveToolSnapshot, "alwaysActiveTools", registrySet);
+  validateToolNames(toolOrderSnapshot, "toolOrder", registrySet);
 
-  const preparedResult: unknown = prepareModelStep
-    ? await prepareModelStep({
-        history: [...history],
-        runtimeStepIndex,
-        signal,
-        threadKey,
-        tools: Object.freeze({ ...(registry ?? {}) }),
-      })
-    : undefined;
-  assertPrepareModelStepResult(preparedResult);
-  const prepared = preparedResult;
+  let preparedResult: unknown;
+  let selectionDurationMs = 0;
+  if (prepareModelStep) {
+    if (threadKey === undefined) {
+      throw new ModelToolSelectionError(
+        "prepareModelStep requires a runtime threadKey."
+      );
+    }
+    const selectionStarted = performance.now();
+    preparedResult = await prepareModelStep({
+      history: structuredClone([...history]),
+      runtimeStepIndex,
+      signal,
+      threadKey,
+      tools: readonlyToolRegistry(registry),
+    });
+    selectionDurationMs = Math.max(0, performance.now() - selectionStarted);
+  }
+  const prepared = parsePrepareModelStepResult(
+    preparedResult,
+    registryNames.length
+  );
 
   const selectedTools = prepared?.activeTools;
   if (selectedTools !== undefined) {
     validateToolNames(selectedTools, "activeTools", registrySet);
   }
 
-  const alwaysActiveSet = new Set(alwaysActiveTools);
+  const alwaysActiveSet = new Set(alwaysActiveToolSnapshot);
   for (const name of selectedTools ?? []) {
     if (alwaysActiveSet.has(name)) {
       throw new ModelToolSelectionError(
@@ -99,7 +142,10 @@ export async function resolveModelStepOptions({
     }
   }
 
-  const canonicalRegistryOrder = canonicalToolOrder(registryNames, toolOrder);
+  const canonicalRegistryOrder = canonicalToolOrder(
+    registryNames,
+    toolOrderSnapshot
+  );
   const selectedSet = new Set(
     selectedTools ??
       canonicalRegistryOrder.filter((name) => !alwaysActiveSet.has(name))
@@ -108,55 +154,306 @@ export async function resolveModelStepOptions({
     ...canonicalRegistryOrder.filter((name) => alwaysActiveSet.has(name)),
     ...canonicalRegistryOrder.filter((name) => selectedSet.has(name)),
   ];
-  const effectiveToolChoice = prepared?.toolChoice ?? toolChoice;
+  const executableTools = registry
+    ? Object.fromEntries(activeTools.map((name) => [name, registry[name]]))
+    : undefined;
+  const effectiveToolChoice = snapshotToolChoice(
+    prepared?.toolChoice ?? toolChoice
+  ) as PreparedModelToolChoice | undefined;
   validateToolChoice(effectiveToolChoice, registrySet, new Set(activeTools));
+  const resolvedModel = prepared?.model ?? model;
 
   const pendingDiagnostic = reportToolCacheFingerprint(diagnostics, {
     activeTools,
-    alwaysActiveToolCount: alwaysActiveTools.length,
+    activeToolRegistry: executableTools ?? {},
+    alwaysActiveToolCount: alwaysActiveToolSnapshot.length,
+    attemptId,
+    model: resolvedModel,
     registryNames,
     runtimeStepIndex,
+    selectionDurationMs,
   });
   pendingDiagnostic.catch(() => undefined);
 
   return {
-    ...(registry === undefined ? {} : { tools: registry }),
+    ...(executableTools === undefined ? {} : { tools: executableTools }),
     ...(registryNames.length === 0
       ? {}
       : { activeTools, toolOrder: activeTools }),
-    model: prepared?.model ?? model,
+    model: resolvedModel,
     ...(effectiveToolChoice === undefined
       ? {}
       : { toolChoice: effectiveToolChoice }),
   };
 }
 
-function assertPrepareModelStepResult(
-  value: unknown
-): asserts value is PrepareModelStepResult | undefined {
+function parsePrepareModelStepResult(
+  value: unknown,
+  registeredToolCount: number
+): PrepareModelStepResult | undefined {
   if (value === undefined) {
     return;
   }
-  if (!isObjectRecord(value) || Array.isArray(value)) {
+  if (!isPlainRecord(value)) {
     throw new ModelToolSelectionError(
-      "prepareModelStep must return an object or undefined."
+      "prepareModelStep must return a plain object or undefined."
     );
   }
-  if (value.activeTools !== undefined && !Array.isArray(value.activeTools)) {
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== "string" || !PREPARED_RESULT_KEYS.has(key)) {
+      throw new ModelToolSelectionError(
+        `prepareModelStep returned unsupported field ${JSON.stringify(String(key))}.`
+      );
+    }
+  }
+  const activeTools = ownDataProperty(value, "activeTools", "prepareModelStep");
+  const model = ownDataProperty(value, "model", "prepareModelStep");
+  const toolChoice = ownDataProperty(value, "toolChoice", "prepareModelStep");
+  if (activeTools !== undefined && !Array.isArray(activeTools)) {
     throw new ModelToolSelectionError(
       "prepareModelStep activeTools must be an array of tool names."
     );
   }
-  if (
-    value.model !== undefined &&
-    (typeof value.model !== "object" ||
-      value.model === null ||
-      Array.isArray(value.model))
-  ) {
+  const activeToolSnapshot =
+    activeTools === undefined
+      ? undefined
+      : snapshotToolNames(
+          activeTools,
+          "prepareModelStep activeTools",
+          registeredToolCount
+        );
+  if (model !== undefined && !isLanguageModelObject(model)) {
     throw new ModelToolSelectionError(
-      "prepareModelStep model must be a language model object."
+      "prepareModelStep model must implement an AI SDK v2, v3, or v4 language model."
     );
   }
+  return {
+    ...(activeToolSnapshot === undefined
+      ? {}
+      : { activeTools: activeToolSnapshot }),
+    ...(model === undefined ? {} : { model }),
+    ...(toolChoice === undefined
+      ? {}
+      : {
+          toolChoice: snapshotToolChoice(toolChoice) as PreparedModelToolChoice,
+        }),
+  };
+}
+
+function snapshotToolNames(
+  value: unknown,
+  context: string,
+  maximumLength: number
+): readonly string[] {
+  if (!Array.isArray(value)) {
+    throw new ModelToolSelectionError(
+      `${context} must be an array of tool names.`
+    );
+  }
+  const lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
+  if (
+    !(
+      lengthDescriptor &&
+      "value" in lengthDescriptor &&
+      Number.isSafeInteger(lengthDescriptor.value) &&
+      lengthDescriptor.value >= 0 &&
+      lengthDescriptor.value <= maximumLength
+    )
+  ) {
+    throw new ModelToolSelectionError(`${context} has an invalid length.`);
+  }
+  const snapshot: string[] = [];
+  for (let index = 0; index < lengthDescriptor.value; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+    if (!(descriptor && "value" in descriptor)) {
+      throw new ModelToolSelectionError(
+        `${context} must be a dense array of data-property tool names.`
+      );
+    }
+    if (typeof descriptor.value !== "string") {
+      throw new ModelToolSelectionError(
+        `${context} must contain only tool-name strings.`
+      );
+    }
+    snapshot.push(descriptor.value);
+  }
+  return Object.freeze(snapshot);
+}
+
+function snapshotToolChoice(value: unknown): unknown {
+  if (!isPlainRecord(value)) {
+    return value;
+  }
+  const snapshot: Record<string, unknown> = Object.create(null);
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== "string") {
+      throw new ModelToolSelectionError(
+        "toolChoice must contain only named string fields."
+      );
+    }
+    snapshot[key] = ownDataProperty(value, key, "toolChoice");
+  }
+  return Object.freeze(snapshot);
+}
+
+function readonlyToolRegistry(
+  registry: ToolSet | undefined
+): Readonly<ToolSet> {
+  return Object.freeze(
+    Object.fromEntries(
+      Object.keys(registry ?? {}).map((name) => [
+        name,
+        readonlyToolFacade((registry as ToolSet)[name]),
+      ])
+    )
+  );
+}
+
+function readonlyToolFacade(definition: ToolSet[string]): ToolSet[string] {
+  const facade: Record<string, unknown> = Object.create(null);
+  copyEnumerableDataProperties(definition, facade, new WeakMap());
+  return Object.freeze(facade) as ToolSet[string];
+}
+
+function readonlyNestedSnapshot(
+  value: unknown,
+  seen = new WeakMap<object, unknown>()
+): unknown {
+  if (
+    value === null ||
+    (typeof value !== "object" && typeof value !== "function")
+  ) {
+    return value;
+  }
+  const existing = seen.get(value);
+  if (existing !== undefined) {
+    return existing;
+  }
+  if (typeof value === "function") {
+    const blocked = function readonlyToolCallback(): never {
+      throw new ModelToolSelectionError(
+        "prepareModelStep tool facades do not expose callable members."
+      );
+    };
+    seen.set(value, blocked);
+    copyEnumerableDataProperties(value, blocked, seen);
+    return Object.freeze(blocked);
+  }
+  const snapshot: unknown[] | Record<string, unknown> = Array.isArray(value)
+    ? []
+    : Object.create(null);
+  seen.set(value, snapshot);
+  copyEnumerableDataProperties(value, snapshot, seen);
+  return Object.freeze(snapshot);
+}
+
+function copyToolRegistry(tools: ToolSet | undefined): ToolSet | undefined {
+  if (tools === undefined) {
+    return;
+  }
+  const registry: ToolSet = Object.create(null);
+  for (const name of Object.keys(tools)) {
+    const descriptor = Object.getOwnPropertyDescriptor(tools, name);
+    if (!(descriptor && "value" in descriptor)) {
+      throw new ModelToolSelectionError(
+        `tools registry entry ${JSON.stringify(name)} must be a data property.`
+      );
+    }
+    registry[name] = descriptor.value as ToolSet[string];
+  }
+  return registry;
+}
+
+function copyEnumerableDataProperties(
+  source: object,
+  target: object,
+  seen: WeakMap<object, unknown>
+): void {
+  for (const key of Object.keys(source)) {
+    const descriptor = Object.getOwnPropertyDescriptor(source, key);
+    if (!(descriptor && "value" in descriptor)) {
+      continue;
+    }
+    const targetDescriptor = Object.getOwnPropertyDescriptor(target, key);
+    if (targetDescriptor && !targetDescriptor.configurable) {
+      continue;
+    }
+    Object.defineProperty(target, key, {
+      configurable: true,
+      enumerable: true,
+      value: readonlyNestedSnapshot(descriptor.value, seen),
+      writable: true,
+    });
+  }
+}
+
+function isLanguageModelObject(
+  value: unknown
+): value is Exclude<LanguageModel, string> {
+  if (!isObjectRecord(value) || Array.isArray(value)) {
+    return false;
+  }
+  const specificationVersion = dataPropertyInPrototypeChain(
+    value,
+    "specificationVersion"
+  );
+  const provider = propertyDescriptorInPrototypeChain(value, "provider");
+  const modelId = dataPropertyInPrototypeChain(value, "modelId");
+  const supportedUrls = propertyDescriptorInPrototypeChain(
+    value,
+    "supportedUrls"
+  );
+  const doGenerate = dataPropertyInPrototypeChain(value, "doGenerate");
+  const doStream = dataPropertyInPrototypeChain(value, "doStream");
+  return (
+    (specificationVersion === "v2" ||
+      specificationVersion === "v3" ||
+      specificationVersion === "v4") &&
+    propertyCanProvideValue(provider, "string") &&
+    typeof modelId === "string" &&
+    propertyCanProvideValue(supportedUrls) &&
+    typeof doGenerate === "function" &&
+    typeof doStream === "function"
+  );
+}
+
+const MISSING_DATA_PROPERTY = Symbol("missing-data-property");
+
+function propertyDescriptorInPrototypeChain(
+  value: object,
+  property: string
+): PropertyDescriptor | undefined {
+  let current: object | null = value;
+  while (current !== null) {
+    const descriptor = Object.getOwnPropertyDescriptor(current, property);
+    if (descriptor) {
+      return descriptor;
+    }
+    current = Object.getPrototypeOf(current);
+  }
+}
+
+function propertyCanProvideValue(
+  descriptor: PropertyDescriptor | undefined,
+  dataType?: "string"
+): boolean {
+  if (!descriptor) {
+    return false;
+  }
+  if ("value" in descriptor) {
+    return dataType === undefined || typeof descriptor.value === dataType;
+  }
+  return typeof descriptor.get === "function";
+}
+
+function dataPropertyInPrototypeChain(
+  value: object,
+  property: string
+): unknown | typeof MISSING_DATA_PROPERTY {
+  const descriptor = propertyDescriptorInPrototypeChain(value, property);
+  return descriptor && "value" in descriptor
+    ? descriptor.value
+    : MISSING_DATA_PROPERTY;
 }
 
 function canonicalToolOrder(
@@ -187,10 +484,39 @@ function validateToolChoice(
   registry: ReadonlySet<string>,
   activeTools: ReadonlySet<string>
 ): void {
-  if (!(isObjectRecord(toolChoice) && toolChoice.type === "tool")) {
+  if (
+    toolChoice === undefined ||
+    toolChoice === "auto" ||
+    toolChoice === "none"
+  ) {
     return;
   }
-  const name = toolChoice.toolName;
+  if (toolChoice === "required" && activeTools.size === 0) {
+    throw new ModelToolSelectionError(
+      'toolChoice "required" cannot be used without an active tool.'
+    );
+  }
+  if (toolChoice === "required") {
+    return;
+  }
+  if (
+    !isPlainRecord(toolChoice) ||
+    ownProperty(toolChoice, "type") !== "tool"
+  ) {
+    throw new ModelToolSelectionError(
+      'toolChoice must be "auto", "none", "required", or a named tool selection.'
+    );
+  }
+  if (
+    Reflect.ownKeys(toolChoice).some(
+      (key) => typeof key !== "string" || (key !== "type" && key !== "toolName")
+    )
+  ) {
+    throw new ModelToolSelectionError(
+      "named toolChoice may contain only type and toolName."
+    );
+  }
+  const name = ownProperty(toolChoice, "toolName");
   if (typeof name !== "string" || !registry.has(name)) {
     throw new ModelToolSelectionError(
       `toolChoice references unknown tool ${JSON.stringify(name)}.`
@@ -236,32 +562,53 @@ async function reportToolCacheFingerprint(
   diagnostics: RuntimeDiagnosticsSink | undefined,
   input: {
     readonly activeTools: readonly string[];
+    readonly activeToolRegistry: ToolSet;
     readonly alwaysActiveToolCount: number;
+    readonly attemptId: string;
+    readonly model: LanguageModel;
     readonly registryNames: readonly string[];
     readonly runtimeStepIndex: number;
+    readonly selectionDurationMs: number;
   }
 ): Promise<void> {
   if (!diagnostics || diagnostics === noopRuntimeDiagnostics) {
     return;
   }
   try {
+    const activeToolRegistry = diagnosticToolRegistry(input.activeToolRegistry);
     const [
       activeToolsFingerprint,
+      modelIdentity,
       orderedToolNamesFingerprint,
+      semanticFingerprint,
       registryToolNamesFingerprint,
     ] = await Promise.all([
       toolNamesFingerprint([...input.activeTools].sort(compareToolNames)),
+      fingerprintModelIdentity(input.model),
       toolNamesFingerprint(input.activeTools),
+      toolSemanticFingerprint(input.activeTools, activeToolRegistry),
       toolNamesFingerprint([...input.registryNames].sort(compareToolNames)),
     ]);
     const metadata: ModelToolCacheFingerprintMetadata = {
       activeToolCount: input.activeTools.length,
       activeToolsFingerprint,
       alwaysActiveToolCount: input.alwaysActiveToolCount,
+      attemptId: input.attemptId,
+      dynamicDescriptionToolCount: countDynamicDescriptions(
+        input.activeTools,
+        activeToolRegistry
+      ),
+      modelIdentityFingerprint: modelIdentity.fingerprint,
+      modelIdentityFingerprintUnavailable: modelIdentity.unavailable,
       orderedToolNamesFingerprint,
+      orderedToolSemanticFingerprint: semanticFingerprint.fingerprint,
       registeredToolCount: input.registryNames.length,
       registryToolNamesFingerprint,
       runtimeStepIndex: input.runtimeStepIndex,
+      selectionDurationMs: input.selectionDurationMs,
+      semanticFingerprintUnavailableToolCount:
+        semanticFingerprint.unavailableToolCount,
+      toolLoadingStrategy: "eager-active-tools",
     };
     await diagnostics.report({
       code: "model.tool_cache_fingerprint",
@@ -274,8 +621,390 @@ async function reportToolCacheFingerprint(
   }
 }
 
-async function toolNamesFingerprint(names: readonly string[]): Promise<string> {
-  const bytes = new TextEncoder().encode(JSON.stringify(names));
+async function fingerprintModelIdentity(model: LanguageModel): Promise<{
+  readonly fingerprint: string;
+  readonly unavailable: boolean;
+}> {
+  if (typeof model === "string") {
+    return {
+      fingerprint: await jsonFingerprint(["gateway", model]),
+      unavailable: false,
+    };
+  }
+  const specificationVersion = dataPropertyInPrototypeChain(
+    model,
+    "specificationVersion"
+  );
+  const provider = dataPropertyInPrototypeChain(model, "provider");
+  const modelId = dataPropertyInPrototypeChain(model, "modelId");
+  const unavailable = !(
+    (specificationVersion === "v2" ||
+      specificationVersion === "v3" ||
+      specificationVersion === "v4") &&
+    typeof provider === "string" &&
+    typeof modelId === "string"
+  );
+  return {
+    fingerprint: await jsonFingerprint([
+      "model",
+      specificationVersion === MISSING_DATA_PROPERTY
+        ? { status: "unavailable" }
+        : specificationVersion,
+      provider === MISSING_DATA_PROPERTY ? { status: "unavailable" } : provider,
+      modelId === MISSING_DATA_PROPERTY ? { status: "unavailable" } : modelId,
+    ]),
+    unavailable,
+  };
+}
+
+function diagnosticToolRegistry(tools: ToolSet): ToolSet {
+  const snapshot: ToolSet = Object.create(null);
+  for (const name of Object.keys(tools)) {
+    const tool = tools[name];
+    if (!isObjectRecord(tool)) {
+      snapshot[name] = tool;
+      continue;
+    }
+    const definition: Record<PropertyKey, unknown> = Object.create(null);
+    if (!isPlainRecord(tool)) {
+      Object.defineProperty(definition, SEMANTIC_TOOL_UNAVAILABLE, {
+        value: true,
+      });
+    }
+    for (const field of SEMANTIC_TOOL_FIELDS) {
+      const descriptor = Object.getOwnPropertyDescriptor(tool, field);
+      if (descriptor) {
+        Object.defineProperty(definition, field, descriptor);
+      }
+    }
+    snapshot[name] = Object.freeze(definition) as ToolSet[string];
+  }
+  return Object.freeze(snapshot);
+}
+
+async function toolSemanticFingerprint(
+  names: readonly string[],
+  tools: ToolSet
+): Promise<{
+  readonly fingerprint: string;
+  readonly unavailableToolCount: number;
+}> {
+  const entries = await Promise.all(
+    names.map(async (name) => {
+      try {
+        return await semanticToolEntry(name, tools[name]);
+      } catch {
+        return {
+          name,
+          representation: { status: "unavailable" },
+          unavailable: true,
+        };
+      }
+    })
+  );
+  const unavailableToolCount = entries.filter(
+    (entry) => entry.unavailable
+  ).length;
+  const fingerprint = await jsonFingerprint(
+    entries.map(({ name, representation }) => [name, representation])
+  );
+  return { fingerprint, unavailableToolCount };
+}
+
+async function semanticToolEntry(
+  name: string,
+  tool: ToolSet[string] | undefined
+): Promise<{
+  readonly name: string;
+  readonly representation: unknown;
+  readonly unavailable: boolean;
+}> {
+  if (!isObjectRecord(tool)) {
+    return unavailableSemanticToolEntry(name);
+  }
+  if (
+    Object.getOwnPropertyDescriptor(tool, SEMANTIC_TOOL_UNAVAILABLE)?.value ===
+    true
+  ) {
+    return unavailableSemanticToolEntry(name);
+  }
+  const type = safeOwnDataProperty(tool, "type");
+  if (type.status === "accessor") {
+    return unavailableSemanticToolEntry(name);
+  }
+  if (type.status === "data" && type.value === "provider") {
+    return providerSemanticToolEntry(name, tool);
+  }
+  return await functionSemanticToolEntry(name, tool);
+}
+
+function unavailableSemanticToolEntry(name: string, type?: string) {
+  return {
+    name,
+    representation: {
+      status: "unavailable",
+      ...(type === undefined ? {} : { type }),
+    },
+    unavailable: true,
+  } as const;
+}
+
+function providerSemanticToolEntry(
+  name: string,
+  tool: Record<string, unknown>
+) {
+  const id = safeOwnDataProperty(tool, "id");
+  const args = safeOwnDataProperty(tool, "args");
+  const providerOptions = safeOwnDataProperty(tool, "providerOptions");
+  const idValue = dataPropertyValue(id);
+  const argsValue = dataPropertyValue(args);
+  const providerOptionsValue = dataPropertyValue(providerOptions);
+  const unavailable =
+    [id, args, providerOptions].some((field) => field.status === "accessor") ||
+    typeof idValue !== "string" ||
+    !fingerprintValueIsSafe(argsValue) ||
+    !fingerprintValueIsSafe(providerOptionsValue);
+  return {
+    name,
+    representation: unavailable
+      ? { status: "unavailable", type: "provider" }
+      : [
+          "provider",
+          idValue,
+          canonicalFingerprintValue(argsValue),
+          canonicalFingerprintValue(providerOptionsValue),
+        ],
+    unavailable,
+  };
+}
+
+async function functionSemanticToolEntry(
+  name: string,
+  tool: Record<string, unknown>
+) {
+  const description = safeOwnDataProperty(tool, "description");
+  const inputExamples = safeOwnDataProperty(tool, "inputExamples");
+  const inputSchema = safeOwnDataProperty(tool, "inputSchema");
+  const providerOptions = safeOwnDataProperty(tool, "providerOptions");
+  const strict = safeOwnDataProperty(tool, "strict");
+  const title = safeOwnDataProperty(tool, "title");
+  const fields = [
+    description,
+    inputExamples,
+    inputSchema,
+    providerOptions,
+    strict,
+    title,
+  ];
+  if (fields.some((field) => field.status === "accessor")) {
+    return unavailableSemanticToolEntry(name, "function");
+  }
+
+  const descriptionValue = dataPropertyValue(description);
+  const strictValue = dataPropertyValue(strict);
+  const titleValue = dataPropertyValue(title);
+  const scalarMetadataUnavailable = !(
+    (descriptionValue === undefined ||
+      typeof descriptionValue === "string" ||
+      typeof descriptionValue === "function") &&
+    (strictValue === undefined || typeof strictValue === "boolean") &&
+    (titleValue === undefined || typeof titleValue === "string")
+  );
+  const inputExamplesValue = dataPropertyValue(inputExamples);
+  const providerOptionsValue = dataPropertyValue(providerOptions);
+  const metadataUnavailable =
+    scalarMetadataUnavailable ||
+    !fingerprintValueIsSafe(inputExamplesValue) ||
+    !fingerprintValueIsSafe(providerOptionsValue);
+  const canonicalInputExamples = metadataUnavailable
+    ? null
+    : canonicalFingerprintValue(inputExamplesValue);
+  const canonicalProviderOptions = metadataUnavailable
+    ? null
+    : canonicalFingerprintValue(providerOptionsValue);
+
+  let definitionFingerprint: string | undefined;
+  const schemaValue = dataPropertyValue(inputSchema);
+  if (!scalarMetadataUnavailable) {
+    try {
+      const fingerprintable = Object.freeze({
+        description: descriptionValue,
+        inputSchema: schemaValue,
+        title: titleValue,
+      }) as ToolSet[string];
+      const result = await fingerprintTools({ [name]: fingerprintable });
+      definitionFingerprint = Object.hasOwn(result, name)
+        ? result[name]
+        : undefined;
+    } catch {
+      definitionFingerprint = undefined;
+    }
+  }
+  const unavailable = definitionFingerprint === undefined;
+  return {
+    name,
+    representation: metadataUnavailable
+      ? { status: "unavailable", type: "function" }
+      : [
+          "function",
+          definitionFingerprint === undefined
+            ? { status: "unavailable" }
+            : { fingerprint: definitionFingerprint, status: "available" },
+          canonicalInputExamples,
+          canonicalProviderOptions,
+          typeof strictValue === "boolean" ? strictValue : null,
+        ],
+    unavailable: unavailable || metadataUnavailable,
+  };
+}
+
+type SafeDataProperty =
+  | { readonly status: "accessor" }
+  | { readonly status: "data"; readonly value: unknown }
+  | { readonly status: "missing" };
+
+function safeOwnDataProperty(
+  value: Record<string, unknown>,
+  property: string
+): SafeDataProperty {
+  const descriptor = Object.getOwnPropertyDescriptor(value, property);
+  if (!descriptor) {
+    return { status: "missing" };
+  }
+  return "value" in descriptor
+    ? { status: "data", value: descriptor.value }
+    : { status: "accessor" };
+}
+
+function dataPropertyValue(property: SafeDataProperty): unknown {
+  return property.status === "data" ? property.value : undefined;
+}
+
+function fingerprintValueIsSafe(
+  value: unknown,
+  seen = new WeakSet<object>()
+): boolean {
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value === "string" ||
+    typeof value === "boolean" ||
+    typeof value === "number" ||
+    typeof value === "bigint"
+  ) {
+    return true;
+  }
+  if (typeof value !== "object") {
+    return false;
+  }
+  if (seen.has(value)) {
+    return true;
+  }
+  if (!(Array.isArray(value) || isPlainRecord(value))) {
+    return false;
+  }
+  seen.add(value);
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== "string") {
+      return false;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (
+      !(
+        descriptor &&
+        "value" in descriptor &&
+        fingerprintValueIsSafe(descriptor.value, seen)
+      )
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function countDynamicDescriptions(
+  names: readonly string[],
+  tools: ToolSet
+): number {
+  return names.filter((name) => {
+    const tool = tools[name];
+    if (!isObjectRecord(tool)) {
+      return false;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(tool, "description");
+    return descriptor !== undefined && "value" in descriptor
+      ? typeof descriptor.value === "function"
+      : false;
+  }).length;
+}
+
+function canonicalFingerprintValue(
+  value: unknown,
+  ancestors = new WeakSet<object>()
+): unknown {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+  if (typeof value === "number") {
+    if (Number.isNaN(value)) {
+      return { type: "number", value: "NaN" };
+    }
+    if (value === Number.POSITIVE_INFINITY) {
+      return { type: "number", value: "+Infinity" };
+    }
+    if (value === Number.NEGATIVE_INFINITY) {
+      return { type: "number", value: "-Infinity" };
+    }
+    if (Object.is(value, -0)) {
+      return { type: "number", value: "-0" };
+    }
+    return value;
+  }
+  if (value === undefined) {
+    return { type: "undefined" };
+  }
+  if (typeof value === "bigint") {
+    return { type: "bigint", value: value.toString() };
+  }
+  if (typeof value !== "object") {
+    return { type: typeof value };
+  }
+  if (ancestors.has(value)) {
+    return { type: "circular" };
+  }
+  ancestors.add(value);
+  const entries = Object.keys(value)
+    .sort(compareToolNames)
+    .map((key) => {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      return [
+        key,
+        descriptor && "value" in descriptor
+          ? canonicalFingerprintValue(descriptor.value, ancestors)
+          : { type: "accessor" },
+      ];
+    });
+  const canonical = Array.isArray(value)
+    ? {
+        entries,
+        length: Object.getOwnPropertyDescriptor(value, "length")?.value ?? null,
+        type: "array",
+      }
+    : entries;
+  ancestors.delete(value);
+  return canonical;
+}
+
+function toolNamesFingerprint(names: readonly string[]): Promise<string> {
+  return jsonFingerprint(names);
+}
+
+async function jsonFingerprint(value: unknown): Promise<string> {
+  const bytes = new TextEncoder().encode(JSON.stringify(value));
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return `sha256:${Array.from(new Uint8Array(digest), (byte) =>
     byte.toString(16).padStart(2, "0")
@@ -284,4 +1013,36 @@ async function toolNamesFingerprint(names: readonly string[]): Promise<string> {
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object";
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (!isObjectRecord(value) || Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function ownProperty(
+  value: Record<string, unknown>,
+  property: string
+): unknown {
+  return Object.hasOwn(value, property) ? value[property] : undefined;
+}
+
+function ownDataProperty(
+  value: Record<string, unknown>,
+  property: string,
+  context: string
+): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(value, property);
+  if (!descriptor) {
+    return;
+  }
+  if (!("value" in descriptor)) {
+    throw new ModelToolSelectionError(
+      `${context} field ${JSON.stringify(property)} must be a data property.`
+    );
+  }
+  return descriptor.value;
 }

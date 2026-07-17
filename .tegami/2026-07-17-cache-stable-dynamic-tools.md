@@ -9,20 +9,37 @@ Add a PSS-owned, zero-based `prepareModelStep` callback with logical indices
 that survive outer-loop overflow retries and durable resume. Support AI SDK 7
 `toolOrder`, fixed always-active prefixes, deterministic dynamic suffixes, and
 fail-closed validation for duplicate, unknown, overlapping, and inactive named
-tool selections.
+tool selections. Snapshot configured and callback-returned tool-name arrays
+through bounded own data descriptors without invoking custom iterators or index
+getters.
 
-Emit opt-in metadata-only tool-name cache fingerprints through host diagnostics.
-The diagnostic contains counts, hashes, and the logical step index, never raw
-prompts, tool inputs, tool definitions, or thread keys. Automatic-compaction
-summary calls remain outside model-step selection.
+Emit opt-in metadata-only name and semantic cache fingerprints through host
+diagnostics. The diagnostic contains bounded counts, hashes, duration, an
+attempt ID, and the logical step index, never raw prompts, tool inputs, tool
+definitions, or thread keys. Automatic-compaction summary calls remain outside
+model-step selection.
 
-Add a reproducible OpenAI-compatible live-provider benchmark for stable tool
-order and changed active sets. Its checked-in evidence records only timing and
-numeric usage metadata, explicitly separating positive, zero-only, absent, and
-unavailable cache reporting.
+Add a source-hashed OpenAI-compatible live-provider benchmark for stable order,
+active-set reduction, and an equal-byte membership swap. Seeded alternating
+AB/BA trials isolate every arm with its own warmup/canary and audit response
+model, output compliance, input parity, cache-read/cache-write telemetry, and
+warmup prerequisites independently. Require a sanitized `finish_reason=stop`
+and exact trimmed `OK` from exactly one choice, and fail closed on unsafe
+token-aggregate overflow. The
+checked-in result and dated benchmark README findings are authoritative only
+when schema, campaign topology, and
+source-hash verification pass; no raw response content, provider payload, or
+credential is retained.
 
-In ten paired trials, MiniMax reported a 25.90 percentage-point median
-read/input advantage for stable versus reversed tool order, while Mistral showed
-no ordering effect and Qwen exposed no cache telemetry. Treat the result as
-provider-specific observational evidence; the recorded fixed arm order remains
-a time-drift limitation.
+Keep the generic eager selector distinct from provider-native loading. Official
+AI SDK OpenAI Responses and Anthropic adapters expose their own native tool
+search/defer lowering, while `@ai-sdk/openai-compatible` and the eager
+FreeRouter Chat Completions benchmark make no such preservation guarantee. Pi's
+Kimi work is a direct-provider-only system-message compatibility mode, not a
+router capability. Gate any native follow-up by adapter, provider, model, and
+version; verify it with a wire canary and fall back to eager selection when the
+tuple is unknown or the canary fails.
+The canary must pin and inspect an explicit approval policy because the OpenAI
+API and current AI SDK OpenAI adapter have different omitted-value behavior.
+Treat cache-write telemetry as a separate required signal for GPT-5.6+
+economics; the generic compatible adapter does not normalize that field.

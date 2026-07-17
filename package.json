@@ -18,8 +18,11 @@
     "dev:tui": "tsx --conditions=@minpeter/pss-source apps/coding-agent/src/tui.ts",
     "build": "turbo run build",
     "benchmark:cache-stable-tools": "tsx scripts/benchmark-cache-stable-tools.mts",
+    "verify:cache-stable-tools": "node scripts/cache-stable-tools-independent-verifier.mjs",
+    "test:cache-stable-tools-evidence": "vitest run scripts/cache-stable-tools-evidence.test.mjs",
+    "test:cache-stable-tools-verifier": "node --test scripts/cache-stable-tools-independent-verifier.adversarial.mjs",
     "typecheck": "turbo run typecheck && tsc -p tsconfig.json --noEmit",
-    "test": "turbo run test && vitest run scripts/*.test.mjs",
+    "test": "turbo run test && vitest run scripts/*.test.mjs && pnpm test:cache-stable-tools-verifier",
     "inspect:runtime-storage": "tsx packages/runtime/scripts/inspect-storage.ts",
     "stress:runtime-storage": "pnpm --filter @minpeter/pss-runtime test:storage-stress",
     "stress:runtime-storage:extreme": "pnpm --filter @minpeter/pss-runtime test:storage-stress:extreme",
@@ -34,7 +37,7 @@
     "repo:affected": "turbo query affected"
   },
   "devDependencies": {
-    "@ai-sdk/openai-compatible": "3.0.2",
+    "@ai-sdk/openai-compatible": "3.0.11",
     "@biomejs/biome": "2.5.1",
     "@minpeter/pss-coding-agent": "workspace:*",
     "@minpeter/pss-runtime": "workspace:*",

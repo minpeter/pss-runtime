@@ -1,15 +1,31 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = "https://freerouter.minpeter.workers.dev/v1";
 const DEFAULT_MODELS = [
   "minimaxai/minimax-m2.7",
+  "minimaxai/minimax-m3",
   "mistralai/ministral-14b-latest",
   "qwen/qwen2.5-7b-instruct",
+  "zai-org/glm-4.7",
 ] as const;
 const DEFAULT_OUTPUT = "benchmarks/cache-stable-tools/latest-freerouter.json";
+const IMPLEMENTATION_SOURCE_PATHS = [
+  "package.json",
+  "packages/runtime/package.json",
+  "packages/runtime/src/llm/llm.ts",
+  "packages/runtime/src/llm/model-step-preparation.ts",
+  "packages/runtime/src/plugins/diagnostics.ts",
+  "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
+  "scripts/cache-stable-tools-evidence.test.mjs",
+  "scripts/cache-stable-tools-independent-verifier.adversarial.mjs",
+  "scripts/cache-stable-tools-independent-verifier.mjs",
+  "scripts/cache-stable-tools-wire.test.mjs",
+] as const;
 const FIXED_TOOL_NAMES = [
   "runtime_status",
   "read_project_file",
@@ -22,9 +38,30 @@ const DYNAMIC_TOOL_NAMES = [
   "query_session_memory",
   "query_dependency_docs",
 ] as const;
+const MEMBERSHIP_REPLACEMENT_TOOL_NAME = "query_archive_notes";
 const ALL_TOOL_NAMES = [...FIXED_TOOL_NAMES, ...DYNAMIC_TOOL_NAMES];
 const SAFE_ERROR_CODE_PATTERN = /^[\w.-]{1,80}$/u;
-const TRAILING_SLASH_PATTERN = /\/$/u;
+const SAFE_MODEL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,199}$/u;
+const SAFE_SEED_PATTERN = /^[\w.-]{1,80}$/u;
+const TRAILING_SLASH_PATTERN = /\/+$/u;
+const BEARER_PATTERN = /Bearer\s/iu;
+const ACCEPTED_ZERO_TOOL_FINISH_REASONS = ["stop"] as const;
+const FINISH_REASON_STATUSES = [
+  "accepted-stop",
+  "invalid",
+  "missing",
+  "rejected-content-filter",
+  "rejected-function-call",
+  "rejected-length",
+  "rejected-tool-calls",
+] as const;
+const MAX_MODELS = 20;
+const MAX_OUTPUT_TOKENS = 256;
+const MAX_PREFIX_LINES = 5000;
+const MAX_SETTLE_MS = 60_000;
+const MAX_TIMEOUT_MS = 600_000;
+const MAX_TRIALS = 100;
+const MIN_TIMEOUT_MS = 1000;
 
 type CacheReporting =
   | "not-reported"
@@ -32,18 +69,30 @@ type CacheReporting =
   | "reported-zero-only"
   | "unavailable";
 type Phase = "measure" | "warmup";
-type Scenario = "active-set-change" | "same-set-order";
+type FinishReasonStatus = (typeof FINISH_REASON_STATUSES)[number];
+type ArmPosition = "first" | "second";
+type PairOrder = "changed-first" | "control-first";
+type Scenario =
+  | "active-set-change"
+  | "membership-only-change"
+  | "same-set-order";
 type Variant =
   | "changed-active-set"
+  | "changed-membership"
   | "reversed-order"
   | "stable-order"
-  | "unchanged-active-set";
+  | "unchanged-active-set"
+  | "unchanged-membership";
 
 interface CliOptions {
   readonly baseUrl: string;
+  readonly campaignId: string | null;
   readonly models: readonly string[];
   readonly output: string;
   readonly prefixLines: number;
+  readonly preflightModels: boolean;
+  readonly scenarios: readonly ScenarioDefinition[];
+  readonly seed: string;
   readonly settleMs: number;
   readonly timeoutMs: number;
   readonly trials: number;
@@ -58,20 +107,45 @@ interface NumericUsage {
   readonly inputTokens: number | null;
   readonly outputTokens: number | null;
   readonly totalTokens: number | null;
-  readonly usageNumericFields: Readonly<Record<string, number>>;
+  readonly usageFieldAudit: {
+    readonly cacheRead: UsageFieldStatus;
+    readonly cacheWrite: UsageFieldStatus;
+    readonly input: UsageFieldStatus;
+    readonly output: UsageFieldStatus;
+    readonly total: UsageFieldStatus;
+  };
 }
 
+type UsageFieldStatus = "absent" | "conflict" | "invalid" | "valid";
+
 interface RequestResult extends NumericUsage {
+  readonly armPosition: ArmPosition;
+  readonly cacheTelemetryEligible: boolean;
+  readonly completedAt: string;
   readonly errorCode: string | null;
   readonly httpStatus: number | null;
+  readonly httpSuccess: boolean;
+  readonly isolationCanarySha256: string;
   readonly latencyMs: number;
+  readonly outputWasExactOk: boolean | null;
+  readonly pairOrder: PairOrder;
   readonly phase: Phase;
+  readonly requestBodyBytes: number;
   readonly requestBodySha256: string;
+  readonly requestSequence: number;
+  readonly responseFinishReasonStatuses: readonly FinishReasonStatus[] | null;
+  readonly responseIdSha256: string | null;
+  readonly responseModel: string | null;
+  readonly responseModelMatchesRequested: boolean | null;
+  readonly responseToolCallCount: number | null;
   readonly scenario: Scenario;
+  readonly startedAt: string;
   readonly success: boolean;
+  readonly toolsArrayBytes: number;
   readonly toolsArraySha256: string;
   readonly trial: number;
   readonly variant: Variant;
+  readonly warmupPrerequisitePassed: boolean | null;
 }
 
 interface ScenarioArm {
@@ -87,7 +161,7 @@ interface ScenarioDefinition {
   readonly warmupTools: readonly string[];
 }
 
-const SCENARIOS: readonly ScenarioDefinition[] = [
+const CORE_SCENARIOS: readonly ScenarioDefinition[] = [
   {
     name: "same-set-order",
     warmupTools: ALL_TOOL_NAMES,
@@ -120,6 +194,81 @@ const SCENARIOS: readonly ScenarioDefinition[] = [
   },
 ];
 
+const MEMBERSHIP_SCENARIO: ScenarioDefinition = {
+  arms: [
+    { variant: "unchanged-membership", measuredTools: ALL_TOOL_NAMES },
+    {
+      variant: "changed-membership",
+      measuredTools: ALL_TOOL_NAMES.map((name) =>
+        name === DYNAMIC_TOOL_NAMES[1] ? MEMBERSHIP_REPLACEMENT_TOOL_NAME : name
+      ),
+    },
+  ],
+  changedVariant: "changed-membership",
+  controlVariant: "unchanged-membership",
+  name: "membership-only-change",
+  warmupTools: ALL_TOOL_NAMES,
+};
+
+const ALL_SCENARIOS = [...CORE_SCENARIOS, MEMBERSHIP_SCENARIO] as const;
+const ARM_EXECUTION_PHASES = ["warmup", "settle", "measure"] as const;
+const PAIR_ORDERS = ["control-first", "changed-first"] as const;
+const EVIDENCE_CAMPAIGN = Object.freeze({
+  baseUrl: DEFAULT_BASE_URL,
+  id: "pr208-cache-v3-20260717",
+  minimumStratumCoverage: 0.75,
+  models: DEFAULT_MODELS,
+  prefixLines: 700,
+  scenarios: ALL_SCENARIOS,
+  seed: "pr208-cache-v3-20260717",
+  settleMs: 1500,
+  timeoutMs: 120_000,
+  trials: 8,
+});
+const EVIDENCE_CAMPAIGN_CONTROLLED_FLAGS = new Set([
+  "--base-url",
+  "--models",
+  "--prefix-lines",
+  "--scenario-set",
+  "--seed",
+  "--settle-ms",
+  "--skip-model-preflight",
+  "--timeout-ms",
+  "--trials",
+]);
+
+function benchmarkRequestTopology({
+  models,
+  scenarios,
+  trials,
+}: Pick<CliOptions, "models" | "scenarios" | "trials">) {
+  const phasesPerArm = 2;
+  const armsPerTrial = scenarios.reduce(
+    (sum, scenario) => sum + scenario.arms.length,
+    0
+  );
+  const armsPerModel = trials * armsPerTrial;
+  const requestsPerModel = armsPerModel * phasesPerArm;
+  return Object.freeze({
+    armsPerModel,
+    modelCount: models.length,
+    orderAssignmentCount: models.length * trials * scenarios.length,
+    pairOrderCount: 2,
+    phasesPerArm,
+    requestsPerModel,
+    requestsPerScenario: Object.fromEntries(
+      scenarios.map((scenario) => [
+        scenario.name,
+        trials * scenario.arms.length * phasesPerArm,
+      ])
+    ),
+    scenarioCount: scenarios.length,
+    totalRequests: models.length * requestsPerModel,
+  });
+}
+
+const EVIDENCE_CAMPAIGN_TOPOLOGY = benchmarkRequestTopology(EVIDENCE_CAMPAIGN);
+
 const CACHE_READ_PATHS = [
   "prompt_tokens_details.cached_tokens",
   "input_tokens_details.cached_tokens",
@@ -130,6 +279,8 @@ const CACHE_READ_PATHS = [
   "cached_input_tokens",
 ] as const;
 const CACHE_WRITE_PATHS = [
+  "prompt_tokens_details.cache_write_tokens",
+  "input_tokens_details.cache_write_tokens",
   "prompt_tokens_details.cache_creation_tokens",
   "input_tokens_details.cache_creation_tokens",
   "cache_creation_input_tokens",
@@ -147,10 +298,14 @@ Required environment:
   CACHE_BENCH_API_KEY       bearer token (never written to results)
 
 Options:
+  --evidence-campaign      use the verifier-pinned 5-model/3-scenario preset
   --base-url <url>          default: ${DEFAULT_BASE_URL}
   --models <id,id,...>      default: ${DEFAULT_MODELS.join(",")}
   --output <path>           default: ${DEFAULT_OUTPUT}
   --prefix-lines <count>    default: 700
+  --scenario-set <name>    core (default), membership-only, or all
+  --seed <safe-text>        default: a generated UUID (recorded in results)
+  --skip-model-preflight    skip authenticated /models availability check
   --settle-ms <ms>          default: 1500
   --timeout-ms <ms>         default: 120000
   --trials <count>          default: 10
@@ -166,6 +321,21 @@ function parsePositiveInteger(value: string | undefined, flag: string): number {
   return parsed;
 }
 
+function parseBoundedPositiveInteger(
+  value: string | undefined,
+  flag: string,
+  maximum: number,
+  minimum = 1
+): number {
+  const parsed = parsePositiveInteger(value, flag);
+  if (parsed < minimum || parsed > maximum) {
+    throw new RangeError(
+      `${flag} must be between ${minimum} and ${maximum}, inclusive.`
+    );
+  }
+  return parsed;
+}
+
 function takeFlagValue(args: string[], index: number, flag: string): string {
   const value = args[index + 1];
   if (!(value && !value.startsWith("--"))) {
@@ -174,14 +344,26 @@ function takeFlagValue(args: string[], index: number, flag: string): string {
   return value;
 }
 
+type MutableCliOptions = {
+  -readonly [Key in keyof CliOptions]: CliOptions[Key];
+};
+
 function parseOptions(args: string[]): CliOptions {
-  let baseUrl = DEFAULT_BASE_URL;
-  let models: readonly string[] = DEFAULT_MODELS;
-  let output = DEFAULT_OUTPUT;
-  let prefixLines = 700;
-  let settleMs = 1500;
-  let timeoutMs = 120_000;
-  let trials = 10;
+  const options: MutableCliOptions = {
+    baseUrl: DEFAULT_BASE_URL,
+    campaignId: null,
+    models: DEFAULT_MODELS,
+    output: DEFAULT_OUTPUT,
+    preflightModels: true,
+    prefixLines: 700,
+    scenarios: CORE_SCENARIOS,
+    seed: randomUUID(),
+    settleMs: 1500,
+    timeoutMs: 120_000,
+    trials: 10,
+  };
+  let evidenceCampaignRequested = false;
+  const suppliedFlags = new Set<string>();
 
   for (let index = 0; index < args.length; index += 1) {
     const flag = args[index];
@@ -191,42 +373,45 @@ function parseOptions(args: string[]): CliOptions {
     if (flag === "--help" || flag === "-h") {
       usage();
     }
+    if (flag === "--evidence-campaign") {
+      evidenceCampaignRequested = true;
+      continue;
+    }
+    if (flag === "--skip-model-preflight") {
+      options.preflightModels = false;
+      suppliedFlags.add(flag);
+      continue;
+    }
     const value = takeFlagValue(args, index, flag ?? "option");
     index += 1;
-    switch (flag) {
-      case "--base-url":
-        baseUrl = value;
-        break;
-      case "--models":
-        models = value
-          .split(",")
-          .map((model) => model.trim())
-          .filter(Boolean);
-        if (models.length === 0) {
-          throw new TypeError("--models must contain at least one model id.");
-        }
-        break;
-      case "--output":
-        output = value;
-        break;
-      case "--prefix-lines":
-        prefixLines = parsePositiveInteger(value, flag);
-        break;
-      case "--settle-ms":
-        settleMs = parsePositiveInteger(value, flag);
-        break;
-      case "--timeout-ms":
-        timeoutMs = parsePositiveInteger(value, flag);
-        break;
-      case "--trials":
-        trials = parsePositiveInteger(value, flag);
-        break;
-      default:
-        throw new TypeError(`Unknown option: ${flag}`);
+    applyOption(options, flag, value);
+    if (flag) {
+      suppliedFlags.add(flag);
     }
   }
 
-  const parsedBaseUrl = new URL(baseUrl);
+  if (evidenceCampaignRequested) {
+    const conflictingFlags = [...suppliedFlags].filter((flag) =>
+      EVIDENCE_CAMPAIGN_CONTROLLED_FLAGS.has(flag)
+    );
+    if (conflictingFlags.length > 0) {
+      throw new TypeError(
+        `--evidence-campaign cannot be combined with ${conflictingFlags.join(", ")}.`
+      );
+    }
+    options.baseUrl = EVIDENCE_CAMPAIGN.baseUrl;
+    options.campaignId = EVIDENCE_CAMPAIGN.id;
+    options.models = EVIDENCE_CAMPAIGN.models;
+    options.prefixLines = EVIDENCE_CAMPAIGN.prefixLines;
+    options.preflightModels = true;
+    options.scenarios = EVIDENCE_CAMPAIGN.scenarios;
+    options.seed = EVIDENCE_CAMPAIGN.seed;
+    options.settleMs = EVIDENCE_CAMPAIGN.settleMs;
+    options.timeoutMs = EVIDENCE_CAMPAIGN.timeoutMs;
+    options.trials = EVIDENCE_CAMPAIGN.trials;
+  }
+
+  const parsedBaseUrl = new URL(options.baseUrl);
   if (parsedBaseUrl.protocol !== "https:") {
     throw new TypeError("--base-url must use HTTPS.");
   }
@@ -242,21 +427,113 @@ function parseOptions(args: string[]): CliOptions {
   }
 
   return {
-    baseUrl: baseUrl.replace(TRAILING_SLASH_PATTERN, ""),
-    models,
-    output,
-    prefixLines,
-    settleMs,
-    timeoutMs,
-    trials,
+    ...options,
+    baseUrl: options.baseUrl.replace(TRAILING_SLASH_PATTERN, ""),
   };
+}
+
+function applyOption(
+  options: MutableCliOptions,
+  flag: string | undefined,
+  value: string
+): void {
+  switch (flag) {
+    case "--base-url":
+      options.baseUrl = value;
+      return;
+    case "--models":
+      options.models = parseModels(value);
+      return;
+    case "--output":
+      options.output = value;
+      return;
+    case "--prefix-lines":
+      options.prefixLines = parseBoundedPositiveInteger(
+        value,
+        flag,
+        MAX_PREFIX_LINES
+      );
+      return;
+    case "--seed":
+      options.seed = parseSeed(value);
+      return;
+    case "--scenario-set":
+      options.scenarios = parseScenarioSet(value);
+      return;
+    case "--settle-ms":
+      options.settleMs = parseBoundedPositiveInteger(
+        value,
+        flag,
+        MAX_SETTLE_MS
+      );
+      return;
+    case "--timeout-ms":
+      options.timeoutMs = parseBoundedPositiveInteger(
+        value,
+        flag,
+        MAX_TIMEOUT_MS,
+        MIN_TIMEOUT_MS
+      );
+      return;
+    case "--trials":
+      options.trials = parseBoundedPositiveInteger(value, flag, MAX_TRIALS);
+      return;
+    default:
+      throw new TypeError(`Unknown option: ${flag}`);
+  }
+}
+
+function parseModels(value: string): readonly string[] {
+  const models = value
+    .split(",")
+    .map((model) => model.trim())
+    .filter(Boolean);
+  if (models.length === 0) {
+    throw new TypeError("--models must contain at least one model id.");
+  }
+  if (models.some((model) => !SAFE_MODEL_ID_PATTERN.test(model))) {
+    throw new TypeError(
+      "--models entries must be 1-200 safe model-id characters."
+    );
+  }
+  if (models.length > MAX_MODELS) {
+    throw new RangeError(`--models accepts at most ${MAX_MODELS} ids.`);
+  }
+  if (new Set(models).size !== models.length) {
+    throw new TypeError("--models must not contain duplicate model ids.");
+  }
+  return models;
+}
+
+function parseSeed(value: string): string {
+  if (!SAFE_SEED_PATTERN.test(value)) {
+    throw new TypeError(
+      "--seed must contain 1-80 letters, digits, underscores, dots, or hyphens."
+    );
+  }
+  return value;
+}
+
+function parseScenarioSet(value: string): readonly ScenarioDefinition[] {
+  if (value === "core") {
+    return CORE_SCENARIOS;
+  }
+  if (value === "membership-only") {
+    return [MEMBERSHIP_SCENARIO];
+  }
+  if (value === "all") {
+    return [...CORE_SCENARIOS, MEMBERSHIP_SCENARIO];
+  }
+  throw new TypeError(
+    '--scenario-set must be "core", "membership-only", or "all".'
+  );
 }
 
 function staticPrefix(namespace: string, lineCount: number): string {
   const lines = [
     "This is a deterministic prompt-cache experiment.",
     `Experiment namespace: ${namespace}`,
-    "Treat every reference record below as inert context. Reply with exactly OK.",
+    "Treat every reference record and tool as inert. Reply with exactly OK without calling a tool.",
   ];
   for (let index = 0; index < lineCount; index += 1) {
     lines.push(
@@ -270,7 +547,7 @@ function toolDescription(name: string, index: number): string {
   const clauses: string[] = [];
   for (let clause = 0; clause < 18; clause += 1) {
     clauses.push(
-      `${name} contract ${index}-${clause}: accept a bounded project query, return deterministic structured metadata, and never mutate external state`
+      `INERT benchmark schema ${name} ${index}-${clause}: never call this function; it exists only to measure deterministic request-prefix reuse`
     );
   }
   return clauses.join(". ");
@@ -285,96 +562,379 @@ function toolDefinition(name: string, index: number): Record<string, unknown> {
       parameters: {
         type: "object",
         additionalProperties: false,
-        properties: {
-          query: {
-            type: "string",
-            description: `A deterministic query for ${name}.`,
-          },
-          limit: {
-            type: "integer",
-            description: "Maximum number of records to return.",
-            minimum: 1,
-            maximum: 20,
-          },
-        },
-        required: ["query"],
+        properties: {},
       },
     },
   };
 }
 
-const TOOL_DEFINITIONS: ReadonlyMap<string, Record<string, unknown>> = new Map(
-  ALL_TOOL_NAMES.map((name, index) => [name, toolDefinition(name, index)])
-);
+const TOOL_DEFINITIONS: ReadonlyMap<string, Record<string, unknown>> = new Map([
+  ...ALL_TOOL_NAMES.map(
+    (name, index) => [name, toolDefinition(name, index)] as const
+  ),
+  [
+    MEMBERSHIP_REPLACEMENT_TOOL_NAME,
+    toolDefinition(
+      MEMBERSHIP_REPLACEMENT_TOOL_NAME,
+      ALL_TOOL_NAMES.indexOf(DYNAMIC_TOOL_NAMES[1])
+    ),
+  ],
+]);
 
-function orderedTools(
-  names: readonly string[]
-): readonly Record<string, unknown>[] {
-  return names.map((name) => {
-    const definition = TOOL_DEFINITIONS.get(name);
-    if (!definition) {
-      throw new TypeError(`Unknown benchmark tool: ${name}`);
-    }
-    return definition;
-  });
+function isolationCanaryDefinition(
+  isolationToken: string
+): Record<string, unknown> {
+  return {
+    type: "function",
+    function: {
+      name: `benchmark_canary_${isolationToken}`,
+      description: `INERT cache-isolation canary ${isolationToken}: never call this function; its fixed-shape value separates benchmark arms before every other tool definition.`,
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {},
+      },
+    },
+  };
 }
 
-function sha256(value: string): string {
+function orderedTools(
+  names: readonly string[],
+  isolationToken: string
+): readonly Record<string, unknown>[] {
+  return [
+    isolationCanaryDefinition(isolationToken),
+    ...names.map((name) => {
+      const definition = TOOL_DEFINITIONS.get(name);
+      if (!definition) {
+        throw new TypeError(`Unknown benchmark tool: ${name}`);
+      }
+      return definition;
+    }),
+  ];
+}
+
+function sha256(value: string | Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function valueAtPath(input: unknown, path: string): unknown {
+function isolationTokenFor({
+  model,
+  runId,
+  scenario,
+  trial,
+  variant,
+}: {
+  readonly model: string;
+  readonly runId: string;
+  readonly scenario: Scenario;
+  readonly trial: number;
+  readonly variant: Variant;
+}): string {
+  return sha256(`${runId}\0${model}\0${scenario}\0${variant}\0${trial}`).slice(
+    0,
+    24
+  );
+}
+
+function benchmarkRequestArtifacts({
+  isolationToken,
+  model,
+  namespace,
+  prefixLines,
+  toolNames,
+}: {
+  readonly isolationToken: string;
+  readonly model: string;
+  readonly namespace: string;
+  readonly prefixLines: number;
+  readonly toolNames: readonly string[];
+}) {
+  const tools = orderedTools(toolNames, isolationToken);
+  const toolsJson = JSON.stringify(tools);
+  const requestBody = JSON.stringify({
+    model,
+    messages: [
+      {
+        role: "system",
+        content: staticPrefix(namespace, prefixLines),
+      },
+      {
+        role: "user",
+        content: "Reply with exactly OK and do not call a tool.",
+      },
+    ],
+    tools,
+    // Tiny limits are too small for reasoning-capable routes that spend part
+    // of the completion budget before emitting the requested two-token text.
+    // Keep the response bounded while allowing a normal `stop` finish.
+    max_tokens: MAX_OUTPUT_TOKENS,
+    stream: false,
+  });
+  return Object.freeze({
+    isolationCanarySha256: sha256(JSON.stringify(tools[0])),
+    requestBody,
+    requestBodyBytes: Buffer.byteLength(requestBody),
+    requestBodySha256: sha256(requestBody),
+    toolsArrayBytes: Buffer.byteLength(toolsJson),
+    toolsArraySha256: sha256(toolsJson),
+  });
+}
+
+async function implementationSourceManifest(): Promise<
+  Record<(typeof IMPLEMENTATION_SOURCE_PATHS)[number], string>
+> {
+  const repositoryRoot = new URL("../", import.meta.url);
+  return Object.fromEntries(
+    await Promise.all(
+      IMPLEMENTATION_SOURCE_PATHS.map(async (path) => [
+        path,
+        sha256(await readFile(new URL(path, repositoryRoot))),
+      ])
+    )
+  ) as Record<(typeof IMPLEMENTATION_SOURCE_PATHS)[number], string>;
+}
+
+interface BenchmarkSourceSnapshot {
+  readonly benchmarkSourceSha256: string;
+  readonly implementationSourcesSha256: Record<string, string>;
+}
+
+async function benchmarkSourceSnapshot(): Promise<BenchmarkSourceSnapshot> {
+  return {
+    benchmarkSourceSha256: sha256(
+      await readFile(fileURLToPath(import.meta.url))
+    ),
+    implementationSourcesSha256: await implementationSourceManifest(),
+  };
+}
+
+function sourceSnapshotsMatch(
+  initial: BenchmarkSourceSnapshot,
+  final: BenchmarkSourceSnapshot
+): boolean {
+  if (initial.benchmarkSourceSha256 !== final.benchmarkSourceSha256) {
+    return false;
+  }
+  const initialPaths = Object.keys(initial.implementationSourcesSha256).sort();
+  const finalPaths = Object.keys(final.implementationSourcesSha256).sort();
+  return (
+    initialPaths.length === finalPaths.length &&
+    initialPaths.every(
+      (path, index) =>
+        path === finalPaths[index] &&
+        initial.implementationSourcesSha256[path] ===
+          final.implementationSourcesSha256[path]
+    )
+  );
+}
+
+function pairOrderFor({
+  model,
+  scenario,
+  seed,
+  trial,
+}: {
+  readonly model: string;
+  readonly scenario: Scenario;
+  readonly seed: string;
+  readonly trial: number;
+}): PairOrder {
+  const seedStartsControl =
+    Number.parseInt(sha256(`${seed}\0${model}\0${scenario}`).slice(0, 8), 16) %
+      2 ===
+    0;
+  const controlFirst = trial % 2 === 1 ? seedStartsControl : !seedStartsControl;
+  return controlFirst ? "control-first" : "changed-first";
+}
+
+function orderedArms(
+  scenario: ScenarioDefinition,
+  pairOrder: PairOrder
+): readonly [ScenarioArm, ScenarioArm] {
+  const control = scenario.arms.find(
+    (arm) => arm.variant === scenario.controlVariant
+  );
+  const changed = scenario.arms.find(
+    (arm) => arm.variant === scenario.changedVariant
+  );
+  if (!(control && changed)) {
+    throw new TypeError(
+      `Scenario ${scenario.name} is missing a benchmark arm.`
+    );
+  }
+  return pairOrder === "control-first"
+    ? [control, changed]
+    : [changed, control];
+}
+
+function valueAtPath(
+  input: unknown,
+  path: string
+): {
+  readonly present: boolean;
+  readonly valid: boolean;
+  readonly value: unknown;
+} {
   let value = input;
   for (const segment of path.split(".")) {
-    if (!(value && typeof value === "object" && segment in value)) {
-      return;
+    if (!isPlainRecord(value)) {
+      return { present: true, valid: false, value: undefined };
     }
-    value = (value as Record<string, unknown>)[segment];
+    const property = ownDataProperty(value, segment);
+    if (!property.valid) {
+      return {
+        present: property.present,
+        valid: false,
+        value: undefined,
+      };
+    }
+    if (!property.present) {
+      return { present: false, valid: true, value: undefined };
+    }
+    value = property.value;
   }
-  return value;
+  return { present: true, valid: true, value };
 }
 
-function firstNumber(
+function responseChoices(body: unknown): readonly unknown[] | null {
+  if (!isPlainRecord(body)) {
+    return null;
+  }
+  const choices = ownDataProperty(body, "choices");
+  return choices.valid && choices.present
+    ? denseOwnArrayValues(choices.value)
+    : null;
+}
+
+function denseOwnArrayValues(value: unknown): readonly unknown[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const lengthProperty = ownDataProperty(value, "length");
+  if (
+    !(
+      lengthProperty.valid &&
+      lengthProperty.present &&
+      typeof lengthProperty.value === "number" &&
+      Number.isSafeInteger(lengthProperty.value) &&
+      lengthProperty.value >= 0
+    )
+  ) {
+    return null;
+  }
+  const length = lengthProperty.value;
+  const result: unknown[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const item = ownDataProperty(value, String(index));
+    if (!(item.valid && item.present)) {
+      return null;
+    }
+    result.push(item.value);
+  }
+  return Object.freeze(result);
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (!(value !== null && typeof value === "object" && !Array.isArray(value))) {
+    return false;
+  }
+  try {
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  } catch {
+    return false;
+  }
+}
+
+function ownDataProperty(
+  value: unknown,
+  key: string
+): {
+  readonly present: boolean;
+  readonly valid: boolean;
+  readonly value: unknown;
+} {
+  if (value === null || typeof value !== "object") {
+    return { present: false, valid: true, value: undefined };
+  }
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined) {
+      return { present: false, valid: true, value: undefined };
+    }
+    if (!("value" in descriptor)) {
+      return { present: true, valid: false, value: undefined };
+    }
+    return { present: true, valid: true, value: descriptor.value };
+  } catch {
+    return { present: false, valid: false, value: undefined };
+  }
+}
+
+function ownDataValue(value: unknown, key: string): unknown {
+  const property = ownDataProperty(value, key);
+  return property.valid && property.present ? property.value : undefined;
+}
+
+function auditedNumber(
   input: unknown,
   paths: readonly string[]
-): { readonly source: string | null; readonly value: number | null } {
-  for (const path of paths) {
-    const value = valueAtPath(input, path);
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return { source: path, value };
-    }
+): {
+  readonly source: string | null;
+  readonly status: UsageFieldStatus;
+  readonly value: number | null;
+} {
+  const present = paths.flatMap((path) => {
+    const observed = valueAtPath(input, path);
+    return observed.present
+      ? [{ path, valid: observed.valid, value: observed.value }]
+      : [];
+  });
+  if (present.length === 0) {
+    return { source: null, status: "absent", value: null };
   }
-  return { source: null, value: null };
-}
-
-function numericLeaves(
-  value: unknown,
-  prefix = "",
-  output: Record<string, number> = {}
-): Readonly<Record<string, number>> {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    output[prefix] = value;
-    return output;
+  if (
+    present.some(
+      ({ valid, value }) =>
+        !(
+          valid &&
+          typeof value === "number" &&
+          Number.isSafeInteger(value) &&
+          value >= 0
+        )
+    )
+  ) {
+    return { source: null, status: "invalid", value: null };
   }
-  if (!(value && typeof value === "object" && !Array.isArray(value))) {
-    return output;
+  const values = new Set(present.map(({ value }) => value as number));
+  if (values.size !== 1) {
+    return { source: null, status: "conflict", value: null };
   }
-  for (const [key, child] of Object.entries(value)) {
-    numericLeaves(child, prefix ? `${prefix}.${key}` : key, output);
-  }
-  return output;
+  const selected = present[0];
+  return {
+    source: selected?.path ?? null,
+    status: "valid",
+    value: (selected?.value as number | undefined) ?? null,
+  };
 }
 
 function extractUsage(body: unknown): NumericUsage {
-  const usageValue =
-    body && typeof body === "object"
-      ? (body as Record<string, unknown>).usage
-      : undefined;
-  const cacheRead = firstNumber(usageValue, CACHE_READ_PATHS);
-  const cacheWrite = firstNumber(usageValue, CACHE_WRITE_PATHS);
-  const input = firstNumber(usageValue, INPUT_PATHS);
-  const output = firstNumber(usageValue, OUTPUT_PATHS);
-  const total = firstNumber(usageValue, TOTAL_PATHS);
+  const usageProperty = isPlainRecord(body)
+    ? ownDataProperty(body, "usage")
+    : { present: false, valid: true, value: undefined };
+  if (
+    usageProperty.present &&
+    !(usageProperty.valid && isPlainRecord(usageProperty.value))
+  ) {
+    return invalidUsage();
+  }
+  const usageValue = usageProperty.present ? usageProperty.value : undefined;
+  const cacheRead = auditedNumber(usageValue, CACHE_READ_PATHS);
+  const cacheWrite = auditedNumber(usageValue, CACHE_WRITE_PATHS);
+  const input = auditedNumber(usageValue, INPUT_PATHS);
+  const output = auditedNumber(usageValue, OUTPUT_PATHS);
+  const total = auditedNumber(usageValue, TOTAL_PATHS);
   return {
     cacheReadSource: cacheRead.source,
     cacheReadTokens: cacheRead.value,
@@ -384,19 +944,45 @@ function extractUsage(body: unknown): NumericUsage {
     inputTokens: input.value,
     outputTokens: output.value,
     totalTokens: total.value,
-    usageNumericFields: numericLeaves(usageValue),
+    usageFieldAudit: {
+      cacheRead: cacheRead.status,
+      cacheWrite: cacheWrite.status,
+      input: input.status,
+      output: output.status,
+      total: total.status,
+    },
+  };
+}
+
+function invalidUsage(): NumericUsage {
+  return {
+    cacheReadSource: null,
+    cacheReadTokens: null,
+    cacheWriteSource: null,
+    cacheWriteTokens: null,
+    inputSource: null,
+    inputTokens: null,
+    outputTokens: null,
+    totalTokens: null,
+    usageFieldAudit: {
+      cacheRead: "invalid",
+      cacheWrite: "invalid",
+      input: "invalid",
+      output: "invalid",
+      total: "invalid",
+    },
   };
 }
 
 function errorCode(body: unknown, status: number): string {
-  if (body && typeof body === "object") {
-    const error = (body as Record<string, unknown>).error;
-    if (error && typeof error === "object") {
-      const code = (error as Record<string, unknown>).code;
+  if (isPlainRecord(body)) {
+    const error = ownDataValue(body, "error");
+    if (isPlainRecord(error)) {
+      const code = ownDataValue(error, "code");
       if (typeof code === "string" && SAFE_ERROR_CODE_PATTERN.test(code)) {
         return code;
       }
-      const type = (error as Record<string, unknown>).type;
+      const type = ownDataValue(error, "type");
       if (typeof type === "string" && SAFE_ERROR_CODE_PATTERN.test(type)) {
         return type;
       }
@@ -405,47 +991,241 @@ function errorCode(body: unknown, status: number): string {
   return `http-${status}`;
 }
 
+function responseToolCallCount(body: unknown): number | null {
+  const choices = responseChoices(body);
+  if (choices === null || choices.length === 0) {
+    return null;
+  }
+  let count = 0;
+  for (const choice of choices) {
+    const choiceCount = responseChoiceToolCallCount(choice);
+    if (choiceCount === null) {
+      return null;
+    }
+    const next = count + choiceCount;
+    if (!Number.isSafeInteger(next)) {
+      return null;
+    }
+    count = next;
+  }
+  return count;
+}
+
+function responseChoiceToolCallCount(choice: unknown): number | null {
+  if (!isPlainRecord(choice)) {
+    return null;
+  }
+  const message = ownDataValue(choice, "message");
+  if (!isPlainRecord(message)) {
+    return null;
+  }
+  const toolCallsProperty = ownDataProperty(message, "tool_calls");
+  const functionCallProperty = ownDataProperty(message, "function_call");
+  if (!(toolCallsProperty.valid && functionCallProperty.valid)) {
+    return null;
+  }
+  const toolCalls = toolCallsProperty.value;
+  const denseToolCalls =
+    toolCalls == null ? [] : denseOwnArrayValues(toolCalls);
+  if (denseToolCalls === null) {
+    return null;
+  }
+  const functionCall = functionCallProperty.value;
+  return (
+    denseToolCalls.length +
+    (functionCall === undefined || functionCall === null ? 0 : 1)
+  );
+}
+
+function responseFinishReasonStatuses(
+  body: unknown
+): readonly FinishReasonStatus[] | null {
+  const choices = responseChoices(body);
+  if (choices === null || choices.length === 0) {
+    return null;
+  }
+  const statuses: FinishReasonStatus[] = [];
+  for (const choice of choices) {
+    if (!isPlainRecord(choice)) {
+      return null;
+    }
+    const property = ownDataProperty(choice, "finish_reason");
+    if (!property.valid) {
+      statuses.push("invalid");
+      continue;
+    }
+    if (!property.present || property.value == null) {
+      statuses.push("missing");
+      continue;
+    }
+    if (typeof property.value !== "string") {
+      statuses.push("invalid");
+      continue;
+    }
+    switch (property.value) {
+      case "stop":
+        statuses.push("accepted-stop");
+        break;
+      case "content_filter":
+        statuses.push("rejected-content-filter");
+        break;
+      case "function_call":
+        statuses.push("rejected-function-call");
+        break;
+      case "length":
+        statuses.push("rejected-length");
+        break;
+      case "tool_calls":
+        statuses.push("rejected-tool-calls");
+        break;
+      default:
+        statuses.push("invalid");
+    }
+  }
+  return Object.freeze(statuses);
+}
+
+function finishReasonsAreAccepted(
+  statuses: readonly FinishReasonStatus[] | null
+): boolean {
+  return (
+    statuses !== null &&
+    statuses.length > 0 &&
+    statuses.every((status) => status === "accepted-stop")
+  );
+}
+
+function outputWasExactOk(body: unknown): boolean | null {
+  const choices = responseChoices(body);
+  if (choices === null || choices.length !== 1) {
+    return null;
+  }
+  const choice = choices[0];
+  if (!isPlainRecord(choice)) {
+    return null;
+  }
+  const message = ownDataValue(choice, "message");
+  const content = ownDataProperty(message, "content");
+  if (!(isPlainRecord(message) && content.valid && content.present)) {
+    return null;
+  }
+  return typeof content.value === "string"
+    ? content.value.trim() === "OK"
+    : null;
+}
+
+function responseModel(body: unknown): string | null {
+  const model = ownDataValue(body, "model");
+  if (!(typeof model === "string" && SAFE_MODEL_ID_PATTERN.test(model))) {
+    return null;
+  }
+  return model;
+}
+
+function responseIdSha256(body: unknown): string | null {
+  const id = ownDataValue(body, "id");
+  return typeof id === "string" && id.length <= 512 ? sha256(id) : null;
+}
+
+function benchmarkResponseErrorCode({
+  body,
+  finishReasonStatuses,
+  outputWasExactOk: exactOutput,
+  response,
+  toolCallCount,
+}: {
+  readonly body: unknown;
+  readonly finishReasonStatuses: readonly FinishReasonStatus[] | null;
+  readonly outputWasExactOk: boolean | null;
+  readonly response: Response;
+  readonly toolCallCount: number | null;
+}): string | null {
+  if (!response.ok) {
+    return errorCode(body, response.status);
+  }
+  if (toolCallCount === null || finishReasonStatuses === null) {
+    return "invalid-response-shape";
+  }
+  if (toolCallCount > 0) {
+    return "unexpected-tool-call";
+  }
+  if (!finishReasonsAreAccepted(finishReasonStatuses)) {
+    return "invalid-finish-reason";
+  }
+  if (exactOutput === null) {
+    return "invalid-response-shape";
+  }
+  return exactOutput ? null : "unexpected-output";
+}
+
+function cacheUsageEnvelopeIsValid(usage: NumericUsage): boolean {
+  return (
+    usage.usageFieldAudit.input === "valid" &&
+    (usage.usageFieldAudit.cacheRead === "absent" ||
+      usage.usageFieldAudit.cacheRead === "valid") &&
+    (usage.usageFieldAudit.cacheWrite === "absent" ||
+      usage.usageFieldAudit.cacheWrite === "valid") &&
+    usage.inputTokens !== null &&
+    Number.isSafeInteger(usage.inputTokens) &&
+    usage.inputTokens >= 0 &&
+    (usage.cacheReadTokens === null ||
+      (Number.isSafeInteger(usage.cacheReadTokens) &&
+        usage.cacheReadTokens >= 0)) &&
+    (usage.cacheWriteTokens === null ||
+      (Number.isSafeInteger(usage.cacheWriteTokens) &&
+        usage.cacheWriteTokens >= 0)) &&
+    (usage.cacheReadTokens === null ||
+      usage.cacheReadTokens <= usage.inputTokens) &&
+    (usage.cacheWriteTokens === null ||
+      usage.cacheWriteTokens <= usage.inputTokens) &&
+    (usage.cacheReadTokens === null ||
+      usage.cacheWriteTokens === null ||
+      cacheComponentsFitInput(
+        usage.cacheReadTokens,
+        usage.cacheWriteTokens,
+        usage.inputTokens
+      ))
+  );
+}
+
 async function runRequest({
+  armPosition,
   apiKey,
+  isolationToken,
   options,
   model,
   namespace,
+  pairOrder,
   phase,
+  requestSequence,
   scenario,
   toolNames,
   trial,
   variant,
 }: {
+  readonly armPosition: ArmPosition;
   readonly apiKey: string;
+  readonly isolationToken: string;
   readonly model: string;
   readonly namespace: string;
   readonly options: CliOptions;
+  readonly pairOrder: PairOrder;
   readonly phase: Phase;
+  readonly requestSequence: number;
   readonly scenario: Scenario;
   readonly toolNames: readonly string[];
   readonly trial: number;
   readonly variant: Variant;
 }): Promise<RequestResult> {
-  const tools = orderedTools(toolNames);
-  const requestBody = JSON.stringify({
+  const artifacts = benchmarkRequestArtifacts({
+    isolationToken,
     model,
-    messages: [
-      {
-        role: "system",
-        content: staticPrefix(namespace, options.prefixLines),
-      },
-      {
-        role: "user",
-        content: "Reply with exactly OK and do not call a tool.",
-      },
-    ],
-    tools,
-    tool_choice: "none",
-    max_tokens: 8,
-    stream: false,
+    namespace,
+    prefixLines: options.prefixLines,
+    toolNames,
   });
-  const requestBodySha256 = sha256(requestBody);
-  const toolsArraySha256 = sha256(JSON.stringify(tools));
+  const { requestBody } = artifacts;
+  const startedAt = new Date().toISOString();
   const started = performance.now();
   try {
     const response = await fetch(`${options.baseUrl}/chat/completions`, {
@@ -455,77 +1235,244 @@ async function runRequest({
         "Content-Type": "application/json",
       },
       body: requestBody,
+      redirect: "error",
       signal: AbortSignal.timeout(options.timeoutMs),
     });
     const body: unknown = await response.json().catch(() => undefined);
     const extracted = extractUsage(body);
+    const toolCallCount = responseToolCallCount(body);
+    const finishReasonStatuses = responseFinishReasonStatuses(body);
+    const exactOutput = outputWasExactOk(body);
+    const observedResponseModel = responseModel(body);
+    const responseErrorCode = benchmarkResponseErrorCode({
+      body,
+      finishReasonStatuses,
+      outputWasExactOk: exactOutput,
+      response,
+      toolCallCount,
+    });
+    const success = responseErrorCode === null;
+    const modelMatchesRequested =
+      observedResponseModel === null ? null : observedResponseModel === model;
+    const cacheTelemetryEligible =
+      success &&
+      modelMatchesRequested === true &&
+      cacheUsageEnvelopeIsValid(extracted);
     return {
       ...extracted,
-      errorCode: response.ok ? null : errorCode(body, response.status),
+      armPosition,
+      cacheTelemetryEligible,
+      completedAt: new Date().toISOString(),
+      errorCode: responseErrorCode,
       httpStatus: response.status,
+      httpSuccess: response.ok,
+      isolationCanarySha256: artifacts.isolationCanarySha256,
       latencyMs: Math.round(performance.now() - started),
+      outputWasExactOk: exactOutput,
+      pairOrder,
       phase,
-      requestBodySha256,
+      requestBodyBytes: artifacts.requestBodyBytes,
+      requestBodySha256: artifacts.requestBodySha256,
+      requestSequence,
+      responseFinishReasonStatuses: finishReasonStatuses,
+      responseIdSha256: responseIdSha256(body),
+      responseModel: observedResponseModel,
+      responseModelMatchesRequested: modelMatchesRequested,
+      responseToolCallCount: toolCallCount,
       scenario,
-      success: response.ok,
-      toolsArraySha256,
+      startedAt,
+      success,
+      toolsArrayBytes: artifacts.toolsArrayBytes,
+      toolsArraySha256: artifacts.toolsArraySha256,
       trial,
       variant,
+      warmupPrerequisitePassed: null,
     };
   } catch (error) {
-    const code =
-      error && typeof error === "object" && "name" in error
-        ? String((error as { readonly name: unknown }).name)
-        : "request-error";
+    const errorName = ownDataValue(error, "name");
+    const code = typeof errorName === "string" ? errorName : "request-error";
     return {
+      armPosition,
+      cacheTelemetryEligible: false,
       cacheReadSource: null,
       cacheReadTokens: null,
       cacheWriteSource: null,
       cacheWriteTokens: null,
+      completedAt: new Date().toISOString(),
       errorCode: SAFE_ERROR_CODE_PATTERN.test(code) ? code : "request-error",
       httpStatus: null,
+      httpSuccess: false,
       inputSource: null,
       inputTokens: null,
+      isolationCanarySha256: artifacts.isolationCanarySha256,
       latencyMs: Math.round(performance.now() - started),
+      outputWasExactOk: null,
       outputTokens: null,
+      pairOrder,
       phase,
-      requestBodySha256,
+      requestBodyBytes: artifacts.requestBodyBytes,
+      requestBodySha256: artifacts.requestBodySha256,
+      requestSequence,
+      responseFinishReasonStatuses: null,
+      responseIdSha256: null,
+      responseModel: null,
+      responseModelMatchesRequested: null,
+      responseToolCallCount: null,
       scenario,
+      startedAt,
       success: false,
+      toolsArrayBytes: artifacts.toolsArrayBytes,
       totalTokens: null,
-      toolsArraySha256,
+      toolsArraySha256: artifacts.toolsArraySha256,
       trial,
-      usageNumericFields: {},
+      usageFieldAudit: {
+        cacheRead: "absent",
+        cacheWrite: "absent",
+        input: "absent",
+        output: "absent",
+        total: "absent",
+      },
       variant,
+      warmupPrerequisitePassed: null,
     };
   }
 }
 
 function median(values: readonly number[]): number | null {
+  return quantile(values, 0.5);
+}
+
+function quantile(
+  values: readonly number[],
+  probability: number
+): number | null {
   if (values.length === 0) {
     return null;
   }
   const sorted = [...values].sort((left, right) => left - right);
-  const middle = Math.floor(sorted.length / 2);
-  const upper = sorted.at(middle);
-  if (upper === undefined) {
+  const position = (sorted.length - 1) * probability;
+  const lowerIndex = Math.floor(position);
+  const upperIndex = Math.ceil(position);
+  const lower = sorted[lowerIndex];
+  const upper = sorted[upperIndex];
+  if (lower === undefined || upper === undefined) {
     return null;
   }
-  if (sorted.length % 2 !== 0) {
-    return upper;
+  const upperWeight = position - lowerIndex;
+  return lower * (1 - upperWeight) + upper * upperWeight;
+}
+
+function isFiniteNonnegative(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function safeTokenSum(values: readonly number[], context: string): number {
+  let total = 0;
+  for (const value of values) {
+    if (!isFiniteNonnegative(value)) {
+      throw new RangeError(`${context} contains an unsafe token count.`);
+    }
+    const next = total + value;
+    if (!Number.isSafeInteger(next)) {
+      throw new RangeError(`${context} exceeded the safe integer range.`);
+    }
+    total = next;
   }
-  const lower = sorted.at(middle - 1);
-  if (lower === undefined) {
-    return null;
+  return total;
+}
+
+function cacheComponentsFitInput(
+  cacheReadTokens: number,
+  cacheWriteTokens: number,
+  inputTokens: number
+): boolean {
+  const total = cacheReadTokens + cacheWriteTokens;
+  return Number.isSafeInteger(total) && total <= inputTokens;
+}
+
+function safeIntegerDifference(
+  left: number,
+  right: number,
+  context: string
+): number {
+  if (!(Number.isSafeInteger(left) && Number.isSafeInteger(right))) {
+    throw new RangeError(`${context} contains an unsafe integer.`);
   }
-  return (lower + upper) / 2;
+  const difference = left - right;
+  if (!Number.isSafeInteger(difference)) {
+    throw new RangeError(`${context} exceeded the safe integer range.`);
+  }
+  return difference;
+}
+
+function cacheMeasurementIsValid<
+  Request extends Pick<
+    RequestResult,
+    "cacheReadTokens" | "cacheWriteTokens" | "inputTokens" | "usageFieldAudit"
+  >,
+>(
+  request: Request
+): request is Request & {
+  readonly cacheReadTokens: number;
+  readonly inputTokens: number;
+} {
+  return (
+    isFiniteNonnegative(request.inputTokens) &&
+    isFiniteNonnegative(request.cacheReadTokens) &&
+    request.usageFieldAudit.input === "valid" &&
+    request.usageFieldAudit.cacheRead === "valid" &&
+    (request.usageFieldAudit.cacheWrite === "absent" ||
+      request.usageFieldAudit.cacheWrite === "valid") &&
+    request.cacheReadTokens <= request.inputTokens &&
+    (request.cacheWriteTokens === null ||
+      (isFiniteNonnegative(request.cacheWriteTokens) &&
+        request.cacheWriteTokens <= request.inputTokens &&
+        cacheComponentsFitInput(
+          request.cacheReadTokens,
+          request.cacheWriteTokens,
+          request.inputTokens
+        )))
+  );
+}
+
+function cacheWriteMeasurementIsValid<
+  Request extends Pick<
+    RequestResult,
+    "cacheReadTokens" | "cacheWriteTokens" | "inputTokens" | "usageFieldAudit"
+  >,
+>(
+  request: Request
+): request is Request & {
+  readonly cacheWriteTokens: number;
+  readonly inputTokens: number;
+} {
+  return (
+    isFiniteNonnegative(request.inputTokens) &&
+    isFiniteNonnegative(request.cacheWriteTokens) &&
+    request.usageFieldAudit.input === "valid" &&
+    request.usageFieldAudit.cacheWrite === "valid" &&
+    (request.usageFieldAudit.cacheRead === "absent" ||
+      request.usageFieldAudit.cacheRead === "valid") &&
+    request.cacheWriteTokens <= request.inputTokens &&
+    (request.cacheReadTokens === null ||
+      (isFiniteNonnegative(request.cacheReadTokens) &&
+        request.cacheReadTokens <= request.inputTokens &&
+        cacheComponentsFitInput(
+          request.cacheReadTokens,
+          request.cacheWriteTokens,
+          request.inputTokens
+        )))
+  );
 }
 
 function variantSummary(requests: readonly RequestResult[]) {
   const measured = requests.filter((request) => request.phase === "measure");
-  const successful = measured.filter((request) => request.success);
-  const cacheReported = successful.filter(
-    (request) => request.cacheReadTokens !== null
+  const eligibleRequests = measured.filter(
+    (request) => request.cacheTelemetryEligible
+  );
+  const cacheReported = eligibleRequests.filter(cacheMeasurementIsValid);
+  const cacheWriteReported = eligibleRequests.filter(
+    cacheWriteMeasurementIsValid
   );
   const rates = cacheReported.flatMap((request) =>
     request.inputTokens && request.cacheReadTokens !== null
@@ -535,50 +1482,89 @@ function variantSummary(requests: readonly RequestResult[]) {
   const ratioEligible = cacheReported.filter(
     (request) => request.inputTokens !== null && request.inputTokens > 0
   );
-  const cacheReadSum = ratioEligible.reduce(
-    (sum, request) => sum + (request.cacheReadTokens ?? 0),
-    0
+  const cacheReadSum = safeTokenSum(
+    ratioEligible.map((request) => request.cacheReadTokens),
+    "weighted cache-read tokens"
   );
-  const inputSum = ratioEligible.reduce(
-    (sum, request) => sum + (request.inputTokens ?? 0),
-    0
+  const inputSum = safeTokenSum(
+    ratioEligible.map((request) => request.inputTokens),
+    "weighted cache-read input tokens"
   );
   const cacheReadNonzero = cacheReported.filter(
     (request) => (request.cacheReadTokens ?? 0) > 0
   ).length;
+  const cacheWriteRatioEligible = cacheWriteReported.filter(
+    (request) => request.inputTokens > 0
+  );
+  const cacheWriteSum = safeTokenSum(
+    cacheWriteRatioEligible.map((request) => request.cacheWriteTokens),
+    "weighted cache-write tokens"
+  );
+  const cacheWriteInputSum = safeTokenSum(
+    cacheWriteRatioEligible.map((request) => request.inputTokens),
+    "weighted cache-write input tokens"
+  );
+  const cacheWriteNonzero = cacheWriteReported.filter(
+    (request) => request.cacheWriteTokens > 0
+  ).length;
   return {
     attempts: measured.length,
-    successes: successful.length,
+    cacheTelemetryEligible: eligibleRequests.length,
+    cacheWriteNonzero,
+    cacheWriteNonzeroCoverage:
+      eligibleRequests.length === 0
+        ? null
+        : cacheWriteNonzero / eligibleRequests.length,
+    cacheWriteReported: cacheWriteReported.length,
+    cacheWriteReportCoverage:
+      eligibleRequests.length === 0
+        ? null
+        : cacheWriteReported.length / eligibleRequests.length,
+    captureSuccesses: measured.filter((request) => request.success).length,
     cacheReadReported: cacheReported.length,
     cacheReportCoverage:
-      successful.length === 0 ? null : cacheReported.length / successful.length,
+      eligibleRequests.length === 0
+        ? null
+        : cacheReported.length / eligibleRequests.length,
     cacheReadNonzero,
     cacheReadNonzeroCoverage:
-      successful.length === 0 ? null : cacheReadNonzero / successful.length,
+      eligibleRequests.length === 0
+        ? null
+        : cacheReadNonzero / eligibleRequests.length,
     medianCacheReadTokens: median(
       cacheReported.map((request) => request.cacheReadTokens ?? 0)
     ),
     medianCacheReadRatio: median(rates),
     medianInputTokens: median(
-      successful.flatMap((request) =>
-        request.inputTokens === null ? [] : [request.inputTokens]
+      eligibleRequests.flatMap((request) =>
+        isFiniteNonnegative(request.inputTokens) ? [request.inputTokens] : []
       )
     ),
-    medianLatencyMs: median(successful.map((request) => request.latencyMs)),
+    medianCacheWriteRatio: median(
+      cacheWriteRatioEligible.map(
+        (request) => request.cacheWriteTokens / request.inputTokens
+      )
+    ),
+    medianCacheWriteTokens: median(
+      cacheWriteReported.map((request) => request.cacheWriteTokens)
+    ),
+    medianLatencyMs: median(
+      eligibleRequests.map((request) => request.latencyMs)
+    ),
     weightedCacheReadRatio: inputSum === 0 ? null : cacheReadSum / inputSum,
+    weightedCacheWriteRatio:
+      cacheWriteInputSum === 0 ? null : cacheWriteSum / cacheWriteInputSum,
   };
 }
 
 function reportingStatus(requests: readonly RequestResult[]): CacheReporting {
   const successful = requests.filter(
-    (request) => request.phase === "measure" && request.success
+    (request) => request.phase === "measure" && request.cacheTelemetryEligible
   );
   if (successful.length === 0) {
     return "unavailable";
   }
-  const reported = successful.filter(
-    (request) => request.cacheReadTokens !== null
-  );
+  const reported = successful.filter(cacheMeasurementIsValid);
   if (reported.length === 0) {
     return "not-reported";
   }
@@ -587,8 +1573,396 @@ function reportingStatus(requests: readonly RequestResult[]): CacheReporting {
     : "reported-zero-only";
 }
 
-function comparisons(requests: readonly RequestResult[]) {
-  return SCENARIOS.map(({ changedVariant, controlVariant, name }) => {
+function cacheWriteReportingStatus(
+  requests: readonly RequestResult[]
+): CacheReporting {
+  const eligible = requests.filter(
+    (request) => request.phase === "measure" && request.cacheTelemetryEligible
+  );
+  if (eligible.length === 0) {
+    return "unavailable";
+  }
+  const reported = eligible.filter(cacheWriteMeasurementIsValid);
+  if (reported.length === 0) {
+    return "not-reported";
+  }
+  return reported.some((request) => request.cacheWriteTokens > 0)
+    ? "reported-nonzero"
+    : "reported-zero-only";
+}
+
+function isolationAudit(requests: readonly RequestResult[]) {
+  const arms = new Map<string, RequestResult[]>();
+  for (const request of requests) {
+    const key = `${request.scenario}\0${request.trial}\0${request.variant}`;
+    const existing = arms.get(key) ?? [];
+    existing.push(request);
+    arms.set(key, existing);
+  }
+  const canaryHashes = [...arms.values()].map(
+    (armRequests) => armRequests[0]?.isolationCanarySha256
+  );
+  const warmups = requests.filter((request) => request.phase === "warmup");
+  return {
+    armCount: arms.size,
+    allArmsHaveOneWarmupAndOneMeasure: [...arms.values()].every(
+      (armRequests) =>
+        armRequests.length === 2 &&
+        armRequests.some((request) => request.phase === "warmup") &&
+        armRequests.some((request) => request.phase === "measure")
+    ),
+    allWarmupMeasurePairsShareCanary: [...arms.values()].every(
+      (armRequests) =>
+        new Set(armRequests.map((request) => request.isolationCanarySha256))
+          .size === 1
+    ),
+    canariesUniqueAcrossArms:
+      canaryHashes.every((hash) => hash !== undefined) &&
+      new Set(canaryHashes).size === arms.size,
+    uniqueCanaryHashCount: new Set(canaryHashes).size,
+    uniqueWarmupToolsArrayHashCount: new Set(
+      warmups.map((request) => request.toolsArraySha256)
+    ).size,
+    uniqueWarmupToolsArrayByteCount: new Set(
+      warmups.map((request) => request.toolsArrayBytes)
+    ).size,
+    membershipChangeIsEqualByteSwap: equalByteMeasurementSwap(
+      requests,
+      "membership-only-change"
+    ),
+    sameSetOrderIsEqualByteSwap: equalByteMeasurementSwap(
+      requests,
+      "same-set-order"
+    ),
+    warmupCount: warmups.length,
+    unexpectedToolCallResponseCount: requests.filter(
+      (request) => (request.responseToolCallCount ?? 0) > 0
+    ).length,
+  };
+}
+
+function equalByteMeasurementSwap(
+  requests: readonly RequestResult[],
+  scenario: Scenario
+): boolean | null {
+  const measured = requests.filter(
+    (request) => request.phase === "measure" && request.scenario === scenario
+  );
+  if (measured.length === 0) {
+    return null;
+  }
+  const trials = new Set(measured.map((request) => request.trial));
+  return [...trials].every((trial) => {
+    const trialRequests = measured.filter((request) => request.trial === trial);
+    return (
+      trialRequests.length === 2 &&
+      new Set(trialRequests.map((request) => request.toolsArrayBytes)).size ===
+        1 &&
+      new Set(trialRequests.map((request) => request.requestBodyBytes)).size ===
+        1
+    );
+  });
+}
+
+function responseModelSummary(requests: readonly RequestResult[]) {
+  const observed = new Map<string, number>();
+  for (const request of requests) {
+    if (request.responseModel !== null) {
+      observed.set(
+        request.responseModel,
+        (observed.get(request.responseModel) ?? 0) + 1
+      );
+    }
+  }
+  return {
+    responses: requests.length,
+    modelReported: requests.filter((request) => request.responseModel !== null)
+      .length,
+    requestedModelMatches: requests.filter(
+      (request) => request.responseModelMatchesRequested === true
+    ).length,
+    requestedModelMismatches: requests.filter(
+      (request) => request.responseModelMatchesRequested === false
+    ).length,
+    requestedModelMissing: requests.filter(
+      (request) => request.responseModelMatchesRequested === null
+    ).length,
+    observedResponseModels: Object.fromEntries(observed),
+  };
+}
+
+function responseModelAudit(requests: readonly RequestResult[]) {
+  return {
+    all: responseModelSummary(requests),
+    measure: responseModelSummary(
+      requests.filter((request) => request.phase === "measure")
+    ),
+    warmup: responseModelSummary(
+      requests.filter((request) => request.phase === "warmup")
+    ),
+  };
+}
+
+function finishReasonSummary(requests: readonly RequestResult[]) {
+  const statuses = requests.flatMap(
+    (request) => request.responseFinishReasonStatuses ?? []
+  );
+  return {
+    acceptedResponses: requests.filter((request) =>
+      finishReasonsAreAccepted(request.responseFinishReasonStatuses)
+    ).length,
+    choicesAudited: statuses.length,
+    responseShapeUnavailable: requests.filter(
+      (request) => request.responseFinishReasonStatuses === null
+    ).length,
+    responses: requests.length,
+    statusCounts: Object.fromEntries(
+      FINISH_REASON_STATUSES.map((status) => [
+        status,
+        statuses.filter((observed) => observed === status).length,
+      ])
+    ),
+  };
+}
+
+function finishReasonAudit(requests: readonly RequestResult[]) {
+  return {
+    all: finishReasonSummary(requests),
+    measure: finishReasonSummary(
+      requests.filter((request) => request.phase === "measure")
+    ),
+    warmup: finishReasonSummary(
+      requests.filter((request) => request.phase === "warmup")
+    ),
+  };
+}
+
+function outputComplianceAudit(requests: readonly RequestResult[]) {
+  const summarize = (selected: readonly RequestResult[]) => ({
+    exact: selected.filter((request) => request.outputWasExactOk === true)
+      .length,
+    mismatch: selected.filter((request) => request.outputWasExactOk === false)
+      .length,
+    unavailable: selected.filter((request) => request.outputWasExactOk === null)
+      .length,
+  });
+  return {
+    all: summarize(requests),
+    measure: summarize(
+      requests.filter((request) => request.phase === "measure")
+    ),
+    warmup: summarize(requests.filter((request) => request.phase === "warmup")),
+  };
+}
+
+function requestOutcomeAudit(requests: readonly RequestResult[]) {
+  const captureSuccessful = requests.filter((request) => request.success);
+  const measured = requests.filter((request) => request.phase === "measure");
+  return {
+    cacheUsageEnvelopeAudited: captureSuccessful.length,
+    cacheUsageEnvelopeUnavailable: requests.length - captureSuccessful.length,
+    cacheTelemetryEligible: requests.filter(
+      (request) => request.cacheTelemetryEligible
+    ).length,
+    captureSuccess: requests.filter((request) => request.success).length,
+    httpSuccess: requests.filter((request) => request.httpSuccess).length,
+    invalidResponseShape: requests.filter(
+      (request) => request.errorCode === "invalid-response-shape"
+    ).length,
+    invalidFinishReason: requests.filter(
+      (request) => request.errorCode === "invalid-finish-reason"
+    ).length,
+    unexpectedOutput: requests.filter(
+      (request) => request.errorCode === "unexpected-output"
+    ).length,
+    measuredCacheTelemetryEligible: measured.filter(
+      (request) => request.cacheTelemetryEligible
+    ).length,
+    measuredLocalCacheTelemetryEligible: measured.filter(
+      (request) =>
+        request.success &&
+        request.responseModelMatchesRequested === true &&
+        cacheUsageEnvelopeIsValid(request)
+    ).length,
+    measuredWarmupPrerequisiteFailures: measured.filter(
+      (request) => request.warmupPrerequisitePassed === false
+    ).length,
+    invalidCacheUsageEnvelope: captureSuccessful.filter(
+      (request) => !cacheUsageEnvelopeIsValid(request)
+    ).length,
+    positiveToolCallResponses: requests.filter(
+      (request) => (request.responseToolCallCount ?? 0) > 0
+    ).length,
+    requests: requests.length,
+  };
+}
+
+function usageFieldStatusAudit(requests: readonly RequestResult[]) {
+  const summarize = (field: keyof NumericUsage["usageFieldAudit"]) =>
+    Object.fromEntries(
+      (["absent", "valid", "invalid", "conflict"] as const).map((status) => [
+        status,
+        requests.filter((request) => request.usageFieldAudit[field] === status)
+          .length,
+      ])
+    );
+  return {
+    cacheRead: summarize("cacheRead"),
+    cacheWrite: summarize("cacheWrite"),
+    input: summarize("input"),
+    output: summarize("output"),
+    total: summarize("total"),
+  };
+}
+
+function membershipInputTokenParityAudit(
+  requests: readonly RequestResult[],
+  scenario: ScenarioDefinition
+) {
+  const measured = requests.filter(
+    (request) =>
+      request.phase === "measure" && request.scenario === scenario.name
+  );
+  const trials = [...new Set(measured.map((request) => request.trial))].sort(
+    (left, right) => left - right
+  );
+  const pairs = trials.flatMap((trial) => {
+    const control = measured.find(
+      (request) =>
+        request.trial === trial && request.variant === scenario.controlVariant
+    );
+    const changed = measured.find(
+      (request) =>
+        request.trial === trial && request.variant === scenario.changedVariant
+    );
+    if (!(inputParityEligible(control) && inputParityEligible(changed))) {
+      return [];
+    }
+    if (!pairedCoordinatesMatch(control, changed)) {
+      return [];
+    }
+    return [
+      {
+        changedInputTokens: changed.inputTokens,
+        controlInputTokens: control.inputTokens,
+        controlMinusChangedInputTokens: safeIntegerDifference(
+          control.inputTokens,
+          changed.inputTokens,
+          "membership input-token difference"
+        ),
+        pairOrder: control.pairOrder,
+        trial,
+      },
+    ];
+  });
+  const differences = pairs.map((pair) => pair.controlMinusChangedInputTokens);
+  const orderStrata = PAIR_ORDERS.map((pairOrder) => {
+    const stratumPairs = pairs.filter((pair) => pair.pairOrder === pairOrder);
+    const stratumDifferences = stratumPairs.map(
+      (pair) => pair.controlMinusChangedInputTokens
+    );
+    return {
+      pairOrder,
+      ...differenceSummary(stratumDifferences),
+    };
+  });
+  const expectedPairsByOrder = Object.fromEntries(
+    PAIR_ORDERS.map((pairOrder) => [
+      pairOrder,
+      measured.filter(
+        (request) =>
+          request.variant === scenario.controlVariant &&
+          request.pairOrder === pairOrder
+      ).length,
+    ])
+  ) as Record<PairOrder, number>;
+  return {
+    changedHigher: differences.filter((difference) => difference < 0).length,
+    controlHigher: differences.filter((difference) => difference > 0).length,
+    effectConclusion: directionalEffectConclusion({
+      expectedPairsByOrder,
+      orderStrata,
+    }),
+    eligiblePairs: pairs.length,
+    equal: differences.filter((difference) => difference === 0).length,
+    missingPairs: trials.length - pairs.length,
+    orderStrata,
+    pairs,
+  };
+}
+
+function differenceSummary(differences: readonly number[]) {
+  return {
+    changedHigher: differences.filter((difference) => difference < 0).length,
+    controlHigher: differences.filter((difference) => difference > 0).length,
+    eligiblePairs: differences.length,
+    equal: differences.filter((difference) => difference === 0).length,
+    medianDifference: median(differences),
+  };
+}
+
+function directionalEffectConclusion({
+  expectedPairsByOrder,
+  orderStrata,
+}: {
+  readonly expectedPairsByOrder: Readonly<Record<PairOrder, number>>;
+  readonly orderStrata: readonly {
+    readonly eligiblePairs: number;
+    readonly medianDifference: number | null;
+    readonly pairOrder: PairOrder;
+  }[];
+}):
+  | "changed-higher"
+  | "control-higher"
+  | "indeterminate-insufficient-order-stratum-coverage"
+  | "no-observed-median-difference"
+  | "order-sensitive" {
+  if (
+    orderStrata.some(({ eligiblePairs, pairOrder }) => {
+      const expected = expectedPairsByOrder[pairOrder];
+      return (
+        expected === 0 ||
+        eligiblePairs <
+          Math.ceil(expected * EVIDENCE_CAMPAIGN.minimumStratumCoverage)
+      );
+    })
+  ) {
+    return "indeterminate-insufficient-order-stratum-coverage";
+  }
+  const medians = orderStrata.map((stratum) => stratum.medianDifference);
+  if (medians.some((value) => value === null)) {
+    return "indeterminate-insufficient-order-stratum-coverage";
+  }
+  const numericMedians = medians as number[];
+  if (numericMedians.every((value) => value === 0)) {
+    return "no-observed-median-difference";
+  }
+  if (numericMedians.every((value) => value > 0)) {
+    return "control-higher";
+  }
+  if (numericMedians.every((value) => value < 0)) {
+    return "changed-higher";
+  }
+  return "order-sensitive";
+}
+
+function inputParityEligible(
+  request: RequestResult | undefined
+): request is RequestResult & { readonly inputTokens: number } {
+  return Boolean(
+    request?.success &&
+      request.responseModelMatchesRequested === true &&
+      request.warmupPrerequisitePassed === true &&
+      request.usageFieldAudit.input === "valid" &&
+      isFiniteNonnegative(request.inputTokens)
+  );
+}
+
+function comparisons(
+  requests: readonly RequestResult[],
+  scenarios: readonly ScenarioDefinition[]
+) {
+  return scenarios.map(({ changedVariant, controlVariant, name }) => {
     const control = requests.filter(
       (request) =>
         request.phase === "measure" &&
@@ -606,23 +1980,41 @@ function comparisons(requests: readonly RequestResult[]) {
         (request) => request.trial === controlRequest.trial
       );
       if (
-        !(controlRequest.success && changedRequest?.success) ||
-        controlRequest.cacheReadTokens === null ||
-        changedRequest.cacheReadTokens === null
+        !(
+          controlRequest.cacheTelemetryEligible &&
+          changedRequest?.cacheTelemetryEligible &&
+          cacheMeasurementIsValid(controlRequest) &&
+          cacheMeasurementIsValid(changedRequest) &&
+          pairedCoordinatesMatch(controlRequest, changedRequest)
+        )
       ) {
         return [];
       }
       return [
         {
+          pairOrder: controlRequest.pairOrder,
           trial: controlRequest.trial,
           controlCacheReadTokens: controlRequest.cacheReadTokens,
           changedCacheReadTokens: changedRequest.cacheReadTokens,
-          controlMinusChangedCacheReadTokens:
-            controlRequest.cacheReadTokens - changedRequest.cacheReadTokens,
+          controlInputTokens: controlRequest.inputTokens,
+          changedInputTokens: changedRequest.inputTokens,
+          controlMinusChangedCacheReadTokens: safeIntegerDifference(
+            controlRequest.cacheReadTokens,
+            changedRequest.cacheReadTokens,
+            "paired cache-read-token difference"
+          ),
+          controlMinusChangedInputTokens: safeIntegerDifference(
+            controlRequest.inputTokens,
+            changedRequest.inputTokens,
+            "paired input-token difference"
+          ),
           controlLatencyMs: controlRequest.latencyMs,
           changedLatencyMs: changedRequest.latencyMs,
-          controlMinusChangedLatencyMs:
-            controlRequest.latencyMs - changedRequest.latencyMs,
+          controlMinusChangedLatencyMs: safeIntegerDifference(
+            controlRequest.latencyMs,
+            changedRequest.latencyMs,
+            "paired latency difference"
+          ),
           controlCacheReadRatio:
             controlRequest.inputTokens &&
             controlRequest.cacheReadTokens !== null
@@ -636,137 +2028,464 @@ function comparisons(requests: readonly RequestResult[]) {
         },
       ];
     });
+    const orderStrata = PAIR_ORDERS.map((pairOrder) => ({
+      pairOrder,
+      ...pairedSummary(paired.filter((pair) => pair.pairOrder === pairOrder)),
+    }));
+    const expectedPairsByOrder = Object.fromEntries(
+      PAIR_ORDERS.map((pairOrder) => [
+        pairOrder,
+        control.filter((request) => request.pairOrder === pairOrder).length,
+      ])
+    ) as Record<PairOrder, number>;
     return {
       scenario: name,
       controlVariant,
       changedVariant,
-      eligiblePairs: paired.length,
-      medianControlMinusChangedCacheReadTokens: median(
-        paired.map((pair) => pair.controlMinusChangedCacheReadTokens)
-      ),
-      medianControlMinusChangedLatencyMs: median(
-        paired.map((pair) => pair.controlMinusChangedLatencyMs)
-      ),
-      medianControlMinusChangedCacheReadRatio: median(
-        paired.flatMap((pair) =>
-          pair.controlCacheReadRatio === null ||
-          pair.changedCacheReadRatio === null
-            ? []
-            : [pair.controlCacheReadRatio - pair.changedCacheReadRatio]
-        )
-      ),
+      effectConclusion: directionalEffectConclusion({
+        expectedPairsByOrder,
+        orderStrata: orderStrata.map((stratum) => ({
+          eligiblePairs: stratum.eligiblePairs,
+          medianDifference: stratum.medianControlMinusChangedCacheReadTokens,
+          pairOrder: stratum.pairOrder,
+        })),
+      }),
+      ...pairedSummary(paired),
+      orderStrata,
       pairs: paired,
     };
   });
+}
+
+function pairedCoordinatesMatch(
+  control: RequestResult,
+  changed: RequestResult
+): boolean {
+  if (
+    control.trial !== changed.trial ||
+    control.scenario !== changed.scenario ||
+    control.pairOrder !== changed.pairOrder
+  ) {
+    return false;
+  }
+  return control.pairOrder === "control-first"
+    ? control.armPosition === "first" && changed.armPosition === "second"
+    : control.armPosition === "second" && changed.armPosition === "first";
+}
+
+function pairedSummary<
+  Pair extends {
+    readonly changedCacheReadRatio: number | null;
+    readonly controlCacheReadRatio: number | null;
+    readonly controlMinusChangedCacheReadTokens: number;
+    readonly controlMinusChangedInputTokens: number;
+    readonly controlMinusChangedLatencyMs: number;
+  },
+>(pairs: readonly Pair[]) {
+  const tokenDifferences = pairs.map(
+    (pair) => pair.controlMinusChangedCacheReadTokens
+  );
+  const ratioDifferences = pairs.flatMap((pair) =>
+    pair.controlCacheReadRatio === null || pair.changedCacheReadRatio === null
+      ? []
+      : [pair.controlCacheReadRatio - pair.changedCacheReadRatio]
+  );
+  const inputTokenDifferences = pairs.map(
+    (pair) => pair.controlMinusChangedInputTokens
+  );
+  return {
+    eligiblePairs: pairs.length,
+    medianControlMinusChangedCacheReadTokens: median(tokenDifferences),
+    p25ControlMinusChangedCacheReadTokens: quantile(tokenDifferences, 0.25),
+    p75ControlMinusChangedCacheReadTokens: quantile(tokenDifferences, 0.75),
+    cacheReadTokenDifferenceSigns: {
+      controlHigher: tokenDifferences.filter((difference) => difference > 0)
+        .length,
+      equal: tokenDifferences.filter((difference) => difference === 0).length,
+      changedHigher: tokenDifferences.filter((difference) => difference < 0)
+        .length,
+    },
+    inputTokenDifferenceSigns: {
+      controlHigher: inputTokenDifferences.filter(
+        (difference) => difference > 0
+      ).length,
+      equal: inputTokenDifferences.filter((difference) => difference === 0)
+        .length,
+      changedHigher: inputTokenDifferences.filter(
+        (difference) => difference < 0
+      ).length,
+    },
+    medianControlMinusChangedInputTokens: median(inputTokenDifferences),
+    p25ControlMinusChangedInputTokens: quantile(inputTokenDifferences, 0.25),
+    p75ControlMinusChangedInputTokens: quantile(inputTokenDifferences, 0.75),
+    medianControlMinusChangedLatencyMs: median(
+      pairs.map((pair) => pair.controlMinusChangedLatencyMs)
+    ),
+    medianControlMinusChangedCacheReadRatio: median(ratioDifferences),
+    p25ControlMinusChangedCacheReadRatio: quantile(ratioDifferences, 0.25),
+    p75ControlMinusChangedCacheReadRatio: quantile(ratioDifferences, 0.75),
+  };
 }
 
 function sleep(milliseconds: number): Promise<void> {
   return new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds));
 }
 
-async function main(): Promise<void> {
-  const options = parseOptions(process.argv.slice(2));
-  const apiKey = process.env.CACHE_BENCH_API_KEY?.trim();
+function serializeBenchmarkResult(result: unknown, apiKey: string): string {
+  const serialized = `${JSON.stringify(result, null, 2)}\n`;
+  if (serialized.includes(apiKey) || BEARER_PATTERN.test(serialized)) {
+    throw new Error(
+      "Refusing to write benchmark output containing a credential."
+    );
+  }
+  return serialized;
+}
+
+async function modelPreflight({
+  apiKey,
+  options,
+}: {
+  readonly apiKey: string;
+  readonly options: CliOptions;
+}): Promise<Record<string, unknown>> {
+  if (!options.preflightModels) {
+    return {
+      checkedAt: null,
+      presentModelIds: null,
+      requestedModelIds: options.models,
+      status: "skipped",
+    };
+  }
+  const checkedAt = new Date().toISOString();
+  const response = await fetch(`${options.baseUrl}/models`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+    redirect: "error",
+    signal: AbortSignal.timeout(options.timeoutMs),
+  });
+  if (!response.ok) {
+    throw new Error(`Model preflight failed with HTTP ${response.status}.`);
+  }
+  const body: unknown = await response.json().catch(() => undefined);
+  const dataProperty = isPlainRecord(body)
+    ? ownDataProperty(body, "data")
+    : { present: false, valid: true, value: undefined };
+  const data =
+    dataProperty.valid && dataProperty.present
+      ? denseOwnArrayValues(dataProperty.value)
+      : null;
+  if (data === null) {
+    throw new Error("Model preflight returned an invalid catalog shape.");
+  }
+  const available = new Set<string>();
+  for (const entry of data) {
+    const id = isPlainRecord(entry) ? ownDataValue(entry, "id") : undefined;
+    if (typeof id === "string" && SAFE_MODEL_ID_PATTERN.test(id)) {
+      available.add(id);
+    }
+  }
+  const presentModelIds = options.models.filter((model) =>
+    available.has(model)
+  );
+  const missingModelIds = options.models.filter(
+    (model) => !available.has(model)
+  );
+  if (missingModelIds.length > 0) {
+    throw new Error(
+      `Model preflight did not find requested model(s): ${missingModelIds.join(", ")}.`
+    );
+  }
+  return {
+    checkedAt,
+    presentModelIds,
+    requestedModelIds: options.models,
+    status: "passed",
+  };
+}
+
+async function benchmarkArm({
+  apiKey,
+  arm,
+  armPosition,
+  isolationToken,
+  model,
+  options,
+  pairOrder,
+  requestSequence,
+  scenario,
+  trial,
+}: {
+  readonly apiKey: string;
+  readonly arm: ScenarioArm;
+  readonly armPosition: ArmPosition;
+  readonly isolationToken: string;
+  readonly model: string;
+  readonly options: CliOptions;
+  readonly pairOrder: PairOrder;
+  readonly requestSequence: { value: number };
+  readonly scenario: ScenarioDefinition;
+  readonly trial: number;
+}): Promise<readonly [RequestResult, RequestResult]> {
+  const namespace = `cache-arm-${isolationToken}`;
+  requestSequence.value += 1;
+  const warmup = await runRequest({
+    armPosition,
+    apiKey,
+    isolationToken,
+    model,
+    namespace,
+    options,
+    pairOrder,
+    phase: "warmup",
+    requestSequence: requestSequence.value,
+    scenario: scenario.name,
+    toolNames: scenario.warmupTools,
+    trial,
+    variant: arm.variant,
+  });
+  await sleep(options.settleMs);
+  requestSequence.value += 1;
+  const measuredResult = await runRequest({
+    armPosition,
+    apiKey,
+    isolationToken,
+    model,
+    namespace,
+    options,
+    pairOrder,
+    phase: "measure",
+    requestSequence: requestSequence.value,
+    scenario: scenario.name,
+    toolNames: arm.measuredTools,
+    trial,
+    variant: arm.variant,
+  });
+  const warmupPrerequisitePassed =
+    warmup.success && warmup.responseModelMatchesRequested === true;
+  const measured: RequestResult = {
+    ...measuredResult,
+    cacheTelemetryEligible:
+      measuredResult.cacheTelemetryEligible && warmupPrerequisitePassed,
+    warmupPrerequisitePassed,
+  };
+  const captureStatus = measured.success ? "capture-ok" : measured.errorCode;
+  let eligibilityStatus = "warmup-prerequisite-failed";
+  if (warmupPrerequisitePassed) {
+    eligibilityStatus = "local-telemetry-ineligible";
+  }
+  if (measured.cacheTelemetryEligible) {
+    eligibilityStatus = "eligible";
+  }
+  process.stderr.write(
+    `  trial ${trial} ${scenario.name} ${pairOrder} ${arm.variant}: ${captureStatus}, ${eligibilityStatus}, cache-read=${measured.cacheReadTokens ?? "not-reported"}\n`
+  );
+  return [warmup, measured];
+}
+
+async function benchmarkModel({
+  apiKey,
+  model,
+  options,
+  orderAssignments,
+  requestSequence,
+  runId,
+}: {
+  readonly apiKey: string;
+  readonly model: string;
+  readonly options: CliOptions;
+  readonly orderAssignments: Record<string, unknown>[];
+  readonly requestSequence: { value: number };
+  readonly runId: string;
+}): Promise<Record<string, unknown>> {
+  const requests: RequestResult[] = [];
+  process.stderr.write(`Benchmarking ${model}\n`);
+  for (let trial = 1; trial <= options.trials; trial += 1) {
+    for (const scenario of options.scenarios) {
+      const pairOrder = pairOrderFor({
+        model,
+        scenario: scenario.name,
+        seed: options.seed,
+        trial,
+      });
+      const arms = orderedArms(scenario, pairOrder);
+      orderAssignments.push({
+        model,
+        pairOrder,
+        scenario: scenario.name,
+        trial,
+        variants: arms.map((arm) => arm.variant),
+      });
+      for (const [armIndex, arm] of arms.entries()) {
+        const isolationToken = isolationTokenFor({
+          model,
+          runId,
+          scenario: scenario.name,
+          trial,
+          variant: arm.variant,
+        });
+        requests.push(
+          ...(await benchmarkArm({
+            apiKey,
+            arm,
+            armPosition: armIndex === 0 ? "first" : "second",
+            isolationToken,
+            model,
+            options,
+            pairOrder,
+            requestSequence,
+            scenario,
+            trial,
+          }))
+        );
+      }
+    }
+  }
+  return {
+    cacheReporting: reportingStatus(requests),
+    cacheWriteReporting: cacheWriteReportingStatus(requests),
+    comparisons: comparisons(requests, options.scenarios),
+    finishReasonAudit: finishReasonAudit(requests),
+    isolationAudit: isolationAudit(requests),
+    membershipInputTokenParityAudit: membershipInputTokenParityAudit(
+      requests,
+      MEMBERSHIP_SCENARIO
+    ),
+    model,
+    outputComplianceAudit: outputComplianceAudit(requests),
+    requests,
+    requestOutcomeAudit: requestOutcomeAudit(requests),
+    responseModelAudit: responseModelAudit(requests),
+    summaries: options.scenarios.flatMap(({ arms, name }) =>
+      arms.map(({ variant }) => ({
+        scenario: name,
+        variant,
+        ...variantSummary(
+          requests.filter(
+            (request) =>
+              request.scenario === name && request.variant === variant
+          )
+        ),
+      }))
+    ),
+    usageFieldStatusAudit: usageFieldStatusAudit(requests),
+  };
+}
+
+async function runBenchmark(
+  options: CliOptions,
+  providedApiKey: string,
+  dependencies: {
+    readonly sourceSnapshot?: () => Promise<BenchmarkSourceSnapshot>;
+  } = {}
+): Promise<Record<string, unknown>> {
+  const apiKey = providedApiKey.trim();
   if (!apiKey) {
     throw new TypeError("CACHE_BENCH_API_KEY is required.");
   }
+  const readSourceSnapshot =
+    dependencies.sourceSnapshot ?? benchmarkSourceSnapshot;
+  const initialSourceSnapshot = await readSourceSnapshot();
+  const preflight = await modelPreflight({ apiKey, options });
   const runId = randomUUID();
+  const requestTopology = benchmarkRequestTopology(options);
   const models: Record<string, unknown>[] = [];
+  const orderAssignments: Record<string, unknown>[] = [];
+  const requestSequence = { value: 0 };
 
   for (const model of options.models) {
-    const requests: RequestResult[] = [];
-    process.stderr.write(`Benchmarking ${model}\n`);
-    for (let trial = 1; trial <= options.trials; trial += 1) {
-      for (const scenario of SCENARIOS) {
-        for (const arm of scenario.arms) {
-          const { variant } = arm;
-          const namespace = `${runId}:${model}:${scenario.name}:${variant}:${trial}`;
-          const warmup = await runRequest({
-            apiKey,
-            model,
-            namespace,
-            options,
-            phase: "warmup",
-            scenario: scenario.name,
-            toolNames: scenario.warmupTools,
-            trial,
-            variant,
-          });
-          requests.push(warmup);
-          await sleep(options.settleMs);
-          const measured = await runRequest({
-            apiKey,
-            model,
-            namespace,
-            options,
-            phase: "measure",
-            scenario: scenario.name,
-            toolNames: arm.measuredTools,
-            trial,
-            variant,
-          });
-          requests.push(measured);
-          process.stderr.write(
-            `  trial ${trial} ${scenario.name} ${variant}: ${
-              measured.success ? "ok" : measured.errorCode
-            }, cache-read=${measured.cacheReadTokens ?? "not-reported"}\n`
-          );
-        }
-      }
-    }
-
-    models.push({
-      model,
-      cacheReporting: reportingStatus(requests),
-      summaries: SCENARIOS.flatMap(({ arms, name }) =>
-        arms.map(({ variant }) => ({
-          scenario: name,
-          variant,
-          ...variantSummary(
-            requests.filter(
-              (request) =>
-                request.scenario === name && request.variant === variant
-            )
-          ),
-        }))
-      ),
-      comparisons: comparisons(requests),
-      requests,
-    });
+    models.push(
+      await benchmarkModel({
+        apiKey,
+        model,
+        options,
+        orderAssignments,
+        requestSequence,
+        runId,
+      })
+    );
   }
-
+  if (requestSequence.value !== requestTopology.totalRequests) {
+    throw new Error(
+      `Benchmark topology produced ${requestSequence.value} requests; expected ${requestTopology.totalRequests}.`
+    );
+  }
   const result = {
-    schemaVersion: 1,
+    schemaVersion: 3,
     generatedAt: new Date().toISOString(),
     endpoint: options.baseUrl,
     protocol: "openai-chat-completions",
     credentialRecorded: false,
     configuration: {
+      benchmarkSourceSha256: initialSourceSnapshot.benchmarkSourceSha256,
+      campaignId: options.campaignId,
+      implementationSourcesSha256:
+        initialSourceSnapshot.implementationSourcesSha256,
       models: options.models,
+      maxOutputTokens: MAX_OUTPUT_TOKENS,
+      nodeVersion: process.version,
+      runId,
+      seed: options.seed,
       trials: options.trials,
       prefixLines: options.prefixLines,
       settleMs: options.settleMs,
       timeoutMs: options.timeoutMs,
+      modelPreflight: preflight,
+      requestTopology,
       fixedToolNames: FIXED_TOOL_NAMES,
       dynamicToolNames: DYNAMIC_TOOL_NAMES,
+      membershipReplacementToolName: MEMBERSHIP_REPLACEMENT_TOOL_NAME,
+      toolChoice: "omitted-auto",
+      toolCallValidation:
+        "Every HTTP-success response must contain a recognized choices array and zero tool calls; otherwise the request is marked unsuccessful.",
+      finishReasonValidation: {
+        acceptedZeroToolReasons: ACCEPTED_ZERO_TOOL_FINISH_REASONS,
+        statuses: FINISH_REASON_STATUSES,
+        policy:
+          "The sole choice must report finish_reason=stop for capture success. Missing, accessor-backed, non-string, unknown, length, content_filter, function_call, and tool_calls values are stored only as sanitized status labels and fail closed; raw finish-reason values are never stored.",
+      },
+      eligibilitySemantics: {
+        cacheTelemetryEligible:
+          "A capture-success request is locally eligible for requested-model cache aggregation only when the sanitized response model exactly matches the requested model and input/cache-read/cache-write usage aliases form a valid envelope. A measured request additionally requires its own arm's warmup to be a capture success from that exact requested model.",
+        captureSuccess:
+          "HTTP success plus exactly one recognized choice/message, zero modern or legacy tool calls, finish_reason=stop, and exact trimmed text OK. Response-model attribution and usage validity are audited separately.",
+      },
+      outputValidation:
+        "The result stores only whether the sole choice returned exact trimmed text OK; response text and tool arguments are never stored. Missing, malformed, multi-choice, and mismatched output fails capture and therefore cache-telemetry eligibility.",
+      usageValidation:
+        "Cache aggregates accept only nonnegative safe-integer input/read/write token observations. Read and write must each be no greater than input, their sum must be a safe integer no greater than input, and every cross-request sum must remain a safe integer or the campaign fails closed without evidence. Conflicting or malformed aliases retain only an audit status; their source and value are nulled instead of guessed or clamped. Output and total-token audit conflicts do not affect cache-read eligibility.",
+      pairedUncertainty:
+        "Paired summaries include descriptive p25/p75 intervals and effect signs overall and by AB/BA order. These are not confidence intervals.",
+      armIsolation: {
+        canary:
+          "Each arm has a unique, fixed-length token in an equal-shape inert canary placed before every benchmark tool. Warmup and measure reuse the same canary; no other arm does.",
+        promptNamespace:
+          "Each arm has a unique, fixed-length system-message namespace shared only by its warmup and measurement.",
+      },
       armExecutionOrder: {
-        mode: "fixed-control-first",
+        mode: "seeded-alternating-ab-ba",
+        algorithm:
+          "A SHA-256 bit of seed, model, and scenario selects the first trial order; each later trial alternates it. Even trial counts are exactly balanced.",
         models: options.models,
-        scenarios: SCENARIOS.map((scenario) => scenario.name),
+        scenarios: options.scenarios.map((scenario) => scenario.name),
         variantsByScenario: Object.fromEntries(
-          SCENARIOS.map((scenario) => [
+          options.scenarios.map((scenario) => [
             scenario.name,
             scenario.arms.map((arm) => arm.variant),
           ])
         ),
-        phasesPerArm: ["warmup", "settle", "measure"],
+        orderAssignments,
+        phasesPerArm: ARM_EXECUTION_PHASES,
       },
       comparisonSemantics: {
         "same-set-order":
-          "The warmup uses canonical order. The measured request either preserves it or reverses the same set.",
+          "After an arm-specific canary, the warmup uses canonical order. The measured request either preserves it or reverses the same set.",
         "active-set-change":
-          "The warmup uses the full canonical set. The measured request either preserves that set exactly or uses a smaller canonical subset with the fixed prefix intact.",
+          "After an arm-specific canary, the warmup uses the full canonical set. The measured request either preserves that set exactly or uses a smaller canonical subset with the fixed prefix intact.",
+        "membership-only-change":
+          "The measured request either preserves the warmup set or replaces one tool at the same position with an equal-byte definition, keeping tool count and serialized request length equal.",
       },
+      effectConclusionPolicy:
+        "A directional cache or input-token conclusion is reported only when each AB/BA order stratum retains at least 75% eligible pairs and both stratum medians have the same nonzero sign. Two zero medians report no observed median difference; mixed signs or a zero/nonzero mix report order-sensitive; missing coverage is indeterminate.",
+      minimumOrderStratumCoverage: EVIDENCE_CAMPAIGN.minimumStratumCoverage,
     },
     interpretation: {
       "not-reported":
@@ -775,17 +2494,69 @@ async function main(): Promise<void> {
         "A recognized cache-read usage field was exposed, but every measured value was zero.",
       "reported-nonzero":
         "At least one measured response exposed a positive provider-reported cache-read token count.",
-      unavailable: "No measured request succeeded.",
+      unavailable:
+        "No measured request passed response-model and usage-envelope eligibility.",
     },
     models,
   };
 
   const outputPath = resolve(options.output);
   await mkdir(dirname(outputPath), { recursive: true });
-  await writeFile(outputPath, `${JSON.stringify(result, null, 2)}\n`, {
-    mode: 0o600,
-  });
+  const serialized = serializeBenchmarkResult(result, apiKey);
+  const temporaryPath = `${outputPath}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporaryPath, serialized, { flag: "wx", mode: 0o600 });
+    const finalSourceSnapshot = await readSourceSnapshot();
+    if (!sourceSnapshotsMatch(initialSourceSnapshot, finalSourceSnapshot)) {
+      throw new Error(
+        "Benchmark or implementation sources changed during the campaign; refusing to write evidence."
+      );
+    }
+    await rename(temporaryPath, outputPath);
+  } finally {
+    await rm(temporaryPath, { force: true });
+  }
   process.stderr.write(`Wrote ${outputPath}\n`);
+  return result;
 }
 
-await main();
+async function main(): Promise<void> {
+  const options = parseOptions(process.argv.slice(2));
+  await runBenchmark(options, process.env.CACHE_BENCH_API_KEY ?? "");
+}
+
+export {
+  ACCEPTED_ZERO_TOOL_FINISH_REASONS,
+  ALL_TOOL_NAMES,
+  ARM_EXECUTION_PHASES,
+  benchmarkRequestArtifacts,
+  benchmarkRequestTopology,
+  cacheMeasurementIsValid,
+  DYNAMIC_TOOL_NAMES,
+  EVIDENCE_CAMPAIGN,
+  EVIDENCE_CAMPAIGN_TOPOLOGY,
+  extractUsage,
+  FINISH_REASON_STATUSES,
+  FIXED_TOOL_NAMES,
+  IMPLEMENTATION_SOURCE_PATHS,
+  isolationTokenFor,
+  MEMBERSHIP_REPLACEMENT_TOOL_NAME,
+  MEMBERSHIP_SCENARIO,
+  orderedTools,
+  outputWasExactOk,
+  pairOrderFor,
+  parseOptions,
+  responseFinishReasonStatuses,
+  responseModel,
+  responseToolCallCount,
+  runBenchmark,
+  safeTokenSum,
+  serializeBenchmarkResult,
+  staticPrefix,
+  variantSummary,
+};
+
+const entrypoint = process.argv[1];
+if (entrypoint && import.meta.url === pathToFileURL(resolve(entrypoint)).href) {
+  await main();
+}

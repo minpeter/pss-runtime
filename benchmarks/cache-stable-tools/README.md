@@ -1,103 +1,226 @@
 # Cache-stable dynamic tools: live-provider benchmark
 
-This benchmark checks whether preserving the tool-definition prefix correlates
-with provider-reported prompt-cache reuse. It sends OpenAI-compatible chat
-completion requests directly so the raw usage shape remains observable.
+This benchmark tests a narrow provider premise behind PSS tool selection:
+whether preserving an exact tool/prompt prefix correlates with
+provider-reported prompt-cache reuse. It sends sequential OpenAI-compatible
+chat-completion requests directly so sanitized usage telemetry remains
+observable. PSS resolver and adapter wiring are tested separately; the live
+script is not presented as an end-to-end runtime test.
 
-It runs two paired comparisons:
+The live runner emits an eager top-level `tools` array over raw Chat
+Completions. The local wire smoke uses `@ai-sdk/openai-compatible` to reproduce
+that generic eager shape. Neither path sends OpenAI Responses `tool_search`,
+Anthropic `defer_loading`/`tool_reference`, OpenAI `additional_tools`, or Kimi
+system-message tool declarations. A cache hit here therefore supports only the
+eager exact-prefix premise; it does not show that FreeRouter preserves any
+upstream native deferred-tool protocol.
 
-1. **Same set, different order.** Each pair warms the cache with the canonical
-   tool order. The measured request either preserves that order or reverses the
-   exact same set.
-2. **Changed active set.** Each pair warms with the full canonical set. The
-   measured request either repeats that set exactly or removes a dynamic suffix
-   while retaining the fixed canonical prefix.
+## Design
 
-Every arm gets a unique prompt namespace and its own warmup, preventing one arm
-from inheriting another arm's cache entry. The long deterministic prefix clears
-common minimum cacheable-token thresholds. Request bodies, model output, and
-credentials are not written to the result. SHA-256 hashes of the serialized
-request and tools array make the wire-level relationships auditable without
-publishing the long prompt.
+The `all` scenario set runs three paired comparisons:
 
-The runtime resolver behavior that constructs these two arrangements is covered
-separately by `packages/runtime/src/llm/llm.test.ts`, especially “uses
-alphabetical tool order by default” and “keeps always-active tools as a
-canonical prefix before dynamic tools.” Those tests assert the `activeTools`
-and AI SDK `toolOrder` passed to model generation. This benchmark isolates the
-provider premise: what an OpenAI-compatible endpoint reports after receiving
-equivalent wire arrays. It does not replace the resolver tests or claim that
-the raw HTTP script exercises PSS end to end.
+1. **Same set, different order.** Both arms warm with canonical order. The
+   measurement preserves or reverses the same definitions.
+2. **Changed active set.** Both arms warm with the full set. The measurement
+   repeats it or removes a dynamic suffix while preserving the fixed prefix.
+3. **Membership-only change.** The measurement repeats the full set or swaps
+   one tool at the same position for a different, equal-byte definition. Tool
+   count, tools-array bytes, and request-body bytes remain equal.
 
-`scripts/cache-stable-tools-wire.test.mjs` closes that boundary locally: it
-runs PSS through the OpenAI-compatible adapter with a synthetic fetch, asserts
-the actual wire tool-name arrays and SHA-256 hashes across registry insertion
-orders, and checks the changed active set and diagnostic fingerprints. No live
-credential is needed for that deterministic smoke test.
+Equal bytes do not imply equal tokenizer output. The third scenario therefore
+has a dedicated input-token parity audit, independent of cache-read reporting.
+It records complete valid-input pairs, equal/control-higher/changed-higher
+counts, each delta, and missing pairs. A difference is reported, not silently
+normalized or treated as a benchmark failure; it limits interpretation of
+absolute cache-token deltas. The checked-in verifier requires valid parity
+telemetry for at least 75% of membership pairs.
+
+Every arm has a unique fixed-length prompt namespace and a unique, equal-shape
+inert canary before the benchmark tools. Its warmup and measurement alone share
+those values. A measurement is eligible for cache aggregation only when its own
+warmup was a recognized zero-tool-call response from the exact requested model
+with exactly one choice, `finish_reason=stop`, and exact trimmed text `OK`.
+The verifier checks that unchanged arms reuse both tools-array and request-body
+hashes, changed arms change both hashes, and the same-set/membership swaps keep
+serialized byte length equal.
+
+Trial order is deterministic but counterbalanced. A SHA-256 bit of seed, model,
+and scenario selects the first AB or BA order, then every trial alternates. With
+eight trials, each model/scenario stratum has four control-first and four
+changed-first assignments. Requests remain sequential to avoid benchmark-made
+concurrency as a cache-affinity or latency variable.
+
+Headline direction is order-robust, not merely pooled. Each AB/BA order must
+retain at least 75% complete eligible pairs, and both order-stratum medians
+must have the same nonzero sign before the result says either arm was higher.
+Two zero medians report no observed median difference. Opposite signs, or a
+zero/nonzero split, are reported as order-sensitive; missing stratum coverage
+is indeterminate. The membership input-token parity audit uses the same rule.
+
+## What counts as evidence
+
+The result deliberately separates several concepts:
+
+- `captureSuccess`: HTTP success plus exactly one recognized choice/message,
+  zero modern or legacy tool calls, `finish_reason=stop`, and exact trimmed
+  text `OK`.
+  `tool_calls: null` is a valid no-tool shape; array-valued choices/messages,
+  missing/non-string/nonstandard finish reasons, `length`, `content_filter`,
+  `function_call`, and `tool_calls` finishes fail closed.
+- `finishReasonAudit`: per-choice sanitized status counts split into warmup,
+  measurement, and all-request views. Raw finish-reason values are not retained.
+- `cacheTelemetryEligible`: capture success, exact requested response-model
+  attribution, a valid input/read/write usage envelope, and—for measurements—a
+  successful exact-model warmup from the same arm.
+- `outputComplianceAudit`: whether the sole returned choice was exact trimmed
+  `OK`. Missing, malformed, multi-choice, and mismatched output fails capture
+  and cache eligibility; no response text is stored.
+- `responseModelAudit`: match, mismatch, and missing counts split into warmup,
+  measurement, and all-request views.
+- `usageFieldStatusAudit`: absent, valid, malformed, and conflicting alias
+  counts for input, cache read, cache write, output, and total tokens.
+
+When multiple recognized aliases are present, they must contain the same
+nonnegative safe integer. A malformed or conflicting field retains only its
+audit status; source and value are nulled. Cache read/write must each be no
+greater than input and their sum must not exceed input. Output/total conflicts
+remain visible but do not reduce read/write eligibility. The per-request
+read/write sum and every cross-request weighted aggregate must also remain a
+safe integer; overflow aborts the campaign before evidence is written.
+
+Read and write summaries are separate. Each reports field coverage, nonzero
+coverage, median tokens, median read-or-write/input ratio, and a weighted ratio.
+No cost is derived and provider-normalized fields are not assumed comparable
+across models.
+
+## Local and live verification
+
+`scripts/cache-stable-tools-wire.test.mjs` runs PSS through the
+OpenAI-compatible adapter with a synthetic fetch. It proves canonical wire
+order across registry insertion orders, inactive-tool removal from the
+executable registry, actual tools-array hashes, and semantic diagnostics. The
+runtime suite covers callback isolation, fail-closed selection/model/toolChoice
+validation, retry indices, and AI SDK execution behavior.
+
+`scripts/cache-stable-tools-evidence.test.mjs` is a source-coupled regression
+check, not an independent verifier. It imports the producer's campaign preset,
+source manifest, topology, and request-artifact helpers, then recalculates the
+checked-in snapshot. That makes it useful for catching stale evidence and
+recorded-view drift, but producer and test can share the same faulty assumption.
+
+`scripts/cache-stable-tools-independent-verifier.mjs` is the authoritative
+evidence verifier. It uses only Node.js standard-library imports and does not
+import the benchmark producer. From the serialized evidence and current source
+bytes, it independently reconstructs the 480-request topology, AB/BA order,
+request-body/tool-array/isolation hashes, chronology, response and usage
+eligibility, warmup linkage, audits, summaries, comparisons, membership parity,
+and the final README report. It also rejects unexpected request fields, raw
+content/provider payloads, bearer strings, and key-like values. Schema v3, the
+campaign ID, exact source hashes, and full topology must all match, so an older
+or interrupted output fails closed.
+
+`scripts/cache-stable-tools-independent-verifier.adversarial.mjs` exercises that
+independent path against a complete synthetic schema-v3 campaign and targeted
+topology, chronology, source, usage, warmup, audit, summary, order-sensitivity,
+and README tampering. `pnpm test` runs this synthetic adversarial suite in CI;
+the suite itself does not read the checked-in live snapshot. The normal Vitest
+glob also runs the source-coupled regression check, which intentionally rejects
+stale evidence once these sources change. The authoritative live-snapshot
+verifier remains an explicit command and must not run against the obsolete
+pre-campaign schema-v2 artifact.
 
 ## Reproduce
 
-Use a disposable credential and pass it only through the environment:
+Use a disposable credential, enter it without shell echo, and keep the runner
+and every manifested implementation/verifier source unchanged until source-hash
+verification completes:
 
 ```sh
 read -rsp 'API key: ' CACHE_BENCH_API_KEY
+printf '\n'
 export CACHE_BENCH_API_KEY
-pnpm benchmark:cache-stable-tools
+trap 'unset CACHE_BENCH_API_KEY' EXIT
+pnpm benchmark:cache-stable-tools -- --evidence-campaign
 unset CACHE_BENCH_API_KEY
+trap - EXIT
 ```
 
-Run `pnpm benchmark:cache-stable-tools -- --help` for model, trial, timeout,
-settling-delay, prefix-size, endpoint, and output options.
+Before spending the live credential, run the independent verifier's synthetic
+adversarial suite:
 
-The default run uses ten sequential paired trials per model and scenario. It is
-deliberately not parallelized, avoiding benchmark-induced concurrency as an
-extra latency and cache-affinity variable.
+```sh
+pnpm test:cache-stable-tools-verifier
+```
 
-## Checked-in snapshot
+After the campaign has atomically written fresh schema-v3 evidence, run both
+verification paths. Generate the canonical report block without checking the
+still-placeholder README, replace the marked block below with that exact
+output, and then run the authoritative verifier with README parity enabled:
 
-The 2026-07-17 KST snapshot completed all 120 warmups and all 120 measured
-requests successfully. MiniMax and Mistral exposed
-`prompt_tokens_details.cached_tokens`; Qwen exposed no recognized cache-read
-field. No model exposed a recognized cache-write field.
+```sh
+pnpm test:cache-stable-tools-evidence
+pnpm verify:cache-stable-tools -- --no-readme --print-readme
+pnpm verify:cache-stable-tools
+```
 
-| Model | Raw cache-field coverage | Same order vs reversed (median read/input) | Paired difference | Active set unchanged vs subset (median read/input) |
-| --- | ---: | ---: | ---: | ---: |
-| `minimaxai/minimax-m2.7` | 38/40 | 98.36% vs 72.46% | +25.90 pp for stable order (9 pairs) | 98.35% vs 96.91% |
-| `mistralai/ministral-14b-latest` | 40/40 | 0.454% vs 0.454% | approximately 0 pp (10 pairs) | 0.454% vs 0.454% |
-| `qwen/qwen2.5-7b-instruct` | 0/40 | not reported | not eligible | not reported |
+The default endpoint is
+`https://freerouter.minpeter.workers.dev/v1`. The run performs an authenticated
+`/models` preflight, rejects redirects so the bearer token cannot be forwarded,
+and writes by mode-`0600` temporary file plus atomic rename. The pinned preset
+uses 5 models × 8 trials × 3 scenarios × 2 arms × warmup/measurement = 480
+Chat Completions requests, plus one `/models` preflight request: 481 HTTP
+requests total. There are no hidden retries. The runner checks the 480-request
+topology, then re-hashes the runner and complete source manifest before writing;
+any mid-campaign drift fails before the atomic rename. Methodology-changing
+flags cannot be combined with `--evidence-campaign`; `--help` lists the bounded
+exploratory options.
 
-For MiniMax, stable order also had a 4,480-token paired median advantage and
-was 974 ms faster in the same-set comparison. Its weighted read/input ratios,
-which retain zero-hit observations, were 89.84% stable versus 71.06% reversed.
-The Mistral distribution was bimodal: occasional approximately 14k-token hits
-raised weighted ratios to about 20.2%, while every arm's median remained 64
-tokens. It provides no ordering evidence in this run.
+## Artifacts and interpretation
 
-The active-set absolute token difference is not an effect estimate because the
-subset has a different input length. The useful MiniMax signal is coverage: the
-canonical subset retained a 96.91% median read/input ratio, only 1.44 percentage
-points below the unchanged control in eligible paired trials.
+[`latest-freerouter.json`](./latest-freerouter.json) is authoritative only
+when its independent verifier and current runner-source hash pass. Snapshot
+results and SHA-256 are recorded below after the final run.
 
-## Interpretation limits
+[`mistral-response-shape-probe.json`](./mistral-response-shape-probe.json) is a
+diagnostic-only, unversioned-source discovery artifact. It records no response
+text or credential and showed that the router returned `tool_calls: null` for a
+valid no-tool Mistral response. Its SHA-256 is
+`d43b238a53dd686445fff02c86c57cfedf7e0e1987780290be3122501addb214`.
+It motivated the parser regression test but is not used for an effect estimate;
+the final source-hashed campaign is the authoritative parser/effect evidence.
 
-- `reported-nonzero` means the endpoint returned a recognized positive
-  cache-read token field. `reported-zero-only` means a raw field was present but
-  zero. `not-reported` means no recognized raw field was exposed; it is not
-  normalized to zero and is not proof that the upstream provider did no caching.
-- The router's upstream provider, backend affinity, cache policy, load, and
-  usage normalization are opaque. This is observational evidence, not a causal
-  provider guarantee.
-- Arm order was fixed within every trial: stable before reversed, then
-  unchanged before subset. The checked-in JSON records this as
-  `fixed-control-first`. Time drift or backend-affinity drift can therefore be
-  confounded with arm identity. Counterbalance the order before using this as
-  publication-grade causal evidence; the current snapshot is sufficient only
-  as scoped implementation evidence.
-- The Mistral usage totals barely changed when tools were removed, unlike the
-  MiniMax totals. Cross-model token counts are provider-normalized and are not
-  directly comparable.
-- Latency includes router and network variance. Token reuse is the primary
-  signal; latency is supporting context only.
-- A result is a dated snapshot. Re-run it when router or model versions change.
+The router's upstream provider, retry behavior, backend affinity,
+`system_fingerprint`, cache policy, load, and usage normalization are opaque.
+The endpoint does not expose enough bounded metadata to control those variables
+without retaining raw provider payloads. Results are observational, dated, and
+provider-specific. `not-reported` means no recognized valid field was exposed,
+not that no upstream cache exists. Latency is supporting context only.
 
-The checked-in result is [`latest-freerouter.json`](./latest-freerouter.json).
+Native capability must be established separately for a precise
+adapter/provider/model/version tuple. The audited
+[`@ai-sdk/openai@4.0.15` tool-search implementation](https://github.com/vercel/ai/blob/b8241a6e5592066c0ee1772c32d3ef47d7d7595e/packages/openai/src/tool/tool-search.ts)
+and
+[`@ai-sdk/anthropic@4.0.15` tool preparation](https://github.com/vercel/ai/blob/6976682b5718f36425521816e6a8c2df8c07faa9/packages/anthropic/src/anthropic-prepare-tools.ts)
+do not imply equivalent behavior in `@ai-sdk/openai-compatible` or a router.
+Likewise, [Kimi's positioned system-message protocol](https://platform.kimi.ai/docs/guide/use-dynamic-tool-loading)
+is a direct-provider, currently `kimi-k3`-specific extension. Any future native
+path needs a wire canary for its expected request/replay items and an eager
+fallback when the tuple is unknown or the canary fails.
+
+That canary must also assert an explicit MCP approval policy. The OpenAI API
+documents approval-before-sharing as its default, while the current AI SDK
+OpenAI Responses adapter lowers an omitted setting to
+`require_approval: "never"`; a provider-native integration must not rely on
+either implicit default. The generic adapter used here also does not normalize
+GPT-5.6 `cache_write_tokens`, so this benchmark's separately audited raw write
+field is required and a read-hit ratio is never presented as net cost savings.
+
+## Final checked-in snapshot
+
+This section is populated from the source-hashed 480-request campaign before
+the pull request is finalized.
+
+<!-- cache-stable-tools-independent-verifier:start -->
+Fresh schema-v3 evidence and the verifier-generated report are pending the
+final source-frozen campaign.
+<!-- cache-stable-tools-independent-verifier:end -->

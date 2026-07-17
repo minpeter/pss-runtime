@@ -113,17 +113,181 @@ while `[]` selects none of them. `toolOrder` controls ordering within the
 always-active and dynamic groups: listed names come first and omitted registry
 names follow alphabetically, while the always-active group remains the prefix.
 Without configuration, all tool names are ordered alphabetically. The runtime
-passes the effective order through AI SDK 7 `toolOrder` and rejects duplicate,
-unknown, overlapping, or inactive named-tool selections before provider work.
+passes the effective order through AI SDK 7 `toolOrder`, removes every inactive
+tool from AI SDK's executable registry, and rejects duplicate, unknown,
+overlapping, malformed, or inactive named-tool selections before provider
+work. Callback results may contain only `activeTools`, `model`, and
+`toolChoice`; unknown or accessor-backed fields fail closed instead of silently
+activating the full registry. `toolChoice: "required"` is rejected when no tool
+is active. A `model` override must be a concrete AI SDK v2, v3, or v4 language
+model object; string gateway IDs are rejected so step preparation cannot switch
+to a different model-resolution path and bypass the provider wrapper or
+middleware configured by the host. `activeTools` must be a dense array of
+data-property strings; sparse or accessor-backed indices fail without invoking
+their getters. Configured `alwaysActiveTools` and `toolOrder` use the same
+registry-bounded snapshot, so array-subclass iterators, custom
+`Symbol.iterator` accessors, sparse indices, and index getters are never used to
+drive selection.
+
+The callback receives a structured clone of history and a frozen registry of
+isolated tool facades. History that cannot be structured-cloned fails closed
+with `DataCloneError`. A tool facade recursively copies only own enumerable
+data properties into frozen arrays or null-prototype records. Accessors are
+skipped without invocation, custom prototypes are discarded, cycles preserve
+their identity within the snapshot, and callable values become frozen inert
+stubs that throw if invoked. This prevents reflection, methods, or a
+non-configurable property from escaping back to the runtime's original tool
+objects. Select by names and inert data metadata only; execute tools through
+the normal model tool-call path.
 
 Stable ordering reduces accidental tool-definition reordering, but dynamic
 selection is not inherently cache-safe: changing the active set still changes
 the provider request. Hosts with a diagnostics sink receive best-effort,
 non-blocking `model.tool_cache_fingerprint` records. These contain only counts,
-the logical step index, and SHA-256 hashes of registry/selection/order tool-name
-lists. They do not contain prompts, tool inputs, definitions, or thread keys.
-The registry hash covers names only, so schema or description changes require
-separate versioning and are not detected by this diagnostic.
+the logical step index, selector duration, an opaque attempt ID, and SHA-256
+fingerprints. A new attempt ID is generated per actual `generateModelStep`
+invocation, including retries and resumed attempts; `runtimeStepIndex` remains
+the logical outer-loop index. This lets a host join selection diagnostics with
+other records from the exact same model attempt. The record also counts dynamic
+description functions and per-tool semantic fingerprints that were unavailable;
+a single malformed schema therefore does not erase the rest of the diagnostic.
+
+Name fingerprints cover the registered set, active set, and effective order.
+For each active function or dynamic tool, PSS delegates the definition digest
+to AI SDK 7.0.30's public `fingerprintTools`, which covers its tagged
+description, resolved input JSON schema, and title. PSS then builds an ordered
+aggregate that additionally binds the tool name, input examples, provider
+options, and `strict`; provider tools bind their name, ID, arguments, and
+provider options. AI SDK's separate `detectToolDrift` remains available to
+hosts that persist and compare per-tool trust baselines; this runtime diagnostic
+is an attempt-scoped correlation signal rather than a replacement drift policy.
+Literal registry names such as `constructor`, `toString`, and `__proto__` stay
+own properties throughout selection, execution filtering, and fingerprint-map
+lookup.
+
+The aggregate is a semantic drift signal, not a hash of the provider's final
+wire bytes: dynamic description function results and adapter-specific lowering
+are intentionally not evaluated. Records do not contain prompts, tool inputs,
+definitions, thread keys, or unhashed semantic values. AI SDK currently lowers
+provider tools from their name, provider ID, and arguments; hashing provider
+options here intentionally captures extra host-side semantics and is not a
+wire-equivalence claim. These hashes are correlation and version identifiers,
+not secrecy controls: low-entropy tool names or standard schemas may be
+recoverable by dictionary guessing.
+
+The callback facade and the diagnostic snapshot are deliberately separate.
+Diagnostics capture only own data descriptors for the semantic fields above,
+then let AI SDK resolve supported JSON, Zod, standard, or lazy input schemas.
+Accessor-backed fields and top-level tool definitions with custom prototypes
+are recorded as unavailable rather than executed. Dynamic description
+functions are counted and fingerprinted only by their presence; their result is
+never evaluated. Schema conversion failures are isolated to that tool and
+recorded through `semanticFingerprintUnavailableToolCount`; they never make the
+model step fail. Metadata is canonicalized before the asynchronous digest so a
+later host mutation cannot rewrite an in-flight diagnostic.
+
+Model identity follows the same no-accessor rule. Data-backed
+specification-version, provider, and model-ID fields are hashed directly. Some
+official adapters expose `provider` through a prototype getter; PSS recognizes
+that object as a usable AI SDK model without invoking the getter during
+selection, hashes the safe data-backed identity fields plus an unavailable
+marker, and sets `modelIdentityFingerprintUnavailable` to `true`.
+
+This local registry selector does not emulate provider-native deferred tool
+discovery (`tool_search`, `defer_loading`, or `additional_tools`) or explicit
+prompt-cache breakpoints. AI SDK core generation is adapter-neutral, so native
+support must be attributed to a concrete adapter rather than to `ai` in
+general. The audited `@ai-sdk/openai@4.0.15`
+[`Responses adapter`](https://github.com/vercel/ai/blob/b8241a6e5592066c0ee1772c32d3ef47d7d7595e/packages/openai/src/tool/tool-search.ts)
+exposes `openai.tools.toolSearch`; its Responses tool preparation maps
+[`providerOptions.openai.deferLoading` to `defer_loading`](https://github.com/vercel/ai/blob/b8241a6e5592066c0ee1772c32d3ef47d7d7595e/packages/openai/src/responses/openai-responses-prepare-tools.ts).
+The audited
+[`@ai-sdk/anthropic@4.0.15` adapter](https://github.com/vercel/ai/blob/6976682b5718f36425521816e6a8c2df8c07faa9/packages/anthropic/src/anthropic-prepare-tools.ts)
+maps `providerOptions.anthropic.deferLoading` into Anthropic tool definitions.
+Those native paths can coexist with PSS when a host explicitly supplies the
+matching adapter and tool configuration, but PSS does not create or replay
+their provider-specific transcript items.
+
+`@ai-sdk/openai-compatible` is a different, generic adapter. It has no general
+contract to preserve every router/vendor extension, so neither an official
+OpenAI/Anthropic adapter implementation nor a compatible model ID establishes
+native deferred-tool support on that path. Broader adapter-agnostic dynamic
+selection remains discussed in AI SDK
+[#11920](https://github.com/vercel/ai/issues/11920). Provider-native
+just-in-time retrieval is therefore a separate, capability-gated layer.
+[OpenAI tool search](https://developers.openai.com/api/docs/guides/tools-tool-search)
+is documented for GPT-5.4 and later. Both hosted and client-managed search load
+selected definitions at the end of the current context; transcript
+`additional_tools` preserve the earlier load point, and changing or removing
+that loaded set breaks cache reuse from that point forward. OpenAI recommends
+grouping tools into namespaces or MCP servers and keeping each namespace small.
+
+[Anthropic tool search](https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-search-tool.md)
+uses `defer_loading` plus `tool_reference` expansion and requires unchanged
+search-result/reference blocks when replaying history. Deferred definitions
+are still sent in the request's top-level `tools` array; they are omitted only
+from the initial model-visible context prefix, so deferral is neither an
+authorization boundary nor a secrecy mechanism. Anthropic's native support
+matrix includes Haiku 4.5; that should not be conflated with third-party custom
+message-anchored implementations that may support a narrower model set.
+
+As of the 2026-07-17 upstream audit (Pi main
+[`216e672`](https://github.com/badlogic/pi-mono/commit/216e672)), Pi's
+additive-only prototype
+([`3d8f743`](https://github.com/badlogic/pi-mono/commit/3d8f743))
+records added tool names in tool results and replays provider-native references
+at the exact load point, while removal or other non-additive changes fall back
+to eager tools. Current OpenCode
+([commit `3a1c6df`](https://github.com/anomalyco/opencode/commit/3a1c6df)) exposes a
+cache marker/key path but no native tool-search replay. Those designs reinforce
+the boundary here: the generic selector owns deterministic eager membership;
+an adapter-specific future layer would own transcript-anchored loading.
+
+Pi main also contains a separate, direct-Kimi compatibility path in
+[`f16b4e0cda56cef74bb92e264f8561cf8f4c1385`](https://github.com/badlogic/pi-mono/commit/f16b4e0cda56cef74bb92e264f8561cf8f4c1385)
+and
+[`70c57632975c989f80a3a49c79ff43213f1f1dad`](https://github.com/badlogic/pi-mono/commit/70c57632975c989f80a3a49c79ff43213f1f1dad).
+It serializes tools into system messages only when the OpenAI Completions
+adapter explicitly sets `compat.deferredToolsMode = "kimi"`. That matches
+[Kimi's direct-provider protocol](https://platform.kimi.ai/docs/guide/use-dynamic-tool-loading),
+which injects complete tool definitions in positioned system messages and is
+currently documented only for `kimi-k3`; it is not OpenAI `tool_search`.
+Pi's OpenRouter Kimi registry does not enable this mode. A Kimi-compatible name
+through a router therefore must not be treated as evidence that the direct
+provider extension survived routing.
+
+Native enablement should be keyed by the full
+adapter/provider/model/version tuple, then confirmed by a wire canary that
+observes the expected native request and replay items. Unknown tuples, failed
+canaries, model aliases, and router paths should fall back to the deterministic
+eager PSS selection implemented here. Model-name detection alone is not a safe
+capability check.
+
+The canary must cover approval policy as well as wire shape. OpenAI's current
+[MCP guide](https://developers.openai.com/api/docs/guides/tools-connectors-mcp)
+says the API defaults to approval before sharing data, while the pinned
+`@ai-sdk/openai@4.0.15` Responses preparation code serializes an omitted
+adapter option as
+`require_approval: "never"`. A native PSS integration must therefore require an
+explicit host-owned approval policy and verify the serialized value; it must
+not inherit either side's default for sensitive tools.
+
+Both providers' prompt-cache documentation keeps exact-prefix stability
+central; see
+[OpenAI prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)
+and [Anthropic prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching).
+OpenAI additionally documents `prompt_cache_key` and explicit cache breakpoints
+for GPT-5.6 and later, including separately reported cache-write tokens and
+write cost. These provider-native controls are not silently synthesized by the
+generic OpenAI-compatible path. Provider pages currently disagree on a numeric
+breakpoint lookback limit, so this runtime does not encode or claim one.
+[`@ai-sdk/openai-compatible` 3.0.11](https://github.com/vercel/ai/blob/b8241a6e5592066c0ee1772c32d3ef47d7d7595e/packages/openai-compatible/src/chat/convert-openai-compatible-chat-usage.ts)
+parses `cached_tokens` but not
+`cache_write_tokens`: the latter can remain only in `usage.raw`, normalized
+`cacheWrite` stays absent, and normalized `noCache` includes those writes. A
+custom `convertUsage` or a provider-specific adapter is required before using
+normalized usage for GPT-5.6 cache economics; read-hit telemetry alone is not a
+cost claim.
 
 Per-key conversations use `thread(key)`:
 

@@ -1,0 +1,45 @@
+{
+  "credentialRecorded": false,
+  "endpoint": "https://freerouter.minpeter.workers.dev/v1",
+  "generatedAt": "2026-07-17T04:20:22.299Z",
+  "httpStatus": 200,
+  "httpSuccess": true,
+  "protocol": "openai-chat-completions",
+  "requestedModel": "mistralai/ministral-14b-latest",
+  "responseShape": {
+    "rootKind": "object",
+    "choices": {
+      "kind": "array",
+      "length": 1,
+      "present": true
+    },
+    "firstChoiceKind": "object",
+    "message": {
+      "kind": "object",
+      "present": true
+    },
+    "toolCalls": {
+      "kind": "null",
+      "length": null,
+      "present": true
+    },
+    "functionCall": {
+      "kind": "undefined",
+      "present": false
+    },
+    "content": {
+      "exactTrimmedOk": true,
+      "kind": "string",
+      "present": true
+    },
+    "model": {
+      "matchesRequested": true,
+      "safeIdReported": true
+    },
+    "usage": {
+      "kind": "object",
+      "present": true
+    }
+  },
+  "schemaVersion": 1
+}

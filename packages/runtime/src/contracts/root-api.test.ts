@@ -199,10 +199,18 @@ describe("runtime public exports", () => {
       activeToolCount: 1,
       activeToolsFingerprint: "sha256:active",
       alwaysActiveToolCount: 1,
+      attemptId: "attempt-1",
+      dynamicDescriptionToolCount: 0,
+      modelIdentityFingerprint: "sha256:model",
+      modelIdentityFingerprintUnavailable: false,
+      orderedToolSemanticFingerprint: "sha256:semantic",
       orderedToolNamesFingerprint: "sha256:order",
       registeredToolCount: 2,
       registryToolNamesFingerprint: "sha256:registry",
       runtimeStepIndex: 0,
+      selectionDurationMs: 1,
+      semanticFingerprintUnavailableToolCount: 0,
+      toolLoadingStrategy: "eager-active-tools",
     } satisfies ModelToolCacheFingerprintMetadata;
 
     expect(runtime).toHaveProperty(

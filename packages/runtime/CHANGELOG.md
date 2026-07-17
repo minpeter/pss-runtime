@@ -5,9 +5,22 @@
 Add a PSS-owned, zero-based `prepareModelStep` callback that persists logical
 step indices across outer-loop overflow retries and durable resume. Support AI
 SDK 7 `toolOrder`, fixed always-active prefixes, deterministic dynamic suffixes,
-and fail-closed tool-name validation. Export metadata-only tool-name cache
-fingerprint diagnostics without prompts, tool inputs, definitions, or thread
-keys. Automatic-compaction summary calls remain outside model-step selection.
+and fail-closed tool/model/choice validation. Remove inactive definitions from
+the AI SDK executable registry, not only provider serialization. Export
+metadata-only name and scoped semantic cache fingerprints, per-attempt IDs, and
+selector duration without prompts, tool inputs, definitions, or thread keys.
+Reject unknown callback-result fields, validate the thread key before attachment
+or context-gate work, require concrete AI SDK model-object overrides, snapshot
+callback-held selections through data descriptors, structured-clone history,
+snapshot configured tool-name arrays without invoking custom iterators or index
+getters, and expose only recursively frozen inert tool metadata facades to
+selectors.
+Semantic diagnostics count
+dynamic descriptions and individual tool definitions that could not be
+fingerprinted instead of dropping the entire record.
+Upgrade AI SDK 7.0.16 to 7.0.30 for own-property tool-name hardening and the
+public tool fingerprint API. Automatic-compaction summary calls remain outside
+model-step selection.
 
 ### Introduce a factory-based plugin runtime
 

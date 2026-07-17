@@ -116,8 +116,24 @@ export async function generateModelStep({
       "prepareModelStep requires a runtime threadKey."
     );
   }
+  const attemptId = crypto.randomUUID();
+  const historySnapshot = snapshotModelHistory(history);
   const toolCallIds = new Map<string, string>();
-  const prompt = promptForModel({ history, instructions });
+  const prepared = await resolveModelStepOptions({
+    alwaysActiveTools,
+    attemptId,
+    diagnostics,
+    history: historySnapshot,
+    model,
+    prepareModelStep,
+    runtimeStepIndex,
+    signal,
+    threadKey,
+    toolChoice,
+    toolOrder,
+    tools,
+  });
+  const prompt = promptForModel({ history: historySnapshot, instructions });
   const messages = await hydrateRuntimeAttachments(
     prompt.messages,
     attachmentStore
@@ -126,19 +142,6 @@ export async function generateModelStep({
     contextGate,
     instructions: prompt.instructions,
     messages,
-  });
-  const prepared = await resolveModelStepOptions({
-    alwaysActiveTools,
-    diagnostics,
-    history,
-    model,
-    prepareModelStep,
-    runtimeStepIndex,
-    signal,
-    threadKey: threadKey ?? "",
-    toolChoice,
-    toolOrder,
-    tools,
   });
   assertNoUnsupportedToolApproval(prepared.tools);
   const { responseMessages } = await generateText({
@@ -155,6 +158,47 @@ export async function generateModelStep({
   return responseMessages.map((message) =>
     rewriteMessageToolCallIds(message, toolCallIds)
   );
+}
+
+function snapshotModelHistory(
+  history: readonly ModelMessage[]
+): readonly ModelMessage[] {
+  if (!Array.isArray(history)) {
+    throw new TypeError("history must be an array of model messages.");
+  }
+  let lengthDescriptor: PropertyDescriptor | undefined;
+  try {
+    lengthDescriptor = Object.getOwnPropertyDescriptor(history, "length");
+  } catch {
+    throw new TypeError("history has an invalid length descriptor.");
+  }
+  if (
+    !(
+      lengthDescriptor &&
+      "value" in lengthDescriptor &&
+      typeof lengthDescriptor.value === "number" &&
+      Number.isSafeInteger(lengthDescriptor.value) &&
+      lengthDescriptor.value >= 0
+    )
+  ) {
+    throw new TypeError("history has an invalid length.");
+  }
+  const snapshot: ModelMessage[] = [];
+  for (let index = 0; index < lengthDescriptor.value; index += 1) {
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(history, String(index));
+    } catch {
+      throw new TypeError("history contains an invalid message descriptor.");
+    }
+    if (!(descriptor && "value" in descriptor)) {
+      throw new TypeError(
+        "history must be a dense array of data-property model messages."
+      );
+    }
+    snapshot.push(descriptor.value as ModelMessage);
+  }
+  return Object.freeze(snapshot);
 }
 
 function enforceContextGate({

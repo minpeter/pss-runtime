@@ -68,12 +68,12 @@
     "lint": "ultracite check ."
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "3.0.2",
+    "@ai-sdk/openai-compatible": "3.0.11",
     "@earendil-works/pi-tui": "^0.80.7",
     "@minpeter/opensearch": "0.0.4",
     "@minpeter/pss-runtime": "workspace:^",
     "@t3-oss/env-core": "^0.13.11",
-    "ai": "7.0.16",
+    "ai": "7.0.30",
     "dotenv": "^17.4.2",
     "zod": "^4.4.3"
   },
