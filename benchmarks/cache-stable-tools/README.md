@@ -341,6 +341,2033 @@ This section is populated from the source-manifest-bound 480-request campaign
 before the pull request is finalized.
 
 <!-- cache-stable-tools-independent-verifier:start -->
-Fresh schema-v3 evidence and the verifier-generated report are pending the
-final quiescent-worktree campaign.
+```json
+{
+  "evidenceSha256": "346a16667be5a003945384a524f32854fa505c9325c26cc59bb280ea68ffec22",
+  "generatedAt": "2026-07-17T17:52:51.860Z",
+  "campaignId": "pr208-cache-v3-20260717",
+  "aggregate": {
+    "expectedRequests": 480,
+    "observedRequests": 480,
+    "captureSuccess": 480,
+    "cacheTelemetryEligible": 480,
+    "measuredCacheTelemetryEligible": 240
+  },
+  "models": [
+    {
+      "model": "minimaxai/minimax-m2.7",
+      "requests": 96,
+      "captureSuccess": 96,
+      "cacheTelemetryEligible": 96,
+      "measuredCacheTelemetryEligible": 48,
+      "cacheReporting": "reported-nonzero",
+      "cacheWriteReporting": "not-reported",
+      "backendMetadataAudit": {
+        "serviceTier": {
+          "statusCounts": {
+            "absent": 96,
+            "hashed": 0,
+            "invalid": 0,
+            "null": 0
+          },
+          "uniqueHashCount": 0,
+          "driftObserved": false
+        },
+        "systemFingerprint": {
+          "statusCounts": {
+            "absent": 33,
+            "hashed": 63,
+            "invalid": 0,
+            "null": 0
+          },
+          "uniqueHashCount": 2,
+          "driftObserved": true
+        }
+      },
+      "responseIdAudit": {
+        "reported": 96,
+        "distinct": 96,
+        "duplicateHashes": 0,
+        "duplicateObservations": 0,
+        "crossRequestBodyDuplicateHashes": 0,
+        "crossRequestBodyDuplicateObservations": 0
+      }
+    },
+    {
+      "model": "minimaxai/minimax-m3",
+      "requests": 96,
+      "captureSuccess": 96,
+      "cacheTelemetryEligible": 96,
+      "measuredCacheTelemetryEligible": 48,
+      "cacheReporting": "reported-nonzero",
+      "cacheWriteReporting": "not-reported",
+      "backendMetadataAudit": {
+        "serviceTier": {
+          "statusCounts": {
+            "absent": 96,
+            "hashed": 0,
+            "invalid": 0,
+            "null": 0
+          },
+          "uniqueHashCount": 0,
+          "driftObserved": false
+        },
+        "systemFingerprint": {
+          "statusCounts": {
+            "absent": 0,
+            "hashed": 0,
+            "invalid": 0,
+            "null": 96
+          },
+          "uniqueHashCount": 0,
+          "driftObserved": false
+        }
+      },
+      "responseIdAudit": {
+        "reported": 96,
+        "distinct": 96,
+        "duplicateHashes": 0,
+        "duplicateObservations": 0,
+        "crossRequestBodyDuplicateHashes": 0,
+        "crossRequestBodyDuplicateObservations": 0
+      }
+    },
+    {
+      "model": "mistralai/ministral-14b-latest",
+      "requests": 96,
+      "captureSuccess": 96,
+      "cacheTelemetryEligible": 96,
+      "measuredCacheTelemetryEligible": 48,
+      "cacheReporting": "reported-nonzero",
+      "cacheWriteReporting": "not-reported",
+      "backendMetadataAudit": {
+        "serviceTier": {
+          "statusCounts": {
+            "absent": 96,
+            "hashed": 0,
+            "invalid": 0,
+            "null": 0
+          },
+          "uniqueHashCount": 0,
+          "driftObserved": false
+        },
+        "systemFingerprint": {
+          "statusCounts": {
+            "absent": 96,
+            "hashed": 0,
+            "invalid": 0,
+            "null": 0
+          },
+          "uniqueHashCount": 0,
+          "driftObserved": false
+        }
+      },
+      "responseIdAudit": {
+        "reported": 96,
+        "distinct": 96,
+        "duplicateHashes": 0,
+        "duplicateObservations": 0,
+        "crossRequestBodyDuplicateHashes": 0,
+        "crossRequestBodyDuplicateObservations": 0
+      }
+    },
+    {
+      "model": "qwen/qwen2.5-7b-instruct",
+      "requests": 96,
+      "captureSuccess": 96,
+      "cacheTelemetryEligible": 96,
+      "measuredCacheTelemetryEligible": 48,
+      "cacheReporting": "reported-zero-only",
+      "cacheWriteReporting": "not-reported",
+      "backendMetadataAudit": {
+        "serviceTier": {
+          "statusCounts": {
+            "absent": 96,
+            "hashed": 0,
+            "invalid": 0,
+            "null": 0
+          },
+          "uniqueHashCount": 0,
+          "driftObserved": false
+        },
+        "systemFingerprint": {
+          "statusCounts": {
+            "absent": 96,
+            "hashed": 0,
+            "invalid": 0,
+            "null": 0
+          },
+          "uniqueHashCount": 0,
+          "driftObserved": false
+        }
+      },
+      "responseIdAudit": {
+        "reported": 96,
+        "distinct": 96,
+        "duplicateHashes": 0,
+        "duplicateObservations": 0,
+        "crossRequestBodyDuplicateHashes": 0,
+        "crossRequestBodyDuplicateObservations": 0
+      }
+    },
+    {
+      "model": "zai-org/glm-4.7",
+      "requests": 96,
+      "captureSuccess": 96,
+      "cacheTelemetryEligible": 96,
+      "measuredCacheTelemetryEligible": 48,
+      "cacheReporting": "reported-nonzero",
+      "cacheWriteReporting": "not-reported",
+      "backendMetadataAudit": {
+        "serviceTier": {
+          "statusCounts": {
+            "absent": 96,
+            "hashed": 0,
+            "invalid": 0,
+            "null": 0
+          },
+          "uniqueHashCount": 0,
+          "driftObserved": false
+        },
+        "systemFingerprint": {
+          "statusCounts": {
+            "absent": 86,
+            "hashed": 10,
+            "invalid": 0,
+            "null": 0
+          },
+          "uniqueHashCount": 1,
+          "driftObserved": false
+        }
+      },
+      "responseIdAudit": {
+        "reported": 96,
+        "distinct": 96,
+        "duplicateHashes": 0,
+        "duplicateObservations": 0,
+        "crossRequestBodyDuplicateHashes": 0,
+        "crossRequestBodyDuplicateObservations": 0
+      }
+    }
+  ],
+  "effects": [
+    {
+      "scope": "minimaxai/minimax-m2.7",
+      "scenario": "same-set-order",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          }
+        }
+      },
+      "allSampleDescriptive": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 3,
+                "median": -12752,
+                "direction": "changed-higher"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 2,
+                "median": -6376,
+                "direction": "changed-higher"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 3,
+                "median": -0.7509571183198489,
+                "direction": "changed-higher"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 2,
+                "median": -0.37534568630784415,
+                "direction": "changed-higher"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "scope": "minimaxai/minimax-m2.7",
+      "scenario": "active-set-change",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          }
+        }
+      },
+      "allSampleDescriptive": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": -7912,
+                "direction": "changed-higher"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 2,
+                "median": 560,
+                "direction": "control-higher"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": -0.49573864546745583,
+                "direction": "changed-higher"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 2,
+                "median": 0.0029024797853239304,
+                "direction": "control-higher"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "scope": "minimaxai/minimax-m2.7",
+      "scenario": "membership-only-change",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          }
+        }
+      },
+      "allSampleDescriptive": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 3,
+                "median": 16,
+                "direction": "control-higher"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 3,
+                "median": -15312,
+                "direction": "changed-higher"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 3,
+                "median": 0.0009423960419366238,
+                "direction": "control-higher"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 3,
+                "median": -0.9017137909567857,
+                "direction": "changed-higher"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "scope": "minimaxai/minimax-m3",
+      "scenario": "same-set-order",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          }
+        }
+      },
+      "allSampleDescriptive": {
+        "conclusion": "order-sensitive/indeterminate",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "order-sensitive/indeterminate",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 8,
+                "direction": "control-higher"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "order-sensitive/indeterminate",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 0.0004673062704024702,
+                "direction": "control-higher"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": -0.0000014597395716475087,
+                "direction": "changed-higher"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "scope": "minimaxai/minimax-m3",
+      "scenario": "active-set-change",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          }
+        }
+      },
+      "allSampleDescriptive": {
+        "conclusion": "order-sensitive/indeterminate",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "order-sensitive/indeterminate",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 8520,
+                "direction": "control-higher"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "order-sensitive/indeterminate",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": -0.0005306418596278967,
+                "direction": "changed-higher"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 0.49481746596599435,
+                "direction": "control-higher"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "scope": "minimaxai/minimax-m3",
+      "scenario": "membership-only-change",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          }
+        }
+      },
+      "allSampleDescriptive": {
+        "conclusion": "endpoint-disagreement/indeterminate",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "no-observed-median-difference",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "descriptive-changed-higher",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": -4.866930021661317e-7,
+                "direction": "changed-higher"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": -7.297425051542433e-7,
+                "direction": "changed-higher"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "scope": "mistralai/ministral-14b-latest",
+      "scenario": "same-set-order",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          }
+        }
+      },
+      "allSampleDescriptive": {
+        "conclusion": "no-observed-median-difference",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "no-observed-median-difference",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "no-observed-median-difference",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "scope": "mistralai/ministral-14b-latest",
+      "scenario": "active-set-change",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          }
+        }
+      },
+      "allSampleDescriptive": {
+        "conclusion": "no-observed-median-difference",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "no-observed-median-difference",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "no-observed-median-difference",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "scope": "mistralai/ministral-14b-latest",
+      "scenario": "membership-only-change",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          }
+        }
+      },
+      "allSampleDescriptive": {
+        "conclusion": "no-observed-median-difference",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "no-observed-median-difference",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "no-observed-median-difference",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "scope": "qwen/qwen2.5-7b-instruct",
+      "scenario": "same-set-order",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          }
+        }
+      },
+      "allSampleDescriptive": {
+        "conclusion": "no-observed-median-difference",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "no-observed-median-difference",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "no-observed-median-difference",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "scope": "qwen/qwen2.5-7b-instruct",
+      "scenario": "active-set-change",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          }
+        }
+      },
+      "allSampleDescriptive": {
+        "conclusion": "no-observed-median-difference",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "no-observed-median-difference",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "no-observed-median-difference",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "scope": "qwen/qwen2.5-7b-instruct",
+      "scenario": "membership-only-change",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          }
+        }
+      },
+      "allSampleDescriptive": {
+        "conclusion": "no-observed-median-difference",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "no-observed-median-difference",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "no-observed-median-difference",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 0,
+                "direction": "equal"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "scope": "zai-org/glm-4.7",
+      "scenario": "same-set-order",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          }
+        }
+      },
+      "allSampleDescriptive": {
+        "conclusion": "descriptive-control-higher",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "descriptive-control-higher",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 17664,
+                "direction": "control-higher"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 17585,
+                "direction": "control-higher"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "descriptive-control-higher",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 0.9968126552814505,
+                "direction": "control-higher"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 0.9914558706225491,
+                "direction": "control-higher"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "scope": "zai-org/glm-4.7",
+      "scenario": "active-set-change",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          }
+        }
+      },
+      "allSampleDescriptive": {
+        "conclusion": "descriptive-control-higher",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "descriptive-control-higher",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 7210,
+                "direction": "control-higher"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 16046.5,
+                "direction": "control-higher"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "descriptive-control-higher",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 0.40108299369137035,
+                "direction": "control-higher"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 0.8994731325391823,
+                "direction": "control-higher"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "scope": "zai-org/glm-4.7",
+      "scenario": "membership-only-change",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          }
+        }
+      },
+      "allSampleDescriptive": {
+        "conclusion": "descriptive-control-higher",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "descriptive-control-higher",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 14962.5,
+                "direction": "control-higher"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 14937.5,
+                "direction": "control-higher"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "descriptive-control-higher",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 4,
+                "median": 0.843190694118264,
+                "direction": "control-higher"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 4,
+                "median": 0.8431460708903042,
+                "direction": "control-higher"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "scope": "pooled",
+      "scenario": "same-set-order",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          }
+        }
+      },
+      "allSampleDescriptive": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 19,
+                "median": 0,
+                "direction": "equal"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 18,
+                "median": 0,
+                "direction": "equal"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 19,
+                "median": 0,
+                "direction": "equal"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 18,
+                "median": 0,
+                "direction": "equal"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "scope": "pooled",
+      "scenario": "active-set-change",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          }
+        }
+      },
+      "allSampleDescriptive": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 20,
+                "median": 0,
+                "direction": "equal"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 18,
+                "median": 0,
+                "direction": "equal"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 20,
+                "median": 0,
+                "direction": "equal"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 18,
+                "median": 0,
+                "direction": "equal"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "scope": "pooled",
+      "scenario": "membership-only-change",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 0,
+                "median": null,
+                "direction": "unavailable"
+              }
+            ]
+          }
+        }
+      },
+      "allSampleDescriptive": {
+        "conclusion": "insufficient-coverage",
+        "endpoints": {
+          "rawCacheReadTokens": {
+            "metric": "provider-reported-raw-cache-read-tokens",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 19,
+                "median": 0,
+                "direction": "equal"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 19,
+                "median": 0,
+                "direction": "equal"
+              }
+            ]
+          },
+          "cacheReadInputCoverageRatio": {
+            "metric": "provider-reported-cache-read/input-coverage-ratio",
+            "conclusion": "insufficient-coverage",
+            "orderStrata": [
+              {
+                "pairOrder": "control-first",
+                "eligiblePairs": 19,
+                "median": 0,
+                "direction": "equal"
+              },
+              {
+                "pairOrder": "changed-first",
+                "eligiblePairs": 19,
+                "median": 0,
+                "direction": "equal"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "membershipInputParity": [
+    {
+      "scope": "minimaxai/minimax-m2.7",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "metric": "input-token-difference",
+        "conclusion": "insufficient-coverage",
+        "orderStrata": [
+          {
+            "pairOrder": "control-first",
+            "eligiblePairs": 0,
+            "median": null,
+            "direction": "unavailable"
+          },
+          {
+            "pairOrder": "changed-first",
+            "eligiblePairs": 0,
+            "median": null,
+            "direction": "unavailable"
+          }
+        ]
+      },
+      "allSampleDescriptive": {
+        "metric": "input-token-difference",
+        "conclusion": "order-sensitive/indeterminate",
+        "orderStrata": [
+          {
+            "pairOrder": "control-first",
+            "eligiblePairs": 4,
+            "median": -3,
+            "direction": "changed-higher"
+          },
+          {
+            "pairOrder": "changed-first",
+            "eligiblePairs": 4,
+            "median": 2.5,
+            "direction": "control-higher"
+          }
+        ]
+      }
+    },
+    {
+      "scope": "minimaxai/minimax-m3",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "metric": "input-token-difference",
+        "conclusion": "insufficient-coverage",
+        "orderStrata": [
+          {
+            "pairOrder": "control-first",
+            "eligiblePairs": 0,
+            "median": null,
+            "direction": "unavailable"
+          },
+          {
+            "pairOrder": "changed-first",
+            "eligiblePairs": 0,
+            "median": null,
+            "direction": "unavailable"
+          }
+        ]
+      },
+      "allSampleDescriptive": {
+        "metric": "input-token-difference",
+        "conclusion": "descriptive-control-higher-input",
+        "orderStrata": [
+          {
+            "pairOrder": "control-first",
+            "eligiblePairs": 4,
+            "median": 1,
+            "direction": "control-higher"
+          },
+          {
+            "pairOrder": "changed-first",
+            "eligiblePairs": 4,
+            "median": 1.5,
+            "direction": "control-higher"
+          }
+        ]
+      }
+    },
+    {
+      "scope": "mistralai/ministral-14b-latest",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "metric": "input-token-difference",
+        "conclusion": "insufficient-coverage",
+        "orderStrata": [
+          {
+            "pairOrder": "control-first",
+            "eligiblePairs": 0,
+            "median": null,
+            "direction": "unavailable"
+          },
+          {
+            "pairOrder": "changed-first",
+            "eligiblePairs": 0,
+            "median": null,
+            "direction": "unavailable"
+          }
+        ]
+      },
+      "allSampleDescriptive": {
+        "metric": "input-token-difference",
+        "conclusion": "descriptive-changed-higher-input",
+        "orderStrata": [
+          {
+            "pairOrder": "control-first",
+            "eligiblePairs": 4,
+            "median": -17.5,
+            "direction": "changed-higher"
+          },
+          {
+            "pairOrder": "changed-first",
+            "eligiblePairs": 4,
+            "median": -19,
+            "direction": "changed-higher"
+          }
+        ]
+      }
+    },
+    {
+      "scope": "qwen/qwen2.5-7b-instruct",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "metric": "input-token-difference",
+        "conclusion": "insufficient-coverage",
+        "orderStrata": [
+          {
+            "pairOrder": "control-first",
+            "eligiblePairs": 0,
+            "median": null,
+            "direction": "unavailable"
+          },
+          {
+            "pairOrder": "changed-first",
+            "eligiblePairs": 0,
+            "median": null,
+            "direction": "unavailable"
+          }
+        ]
+      },
+      "allSampleDescriptive": {
+        "metric": "input-token-difference",
+        "conclusion": "order-sensitive/indeterminate",
+        "orderStrata": [
+          {
+            "pairOrder": "control-first",
+            "eligiblePairs": 4,
+            "median": 12,
+            "direction": "control-higher"
+          },
+          {
+            "pairOrder": "changed-first",
+            "eligiblePairs": 4,
+            "median": -2,
+            "direction": "changed-higher"
+          }
+        ]
+      }
+    },
+    {
+      "scope": "zai-org/glm-4.7",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "metric": "input-token-difference",
+        "conclusion": "insufficient-coverage",
+        "orderStrata": [
+          {
+            "pairOrder": "control-first",
+            "eligiblePairs": 0,
+            "median": null,
+            "direction": "unavailable"
+          },
+          {
+            "pairOrder": "changed-first",
+            "eligiblePairs": 0,
+            "median": null,
+            "direction": "unavailable"
+          }
+        ]
+      },
+      "allSampleDescriptive": {
+        "metric": "input-token-difference",
+        "conclusion": "order-sensitive/indeterminate",
+        "orderStrata": [
+          {
+            "pairOrder": "control-first",
+            "eligiblePairs": 4,
+            "median": 1.5,
+            "direction": "control-higher"
+          },
+          {
+            "pairOrder": "changed-first",
+            "eligiblePairs": 4,
+            "median": -0.5,
+            "direction": "changed-higher"
+          }
+        ]
+      }
+    },
+    {
+      "scope": "pooled",
+      "conclusion": "insufficient-coverage",
+      "primary": {
+        "metric": "input-token-difference",
+        "conclusion": "insufficient-coverage",
+        "orderStrata": [
+          {
+            "pairOrder": "control-first",
+            "eligiblePairs": 0,
+            "median": null,
+            "direction": "unavailable"
+          },
+          {
+            "pairOrder": "changed-first",
+            "eligiblePairs": 0,
+            "median": null,
+            "direction": "unavailable"
+          }
+        ]
+      },
+      "allSampleDescriptive": {
+        "metric": "input-token-difference",
+        "conclusion": "no-observed-median-input-token-difference",
+        "orderStrata": [
+          {
+            "pairOrder": "control-first",
+            "eligiblePairs": 20,
+            "median": 0,
+            "direction": "equal"
+          },
+          {
+            "pairOrder": "changed-first",
+            "eligiblePairs": 20,
+            "median": 0,
+            "direction": "equal"
+          }
+        ]
+      }
+    }
+  ],
+  "responseIdAudit": {
+    "reported": 480,
+    "distinct": 480,
+    "duplicateHashes": 0,
+    "duplicateObservations": 0,
+    "crossRequestBodyDuplicateHashes": 0,
+    "crossRequestBodyDuplicateObservations": 0
+  }
+}
+```
 <!-- cache-stable-tools-independent-verifier:end -->
