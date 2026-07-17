@@ -124,6 +124,7 @@ const REQUEST_KEYS = [
   "responseModelMatchesRequested",
   "responseToolCallCount",
   "scenario",
+  "settleElapsedMs",
   "startedAt",
   "success",
   "toolsArrayBytes",
@@ -300,6 +301,7 @@ function verifyConfiguration(
     "runId",
     "seed",
     "settleMs",
+    "sourceSnapshotSemantics",
     "timeoutMs",
     "toolCallValidation",
     "toolChoice",
@@ -316,6 +318,9 @@ function verifyConfiguration(
   expect(configuration.timeoutMs).toBe(EVIDENCE_CAMPAIGN.timeoutMs);
   expect(configuration.minimumOrderStratumCoverage).toBe(MIN_STRATUM_COVERAGE);
   expect(configuration.effectConclusionPolicy).toBeTypeOf("string");
+  expect(configuration.sourceSnapshotSemantics).toContain(
+    "Transient edit-and-restore"
+  );
   expect(configuration.fixedToolNames).toEqual(FIXED_TOOL_NAMES);
   expect(configuration.dynamicToolNames).toEqual(DYNAMIC_TOOL_NAMES);
   expect(configuration.membershipReplacementToolName).toBe(
@@ -433,7 +438,7 @@ function verifyModel(model, configuration) {
   for (const request of model.requests) {
     verifyRequest(request, model.model, configuration);
   }
-  verifyMeasurementPrerequisites(model);
+  verifyMeasurementPrerequisites(model, configuration);
   for (const scenario of SCENARIOS) {
     const scenarioRequests = model.requests.filter(
       (request) => request.scenario === scenario
@@ -597,6 +602,14 @@ function verifyRequest(request, requestedModel, configuration) {
   expect(request.warmupPrerequisitePassed === null).toBe(
     request.phase === "warmup"
   );
+  if (request.phase === "warmup") {
+    expect(request.settleElapsedMs).toBeNull();
+  } else {
+    expect(isNonnegativeSafeInteger(request.settleElapsedMs)).toBe(true);
+    expect(request.settleElapsedMs).toBeGreaterThanOrEqual(
+      configuration.settleMs
+    );
+  }
 }
 
 function verifyRequestErrorCode(request) {
@@ -651,7 +664,7 @@ function verifyRequestArtifacts(request, requestedModel, configuration) {
   });
 }
 
-function verifyMeasurementPrerequisites(model) {
+function verifyMeasurementPrerequisites(model, configuration) {
   for (const measured of model.requests.filter(
     ({ phase }) => phase === "measure"
   )) {
@@ -666,6 +679,9 @@ function verifyMeasurementPrerequisites(model) {
     const prerequisitePassed =
       warmup.success && warmup.responseModelMatchesRequested === true;
     expect(measured.warmupPrerequisitePassed).toBe(prerequisitePassed);
+    expect(
+      Date.parse(measured.startedAt) - Date.parse(warmup.completedAt)
+    ).toBeGreaterThanOrEqual(configuration.settleMs);
     expect(measured.cacheTelemetryEligible).toBe(
       prerequisitePassed && localCacheTelemetryEligible(measured)
     );

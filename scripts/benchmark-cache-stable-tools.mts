@@ -1,5 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -13,19 +20,18 @@ const DEFAULT_MODELS = [
   "zai-org/glm-4.7",
 ] as const;
 const DEFAULT_OUTPUT = "benchmarks/cache-stable-tools/latest-freerouter.json";
-const IMPLEMENTATION_SOURCE_PATHS = [
+const IMPLEMENTATION_SUPPORT_PATHS = [
   "package.json",
   "packages/runtime/package.json",
-  "packages/runtime/src/llm/llm.ts",
-  "packages/runtime/src/llm/model-step-preparation.ts",
-  "packages/runtime/src/plugins/diagnostics.ts",
   "pnpm-lock.yaml",
   "pnpm-workspace.yaml",
+  "scripts/benchmark-cache-stable-tools.test.mjs",
   "scripts/cache-stable-tools-evidence.test.mjs",
   "scripts/cache-stable-tools-independent-verifier.adversarial.mjs",
   "scripts/cache-stable-tools-independent-verifier.mjs",
   "scripts/cache-stable-tools-wire.test.mjs",
 ] as const;
+const IMPLEMENTATION_SOURCE_PATHS = await completeImplementationSourcePaths();
 const FIXED_TOOL_NAMES = [
   "runtime_status",
   "read_project_file",
@@ -45,6 +51,7 @@ const SAFE_MODEL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,199}$/u;
 const SAFE_SEED_PATTERN = /^[\w.-]{1,80}$/u;
 const TRAILING_SLASH_PATTERN = /\/+$/u;
 const BEARER_PATTERN = /Bearer\s/iu;
+const KEY_LIKE_PATTERN = /\bfr-[\w-]{8,}\b/u;
 const ACCEPTED_ZERO_TOOL_FINISH_REASONS = ["stop"] as const;
 const FINISH_REASON_STATUSES = [
   "accepted-stop",
@@ -139,6 +146,7 @@ interface RequestResult extends NumericUsage {
   readonly responseModelMatchesRequested: boolean | null;
   readonly responseToolCallCount: number | null;
   readonly scenario: Scenario;
+  readonly settleElapsedMs: number | null;
   readonly startedAt: string;
   readonly success: boolean;
   readonly toolsArrayBytes: number;
@@ -685,14 +693,48 @@ async function implementationSourceManifest(): Promise<
   Record<(typeof IMPLEMENTATION_SOURCE_PATHS)[number], string>
 > {
   const repositoryRoot = new URL("../", import.meta.url);
+  const sourcePaths = await completeImplementationSourcePaths();
   return Object.fromEntries(
     await Promise.all(
-      IMPLEMENTATION_SOURCE_PATHS.map(async (path) => [
+      sourcePaths.map(async (path) => [
         path,
         sha256(await readFile(new URL(path, repositoryRoot))),
       ])
     )
   ) as Record<(typeof IMPLEMENTATION_SOURCE_PATHS)[number], string>;
+}
+
+async function completeImplementationSourcePaths(): Promise<readonly string[]> {
+  const repositoryRoot = new URL("../", import.meta.url);
+  const runtimeSources = await regularFilesUnder(
+    new URL("packages/runtime/src/", repositoryRoot),
+    "packages/runtime/src"
+  );
+  return [...IMPLEMENTATION_SUPPORT_PATHS, ...runtimeSources].sort();
+}
+
+async function regularFilesUnder(
+  directory: URL,
+  relativeDirectory: string
+): Promise<string[]> {
+  const paths: string[] = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const relativePath = `${relativeDirectory}/${entry.name}`;
+    if (entry.isDirectory()) {
+      paths.push(
+        ...(await regularFilesUnder(
+          new URL(`${entry.name}/`, directory),
+          relativePath
+        ))
+      );
+      continue;
+    }
+    if (!entry.isFile()) {
+      throw new Error(`Implementation source ${relativePath} is not a file.`);
+    }
+    paths.push(relativePath);
+  }
+  return paths;
 }
 
 interface BenchmarkSourceSnapshot {
@@ -1280,6 +1322,7 @@ async function runRequest({
       responseModelMatchesRequested: modelMatchesRequested,
       responseToolCallCount: toolCallCount,
       scenario,
+      settleElapsedMs: null,
       startedAt,
       success,
       toolsArrayBytes: artifacts.toolsArrayBytes,
@@ -1319,6 +1362,7 @@ async function runRequest({
       responseModelMatchesRequested: null,
       responseToolCallCount: null,
       scenario,
+      settleElapsedMs: null,
       startedAt,
       success: false,
       toolsArrayBytes: artifacts.toolsArrayBytes,
@@ -2131,14 +2175,60 @@ function sleep(milliseconds: number): Promise<void> {
   return new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds));
 }
 
+async function settleForAtLeast(milliseconds: number): Promise<number> {
+  const started = performance.now();
+  while (true) {
+    const elapsed = Math.floor(performance.now() - started);
+    if (elapsed >= milliseconds) {
+      return elapsed;
+    }
+    await sleep(milliseconds - elapsed);
+  }
+}
+
 function serializeBenchmarkResult(result: unknown, apiKey: string): string {
+  if (containsCredentialLikeString(result, apiKey)) {
+    throw new Error(
+      "Refusing to write benchmark output containing a credential."
+    );
+  }
   const serialized = `${JSON.stringify(result, null, 2)}\n`;
-  if (serialized.includes(apiKey) || BEARER_PATTERN.test(serialized)) {
+  if (
+    serialized.includes(apiKey) ||
+    BEARER_PATTERN.test(serialized) ||
+    KEY_LIKE_PATTERN.test(serialized)
+  ) {
     throw new Error(
       "Refusing to write benchmark output containing a credential."
     );
   }
   return serialized;
+}
+
+function containsCredentialLikeString(value: unknown, apiKey: string): boolean {
+  const stack: unknown[] = [value];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (typeof current === "string") {
+      if (
+        current.includes(apiKey) ||
+        BEARER_PATTERN.test(current) ||
+        KEY_LIKE_PATTERN.test(current)
+      ) {
+        return true;
+      }
+      continue;
+    }
+    if (current === null || typeof current !== "object") {
+      continue;
+    }
+    if (Array.isArray(current)) {
+      stack.push(...current);
+    } else {
+      stack.push(...Object.values(current));
+    }
+  }
+  return false;
 }
 
 async function modelPreflight({
@@ -2242,7 +2332,7 @@ async function benchmarkArm({
     trial,
     variant: arm.variant,
   });
-  await sleep(options.settleMs);
+  const settleElapsedMs = await settleForAtLeast(options.settleMs);
   requestSequence.value += 1;
   const measuredResult = await runRequest({
     armPosition,
@@ -2265,6 +2355,7 @@ async function benchmarkArm({
     ...measuredResult,
     cacheTelemetryEligible:
       measuredResult.cacheTelemetryEligible && warmupPrerequisitePassed,
+    settleElapsedMs,
     warmupPrerequisitePassed,
   };
   const captureStatus = measured.success ? "capture-ok" : measured.errorCode;
@@ -2454,6 +2545,8 @@ async function runBenchmark(
         "Cache aggregates accept only nonnegative safe-integer input/read/write token observations. Read and write must each be no greater than input, their sum must be a safe integer no greater than input, and every cross-request sum must remain a safe integer or the campaign fails closed without evidence. Conflicting or malformed aliases retain only an audit status; their source and value are nulled instead of guessed or clamped. Output and total-token audit conflicts do not affect cache-read eligibility.",
       pairedUncertainty:
         "Paired summaries include descriptive p25/p75 intervals and effect signs overall and by AB/BA order. These are not confidence intervals.",
+      sourceSnapshotSemantics:
+        "The runner records on-disk source snapshots after module initialization and again before atomic rename. A start/end mismatch fails. Transient edit-and-restore and changes between module load and the initial snapshot are not detected, so the campaign requires a quiescent worktree.",
       armIsolation: {
         canary:
           "Each arm has a unique, fixed-length token in an equal-shape inert canary placed before every benchmark tool. Warmup and measure reuse the same canary; no other arm does.",
@@ -2484,7 +2577,7 @@ async function runBenchmark(
           "The measured request either preserves the warmup set or replaces one tool at the same position with an equal-byte definition, keeping tool count and serialized request length equal.",
       },
       effectConclusionPolicy:
-        "A directional cache or input-token conclusion is reported only when each AB/BA order stratum retains at least 75% eligible pairs and both stratum medians have the same nonzero sign. Two zero medians report no observed median difference; mixed signs or a zero/nonzero mix report order-sensitive; missing coverage is indeterminate.",
+        "A model-level directional cache or input-token conclusion is reported only when each AB/BA order stratum retains at least 75% eligible pairs and both stratum medians have the same nonzero sign. A pooled conclusion additionally requires at least three complete pairs in every model-by-order stratum. Two zero medians report no observed median difference; mixed signs or a zero/nonzero mix report order-sensitive; missing coverage is indeterminate.",
       minimumOrderStratumCoverage: EVIDENCE_CAMPAIGN.minimumStratumCoverage,
     },
     interpretation: {
@@ -2509,7 +2602,7 @@ async function runBenchmark(
     const finalSourceSnapshot = await readSourceSnapshot();
     if (!sourceSnapshotsMatch(initialSourceSnapshot, finalSourceSnapshot)) {
       throw new Error(
-        "Benchmark or implementation sources changed during the campaign; refusing to write evidence."
+        "Benchmark or implementation start/end source snapshots differ; refusing to write evidence."
       );
     }
     await rename(temporaryPath, outputPath);

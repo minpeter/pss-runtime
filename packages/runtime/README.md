@@ -197,16 +197,19 @@ This local registry selector does not emulate provider-native deferred tool
 discovery (`tool_search`, `defer_loading`, or `additional_tools`) or explicit
 prompt-cache breakpoints. AI SDK core generation is adapter-neutral, so native
 support must be attributed to a concrete adapter rather than to `ai` in
-general. The audited `@ai-sdk/openai@4.0.15`
+general. The 2026-07-17 audit used `ai@7.0.30`, `@ai-sdk/provider@4.0.3`,
+`@ai-sdk/openai-compatible@3.0.11`, `@ai-sdk/openai@4.0.15`, and
+`@ai-sdk/anthropic@4.0.15`; adapter and core versions are part of the capability
+tuple rather than evidence by themselves. The audited `@ai-sdk/openai@4.0.15`
 [`Responses adapter`](https://github.com/vercel/ai/blob/b8241a6e5592066c0ee1772c32d3ef47d7d7595e/packages/openai/src/tool/tool-search.ts)
 exposes `openai.tools.toolSearch`; its Responses tool preparation maps
 [`providerOptions.openai.deferLoading` to `defer_loading`](https://github.com/vercel/ai/blob/b8241a6e5592066c0ee1772c32d3ef47d7d7595e/packages/openai/src/responses/openai-responses-prepare-tools.ts).
 The audited
 [`@ai-sdk/anthropic@4.0.15` adapter](https://github.com/vercel/ai/blob/6976682b5718f36425521816e6a8c2df8c07faa9/packages/anthropic/src/anthropic-prepare-tools.ts)
 maps `providerOptions.anthropic.deferLoading` into Anthropic tool definitions.
-Those native paths can coexist with PSS when a host explicitly supplies the
-matching adapter and tool configuration, but PSS does not create or replay
-their provider-specific transcript items.
+A host may explicitly configure those adapter paths, but PSS does not create or
+replay their provider-specific transcript items. This is not a claim that PSS
+implements client-executed OpenAI tool search or Anthropic reference replay.
 
 `@ai-sdk/openai-compatible` is a different, generic adapter. It has no general
 contract to preserve every router/vendor extension, so neither an official
@@ -216,11 +219,26 @@ selection remains discussed in AI SDK
 [#11920](https://github.com/vercel/ai/issues/11920). Provider-native
 just-in-time retrieval is therefore a separate, capability-gated layer.
 [OpenAI tool search](https://developers.openai.com/api/docs/guides/tools-tool-search)
-is documented for GPT-5.4 and later. Both hosted and client-managed search load
-selected definitions at the end of the current context; transcript
-`additional_tools` preserve the earlier load point, and changing or removing
-that loaded set breaks cache reuse from that point forward. OpenAI recommends
-grouping tools into namespaces or MCP servers and keeping each namespace small.
+is documented for GPT-5.4 and later. Hosted search returns
+`tool_search_call`/`tool_search_output` in the same response with
+`execution: "server"` and a null `call_id`. Client-executed search stops after a
+call with `execution: "client"`; the application must return a later
+`tool_search_output` with the same non-null `call_id`. PSS does not currently own
+that client round trip. A future client path must constrain returned definitions
+to a host-owned allowlist or registry subset and fail closed on unexpected
+names, types, duplicates, or schemas. Both modes load selected definitions at
+the end of the current context. An `additional_tools` item instead makes tools
+available at its exact input position; manual replay must preserve that position
+and `role: "developer"`. Changing or removing a loaded set breaks cache reuse
+from that point forward.
+
+An individually deferred function still exposes its name and description at the
+start of the request, so in practice it mostly defers the parameter schema.
+Namespaces and MCP servers initially expose only their container name and
+description and can produce more material savings. OpenAI recommends those
+grouped surfaces where possible and, as a best practice, fewer than ten
+functions per namespace. Tool search may reduce token use and cost; deferral is
+not an authorization or secrecy boundary.
 
 [Anthropic tool search](https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-search-tool.md)
 uses `defer_loading` plus `tool_reference` expansion and requires unchanged
@@ -270,7 +288,11 @@ says the API defaults to approval before sharing data, while the pinned
 adapter option as
 `require_approval: "never"`. A native PSS integration must therefore require an
 explicit host-owned approval policy and verify the serialized value; it must
-not inherit either side's default for sensitive tools.
+not inherit either side's default for sensitive tools. OpenAI does not store MCP
+`authorization` or include it in the Response, so every native Responses request
+must re-inject it from a host credential source rather than a transcript or
+evidence record. The same canary must verify `allowed_tools`; returned tools and
+output remain untrusted input across durable resume.
 
 Both providers' prompt-cache documentation keeps exact-prefix stability
 central; see
@@ -279,8 +301,12 @@ and [Anthropic prompt caching](https://platform.claude.com/docs/en/build-with-cl
 OpenAI additionally documents `prompt_cache_key` and explicit cache breakpoints
 for GPT-5.6 and later, including separately reported cache-write tokens and
 write cost. These provider-native controls are not silently synthesized by the
-generic OpenAI-compatible path. Provider pages currently disagree on a numeric
-breakpoint lookback limit, so this runtime does not encode or claim one.
+generic OpenAI-compatible path. As rechecked on 2026-07-17, the
+[prompt-caching guide](https://developers.openai.com/api/docs/guides/prompt-caching#prompt-cache-breakpoints)
+says cache reads consider the latest 50 breakpoints, while the
+[Responses API reference](https://developers.openai.com/api/reference/resources/responses/methods/create)
+says the latest 80 without a content-block lookback limit. This runtime does not
+encode or claim either disputed limit.
 [`@ai-sdk/openai-compatible` 3.0.11](https://github.com/vercel/ai/blob/b8241a6e5592066c0ee1772c32d3ef47d7d7595e/packages/openai-compatible/src/chat/convert-openai-compatible-chat-usage.ts)
 parses `cached_tokens` but not
 `cache_write_tokens`: the latter can remain only in `usage.raw`, normalized

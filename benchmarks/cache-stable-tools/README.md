@@ -48,14 +48,21 @@ Trial order is deterministic but counterbalanced. A SHA-256 bit of seed, model,
 and scenario selects the first AB or BA order, then every trial alternates. With
 eight trials, each model/scenario stratum has four control-first and four
 changed-first assignments. Requests remain sequential to avoid benchmark-made
-concurrency as a cache-affinity or latency variable.
+concurrency as a cache-affinity or latency variable. Every measured request
+also records the monotonic warmup-to-measure settle elapsed by the
+source-manifest-bound runner; the verifier requires both that value and the
+sanitized wall-clock gap between warmup completion and measurement start to
+meet the configured 1,500 ms.
 
 Headline direction is order-robust, not merely pooled. Each AB/BA order must
 retain at least 75% complete eligible pairs, and both order-stratum medians
 must have the same nonzero sign before the result says either arm was higher.
 Two zero medians report no observed median difference. Opposite signs, or a
 zero/nonzero split, are reported as order-sensitive; missing stratum coverage
-is indeterminate. The membership input-token parity audit uses the same rule.
+is indeterminate. A pooled conclusion additionally requires at least three
+complete pairs in every model-by-order stratum, so aggregate volume cannot hide
+one model's missing AB or BA arm. The membership input-token parity audit uses
+the same rule.
 
 ## What counts as evidence
 
@@ -159,9 +166,14 @@ output, and then run the authoritative verifier with README parity enabled:
 
 ```sh
 pnpm test:cache-stable-tools-evidence
-pnpm verify:cache-stable-tools -- --no-readme --print-readme
+pnpm verify:cache-stable-tools --no-readme --print-readme
 pnpm verify:cache-stable-tools
 ```
+
+The verifier treats the serialized JSON bytes as the sole authority and uses
+the same bytes for parsing, credential scanning, and SHA-256 reporting. Its CLI
+rejects symlinks, non-regular inputs, evidence over 10 MB, and README input over
+1 MB before reading them.
 
 The default endpoint is
 `https://freerouter.minpeter.workers.dev/v1`. The run performs an authenticated
@@ -169,9 +181,13 @@ The default endpoint is
 and writes by mode-`0600` temporary file plus atomic rename. The pinned preset
 uses 5 models × 8 trials × 3 scenarios × 2 arms × warmup/measurement = 480
 Chat Completions requests, plus one `/models` preflight request: 481 HTTP
-requests total. There are no hidden retries. The runner checks the 480-request
-topology, then re-hashes the runner and complete source manifest before writing;
-any mid-campaign drift fails before the atomic rename. Methodology-changing
+requests total. The runner performs no client-side retries; any router or
+upstream retries remain opaque. The runner checks the 480-request topology and
+requires its on-disk runner/source snapshots after module initialization to
+equal a second snapshot before atomic rename. A mismatch fails, but this is not
+continuous file monitoring or execution-byte attestation: transient
+edit-and-restore and a change between module load and the first snapshot are not
+detectable. Run the campaign from a quiescent worktree. Methodology-changing
 flags cannot be combined with `--evidence-campaign`; `--help` lists the bounded
 exploratory options.
 
@@ -187,7 +203,8 @@ text or credential and showed that the router returned `tool_calls: null` for a
 valid no-tool Mistral response. Its SHA-256 is
 `d43b238a53dd686445fff02c86c57cfedf7e0e1987780290be3122501addb214`.
 It motivated the parser regression test but is not used for an effect estimate;
-the final source-hashed campaign is the authoritative parser/effect evidence.
+the final source-manifest-bound campaign is the authoritative parser/effect
+evidence within the snapshot limits above.
 
 The router's upstream provider, retry behavior, backend affinity,
 `system_fingerprint`, cache policy, load, and usage normalization are opaque.
@@ -197,7 +214,11 @@ provider-specific. `not-reported` means no recognized valid field was exposed,
 not that no upstream cache exists. Latency is supporting context only.
 
 Native capability must be established separately for a precise
-adapter/provider/model/version tuple. The audited
+adapter/provider/model/version tuple. The 2026-07-17 dependency audit used
+`ai@7.0.30`, `@ai-sdk/provider@4.0.3`,
+`@ai-sdk/openai-compatible@3.0.11`, `@ai-sdk/openai@4.0.15`, and
+`@ai-sdk/anthropic@4.0.15`; current package versions do not establish provider
+or router capability. The audited
 [`@ai-sdk/openai@4.0.15` tool-search implementation](https://github.com/vercel/ai/blob/b8241a6e5592066c0ee1772c32d3ef47d7d7595e/packages/openai/src/tool/tool-search.ts)
 and
 [`@ai-sdk/anthropic@4.0.15` tool preparation](https://github.com/vercel/ai/blob/6976682b5718f36425521816e6a8c2df8c07faa9/packages/anthropic/src/anthropic-prepare-tools.ts)
@@ -207,20 +228,43 @@ is a direct-provider, currently `kimi-k3`-specific extension. Any future native
 path needs a wire canary for its expected request/replay items and an eager
 fallback when the tuple is unknown or the canary fails.
 
+For OpenAI hosted search, that canary must see a same-response
+`tool_search_call`/`tool_search_output` pair with `execution: "server"` and a
+null `call_id`. Client-executed search instead stops after a call with
+`execution: "client"` and requires the application to echo its non-null
+`call_id` in a later `tool_search_output`; PSS does not currently own that replay
+path. A future client path must accept returned definitions only from a
+host-owned allowlist or registry subset and reject unexpected names, types,
+duplicates, and schemas. Manually replayed `additional_tools` items must also
+retain their original input position and `role: "developer"`; the selector is
+not an authorization decision. An individually deferred function still exposes
+its name and description and mostly saves its parameter schema, while
+namespaces or MCP servers can defer the contained function details. OpenAI
+recommends those grouped surfaces where possible and fewer than ten functions
+per namespace; documented savings are possible, not guaranteed.
+
 That canary must also assert an explicit MCP approval policy. The OpenAI API
 documents approval-before-sharing as its default, while the current AI SDK
 OpenAI Responses adapter lowers an omitted setting to
 `require_approval: "never"`; a provider-native integration must not rely on
-either implicit default. The generic adapter used here also does not normalize
-GPT-5.6 `cache_write_tokens`, so this benchmark's separately audited raw write
-field is required and a read-hit ratio is never presented as net cost savings.
+either implicit default. OpenAI does not store MCP `authorization` or return it
+in the Response, so a future durable path must re-inject it from a host
+credential source on every request, never persist it in transcripts or
+evidence, and canary-check `allowed_tools` with the explicit approval policy.
+Returned tools and output remain untrusted input. The generic adapter used here
+also does not normalize GPT-5.6 `cache_write_tokens`, so this benchmark's
+separately audited raw write field is required and a read-hit ratio is never
+presented as net cost savings. The current OpenAI prompt-caching guide says
+cache reads consider the latest 50 breakpoints, while the Responses API
+reference says the latest 80 without a content-block lookback limit. This raw
+generic benchmark uses neither value and does not encode either disputed limit.
 
 ## Final checked-in snapshot
 
-This section is populated from the source-hashed 480-request campaign before
-the pull request is finalized.
+This section is populated from the source-manifest-bound 480-request campaign
+before the pull request is finalized.
 
 <!-- cache-stable-tools-independent-verifier:start -->
 Fresh schema-v3 evidence and the verifier-generated report are pending the
-final source-frozen campaign.
+final quiescent-worktree campaign.
 <!-- cache-stable-tools-independent-verifier:end -->

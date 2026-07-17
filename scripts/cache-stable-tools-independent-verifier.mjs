@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { lstat, readdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 
 const EXPECTED_ENDPOINT = "https://freerouter.minpeter.workers.dev/v1";
+const MAX_EVIDENCE_BYTES = 10_000_000;
+const MAX_README_BYTES = 1_000_000;
 const EXPECTED_CAMPAIGN_ID = "pr208-cache-v3-20260717";
 const EXPECTED_MODELS = Object.freeze([
   "minimaxai/minimax-m2.7",
@@ -57,6 +59,54 @@ const CACHE_REPORTING_STATUSES = Object.freeze([
   "reported-zero-only",
   "unavailable",
 ]);
+const EXPECTED_METHODOLOGY = Object.freeze({
+  armExecutionAlgorithm:
+    "A SHA-256 bit of seed, model, and scenario selects the first trial order; each later trial alternates it. Even trial counts are exactly balanced.",
+  armIsolation: Object.freeze({
+    canary:
+      "Each arm has a unique, fixed-length token in an equal-shape inert canary placed before every benchmark tool. Warmup and measure reuse the same canary; no other arm does.",
+    promptNamespace:
+      "Each arm has a unique, fixed-length system-message namespace shared only by its warmup and measurement.",
+  }),
+  comparisonSemantics: Object.freeze({
+    "same-set-order":
+      "After an arm-specific canary, the warmup uses canonical order. The measured request either preserves it or reverses the same set.",
+    "active-set-change":
+      "After an arm-specific canary, the warmup uses the full canonical set. The measured request either preserves that set exactly or uses a smaller canonical subset with the fixed prefix intact.",
+    "membership-only-change":
+      "The measured request either preserves the warmup set or replaces one tool at the same position with an equal-byte definition, keeping tool count and serialized request length equal.",
+  }),
+  effectConclusionPolicy:
+    "A model-level directional cache or input-token conclusion is reported only when each AB/BA order stratum retains at least 75% eligible pairs and both stratum medians have the same nonzero sign. A pooled conclusion additionally requires at least three complete pairs in every model-by-order stratum. Two zero medians report no observed median difference; mixed signs or a zero/nonzero mix report order-sensitive; missing coverage is indeterminate.",
+  eligibilitySemantics: Object.freeze({
+    cacheTelemetryEligible:
+      "A capture-success request is locally eligible for requested-model cache aggregation only when the sanitized response model exactly matches the requested model and input/cache-read/cache-write usage aliases form a valid envelope. A measured request additionally requires its own arm's warmup to be a capture success from that exact requested model.",
+    captureSuccess:
+      "HTTP success plus exactly one recognized choice/message, zero modern or legacy tool calls, finish_reason=stop, and exact trimmed text OK. Response-model attribution and usage validity are audited separately.",
+  }),
+  finishReasonPolicy:
+    "The sole choice must report finish_reason=stop for capture success. Missing, accessor-backed, non-string, unknown, length, content_filter, function_call, and tool_calls values are stored only as sanitized status labels and fail closed; raw finish-reason values are never stored.",
+  outputValidation:
+    "The result stores only whether the sole choice returned exact trimmed text OK; response text and tool arguments are never stored. Missing, malformed, multi-choice, and mismatched output fails capture and therefore cache-telemetry eligibility.",
+  pairedUncertainty:
+    "Paired summaries include descriptive p25/p75 intervals and effect signs overall and by AB/BA order. These are not confidence intervals.",
+  sourceSnapshotSemantics:
+    "The runner records on-disk source snapshots after module initialization and again before atomic rename. A start/end mismatch fails. Transient edit-and-restore and changes between module load and the initial snapshot are not detected, so the campaign requires a quiescent worktree.",
+  toolCallValidation:
+    "Every HTTP-success response must contain a recognized choices array and zero tool calls; otherwise the request is marked unsuccessful.",
+  usageValidation:
+    "Cache aggregates accept only nonnegative safe-integer input/read/write token observations. Read and write must each be no greater than input, their sum must be a safe integer no greater than input, and every cross-request sum must remain a safe integer or the campaign fails closed without evidence. Conflicting or malformed aliases retain only an audit status; their source and value are nulled instead of guessed or clamped. Output and total-token audit conflicts do not affect cache-read eligibility.",
+});
+const EXPECTED_INTERPRETATION = Object.freeze({
+  "not-reported":
+    "Successful responses did not expose a recognized cache-read usage field; this does not prove that no provider-side cache exists.",
+  "reported-nonzero":
+    "At least one measured response exposed a positive provider-reported cache-read token count.",
+  "reported-zero-only":
+    "A recognized cache-read usage field was exposed, but every measured value was zero.",
+  unavailable:
+    "No measured request passed response-model and usage-envelope eligibility.",
+});
 const SCENARIOS = Object.freeze([
   Object.freeze({
     name: "same-set-order",
@@ -117,19 +167,20 @@ const EXPECTED_TOPOLOGY = Object.freeze({
   scenarioCount: 3,
   totalRequests: 480,
 });
-const REQUIRED_IMPLEMENTATION_SOURCE_PATHS = Object.freeze([
+const IMPLEMENTATION_SUPPORT_PATHS = Object.freeze([
   "package.json",
   "packages/runtime/package.json",
-  "packages/runtime/src/llm/llm.ts",
-  "packages/runtime/src/llm/model-step-preparation.ts",
-  "packages/runtime/src/plugins/diagnostics.ts",
   "pnpm-lock.yaml",
   "pnpm-workspace.yaml",
+  "scripts/benchmark-cache-stable-tools.test.mjs",
   "scripts/cache-stable-tools-evidence.test.mjs",
   "scripts/cache-stable-tools-independent-verifier.adversarial.mjs",
   "scripts/cache-stable-tools-independent-verifier.mjs",
   "scripts/cache-stable-tools-wire.test.mjs",
 ]);
+const REQUIRED_IMPLEMENTATION_SOURCE_PATHS = Object.freeze(
+  await completeImplementationSourcePaths()
+);
 const REQUEST_KEYS = Object.freeze([
   "armPosition",
   "cacheReadSource",
@@ -158,6 +209,7 @@ const REQUEST_KEYS = Object.freeze([
   "responseModelMatchesRequested",
   "responseToolCallCount",
   "scenario",
+  "settleElapsedMs",
   "startedAt",
   "success",
   "toolsArrayBytes",
@@ -296,6 +348,34 @@ function check(condition, path, message) {
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+async function completeImplementationSourcePaths() {
+  const repositoryRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+  const runtimeSources = await regularFilesUnder(
+    resolve(repositoryRoot, "packages/runtime/src"),
+    "packages/runtime/src"
+  );
+  return [...IMPLEMENTATION_SUPPORT_PATHS, ...runtimeSources].sort();
+}
+
+async function regularFilesUnder(directory, relativeDirectory) {
+  const paths = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const relativePath = `${relativeDirectory}/${entry.name}`;
+    if (entry.isDirectory()) {
+      paths.push(
+        ...(await regularFilesUnder(
+          resolve(directory, entry.name),
+          relativePath
+        ))
+      );
+      continue;
+    }
+    check(entry.isFile(), relativePath, "implementation source is not a file");
+    paths.push(relativePath);
+  }
+  return paths;
 }
 
 function ownDescriptor(value, key, path) {
@@ -799,15 +879,33 @@ function buildPairs(requests, scenario) {
 function deriveComparisons(requests) {
   return SCENARIOS.map((scenario) => {
     const pairs = buildPairs(requests, scenario);
+    const orderStrata = PAIR_ORDERS.map((pairOrder) => ({
+      pairOrder,
+      ...summarizePairs(pairs.filter((pair) => pair.pairOrder === pairOrder)),
+    }));
+    const expectedPairsByOrder = Object.fromEntries(
+      PAIR_ORDERS.map((pairOrder) => [
+        pairOrder,
+        requests.filter(
+          (request) =>
+            request.phase === "measure" &&
+            request.scenario === scenario.name &&
+            request.variant === scenario.controlVariant &&
+            request.pairOrder === pairOrder
+        ).length,
+      ])
+    );
     return {
       scenario: scenario.name,
       controlVariant: scenario.controlVariant,
       changedVariant: scenario.changedVariant,
+      effectConclusion: recordedDirectionalConclusion(
+        expectedPairsByOrder,
+        orderStrata,
+        "medianControlMinusChangedCacheReadTokens"
+      ),
       ...summarizePairs(pairs),
-      orderStrata: PAIR_ORDERS.map((pairOrder) => ({
-        pairOrder,
-        ...summarizePairs(pairs.filter((pair) => pair.pairOrder === pairOrder)),
-      })),
+      orderStrata,
       pairs,
     };
   });
@@ -862,14 +960,78 @@ function deriveMembershipParity(requests) {
     });
   }
   const differences = pairs.map((pair) => pair.controlMinusChangedInputTokens);
+  const orderStrata = PAIR_ORDERS.map((pairOrder) => {
+    const stratumDifferences = pairs
+      .filter((pair) => pair.pairOrder === pairOrder)
+      .map((pair) => pair.controlMinusChangedInputTokens);
+    return {
+      pairOrder,
+      changedHigher: stratumDifferences.filter((difference) => difference < 0)
+        .length,
+      controlHigher: stratumDifferences.filter((difference) => difference > 0)
+        .length,
+      eligiblePairs: stratumDifferences.length,
+      equal: stratumDifferences.filter((difference) => difference === 0).length,
+      medianDifference: quantile(stratumDifferences, 0.5),
+    };
+  });
+  const expectedPairsByOrder = Object.fromEntries(
+    PAIR_ORDERS.map((pairOrder) => [
+      pairOrder,
+      requests.filter(
+        (request) =>
+          request.phase === "measure" &&
+          request.scenario === scenario.name &&
+          request.variant === scenario.controlVariant &&
+          request.pairOrder === pairOrder
+      ).length,
+    ])
+  );
   return {
     changedHigher: differences.filter((difference) => difference < 0).length,
     controlHigher: differences.filter((difference) => difference > 0).length,
+    effectConclusion: recordedDirectionalConclusion(
+      expectedPairsByOrder,
+      orderStrata,
+      "medianDifference"
+    ),
     eligiblePairs: pairs.length,
     equal: differences.filter((difference) => difference === 0).length,
     missingPairs: EXPECTED_TRIALS - pairs.length,
+    orderStrata,
     pairs,
   };
+}
+
+function recordedDirectionalConclusion(
+  expectedPairsByOrder,
+  orderStrata,
+  medianField
+) {
+  if (
+    orderStrata.some((stratum) => {
+      const expected = expectedPairsByOrder[stratum.pairOrder];
+      return (
+        expected === 0 || stratum.eligiblePairs < Math.ceil(expected * 0.75)
+      );
+    })
+  ) {
+    return "indeterminate-insufficient-order-stratum-coverage";
+  }
+  const medians = orderStrata.map((stratum) => stratum[medianField]);
+  if (medians.some((median) => median === null)) {
+    return "indeterminate-insufficient-order-stratum-coverage";
+  }
+  if (medians.every((median) => median === 0)) {
+    return "no-observed-median-difference";
+  }
+  if (medians.every((median) => median > 0)) {
+    return "control-higher";
+  }
+  if (medians.every((median) => median < 0)) {
+    return "changed-higher";
+  }
+  return "order-sensitive";
 }
 
 function deriveVariantSummary(requests) {
@@ -1279,6 +1441,16 @@ function verifyRequest(
       "violates sequential request chronology"
     );
   }
+  if (request.phase === "warmup") {
+    exact(request.settleElapsedMs, null, `${path}.settleElapsedMs`);
+  } else {
+    nonnegativeSafeInteger(request.settleElapsedMs, `${path}.settleElapsedMs`);
+    check(
+      request.settleElapsedMs >= configuration.settleMs,
+      `${path}.settleElapsedMs`,
+      `must be at least the configured ${configuration.settleMs} ms`
+    );
+  }
   check(
     request.httpStatus === null ||
       (Number.isSafeInteger(request.httpStatus) &&
@@ -1450,7 +1622,7 @@ function expectedCoordinatesForModel(model, seed, startSequence) {
   return coordinates;
 }
 
-function verifyWarmupLinkage(requests, path) {
+function verifyWarmupLinkage(requests, settleMs, path) {
   for (const scenario of SCENARIOS) {
     for (let trial = 1; trial <= EXPECTED_TRIALS; trial += 1) {
       for (const variant of scenarioVariants(scenario)) {
@@ -1473,6 +1645,12 @@ function verifyWarmupLinkage(requests, path) {
           measured.requestSequence,
           warmup.requestSequence + 1,
           `${armPath}.requestSequence`
+        );
+        check(
+          Date.parse(measured.startedAt) - Date.parse(warmup.completedAt) >=
+            settleMs,
+          `${armPath}.measure.startedAt`,
+          `must be at least ${settleMs} ms after warmup completion`
         );
         exact(
           warmup.warmupPrerequisitePassed,
@@ -1538,6 +1716,7 @@ function validateRecordedViewSchemas(model, path) {
         "scenario",
         "controlVariant",
         "changedVariant",
+        "effectConclusion",
         ...PAIRED_SUMMARY_KEYS,
         "orderStrata",
         "pairs",
@@ -1578,13 +1757,37 @@ function validateRecordedViewSchemas(model, path) {
     [
       "changedHigher",
       "controlHigher",
+      "effectConclusion",
       "eligiblePairs",
       "equal",
       "missingPairs",
+      "orderStrata",
       "pairs",
     ],
     `${path}.membershipInputTokenParityAudit`
   );
+  denseArray(
+    model.membershipInputTokenParityAudit.orderStrata,
+    `${path}.membershipInputTokenParityAudit.orderStrata`,
+    2
+  );
+  for (const [
+    index,
+    stratum,
+  ] of model.membershipInputTokenParityAudit.orderStrata.entries()) {
+    exactKeys(
+      stratum,
+      [
+        "changedHigher",
+        "controlHigher",
+        "eligiblePairs",
+        "equal",
+        "medianDifference",
+        "pairOrder",
+      ],
+      `${path}.membershipInputTokenParityAudit.orderStrata[${index}]`
+    );
+  }
   denseArray(
     model.membershipInputTokenParityAudit.pairs,
     `${path}.membershipInputTokenParityAudit.pairs`
@@ -1678,13 +1881,18 @@ function membershipEffect(parity, minimumPairs = MINIMUM_ORDER_STRATUM_PAIRS) {
         0.5
       ),
     };
-  }, minimumPairs);
-  return classifyOrderStrata(strata, "medianControlMinusChangedInputTokens", {
-    "control-higher": "descriptive-control-higher-input",
-    "changed-higher": "descriptive-changed-higher-input",
-    equal: "input-token-parity",
-    unavailable: "insufficient-coverage",
   });
+  return classifyOrderStrata(
+    strata,
+    "medianControlMinusChangedInputTokens",
+    {
+      "control-higher": "descriptive-control-higher-input",
+      "changed-higher": "descriptive-changed-higher-input",
+      equal: "input-token-parity",
+      unavailable: "insufficient-coverage",
+    },
+    minimumPairs
+  );
 }
 
 function pooledComparison(models, scenario) {
@@ -1702,6 +1910,17 @@ function pooledComparison(models, scenario) {
       ...summarizePairs(pairs.filter((pair) => pair.pairOrder === pairOrder)),
     })),
   };
+}
+
+function everyModelOrderStratumHasCoverage(models, pairsForModel) {
+  return models.every((model) => {
+    const pairs = pairsForModel(model);
+    return PAIR_ORDERS.every(
+      (pairOrder) =>
+        pairs.filter((pair) => pair.pairOrder === pairOrder).length >=
+        MINIMUM_ORDER_STRATUM_PAIRS
+    );
+  });
 }
 
 function buildReport(evidence, serialized) {
@@ -1728,13 +1947,24 @@ function buildReport(evidence, serialized) {
   );
   for (const scenario of SCENARIOS) {
     const comparison = pooledComparison(evidence.models, scenario);
+    const pooledEffect = effectForComparison(
+      comparison,
+      EXPECTED_MODELS.length * MINIMUM_ORDER_STRATUM_PAIRS
+    );
+    const allModelOrderStrataCovered = everyModelOrderStratumHasCoverage(
+      evidence.models,
+      (model) =>
+        deriveComparisons(model.requests).find(
+          (item) => item.scenario === scenario.name
+        ).pairs
+    );
     effects.push({
       scope: "pooled",
       scenario: scenario.name,
-      ...effectForComparison(
-        comparison,
-        EXPECTED_MODELS.length * MINIMUM_ORDER_STRATUM_PAIRS
-      ),
+      ...pooledEffect,
+      conclusion: allModelOrderStrataCovered
+        ? pooledEffect.conclusion
+        : "insufficient-coverage",
     });
   }
   const membershipInputParity = evidence.models.map((model) => ({
@@ -1747,12 +1977,21 @@ function buildReport(evidence, serialized) {
       model: model.model,
     }))
   );
+  const pooledMembershipEffect = membershipEffect(
+    { pairs: pooledParityPairs },
+    EXPECTED_MODELS.length * MINIMUM_ORDER_STRATUM_PAIRS
+  );
+  const allMembershipModelOrderStrataCovered =
+    everyModelOrderStratumHasCoverage(
+      evidence.models,
+      (model) => deriveMembershipParity(model.requests).pairs
+    );
   membershipInputParity.push({
     scope: "pooled",
-    ...membershipEffect(
-      { pairs: pooledParityPairs },
-      EXPECTED_MODELS.length * MINIMUM_ORDER_STRATUM_PAIRS
-    ),
+    ...pooledMembershipEffect,
+    conclusion: allMembershipModelOrderStrataCovered
+      ? pooledMembershipEffect.conclusion
+      : "insufficient-coverage",
   });
   return {
     evidenceSha256: sha256(serialized),
@@ -1827,6 +2066,28 @@ function findForbiddenKeys(value, path = "evidence", found = []) {
   return found;
 }
 
+function containsCredentialLikeString(value) {
+  const stack = [value];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (typeof current === "string") {
+      if (BEARER_PATTERN.test(current) || KEY_LIKE_PATTERN.test(current)) {
+        return true;
+      }
+      continue;
+    }
+    if (current === null || typeof current !== "object") {
+      continue;
+    }
+    if (Array.isArray(current)) {
+      stack.push(...current);
+    } else {
+      stack.push(...Object.values(current));
+    }
+  }
+  return false;
+}
+
 async function verifyConfiguration(configuration, repoRoot) {
   exactKeys(
     configuration,
@@ -1855,6 +2116,7 @@ async function verifyConfiguration(configuration, repoRoot) {
       "runId",
       "seed",
       "settleMs",
+      "sourceSnapshotSemantics",
       "timeoutMs",
       "toolCallValidation",
       "toolChoice",
@@ -1913,27 +2175,54 @@ async function verifyConfiguration(configuration, repoRoot) {
     "must be a Node version"
   );
   exact(configuration.toolChoice, "omitted-auto", "configuration.toolChoice");
-  for (const key of [
-    "effectConclusionPolicy",
-    "toolCallValidation",
-    "outputValidation",
-    "pairedUncertainty",
-    "usageValidation",
-  ]) {
-    check(
-      typeof configuration[key] === "string" && configuration[key].length > 0,
-      `configuration.${key}`,
-      "must be nonempty text"
-    );
-  }
+  exact(
+    configuration.effectConclusionPolicy,
+    EXPECTED_METHODOLOGY.effectConclusionPolicy,
+    "configuration.effectConclusionPolicy"
+  );
+  exact(
+    configuration.toolCallValidation,
+    EXPECTED_METHODOLOGY.toolCallValidation,
+    "configuration.toolCallValidation"
+  );
+  exact(
+    configuration.outputValidation,
+    EXPECTED_METHODOLOGY.outputValidation,
+    "configuration.outputValidation"
+  );
+  exact(
+    configuration.pairedUncertainty,
+    EXPECTED_METHODOLOGY.pairedUncertainty,
+    "configuration.pairedUncertainty"
+  );
+  exact(
+    configuration.sourceSnapshotSemantics,
+    EXPECTED_METHODOLOGY.sourceSnapshotSemantics,
+    "configuration.sourceSnapshotSemantics"
+  );
+  exact(
+    configuration.usageValidation,
+    EXPECTED_METHODOLOGY.usageValidation,
+    "configuration.usageValidation"
+  );
   exactKeys(
     configuration.armIsolation,
     ["canary", "promptNamespace"],
     "configuration.armIsolation"
   );
+  exact(
+    configuration.armIsolation,
+    EXPECTED_METHODOLOGY.armIsolation,
+    "configuration.armIsolation"
+  );
   exactKeys(
     configuration.eligibilitySemantics,
     ["cacheTelemetryEligible", "captureSuccess"],
+    "configuration.eligibilitySemantics"
+  );
+  exact(
+    configuration.eligibilitySemantics,
+    EXPECTED_METHODOLOGY.eligibilitySemantics,
     "configuration.eligibilitySemantics"
   );
   exactKeys(
@@ -1951,9 +2240,19 @@ async function verifyConfiguration(configuration, repoRoot) {
     FINISH_REASON_STATUSES,
     "configuration.finishReasonValidation.statuses"
   );
+  exact(
+    configuration.finishReasonValidation.policy,
+    EXPECTED_METHODOLOGY.finishReasonPolicy,
+    "configuration.finishReasonValidation.policy"
+  );
   exactKeys(
     configuration.comparisonSemantics,
     SCENARIOS.map((scenario) => scenario.name),
+    "configuration.comparisonSemantics"
+  );
+  exact(
+    configuration.comparisonSemantics,
+    EXPECTED_METHODOLOGY.comparisonSemantics,
     "configuration.comparisonSemantics"
   );
   exactKeys(
@@ -1997,6 +2296,11 @@ async function verifyConfiguration(configuration, repoRoot) {
     configuration.armExecutionOrder.mode,
     "seeded-alternating-ab-ba",
     "configuration.armExecutionOrder.mode"
+  );
+  exact(
+    configuration.armExecutionOrder.algorithm,
+    EXPECTED_METHODOLOGY.armExecutionAlgorithm,
+    "configuration.armExecutionOrder.algorithm"
   );
   exact(
     configuration.armExecutionOrder.models,
@@ -2113,16 +2417,21 @@ async function verifyConfiguration(configuration, repoRoot) {
 }
 
 async function verifyEvidenceDocument({
-  evidence,
   serialized,
   repoRoot,
   readmeText = null,
 }) {
-  const raw = serialized ?? `${JSON.stringify(evidence, null, 2)}\n`;
+  const raw = serialized;
   check(
     typeof raw === "string",
     "evidence",
     "serialized evidence must be text"
+  );
+  const rawBytes = Buffer.byteLength(raw);
+  check(
+    rawBytes > 0 && rawBytes <= MAX_EVIDENCE_BYTES,
+    "evidence",
+    `serialized evidence must be 1-${MAX_EVIDENCE_BYTES} bytes`
   );
   check(
     !BEARER_PATTERN.test(raw),
@@ -2130,6 +2439,17 @@ async function verifyEvidenceDocument({
     "contains a bearer credential marker"
   );
   check(!KEY_LIKE_PATTERN.test(raw), "evidence", "contains a key-like value");
+  let evidence;
+  try {
+    evidence = JSON.parse(raw);
+  } catch {
+    fail("evidence", "serialized evidence is not valid JSON");
+  }
+  check(
+    !containsCredentialLikeString(evidence),
+    "evidence",
+    "contains a decoded credential-like string"
+  );
   exactKeys(
     evidence,
     [
@@ -2148,20 +2468,20 @@ async function verifyEvidenceDocument({
   exact(evidence.endpoint, EXPECTED_ENDPOINT, "evidence.endpoint");
   exact(evidence.protocol, "openai-chat-completions", "evidence.protocol");
   exact(evidence.credentialRecorded, false, "evidence.credentialRecorded");
-  validTimestamp(evidence.generatedAt, "evidence.generatedAt");
+  const generatedAt = validTimestamp(
+    evidence.generatedAt,
+    "evidence.generatedAt"
+  );
   exactKeys(
     evidence.interpretation,
     CACHE_REPORTING_STATUSES,
     "evidence.interpretation"
   );
-  for (const status of CACHE_REPORTING_STATUSES) {
-    check(
-      typeof evidence.interpretation[status] === "string" &&
-        evidence.interpretation[status].length > 0,
-      `evidence.interpretation.${status}`,
-      "must be nonempty text"
-    );
-  }
+  exact(
+    evidence.interpretation,
+    EXPECTED_INTERPRETATION,
+    "evidence.interpretation"
+  );
   check(
     findForbiddenKeys(evidence).length === 0,
     "evidence",
@@ -2171,6 +2491,10 @@ async function verifyEvidenceDocument({
     repoRoot ?? dirname(dirname(fileURLToPath(import.meta.url)))
   );
   await verifyConfiguration(evidence.configuration, root);
+  const preflightAt = validTimestamp(
+    evidence.configuration.modelPreflight.checkedAt,
+    "configuration.modelPreflight.checkedAt"
+  );
   denseArray(evidence.models, "evidence.models", EXPECTED_MODELS.length);
   exact(
     evidence.models.map((model) => value(model, "model", "evidence.models[]")),
@@ -2178,6 +2502,7 @@ async function verifyEvidenceDocument({
     "evidence.models[].model"
   );
   let previousCompletedAt = null;
+  let firstStartedAt = null;
   let nextSequence = 0;
   const globalCanaries = new Set();
   for (const [modelIndex, model] of evidence.models.entries()) {
@@ -2195,6 +2520,12 @@ async function verifyEvidenceDocument({
       nextSequence
     );
     for (const [requestIndex, request] of model.requests.entries()) {
+      if (firstStartedAt === null) {
+        firstStartedAt = validTimestamp(
+          request.startedAt,
+          `${path}.requests[${requestIndex}].startedAt`
+        );
+      }
       previousCompletedAt = verifyRequest(
         request,
         model.model,
@@ -2214,7 +2545,11 @@ async function verifyEvidenceDocument({
         globalCanaries.add(request.isolationCanarySha256);
       }
     }
-    verifyWarmupLinkage(model.requests, `${path}.warmupLinkage`);
+    verifyWarmupLinkage(
+      model.requests,
+      evidence.configuration.settleMs,
+      `${path}.warmupLinkage`
+    );
     validateRecordedViewSchemas(model, path);
     const expectedViews = deriveModelViews(model.requests);
     for (const [key, expectedView] of Object.entries(expectedViews)) {
@@ -2230,6 +2565,21 @@ async function verifyEvidenceDocument({
     globalCanaries.size,
     EXPECTED_MODELS.length * EXPECTED_TOPOLOGY.armsPerModel,
     "evidence.isolationCanaries.uniqueArms"
+  );
+  check(
+    firstStartedAt !== null && preflightAt <= firstStartedAt,
+    "configuration.modelPreflight.checkedAt",
+    "must not postdate the first benchmark request"
+  );
+  check(
+    previousCompletedAt !== null && generatedAt >= previousCompletedAt,
+    "evidence.generatedAt",
+    "must not predate the final benchmark response"
+  );
+  check(
+    generatedAt >= preflightAt,
+    "evidence.generatedAt",
+    "must not predate model preflight"
   );
   const report = buildReport(evidence, raw);
   const readmeBlock = renderReadmeBlock(report);
@@ -2253,6 +2603,9 @@ function parseCli(args) {
   };
   for (let index = 0; index < args.length; index += 1) {
     const flag = args[index];
+    if (flag === "--") {
+      continue;
+    }
     if (flag === "--print-readme") {
       options.printReadme = true;
       continue;
@@ -2286,18 +2639,15 @@ function parseCli(args) {
 
 async function main() {
   const options = parseCli(process.argv.slice(2));
-  const serialized = await readFile(options.evidence, "utf8");
-  let evidence;
-  try {
-    evidence = JSON.parse(serialized);
-  } catch {
-    fail("evidence", "is not valid JSON");
-  }
+  const serialized = await readRegularText(
+    options.evidence,
+    MAX_EVIDENCE_BYTES,
+    "evidence"
+  );
   const readmeText = options.verifyReadme
-    ? await readFile(options.readme, "utf8")
+    ? await readRegularText(options.readme, MAX_README_BYTES, "README")
     : null;
   const result = await verifyEvidenceDocument({
-    evidence,
     serialized,
     repoRoot: options.repoRoot,
     readmeText,
@@ -2309,6 +2659,21 @@ async function main() {
       `Verified cache-stable evidence ${result.evidenceSha256} (${result.report.aggregate.observedRequests} requests).\n`
     );
   }
+}
+
+async function readRegularText(path, maximumBytes, label) {
+  const metadata = await lstat(path);
+  check(
+    metadata.isFile() && !metadata.isSymbolicLink(),
+    label,
+    "must be a regular non-symlink file"
+  );
+  check(
+    metadata.size > 0 && metadata.size <= maximumBytes,
+    label,
+    `must be 1-${maximumBytes} bytes`
+  );
+  return readFile(path, "utf8");
 }
 
 const isMain =

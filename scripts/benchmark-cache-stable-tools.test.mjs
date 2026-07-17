@@ -25,6 +25,7 @@ import {
   serializeBenchmarkResult,
   variantSummary,
 } from "./benchmark-cache-stable-tools.mts";
+import { deriveModelViews } from "./cache-stable-tools-independent-verifier.mjs";
 
 const ISOLATION_TOKEN_PATTERN = /^[0-9a-f]{24}$/u;
 
@@ -294,6 +295,12 @@ describe("cache-stable benchmark methodology", () => {
     expect(() =>
       serializeBenchmarkResult({ echoed: "Bearer redacted" }, "different-key")
     ).toThrow("containing a credential");
+    expect(() =>
+      serializeBenchmarkResult(
+        { echoed: "Bearer\tsynthetic-secret" },
+        "different-key"
+      )
+    ).toThrow("containing a credential");
   });
 
   it("excludes invalid cache counters from aggregation", () => {
@@ -551,6 +558,22 @@ describe("cache-stable benchmark methodology", () => {
         written.models[0].requests.map(({ requestSequence }) => requestSequence)
       ).toEqual([1, 2, 3, 4]);
       expect(
+        written.models[0].requests.map(({ phase, settleElapsedMs }) => ({
+          phase,
+          settleElapsedMs,
+        }))
+      ).toEqual([
+        { phase: "warmup", settleElapsedMs: null },
+        { phase: "measure", settleElapsedMs: expect.any(Number) },
+        { phase: "warmup", settleElapsedMs: null },
+        { phase: "measure", settleElapsedMs: expect.any(Number) },
+      ]);
+      expect(
+        written.models[0].requests
+          .filter(({ phase }) => phase === "measure")
+          .every(({ settleElapsedMs }) => settleElapsedMs >= 1)
+      ).toBe(true);
+      expect(
         written.models[0].requests.every(
           ({ cacheTelemetryEligible }) => cacheTelemetryEligible
         )
@@ -573,6 +596,77 @@ describe("cache-stable benchmark methodology", () => {
       });
       expect((await stat(output)).mode % 0o1000).toBe(0o600);
       expect(serialized).not.toContain("synthetic-control-key");
+    } finally {
+      vi.unstubAllGlobals();
+      await rm(temporaryDirectory, { force: true, recursive: true });
+    }
+  });
+
+  it("keeps producer views schema-compatible with independent recomputation", async () => {
+    const temporaryDirectory = await mkdtemp(
+      join(tmpdir(), "pss-cache-benchmark-view-parity-")
+    );
+    const output = join(temporaryDirectory, "synthetic.json");
+    const fetchMock = vi.fn((input) => {
+      if (String(input).endsWith("/models")) {
+        return new Response(
+          JSON.stringify({ data: [{ id: "synthetic/model" }] }),
+          { headers: { "content-type": "application/json" }, status: 200 }
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              finish_reason: "stop",
+              message: { content: "OK", role: "assistant", tool_calls: null },
+            },
+          ],
+          model: "synthetic/model",
+          usage: {
+            completion_tokens: 1,
+            prompt_tokens: 100,
+            prompt_tokens_details: {
+              cache_write_tokens: 0,
+              cached_tokens: 50,
+            },
+            total_tokens: 101,
+          },
+        }),
+        { headers: { "content-type": "application/json" }, status: 200 }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const options = parseOptions([
+        "--base-url",
+        "https://synthetic.invalid/v1",
+        "--models",
+        "synthetic/model",
+        "--output",
+        output,
+        "--prefix-lines",
+        "1",
+        "--scenario-set",
+        "all",
+        "--seed",
+        "synthetic-view-parity",
+        "--settle-ms",
+        "1",
+        "--timeout-ms",
+        "1000",
+        "--trials",
+        "8",
+      ]);
+      const result = await runBenchmark(options, "synthetic-control-key");
+      const model = result.models[0];
+      const independentlyDerived = deriveModelViews(model.requests);
+
+      for (const [key, expected] of Object.entries(independentlyDerived)) {
+        expect(model[key]).toEqual(expected);
+      }
+      expect(fetchMock).toHaveBeenCalledTimes(97);
     } finally {
       vi.unstubAllGlobals();
       await rm(temporaryDirectory, { force: true, recursive: true });
@@ -880,7 +974,7 @@ describe("cache-stable benchmark methodology", () => {
 
       await expect(
         runBenchmark(options, "synthetic-control-key", { sourceSnapshot })
-      ).rejects.toThrow("sources changed during the campaign");
+      ).rejects.toThrow("start/end source snapshots differ");
       expect(fetchMock).toHaveBeenCalledTimes(5);
       expect(sourceSnapshot).toHaveBeenCalledTimes(2);
       await expect(stat(output)).rejects.toMatchObject({ code: "ENOENT" });
