@@ -727,6 +727,11 @@ describe("generateModelStep", () => {
       toolChoice: undefined,
     },
     {
+      label: "a null prepared tool choice",
+      prepareModelStep: () => ({ toolChoice: null }) as never,
+      toolChoice: undefined,
+    },
+    {
       label: "an inherited result selection",
       prepareModelStep: () =>
         Object.create({ activeTools: ["dynamic"] }) as never,
@@ -1179,7 +1184,7 @@ describe("generateModelStep", () => {
     ).toBe(cases.length);
   });
 
-  it("fingerprints an immutable resolve-time metadata snapshot", async () => {
+  it("observes metadata mutations before the detached snapshot starts", async () => {
     const runModelStep = await loadModelStepRunner();
     const fingerprints: string[] = [];
     const providerOptions = { example: { mode: "original" } };
@@ -1216,7 +1221,348 @@ describe("generateModelStep", () => {
     );
     await vi.waitFor(() => expect(fingerprints).toHaveLength(2));
 
-    expect(fingerprints[1]).toBe(fingerprints[0]);
+    expect(fingerprints[1]).not.toBe(fingerprints[0]);
+  });
+
+  it("marks asynchronous schemas unavailable without awaiting mutable results", async () => {
+    const runModelStep = await loadModelStepRunner();
+    const diagnostics: Array<{
+      readonly fingerprint: string;
+      readonly unavailable: number;
+    }> = [];
+    const mutableSchema: {
+      properties: { query: { type: "number" | "string" } };
+      type: "object";
+    } = {
+      properties: { query: { type: "string" } },
+      type: "object",
+    };
+    let resolveSchema: (schema: typeof mutableSchema) => void = () => undefined;
+    const pendingSchema = new Promise<typeof mutableSchema>((resolve) => {
+      resolveSchema = resolve;
+    });
+    const definition = {
+      description: "async schema",
+      inputSchema: jsonSchema(pendingSchema),
+    } as unknown as ToolSet[string];
+    const diagnosticSink = {
+      report: (diagnostic: {
+        readonly metadata?: {
+          readonly orderedToolSemanticFingerprint: string;
+          readonly semanticFingerprintUnavailableToolCount: number;
+        };
+      }) => {
+        if (diagnostic.metadata) {
+          diagnostics.push({
+            fingerprint: diagnostic.metadata.orderedToolSemanticFingerprint,
+            unavailable:
+              diagnostic.metadata.semanticFingerprintUnavailableToolCount,
+          });
+        }
+      },
+    };
+
+    await runModelStep(
+      {
+        diagnostics: diagnosticSink,
+        model: fakeModel,
+        tools: { delayed: definition },
+      },
+      { history: [], signal: new AbortController().signal }
+    );
+    await vi.waitFor(() => expect(diagnostics).toHaveLength(1));
+    expect(diagnostics[0]?.unavailable).toBe(1);
+
+    mutableSchema.properties.query = { type: "number" };
+    resolveSchema(mutableSchema);
+    await pendingSchema;
+    await runModelStep(
+      {
+        diagnostics: diagnosticSink,
+        model: fakeModel,
+        tools: { delayed: definition },
+      },
+      { history: [], signal: new AbortController().signal }
+    );
+    await vi.waitFor(() => expect(diagnostics).toHaveLength(2));
+
+    expect(diagnostics[1]).toEqual(diagnostics[0]);
+  });
+
+  it("observes schema Promise rejections after detached inspection", async () => {
+    const runModelStep = await loadModelStepRunner();
+    const unavailableCounts: number[] = [];
+    const unhandledRejections: unknown[] = [];
+    let rejectSchema: (reason: Error) => void = () => undefined;
+    const pendingSchema = new Promise<never>((_resolve, reject) => {
+      rejectSchema = reject;
+    });
+    const onUnhandledRejection = (reason: unknown) => {
+      unhandledRejections.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandledRejection);
+
+    try {
+      await runModelStep(
+        {
+          diagnostics: {
+            report(diagnostic) {
+              const count =
+                diagnostic.metadata?.semanticFingerprintUnavailableToolCount;
+              if (count !== undefined) {
+                unavailableCounts.push(count);
+              }
+            },
+          },
+          model: fakeModel,
+          tools: {
+            rejecting: {
+              inputSchema: jsonSchema(pendingSchema),
+            } as unknown as ToolSet[string],
+          },
+        },
+        { history: [], signal: new AbortController().signal }
+      );
+      await vi.waitFor(() => expect(unavailableCounts).toEqual([1]));
+
+      rejectSchema(new Error("schema-boom"));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(unhandledRejections).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandledRejection);
+    }
+  });
+
+  it("observes shadowed native Promises after detached inspection", async () => {
+    const runModelStep = await loadModelStepRunner();
+    const unavailableCounts: number[] = [];
+    const unhandledRejections: unknown[] = [];
+    let rejectSchema: (reason: Error) => void = () => undefined;
+    const pendingSchema = new Promise<never>((_resolve, reject) => {
+      rejectSchema = reject;
+    });
+    // biome-ignore lint/suspicious/noThenProperty: this regression intentionally shadows Promise.prototype.then.
+    Object.defineProperty(pendingSchema, "then", { value: undefined });
+    const onUnhandledRejection = (reason: unknown) => {
+      unhandledRejections.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandledRejection);
+
+    try {
+      await runModelStep(
+        {
+          diagnostics: {
+            report(diagnostic) {
+              const count =
+                diagnostic.metadata?.semanticFingerprintUnavailableToolCount;
+              if (count !== undefined) {
+                unavailableCounts.push(count);
+              }
+            },
+          },
+          model: fakeModel,
+          tools: {
+            rejecting: {
+              inputSchema: jsonSchema(pendingSchema),
+            } as unknown as ToolSet[string],
+          },
+        },
+        { history: [], signal: new AbortController().signal }
+      );
+      await vi.waitFor(() => expect(unavailableCounts).toEqual([1]));
+
+      rejectSchema(new Error("shadowed-then-boom"));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(unhandledRejections).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandledRejection);
+    }
+  });
+
+  it("does not assimilate accessor-backed schema thenables", async () => {
+    const runModelStep = await loadModelStepRunner();
+    const unavailableCounts: number[] = [];
+    let thenGetterCount = 0;
+    const hostileThenable = Object.create(null) as Record<string, unknown>;
+    // biome-ignore lint/suspicious/noThenProperty: this regression intentionally exercises a hostile thenable accessor.
+    Object.defineProperty(hostileThenable, "then", {
+      enumerable: true,
+      get() {
+        thenGetterCount += 1;
+        return () => undefined;
+      },
+    });
+
+    await runModelStep(
+      {
+        diagnostics: {
+          report(diagnostic) {
+            const count =
+              diagnostic.metadata?.semanticFingerprintUnavailableToolCount;
+            if (count !== undefined) {
+              unavailableCounts.push(count);
+            }
+          },
+        },
+        model: fakeModel,
+        tools: {
+          thenable: {
+            inputSchema: jsonSchema(hostileThenable),
+          } as unknown as ToolSet[string],
+        },
+      },
+      { history: [], signal: new AbortController().signal }
+    );
+    await vi.waitFor(() => expect(unavailableCounts).toEqual([1]));
+
+    expect(thenGetterCount).toBe(0);
+  });
+
+  it("marks arbitrary Standard Schema converters unavailable", async () => {
+    const runModelStep = await loadModelStepRunner();
+    const unavailableCounts: number[] = [];
+    let conversionCount = 0;
+    const definition = {
+      inputSchema: {
+        "~standard": {
+          jsonSchema: {
+            input() {
+              conversionCount += 1;
+              return { type: "object" };
+            },
+          },
+          validate: () => ({ value: undefined }),
+          vendor: "stateful-example",
+          version: 1,
+        },
+      },
+    } as unknown as ToolSet[string];
+
+    await runModelStep(
+      {
+        diagnostics: {
+          report(diagnostic) {
+            const count =
+              diagnostic.metadata?.semanticFingerprintUnavailableToolCount;
+            if (count !== undefined) {
+              unavailableCounts.push(count);
+            }
+          },
+        },
+        model: fakeModel,
+        tools: { standard: definition },
+      },
+      { history: [], signal: new AbortController().signal }
+    );
+    await vi.waitFor(() => expect(unavailableCounts).toEqual([1]));
+
+    expect(conversionCount).toBe(0);
+  });
+
+  it("does not rerun a bare lazy schema callback for diagnostics", async () => {
+    const runModelStep = await loadModelStepRunner();
+    const unavailableCounts: number[] = [];
+    let conversionCount = 0;
+    const definition = {
+      inputSchema: () => {
+        conversionCount += 1;
+        return jsonSchema({ type: "object" });
+      },
+    } as ToolSet[string];
+
+    await runModelStep(
+      {
+        diagnostics: {
+          report(diagnostic) {
+            const count =
+              diagnostic.metadata?.semanticFingerprintUnavailableToolCount;
+            if (count !== undefined) {
+              unavailableCounts.push(count);
+            }
+          },
+        },
+        model: fakeModel,
+        tools: { lazy: definition },
+      },
+      { history: [], signal: new AbortController().signal }
+    );
+    await vi.waitFor(() => expect(unavailableCounts).toEqual([1]));
+
+    expect(conversionCount).toBe(0);
+  });
+
+  it("isolates diagnostic reflection failures from model generation", async () => {
+    const runModelStep = await loadModelStepRunner();
+    const unavailableCounts: number[] = [];
+    const hostileDefinition = new Proxy(
+      {},
+      {
+        getPrototypeOf() {
+          throw new Error("diagnostic-proxy-boom");
+        },
+      }
+    ) as ToolSet[string];
+
+    await runModelStep(
+      {
+        diagnostics: {
+          report(diagnostic) {
+            const count =
+              diagnostic.metadata?.semanticFingerprintUnavailableToolCount;
+            if (count !== undefined) {
+              unavailableCounts.push(count);
+            }
+          },
+        },
+        model: fakeModel,
+        tools: { hostile: hostileDefinition },
+      },
+      { history: [], signal: new AbortController().signal }
+    );
+    await vi.waitFor(() => expect(unavailableCounts).toEqual([1]));
+
+    expect(generateTextMock).toHaveBeenCalledOnce();
+  });
+
+  it("starts the model request before resolving detached schema diagnostics", async () => {
+    const runModelStep = await loadModelStepRunner();
+    const order: string[] = [];
+    const definition = {
+      inputSchema: jsonSchema(() => {
+        order.push("schema");
+        return {
+          properties: { query: { type: "string" } },
+          type: "object",
+        };
+      }),
+    } as ToolSet[string];
+    generateTextMock.mockImplementationOnce(() => {
+      order.push("model-request");
+      return Promise.resolve({
+        responseMessages: [assistantMessage("DONE")],
+      });
+    });
+
+    await runModelStep(
+      {
+        diagnostics: {
+          report() {
+            order.push("diagnostic-report");
+          },
+        },
+        model: fakeModel,
+        tools: { lazy: definition },
+      },
+      { history: [], signal: new AbortController().signal }
+    );
+    await vi.waitFor(() => expect(order).toContain("diagnostic-report"));
+
+    expect(order[0]).toBe("model-request");
+    expect(order.indexOf("schema")).toBeGreaterThan(
+      order.indexOf("model-request")
+    );
   });
 
   it("fingerprints provider-tool ids and canonical arguments", async () => {

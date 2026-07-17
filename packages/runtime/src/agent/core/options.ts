@@ -119,8 +119,26 @@ function assertToolNameList(
   if (!Array.isArray(value)) {
     throw new TypeError(`Agent: options.${field} must be an array.`);
   }
+  const lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
+  if (
+    !(
+      lengthDescriptor &&
+      "value" in lengthDescriptor &&
+      Number.isSafeInteger(lengthDescriptor.value) &&
+      lengthDescriptor.value >= 0
+    )
+  ) {
+    throw new TypeError(`Agent: options.${field} has an invalid length.`);
+  }
   const seen = new Set<string>();
-  for (const name of value) {
+  for (let index = 0; index < lengthDescriptor.value; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+    if (!(descriptor && "value" in descriptor)) {
+      throw new TypeError(
+        `Agent: options.${field} must be a dense array of data-property tool names.`
+      );
+    }
+    const name = descriptor.value;
     if (typeof name !== "string") {
       throw new TypeError(`Agent: options.${field} must contain only strings.`);
     }

@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -6,22 +7,27 @@ import { describe, expect, it, vi } from "vitest";
 import {
   ACCEPTED_ZERO_TOOL_FINISH_REASONS,
   ALL_TOOL_NAMES,
+  assertSourceSnapshotMatchesCommit,
   benchmarkRequestArtifacts,
   cacheMeasurementIsValid,
   EVIDENCE_CAMPAIGN,
   EVIDENCE_CAMPAIGN_TOPOLOGY,
+  endpointCombinedConclusion,
   extractUsage,
   isolationTokenFor,
+  localRequestErrorCode,
   MEMBERSHIP_SCENARIO,
   orderedTools,
   outputWasExactOk,
   pairOrderFor,
   parseOptions,
+  readBoundedJsonResponse,
   responseFinishReasonStatuses,
   responseModel,
   responseToolCallCount,
   runBenchmark,
   safeTokenSum,
+  sanitizedBackendMetadata,
   serializeBenchmarkResult,
   variantSummary,
 } from "./benchmark-cache-stable-tools.mts";
@@ -245,6 +251,73 @@ describe("cache-stable benchmark methodology", () => {
     );
   });
 
+  it("hashes backend drift metadata without invoking accessors", () => {
+    expect(sanitizedBackendMetadata({}, "system_fingerprint")).toEqual({
+      sha256: null,
+      status: "absent",
+    });
+    expect(
+      sanitizedBackendMetadata(
+        { system_fingerprint: null },
+        "system_fingerprint"
+      )
+    ).toEqual({ sha256: null, status: "null" });
+    expect(
+      sanitizedBackendMetadata(
+        { system_fingerprint: "backend-a" },
+        "system_fingerprint"
+      )
+    ).toEqual({ sha256: hashText("backend-a"), status: "hashed" });
+    const getter = vi.fn(() => "must-not-run");
+    const response = {};
+    Object.defineProperty(response, "service_tier", { get: getter });
+    expect(sanitizedBackendMetadata(response, "service_tier")).toEqual({
+      sha256: null,
+      status: "invalid",
+    });
+    expect(getter).not.toHaveBeenCalled();
+  });
+
+  it("bounds JSON response reads and cancels declared or streamed overflow", async () => {
+    await expect(
+      readBoundedJsonResponse(Response.json({ ok: true }), 100)
+    ).resolves.toEqual({ ok: true });
+
+    const declaredCancel = vi.fn();
+    const declaredBody = new ReadableStream({ cancel: declaredCancel });
+    await expect(
+      readBoundedJsonResponse(
+        new Response(declaredBody, {
+          headers: { "content-length": "101" },
+        }),
+        100
+      )
+    ).rejects.toThrow("Content-Length exceeds");
+    expect(declaredCancel).toHaveBeenCalledTimes(1);
+
+    const streamedCancel = vi.fn();
+    const streamedBody = new ReadableStream({
+      cancel: streamedCancel,
+      start(controller) {
+        controller.enqueue(new Uint8Array(101));
+      },
+    });
+    await expect(
+      readBoundedJsonResponse(new Response(streamedBody), 100)
+    ).rejects.toThrow("body exceeds");
+    expect(streamedCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("classifies a prototype-backed DOMException from the explicit timeout signal", () => {
+    const controller = new AbortController();
+    const timeout = new DOMException("timed out", "TimeoutError");
+    controller.abort(timeout);
+    expect(Object.hasOwn(timeout, "name")).toBe(false);
+    expect(localRequestErrorCode(timeout, controller.signal)).toBe(
+      "TimeoutError"
+    );
+  });
+
   it("pins the verifier campaign and derives its exact request topology", () => {
     const options = parseOptions(["--evidence-campaign"]);
 
@@ -283,6 +356,158 @@ describe("cache-stable benchmark methodology", () => {
     expect(() =>
       parseOptions(["--skip-model-preflight", "--evidence-campaign"])
     ).toThrow("cannot be combined");
+    expect(() =>
+      parseOptions([
+        "--evidence-campaign",
+        "--output",
+        "benchmarks/cache-stable-tools/alternate.json",
+      ])
+    ).toThrow("cannot be combined");
+  });
+
+  it("refuses an evidence campaign before network I/O when the worktree is dirty", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await expect(
+        runBenchmark(parseOptions(["--evidence-campaign"]), "synthetic-key", {
+          repositoryState: async () => ({
+            commitSha: "0".repeat(40),
+            worktreeClean: false,
+          }),
+        })
+      ).rejects.toThrow("clean worktree at start");
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("detects a HEAD change across the initial source snapshot", async () => {
+    const fetchMock = vi.fn();
+    const repositoryState = vi
+      .fn()
+      .mockResolvedValueOnce({ commitSha: "a".repeat(40), worktreeClean: true })
+      .mockResolvedValueOnce({
+        commitSha: "b".repeat(40),
+        worktreeClean: true,
+      });
+    const sourceSnapshot = vi.fn().mockResolvedValue({
+      benchmarkSourceSha256: "c".repeat(64),
+      implementationSourcesSha256: { "source.ts": "d".repeat(64) },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const options = parseOptions([
+        "--base-url",
+        "https://synthetic.invalid/v1",
+        "--models",
+        "synthetic/model",
+        "--prefix-lines",
+        "1",
+        "--scenario-set",
+        "membership-only",
+        "--seed",
+        "synthetic-head-drift",
+        "--settle-ms",
+        "1",
+        "--timeout-ms",
+        "1000",
+        "--trials",
+        "1",
+      ]);
+      await expect(
+        runBenchmark(options, "synthetic-key", {
+          repositoryState,
+          sourceSnapshot,
+        })
+      ).rejects.toThrow("Source-freeze commit changed");
+      expect(repositoryState).toHaveBeenCalledTimes(2);
+      expect(sourceSnapshot).toHaveBeenCalledTimes(1);
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("binds current source bytes to the frozen tree before provider preflight", async () => {
+    const fetchMock = vi.fn();
+    const repositoryState = vi.fn().mockResolvedValue({
+      commitSha: "a".repeat(40),
+      worktreeClean: true,
+    });
+    const sourceSnapshot = vi.fn().mockResolvedValue({
+      benchmarkSourceSha256: "b".repeat(64),
+      implementationSourcesSha256: { "source.ts": "c".repeat(64) },
+    });
+    const sourceFreezeTreeVerifier = vi
+      .fn()
+      .mockRejectedValue(new Error("synthetic frozen-tree mismatch"));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await expect(
+        runBenchmark(parseOptions(["--evidence-campaign"]), "synthetic-key", {
+          repositoryState,
+          sourceFreezeTreeVerifier,
+          sourceSnapshot,
+        })
+      ).rejects.toThrow("synthetic frozen-tree mismatch");
+      expect(sourceFreezeTreeVerifier).toHaveBeenCalledWith(
+        await sourceSnapshot.mock.results[0].value,
+        "a".repeat(40)
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("rejects a source snapshot hash not backed by the frozen tree", async () => {
+    const commitSha = execFileSync("git", ["rev-parse", "--verify", "HEAD"], {
+      encoding: "utf8",
+    }).trim();
+    await expect(
+      assertSourceSnapshotMatchesCommit(
+        {
+          benchmarkSourceSha256: "0".repeat(64),
+          implementationSourcesSha256: {},
+        },
+        commitSha
+      )
+    ).rejects.toThrow("does not match source-freeze commit");
+  });
+
+  it("cancels a non-success model catalog body before failing preflight", async () => {
+    const cancel = vi.fn();
+    const body = new ReadableStream({ cancel });
+    const fetchMock = vi.fn(() => new Response(body, { status: 503 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const options = parseOptions([
+        "--base-url",
+        "https://synthetic.invalid/v1",
+        "--models",
+        "synthetic/model",
+        "--prefix-lines",
+        "1",
+        "--scenario-set",
+        "membership-only",
+        "--seed",
+        "synthetic-preflight-error",
+        "--settle-ms",
+        "1",
+        "--timeout-ms",
+        "1000",
+        "--trials",
+        "1",
+      ]);
+      await expect(runBenchmark(options, "synthetic-key")).rejects.toThrow(
+        "HTTP 503"
+      );
+      expect(cancel).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("refuses to serialize credentials or bearer headers", () => {
@@ -298,6 +523,12 @@ describe("cache-stable benchmark methodology", () => {
     expect(() =>
       serializeBenchmarkResult(
         { echoed: "Bearer\tsynthetic-secret" },
+        "different-key"
+      )
+    ).toThrow("containing a credential");
+    expect(() =>
+      serializeBenchmarkResult(
+        { echoed: "sk-synthetic-forged-credential" },
         "different-key"
       )
     ).toThrow("containing a credential");
@@ -402,6 +633,31 @@ describe("cache-stable benchmark methodology", () => {
     );
   });
 
+  it("fails closed across the endpoint-conclusion truth table", () => {
+    const insufficient = "indeterminate-insufficient-order-stratum-coverage";
+    expect(endpointCombinedConclusion("control-higher", "control-higher")).toBe(
+      "control-higher"
+    );
+    expect(endpointCombinedConclusion("changed-higher", "changed-higher")).toBe(
+      "changed-higher"
+    );
+    expect(endpointCombinedConclusion("control-higher", "changed-higher")).toBe(
+      "denominator-sensitive/indeterminate"
+    );
+    expect(
+      endpointCombinedConclusion(
+        "no-observed-median-difference",
+        "control-higher"
+      )
+    ).toBe("endpoint-disagreement/indeterminate");
+    expect(
+      endpointCombinedConclusion("order-sensitive", "control-higher")
+    ).toBe("endpoint-disagreement/indeterminate");
+    expect(endpointCombinedConclusion(insufficient, "control-higher")).toBe(
+      insufficient
+    );
+  });
+
   it("uses unique equal-shape canaries and an equal-byte order swap", () => {
     const first = orderedTools(ALL_TOOL_NAMES, "a".repeat(24));
     const second = orderedTools(ALL_TOOL_NAMES, "b".repeat(24));
@@ -422,7 +678,7 @@ describe("cache-stable benchmark methodology", () => {
       runId: "00000000-0000-4000-8000-000000000000",
       scenario: "same-set-order",
       trial: 1,
-      variant: "stable-order",
+      armPosition: "first",
     };
     const isolationToken = isolationTokenFor(identity);
     const first = benchmarkRequestArtifacts({
@@ -596,6 +852,104 @@ describe("cache-stable benchmark methodology", () => {
       });
       expect((await stat(output)).mode % 0o1000).toBe(0o600);
       expect(serialized).not.toContain("synthetic-control-key");
+    } finally {
+      vi.unstubAllGlobals();
+      await rm(temporaryDirectory, { force: true, recursive: true });
+    }
+  });
+
+  it("gates model views with campaign-global response ID replays", async () => {
+    const temporaryDirectory = await mkdtemp(
+      join(tmpdir(), "pss-cache-benchmark-global-response-id-")
+    );
+    const output = join(temporaryDirectory, "synthetic.json");
+    const responseCounts = new Map();
+    const fetchMock = vi.fn((input, init) => {
+      if (String(input).endsWith("/models")) {
+        return new Response(
+          JSON.stringify({
+            data: [{ id: "synthetic/a" }, { id: "synthetic/b" }],
+          }),
+          { status: 200 }
+        );
+      }
+      const requestBody = JSON.parse(String(init?.body));
+      const model = requestBody.model;
+      const responseIndex = responseCounts.get(model) ?? 0;
+      responseCounts.set(model, responseIndex + 1);
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              finish_reason: "stop",
+              message: { content: "OK", role: "assistant", tool_calls: null },
+            },
+          ],
+          id:
+            responseIndex === 0
+              ? "shared-synthetic-response"
+              : `${model}-response-${responseIndex}`,
+          model,
+          service_tier: "default",
+          system_fingerprint: "synthetic-backend",
+          usage: {
+            completion_tokens: 1,
+            prompt_tokens: 100,
+            prompt_tokens_details: {
+              cache_write_tokens: 0,
+              cached_tokens: 50,
+            },
+            total_tokens: 101,
+          },
+        }),
+        { status: 200 }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const options = parseOptions([
+        "--base-url",
+        "https://synthetic.invalid/v1",
+        "--models",
+        "synthetic/a,synthetic/b",
+        "--output",
+        output,
+        "--prefix-lines",
+        "1",
+        "--scenario-set",
+        "membership-only",
+        "--seed",
+        "synthetic-global-response-id",
+        "--settle-ms",
+        "1",
+        "--timeout-ms",
+        "1000",
+        "--trials",
+        "1",
+      ]);
+      const result = await runBenchmark(options, "synthetic-control-key");
+
+      expect(result.responseIdAudit).toEqual({
+        crossRequestBodyDuplicateHashes: 1,
+        crossRequestBodyDuplicateObservations: 2,
+        distinct: 7,
+        duplicateHashes: 1,
+        duplicateObservations: 1,
+        reported: 8,
+      });
+      for (const model of result.models) {
+        expect(model.responseIdAudit.duplicateHashes).toBe(0);
+        expect(
+          model.comparisons[0].responseIdIntegrityStatuses.crossBodyDuplicate
+        ).toBe(1);
+        expect(model.primaryComparisons[0].eligiblePairs).toBe(0);
+        expect(model.membershipInputTokenParityAudit.eligiblePairs).toBe(1);
+        expect(model.primaryMembershipInputTokenParityAudit.eligiblePairs).toBe(
+          0
+        );
+      }
+      expect(fetchMock).toHaveBeenCalledTimes(9);
     } finally {
       vi.unstubAllGlobals();
       await rm(temporaryDirectory, { force: true, recursive: true });
@@ -979,6 +1333,68 @@ describe("cache-stable benchmark methodology", () => {
       expect(sourceSnapshot).toHaveBeenCalledTimes(2);
       await expect(stat(output)).rejects.toMatchObject({ code: "ENOENT" });
     } finally {
+      vi.unstubAllGlobals();
+      await rm(temporaryDirectory, { force: true, recursive: true });
+    }
+  });
+
+  it("never retains or logs a provider-reflected credential error", async () => {
+    const temporaryDirectory = await mkdtemp(
+      join(tmpdir(), "pss-cache-benchmark-reflection-")
+    );
+    const output = join(temporaryDirectory, "synthetic.json");
+    const reflectedKey = "fr-reflected-credential-value";
+    const fetchMock = vi.fn((input) => {
+      if (String(input).endsWith("/models")) {
+        return new Response(
+          JSON.stringify({ data: [{ id: "synthetic/model" }] }),
+          { status: 200 }
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          error: { code: reflectedKey, type: reflectedKey },
+        }),
+        { status: 400 }
+      );
+    });
+    const stderr = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const options = parseOptions([
+        "--base-url",
+        "https://synthetic.invalid/v1",
+        "--models",
+        "synthetic/model",
+        "--output",
+        output,
+        "--prefix-lines",
+        "1",
+        "--scenario-set",
+        "membership-only",
+        "--seed",
+        "synthetic-reflection",
+        "--settle-ms",
+        "1",
+        "--timeout-ms",
+        "1000",
+        "--trials",
+        "1",
+      ]);
+      const result = await runBenchmark(options, reflectedKey);
+      const serialized = await readFile(output, "utf8");
+      const logged = stderr.mock.calls.map(([chunk]) => String(chunk)).join("");
+
+      expect(
+        result.models[0].requests.map(({ errorCode }) => errorCode)
+      ).toEqual(["http-400", "http-400", "http-400", "http-400"]);
+      expect(serialized).not.toContain(reflectedKey);
+      expect(logged).not.toContain(reflectedKey);
+    } finally {
+      stderr.mockRestore();
       vi.unstubAllGlobals();
       await rm(temporaryDirectory, { force: true, recursive: true });
     }

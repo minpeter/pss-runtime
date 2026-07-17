@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -7,12 +8,14 @@ import { fileURLToPath } from "node:url";
 
 import {
   deriveModelViews,
+  deriveResponseIdAudit,
   EXPECTED_CAMPAIGN_ID,
   EXPECTED_MODELS,
   EXPECTED_TOPOLOGY,
   pairOrderFor,
   REQUIRED_IMPLEMENTATION_SOURCE_PATHS,
   requestArtifacts,
+  responseIdDuplicateSets,
   SCENARIOS,
   verifyEvidenceDocument,
 } from "./cache-stable-tools-independent-verifier.mjs";
@@ -27,7 +30,9 @@ const IMPORT_SIDE_EFFECT_SPECIFIER_PATTERN = /^\s*import\s+["']([^"']+)["']/u;
 const DYNAMIC_IMPORT_PATTERN = /\bimport\s*\(/u;
 const DECODED_CREDENTIAL_PATTERN = /decoded credential-like string/u;
 const OVERSIZED_EVIDENCE_PATTERN = /1-10000000 bytes/u;
+const SYNTHETIC_BACKEND_PATTERN = /synthetic-backend-[ab]/u;
 const EXPECTED_VERIFIER_IMPORTS = [
+  "node:child_process",
   "node:crypto",
   "node:fs/promises",
   "node:path",
@@ -49,10 +54,12 @@ const MANUAL_METHODOLOGY = {
     "A SHA-256 bit of seed, model, and scenario selects the first trial order; each later trial alternates it. Even trial counts are exactly balanced.",
   armIsolation: {
     canary:
-      "Each arm has a unique, fixed-length token in an equal-shape inert canary placed before every benchmark tool. Warmup and measure reuse the same canary; no other arm does.",
+      "Each model/scenario/trial execution slot (first or second) has a unique, fixed-length token in an equal-shape inert canary placed before every benchmark tool. Warmup and measure reuse the slot canary; alternating AB/BA order counterbalances each variant across slots.",
     promptNamespace:
-      "Each arm has a unique, fixed-length system-message namespace shared only by its warmup and measurement.",
+      "Each model/scenario/trial execution slot has a unique, fixed-length system-message namespace shared only by its warmup and measurement; it is not derived from control/changed identity.",
   },
+  backendMetadataSemantics:
+    "Nullable system_fingerprint and service_tier response fields are retained only as absent/null/invalid/hashed statuses plus SHA-256 digests. Multiple digests are reported as possible backend drift. These fields do not change per-request cache-telemetry eligibility, but matched non-null values gate primary paired sensitivity eligibility; raw values and raw provider payloads are never stored.",
   comparisonSemantics: {
     "same-set-order":
       "After an arm-specific canary, the warmup uses canonical order. The measured request either preserves it or reverses the same set.",
@@ -62,21 +69,21 @@ const MANUAL_METHODOLOGY = {
       "The measured request either preserves the warmup set or replaces one tool at the same position with an equal-byte definition, keeping tool count and serialized request length equal.",
   },
   effectConclusionPolicy:
-    "A model-level directional cache or input-token conclusion is reported only when each AB/BA order stratum retains at least 75% eligible pairs and both stratum medians have the same nonzero sign. A pooled conclusion additionally requires at least three complete pairs in every model-by-order stratum. Two zero medians report no observed median difference; mixed signs or a zero/nonzero mix report order-sensitive; missing coverage is indeterminate.",
+    "Provider-reported raw cache-read-token differences and cache-read/input coverage-ratio differences are parallel descriptive endpoints. The all-sample view remains descriptive; the primary sensitivity view additionally requires one matched non-null system_fingerprint hash and one matched non-null service_tier hash across all four responses in a pair (each arm's warmup and measurement), and excludes any non-null response ID repeated anywhere in the campaign; reuse across distinct request-body hashes is separately audited. Missing backend metadata is unavailable for the primary view, not treated as a match. A model-level directional conclusion requires all four planned pairs in each AB/BA order stratum, matching nonzero median signs across endpoints, and no endpoint disagreement. Opposite raw-token and ratio directions are denominator-sensitive/indeterminate; every other endpoint disagreement is also indeterminate. Neither endpoint is a causal saving or cost estimate. Primary membership input parity uses the same four-response backend-metadata and response-ID pair universe; its all-sample view remains descriptive. Full input-token parity requires every planned primary pair to be observed and exactly equal. A pooled conclusion requires every planned primary pair in every model-by-order stratum and agreement with every model-level conclusion; model disagreement is indeterminate.",
   eligibilitySemantics: {
     cacheTelemetryEligible:
       "A capture-success request is locally eligible for requested-model cache aggregation only when the sanitized response model exactly matches the requested model and input/cache-read/cache-write usage aliases form a valid envelope. A measured request additionally requires its own arm's warmup to be a capture success from that exact requested model.",
     captureSuccess:
-      "HTTP success plus exactly one recognized choice/message, zero modern or legacy tool calls, finish_reason=stop, and exact trimmed text OK. Response-model attribution and usage validity are audited separately.",
+      "HTTP success plus exactly one recognized choice/message, zero modern or legacy tool calls, finish_reason=stop, and exact trimmed text OK. Response-model attribution and usage validity are audited separately. HTTP failures retain only status-derived codes and local failures use a fixed allowlist; provider error strings are never retained or logged.",
   },
   finishReasonPolicy:
     "The sole choice must report finish_reason=stop for capture success. Missing, accessor-backed, non-string, unknown, length, content_filter, function_call, and tool_calls values are stored only as sanitized status labels and fail closed; raw finish-reason values are never stored.",
   outputValidation:
     "The result stores only whether the sole choice returned exact trimmed text OK; response text and tool arguments are never stored. Missing, malformed, multi-choice, and mismatched output fails capture and therefore cache-telemetry eligibility.",
   pairedUncertainty:
-    "Paired summaries include descriptive p25/p75 intervals and effect signs overall and by AB/BA order. These are not confidence intervals.",
+    "Paired summaries include descriptive p25/p75 intervals and exact raw-token, input-token, and cache-read/input-ratio signs overall and by AB/BA order. Ratio pair signs, ordering, and even-sample median signs use BigInt rational arithmetic rather than floating-point subtraction; float medians remain display-only. These are not confidence intervals.",
   sourceSnapshotSemantics:
-    "The runner records on-disk source snapshots after module initialization and again before atomic rename. A start/end mismatch fails. Transient edit-and-restore and changes between module load and the initial snapshot are not detected, so the campaign requires a quiescent worktree.",
+    "Before an evidence campaign spends the credential, the runner records the current Git commit and requires a clean worktree, then compares every manifested current source byte and hash, including the benchmark runner, with its git show commit blob before provider preflight. It rechecks the same commit and cleanliness after that binding and before writing, then rechecks the commit again immediately before atomic rename after the temporary evidence file exists. Start/end source bytes must match. The freeze commit, clean-at-start result, and hashes are retained; transient edit-and-restore between checkpoints is not detected.",
   toolCallValidation:
     "Every HTTP-success response must contain a recognized choices array and zero tool calls; otherwise the request is marked unsuccessful.",
   usageValidation:
@@ -151,7 +158,7 @@ test("accepts a complete synthetic 480-request schema-v3 campaign", async () => 
         effect.scope === EXPECTED_MODELS[0] &&
         effect.scenario === "same-set-order"
     ).conclusion,
-    "descriptive-control-higher-cache-read"
+    "descriptive-control-higher"
   );
   assert.equal(
     result.report.membershipInputParity.find(
@@ -176,6 +183,30 @@ test("rejects a source manifest hash that is not backed by current bytes", async
     "packages/runtime/src/llm/llm.ts"
   ] = "0".repeat(64);
   await rejectsWith(evidence, ["implementationSourcesSha256"]);
+});
+
+test("requires runtime build and validation configs in the source manifest", async () => {
+  const evidence = await copyPristine();
+  evidence.configuration.implementationSourcesSha256 = Object.fromEntries(
+    Object.entries(evidence.configuration.implementationSourcesSha256).filter(
+      ([sourcePath]) => sourcePath !== "biome.jsonc"
+    )
+  );
+  await rejectsWith(evidence, ["implementationSourcesSha256"]);
+});
+
+test("rejects a false clean-at-start attestation and mismatched freeze tree", async () => {
+  const dirty = await copyPristine();
+  dirty.configuration.sourceWorktreeCleanAtStart = false;
+  await rejectsWith(dirty, ["sourceWorktreeCleanAtStart"]);
+
+  const wrongCommit = await copyPristine();
+  wrongCommit.configuration.sourceFreezeCommitSha = execFileSync(
+    "git",
+    ["rev-parse", "--verify", "HEAD^"],
+    { cwd: REPOSITORY_ROOT, encoding: "utf8" }
+  ).trim();
+  await rejectsWith(wrongCommit, ["sourceFreezeCommit"]);
 });
 
 test("rejects topology truncation", async () => {
@@ -298,6 +329,23 @@ test("rejects credential markers hidden behind JSON escapes", async () => {
   );
 });
 
+test("rejects an OpenAI-style credential hidden behind JSON escapes", async () => {
+  const evidence = await copyPristine();
+  evidence.configuration.nodeVersion = "sk-synthetic-forged-credential";
+  const serialized = `${JSON.stringify(evidence, null, 2).replace(
+    "sk-synthetic-forged-credential",
+    "sk\\u002dsynthetic-forged-credential"
+  )}\n`;
+  await assert.rejects(
+    () =>
+      verifyEvidenceDocument({
+        serialized,
+        repoRoot: REPOSITORY_ROOT,
+      }),
+    DECODED_CREDENTIAL_PATTERN
+  );
+});
+
 test("rejects methodology and interpretation prose tampering", async () => {
   const methodology = await copyPristine();
   methodology.configuration.eligibilitySemantics.captureSuccess =
@@ -338,6 +386,15 @@ test("rejects a producer-authored paired effect summary tamper", async () => {
   await rejectsWith(evidence, ["comparisons", "independent recomputation"]);
 });
 
+test("rejects a campaign response-ID audit tamper", async () => {
+  const evidence = await copyPristine();
+  evidence.responseIdAudit.reported -= 1;
+  await rejectsWith(evidence, [
+    "evidence.responseIdAudit",
+    "independent recomputation",
+  ]);
+});
+
 test("rejects a membership parity audit tamper", async () => {
   const evidence = await copyPristine();
   evidence.models[0].membershipInputTokenParityAudit.equal -= 1;
@@ -347,10 +404,246 @@ test("rejects a membership parity audit tamper", async () => {
   ]);
 });
 
+test("rejects a primary membership parity audit tamper", async () => {
+  const evidence = await copyPristine();
+  evidence.models[0].primaryMembershipInputTokenParityAudit.equal -= 1;
+  await rejectsWith(evidence, [
+    "primaryMembershipInputTokenParityAudit",
+    "independent recomputation",
+  ]);
+});
+
 test("rejects a weighted aggregate tamper", async () => {
   const evidence = await copyPristine();
   evidence.models[0].summaries[0].weightedCacheReadRatio = 0.123;
   await rejectsWith(evidence, ["summaries", "independent recomputation"]);
+});
+
+test("reports hashed backend drift without retaining raw metadata", async () => {
+  const evidence = await copyPristine();
+  const model = evidence.models[0];
+  model.requests[0].systemFingerprintSha256 = sha256("synthetic-backend-b");
+  refreshModel(model);
+  const result = await verify(evidence);
+
+  assert.deepEqual(model.backendMetadataAudit.systemFingerprint, {
+    driftObserved: true,
+    statusCounts: { absent: 0, hashed: 96, invalid: 0, null: 0 },
+    uniqueHashCount: 2,
+  });
+  assert.equal(
+    result.report.models[0].backendMetadataAudit.systemFingerprint
+      .driftObserved,
+    true
+  );
+  assert.doesNotMatch(JSON.stringify(evidence), SYNTHETIC_BACKEND_PATTERN);
+});
+
+test("keeps mismatched backend hashes descriptive but excludes the primary pair", async () => {
+  const evidence = await copyPristine();
+  const model = evidence.models[0];
+  const changed = model.requests.find(
+    (request) =>
+      request.phase === "measure" &&
+      request.scenario === "same-set-order" &&
+      request.variant === "reversed-order"
+  );
+  changed.systemFingerprintSha256 = sha256("different-backend");
+  refreshModel(model);
+  const result = await verify(evidence);
+  const allSample = model.comparisons[0];
+  const primary = model.primaryComparisons[0];
+  const effect = result.report.effects.find(
+    (item) => item.scope === model.model && item.scenario === "same-set-order"
+  );
+
+  assert.equal(allSample.systemFingerprintPairStatuses.mismatched, 1);
+  assert.equal(allSample.eligiblePairs, 8);
+  assert.equal(primary.eligiblePairs, 7);
+  assert.equal(effect.conclusion, "insufficient-coverage");
+  assert.equal(
+    effect.allSampleDescriptive.conclusion,
+    "descriptive-control-higher"
+  );
+});
+
+test("excludes a pair when an arm crosses backends between warmup and measure", async () => {
+  const evidence = await copyPristine();
+  const model = evidence.models[0];
+  const warmup = model.requests.find(
+    (request) =>
+      request.phase === "warmup" &&
+      request.scenario === "same-set-order" &&
+      request.variant === "reversed-order"
+  );
+  warmup.serviceTierSha256 = sha256("different-service-tier");
+  refreshModel(model);
+  const result = await verify(evidence);
+  const effect = result.report.effects.find(
+    (item) => item.scope === model.model && item.scenario === "same-set-order"
+  );
+
+  assert.equal(model.comparisons[0].serviceTierPairStatuses.mismatched, 1);
+  assert.equal(model.comparisons[0].eligiblePairs, 8);
+  assert.equal(model.primaryComparisons[0].eligiblePairs, 7);
+  assert.equal(effect.conclusion, "insufficient-coverage");
+  assert.equal(
+    effect.allSampleDescriptive.conclusion,
+    "descriptive-control-higher"
+  );
+});
+
+test("uses the cache-primary pair universe for membership parity", async () => {
+  const evidence = await copyPristine();
+  const model = evidence.models[0];
+  const warmup = model.requests.find(
+    (request) =>
+      request.phase === "warmup" &&
+      request.scenario === "membership-only-change" &&
+      request.variant === "changed-membership"
+  );
+  warmup.serviceTierSha256 = sha256("different-service-tier");
+  refreshModel(model);
+  const result = await verify(evidence);
+  const parity = result.report.membershipInputParity.find(
+    (item) => item.scope === model.model
+  );
+
+  assert.equal(model.membershipInputTokenParityAudit.eligiblePairs, 8);
+  assert.equal(model.primaryMembershipInputTokenParityAudit.eligiblePairs, 7);
+  assert.equal(parity.conclusion, "insufficient-coverage");
+  assert.equal(parity.allSampleDescriptive.conclusion, "input-token-parity");
+});
+
+test("excludes response IDs duplicated across distinct request bodies", async () => {
+  const evidence = await copyPristine();
+  const model = evidence.models[0];
+  const pair = model.requests.filter(
+    (request) =>
+      request.phase === "measure" &&
+      request.scenario === "same-set-order" &&
+      request.trial === 1
+  );
+  assert.equal(pair.length, 2);
+  pair[1].responseIdSha256 = pair[0].responseIdSha256;
+  assert.notEqual(pair[0].requestBodySha256, pair[1].requestBodySha256);
+  refreshEvidence(evidence);
+  const result = await verify(evidence);
+  const effect = result.report.effects.find(
+    (item) => item.scope === model.model && item.scenario === "same-set-order"
+  );
+
+  assert.deepEqual(model.responseIdAudit, {
+    crossRequestBodyDuplicateHashes: 1,
+    crossRequestBodyDuplicateObservations: 2,
+    distinct: 95,
+    duplicateHashes: 1,
+    duplicateObservations: 1,
+    reported: 96,
+  });
+  assert.equal(
+    model.comparisons[0].responseIdIntegrityStatuses.crossBodyDuplicate,
+    1
+  );
+  assert.equal(model.primaryComparisons[0].eligiblePairs, 7);
+  assert.equal(effect.conclusion, "insufficient-coverage");
+});
+
+test("excludes a same-body response ID replay from the primary view", async () => {
+  const evidence = await copyPristine();
+  const model = evidence.models[0];
+  const requests = model.requests.filter(
+    (request) =>
+      request.scenario === "membership-only-change" &&
+      request.trial === 1 &&
+      request.variant === "unchanged-membership"
+  );
+  assert.equal(requests.length, 2);
+  const warmup = requests.find((request) => request.phase === "warmup");
+  const measured = requests.find((request) => request.phase === "measure");
+  assert.equal(warmup.requestBodySha256, measured.requestBodySha256);
+  measured.responseIdSha256 = warmup.responseIdSha256;
+  refreshEvidence(evidence);
+  const result = await verify(evidence);
+
+  assert.deepEqual(evidence.responseIdAudit, {
+    crossRequestBodyDuplicateHashes: 0,
+    crossRequestBodyDuplicateObservations: 0,
+    distinct: 479,
+    duplicateHashes: 1,
+    duplicateObservations: 1,
+    reported: 480,
+  });
+  assert.equal(model.comparisons[2].responseIdIntegrityStatuses.duplicate, 1);
+  assert.equal(model.primaryComparisons[2].eligiblePairs, 7);
+  assert.equal(model.primaryMembershipInputTokenParityAudit.eligiblePairs, 7);
+  assert.equal(
+    result.report.effects.find(
+      (item) =>
+        item.scope === model.model && item.scenario === "membership-only-change"
+    ).conclusion,
+    "insufficient-coverage"
+  );
+  const parity = result.report.membershipInputParity.find(
+    (item) => item.scope === model.model
+  );
+  assert.equal(parity.conclusion, "insufficient-coverage");
+  assert.equal(parity.allSampleDescriptive.conclusion, "input-token-parity");
+});
+
+test("excludes campaign-global response IDs reused across models", async () => {
+  const evidence = await copyPristine();
+  const firstModel = evidence.models[0];
+  const secondModel = evidence.models[1];
+  const firstRequest = firstModel.requests.find(
+    (request) =>
+      request.phase === "measure" &&
+      request.scenario === "membership-only-change"
+  );
+  const secondRequest = secondModel.requests.find(
+    (request) =>
+      request.phase === "measure" &&
+      request.scenario === "membership-only-change"
+  );
+  assert.notEqual(
+    firstRequest.requestBodySha256,
+    secondRequest.requestBodySha256
+  );
+  secondRequest.responseIdSha256 = firstRequest.responseIdSha256;
+  refreshEvidence(evidence);
+  const result = await verify(evidence);
+
+  assert.deepEqual(evidence.responseIdAudit, {
+    crossRequestBodyDuplicateHashes: 1,
+    crossRequestBodyDuplicateObservations: 2,
+    distinct: 479,
+    duplicateHashes: 1,
+    duplicateObservations: 1,
+    reported: 480,
+  });
+  for (const model of [firstModel, secondModel]) {
+    assert.equal(model.responseIdAudit.duplicateHashes, 0);
+    assert.equal(
+      model.comparisons[2].responseIdIntegrityStatuses.crossBodyDuplicate,
+      1
+    );
+    assert.equal(model.primaryComparisons[2].eligiblePairs, 7);
+    assert.equal(model.primaryMembershipInputTokenParityAudit.eligiblePairs, 7);
+    assert.equal(
+      result.report.effects.find(
+        (item) =>
+          item.scope === model.model &&
+          item.scenario === "membership-only-change"
+      ).conclusion,
+      "insufficient-coverage"
+    );
+    const parity = result.report.membershipInputParity.find(
+      (item) => item.scope === model.model
+    );
+    assert.equal(parity.conclusion, "insufficient-coverage");
+    assert.equal(parity.allSampleDescriptive.conclusion, "input-token-parity");
+  }
+  assert.deepEqual(result.report.responseIdAudit, evidence.responseIdAudit);
 });
 
 test("fails closed when a cross-request token sum overflows", async () => {
@@ -369,14 +662,14 @@ test("fails closed when a cross-request token sum overflows", async () => {
   await rejectsWith(evidence, ["sum overflow"]);
 });
 
-test("withholds a directional effect below three complete pairs per order", async () => {
+test("withholds a directional effect when an order stratum is incomplete", async () => {
   const evidence = await copyPristine();
   const model = evidence.models[0];
   const targetTrials = trialsForOrder(
     model.model,
     "same-set-order",
     "control-first"
-  ).slice(0, 2);
+  ).slice(0, 1);
   for (const request of model.requests) {
     if (
       request.phase === "measure" &&
@@ -389,6 +682,43 @@ test("withholds a directional effect below three complete pairs per order", asyn
     }
   }
   refreshModel(model);
+  const result = await verify(evidence);
+  assert.equal(
+    result.report.effects.find(
+      (effect) =>
+        effect.scope === model.model && effect.scenario === "same-set-order"
+    ).conclusion,
+    "insufficient-coverage"
+  );
+});
+
+test("counts only positive-input pairs toward cache-ratio coverage", async () => {
+  const evidence = await copyPristine();
+  const model = evidence.models[0];
+  const targetTrials = trialsForOrder(
+    model.model,
+    "same-set-order",
+    "control-first"
+  ).slice(0, 3);
+  for (const request of model.requests) {
+    if (
+      request.phase === "measure" &&
+      request.scenario === "same-set-order" &&
+      targetTrials.includes(request.trial)
+    ) {
+      request.cacheReadTokens = 0;
+      request.inputTokens = 0;
+      request.totalTokens = 1;
+    }
+  }
+  refreshModel(model);
+  const stableSummary = model.summaries.find(
+    (summary) => summary.variant === "stable-order"
+  );
+  assert.equal(stableSummary.cacheReadReported, 8);
+  assert.equal(stableSummary.cacheReadRatioEligible, 5);
+  assert.equal(stableSummary.cacheReportCoverage, 1);
+  assert.equal(stableSummary.cacheReadRatioCoverage, 5 / 8);
   const result = await verify(evidence);
   assert.equal(
     result.report.effects.find(
@@ -433,6 +763,42 @@ test("withholds membership parity below three complete pairs per order", async (
     ).conclusion,
     "insufficient-coverage"
   );
+});
+
+test("does not call cancelling input-token deltas exact parity", async () => {
+  const evidence = await copyPristine();
+  const model = evidence.models[0];
+  for (const pairOrder of ["control-first", "changed-first"]) {
+    const deltas = [-10, 0, 0, 10];
+    for (const [index, trial] of trialsForOrder(
+      model.model,
+      "membership-only-change",
+      pairOrder
+    ).entries()) {
+      for (const request of model.requests) {
+        if (
+          request.phase !== "measure" ||
+          request.scenario !== "membership-only-change" ||
+          request.trial !== trial
+        ) {
+          continue;
+        }
+        const delta = deltas[index];
+        request.inputTokens =
+          request.variant === "unchanged-membership" ? 100 : 100 - delta;
+        request.totalTokens = request.inputTokens + 1;
+      }
+    }
+  }
+  refreshModel(model);
+  const result = await verify(evidence);
+  const effect = result.report.membershipInputParity.find(
+    (item) => item.scope === model.model
+  );
+  assert.equal(effect.conclusion, "no-observed-median-input-token-difference");
+  assert.equal(model.membershipInputTokenParityAudit.equal, 4);
+  assert.equal(model.membershipInputTokenParityAudit.controlHigher, 2);
+  assert.equal(model.membershipInputTokenParityAudit.changedHigher, 2);
 });
 
 test("requires every model-by-order stratum for pooled conclusions", async () => {
@@ -486,6 +852,213 @@ test("classifies opposite AB and BA directions as order-sensitive", async () => 
     ).conclusion,
     "order-sensitive/indeterminate"
   );
+  assert.equal(
+    result.report.effects.find(
+      (effect) =>
+        effect.scope === "pooled" && effect.scenario === "same-set-order"
+    ).conclusion,
+    "model-heterogeneous/indeterminate"
+  );
+});
+
+test("withholds pooled input parity when one model is directional", async () => {
+  const evidence = await copyPristine();
+  const model = evidence.models[0];
+  for (const request of model.requests) {
+    if (
+      request.phase === "measure" &&
+      request.scenario === "membership-only-change"
+    ) {
+      request.inputTokens =
+        request.variant === "unchanged-membership" ? 110 : 100;
+      request.totalTokens = request.inputTokens + 1;
+    }
+  }
+  refreshModel(model);
+  const result = await verify(evidence);
+  assert.equal(
+    result.report.membershipInputParity.find(
+      (effect) => effect.scope === model.model
+    ).conclusion,
+    "descriptive-control-higher-input"
+  );
+  assert.equal(
+    result.report.membershipInputParity.find(
+      (effect) => effect.scope === "pooled"
+    ).conclusion,
+    "model-heterogeneous/indeterminate"
+  );
+});
+
+test("marks opposing raw-token and ratio directions denominator-sensitive", async () => {
+  const evidence = await copyPristine();
+  const model = evidence.models[0];
+  for (const request of model.requests) {
+    if (
+      request.phase === "measure" &&
+      request.scenario === "active-set-change"
+    ) {
+      const control = request.variant === "unchanged-active-set";
+      request.cacheReadTokens = control ? 100 : 90;
+      request.inputTokens = control ? 200 : 100;
+      request.totalTokens = request.inputTokens + 1;
+    }
+  }
+  refreshModel(model);
+  const result = await verify(evidence);
+  const effect = result.report.effects.find(
+    (item) =>
+      item.scope === model.model && item.scenario === "active-set-change"
+  );
+  assert.equal(effect.conclusion, "denominator-sensitive/indeterminate");
+  assert.equal(
+    effect.primary.endpoints.rawCacheReadTokens.conclusion,
+    "descriptive-control-higher"
+  );
+  assert.equal(
+    effect.primary.endpoints.cacheReadInputCoverageRatio.conclusion,
+    "descriptive-changed-higher"
+  );
+  assert.ok(
+    effect.primary.endpoints.cacheReadInputCoverageRatio.orderStrata.every(
+      (stratum) => stratum.median < 0
+    ),
+    "each AB/BA stratum should report the changed arm's higher read ratio"
+  );
+  assert.deepEqual(model.comparisons[1].cacheReadTokenDifferenceSigns, {
+    changedHigher: 0,
+    controlHigher: 8,
+    equal: 0,
+  });
+  assert.deepEqual(model.comparisons[1].cacheReadRatioDifferenceSigns, {
+    changedHigher: 8,
+    controlHigher: 0,
+    equal: 0,
+  });
+});
+
+test("marks zero-versus-directional endpoint disagreement indeterminate", async () => {
+  const evidence = await copyPristine();
+  const model = evidence.models[0];
+  for (const request of model.requests) {
+    if (
+      request.phase === "measure" &&
+      request.scenario === "active-set-change"
+    ) {
+      request.cacheReadTokens = 100;
+      request.inputTokens =
+        request.variant === "unchanged-active-set" ? 200 : 100;
+      request.totalTokens = request.inputTokens + 1;
+    }
+  }
+  refreshModel(model);
+  const result = await verify(evidence);
+  const effect = result.report.effects.find(
+    (item) =>
+      item.scope === model.model && item.scenario === "active-set-change"
+  );
+  assert.equal(effect.conclusion, "endpoint-disagreement/indeterminate");
+  assert.equal(
+    effect.primary.endpoints.rawCacheReadTokens.conclusion,
+    "no-observed-median-difference"
+  );
+  assert.equal(
+    effect.primary.endpoints.cacheReadInputCoverageRatio.conclusion,
+    "descriptive-changed-higher"
+  );
+});
+
+test("uses exact rational median signs when float ratio deltas round to zero", async () => {
+  const evidence = await copyPristine();
+  const model = evidence.models[0];
+  const input = 1_000_000_000_000_000;
+  for (const request of model.requests) {
+    if (request.phase !== "measure" || request.scenario !== "same-set-order") {
+      continue;
+    }
+    const control = request.variant === "stable-order";
+    request.inputTokens = control ? input : input - 1;
+    request.cacheReadTokens = control ? input - 1 : input - 2;
+    request.totalTokens = request.inputTokens;
+  }
+  refreshModel(model);
+  const comparison = model.comparisons[0];
+  assert.equal(comparison.medianControlMinusChangedCacheReadRatio, 0);
+  assert.equal(comparison.medianControlMinusChangedCacheReadRatioSign, 1);
+  assert.deepEqual(comparison.cacheReadRatioDifferenceSigns, {
+    changedHigher: 0,
+    controlHigher: 8,
+    equal: 0,
+  });
+  const result = await verify(evidence);
+  const effect = result.report.effects.find(
+    (item) => item.scope === model.model && item.scenario === "same-set-order"
+  );
+  assert.equal(effect.conclusion, "descriptive-control-higher");
+  assert.ok(
+    effect.primary.endpoints.cacheReadInputCoverageRatio.orderStrata.every(
+      (stratum) =>
+        stratum.median === 0 && stratum.direction === "control-higher"
+    )
+  );
+});
+
+test("requires 4/4 coverage when one missing pair reverses a stratum median", async () => {
+  const evidence = await copyPristine();
+  const model = evidence.models[0];
+  const targetOrder = "control-first";
+  const targetTrials = trialsForOrder(
+    model.model,
+    "same-set-order",
+    targetOrder
+  );
+  const targetDifferences = [-20, -10, 80, 90];
+  const otherTrials = trialsForOrder(
+    model.model,
+    "same-set-order",
+    "changed-first"
+  );
+  for (const request of model.requests) {
+    if (request.phase !== "measure" || request.scenario !== "same-set-order") {
+      continue;
+    }
+    const targetIndex = targetTrials.indexOf(request.trial);
+    const otherIndex = otherTrials.indexOf(request.trial);
+    const difference =
+      targetIndex >= 0 ? targetDifferences[targetIndex] : 10 + otherIndex * 10;
+    const control = request.variant === "stable-order";
+    if (difference >= 0) {
+      request.cacheReadTokens = control ? difference : 0;
+    } else {
+      request.cacheReadTokens = control ? 0 : -difference;
+    }
+    request.inputTokens = 100;
+    request.totalTokens = 101;
+  }
+  const omittedTrial = targetTrials[3];
+  for (const request of model.requests) {
+    if (
+      request.phase === "measure" &&
+      request.scenario === "same-set-order" &&
+      request.trial === omittedTrial
+    ) {
+      request.cacheReadSource = null;
+      request.cacheReadTokens = null;
+      request.usageFieldAudit.cacheRead = "absent";
+    }
+  }
+  assert.equal((targetDifferences[1] + targetDifferences[2]) / 2, 35);
+  assert.equal(targetDifferences[1], -10);
+  refreshModel(model);
+  const result = await verify(evidence);
+  const effect = result.report.effects.find(
+    (item) => item.scope === model.model && item.scenario === "same-set-order"
+  );
+  assert.equal(effect.conclusion, "insufficient-coverage");
+  assert.equal(
+    model.comparisons[0].effectConclusion,
+    "indeterminate-insufficient-order-stratum-coverage"
+  );
 });
 
 test("rejects README figures that differ from independently derived output", async () => {
@@ -529,7 +1102,7 @@ async function syntheticEvidence() {
   );
 
   assert.equal(counter.value, EXPECTED_TOPOLOGY.totalRequests);
-  return {
+  const evidence = {
     configuration,
     credentialRecorded: false,
     endpoint: "https://freerouter.minpeter.workers.dev/v1",
@@ -537,8 +1110,11 @@ async function syntheticEvidence() {
     interpretation: MANUAL_INTERPRETATION,
     models,
     protocol: "openai-chat-completions",
+    responseIdAudit: null,
     schemaVersion: 3,
   };
+  refreshEvidence(evidence);
+  return evidence;
 }
 
 function syntheticModel(modelName, counter) {
@@ -589,7 +1165,7 @@ function syntheticArmRequests({
   variant,
 }) {
   const isolationToken = sha256(
-    `${RUN_ID}\0${modelName}\0${scenario.name}\0${variant}\0${trial}`
+    `${RUN_ID}\0${modelName}\0${scenario.name}\0${trial}\0${armIndex === 0 ? "first" : "second"}`
   ).slice(0, 24);
   return ["warmup", "measure"].map((phase) => {
     counter.value += 1;
@@ -664,9 +1240,13 @@ function syntheticRequest({
     responseModelMatchesRequested: true,
     responseToolCallCount: 0,
     scenario: scenarioName,
+    serviceTierSha256: sha256("default"),
+    serviceTierStatus: "hashed",
     settleElapsedMs: phase === "warmup" ? null : 1500,
     startedAt: requestTimestamp(requestSequence),
     success: true,
+    systemFingerprintSha256: sha256("synthetic-backend-a"),
+    systemFingerprintStatus: "hashed",
     totalTokens: 101,
     trial,
     usageFieldAudit: {
@@ -691,7 +1271,27 @@ function refreshModel(model) {
   Object.assign(model, deriveModelViews(model.requests));
 }
 
+function refreshEvidence(evidence) {
+  const allRequests = evidence.models.flatMap((model) => model.requests);
+  const duplicateSets = responseIdDuplicateSets(allRequests);
+  for (const model of evidence.models) {
+    Object.assign(model, deriveModelViews(model.requests, duplicateSets));
+  }
+  evidence.responseIdAudit = deriveResponseIdAudit(allRequests);
+}
+
 async function syntheticConfiguration() {
+  const workingTreeCommit = execFileSync(
+    "git",
+    ["stash", "create", "synthetic cache verifier source freeze"],
+    { cwd: REPOSITORY_ROOT, encoding: "utf8" }
+  ).trim();
+  const sourceFreezeCommitSha =
+    workingTreeCommit ||
+    execFileSync("git", ["rev-parse", "--verify", "HEAD"], {
+      cwd: REPOSITORY_ROOT,
+      encoding: "utf8",
+    }).trim();
   const implementationSourcesSha256 = {};
   for (const sourcePath of REQUIRED_IMPLEMENTATION_SOURCE_PATHS) {
     implementationSourcesSha256[sourcePath] = sha256(
@@ -737,6 +1337,7 @@ async function syntheticConfiguration() {
       ),
     },
     armIsolation: MANUAL_METHODOLOGY.armIsolation,
+    backendMetadataSemantics: MANUAL_METHODOLOGY.backendMetadataSemantics,
     benchmarkSourceSha256: sha256(
       await readFile(
         resolve(REPOSITORY_ROOT, "scripts/benchmark-cache-stable-tools.mts")
@@ -774,7 +1375,7 @@ async function syntheticConfiguration() {
     implementationSourcesSha256,
     maxOutputTokens: 256,
     membershipReplacementToolName: "query_archive_notes",
-    minimumOrderStratumCoverage: 0.75,
+    minimumOrderStratumCoverage: 1,
     modelPreflight: {
       checkedAt: TIMESTAMP,
       presentModelIds: EXPECTED_MODELS,
@@ -801,10 +1402,16 @@ async function syntheticConfiguration() {
       scenarioCount: 3,
       totalRequests: 480,
     },
+    responseBodyLimits: {
+      chatCompletionsBytes: 1_000_000,
+      modelCatalogBytes: 5_000_000,
+    },
     runId: RUN_ID,
     seed: EXPECTED_CAMPAIGN_ID,
     settleMs: 1500,
+    sourceFreezeCommitSha,
     sourceSnapshotSemantics: MANUAL_METHODOLOGY.sourceSnapshotSemantics,
+    sourceWorktreeCleanAtStart: true,
     timeoutMs: 120_000,
     toolCallValidation: MANUAL_METHODOLOGY.toolCallValidation,
     toolChoice: "omitted-auto",

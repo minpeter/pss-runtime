@@ -1,5 +1,7 @@
 import {
+  asSchema,
   fingerprintTools,
+  jsonSchema,
   type LanguageModel,
   type ToolChoice,
   type ToolSet,
@@ -76,6 +78,9 @@ const SEMANTIC_TOOL_FIELDS = [
   "type",
 ] as const;
 const SEMANTIC_TOOL_UNAVAILABLE = Symbol("semantic-tool-unavailable");
+const INPUT_SCHEMA_SNAPSHOT_UNAVAILABLE = Symbol(
+  "input-schema-snapshot-unavailable"
+);
 
 export interface ResolveModelStepOptions {
   readonly alwaysActiveTools?: readonly string[];
@@ -95,6 +100,8 @@ export interface ResolveModelStepOptions {
 export interface ResolvedModelStepOptions {
   readonly activeTools?: readonly string[];
   readonly model: LanguageModel;
+  /** Starts best-effort diagnostics after the provider request is invoked. */
+  readonly startToolCacheFingerprintReport?: () => void;
   readonly toolChoice?: PreparedModelToolChoice;
   readonly toolOrder?: readonly string[];
   readonly tools?: ToolSet;
@@ -183,22 +190,24 @@ export async function resolveModelStepOptions({
     ? Object.fromEntries(activeTools.map((name) => [name, registry[name]]))
     : undefined;
   const effectiveToolChoice = snapshotToolChoice(
-    prepared?.toolChoice ?? toolChoice
+    prepared?.toolChoice === undefined ? toolChoice : prepared.toolChoice
   ) as PreparedModelToolChoice | undefined;
   validateToolChoice(effectiveToolChoice, registrySet, new Set(activeTools));
   const resolvedModel = prepared?.model ?? model;
 
-  const pendingDiagnostic = reportToolCacheFingerprint(diagnostics, {
-    activeTools,
-    activeToolRegistry: executableTools ?? {},
-    alwaysActiveToolCount: alwaysActiveToolSnapshot.length,
-    attemptId,
-    model: resolvedModel,
-    registryNames,
-    runtimeStepIndex,
-    selectionDurationMs,
-  });
-  pendingDiagnostic.catch(() => undefined);
+  const startToolCacheFingerprintReport = prepareToolCacheFingerprintReport(
+    diagnostics,
+    {
+      activeTools,
+      activeToolRegistry: executableTools ?? {},
+      alwaysActiveToolCount: alwaysActiveToolSnapshot.length,
+      attemptId,
+      model: resolvedModel,
+      registryNames,
+      runtimeStepIndex,
+      selectionDurationMs,
+    }
+  );
 
   return {
     ...(executableTools === undefined ? {} : { tools: executableTools }),
@@ -209,6 +218,37 @@ export async function resolveModelStepOptions({
     ...(effectiveToolChoice === undefined
       ? {}
       : { toolChoice: effectiveToolChoice }),
+    ...(startToolCacheFingerprintReport === undefined
+      ? {}
+      : { startToolCacheFingerprintReport }),
+  };
+}
+
+function prepareToolCacheFingerprintReport(
+  diagnostics: RuntimeDiagnosticsSink | undefined,
+  input: Parameters<typeof reportToolCacheFingerprint>[1]
+): (() => void) | undefined {
+  if (!diagnostics || diagnostics === noopRuntimeDiagnostics) {
+    return;
+  }
+  let snapshot: Parameters<typeof reportToolCacheFingerprint>[1];
+  try {
+    snapshot = {
+      ...input,
+      activeToolRegistry: diagnosticToolRegistry(input.activeToolRegistry),
+    };
+  } catch {
+    return;
+  }
+  let started = false;
+  return () => {
+    if (started) {
+      return;
+    }
+    started = true;
+    queueMicrotask(() => {
+      reportToolCacheFingerprint(diagnostics, snapshot).catch(() => undefined);
+    });
   };
 }
 
@@ -600,7 +640,6 @@ async function reportToolCacheFingerprint(
     return;
   }
   try {
-    const activeToolRegistry = diagnosticToolRegistry(input.activeToolRegistry);
     const [
       activeToolsFingerprint,
       modelIdentity,
@@ -611,7 +650,7 @@ async function reportToolCacheFingerprint(
       toolNamesFingerprint([...input.activeTools].sort(compareToolNames)),
       fingerprintModelIdentity(input.model),
       toolNamesFingerprint(input.activeTools),
-      toolSemanticFingerprint(input.activeTools, activeToolRegistry),
+      toolSemanticFingerprint(input.activeTools, input.activeToolRegistry),
       toolNamesFingerprint([...input.registryNames].sort(compareToolNames)),
     ]);
     const metadata: ModelToolCacheFingerprintMetadata = {
@@ -621,7 +660,7 @@ async function reportToolCacheFingerprint(
       attemptId: input.attemptId,
       dynamicDescriptionToolCount: countDynamicDescriptions(
         input.activeTools,
-        activeToolRegistry
+        input.activeToolRegistry
       ),
       modelIdentityFingerprint: modelIdentity.fingerprint,
       modelIdentityFingerprintUnavailable: modelIdentity.unavailable,
@@ -685,26 +724,36 @@ async function fingerprintModelIdentity(model: LanguageModel): Promise<{
 function diagnosticToolRegistry(tools: ToolSet): ToolSet {
   const snapshot: ToolSet = Object.create(null);
   for (const name of Object.keys(tools)) {
-    const tool = tools[name];
-    if (!isObjectRecord(tool)) {
-      snapshot[name] = tool;
-      continue;
-    }
-    const definition: Record<PropertyKey, unknown> = Object.create(null);
-    if (!isPlainRecord(tool)) {
-      Object.defineProperty(definition, SEMANTIC_TOOL_UNAVAILABLE, {
-        value: true,
-      });
-    }
-    for (const field of SEMANTIC_TOOL_FIELDS) {
-      const descriptor = Object.getOwnPropertyDescriptor(tool, field);
-      if (descriptor) {
-        Object.defineProperty(definition, field, descriptor);
+    try {
+      const tool = tools[name];
+      if (!isObjectRecord(tool)) {
+        snapshot[name] = tool;
+        continue;
       }
+      const definition: Record<PropertyKey, unknown> = Object.create(null);
+      if (!isPlainRecord(tool)) {
+        markSemanticToolUnavailable(definition);
+      }
+      for (const field of SEMANTIC_TOOL_FIELDS) {
+        const descriptor = Object.getOwnPropertyDescriptor(tool, field);
+        if (descriptor) {
+          Object.defineProperty(definition, field, descriptor);
+        }
+      }
+      snapshot[name] = Object.freeze(definition) as ToolSet[string];
+    } catch {
+      const unavailable: Record<PropertyKey, unknown> = Object.create(null);
+      markSemanticToolUnavailable(unavailable);
+      snapshot[name] = Object.freeze(unavailable) as ToolSet[string];
     }
-    snapshot[name] = Object.freeze(definition) as ToolSet[string];
   }
   return Object.freeze(snapshot);
+}
+
+function markSemanticToolUnavailable(
+  definition: Record<PropertyKey, unknown>
+): void {
+  Object.defineProperty(definition, SEMANTIC_TOOL_UNAVAILABLE, { value: true });
 }
 
 async function toolSemanticFingerprint(
@@ -850,11 +899,15 @@ async function functionSemanticToolEntry(
 
   let definitionFingerprint: string | undefined;
   const schemaValue = dataPropertyValue(inputSchema);
-  if (!scalarMetadataUnavailable) {
+  const schemaSnapshot = snapshotInputSchema(schemaValue);
+  if (
+    !scalarMetadataUnavailable &&
+    schemaSnapshot !== INPUT_SCHEMA_SNAPSHOT_UNAVAILABLE
+  ) {
     try {
       const fingerprintable = Object.freeze({
         description: descriptionValue,
-        inputSchema: schemaValue,
+        inputSchema: schemaSnapshot,
         title: titleValue,
       }) as ToolSet[string];
       const result = await fingerprintTools({ [name]: fingerprintable });
@@ -881,6 +934,149 @@ async function functionSemanticToolEntry(
         ],
     unavailable: unavailable || metadataUnavailable,
   };
+}
+
+function snapshotInputSchema(
+  value: unknown
+): ToolSet[string] | unknown | typeof INPUT_SCHEMA_SNAPSHOT_UNAVAILABLE {
+  if (typeof value === "function" || hasStandardSchemaMarker(value)) {
+    return INPUT_SCHEMA_SNAPSHOT_UNAVAILABLE;
+  }
+  try {
+    const resolved = asSchema(
+      value as Parameters<typeof asSchema>[0]
+    ).jsonSchema;
+    if (observeNativePromiseRejection(resolved) || hasThenProperty(resolved)) {
+      return INPUT_SCHEMA_SNAPSHOT_UNAVAILABLE;
+    }
+    const snapshot = immutableJsonSnapshot(resolved);
+    return snapshot === INPUT_SCHEMA_SNAPSHOT_UNAVAILABLE
+      ? snapshot
+      : jsonSchema(snapshot as Parameters<typeof jsonSchema>[0]);
+  } catch {
+    return INPUT_SCHEMA_SNAPSHOT_UNAVAILABLE;
+  }
+}
+
+function hasStandardSchemaMarker(value: unknown): boolean {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    propertyDescriptorInPrototypeChain(value, "~standard") !== undefined
+  );
+}
+
+function observeNativePromiseRejection(value: unknown): boolean {
+  try {
+    // Use the intrinsic directly: genuine promises get a rejection observer,
+    // while hostile thenables fail the brand check without invoking `then`.
+    Promise.prototype.then.call(value, undefined, () => undefined);
+    return true;
+  } catch {
+    // Non-native thenables remain unavailable and are never assimilated.
+    return false;
+  }
+}
+
+function hasThenProperty(value: unknown): boolean {
+  if (
+    value === null ||
+    (typeof value !== "object" && typeof value !== "function")
+  ) {
+    return false;
+  }
+  const descriptor = propertyDescriptorInPrototypeChain(value, "then");
+  return Boolean(
+    descriptor &&
+      (!("value" in descriptor) || typeof descriptor.value === "function")
+  );
+}
+
+function immutableJsonSnapshot(
+  value: unknown,
+  ancestors = new WeakSet<object>()
+): unknown | typeof INPUT_SCHEMA_SNAPSHOT_UNAVAILABLE {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean" ||
+    (typeof value === "number" && Number.isFinite(value))
+  ) {
+    return value;
+  }
+  if (typeof value !== "object" || ancestors.has(value)) {
+    return INPUT_SCHEMA_SNAPSHOT_UNAVAILABLE;
+  }
+  if (!(Array.isArray(value) || isPlainRecord(value))) {
+    return INPUT_SCHEMA_SNAPSHOT_UNAVAILABLE;
+  }
+  ancestors.add(value);
+  try {
+    if (hasEnumerableSymbol(value)) {
+      return INPUT_SCHEMA_SNAPSHOT_UNAVAILABLE;
+    }
+    return Array.isArray(value)
+      ? immutableJsonArraySnapshot(value, ancestors)
+      : immutableJsonObjectSnapshot(value, ancestors);
+  } finally {
+    ancestors.delete(value);
+  }
+}
+
+function immutableJsonArraySnapshot(
+  value: readonly unknown[],
+  ancestors: WeakSet<object>
+): unknown | typeof INPUT_SCHEMA_SNAPSHOT_UNAVAILABLE {
+  const length = Object.getOwnPropertyDescriptor(value, "length")?.value;
+  if (!Number.isSafeInteger(length) || length < 0) {
+    return INPUT_SCHEMA_SNAPSHOT_UNAVAILABLE;
+  }
+  const keys = Object.keys(value);
+  if (keys.length !== length) {
+    return INPUT_SCHEMA_SNAPSHOT_UNAVAILABLE;
+  }
+  const snapshot: unknown[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const nested = snapshotJsonDataProperty(value, String(index), ancestors);
+    if (nested === INPUT_SCHEMA_SNAPSHOT_UNAVAILABLE) {
+      return nested;
+    }
+    snapshot.push(nested);
+  }
+  return Object.freeze(snapshot);
+}
+
+function immutableJsonObjectSnapshot(
+  value: object,
+  ancestors: WeakSet<object>
+): unknown | typeof INPUT_SCHEMA_SNAPSHOT_UNAVAILABLE {
+  const snapshot: Record<string, unknown> = Object.create(null);
+  for (const key of Object.keys(value)) {
+    const nested = snapshotJsonDataProperty(value, key, ancestors);
+    if (nested === INPUT_SCHEMA_SNAPSHOT_UNAVAILABLE) {
+      return nested;
+    }
+    snapshot[key] = nested;
+  }
+  return Object.freeze(snapshot);
+}
+
+function snapshotJsonDataProperty(
+  value: object,
+  key: string,
+  ancestors: WeakSet<object>
+): unknown | typeof INPUT_SCHEMA_SNAPSHOT_UNAVAILABLE {
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  if (!(descriptor?.enumerable && "value" in descriptor)) {
+    return INPUT_SCHEMA_SNAPSHOT_UNAVAILABLE;
+  }
+  return immutableJsonSnapshot(descriptor.value, ancestors);
+}
+
+function hasEnumerableSymbol(value: object): boolean {
+  return Object.getOwnPropertySymbols(value).some(
+    (key) => Object.getOwnPropertyDescriptor(value, key)?.enumerable === true
+  );
 }
 
 type SafeDataProperty =

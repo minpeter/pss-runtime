@@ -181,17 +181,19 @@ export async function generateModelStepResult({
     messages,
   });
   assertNoUnsupportedToolApproval(prepared.tools);
+  const modelRequest = generateText({
+    activeTools: prepared.activeTools,
+    abortSignal: signal,
+    instructions: prompt.instructions,
+    messages,
+    model: prepared.model,
+    toolChoice: prepared.toolChoice,
+    toolOrder: prepared.toolOrder,
+    tools: normalizeToolCallIds(prepared.tools, toolCallIds, toolExecution),
+  });
+  prepared.startToolCacheFingerprintReport?.();
   const { finalStep, finishReason, response, responseMessages, usage } =
-    await generateText({
-      activeTools: prepared.activeTools,
-      abortSignal: signal,
-      instructions: prompt.instructions,
-      messages,
-      model: prepared.model,
-      toolChoice: prepared.toolChoice,
-      toolOrder: prepared.toolOrder,
-      tools: normalizeToolCallIds(prepared.tools, toolCallIds, toolExecution),
-    });
+    await modelRequest;
 
   return {
     messages: responseMessages.map((message) =>

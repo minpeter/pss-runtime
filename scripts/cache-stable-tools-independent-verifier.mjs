@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { lstat, readdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { isDeepStrictEqual } from "node:util";
+import { isDeepStrictEqual, promisify } from "node:util";
 
 const EXPECTED_ENDPOINT = "https://freerouter.minpeter.workers.dev/v1";
 const MAX_EVIDENCE_BYTES = 10_000_000;
@@ -35,7 +36,9 @@ const ALL_TOOL_NAMES = Object.freeze([
 ]);
 const MEMBERSHIP_REPLACEMENT_TOOL_NAME = "query_archive_notes";
 const EXPECTED_TRIALS = 8;
-const MINIMUM_ORDER_STRATUM_PAIRS = 3;
+const MAX_CHAT_RESPONSE_BYTES = 1_000_000;
+const MAX_MODEL_CATALOG_BYTES = 5_000_000;
+const MINIMUM_ORDER_STRATUM_PAIRS = 4;
 const PHASES = Object.freeze(["warmup", "measure"]);
 const PAIR_ORDERS = Object.freeze(["control-first", "changed-first"]);
 const FINISH_REASON_STATUSES = Object.freeze([
@@ -53,6 +56,12 @@ const USAGE_STATUSES = Object.freeze([
   "invalid",
   "conflict",
 ]);
+const BACKEND_METADATA_STATUSES = Object.freeze([
+  "absent",
+  "hashed",
+  "invalid",
+  "null",
+]);
 const CACHE_REPORTING_STATUSES = Object.freeze([
   "not-reported",
   "reported-nonzero",
@@ -64,10 +73,12 @@ const EXPECTED_METHODOLOGY = Object.freeze({
     "A SHA-256 bit of seed, model, and scenario selects the first trial order; each later trial alternates it. Even trial counts are exactly balanced.",
   armIsolation: Object.freeze({
     canary:
-      "Each arm has a unique, fixed-length token in an equal-shape inert canary placed before every benchmark tool. Warmup and measure reuse the same canary; no other arm does.",
+      "Each model/scenario/trial execution slot (first or second) has a unique, fixed-length token in an equal-shape inert canary placed before every benchmark tool. Warmup and measure reuse the slot canary; alternating AB/BA order counterbalances each variant across slots.",
     promptNamespace:
-      "Each arm has a unique, fixed-length system-message namespace shared only by its warmup and measurement.",
+      "Each model/scenario/trial execution slot has a unique, fixed-length system-message namespace shared only by its warmup and measurement; it is not derived from control/changed identity.",
   }),
+  backendMetadataSemantics:
+    "Nullable system_fingerprint and service_tier response fields are retained only as absent/null/invalid/hashed statuses plus SHA-256 digests. Multiple digests are reported as possible backend drift. These fields do not change per-request cache-telemetry eligibility, but matched non-null values gate primary paired sensitivity eligibility; raw values and raw provider payloads are never stored.",
   comparisonSemantics: Object.freeze({
     "same-set-order":
       "After an arm-specific canary, the warmup uses canonical order. The measured request either preserves it or reverses the same set.",
@@ -77,21 +88,21 @@ const EXPECTED_METHODOLOGY = Object.freeze({
       "The measured request either preserves the warmup set or replaces one tool at the same position with an equal-byte definition, keeping tool count and serialized request length equal.",
   }),
   effectConclusionPolicy:
-    "A model-level directional cache or input-token conclusion is reported only when each AB/BA order stratum retains at least 75% eligible pairs and both stratum medians have the same nonzero sign. A pooled conclusion additionally requires at least three complete pairs in every model-by-order stratum. Two zero medians report no observed median difference; mixed signs or a zero/nonzero mix report order-sensitive; missing coverage is indeterminate.",
+    "Provider-reported raw cache-read-token differences and cache-read/input coverage-ratio differences are parallel descriptive endpoints. The all-sample view remains descriptive; the primary sensitivity view additionally requires one matched non-null system_fingerprint hash and one matched non-null service_tier hash across all four responses in a pair (each arm's warmup and measurement), and excludes any non-null response ID repeated anywhere in the campaign; reuse across distinct request-body hashes is separately audited. Missing backend metadata is unavailable for the primary view, not treated as a match. A model-level directional conclusion requires all four planned pairs in each AB/BA order stratum, matching nonzero median signs across endpoints, and no endpoint disagreement. Opposite raw-token and ratio directions are denominator-sensitive/indeterminate; every other endpoint disagreement is also indeterminate. Neither endpoint is a causal saving or cost estimate. Primary membership input parity uses the same four-response backend-metadata and response-ID pair universe; its all-sample view remains descriptive. Full input-token parity requires every planned primary pair to be observed and exactly equal. A pooled conclusion requires every planned primary pair in every model-by-order stratum and agreement with every model-level conclusion; model disagreement is indeterminate.",
   eligibilitySemantics: Object.freeze({
     cacheTelemetryEligible:
       "A capture-success request is locally eligible for requested-model cache aggregation only when the sanitized response model exactly matches the requested model and input/cache-read/cache-write usage aliases form a valid envelope. A measured request additionally requires its own arm's warmup to be a capture success from that exact requested model.",
     captureSuccess:
-      "HTTP success plus exactly one recognized choice/message, zero modern or legacy tool calls, finish_reason=stop, and exact trimmed text OK. Response-model attribution and usage validity are audited separately.",
+      "HTTP success plus exactly one recognized choice/message, zero modern or legacy tool calls, finish_reason=stop, and exact trimmed text OK. Response-model attribution and usage validity are audited separately. HTTP failures retain only status-derived codes and local failures use a fixed allowlist; provider error strings are never retained or logged.",
   }),
   finishReasonPolicy:
     "The sole choice must report finish_reason=stop for capture success. Missing, accessor-backed, non-string, unknown, length, content_filter, function_call, and tool_calls values are stored only as sanitized status labels and fail closed; raw finish-reason values are never stored.",
   outputValidation:
     "The result stores only whether the sole choice returned exact trimmed text OK; response text and tool arguments are never stored. Missing, malformed, multi-choice, and mismatched output fails capture and therefore cache-telemetry eligibility.",
   pairedUncertainty:
-    "Paired summaries include descriptive p25/p75 intervals and effect signs overall and by AB/BA order. These are not confidence intervals.",
+    "Paired summaries include descriptive p25/p75 intervals and exact raw-token, input-token, and cache-read/input-ratio signs overall and by AB/BA order. Ratio pair signs, ordering, and even-sample median signs use BigInt rational arithmetic rather than floating-point subtraction; float medians remain display-only. These are not confidence intervals.",
   sourceSnapshotSemantics:
-    "The runner records on-disk source snapshots after module initialization and again before atomic rename. A start/end mismatch fails. Transient edit-and-restore and changes between module load and the initial snapshot are not detected, so the campaign requires a quiescent worktree.",
+    "Before an evidence campaign spends the credential, the runner records the current Git commit and requires a clean worktree, then compares every manifested current source byte and hash, including the benchmark runner, with its git show commit blob before provider preflight. It rechecks the same commit and cleanliness after that binding and before writing, then rechecks the commit again immediately before atomic rename after the temporary evidence file exists. Start/end source bytes must match. The freeze commit, clean-at-start result, and hashes are retained; transient edit-and-restore between checkpoints is not detected.",
   toolCallValidation:
     "Every HTTP-success response must contain a recognized choices array and zero tool calls; otherwise the request is marked unsuccessful.",
   usageValidation:
@@ -168,8 +179,11 @@ const EXPECTED_TOPOLOGY = Object.freeze({
   totalRequests: 480,
 });
 const IMPLEMENTATION_SUPPORT_PATHS = Object.freeze([
+  "biome.jsonc",
   "package.json",
   "packages/runtime/package.json",
+  "packages/runtime/tsconfig.json",
+  "packages/runtime/tsdown.config.ts",
   "pnpm-lock.yaml",
   "pnpm-workspace.yaml",
   "scripts/benchmark-cache-stable-tools.test.mjs",
@@ -177,6 +191,9 @@ const IMPLEMENTATION_SUPPORT_PATHS = Object.freeze([
   "scripts/cache-stable-tools-independent-verifier.adversarial.mjs",
   "scripts/cache-stable-tools-independent-verifier.mjs",
   "scripts/cache-stable-tools-wire.test.mjs",
+  "tsconfig.base.json",
+  "tsconfig.json",
+  "turbo.json",
 ]);
 const REQUIRED_IMPLEMENTATION_SOURCE_PATHS = Object.freeze(
   await completeImplementationSourcePaths()
@@ -209,9 +226,13 @@ const REQUEST_KEYS = Object.freeze([
   "responseModelMatchesRequested",
   "responseToolCallCount",
   "scenario",
+  "serviceTierSha256",
+  "serviceTierStatus",
   "settleElapsedMs",
   "startedAt",
   "success",
+  "systemFingerprintSha256",
+  "systemFingerprintStatus",
   "toolsArrayBytes",
   "toolsArraySha256",
   "totalTokens",
@@ -221,6 +242,7 @@ const REQUEST_KEYS = Object.freeze([
   "warmupPrerequisitePassed",
 ]);
 const MODEL_KEYS = Object.freeze([
+  "backendMetadataAudit",
   "cacheReporting",
   "cacheWriteReporting",
   "comparisons",
@@ -229,17 +251,22 @@ const MODEL_KEYS = Object.freeze([
   "membershipInputTokenParityAudit",
   "model",
   "outputComplianceAudit",
+  "primaryComparisons",
+  "primaryMembershipInputTokenParityAudit",
   "requestOutcomeAudit",
   "requests",
   "responseModelAudit",
+  "responseIdAudit",
   "summaries",
   "usageFieldStatusAudit",
 ]);
 const PAIRED_SUMMARY_KEYS = Object.freeze([
+  "cacheReadRatioDifferenceSigns",
   "cacheReadTokenDifferenceSigns",
   "eligiblePairs",
   "inputTokenDifferenceSigns",
   "medianControlMinusChangedCacheReadRatio",
+  "medianControlMinusChangedCacheReadRatioSign",
   "medianControlMinusChangedCacheReadTokens",
   "medianControlMinusChangedInputTokens",
   "medianControlMinusChangedLatencyMs",
@@ -249,6 +276,9 @@ const PAIRED_SUMMARY_KEYS = Object.freeze([
   "p75ControlMinusChangedCacheReadRatio",
   "p75ControlMinusChangedCacheReadTokens",
   "p75ControlMinusChangedInputTokens",
+  "responseIdIntegrityStatuses",
+  "serviceTierPairStatuses",
+  "systemFingerprintPairStatuses",
 ]);
 const PAIR_KEYS = Object.freeze([
   "changedCacheReadRatio",
@@ -260,9 +290,13 @@ const PAIR_KEYS = Object.freeze([
   "controlInputTokens",
   "controlLatencyMs",
   "controlMinusChangedCacheReadTokens",
+  "controlMinusChangedCacheReadRatio",
   "controlMinusChangedInputTokens",
   "controlMinusChangedLatencyMs",
   "pairOrder",
+  "responseIdIntegrityStatus",
+  "serviceTierPairStatus",
+  "systemFingerprintPairStatus",
   "trial",
 ]);
 const VARIANT_SUMMARY_KEYS = Object.freeze([
@@ -270,11 +304,15 @@ const VARIANT_SUMMARY_KEYS = Object.freeze([
   "cacheReadNonzero",
   "cacheReadNonzeroCoverage",
   "cacheReadReported",
+  "cacheReadRatioCoverage",
+  "cacheReadRatioEligible",
   "cacheReportCoverage",
   "cacheTelemetryEligible",
   "cacheWriteNonzero",
   "cacheWriteNonzeroCoverage",
   "cacheWriteReported",
+  "cacheWriteRatioCoverage",
+  "cacheWriteRatioEligible",
   "cacheWriteReportCoverage",
   "captureSuccesses",
   "medianCacheReadRatio",
@@ -287,12 +325,12 @@ const VARIANT_SUMMARY_KEYS = Object.freeze([
   "weightedCacheWriteRatio",
 ]);
 const HASH_PATTERN = /^[0-9a-f]{64}$/u;
+const GIT_COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const NODE_VERSION_PATTERN = /^v\d+\.\d+\.\d+$/u;
 const SAFE_MODEL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,199}$/u;
-const SAFE_ERROR_CODE_PATTERN = /^[\w.-]{1,80}$/u;
-const KEY_LIKE_PATTERN = /\bfr-[\w-]{8,}\b/u;
+const KEY_LIKE_PATTERN = /\b(?:fr|sk)-[\w-]{8,}\b/u;
 const BEARER_PATTERN = /Bearer\s/iu;
 const FORBIDDEN_KEYS = new Set([
   "apikey",
@@ -328,6 +366,8 @@ const CACHE_WRITE_SOURCES = new Set([
 const INPUT_SOURCES = new Set(["prompt_tokens", "input_tokens"]);
 const README_START = "<!-- cache-stable-tools-independent-verifier:start -->";
 const README_END = "<!-- cache-stable-tools-independent-verifier:end -->";
+const execFileAsync = promisify(execFile);
+const sourceFreezeManifestCache = new Map();
 
 class EvidenceVerificationError extends Error {
   constructor(message) {
@@ -654,11 +694,10 @@ function pairOrderFor(model, scenario, seed, trial) {
   return controlFirst ? "control-first" : "changed-first";
 }
 
-function isolationTokenFor(model, runId, scenario, trial, variant) {
-  return sha256(`${runId}\0${model}\0${scenario}\0${variant}\0${trial}`).slice(
-    0,
-    24
-  );
+function isolationTokenFor(model, runId, scenario, trial, armPosition) {
+  return sha256(
+    `${runId}\0${model}\0${scenario}\0${trial}\0${armPosition}`
+  ).slice(0, 24);
 }
 
 function scenarioVariants(scenario) {
@@ -727,6 +766,105 @@ function localCacheTelemetryEligible(request) {
   );
 }
 
+function metadataPairStatus(requests, statusField, hashField) {
+  if (
+    requests.some(
+      (request) =>
+        request?.[statusField] !== "hashed" || request[hashField] === null
+    )
+  ) {
+    return "unavailable";
+  }
+  return new Set(requests.map((request) => request?.[hashField])).size === 1
+    ? "matched"
+    : "mismatched";
+}
+
+function crossBodyDuplicateResponseIds(requests) {
+  const bodiesByResponseId = new Map();
+  for (const request of requests) {
+    if (request.responseIdSha256 === null) {
+      continue;
+    }
+    const bodies =
+      bodiesByResponseId.get(request.responseIdSha256) ?? new Set();
+    bodies.add(request.requestBodySha256);
+    bodiesByResponseId.set(request.responseIdSha256, bodies);
+  }
+  return new Set(
+    [...bodiesByResponseId.entries()]
+      .filter(([, bodies]) => bodies.size > 1)
+      .map(([responseId]) => responseId)
+  );
+}
+
+function duplicateResponseIds(requests) {
+  const counts = new Map();
+  for (const request of requests) {
+    if (request.responseIdSha256 !== null) {
+      counts.set(
+        request.responseIdSha256,
+        (counts.get(request.responseIdSha256) ?? 0) + 1
+      );
+    }
+  }
+  return new Set(
+    [...counts.entries()]
+      .filter(([, count]) => count > 1)
+      .map(([responseId]) => responseId)
+  );
+}
+
+function responseIdDuplicateSets(requests) {
+  return {
+    crossBody: crossBodyDuplicateResponseIds(requests),
+    duplicate: duplicateResponseIds(requests),
+  };
+}
+
+function responseIdIntegrityStatus(requests, duplicateSets) {
+  const responseIds = requests.flatMap((request) =>
+    request?.responseIdSha256 === null ||
+    request?.responseIdSha256 === undefined
+      ? []
+      : [request.responseIdSha256]
+  );
+  if (
+    responseIds.some((responseId) => duplicateSets.crossBody.has(responseId))
+  ) {
+    return "cross-body-duplicate";
+  }
+  return responseIds.some((responseId) =>
+    duplicateSets.duplicate.has(responseId)
+  )
+    ? "duplicate"
+    : "accepted";
+}
+
+function deriveResponseIdAudit(requests) {
+  const reported = requests.flatMap((request) =>
+    request.responseIdSha256 === null ? [] : [request.responseIdSha256]
+  );
+  const counts = new Map();
+  for (const responseId of reported) {
+    counts.set(responseId, (counts.get(responseId) ?? 0) + 1);
+  }
+  const crossBodyDuplicates = crossBodyDuplicateResponseIds(requests);
+  return {
+    reported: reported.length,
+    distinct: counts.size,
+    duplicateHashes: [...counts.values()].filter((count) => count > 1).length,
+    duplicateObservations: [...counts.values()].reduce(
+      (sum, count) => sum + Math.max(0, count - 1),
+      0
+    ),
+    crossRequestBodyDuplicateHashes: crossBodyDuplicates.size,
+    crossRequestBodyDuplicateObservations: reported.filter((responseId) =>
+      crossBodyDuplicates.has(responseId)
+    ).length,
+  };
+}
+
 function finishReasonsAccepted(statuses) {
   return (
     Array.isArray(statuses) &&
@@ -737,7 +875,13 @@ function finishReasonsAccepted(statuses) {
 
 function expectedCaptureOutcome(request) {
   if (!request.httpSuccess) {
-    return { success: false, errorCodeKind: "http" };
+    return {
+      success: false,
+      errorCode:
+        request.httpStatus === null
+          ? request.errorCode
+          : `http-${request.httpStatus}`,
+    };
   }
   if (
     request.responseToolCallCount === null ||
@@ -768,6 +912,59 @@ function differenceSigns(values) {
   };
 }
 
+function metadataPairStatusCounts(statuses) {
+  return {
+    matched: statuses.filter((status) => status === "matched").length,
+    mismatched: statuses.filter((status) => status === "mismatched").length,
+    unavailable: statuses.filter((status) => status === "unavailable").length,
+  };
+}
+
+function exactRatioDifferenceSign(pair) {
+  const crossDifference =
+    BigInt(pair.controlCacheReadTokens) * BigInt(pair.changedInputTokens) -
+    BigInt(pair.changedCacheReadTokens) * BigInt(pair.controlInputTokens);
+  return bigIntSign(crossDifference);
+}
+
+function bigIntSign(value) {
+  if (value > 0n) {
+    return 1;
+  }
+  if (value < 0n) {
+    return -1;
+  }
+  return 0;
+}
+
+function exactRatioMedianSign(pairs) {
+  if (pairs.length === 0) {
+    return null;
+  }
+  const fractions = pairs
+    .map((pair) => ({
+      denominator:
+        BigInt(pair.controlInputTokens) * BigInt(pair.changedInputTokens),
+      numerator:
+        BigInt(pair.controlCacheReadTokens) * BigInt(pair.changedInputTokens) -
+        BigInt(pair.changedCacheReadTokens) * BigInt(pair.controlInputTokens),
+    }))
+    .sort((left, right) => {
+      const difference =
+        left.numerator * right.denominator - right.numerator * left.denominator;
+      return bigIntSign(difference);
+    });
+  const upperIndex = Math.floor(fractions.length / 2);
+  const upper = fractions[upperIndex];
+  let medianNumerator = upper.numerator;
+  if (fractions.length % 2 === 0) {
+    const lower = fractions[upperIndex - 1];
+    medianNumerator =
+      lower.numerator * upper.denominator + upper.numerator * lower.denominator;
+  }
+  return bigIntSign(medianNumerator);
+}
+
 function summarizePairs(pairs) {
   const cacheDifferences = pairs.map(
     (pair) => pair.controlMinusChangedCacheReadTokens
@@ -781,20 +978,40 @@ function summarizePairs(pairs) {
   const ratioDifferences = pairs.flatMap((pair) =>
     pair.controlCacheReadRatio === null || pair.changedCacheReadRatio === null
       ? []
-      : [pair.controlCacheReadRatio - pair.changedCacheReadRatio]
+      : [pair.controlMinusChangedCacheReadRatio]
   );
+  const ratioSigns = pairs.map(exactRatioDifferenceSign);
   return {
     eligiblePairs: pairs.length,
     medianControlMinusChangedCacheReadTokens: quantile(cacheDifferences, 0.5),
     p25ControlMinusChangedCacheReadTokens: quantile(cacheDifferences, 0.25),
     p75ControlMinusChangedCacheReadTokens: quantile(cacheDifferences, 0.75),
     cacheReadTokenDifferenceSigns: differenceSigns(cacheDifferences),
+    cacheReadRatioDifferenceSigns: differenceSigns(ratioSigns),
+    responseIdIntegrityStatuses: {
+      accepted: pairs.filter(
+        (pair) => pair.responseIdIntegrityStatus === "accepted"
+      ).length,
+      crossBodyDuplicate: pairs.filter(
+        (pair) => pair.responseIdIntegrityStatus === "cross-body-duplicate"
+      ).length,
+      duplicate: pairs.filter(
+        (pair) => pair.responseIdIntegrityStatus === "duplicate"
+      ).length,
+    },
+    serviceTierPairStatuses: metadataPairStatusCounts(
+      pairs.map((pair) => pair.serviceTierPairStatus)
+    ),
+    systemFingerprintPairStatuses: metadataPairStatusCounts(
+      pairs.map((pair) => pair.systemFingerprintPairStatus)
+    ),
     inputTokenDifferenceSigns: differenceSigns(inputDifferences),
     medianControlMinusChangedInputTokens: quantile(inputDifferences, 0.5),
     p25ControlMinusChangedInputTokens: quantile(inputDifferences, 0.25),
     p75ControlMinusChangedInputTokens: quantile(inputDifferences, 0.75),
     medianControlMinusChangedLatencyMs: quantile(latencyDifferences, 0.5),
     medianControlMinusChangedCacheReadRatio: quantile(ratioDifferences, 0.5),
+    medianControlMinusChangedCacheReadRatioSign: exactRatioMedianSign(pairs),
     p25ControlMinusChangedCacheReadRatio: quantile(ratioDifferences, 0.25),
     p75ControlMinusChangedCacheReadRatio: quantile(ratioDifferences, 0.75),
   };
@@ -811,7 +1028,14 @@ function pairedCoordinatesMatch(control, changed) {
   );
 }
 
-function buildPairs(requests, scenario) {
+function buildPairs(
+  requests,
+  scenario,
+  view = "all-sample",
+  providedDuplicateSets = null
+) {
+  const duplicateSets =
+    providedDuplicateSets ?? responseIdDuplicateSets(requests);
   const measured = requests.filter(
     (request) =>
       request.phase === "measure" && request.scenario === scenario.name
@@ -834,8 +1058,50 @@ function buildPairs(requests, scenario) {
         control.cacheTelemetryEligible &&
         changed.cacheTelemetryEligible &&
         cacheMeasurementIsValid(control) &&
-        cacheMeasurementIsValid(changed)
+        cacheMeasurementIsValid(changed) &&
+        control.inputTokens > 0 &&
+        changed.inputTokens > 0
       )
+    ) {
+      continue;
+    }
+    const fourRequestPair = [
+      requests.find(
+        (request) =>
+          request.phase === "warmup" &&
+          request.scenario === control.scenario &&
+          request.trial === control.trial &&
+          request.variant === control.variant
+      ),
+      control,
+      requests.find(
+        (request) =>
+          request.phase === "warmup" &&
+          request.scenario === changed.scenario &&
+          request.trial === changed.trial &&
+          request.variant === changed.variant
+      ),
+      changed,
+    ];
+    const systemFingerprintPairStatus = metadataPairStatus(
+      fourRequestPair,
+      "systemFingerprintStatus",
+      "systemFingerprintSha256"
+    );
+    const serviceTierPairStatus = metadataPairStatus(
+      fourRequestPair,
+      "serviceTierStatus",
+      "serviceTierSha256"
+    );
+    const observedResponseIdIntegrityStatus = responseIdIntegrityStatus(
+      fourRequestPair,
+      duplicateSets
+    );
+    if (
+      view === "primary" &&
+      (systemFingerprintPairStatus !== "matched" ||
+        serviceTierPairStatus !== "matched" ||
+        observedResponseIdIntegrityStatus !== "accepted")
     ) {
       continue;
     }
@@ -871,14 +1137,24 @@ function buildPairs(requests, scenario) {
         changed.inputTokens > 0
           ? changed.cacheReadTokens / changed.inputTokens
           : null,
+      controlMinusChangedCacheReadRatio:
+        control.cacheReadTokens / control.inputTokens -
+        changed.cacheReadTokens / changed.inputTokens,
+      responseIdIntegrityStatus: observedResponseIdIntegrityStatus,
+      serviceTierPairStatus,
+      systemFingerprintPairStatus,
     });
   }
   return pairs;
 }
 
-function deriveComparisons(requests) {
+function deriveComparisons(
+  requests,
+  view = "all-sample",
+  providedDuplicateSets = null
+) {
   return SCENARIOS.map((scenario) => {
-    const pairs = buildPairs(requests, scenario);
+    const pairs = buildPairs(requests, scenario, view, providedDuplicateSets);
     const orderStrata = PAIR_ORDERS.map((pairOrder) => ({
       pairOrder,
       ...summarizePairs(pairs.filter((pair) => pair.pairOrder === pairOrder)),
@@ -895,20 +1171,70 @@ function deriveComparisons(requests) {
         ).length,
       ])
     );
+    const cacheReadRatioConclusion = recordedDirectionalConclusion(
+      expectedPairsByOrder,
+      orderStrata,
+      "medianControlMinusChangedCacheReadRatioSign"
+    );
+    const cacheReadTokenConclusion = recordedDirectionalConclusion(
+      expectedPairsByOrder,
+      orderStrata,
+      "medianControlMinusChangedCacheReadTokens"
+    );
     return {
       scenario: scenario.name,
       controlVariant: scenario.controlVariant,
       changedVariant: scenario.changedVariant,
-      effectConclusion: recordedDirectionalConclusion(
-        expectedPairsByOrder,
-        orderStrata,
-        "medianControlMinusChangedCacheReadTokens"
+      cacheReadRatioConclusion,
+      cacheReadTokenConclusion,
+      effectConclusion: endpointCombinedConclusion(
+        cacheReadTokenConclusion,
+        cacheReadRatioConclusion
       ),
       ...summarizePairs(pairs),
       orderStrata,
       pairs,
     };
   });
+}
+
+function endpointCombinedConclusion(tokenConclusion, ratioConclusion) {
+  const directionFor = (conclusion) => {
+    if (
+      conclusion === "changed-higher" ||
+      conclusion === "descriptive-changed-higher"
+    ) {
+      return "changed-higher";
+    }
+    if (
+      conclusion === "control-higher" ||
+      conclusion === "descriptive-control-higher"
+    ) {
+      return "control-higher";
+    }
+    return null;
+  };
+  const tokenDirection = directionFor(tokenConclusion);
+  const ratioDirection = directionFor(ratioConclusion);
+  if (tokenConclusion === ratioConclusion) {
+    return ratioConclusion;
+  }
+  if (
+    tokenConclusion.includes("insufficient") ||
+    ratioConclusion.includes("insufficient")
+  ) {
+    return tokenConclusion.startsWith("indeterminate-")
+      ? tokenConclusion
+      : "insufficient-coverage";
+  }
+  if (
+    tokenDirection !== null &&
+    ratioDirection !== null &&
+    tokenDirection !== ratioDirection
+  ) {
+    return "denominator-sensitive/indeterminate";
+  }
+  return "endpoint-disagreement/indeterminate";
 }
 
 function inputParityEligible(request) {
@@ -922,7 +1248,13 @@ function inputParityEligible(request) {
   );
 }
 
-function deriveMembershipParity(requests) {
+function deriveMembershipParity(
+  requests,
+  view = "all-sample",
+  providedDuplicateSets = null
+) {
+  const duplicateSets =
+    providedDuplicateSets ?? responseIdDuplicateSets(requests);
   const scenario = SCENARIO_BY_NAME.get("membership-only-change");
   const measured = requests.filter(
     (request) =>
@@ -944,6 +1276,41 @@ function deriveMembershipParity(requests) {
         inputParityEligible(changed) &&
         pairedCoordinatesMatch(control, changed)
       )
+    ) {
+      continue;
+    }
+    const fourRequestPair = [
+      requests.find(
+        (request) =>
+          request.phase === "warmup" &&
+          request.scenario === control.scenario &&
+          request.trial === control.trial &&
+          request.variant === control.variant
+      ),
+      control,
+      requests.find(
+        (request) =>
+          request.phase === "warmup" &&
+          request.scenario === changed.scenario &&
+          request.trial === changed.trial &&
+          request.variant === changed.variant
+      ),
+      changed,
+    ];
+    if (
+      view === "primary" &&
+      (metadataPairStatus(
+        fourRequestPair,
+        "systemFingerprintStatus",
+        "systemFingerprintSha256"
+      ) !== "matched" ||
+        metadataPairStatus(
+          fourRequestPair,
+          "serviceTierStatus",
+          "serviceTierSha256"
+        ) !== "matched" ||
+        responseIdIntegrityStatus(fourRequestPair, duplicateSets) !==
+          "accepted")
     ) {
       continue;
     }
@@ -1011,9 +1378,7 @@ function recordedDirectionalConclusion(
   if (
     orderStrata.some((stratum) => {
       const expected = expectedPairsByOrder[stratum.pairOrder];
-      return (
-        expected === 0 || stratum.eligiblePairs < Math.ceil(expected * 0.75)
-      );
+      return expected === 0 || stratum.eligiblePairs < expected;
     })
   ) {
     return "indeterminate-insufficient-order-stratum-coverage";
@@ -1077,10 +1442,18 @@ function deriveVariantSummary(requests) {
       eligible.length === 0
         ? null
         : cacheWriteReported.length / eligible.length,
+    cacheWriteRatioEligible: writeRatioEligible.length,
+    cacheWriteRatioCoverage:
+      eligible.length === 0
+        ? null
+        : writeRatioEligible.length / eligible.length,
     captureSuccesses: requests.filter((request) => request.success).length,
     cacheReadReported: cacheReported.length,
     cacheReportCoverage:
       eligible.length === 0 ? null : cacheReported.length / eligible.length,
+    cacheReadRatioEligible: readRatioEligible.length,
+    cacheReadRatioCoverage:
+      eligible.length === 0 ? null : readRatioEligible.length / eligible.length,
     cacheReadNonzero,
     cacheReadNonzeroCoverage:
       eligible.length === 0 ? null : cacheReadNonzero / eligible.length,
@@ -1145,6 +1518,40 @@ function responseModelSummary(requests) {
       (request) => request.responseModelMatchesRequested === null
     ).length,
     observedResponseModels: observed,
+  };
+}
+
+function backendMetadataFieldSummary(requests, hashField, statusField) {
+  const hashes = requests.flatMap((request) =>
+    request[statusField] === "hashed" && request[hashField] !== null
+      ? [request[hashField]]
+      : []
+  );
+  const uniqueHashCount = new Set(hashes).size;
+  return {
+    statusCounts: Object.fromEntries(
+      BACKEND_METADATA_STATUSES.map((status) => [
+        status,
+        requests.filter((request) => request[statusField] === status).length,
+      ])
+    ),
+    uniqueHashCount,
+    driftObserved: uniqueHashCount > 1,
+  };
+}
+
+function backendMetadataAudit(requests) {
+  return {
+    serviceTier: backendMetadataFieldSummary(
+      requests,
+      "serviceTierSha256",
+      "serviceTierStatus"
+    ),
+    systemFingerprint: backendMetadataFieldSummary(
+      requests,
+      "systemFingerprintSha256",
+      "systemFingerprintStatus"
+    ),
   };
 }
 
@@ -1247,6 +1654,22 @@ function deriveIsolationAudit(requests) {
     ).size,
     membershipChangeIsEqualByteSwap: equalByteSwap("membership-only-change"),
     sameSetOrderIsEqualByteSwap: equalByteSwap("same-set-order"),
+    slotsCounterbalancedAcrossVariants: SCENARIOS.every((scenario) =>
+      scenarioVariants(scenario).every((variant) => {
+        const positions = requests
+          .filter(
+            (request) =>
+              request.phase === "measure" &&
+              request.scenario === scenario.name &&
+              request.variant === variant
+          )
+          .map((request) => request.armPosition);
+        return (
+          positions.filter((position) => position === "first").length ===
+          positions.filter((position) => position === "second").length
+        );
+      })
+    ),
     warmupCount: warmups.length,
     unexpectedToolCallResponseCount: requests.filter(
       (request) => (request.responseToolCallCount ?? 0) > 0
@@ -1254,7 +1677,7 @@ function deriveIsolationAudit(requests) {
   };
 }
 
-function deriveModelViews(requests) {
+function deriveModelViews(requests, providedDuplicateSets = null) {
   const measured = requests.filter((request) => request.phase === "measure");
   const captureSuccessful = requests.filter((request) => request.success);
   const statusAudit = {};
@@ -1268,9 +1691,14 @@ function deriveModelViews(requests) {
     );
   }
   return {
+    backendMetadataAudit: backendMetadataAudit(requests),
     cacheReporting: reportingStatus(requests, "read"),
     cacheWriteReporting: reportingStatus(requests, "write"),
-    comparisons: deriveComparisons(requests),
+    comparisons: deriveComparisons(
+      requests,
+      "all-sample",
+      providedDuplicateSets
+    ),
     finishReasonAudit: {
       all: finishReasonSummary(requests),
       measure: finishReasonSummary(measured),
@@ -1287,6 +1715,16 @@ function deriveModelViews(requests) {
         requests.filter((request) => request.phase === "warmup")
       ),
     },
+    primaryComparisons: deriveComparisons(
+      requests,
+      "primary",
+      providedDuplicateSets
+    ),
+    primaryMembershipInputTokenParityAudit: deriveMembershipParity(
+      requests,
+      "primary",
+      providedDuplicateSets
+    ),
     requestOutcomeAudit: {
       cacheUsageEnvelopeAudited: captureSuccessful.length,
       cacheUsageEnvelopeUnavailable: requests.length - captureSuccessful.length,
@@ -1328,6 +1766,7 @@ function deriveModelViews(requests) {
         requests.filter((request) => request.phase === "warmup")
       ),
     },
+    responseIdAudit: deriveResponseIdAudit(requests),
     summaries: SCENARIOS.flatMap((scenario) =>
       scenarioVariants(scenario).map((variant) => ({
         scenario: scenario.name,
@@ -1383,6 +1822,25 @@ function verifyUnbackedUsage(request, auditField, valueField, path) {
   } else {
     exact(request[valueField], null, `${path}.${valueField}`);
   }
+}
+
+function verifyHashedBackendMetadata(request, statusField, hashField, path) {
+  const status = request[statusField];
+  check(
+    BACKEND_METADATA_STATUSES.includes(status),
+    `${path}.${statusField}`,
+    "has an unknown backend-metadata status"
+  );
+  if (status === "hashed") {
+    check(
+      typeof request[hashField] === "string" &&
+        HASH_PATTERN.test(request[hashField]),
+      `${path}.${hashField}`,
+      "must be a lowercase SHA-256 when status is hashed"
+    );
+    return;
+  }
+  exact(request[hashField], null, `${path}.${hashField}`);
 }
 
 function verifyRequest(
@@ -1471,6 +1929,18 @@ function verifyRequest(
     `${path}.responseToolCallCount`
   );
   verifyResponseFields(request, requestedModel, path);
+  verifyHashedBackendMetadata(
+    request,
+    "serviceTierStatus",
+    "serviceTierSha256",
+    path
+  );
+  verifyHashedBackendMetadata(
+    request,
+    "systemFingerprintStatus",
+    "systemFingerprintSha256",
+    path
+  );
   verifySourceBackedUsage(
     request,
     "cacheRead",
@@ -1499,12 +1969,16 @@ function verifyRequest(
   verifyUnbackedUsage(request, "total", "totalTokens", path);
   const outcome = expectedCaptureOutcome(request);
   exact(request.success, outcome.success, `${path}.success`);
-  if (outcome.errorCodeKind === "http") {
+  if (request.httpStatus === null) {
     check(
-      typeof request.errorCode === "string" &&
-        SAFE_ERROR_CODE_PATTERN.test(request.errorCode),
+      [
+        "AbortError",
+        "TimeoutError",
+        "request-error",
+        "response-too-large",
+      ].includes(request.errorCode),
       `${path}.errorCode`,
-      "must retain a safe HTTP error code"
+      "must use a fixed local request-error code"
     );
   } else {
     exact(request.errorCode, outcome.errorCode, `${path}.errorCode`);
@@ -1524,7 +1998,7 @@ function verifyRequest(
     configuration.runId,
     request.scenario,
     request.trial,
-    request.variant
+    request.armPosition
   );
   const toolNames =
     request.phase === "warmup"
@@ -1708,42 +2182,11 @@ function compareRecorded(observed, expected, path) {
 }
 
 function validateRecordedViewSchemas(model, path) {
-  denseArray(model.comparisons, `${path}.comparisons`, SCENARIOS.length);
-  for (const [index, comparison] of model.comparisons.entries()) {
-    exactKeys(
-      comparison,
-      [
-        "scenario",
-        "controlVariant",
-        "changedVariant",
-        "effectConclusion",
-        ...PAIRED_SUMMARY_KEYS,
-        "orderStrata",
-        "pairs",
-      ],
-      `${path}.comparisons[${index}]`
-    );
-    denseArray(
-      comparison.orderStrata,
-      `${path}.comparisons[${index}].orderStrata`,
-      2
-    );
-    for (const [stratumIndex, stratum] of comparison.orderStrata.entries()) {
-      exactKeys(
-        stratum,
-        ["pairOrder", ...PAIRED_SUMMARY_KEYS],
-        `${path}.comparisons[${index}].orderStrata[${stratumIndex}]`
-      );
-    }
-    denseArray(comparison.pairs, `${path}.comparisons[${index}].pairs`);
-    for (const [pairIndex, pair] of comparison.pairs.entries()) {
-      exactKeys(
-        pair,
-        PAIR_KEYS,
-        `${path}.comparisons[${index}].pairs[${pairIndex}]`
-      );
-    }
-  }
+  validateComparisonView(model.comparisons, `${path}.comparisons`);
+  validateComparisonView(
+    model.primaryComparisons,
+    `${path}.primaryComparisons`
+  );
   denseArray(model.summaries, `${path}.summaries`, SCENARIOS.length * 2);
   for (const [index, summary] of model.summaries.entries()) {
     exactKeys(
@@ -1752,8 +2195,23 @@ function validateRecordedViewSchemas(model, path) {
       `${path}.summaries[${index}]`
     );
   }
-  exactKeys(
+  validateResponseIdAuditSchema(
+    model.responseIdAudit,
+    `${path}.responseIdAudit`
+  );
+  validateMembershipParityAuditSchema(
     model.membershipInputTokenParityAudit,
+    `${path}.membershipInputTokenParityAudit`
+  );
+  validateMembershipParityAuditSchema(
+    model.primaryMembershipInputTokenParityAudit,
+    `${path}.primaryMembershipInputTokenParityAudit`
+  );
+}
+
+function validateMembershipParityAuditSchema(audit, path) {
+  exactKeys(
+    audit,
     [
       "changedHigher",
       "controlHigher",
@@ -1764,17 +2222,10 @@ function validateRecordedViewSchemas(model, path) {
       "orderStrata",
       "pairs",
     ],
-    `${path}.membershipInputTokenParityAudit`
+    path
   );
-  denseArray(
-    model.membershipInputTokenParityAudit.orderStrata,
-    `${path}.membershipInputTokenParityAudit.orderStrata`,
-    2
-  );
-  for (const [
-    index,
-    stratum,
-  ] of model.membershipInputTokenParityAudit.orderStrata.entries()) {
+  denseArray(audit.orderStrata, `${path}.orderStrata`, 2);
+  for (const [index, stratum] of audit.orderStrata.entries()) {
     exactKeys(
       stratum,
       [
@@ -1785,17 +2236,11 @@ function validateRecordedViewSchemas(model, path) {
         "medianDifference",
         "pairOrder",
       ],
-      `${path}.membershipInputTokenParityAudit.orderStrata[${index}]`
+      `${path}.orderStrata[${index}]`
     );
   }
-  denseArray(
-    model.membershipInputTokenParityAudit.pairs,
-    `${path}.membershipInputTokenParityAudit.pairs`
-  );
-  for (const [
-    index,
-    pair,
-  ] of model.membershipInputTokenParityAudit.pairs.entries()) {
+  denseArray(audit.pairs, `${path}.pairs`);
+  for (const [index, pair] of audit.pairs.entries()) {
     exactKeys(
       pair,
       [
@@ -1805,8 +2250,56 @@ function validateRecordedViewSchemas(model, path) {
         "pairOrder",
         "trial",
       ],
-      `${path}.membershipInputTokenParityAudit.pairs[${index}]`
+      `${path}.pairs[${index}]`
     );
+  }
+}
+
+function validateResponseIdAuditSchema(audit, path) {
+  exactKeys(
+    audit,
+    [
+      "crossRequestBodyDuplicateHashes",
+      "crossRequestBodyDuplicateObservations",
+      "distinct",
+      "duplicateHashes",
+      "duplicateObservations",
+      "reported",
+    ],
+    path
+  );
+}
+
+function validateComparisonView(comparisons, path) {
+  denseArray(comparisons, path, SCENARIOS.length);
+  for (const [index, comparison] of comparisons.entries()) {
+    exactKeys(
+      comparison,
+      [
+        "scenario",
+        "controlVariant",
+        "changedVariant",
+        "cacheReadRatioConclusion",
+        "cacheReadTokenConclusion",
+        "effectConclusion",
+        ...PAIRED_SUMMARY_KEYS,
+        "orderStrata",
+        "pairs",
+      ],
+      `${path}[${index}]`
+    );
+    denseArray(comparison.orderStrata, `${path}[${index}].orderStrata`, 2);
+    for (const [stratumIndex, stratum] of comparison.orderStrata.entries()) {
+      exactKeys(
+        stratum,
+        ["pairOrder", ...PAIRED_SUMMARY_KEYS],
+        `${path}[${index}].orderStrata[${stratumIndex}]`
+      );
+    }
+    denseArray(comparison.pairs, `${path}[${index}].pairs`);
+    for (const [pairIndex, pair] of comparison.pairs.entries()) {
+      exactKeys(pair, PAIR_KEYS, `${path}[${index}].pairs[${pairIndex}]`);
+    }
   }
 }
 
@@ -1827,7 +2320,8 @@ function classifyOrderStrata(
   strata,
   medianField,
   directionalLabels,
-  minimumPairs = MINIMUM_ORDER_STRATUM_PAIRS
+  minimumPairs = MINIMUM_ORDER_STRATUM_PAIRS,
+  directionField = medianField
 ) {
   const summarized = PAIR_ORDERS.map((pairOrder) => {
     const stratum = strata.find((item) => item.pairOrder === pairOrder);
@@ -1835,7 +2329,7 @@ function classifyOrderStrata(
       pairOrder,
       eligiblePairs: stratum?.eligiblePairs ?? 0,
       median: stratum?.[medianField] ?? null,
-      direction: direction(stratum?.[medianField] ?? null),
+      direction: direction(stratum?.[directionField] ?? null),
     };
   });
   if (summarized.some((item) => item.eligiblePairs < minimumPairs)) {
@@ -1853,24 +2347,64 @@ function classifyOrderStrata(
   };
 }
 
+function descriptiveEndpoint(
+  comparison,
+  metric,
+  medianField,
+  minimumPairs = MINIMUM_ORDER_STRATUM_PAIRS,
+  directionField = medianField
+) {
+  return {
+    metric,
+    ...classifyOrderStrata(
+      comparison.orderStrata,
+      medianField,
+      {
+        "control-higher": "descriptive-control-higher",
+        "changed-higher": "descriptive-changed-higher",
+        equal: "no-observed-median-difference",
+        unavailable: "insufficient-coverage",
+      },
+      minimumPairs,
+      directionField
+    ),
+  };
+}
+
 function effectForComparison(
   comparison,
   minimumPairs = MINIMUM_ORDER_STRATUM_PAIRS
 ) {
-  return classifyOrderStrata(
-    comparison.orderStrata,
+  const rawCacheReadTokens = descriptiveEndpoint(
+    comparison,
+    "provider-reported-raw-cache-read-tokens",
     "medianControlMinusChangedCacheReadTokens",
-    {
-      "control-higher": "descriptive-control-higher-cache-read",
-      "changed-higher": "descriptive-changed-higher-cache-read",
-      equal: "no-observed-cache-read-difference",
-      unavailable: "insufficient-coverage",
-    },
     minimumPairs
   );
+  const cacheReadInputCoverageRatio = descriptiveEndpoint(
+    comparison,
+    "provider-reported-cache-read/input-coverage-ratio",
+    "medianControlMinusChangedCacheReadRatio",
+    minimumPairs,
+    "medianControlMinusChangedCacheReadRatioSign"
+  );
+  return {
+    conclusion: endpointCombinedConclusion(
+      rawCacheReadTokens.conclusion,
+      cacheReadInputCoverageRatio.conclusion
+    ),
+    endpoints: {
+      rawCacheReadTokens,
+      cacheReadInputCoverageRatio,
+    },
+  };
 }
 
-function membershipEffect(parity, minimumPairs = MINIMUM_ORDER_STRATUM_PAIRS) {
+function membershipEffect(
+  parity,
+  minimumPairs = MINIMUM_ORDER_STRATUM_PAIRS,
+  expectedPairsPerOrder = EXPECTED_TRIALS / PAIR_ORDERS.length
+) {
   const strata = PAIR_ORDERS.map((pairOrder) => {
     const pairs = parity.pairs.filter((pair) => pair.pairOrder === pairOrder);
     return {
@@ -1882,24 +2416,42 @@ function membershipEffect(parity, minimumPairs = MINIMUM_ORDER_STRATUM_PAIRS) {
       ),
     };
   });
-  return classifyOrderStrata(
+  const classified = classifyOrderStrata(
     strata,
     "medianControlMinusChangedInputTokens",
     {
       "control-higher": "descriptive-control-higher-input",
       "changed-higher": "descriptive-changed-higher-input",
-      equal: "input-token-parity",
+      equal: "no-observed-median-input-token-difference",
       unavailable: "insufficient-coverage",
     },
     minimumPairs
   );
+  const exactFullParity =
+    classified.conclusion === "no-observed-median-input-token-difference" &&
+    strata.every(
+      (stratum) => stratum.eligiblePairs === expectedPairsPerOrder
+    ) &&
+    parity.pairs.every((pair) => pair.controlMinusChangedInputTokens === 0);
+  return {
+    metric: "input-token-difference",
+    ...classified,
+    conclusion: exactFullParity ? "input-token-parity" : classified.conclusion,
+  };
 }
 
-function pooledComparison(models, scenario) {
+function pooledComparison(
+  models,
+  scenario,
+  view = "all-sample",
+  providedDuplicateSets = null
+) {
   const pairs = models.flatMap((model) => {
-    const comparison = deriveComparisons(model.requests).find(
-      (item) => item.scenario === scenario.name
-    );
+    const comparison = deriveComparisons(
+      model.requests,
+      view,
+      providedDuplicateSets
+    ).find((item) => item.scenario === scenario.name);
     return comparison.pairs.map((pair) => ({ ...pair, model: model.model }));
   });
   return {
@@ -1923,8 +2475,24 @@ function everyModelOrderStratumHasCoverage(models, pairsForModel) {
   });
 }
 
+function reconcilePooledConclusion(
+  pooledConclusion,
+  modelConclusions,
+  allModelOrderStrataCovered
+) {
+  if (!allModelOrderStrataCovered) {
+    return "insufficient-coverage";
+  }
+  const distinct = new Set(modelConclusions);
+  if (distinct.size !== 1 || !distinct.has(pooledConclusion)) {
+    return "model-heterogeneous/indeterminate";
+  }
+  return pooledConclusion;
+}
+
 function buildReport(evidence, serialized) {
   const allRequests = evidence.models.flatMap((model) => model.requests);
+  const campaignResponseIdDuplicateSets = responseIdDuplicateSets(allRequests);
   const modelRows = evidence.models.map((model) => ({
     model: model.model,
     requests: model.requests.length,
@@ -1937,16 +2505,44 @@ function buildReport(evidence, serialized) {
     ).length,
     cacheReporting: reportingStatus(model.requests, "read"),
     cacheWriteReporting: reportingStatus(model.requests, "write"),
+    backendMetadataAudit: backendMetadataAudit(model.requests),
+    responseIdAudit: deriveResponseIdAudit(model.requests),
   }));
-  const effects = evidence.models.flatMap((model) =>
-    deriveComparisons(model.requests).map((comparison) => ({
-      scope: model.model,
-      scenario: comparison.scenario,
-      ...effectForComparison(comparison),
-    }))
-  );
+  const effects = evidence.models.flatMap((model) => {
+    const allSample = deriveComparisons(
+      model.requests,
+      "all-sample",
+      campaignResponseIdDuplicateSets
+    );
+    const primary = deriveComparisons(
+      model.requests,
+      "primary",
+      campaignResponseIdDuplicateSets
+    );
+    return primary.map((comparison, index) => {
+      const primaryEffect = effectForComparison(comparison);
+      return {
+        scope: model.model,
+        scenario: comparison.scenario,
+        conclusion: primaryEffect.conclusion,
+        primary: primaryEffect,
+        allSampleDescriptive: effectForComparison(allSample[index]),
+      };
+    });
+  });
   for (const scenario of SCENARIOS) {
-    const comparison = pooledComparison(evidence.models, scenario);
+    const comparison = pooledComparison(
+      evidence.models,
+      scenario,
+      "primary",
+      campaignResponseIdDuplicateSets
+    );
+    const allSampleComparison = pooledComparison(
+      evidence.models,
+      scenario,
+      "all-sample",
+      campaignResponseIdDuplicateSets
+    );
     const pooledEffect = effectForComparison(
       comparison,
       EXPECTED_MODELS.length * MINIMUM_ORDER_STRATUM_PAIRS
@@ -1954,44 +2550,98 @@ function buildReport(evidence, serialized) {
     const allModelOrderStrataCovered = everyModelOrderStratumHasCoverage(
       evidence.models,
       (model) =>
-        deriveComparisons(model.requests).find(
-          (item) => item.scenario === scenario.name
-        ).pairs
+        deriveComparisons(
+          model.requests,
+          "primary",
+          campaignResponseIdDuplicateSets
+        ).find((item) => item.scenario === scenario.name).pairs
     );
+    const modelConclusions = effects
+      .filter(
+        (effect) =>
+          effect.scope !== "pooled" && effect.scenario === scenario.name
+      )
+      .map((effect) => effect.conclusion);
     effects.push({
       scope: "pooled",
       scenario: scenario.name,
-      ...pooledEffect,
-      conclusion: allModelOrderStrataCovered
-        ? pooledEffect.conclusion
-        : "insufficient-coverage",
+      conclusion: reconcilePooledConclusion(
+        pooledEffect.conclusion,
+        modelConclusions,
+        allModelOrderStrataCovered
+      ),
+      primary: pooledEffect,
+      allSampleDescriptive: effectForComparison(
+        allSampleComparison,
+        EXPECTED_MODELS.length * MINIMUM_ORDER_STRATUM_PAIRS
+      ),
     });
   }
-  const membershipInputParity = evidence.models.map((model) => ({
-    scope: model.model,
-    ...membershipEffect(deriveMembershipParity(model.requests)),
-  }));
+  const membershipInputParity = evidence.models.map((model) => {
+    const primary = membershipEffect(
+      deriveMembershipParity(
+        model.requests,
+        "primary",
+        campaignResponseIdDuplicateSets
+      )
+    );
+    return {
+      scope: model.model,
+      conclusion: primary.conclusion,
+      primary,
+      allSampleDescriptive: membershipEffect(
+        deriveMembershipParity(model.requests)
+      ),
+    };
+  });
   const pooledParityPairs = evidence.models.flatMap((model) =>
-    deriveMembershipParity(model.requests).pairs.map((pair) => ({
+    deriveMembershipParity(
+      model.requests,
+      "primary",
+      campaignResponseIdDuplicateSets
+    ).pairs.map((pair) => ({
       ...pair,
       model: model.model,
     }))
   );
   const pooledMembershipEffect = membershipEffect(
     { pairs: pooledParityPairs },
-    EXPECTED_MODELS.length * MINIMUM_ORDER_STRATUM_PAIRS
+    EXPECTED_MODELS.length * MINIMUM_ORDER_STRATUM_PAIRS,
+    (EXPECTED_MODELS.length * EXPECTED_TRIALS) / PAIR_ORDERS.length
   );
   const allMembershipModelOrderStrataCovered =
     everyModelOrderStratumHasCoverage(
       evidence.models,
-      (model) => deriveMembershipParity(model.requests).pairs
+      (model) =>
+        deriveMembershipParity(
+          model.requests,
+          "primary",
+          campaignResponseIdDuplicateSets
+        ).pairs
     );
+  const pooledMembershipConclusion = reconcilePooledConclusion(
+    pooledMembershipEffect.conclusion,
+    membershipInputParity.map((effect) => effect.conclusion),
+    allMembershipModelOrderStrataCovered
+  );
+  const pooledAllSampleParityPairs = evidence.models.flatMap((model) =>
+    deriveMembershipParity(model.requests).pairs.map((pair) => ({
+      ...pair,
+      model: model.model,
+    }))
+  );
   membershipInputParity.push({
     scope: "pooled",
-    ...pooledMembershipEffect,
-    conclusion: allMembershipModelOrderStrataCovered
-      ? pooledMembershipEffect.conclusion
-      : "insufficient-coverage",
+    conclusion: pooledMembershipConclusion,
+    primary: {
+      ...pooledMembershipEffect,
+      conclusion: pooledMembershipConclusion,
+    },
+    allSampleDescriptive: membershipEffect(
+      { pairs: pooledAllSampleParityPairs },
+      EXPECTED_MODELS.length * MINIMUM_ORDER_STRATUM_PAIRS,
+      (EXPECTED_MODELS.length * EXPECTED_TRIALS) / PAIR_ORDERS.length
+    ),
   });
   return {
     evidenceSha256: sha256(serialized),
@@ -2012,6 +2662,7 @@ function buildReport(evidence, serialized) {
     models: modelRows,
     effects,
     membershipInputParity,
+    responseIdAudit: deriveResponseIdAudit(allRequests),
   };
 }
 
@@ -2088,12 +2739,54 @@ function containsCredentialLikeString(value) {
   return false;
 }
 
+async function verifySourceFreezeCommit(commitSha, repoRoot) {
+  const cacheKey = `${repoRoot}\0${commitSha}`;
+  let frozenManifest = sourceFreezeManifestCache.get(cacheKey);
+  if (!frozenManifest) {
+    frozenManifest = readFrozenSourceManifest(commitSha, repoRoot);
+    sourceFreezeManifestCache.set(cacheKey, frozenManifest);
+  }
+  try {
+    return await frozenManifest;
+  } catch {
+    sourceFreezeManifestCache.delete(cacheKey);
+    fail(
+      "configuration.sourceFreezeCommitSha",
+      "must identify a commit containing every manifested source path"
+    );
+  }
+}
+
+async function readFrozenSourceManifest(commitSha, repoRoot) {
+  await execFileAsync("git", ["cat-file", "-e", `${commitSha}^{commit}`], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+  const sourcePaths = [
+    "scripts/benchmark-cache-stable-tools.mts",
+    ...REQUIRED_IMPLEMENTATION_SOURCE_PATHS,
+  ];
+  return new Map(
+    await Promise.all(
+      sourcePaths.map(async (sourcePath) => {
+        const { stdout } = await execFileAsync(
+          "git",
+          ["show", `${commitSha}:${sourcePath}`],
+          { cwd: repoRoot, encoding: null, maxBuffer: 20_000_000 }
+        );
+        return [sourcePath, sha256(stdout)];
+      })
+    )
+  );
+}
+
 async function verifyConfiguration(configuration, repoRoot) {
   exactKeys(
     configuration,
     [
       "armExecutionOrder",
       "armIsolation",
+      "backendMetadataSemantics",
       "benchmarkSourceSha256",
       "campaignId",
       "comparisonSemantics",
@@ -2113,10 +2806,13 @@ async function verifyConfiguration(configuration, repoRoot) {
       "pairedUncertainty",
       "prefixLines",
       "requestTopology",
+      "responseBodyLimits",
       "runId",
       "seed",
       "settleMs",
+      "sourceFreezeCommitSha",
       "sourceSnapshotSemantics",
+      "sourceWorktreeCleanAtStart",
       "timeoutMs",
       "toolCallValidation",
       "toolChoice",
@@ -2139,7 +2835,7 @@ async function verifyConfiguration(configuration, repoRoot) {
   exact(configuration.timeoutMs, 120_000, "configuration.timeoutMs");
   exact(
     configuration.minimumOrderStratumCoverage,
-    0.75,
+    1,
     "configuration.minimumOrderStratumCoverage"
   );
   exact(
@@ -2161,6 +2857,19 @@ async function verifyConfiguration(configuration, repoRoot) {
     configuration.requestTopology,
     EXPECTED_TOPOLOGY,
     "configuration.requestTopology"
+  );
+  exactKeys(
+    configuration.responseBodyLimits,
+    ["chatCompletionsBytes", "modelCatalogBytes"],
+    "configuration.responseBodyLimits"
+  );
+  exact(
+    configuration.responseBodyLimits,
+    {
+      chatCompletionsBytes: MAX_CHAT_RESPONSE_BYTES,
+      modelCatalogBytes: MAX_MODEL_CATALOG_BYTES,
+    },
+    "configuration.responseBodyLimits"
   );
   check(
     typeof configuration.runId === "string" &&
@@ -2196,9 +2905,29 @@ async function verifyConfiguration(configuration, repoRoot) {
     "configuration.pairedUncertainty"
   );
   exact(
+    configuration.backendMetadataSemantics,
+    EXPECTED_METHODOLOGY.backendMetadataSemantics,
+    "configuration.backendMetadataSemantics"
+  );
+  exact(
     configuration.sourceSnapshotSemantics,
     EXPECTED_METHODOLOGY.sourceSnapshotSemantics,
     "configuration.sourceSnapshotSemantics"
+  );
+  check(
+    typeof configuration.sourceFreezeCommitSha === "string" &&
+      GIT_COMMIT_PATTERN.test(configuration.sourceFreezeCommitSha),
+    "configuration.sourceFreezeCommitSha",
+    "must be a lowercase Git SHA-1"
+  );
+  exact(
+    configuration.sourceWorktreeCleanAtStart,
+    true,
+    "configuration.sourceWorktreeCleanAtStart"
+  );
+  const frozenSourceManifest = await verifySourceFreezeCommit(
+    configuration.sourceFreezeCommitSha,
+    repoRoot
   );
   exact(
     configuration.usageValidation,
@@ -2378,6 +3107,11 @@ async function verifyConfiguration(configuration, repoRoot) {
     sha256(runnerBytes),
     "configuration.benchmarkSourceSha256"
   );
+  exact(
+    configuration.benchmarkSourceSha256,
+    frozenSourceManifest.get("scripts/benchmark-cache-stable-tools.mts"),
+    "configuration.benchmarkSourceSha256.sourceFreezeCommit"
+  );
   plainRecord(
     configuration.implementationSourcesSha256,
     "configuration.implementationSourcesSha256"
@@ -2412,6 +3146,11 @@ async function verifyConfiguration(configuration, repoRoot) {
       hash,
       sha256(await readFile(resolve(repoRoot, sourcePath))),
       `configuration.implementationSourcesSha256.${sourcePath}`
+    );
+    exact(
+      hash,
+      frozenSourceManifest.get(sourcePath),
+      `configuration.implementationSourcesSha256.${sourcePath}.sourceFreezeCommit`
     );
   }
 }
@@ -2460,6 +3199,7 @@ async function verifyEvidenceDocument({
       "interpretation",
       "models",
       "protocol",
+      "responseIdAudit",
       "schemaVersion",
     ],
     "evidence"
@@ -2501,10 +3241,6 @@ async function verifyEvidenceDocument({
     EXPECTED_MODELS,
     "evidence.models[].model"
   );
-  let previousCompletedAt = null;
-  let firstStartedAt = null;
-  let nextSequence = 0;
-  const globalCanaries = new Set();
   for (const [modelIndex, model] of evidence.models.entries()) {
     const path = `evidence.models[${modelIndex}]`;
     exactKeys(model, MODEL_KEYS, path);
@@ -2514,6 +3250,24 @@ async function verifyEvidenceDocument({
       `${path}.requests`,
       EXPECTED_TOPOLOGY.requestsPerModel
     );
+  }
+  const allRequests = evidence.models.flatMap((model) => model.requests);
+  const campaignResponseIdDuplicateSets = responseIdDuplicateSets(allRequests);
+  validateResponseIdAuditSchema(
+    evidence.responseIdAudit,
+    "evidence.responseIdAudit"
+  );
+  compareRecorded(
+    evidence.responseIdAudit,
+    deriveResponseIdAudit(allRequests),
+    "evidence.responseIdAudit"
+  );
+  let previousCompletedAt = null;
+  let firstStartedAt = null;
+  let nextSequence = 0;
+  const globalCanaries = new Set();
+  for (const [modelIndex, model] of evidence.models.entries()) {
+    const path = `evidence.models[${modelIndex}]`;
     const coordinates = expectedCoordinatesForModel(
       model.model,
       evidence.configuration.seed,
@@ -2551,7 +3305,10 @@ async function verifyEvidenceDocument({
       `${path}.warmupLinkage`
     );
     validateRecordedViewSchemas(model, path);
-    const expectedViews = deriveModelViews(model.requests);
+    const expectedViews = deriveModelViews(
+      model.requests,
+      campaignResponseIdDuplicateSets
+    );
     for (const [key, expectedView] of Object.entries(expectedViews)) {
       compareRecorded(model[key], expectedView, `${path}.${key}`);
     }
@@ -2690,6 +3447,7 @@ if (isMain) {
 
 export {
   deriveModelViews,
+  deriveResponseIdAudit,
   EvidenceVerificationError,
   EXPECTED_CAMPAIGN_ID,
   EXPECTED_MODELS,
@@ -2698,6 +3456,7 @@ export {
   REQUIRED_IMPLEMENTATION_SOURCE_PATHS,
   renderReadmeBlock,
   requestArtifacts,
+  responseIdDuplicateSets,
   SCENARIOS,
   verifyEvidenceDocument,
 };

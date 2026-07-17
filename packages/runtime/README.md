@@ -176,15 +176,33 @@ not secrecy controls: low-entropy tool names or standard schemas may be
 recoverable by dictionary guessing.
 
 The callback facade and the diagnostic snapshot are deliberately separate.
-Diagnostics capture only own data descriptors for the semantic fields above,
-then let AI SDK resolve supported JSON, Zod, standard, or lazy input schemas.
-Accessor-backed fields and top-level tool definitions with custom prototypes
-are recorded as unavailable rather than executed. Dynamic description
-functions are counted and fingerprinted only by their presence; their result is
-never evaluated. Schema conversion failures are isolated to that tool and
-recorded through `semanticFingerprintUnavailableToolCount`; they never make the
-model step fail. Metadata is canonicalized before the asynchronous digest so a
-later host mutation cannot rewrite an in-flight diagnostic.
+PSS first captures own data descriptors for the semantic fields above, then
+schedules all schema conversion and hashing only after the caller invokes the
+model request. The detached task resolves synchronously available AI SDK JSON
+Schema wrappers and their memoized lazy JSON values, then copies enumerable JSON
+data properties before the first asynchronous digest. Bare schema callbacks and
+all Standard Schema converters, including Zod, are recorded as unavailable
+instead of being run a second time after provider serialization, because a
+stateful or forged converter could otherwise describe different semantics.
+Promise/thenable schema results are likewise never awaited. Once the detached
+task encounters an ordinary native Promise whose species construction succeeds,
+it installs an intrinsic rejection observer without assimilating or invoking
+arbitrary thenables. Exotic Promise subclasses and rejection handling before
+inspection remain caller-owned. PSS does not open schema
+accessors early merely to discover hidden Promises, so callers remain
+responsible for rejection handling before the provider or detached diagnostic
+consumes such a schema. Accessor-backed fields, unsafe/cyclic JSON,
+enumerable
+symbol keys, and top-level tool definitions with custom prototypes are likewise
+unavailable rather than traversed. Non-enumerable schema metadata is ignored,
+matching JSON and AI SDK fingerprint semantics. Dynamic description functions
+are counted and fingerprinted only by their presence; their result is never
+evaluated. Schema conversion failures are isolated to that tool and recorded
+through `semanticFingerprintUnavailableToolCount`; they never delay or fail the
+model request. A mutation before the detached task starts can be observed, but
+once its immutable JSON snapshot begins, later mutation cannot rewrite the
+in-flight digest. Treat the record as correlation telemetry, not a trust-time
+baseline.
 
 Model identity follows the same no-accessor rule. Data-backed
 specification-version, provider, and model-ID fields are hashed directly. Some
@@ -232,6 +250,14 @@ available at its exact input position; manual replay must preserve that position
 and `role: "developer"`. Changing or removing a loaded set breaks cache reuse
 from that point forward.
 
+OpenAI's function-calling guide separately recommends
+[`tool_choice: { type: "allowed_tools" }`](https://developers.openai.com/api/docs/guides/function-calling#tool-choice)
+when an application wants to keep the full `tools` list unchanged for prompt
+caching while narrowing the callable subset. The adapter-neutral PSS selector
+does not synthesize that provider shape. A native implementation would still
+need an adapter/model/version wire canary, host-owned authorization, and
+fail-closed validation; cache preservation is not an execution permission.
+
 An individually deferred function still exposes its name and description at the
 start of the request, so in practice it mostly defers the parameter schema.
 Namespaces and MCP servers initially expose only their container name and
@@ -248,15 +274,26 @@ from the initial model-visible context prefix, so deferral is neither an
 authorization boundary nor a secrecy mechanism. Anthropic's native support
 matrix includes Haiku 4.5; that should not be conflated with third-party custom
 message-anchored implementations that may support a narrower model set.
+Anthropic also rejects `defer_loading: true` and `cache_control` on the same
+tool with HTTP 400; put a cache breakpoint on a preceding non-deferred tool.
+At least one tool must remain non-deferred; with built-in search, the
+tool-search tool itself satisfies that requirement and must be non-deferred.
+Deferring every tool is another HTTP 400 case.
+A continuation must resend the same complete top-level tools array and replay
+the assistant `server_tool_use` plus `tool_search_tool_result` blocks unchanged,
+without manufacturing a `tool_result` for a `srvtoolu_` ID. Custom client-side
+search instead returns normal `tool_result` content containing
+`tool_reference` blocks, whose names must exist in the top-level registry.
+These invariants belong in any future Anthropic wire canary and negative test.
 
 As of the 2026-07-17 upstream audit (Pi main
-[`216e672`](https://github.com/badlogic/pi-mono/commit/216e672)), Pi's
+[`a9f6a3159a6f0b70e62f5109709d70318e201a93`](https://github.com/badlogic/pi-mono/commit/a9f6a3159a6f0b70e62f5109709d70318e201a93)), Pi's
 additive-only prototype
 ([`3d8f743`](https://github.com/badlogic/pi-mono/commit/3d8f743))
 records added tool names in tool results and replays provider-native references
 at the exact load point, while removal or other non-additive changes fall back
 to eager tools. Current OpenCode
-([commit `3a1c6df`](https://github.com/anomalyco/opencode/commit/3a1c6df)) exposes a
+([commit `ba6cf386077c32c0ed6196e5e1bce87a6adc26e0`](https://github.com/anomalyco/opencode/commit/ba6cf386077c32c0ed6196e5e1bce87a6adc26e0)) exposes a
 cache marker/key path but no native tool-search replay. Those designs reinforce
 the boundary here: the generic selector owns deterministic eager membership;
 an adapter-specific future layer would own transcript-anchored loading.
@@ -270,6 +307,8 @@ adapter explicitly sets `compat.deferredToolsMode = "kimi"`. That matches
 [Kimi's direct-provider protocol](https://platform.kimi.ai/docs/guide/use-dynamic-tool-loading),
 which injects complete tool definitions in positioned system messages and is
 currently documented only for `kimi-k3`; it is not OpenAI `tool_search`.
+That positioned system message must contain the `tools` field without a
+simultaneous `content` field, which Kimi rejects with HTTP 400.
 Pi's OpenRouter Kimi registry does not enable this mode. A Kimi-compatible name
 through a router therefore must not be treated as evidence that the direct
 provider extension survived routing.

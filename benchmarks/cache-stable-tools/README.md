@@ -32,16 +32,24 @@ has a dedicated input-token parity audit, independent of cache-read reporting.
 It records complete valid-input pairs, equal/control-higher/changed-higher
 counts, each delta, and missing pairs. A difference is reported, not silently
 normalized or treated as a benchmark failure; it limits interpretation of
-absolute cache-token deltas. The checked-in verifier requires valid parity
-telemetry for at least 75% of membership pairs.
+absolute cache-token deltas. In the primary pair universe defined below, the
+checked-in verifier requires all four planned pairs in each AB/BA order stratum;
+any missing pair makes the directional result indeterminate.
+`input-token-parity` is reserved for all eight planned primary model-level pairs
+being present and exactly equal. The all-sample parity result remains
+descriptive, and same-set and membership cache comparisons remain descriptive
+when that exact primary parity is absent.
 
-Every arm has a unique fixed-length prompt namespace and a unique, equal-shape
-inert canary before the benchmark tools. Its warmup and measurement alone share
-those values. A measurement is eligible for cache aggregation only when its own
-warmup was a recognized zero-tool-call response from the exact requested model
-with exactly one choice, `finish_reason=stop`, and exact trimmed text `OK`.
-The verifier checks that unchanged arms reuse both tools-array and request-body
-hashes, changed arms change both hashes, and the same-set/membership swaps keep
+Every model/scenario/trial execution slot (`first` or `second`) has a unique
+fixed-length prompt namespace and a unique, equal-shape inert canary before the
+benchmark tools. Its warmup and measurement alone share those values. The
+namespace and canary derive from execution slot, not control/changed identity;
+alternating AB/BA order counterbalances every variant across both slots. A
+measurement is eligible for cache aggregation only when its own warmup was a
+recognized zero-tool-call response from the exact requested model with exactly
+one choice, `finish_reason=stop`, and exact trimmed text `OK`. The verifier
+checks that unchanged arms reuse both tools-array and request-body hashes,
+changed arms change both hashes, and the same-set/membership swaps keep
 serialized byte length equal.
 
 Trial order is deterministic but counterbalanced. A SHA-256 bit of seed, model,
@@ -54,15 +62,33 @@ source-manifest-bound runner; the verifier requires both that value and the
 sanitized wall-clock gap between warmup completion and measurement start to
 meet the configured 1,500 ms.
 
-Headline direction is order-robust, not merely pooled. Each AB/BA order must
-retain at least 75% complete eligible pairs, and both order-stratum medians
-must have the same nonzero sign before the result says either arm was higher.
-Two zero medians report no observed median difference. Opposite signs, or a
-zero/nonzero split, are reported as order-sensitive; missing stratum coverage
-is indeterminate. A pooled conclusion additionally requires at least three
-complete pairs in every model-by-order stratum, so aggregate volume cannot hide
-one model's missing AB or BA arm. The membership input-token parity audit uses
-the same rule.
+Provider-reported raw cache-read-token differences and cache-read/input
+coverage-ratio differences are parallel descriptive endpoints. Only pairs
+with positive input counts contribute to the ratio endpoint; raw input-token
+differences remain visible alongside both cache endpoints. The combined result
+is indeterminate whenever the endpoints disagree. Opposite directions are
+labeled `denominator-sensitive/indeterminate`, because changing input tokens
+can reverse the ratio direction even when the raw cache-read-token direction
+is unchanged. Neither endpoint estimates causal cache saving, cost, or net
+economic effect. In the active-set scenario, removing tools mechanically
+changes the denominator; same-set and membership results also remain
+descriptive unless every planned input-token pair has exact parity.
+
+Direction is order-robust, not merely pooled. Each AB/BA order must retain all
+four planned eligible pairs, and both order-stratum medians must have the
+same nonzero sign before the result says either arm was higher. Two zero medians
+report only no observed median difference. Opposite signs, or a zero/nonzero
+split, are reported as order-sensitive; one missing pair is enough to make the
+result indeterminate. A pooled conclusion additionally requires all four pairs
+in every model-by-order stratum and agreement with every model-level
+conclusion, so aggregate volume cannot hide a missing, conflicting, or
+order-sensitive model. Paired summaries record exact raw-cache-token,
+input-token, and cache-read/input-ratio sign counts overall and by order. Ratio
+pair signs, rational ordering, and even-sample median signs are computed with
+`BigInt` cross-products rather than floating-point subtraction. Float ratio
+medians remain display-only. The membership input-token audit uses the same
+complete-coverage rule; cancelling nonzero deltas with zero medians is labeled
+only as no observed median difference.
 
 ## What counts as evidence
 
@@ -74,6 +100,10 @@ The result deliberately separates several concepts:
   `tool_calls: null` is a valid no-tool shape; array-valued choices/messages,
   missing/non-string/nonstandard finish reasons, `length`, `content_filter`,
   `function_call`, and `tool_calls` finishes fail closed.
+  HTTP failures retain only `http-<status>` and local failures use a fixed
+  allowlist, so a provider-reflected credential in `error.code`/`error.type`
+  is neither stored nor logged. Serialized evidence also rejects bearer
+  markers and recognized router- or OpenAI-style secret-key shapes.
 - `finishReasonAudit`: per-choice sanitized status counts split into warmup,
   measurement, and all-request views. Raw finish-reason values are not retained.
 - `cacheTelemetryEligible`: capture success, exact requested response-model
@@ -86,6 +116,31 @@ The result deliberately separates several concepts:
   measurement, and all-request views.
 - `usageFieldStatusAudit`: absent, valid, malformed, and conflicting alias
   counts for input, cache read, cache write, output, and total tokens.
+- `backendMetadataAudit`: nullable `system_fingerprint` and `service_tier`
+  values reduced to `absent`/`null`/`invalid`/`hashed` statuses and SHA-256
+  digests. Multiple digests flag possible backend drift. These fields do not
+  change per-request `cacheTelemetryEligible`, but they do gate paired primary
+  sensitivity eligibility; raw metadata and provider payloads are never
+  retained.
+- `responseIdAudit`: reported, distinct, duplicate, and cross-request-body
+  duplicate hash counts at both model and campaign scope. Any non-null response
+  ID repeated anywhere in the campaign is treated as replay-suspect and
+  excludes every affected primary pair, including same-body warmup/measurement
+  replay. Cross-request-body reuse remains a separately reported stronger
+  anomaly.
+- `comparisons`: the all-sample descriptive paired view.
+  `primaryComparisons` additionally requires the same non-null hashed
+  `system_fingerprint` and `service_tier` across all four responses in a pair
+  (both arms' warmups and measurements) and no campaign-global response-ID
+  replay.
+  Missing metadata is `unavailable`, not a match; each view records
+  matched/mismatched/unavailable pair counts.
+- `membershipInputTokenParityAudit` is the all-sample descriptive parity view.
+  `primaryMembershipInputTokenParityAudit` uses exactly the same four-response
+  backend-metadata and campaign-global response-ID pair universe as
+  `primaryComparisons`. The verifier's headline `membershipInputParity`
+  conclusion comes from that primary view and cannot claim exact parity when a
+  planned pair is excluded; its report retains the all-sample result separately.
 
 When multiple recognized aliases are present, they must contain the same
 nonnegative safe integer. A malformed or conflicting field retains only its
@@ -97,8 +152,10 @@ safe integer; overflow aborts the campaign before evidence is written.
 
 Read and write summaries are separate. Each reports field coverage, nonzero
 coverage, median tokens, median read-or-write/input ratio, and a weighted ratio.
-No cost is derived and provider-normalized fields are not assumed comparable
-across models.
+Each also exposes its own ratio-eligible count and ratio coverage, so a valid
+reported field with zero input can contribute to field coverage without being
+silently included in a ratio denominator. No cost is derived and
+provider-normalized fields are not assumed comparable across models.
 
 ## Local and live verification
 
@@ -111,9 +168,10 @@ validation, retry indices, and AI SDK execution behavior.
 
 `scripts/cache-stable-tools-evidence.test.mjs` is a source-coupled regression
 check, not an independent verifier. It imports the producer's campaign preset,
-source manifest, topology, and request-artifact helpers, then recalculates the
-checked-in snapshot. That makes it useful for catching stale evidence and
-recorded-view drift, but producer and test can share the same faulty assumption.
+source manifest, topology, and request-artifact helpers, binds them to the
+checked-in snapshot, and also invokes the independent verifier. That makes it
+useful for catching producer/verifier drift while preserving an explicit
+producer-oracle check.
 
 `scripts/cache-stable-tools-independent-verifier.mjs` is the authoritative
 evidence verifier. It uses only Node.js standard-library imports and does not
@@ -123,8 +181,10 @@ request-body/tool-array/isolation hashes, chronology, response and usage
 eligibility, warmup linkage, audits, summaries, comparisons, membership parity,
 and the final README report. It also rejects unexpected request fields, raw
 content/provider payloads, bearer strings, and key-like values. Schema v3, the
-campaign ID, exact source hashes, and full topology must all match, so an older
-or interrupted output fails closed.
+campaign ID, source-freeze commit, exact source hashes, and full topology must
+all match, so an older or interrupted output fails closed. The source manifest
+covers the runtime source tree, benchmark/verifier support files, and the root
+and runtime TypeScript, build, task-runner, and formatter configurations.
 
 `scripts/cache-stable-tools-independent-verifier.adversarial.mjs` exercises that
 independent path against a complete synthetic schema-v3 campaign and targeted
@@ -138,9 +198,17 @@ pre-campaign schema-v2 artifact.
 
 ## Reproduce
 
-Use a disposable credential, enter it without shell echo, and keep the runner
-and every manifested implementation/verifier source unchanged until source-hash
-verification completes:
+Use a disposable credential, enter it without shell echo, and first freeze the
+campaign sources in a Git commit. The evidence campaign reads `HEAD` and the
+full porcelain status, refuses a dirty worktree, then byte- and hash-compares
+the current runner and every manifested source with `git show HEAD:<path>`
+before the authenticated `/models` preflight. This catches ignored,
+`assume-unchanged`, and `skip-worktree` drift that porcelain status can omit.
+It records the source-freeze SHA and `sourceWorktreeCleanAtStart: true`, rechecks
+HEAD and cleanliness after the tree binding and before writing, and checks HEAD
+again before atomic rename. `--evidence-campaign` also fixes the output to the
+checked-in default and rejects a custom `--output`. Keep every manifested
+source unchanged until source-hash verification completes:
 
 ```sh
 read -rsp 'API key: ' CACHE_BENCH_API_KEY
@@ -175,6 +243,11 @@ the same bytes for parsing, credential scanning, and SHA-256 reporting. Its CLI
 rejects symlinks, non-regular inputs, evidence over 10 MB, and README input over
 1 MB before reading them.
 
+Live JSON parsing is bounded separately from artifact verification. Chat
+Completions bodies are limited to 1 MB and the `/models` catalog to 5 MB. A
+declared or streamed oversize response is rejected and its body reader is
+cancelled, so an unbounded provider payload is never buffered for parsing.
+
 The default endpoint is
 `https://freerouter.minpeter.workers.dev/v1`. The run performs an authenticated
 `/models` preflight, rejects redirects so the bearer token cannot be forwarded,
@@ -184,12 +257,12 @@ Chat Completions requests, plus one `/models` preflight request: 481 HTTP
 requests total. The runner performs no client-side retries; any router or
 upstream retries remain opaque. The runner checks the 480-request topology and
 requires its on-disk runner/source snapshots after module initialization to
-equal a second snapshot before atomic rename. A mismatch fails, but this is not
-continuous file monitoring or execution-byte attestation: transient
-edit-and-restore and a change between module load and the first snapshot are not
-detectable. Run the campaign from a quiescent worktree. Methodology-changing
-flags cannot be combined with `--evidence-campaign`; `--help` lists the bounded
-exploratory options.
+equal a second snapshot before atomic rename. The independent verifier hashes
+both current files and `git show <sourceFreezeCommitSha>:<path>` for every
+manifest entry. A mismatch fails, but this is not continuous file monitoring:
+transient edit-and-restore between checkpoints is not detectable. Run the
+campaign from a quiescent worktree. Methodology-changing flags cannot be combined with
+`--evidence-campaign`; `--help` lists the bounded exploratory options.
 
 ## Artifacts and interpretation
 
@@ -206,12 +279,15 @@ It motivated the parser regression test but is not used for an effect estimate;
 the final source-manifest-bound campaign is the authoritative parser/effect
 evidence within the snapshot limits above.
 
-The router's upstream provider, retry behavior, backend affinity,
-`system_fingerprint`, cache policy, load, and usage normalization are opaque.
-The endpoint does not expose enough bounded metadata to control those variables
-without retaining raw provider payloads. Results are observational, dated, and
-provider-specific. `not-reported` means no recognized valid field was exposed,
-not that no upstream cache exists. Latency is supporting context only.
+The router's upstream provider, retry behavior, backend affinity, cache policy,
+load, and usage normalization remain opaque. Sanitized
+`system_fingerprint`/`service_tier` statuses and hashes can reveal that more
+than one reported value occurred, but cannot identify or control the backend
+change. Primary paired results therefore require equality across each pair's
+two warmup/measurement chains; the all-sample view remains descriptive.
+Results are observational, dated, and provider-specific.
+`not-reported` means no recognized valid field was exposed, not that no
+upstream cache exists. Latency is supporting context only.
 
 Native capability must be established separately for a precise
 adapter/provider/model/version tuple. The 2026-07-17 dependency audit used

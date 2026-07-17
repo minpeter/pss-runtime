@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import {
   mkdir,
@@ -10,6 +11,7 @@ import {
 import { dirname, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 
 const DEFAULT_BASE_URL = "https://freerouter.minpeter.workers.dev/v1";
 const DEFAULT_MODELS = [
@@ -19,10 +21,18 @@ const DEFAULT_MODELS = [
   "qwen/qwen2.5-7b-instruct",
   "zai-org/glm-4.7",
 ] as const;
-const DEFAULT_OUTPUT = "benchmarks/cache-stable-tools/latest-freerouter.json";
+const DEFAULT_OUTPUT = fileURLToPath(
+  new URL(
+    "../benchmarks/cache-stable-tools/latest-freerouter.json",
+    import.meta.url
+  )
+);
 const IMPLEMENTATION_SUPPORT_PATHS = [
+  "biome.jsonc",
   "package.json",
   "packages/runtime/package.json",
+  "packages/runtime/tsconfig.json",
+  "packages/runtime/tsdown.config.ts",
   "pnpm-lock.yaml",
   "pnpm-workspace.yaml",
   "scripts/benchmark-cache-stable-tools.test.mjs",
@@ -30,6 +40,9 @@ const IMPLEMENTATION_SUPPORT_PATHS = [
   "scripts/cache-stable-tools-independent-verifier.adversarial.mjs",
   "scripts/cache-stable-tools-independent-verifier.mjs",
   "scripts/cache-stable-tools-wire.test.mjs",
+  "tsconfig.base.json",
+  "tsconfig.json",
+  "turbo.json",
 ] as const;
 const IMPLEMENTATION_SOURCE_PATHS = await completeImplementationSourcePaths();
 const FIXED_TOOL_NAMES = [
@@ -46,12 +59,12 @@ const DYNAMIC_TOOL_NAMES = [
 ] as const;
 const MEMBERSHIP_REPLACEMENT_TOOL_NAME = "query_archive_notes";
 const ALL_TOOL_NAMES = [...FIXED_TOOL_NAMES, ...DYNAMIC_TOOL_NAMES];
-const SAFE_ERROR_CODE_PATTERN = /^[\w.-]{1,80}$/u;
 const SAFE_MODEL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,199}$/u;
 const SAFE_SEED_PATTERN = /^[\w.-]{1,80}$/u;
+const GIT_COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
 const TRAILING_SLASH_PATTERN = /\/+$/u;
 const BEARER_PATTERN = /Bearer\s/iu;
-const KEY_LIKE_PATTERN = /\bfr-[\w-]{8,}\b/u;
+const KEY_LIKE_PATTERN = /\b(?:fr|sk)-[\w-]{8,}\b/u;
 const ACCEPTED_ZERO_TOOL_FINISH_REASONS = ["stop"] as const;
 const FINISH_REASON_STATUSES = [
   "accepted-stop",
@@ -62,13 +75,22 @@ const FINISH_REASON_STATUSES = [
   "rejected-length",
   "rejected-tool-calls",
 ] as const;
+const BACKEND_METADATA_STATUSES = [
+  "absent",
+  "hashed",
+  "invalid",
+  "null",
+] as const;
 const MAX_MODELS = 20;
+const MAX_CHAT_RESPONSE_BYTES = 1_000_000;
+const MAX_MODEL_CATALOG_BYTES = 5_000_000;
 const MAX_OUTPUT_TOKENS = 256;
 const MAX_PREFIX_LINES = 5000;
 const MAX_SETTLE_MS = 60_000;
 const MAX_TIMEOUT_MS = 600_000;
 const MAX_TRIALS = 100;
 const MIN_TIMEOUT_MS = 1000;
+const CONTENT_LENGTH_PATTERN = /^\d+$/u;
 
 type CacheReporting =
   | "not-reported"
@@ -77,8 +99,14 @@ type CacheReporting =
   | "unavailable";
 type Phase = "measure" | "warmup";
 type FinishReasonStatus = (typeof FINISH_REASON_STATUSES)[number];
+type BackendMetadataStatus = (typeof BACKEND_METADATA_STATUSES)[number];
 type ArmPosition = "first" | "second";
 type PairOrder = "changed-first" | "control-first";
+type PairMetadataStatus = "matched" | "mismatched" | "unavailable";
+type ResponseIdIntegrityStatus =
+  | "accepted"
+  | "cross-body-duplicate"
+  | "duplicate";
 type Scenario =
   | "active-set-change"
   | "membership-only-change"
@@ -146,9 +174,13 @@ interface RequestResult extends NumericUsage {
   readonly responseModelMatchesRequested: boolean | null;
   readonly responseToolCallCount: number | null;
   readonly scenario: Scenario;
+  readonly serviceTierSha256: string | null;
+  readonly serviceTierStatus: BackendMetadataStatus;
   readonly settleElapsedMs: number | null;
   readonly startedAt: string;
   readonly success: boolean;
+  readonly systemFingerprintSha256: string | null;
+  readonly systemFingerprintStatus: BackendMetadataStatus;
   readonly toolsArrayBytes: number;
   readonly toolsArraySha256: string;
   readonly trial: number;
@@ -224,7 +256,7 @@ const PAIR_ORDERS = ["control-first", "changed-first"] as const;
 const EVIDENCE_CAMPAIGN = Object.freeze({
   baseUrl: DEFAULT_BASE_URL,
   id: "pr208-cache-v3-20260717",
-  minimumStratumCoverage: 0.75,
+  minimumStratumCoverage: 1,
   models: DEFAULT_MODELS,
   prefixLines: 700,
   scenarios: ALL_SCENARIOS,
@@ -236,6 +268,7 @@ const EVIDENCE_CAMPAIGN = Object.freeze({
 const EVIDENCE_CAMPAIGN_CONTROLLED_FLAGS = new Set([
   "--base-url",
   "--models",
+  "--output",
   "--prefix-lines",
   "--scenario-set",
   "--seed",
@@ -298,6 +331,11 @@ const CACHE_WRITE_PATHS = [
 const INPUT_PATHS = ["prompt_tokens", "input_tokens"] as const;
 const OUTPUT_PATHS = ["completion_tokens", "output_tokens"] as const;
 const TOTAL_PATHS = ["total_tokens"] as const;
+const execFileAsync = promisify(execFile);
+
+class ResponsePayloadTooLargeError extends Error {
+  override readonly name = "response-too-large";
+}
 
 function usage(): never {
   process.stdout.write(`Cache-stable tool benchmark
@@ -627,22 +665,21 @@ function sha256(value: string | Uint8Array): string {
 }
 
 function isolationTokenFor({
+  armPosition,
   model,
   runId,
   scenario,
   trial,
-  variant,
 }: {
+  readonly armPosition: ArmPosition;
   readonly model: string;
   readonly runId: string;
   readonly scenario: Scenario;
   readonly trial: number;
-  readonly variant: Variant;
 }): string {
-  return sha256(`${runId}\0${model}\0${scenario}\0${variant}\0${trial}`).slice(
-    0,
-    24
-  );
+  return sha256(
+    `${runId}\0${model}\0${scenario}\0${trial}\0${armPosition}`
+  ).slice(0, 24);
 }
 
 function benchmarkRequestArtifacts({
@@ -742,6 +779,61 @@ interface BenchmarkSourceSnapshot {
   readonly implementationSourcesSha256: Record<string, string>;
 }
 
+interface RepositoryState {
+  readonly commitSha: string;
+  readonly worktreeClean: boolean;
+}
+
+async function repositoryState(): Promise<RepositoryState> {
+  const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
+  const { stdout: commitOutput } = await execFileAsync(
+    "git",
+    ["rev-parse", "--verify", "HEAD"],
+    { cwd: repositoryRoot, encoding: "utf8" }
+  );
+  const { stdout: statusOutput } = await execFileAsync(
+    "git",
+    ["status", "--porcelain=v1", "--untracked-files=all"],
+    { cwd: repositoryRoot, encoding: "utf8" }
+  );
+  const { stdout: confirmedCommitOutput } = await execFileAsync(
+    "git",
+    ["rev-parse", "--verify", "HEAD"],
+    { cwd: repositoryRoot, encoding: "utf8" }
+  );
+  const commitSha = commitOutput.trim();
+  if (
+    !GIT_COMMIT_PATTERN.test(commitSha) ||
+    confirmedCommitOutput.trim() !== commitSha
+  ) {
+    throw new Error(
+      "Unable to resolve one stable lowercase SHA-1 source-freeze commit."
+    );
+  }
+  return {
+    commitSha,
+    worktreeClean: statusOutput.length === 0,
+  };
+}
+
+function assertRepositoryFreeze(
+  initial: RepositoryState,
+  observed: RepositoryState,
+  context: string,
+  requireClean: boolean
+): void {
+  if (observed.commitSha !== initial.commitSha) {
+    throw new Error(
+      `Source-freeze commit changed ${context}; refusing to write evidence.`
+    );
+  }
+  if (requireClean && !observed.worktreeClean) {
+    throw new Error(
+      `Evidence campaign worktree became dirty ${context}; refusing to write evidence.`
+    );
+  }
+}
+
 async function benchmarkSourceSnapshot(): Promise<BenchmarkSourceSnapshot> {
   return {
     benchmarkSourceSha256: sha256(
@@ -749,6 +841,49 @@ async function benchmarkSourceSnapshot(): Promise<BenchmarkSourceSnapshot> {
     ),
     implementationSourcesSha256: await implementationSourceManifest(),
   };
+}
+
+async function assertSourceSnapshotMatchesCommit(
+  snapshot: BenchmarkSourceSnapshot,
+  commitSha: string
+): Promise<void> {
+  const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
+  const expectedHashes = new Map<string, string>([
+    [
+      "scripts/benchmark-cache-stable-tools.mts",
+      snapshot.benchmarkSourceSha256,
+    ],
+    ...Object.entries(snapshot.implementationSourcesSha256),
+  ]);
+  for (const [sourcePath, expectedHash] of expectedHashes) {
+    try {
+      const currentBytes = await readFile(resolve(repositoryRoot, sourcePath));
+      const { stdout } = await execFileAsync(
+        "git",
+        ["show", `${commitSha}:${sourcePath}`],
+        {
+          cwd: repositoryRoot,
+          encoding: null,
+          maxBuffer: 20_000_000,
+        }
+      );
+      const frozenBytes = Buffer.isBuffer(stdout)
+        ? stdout
+        : Buffer.from(stdout);
+      if (
+        sha256(currentBytes) !== expectedHash ||
+        sha256(frozenBytes) !== expectedHash ||
+        !currentBytes.equals(frozenBytes)
+      ) {
+        throw new Error("source bytes differ");
+      }
+    } catch (error) {
+      throw new Error(
+        `Implementation source ${sourcePath} does not match source-freeze commit before provider preflight.`,
+        { cause: error }
+      );
+    }
+  }
 }
 
 function sourceSnapshotsMatch(
@@ -1016,21 +1151,21 @@ function invalidUsage(): NumericUsage {
   };
 }
 
-function errorCode(body: unknown, status: number): string {
-  if (isPlainRecord(body)) {
-    const error = ownDataValue(body, "error");
-    if (isPlainRecord(error)) {
-      const code = ownDataValue(error, "code");
-      if (typeof code === "string" && SAFE_ERROR_CODE_PATTERN.test(code)) {
-        return code;
-      }
-      const type = ownDataValue(error, "type");
-      if (typeof type === "string" && SAFE_ERROR_CODE_PATTERN.test(type)) {
-        return type;
-      }
-    }
-  }
+function httpErrorCode(status: number): string {
   return `http-${status}`;
+}
+
+function localRequestErrorCode(
+  error: unknown,
+  timeoutSignal: AbortSignal
+): string {
+  if (timeoutSignal.aborted) {
+    return "TimeoutError";
+  }
+  if (error instanceof ResponsePayloadTooLargeError) {
+    return "response-too-large";
+  }
+  return "request-error";
 }
 
 function responseToolCallCount(body: unknown): number | null {
@@ -1169,21 +1304,52 @@ function responseIdSha256(body: unknown): string | null {
   return typeof id === "string" && id.length <= 512 ? sha256(id) : null;
 }
 
+function sanitizedBackendMetadata(
+  body: unknown,
+  key: "service_tier" | "system_fingerprint"
+): {
+  readonly sha256: string | null;
+  readonly status: BackendMetadataStatus;
+} {
+  if (!isPlainRecord(body)) {
+    return { sha256: null, status: "absent" };
+  }
+  const property = ownDataProperty(body, key);
+  if (!property.present) {
+    return {
+      sha256: null,
+      status: property.valid ? "absent" : "invalid",
+    };
+  }
+  if (!property.valid) {
+    return { sha256: null, status: "invalid" };
+  }
+  if (property.value === null) {
+    return { sha256: null, status: "null" };
+  }
+  if (
+    typeof property.value !== "string" ||
+    property.value.length === 0 ||
+    property.value.length > 512
+  ) {
+    return { sha256: null, status: "invalid" };
+  }
+  return { sha256: sha256(property.value), status: "hashed" };
+}
+
 function benchmarkResponseErrorCode({
-  body,
   finishReasonStatuses,
   outputWasExactOk: exactOutput,
   response,
   toolCallCount,
 }: {
-  readonly body: unknown;
   readonly finishReasonStatuses: readonly FinishReasonStatus[] | null;
   readonly outputWasExactOk: boolean | null;
   readonly response: Response;
   readonly toolCallCount: number | null;
 }): string | null {
   if (!response.ok) {
-    return errorCode(body, response.status);
+    return httpErrorCode(response.status);
   }
   if (toolCallCount === null || finishReasonStatuses === null) {
     return "invalid-response-shape";
@@ -1230,6 +1396,62 @@ function cacheUsageEnvelopeIsValid(usage: NumericUsage): boolean {
   );
 }
 
+async function readBoundedJsonResponse(
+  response: Response,
+  maximumBytes: number
+): Promise<unknown> {
+  const contentLength = response.headers.get("content-length");
+  if (contentLength !== null && CONTENT_LENGTH_PATTERN.test(contentLength)) {
+    const declaredBytes = Number(contentLength);
+    if (Number.isSafeInteger(declaredBytes) && declaredBytes > maximumBytes) {
+      await response.body?.cancel().catch(() => undefined);
+      throw new ResponsePayloadTooLargeError(
+        `Response Content-Length exceeds ${maximumBytes} bytes.`
+      );
+    }
+  }
+  if (response.body === null) {
+    return;
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const next = await reader.read();
+      if (next.done) {
+        break;
+      }
+      const chunk = next.value;
+      const updatedBytes = totalBytes + chunk.byteLength;
+      if (!Number.isSafeInteger(updatedBytes) || updatedBytes > maximumBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new ResponsePayloadTooLargeError(
+          `Response body exceeds ${maximumBytes} bytes.`
+        );
+      }
+      chunks.push(chunk);
+      totalBytes = updatedBytes;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  try {
+    return JSON.parse(
+      Buffer.concat(
+        chunks.map((chunk) => Buffer.from(chunk)),
+        totalBytes
+      ).toString("utf8")
+    ) as unknown;
+  } catch {
+    return;
+  }
+}
+
+async function cancelResponseBody(response: Response): Promise<void> {
+  await response.body?.cancel().catch(() => undefined);
+}
+
 async function runRequest({
   armPosition,
   apiKey,
@@ -1269,6 +1491,7 @@ async function runRequest({
   const { requestBody } = artifacts;
   const startedAt = new Date().toISOString();
   const started = performance.now();
+  const timeoutSignal = AbortSignal.timeout(options.timeoutMs);
   try {
     const response = await fetch(`${options.baseUrl}/chat/completions`, {
       method: "POST",
@@ -1278,16 +1501,22 @@ async function runRequest({
       },
       body: requestBody,
       redirect: "error",
-      signal: AbortSignal.timeout(options.timeoutMs),
+      signal: timeoutSignal,
     });
-    const body: unknown = await response.json().catch(() => undefined);
+    const body = response.ok
+      ? await readBoundedJsonResponse(response, MAX_CHAT_RESPONSE_BYTES)
+      : await cancelResponseBody(response);
     const extracted = extractUsage(body);
     const toolCallCount = responseToolCallCount(body);
     const finishReasonStatuses = responseFinishReasonStatuses(body);
     const exactOutput = outputWasExactOk(body);
     const observedResponseModel = responseModel(body);
-    const responseErrorCode = benchmarkResponseErrorCode({
+    const serviceTier = sanitizedBackendMetadata(body, "service_tier");
+    const systemFingerprint = sanitizedBackendMetadata(
       body,
+      "system_fingerprint"
+    );
+    const responseErrorCode = benchmarkResponseErrorCode({
       finishReasonStatuses,
       outputWasExactOk: exactOutput,
       response,
@@ -1322,9 +1551,13 @@ async function runRequest({
       responseModelMatchesRequested: modelMatchesRequested,
       responseToolCallCount: toolCallCount,
       scenario,
+      serviceTierSha256: serviceTier.sha256,
+      serviceTierStatus: serviceTier.status,
       settleElapsedMs: null,
       startedAt,
       success,
+      systemFingerprintSha256: systemFingerprint.sha256,
+      systemFingerprintStatus: systemFingerprint.status,
       toolsArrayBytes: artifacts.toolsArrayBytes,
       toolsArraySha256: artifacts.toolsArraySha256,
       trial,
@@ -1332,8 +1565,7 @@ async function runRequest({
       warmupPrerequisitePassed: null,
     };
   } catch (error) {
-    const errorName = ownDataValue(error, "name");
-    const code = typeof errorName === "string" ? errorName : "request-error";
+    const code = localRequestErrorCode(error, timeoutSignal);
     return {
       armPosition,
       cacheTelemetryEligible: false,
@@ -1342,7 +1574,7 @@ async function runRequest({
       cacheWriteSource: null,
       cacheWriteTokens: null,
       completedAt: new Date().toISOString(),
-      errorCode: SAFE_ERROR_CODE_PATTERN.test(code) ? code : "request-error",
+      errorCode: code,
       httpStatus: null,
       httpSuccess: false,
       inputSource: null,
@@ -1362,9 +1594,13 @@ async function runRequest({
       responseModelMatchesRequested: null,
       responseToolCallCount: null,
       scenario,
+      serviceTierSha256: null,
+      serviceTierStatus: "absent",
       settleElapsedMs: null,
       startedAt,
       success: false,
+      systemFingerprintSha256: null,
+      systemFingerprintStatus: "absent",
       toolsArrayBytes: artifacts.toolsArrayBytes,
       totalTokens: null,
       toolsArraySha256: artifacts.toolsArraySha256,
@@ -1564,12 +1800,22 @@ function variantSummary(requests: readonly RequestResult[]) {
       eligibleRequests.length === 0
         ? null
         : cacheWriteReported.length / eligibleRequests.length,
+    cacheWriteRatioEligible: cacheWriteRatioEligible.length,
+    cacheWriteRatioCoverage:
+      eligibleRequests.length === 0
+        ? null
+        : cacheWriteRatioEligible.length / eligibleRequests.length,
     captureSuccesses: measured.filter((request) => request.success).length,
     cacheReadReported: cacheReported.length,
     cacheReportCoverage:
       eligibleRequests.length === 0
         ? null
         : cacheReported.length / eligibleRequests.length,
+    cacheReadRatioEligible: ratioEligible.length,
+    cacheReadRatioCoverage:
+      eligibleRequests.length === 0
+        ? null
+        : ratioEligible.length / eligibleRequests.length,
     cacheReadNonzero,
     cacheReadNonzeroCoverage:
       eligibleRequests.length === 0
@@ -1678,11 +1924,39 @@ function isolationAudit(requests: readonly RequestResult[]) {
       requests,
       "same-set-order"
     ),
+    slotsCounterbalancedAcrossVariants:
+      slotAssignmentsAreCounterbalanced(requests),
     warmupCount: warmups.length,
     unexpectedToolCallResponseCount: requests.filter(
       (request) => (request.responseToolCallCount ?? 0) > 0
     ).length,
   };
+}
+
+function slotAssignmentsAreCounterbalanced(
+  requests: readonly RequestResult[]
+): boolean {
+  const measured = requests.filter((request) => request.phase === "measure");
+  const scenarioVariants = new Map<Scenario, Set<Variant>>();
+  for (const request of measured) {
+    const variants = scenarioVariants.get(request.scenario) ?? new Set();
+    variants.add(request.variant);
+    scenarioVariants.set(request.scenario, variants);
+  }
+  return [...scenarioVariants.entries()].every(([scenario, variants]) =>
+    [...variants].every((variant) => {
+      const positions = measured
+        .filter(
+          (request) =>
+            request.scenario === scenario && request.variant === variant
+        )
+        .map((request) => request.armPosition);
+      return (
+        positions.filter((position) => position === "first").length ===
+        positions.filter((position) => position === "second").length
+      );
+    })
+  );
 }
 
 function equalByteMeasurementSwap(
@@ -1743,6 +2017,44 @@ function responseModelAudit(requests: readonly RequestResult[]) {
     ),
     warmup: responseModelSummary(
       requests.filter((request) => request.phase === "warmup")
+    ),
+  };
+}
+
+function backendMetadataFieldSummary(
+  requests: readonly RequestResult[],
+  hashField: "serviceTierSha256" | "systemFingerprintSha256",
+  statusField: "serviceTierStatus" | "systemFingerprintStatus"
+) {
+  const hashes = requests.flatMap((request) =>
+    request[statusField] === "hashed" && request[hashField] !== null
+      ? [request[hashField]]
+      : []
+  );
+  const uniqueHashCount = new Set(hashes).size;
+  return {
+    statusCounts: Object.fromEntries(
+      BACKEND_METADATA_STATUSES.map((status) => [
+        status,
+        requests.filter((request) => request[statusField] === status).length,
+      ])
+    ),
+    uniqueHashCount,
+    driftObserved: uniqueHashCount > 1,
+  };
+}
+
+function backendMetadataAudit(requests: readonly RequestResult[]) {
+  return {
+    serviceTier: backendMetadataFieldSummary(
+      requests,
+      "serviceTierSha256",
+      "serviceTierStatus"
+    ),
+    systemFingerprint: backendMetadataFieldSummary(
+      requests,
+      "systemFingerprintSha256",
+      "systemFingerprintStatus"
     ),
   };
 }
@@ -1861,8 +2173,12 @@ function usageFieldStatusAudit(requests: readonly RequestResult[]) {
 
 function membershipInputTokenParityAudit(
   requests: readonly RequestResult[],
-  scenario: ScenarioDefinition
+  scenario: ScenarioDefinition,
+  view: "all-sample" | "primary" = "all-sample",
+  providedDuplicateSets?: ReturnType<typeof responseIdDuplicateSets>
 ) {
+  const duplicateSets =
+    providedDuplicateSets ?? responseIdDuplicateSets(requests);
   const measured = requests.filter(
     (request) =>
       request.phase === "measure" && request.scenario === scenario.name
@@ -1883,6 +2199,33 @@ function membershipInputTokenParityAudit(
       return [];
     }
     if (!pairedCoordinatesMatch(control, changed)) {
+      return [];
+    }
+    const fourRequestPair = [
+      warmupForMeasurement(requests, control),
+      control,
+      warmupForMeasurement(requests, changed),
+      changed,
+    ] as const;
+    if (
+      view === "primary" &&
+      !pairIsPrimaryEligible({
+        responseIdStatus: responseIdIntegrityStatus(
+          fourRequestPair,
+          duplicateSets
+        ),
+        serviceTierStatus: metadataPairStatus(
+          fourRequestPair,
+          "serviceTierStatus",
+          "serviceTierSha256"
+        ),
+        systemFingerprintStatus: metadataPairStatus(
+          fourRequestPair,
+          "systemFingerprintStatus",
+          "systemFingerprintSha256"
+        ),
+      })
+    ) {
       return [];
     }
     return [
@@ -2002,10 +2345,150 @@ function inputParityEligible(
   );
 }
 
+function metadataPairStatus(
+  requests: readonly (RequestResult | undefined)[],
+  statusField: "serviceTierStatus" | "systemFingerprintStatus",
+  hashField: "serviceTierSha256" | "systemFingerprintSha256"
+): PairMetadataStatus {
+  if (
+    requests.some(
+      (request) =>
+        request?.[statusField] !== "hashed" || request[hashField] === null
+    )
+  ) {
+    return "unavailable";
+  }
+  return new Set(requests.map((request) => request?.[hashField])).size === 1
+    ? "matched"
+    : "mismatched";
+}
+
+function crossBodyDuplicateResponseIds(
+  requests: readonly RequestResult[]
+): ReadonlySet<string> {
+  const bodiesByResponseId = new Map<string, Set<string>>();
+  for (const request of requests) {
+    if (request.responseIdSha256 === null) {
+      continue;
+    }
+    const bodies =
+      bodiesByResponseId.get(request.responseIdSha256) ?? new Set();
+    bodies.add(request.requestBodySha256);
+    bodiesByResponseId.set(request.responseIdSha256, bodies);
+  }
+  return new Set(
+    [...bodiesByResponseId.entries()]
+      .filter(([, bodies]) => bodies.size > 1)
+      .map(([responseId]) => responseId)
+  );
+}
+
+function duplicateResponseIds(
+  requests: readonly RequestResult[]
+): ReadonlySet<string> {
+  const counts = new Map<string, number>();
+  for (const request of requests) {
+    if (request.responseIdSha256 !== null) {
+      counts.set(
+        request.responseIdSha256,
+        (counts.get(request.responseIdSha256) ?? 0) + 1
+      );
+    }
+  }
+  return new Set(
+    [...counts.entries()]
+      .filter(([, count]) => count > 1)
+      .map(([responseId]) => responseId)
+  );
+}
+
+function responseIdDuplicateSets(requests: readonly RequestResult[]) {
+  return {
+    crossBody: crossBodyDuplicateResponseIds(requests),
+    duplicate: duplicateResponseIds(requests),
+  };
+}
+
+function responseIdAudit(requests: readonly RequestResult[]) {
+  const reported = requests.flatMap((request) =>
+    request.responseIdSha256 === null ? [] : [request.responseIdSha256]
+  );
+  const counts = new Map<string, number>();
+  for (const responseId of reported) {
+    counts.set(responseId, (counts.get(responseId) ?? 0) + 1);
+  }
+  const crossBodyDuplicates = crossBodyDuplicateResponseIds(requests);
+  return {
+    reported: reported.length,
+    distinct: counts.size,
+    duplicateHashes: [...counts.values()].filter((count) => count > 1).length,
+    duplicateObservations: [...counts.values()].reduce(
+      (sum, count) => sum + Math.max(0, count - 1),
+      0
+    ),
+    crossRequestBodyDuplicateHashes: crossBodyDuplicates.size,
+    crossRequestBodyDuplicateObservations: reported.filter((responseId) =>
+      crossBodyDuplicates.has(responseId)
+    ).length,
+  };
+}
+
+function responseIdIntegrityStatus(
+  requests: readonly (RequestResult | undefined)[],
+  duplicateSets: ReturnType<typeof responseIdDuplicateSets>
+): ResponseIdIntegrityStatus {
+  const responseIds = requests
+    .map((request) => request?.responseIdSha256 ?? null)
+    .filter((responseId): responseId is string => responseId !== null);
+  if (
+    responseIds.some((responseId) => duplicateSets.crossBody.has(responseId))
+  ) {
+    return "cross-body-duplicate";
+  }
+  return responseIds.some((responseId) =>
+    duplicateSets.duplicate.has(responseId)
+  )
+    ? "duplicate"
+    : "accepted";
+}
+
+function pairIsPrimaryEligible({
+  responseIdStatus,
+  serviceTierStatus,
+  systemFingerprintStatus,
+}: {
+  readonly responseIdStatus: ResponseIdIntegrityStatus;
+  readonly serviceTierStatus: PairMetadataStatus;
+  readonly systemFingerprintStatus: PairMetadataStatus;
+}): boolean {
+  return (
+    systemFingerprintStatus === "matched" &&
+    serviceTierStatus === "matched" &&
+    responseIdStatus === "accepted"
+  );
+}
+
+function warmupForMeasurement(
+  requests: readonly RequestResult[],
+  measurement: RequestResult
+): RequestResult | undefined {
+  return requests.find(
+    (request) =>
+      request.phase === "warmup" &&
+      request.scenario === measurement.scenario &&
+      request.trial === measurement.trial &&
+      request.variant === measurement.variant
+  );
+}
+
 function comparisons(
   requests: readonly RequestResult[],
-  scenarios: readonly ScenarioDefinition[]
+  scenarios: readonly ScenarioDefinition[],
+  view: "all-sample" | "primary" = "all-sample",
+  providedDuplicateSets?: ReturnType<typeof responseIdDuplicateSets>
 ) {
+  const duplicateSets =
+    providedDuplicateSets ?? responseIdDuplicateSets(requests);
   return scenarios.map(({ changedVariant, controlVariant, name }) => {
     const control = requests.filter(
       (request) =>
@@ -2029,48 +2512,83 @@ function comparisons(
           changedRequest?.cacheTelemetryEligible &&
           cacheMeasurementIsValid(controlRequest) &&
           cacheMeasurementIsValid(changedRequest) &&
+          controlRequest.inputTokens > 0 &&
+          changedRequest.inputTokens > 0 &&
           pairedCoordinatesMatch(controlRequest, changedRequest)
         )
       ) {
         return [];
       }
-      return [
-        {
-          pairOrder: controlRequest.pairOrder,
-          trial: controlRequest.trial,
-          controlCacheReadTokens: controlRequest.cacheReadTokens,
-          changedCacheReadTokens: changedRequest.cacheReadTokens,
-          controlInputTokens: controlRequest.inputTokens,
-          changedInputTokens: changedRequest.inputTokens,
-          controlMinusChangedCacheReadTokens: safeIntegerDifference(
-            controlRequest.cacheReadTokens,
-            changedRequest.cacheReadTokens,
-            "paired cache-read-token difference"
-          ),
-          controlMinusChangedInputTokens: safeIntegerDifference(
-            controlRequest.inputTokens,
-            changedRequest.inputTokens,
-            "paired input-token difference"
-          ),
-          controlLatencyMs: controlRequest.latencyMs,
-          changedLatencyMs: changedRequest.latencyMs,
-          controlMinusChangedLatencyMs: safeIntegerDifference(
-            controlRequest.latencyMs,
-            changedRequest.latencyMs,
-            "paired latency difference"
-          ),
-          controlCacheReadRatio:
-            controlRequest.inputTokens &&
-            controlRequest.cacheReadTokens !== null
-              ? controlRequest.cacheReadTokens / controlRequest.inputTokens
-              : null,
-          changedCacheReadRatio:
-            changedRequest.inputTokens &&
-            changedRequest.cacheReadTokens !== null
-              ? changedRequest.cacheReadTokens / changedRequest.inputTokens
-              : null,
-        },
-      ];
+      const fourRequestPair = [
+        warmupForMeasurement(requests, controlRequest),
+        controlRequest,
+        warmupForMeasurement(requests, changedRequest),
+        changedRequest,
+      ] as const;
+      const systemFingerprintPairStatus = metadataPairStatus(
+        fourRequestPair,
+        "systemFingerprintStatus",
+        "systemFingerprintSha256"
+      );
+      const serviceTierPairStatus = metadataPairStatus(
+        fourRequestPair,
+        "serviceTierStatus",
+        "serviceTierSha256"
+      );
+      const observedResponseIdIntegrityStatus = responseIdIntegrityStatus(
+        fourRequestPair,
+        duplicateSets
+      );
+      const pair = {
+        pairOrder: controlRequest.pairOrder,
+        trial: controlRequest.trial,
+        controlCacheReadTokens: controlRequest.cacheReadTokens,
+        changedCacheReadTokens: changedRequest.cacheReadTokens,
+        controlInputTokens: controlRequest.inputTokens,
+        changedInputTokens: changedRequest.inputTokens,
+        controlMinusChangedCacheReadTokens: safeIntegerDifference(
+          controlRequest.cacheReadTokens,
+          changedRequest.cacheReadTokens,
+          "paired cache-read-token difference"
+        ),
+        controlMinusChangedInputTokens: safeIntegerDifference(
+          controlRequest.inputTokens,
+          changedRequest.inputTokens,
+          "paired input-token difference"
+        ),
+        controlLatencyMs: controlRequest.latencyMs,
+        changedLatencyMs: changedRequest.latencyMs,
+        controlMinusChangedLatencyMs: safeIntegerDifference(
+          controlRequest.latencyMs,
+          changedRequest.latencyMs,
+          "paired latency difference"
+        ),
+        controlCacheReadRatio:
+          controlRequest.inputTokens && controlRequest.cacheReadTokens !== null
+            ? controlRequest.cacheReadTokens / controlRequest.inputTokens
+            : null,
+        changedCacheReadRatio:
+          changedRequest.inputTokens && changedRequest.cacheReadTokens !== null
+            ? changedRequest.cacheReadTokens / changedRequest.inputTokens
+            : null,
+        controlMinusChangedCacheReadRatio:
+          controlRequest.cacheReadTokens / controlRequest.inputTokens -
+          changedRequest.cacheReadTokens / changedRequest.inputTokens,
+        responseIdIntegrityStatus: observedResponseIdIntegrityStatus,
+        serviceTierPairStatus,
+        systemFingerprintPairStatus,
+      };
+      if (
+        view === "primary" &&
+        !pairIsPrimaryEligible({
+          responseIdStatus: observedResponseIdIntegrityStatus,
+          serviceTierStatus: serviceTierPairStatus,
+          systemFingerprintStatus: systemFingerprintPairStatus,
+        })
+      ) {
+        return [];
+      }
+      return [pair];
     });
     const orderStrata = PAIR_ORDERS.map((pairOrder) => ({
       pairOrder,
@@ -2082,23 +2600,60 @@ function comparisons(
         control.filter((request) => request.pairOrder === pairOrder).length,
       ])
     ) as Record<PairOrder, number>;
+    const cacheReadRatioConclusion = directionalEffectConclusion({
+      expectedPairsByOrder,
+      orderStrata: orderStrata.map((stratum) => ({
+        eligiblePairs: stratum.eligiblePairs,
+        medianDifference: stratum.medianControlMinusChangedCacheReadRatioSign,
+        pairOrder: stratum.pairOrder,
+      })),
+    });
+    const cacheReadTokenConclusion = directionalEffectConclusion({
+      expectedPairsByOrder,
+      orderStrata: orderStrata.map((stratum) => ({
+        eligiblePairs: stratum.eligiblePairs,
+        medianDifference: stratum.medianControlMinusChangedCacheReadTokens,
+        pairOrder: stratum.pairOrder,
+      })),
+    });
     return {
       scenario: name,
       controlVariant,
       changedVariant,
-      effectConclusion: directionalEffectConclusion({
-        expectedPairsByOrder,
-        orderStrata: orderStrata.map((stratum) => ({
-          eligiblePairs: stratum.eligiblePairs,
-          medianDifference: stratum.medianControlMinusChangedCacheReadTokens,
-          pairOrder: stratum.pairOrder,
-        })),
-      }),
+      cacheReadRatioConclusion,
+      cacheReadTokenConclusion,
+      effectConclusion: endpointCombinedConclusion(
+        cacheReadTokenConclusion,
+        cacheReadRatioConclusion
+      ),
       ...pairedSummary(paired),
       orderStrata,
       pairs: paired,
     };
   });
+}
+
+function endpointCombinedConclusion(
+  tokenConclusion: ReturnType<typeof directionalEffectConclusion>,
+  ratioConclusion: ReturnType<typeof directionalEffectConclusion>
+):
+  | ReturnType<typeof directionalEffectConclusion>
+  | "denominator-sensitive/indeterminate"
+  | "endpoint-disagreement/indeterminate" {
+  if (tokenConclusion === ratioConclusion) {
+    return ratioConclusion;
+  }
+  if (
+    tokenConclusion === "indeterminate-insufficient-order-stratum-coverage" ||
+    ratioConclusion === "indeterminate-insufficient-order-stratum-coverage"
+  ) {
+    return "indeterminate-insufficient-order-stratum-coverage";
+  }
+  const directional = new Set(["changed-higher", "control-higher"]);
+  if (directional.has(tokenConclusion) && directional.has(ratioConclusion)) {
+    return "denominator-sensitive/indeterminate";
+  }
+  return "endpoint-disagreement/indeterminate";
 }
 
 function pairedCoordinatesMatch(
@@ -2120,10 +2675,18 @@ function pairedCoordinatesMatch(
 function pairedSummary<
   Pair extends {
     readonly changedCacheReadRatio: number | null;
+    readonly changedCacheReadTokens: number;
+    readonly changedInputTokens: number;
     readonly controlCacheReadRatio: number | null;
+    readonly controlCacheReadTokens: number;
+    readonly controlInputTokens: number;
+    readonly controlMinusChangedCacheReadRatio: number;
     readonly controlMinusChangedCacheReadTokens: number;
     readonly controlMinusChangedInputTokens: number;
     readonly controlMinusChangedLatencyMs: number;
+    readonly responseIdIntegrityStatus: ResponseIdIntegrityStatus;
+    readonly serviceTierPairStatus: PairMetadataStatus;
+    readonly systemFingerprintPairStatus: PairMetadataStatus;
   },
 >(pairs: readonly Pair[]) {
   const tokenDifferences = pairs.map(
@@ -2132,7 +2695,7 @@ function pairedSummary<
   const ratioDifferences = pairs.flatMap((pair) =>
     pair.controlCacheReadRatio === null || pair.changedCacheReadRatio === null
       ? []
-      : [pair.controlCacheReadRatio - pair.changedCacheReadRatio]
+      : [pair.controlMinusChangedCacheReadRatio]
   );
   const inputTokenDifferences = pairs.map(
     (pair) => pair.controlMinusChangedInputTokens
@@ -2149,6 +2712,24 @@ function pairedSummary<
       changedHigher: tokenDifferences.filter((difference) => difference < 0)
         .length,
     },
+    cacheReadRatioDifferenceSigns: ratioDifferenceSigns(pairs),
+    responseIdIntegrityStatuses: {
+      accepted: pairs.filter(
+        (pair) => pair.responseIdIntegrityStatus === "accepted"
+      ).length,
+      crossBodyDuplicate: pairs.filter(
+        (pair) => pair.responseIdIntegrityStatus === "cross-body-duplicate"
+      ).length,
+      duplicate: pairs.filter(
+        (pair) => pair.responseIdIntegrityStatus === "duplicate"
+      ).length,
+    },
+    serviceTierPairStatuses: metadataPairStatusCounts(
+      pairs.map((pair) => pair.serviceTierPairStatus)
+    ),
+    systemFingerprintPairStatuses: metadataPairStatusCounts(
+      pairs.map((pair) => pair.systemFingerprintPairStatus)
+    ),
     inputTokenDifferenceSigns: {
       controlHigher: inputTokenDifferences.filter(
         (difference) => difference > 0
@@ -2166,9 +2747,104 @@ function pairedSummary<
       pairs.map((pair) => pair.controlMinusChangedLatencyMs)
     ),
     medianControlMinusChangedCacheReadRatio: median(ratioDifferences),
+    medianControlMinusChangedCacheReadRatioSign: exactRatioMedianSign(pairs),
     p25ControlMinusChangedCacheReadRatio: quantile(ratioDifferences, 0.25),
     p75ControlMinusChangedCacheReadRatio: quantile(ratioDifferences, 0.75),
   };
+}
+
+function metadataPairStatusCounts(statuses: readonly PairMetadataStatus[]) {
+  return {
+    matched: statuses.filter((status) => status === "matched").length,
+    mismatched: statuses.filter((status) => status === "mismatched").length,
+    unavailable: statuses.filter((status) => status === "unavailable").length,
+  };
+}
+
+function ratioDifferenceSigns<
+  Pair extends {
+    readonly changedCacheReadTokens: number;
+    readonly changedInputTokens: number;
+    readonly controlCacheReadTokens: number;
+    readonly controlInputTokens: number;
+  },
+>(pairs: readonly Pair[]) {
+  const signs = pairs.map((pair) =>
+    exactRatioDifferenceSign(
+      pair.controlCacheReadTokens,
+      pair.controlInputTokens,
+      pair.changedCacheReadTokens,
+      pair.changedInputTokens
+    )
+  );
+  return {
+    controlHigher: signs.filter((sign) => sign > 0).length,
+    equal: signs.filter((sign) => sign === 0).length,
+    changedHigher: signs.filter((sign) => sign < 0).length,
+  };
+}
+
+function exactRatioMedianSign<
+  Pair extends {
+    readonly changedCacheReadTokens: number;
+    readonly changedInputTokens: number;
+    readonly controlCacheReadTokens: number;
+    readonly controlInputTokens: number;
+  },
+>(pairs: readonly Pair[]): -1 | 0 | 1 | null {
+  if (pairs.length === 0) {
+    return null;
+  }
+  const fractions = pairs
+    .map((pair) => ({
+      denominator:
+        BigInt(pair.controlInputTokens) * BigInt(pair.changedInputTokens),
+      numerator:
+        BigInt(pair.controlCacheReadTokens) * BigInt(pair.changedInputTokens) -
+        BigInt(pair.changedCacheReadTokens) * BigInt(pair.controlInputTokens),
+    }))
+    .sort((left, right) => {
+      const difference =
+        left.numerator * right.denominator - right.numerator * left.denominator;
+      return bigIntSign(difference);
+    });
+  const upperIndex = Math.floor(fractions.length / 2);
+  const upper = fractions[upperIndex];
+  if (!upper) {
+    return null;
+  }
+  let medianNumerator = upper.numerator;
+  if (fractions.length % 2 === 0) {
+    const lower = fractions[upperIndex - 1];
+    if (!lower) {
+      return null;
+    }
+    medianNumerator =
+      lower.numerator * upper.denominator + upper.numerator * lower.denominator;
+  }
+  return bigIntSign(medianNumerator);
+}
+
+function bigIntSign(value: bigint): -1 | 0 | 1 {
+  if (value > 0n) {
+    return 1;
+  }
+  if (value < 0n) {
+    return -1;
+  }
+  return 0;
+}
+
+function exactRatioDifferenceSign(
+  controlRead: number,
+  controlInput: number,
+  changedRead: number,
+  changedInput: number
+): -1 | 0 | 1 {
+  const crossDifference =
+    BigInt(controlRead) * BigInt(changedInput) -
+    BigInt(changedRead) * BigInt(controlInput);
+  return bigIntSign(crossDifference);
 }
 
 function sleep(milliseconds: number): Promise<void> {
@@ -2253,9 +2929,10 @@ async function modelPreflight({
     signal: AbortSignal.timeout(options.timeoutMs),
   });
   if (!response.ok) {
+    await cancelResponseBody(response);
     throw new Error(`Model preflight failed with HTTP ${response.status}.`);
   }
-  const body: unknown = await response.json().catch(() => undefined);
+  const body = await readBoundedJsonResponse(response, MAX_MODEL_CATALOG_BYTES);
   const dataProperty = isPlainRecord(body)
     ? ownDataProperty(body, "data")
     : { present: false, valid: true, value: undefined };
@@ -2406,18 +3083,19 @@ async function benchmarkModel({
         variants: arms.map((arm) => arm.variant),
       });
       for (const [armIndex, arm] of arms.entries()) {
+        const armPosition = armIndex === 0 ? "first" : "second";
         const isolationToken = isolationTokenFor({
+          armPosition,
           model,
           runId,
           scenario: scenario.name,
           trial,
-          variant: arm.variant,
         });
         requests.push(
           ...(await benchmarkArm({
             apiKey,
             arm,
-            armPosition: armIndex === 0 ? "first" : "second",
+            armPosition,
             isolationToken,
             model,
             options,
@@ -2431,6 +3109,7 @@ async function benchmarkModel({
     }
   }
   return {
+    backendMetadataAudit: backendMetadataAudit(requests),
     cacheReporting: reportingStatus(requests),
     cacheWriteReporting: cacheWriteReportingStatus(requests),
     comparisons: comparisons(requests, options.scenarios),
@@ -2442,9 +3121,16 @@ async function benchmarkModel({
     ),
     model,
     outputComplianceAudit: outputComplianceAudit(requests),
+    primaryComparisons: comparisons(requests, options.scenarios, "primary"),
+    primaryMembershipInputTokenParityAudit: membershipInputTokenParityAudit(
+      requests,
+      MEMBERSHIP_SCENARIO,
+      "primary"
+    ),
     requests,
     requestOutcomeAudit: requestOutcomeAudit(requests),
     responseModelAudit: responseModelAudit(requests),
+    responseIdAudit: responseIdAudit(requests),
     summaries: options.scenarios.flatMap(({ arms, name }) =>
       arms.map(({ variant }) => ({
         scenario: name,
@@ -2465,7 +3151,12 @@ async function runBenchmark(
   options: CliOptions,
   providedApiKey: string,
   dependencies: {
+    readonly repositoryState?: () => Promise<RepositoryState>;
     readonly sourceSnapshot?: () => Promise<BenchmarkSourceSnapshot>;
+    readonly sourceFreezeTreeVerifier?: (
+      snapshot: BenchmarkSourceSnapshot,
+      commitSha: string
+    ) => Promise<void>;
   } = {}
 ): Promise<Record<string, unknown>> {
   const apiKey = providedApiKey.trim();
@@ -2474,7 +3165,36 @@ async function runBenchmark(
   }
   const readSourceSnapshot =
     dependencies.sourceSnapshot ?? benchmarkSourceSnapshot;
+  const readRepositoryState = dependencies.repositoryState ?? repositoryState;
+  const verifySourceFreezeTree =
+    dependencies.sourceFreezeTreeVerifier ?? assertSourceSnapshotMatchesCommit;
+  const initialRepositoryState = await readRepositoryState();
+  if (options.campaignId !== null && !initialRepositoryState.worktreeClean) {
+    throw new Error(
+      "Evidence campaigns require a clean worktree at start; refusing to spend the live credential."
+    );
+  }
   const initialSourceSnapshot = await readSourceSnapshot();
+  const postSnapshotRepositoryState = await readRepositoryState();
+  assertRepositoryFreeze(
+    initialRepositoryState,
+    postSnapshotRepositoryState,
+    "during the initial source snapshot",
+    options.campaignId !== null
+  );
+  if (options.campaignId !== null) {
+    await verifySourceFreezeTree(
+      initialSourceSnapshot,
+      initialRepositoryState.commitSha
+    );
+    const postTreeBindingRepositoryState = await readRepositoryState();
+    assertRepositoryFreeze(
+      initialRepositoryState,
+      postTreeBindingRepositoryState,
+      "during the source-freeze tree binding",
+      true
+    );
+  }
   const preflight = await modelPreflight({ apiKey, options });
   const runId = randomUUID();
   const requestTopology = benchmarkRequestTopology(options);
@@ -2493,6 +3213,32 @@ async function runBenchmark(
         runId,
       })
     );
+  }
+  const allRequests = models.flatMap(
+    (model) => model.requests as readonly RequestResult[]
+  );
+  const campaignResponseIdDuplicateSets = responseIdDuplicateSets(allRequests);
+  for (const model of models) {
+    const modelRequests = model.requests as readonly RequestResult[];
+    model.comparisons = comparisons(
+      modelRequests,
+      options.scenarios,
+      "all-sample",
+      campaignResponseIdDuplicateSets
+    );
+    model.primaryComparisons = comparisons(
+      modelRequests,
+      options.scenarios,
+      "primary",
+      campaignResponseIdDuplicateSets
+    );
+    model.primaryMembershipInputTokenParityAudit =
+      membershipInputTokenParityAudit(
+        modelRequests,
+        MEMBERSHIP_SCENARIO,
+        "primary",
+        campaignResponseIdDuplicateSets
+      );
   }
   if (requestSequence.value !== requestTopology.totalRequests) {
     throw new Error(
@@ -2515,11 +3261,17 @@ async function runBenchmark(
       nodeVersion: process.version,
       runId,
       seed: options.seed,
+      sourceFreezeCommitSha: initialRepositoryState.commitSha,
+      sourceWorktreeCleanAtStart: initialRepositoryState.worktreeClean,
       trials: options.trials,
       prefixLines: options.prefixLines,
       settleMs: options.settleMs,
       timeoutMs: options.timeoutMs,
       modelPreflight: preflight,
+      responseBodyLimits: {
+        chatCompletionsBytes: MAX_CHAT_RESPONSE_BYTES,
+        modelCatalogBytes: MAX_MODEL_CATALOG_BYTES,
+      },
       requestTopology,
       fixedToolNames: FIXED_TOOL_NAMES,
       dynamicToolNames: DYNAMIC_TOOL_NAMES,
@@ -2537,21 +3289,23 @@ async function runBenchmark(
         cacheTelemetryEligible:
           "A capture-success request is locally eligible for requested-model cache aggregation only when the sanitized response model exactly matches the requested model and input/cache-read/cache-write usage aliases form a valid envelope. A measured request additionally requires its own arm's warmup to be a capture success from that exact requested model.",
         captureSuccess:
-          "HTTP success plus exactly one recognized choice/message, zero modern or legacy tool calls, finish_reason=stop, and exact trimmed text OK. Response-model attribution and usage validity are audited separately.",
+          "HTTP success plus exactly one recognized choice/message, zero modern or legacy tool calls, finish_reason=stop, and exact trimmed text OK. Response-model attribution and usage validity are audited separately. HTTP failures retain only status-derived codes and local failures use a fixed allowlist; provider error strings are never retained or logged.",
       },
       outputValidation:
         "The result stores only whether the sole choice returned exact trimmed text OK; response text and tool arguments are never stored. Missing, malformed, multi-choice, and mismatched output fails capture and therefore cache-telemetry eligibility.",
       usageValidation:
         "Cache aggregates accept only nonnegative safe-integer input/read/write token observations. Read and write must each be no greater than input, their sum must be a safe integer no greater than input, and every cross-request sum must remain a safe integer or the campaign fails closed without evidence. Conflicting or malformed aliases retain only an audit status; their source and value are nulled instead of guessed or clamped. Output and total-token audit conflicts do not affect cache-read eligibility.",
       pairedUncertainty:
-        "Paired summaries include descriptive p25/p75 intervals and effect signs overall and by AB/BA order. These are not confidence intervals.",
+        "Paired summaries include descriptive p25/p75 intervals and exact raw-token, input-token, and cache-read/input-ratio signs overall and by AB/BA order. Ratio pair signs, ordering, and even-sample median signs use BigInt rational arithmetic rather than floating-point subtraction; float medians remain display-only. These are not confidence intervals.",
       sourceSnapshotSemantics:
-        "The runner records on-disk source snapshots after module initialization and again before atomic rename. A start/end mismatch fails. Transient edit-and-restore and changes between module load and the initial snapshot are not detected, so the campaign requires a quiescent worktree.",
+        "Before an evidence campaign spends the credential, the runner records the current Git commit and requires a clean worktree, then compares every manifested current source byte and hash, including the benchmark runner, with its git show commit blob before provider preflight. It rechecks the same commit and cleanliness after that binding and before writing, then rechecks the commit again immediately before atomic rename after the temporary evidence file exists. Start/end source bytes must match. The freeze commit, clean-at-start result, and hashes are retained; transient edit-and-restore between checkpoints is not detected.",
+      backendMetadataSemantics:
+        "Nullable system_fingerprint and service_tier response fields are retained only as absent/null/invalid/hashed statuses plus SHA-256 digests. Multiple digests are reported as possible backend drift. These fields do not change per-request cache-telemetry eligibility, but matched non-null values gate primary paired sensitivity eligibility; raw values and raw provider payloads are never stored.",
       armIsolation: {
         canary:
-          "Each arm has a unique, fixed-length token in an equal-shape inert canary placed before every benchmark tool. Warmup and measure reuse the same canary; no other arm does.",
+          "Each model/scenario/trial execution slot (first or second) has a unique, fixed-length token in an equal-shape inert canary placed before every benchmark tool. Warmup and measure reuse the slot canary; alternating AB/BA order counterbalances each variant across slots.",
         promptNamespace:
-          "Each arm has a unique, fixed-length system-message namespace shared only by its warmup and measurement.",
+          "Each model/scenario/trial execution slot has a unique, fixed-length system-message namespace shared only by its warmup and measurement; it is not derived from control/changed identity.",
       },
       armExecutionOrder: {
         mode: "seeded-alternating-ab-ba",
@@ -2577,7 +3331,7 @@ async function runBenchmark(
           "The measured request either preserves the warmup set or replaces one tool at the same position with an equal-byte definition, keeping tool count and serialized request length equal.",
       },
       effectConclusionPolicy:
-        "A model-level directional cache or input-token conclusion is reported only when each AB/BA order stratum retains at least 75% eligible pairs and both stratum medians have the same nonzero sign. A pooled conclusion additionally requires at least three complete pairs in every model-by-order stratum. Two zero medians report no observed median difference; mixed signs or a zero/nonzero mix report order-sensitive; missing coverage is indeterminate.",
+        "Provider-reported raw cache-read-token differences and cache-read/input coverage-ratio differences are parallel descriptive endpoints. The all-sample view remains descriptive; the primary sensitivity view additionally requires one matched non-null system_fingerprint hash and one matched non-null service_tier hash across all four responses in a pair (each arm's warmup and measurement), and excludes any non-null response ID repeated anywhere in the campaign; reuse across distinct request-body hashes is separately audited. Missing backend metadata is unavailable for the primary view, not treated as a match. A model-level directional conclusion requires all four planned pairs in each AB/BA order stratum, matching nonzero median signs across endpoints, and no endpoint disagreement. Opposite raw-token and ratio directions are denominator-sensitive/indeterminate; every other endpoint disagreement is also indeterminate. Neither endpoint is a causal saving or cost estimate. Primary membership input parity uses the same four-response backend-metadata and response-ID pair universe; its all-sample view remains descriptive. Full input-token parity requires every planned primary pair to be observed and exactly equal. A pooled conclusion requires every planned primary pair in every model-by-order stratum and agreement with every model-level conclusion; model disagreement is indeterminate.",
       minimumOrderStratumCoverage: EVIDENCE_CAMPAIGN.minimumStratumCoverage,
     },
     interpretation: {
@@ -2591,11 +3345,19 @@ async function runBenchmark(
         "No measured request passed response-model and usage-envelope eligibility.",
     },
     models,
+    responseIdAudit: responseIdAudit(allRequests),
   };
 
   const outputPath = resolve(options.output);
   await mkdir(dirname(outputPath), { recursive: true });
   const serialized = serializeBenchmarkResult(result, apiKey);
+  const preWriteRepositoryState = await readRepositoryState();
+  assertRepositoryFreeze(
+    initialRepositoryState,
+    preWriteRepositoryState,
+    "before the evidence write",
+    options.campaignId !== null
+  );
   const temporaryPath = `${outputPath}.${process.pid}.${randomUUID()}.tmp`;
   try {
     await writeFile(temporaryPath, serialized, { flag: "wx", mode: 0o600 });
@@ -2605,6 +3367,13 @@ async function runBenchmark(
         "Benchmark or implementation start/end source snapshots differ; refusing to write evidence."
       );
     }
+    const preRenameRepositoryState = await readRepositoryState();
+    assertRepositoryFreeze(
+      initialRepositoryState,
+      preRenameRepositoryState,
+      "before atomic rename",
+      false
+    );
     await rename(temporaryPath, outputPath);
   } finally {
     await rm(temporaryPath, { force: true });
@@ -2622,28 +3391,34 @@ export {
   ACCEPTED_ZERO_TOOL_FINISH_REASONS,
   ALL_TOOL_NAMES,
   ARM_EXECUTION_PHASES,
+  assertSourceSnapshotMatchesCommit,
+  BACKEND_METADATA_STATUSES,
   benchmarkRequestArtifacts,
   benchmarkRequestTopology,
   cacheMeasurementIsValid,
   DYNAMIC_TOOL_NAMES,
   EVIDENCE_CAMPAIGN,
   EVIDENCE_CAMPAIGN_TOPOLOGY,
+  endpointCombinedConclusion,
   extractUsage,
   FINISH_REASON_STATUSES,
   FIXED_TOOL_NAMES,
   IMPLEMENTATION_SOURCE_PATHS,
   isolationTokenFor,
+  localRequestErrorCode,
   MEMBERSHIP_REPLACEMENT_TOOL_NAME,
   MEMBERSHIP_SCENARIO,
   orderedTools,
   outputWasExactOk,
   pairOrderFor,
   parseOptions,
+  readBoundedJsonResponse,
   responseFinishReasonStatuses,
   responseModel,
   responseToolCallCount,
   runBenchmark,
   safeTokenSum,
+  sanitizedBackendMetadata,
   serializeBenchmarkResult,
   staticPrefix,
   variantSummary,
