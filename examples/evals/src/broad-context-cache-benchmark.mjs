@@ -33,6 +33,26 @@ if (!(fixtureOnly || apiKey)) {
 
 const SAFE_MODEL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,199}$/u;
 const SAFE_ERROR_CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/u;
+const BEARER_CREDENTIAL_PATTERN = /Bearer\s+[A-Za-z0-9._-]+/iu;
+const CACHE_READ_PATHS = [
+  "prompt_tokens_details.cached_tokens",
+  "input_tokens_details.cached_tokens",
+  "prompt_tokens_details.cache_read_tokens",
+  "input_tokens_details.cache_read_tokens",
+  "cache_read_input_tokens",
+  "cache_read_tokens",
+  "cached_input_tokens",
+];
+const CACHE_WRITE_PATHS = [
+  "prompt_tokens_details.cache_write_tokens",
+  "input_tokens_details.cache_write_tokens",
+  "prompt_tokens_details.cache_creation_tokens",
+  "input_tokens_details.cache_creation_tokens",
+  "cache_creation_input_tokens",
+  "cache_write_input_tokens",
+  "cache_write_tokens",
+];
+const INPUT_PATHS = ["prompt_tokens", "input_tokens"];
 
 const positionalArgs = process.argv.slice(2).filter((arg) => arg !== "--");
 const scenarioId = positionalArgs[0];
@@ -113,9 +133,12 @@ if (
 }
 
 const scenario = buildScenario(scenarioId, repoRoot);
-if (fixtureOnly) {
-  console.log(JSON.stringify(fixtureManifest(scenario), null, 2));
-} else {
+async function main() {
+  if (fixtureOnly) {
+    console.log(JSON.stringify(fixtureManifest(scenario), null, 2));
+    return;
+  }
+
   const campaignStartedAt = new Date().toISOString();
   const modelCatalog = await requestModelCatalog();
   const runs = confirmationMode
@@ -181,8 +204,7 @@ if (fixtureOnly) {
   const serialized = `${JSON.stringify(report, null, 2)}\n`;
   if (
     apiKey &&
-    (serialized.includes(apiKey) ||
-      /Bearer\s+[A-Za-z0-9._-]+/iu.test(serialized))
+    (serialized.includes(apiKey) || BEARER_CREDENTIAL_PATTERN.test(serialized))
   ) {
     throw new Error("refusing to print a report containing the credential");
   }
@@ -962,26 +984,6 @@ function exportedSymbols(source) {
   return [...new Set(symbols)];
 }
 
-const CACHE_READ_PATHS = [
-  "prompt_tokens_details.cached_tokens",
-  "input_tokens_details.cached_tokens",
-  "prompt_tokens_details.cache_read_tokens",
-  "input_tokens_details.cache_read_tokens",
-  "cache_read_input_tokens",
-  "cache_read_tokens",
-  "cached_input_tokens",
-];
-const CACHE_WRITE_PATHS = [
-  "prompt_tokens_details.cache_write_tokens",
-  "input_tokens_details.cache_write_tokens",
-  "prompt_tokens_details.cache_creation_tokens",
-  "input_tokens_details.cache_creation_tokens",
-  "cache_creation_input_tokens",
-  "cache_write_input_tokens",
-  "cache_write_tokens",
-];
-const INPUT_PATHS = ["prompt_tokens", "input_tokens"];
-
 function extractUsage(usage) {
   const cacheRead = auditedNumber(usage, CACHE_READ_PATHS);
   const cacheWrite = auditedNumber(usage, CACHE_WRITE_PATHS);
@@ -1190,3 +1192,5 @@ function positiveIntegerEnv(name, fallback, maximum) {
   }
   return parsed;
 }
+
+await main();
