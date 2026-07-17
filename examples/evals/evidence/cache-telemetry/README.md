@@ -23,16 +23,23 @@ fallback and an exploratory route-aware composite that raises measured cache
 hit to 38.34% without regressing aggregate p95. The composite was post-hoc.
 
 The independent [interleaved confirmation](./2026-07-17-route-aware-confirmation.md)
-then rejected both preregistered route-aware exceptions. Against the uniform
-60K fallback, the 75K Ministral file-search arm reduced reported cache hit from
-27.75% to 24.92% and increased tracked uncached input from 267,061 to 297,171
-tokens; neither arm produced a strictly correct response. The MiniMax
-conversation exception reduced cache hit from 17.68% to 16.20%, increased
-tracked uncached input from 305,187 to 338,926 tokens, and regressed strict
-correctness from 12/12 to 11/12 with one length finish. The pooled result is
-descriptive only: each route failed its own non-regression guardrails. This
-counterexample is why the evidence does not promote the post-hoc composite or
-a global cache-hit target.
+then rejected both preregistered route-aware exceptions. The source-hashed JSON
+and independently regenerated Markdown are authoritative for the exact values;
+the index repeats only a verifier-bound per-route block:
+
+<!-- route-aware-confirmation-index:start -->
+| Route | Result | Strict correct, uniform → route-aware | Cache hit, uniform → route-aware | Read coverage | Tracked uncached tokens | p95 | Exact response-model attribution |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Ministral file search | fail | 0/12 → 0/12 | 19.13% → 23.43% | 10/10 → 10/10 | 298,913 → 303,050 | 7.792 s → 8.492 s | 100.00% → 100.00% |
+| MiniMax conversation | fail | 12/12 → 11/12 | 13.26% → 29.61% | 10/10 → 9/9 | 321,586 → 272,644 | 9.880 s → 14.298 s | 100.00% → 100.00% |
+<!-- route-aware-confirmation-index:end -->
+
+The pooled result is descriptive only: each route failed its own non-regression
+guardrails. File search regressed tracked uncached input and p95 while neither
+arm was strictly correct; conversation regressed strict correctness and p95
+despite higher cache hit and lower tracked uncached input. This counterexample
+is why the evidence does not promote the post-hoc composite or a global
+cache-hit target.
 
 ## Method
 
