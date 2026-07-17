@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { readFileSync, rmSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   aggregateConfirmationRuns,
+  atomicWrite,
   evaluateConfirmationConclusion,
   evaluateRouteGuardrails,
   verifyConfirmationCampaign,
@@ -10,8 +14,29 @@ import {
 } from "./cache-confirmation-evidence.mjs";
 
 const ATTRIBUTION_FLAG_PATTERN = /responseModelMatchesRequested/u;
+const ATOMIC_WRITE_BOUNDARY_PATTERN = /confirmation output must remain/u;
 
 describe("confirmation response-model verification", () => {
+  it("atomically writes only inside the evidence directory", () => {
+    const evidenceRoot = fileURLToPath(
+      new URL("../evidence/cache-telemetry/", import.meta.url)
+    );
+    const approvedPath = resolve(
+      evidenceRoot,
+      `.atomic-write-${randomUUID()}.tmp`
+    );
+    try {
+      atomicWrite(approvedPath, "verified\n");
+      assert.equal(readFileSync(approvedPath, "utf8"), "verified\n");
+      assert.throws(
+        () => atomicWrite(resolve(evidenceRoot, "../escaped.tmp"), "x"),
+        ATOMIC_WRITE_BOUNDARY_PATTERN
+      );
+    } finally {
+      rmSync(approvedPath, { force: true });
+    }
+  });
+
   it("keeps a successful mismatched model as auditable evidence", () => {
     assert.doesNotThrow(() =>
       verifyResponseAttribution(

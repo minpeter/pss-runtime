@@ -35,8 +35,8 @@ const evidenceToolSourceEntries = [
     new URL("./verify-cache-evidence.mjs", import.meta.url),
   ],
 ];
-const evidenceRoot = fileURLToPath(
-  new URL("../evidence/cache-telemetry/", import.meta.url)
+const evidenceRoot = resolve(
+  fileURLToPath(new URL("../evidence/cache-telemetry/", import.meta.url))
 );
 
 export const confirmationJsonPath = resolve(

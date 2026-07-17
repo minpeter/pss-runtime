@@ -20,8 +20,19 @@ logical turns / 168 HTTP attempts at 45K and 60K high-water marks plus a MiniMax
 output-budget sweep. Its [sanitized snapshot](./2026-07-17-policy-tuning.json)
 and [visual summary](./2026-07-17-policy-tuning.png) show a 100%-correct uniform
 fallback and an exploratory route-aware composite that raises measured cache
-hit to 38.34% without regressing aggregate p95. The composite is post-hoc and
-still requires an independent interleaved confirmation run.
+hit to 38.34% without regressing aggregate p95. The composite was post-hoc.
+
+The independent [interleaved confirmation](./2026-07-17-route-aware-confirmation.md)
+then rejected both preregistered route-aware exceptions. Against the uniform
+60K fallback, the 75K Ministral file-search arm reduced reported cache hit from
+27.75% to 24.92% and increased tracked uncached input from 267,061 to 297,171
+tokens; neither arm produced a strictly correct response. The MiniMax
+conversation exception reduced cache hit from 17.68% to 16.20%, increased
+tracked uncached input from 305,187 to 338,926 tokens, and regressed strict
+correctness from 12/12 to 11/12 with one length finish. The pooled result is
+descriptive only: each route failed its own non-regression guardrails. This
+counterexample is why the evidence does not promote the post-hoc composite or
+a global cache-hit target.
 
 ## Method
 
@@ -162,10 +173,11 @@ raw prompt, response, credential, or authorization fields:
 pnpm --filter @minpeter/pss-example-evals evidence:verify-cache
 ```
 
-For a preregistered confirmation of the two routes where the exploratory
-route-aware policy differs from the uniform 60K fallback, run each command once.
-Each command executes `uniform → route-aware → route-aware → uniform`, with a
-fresh unique cache prefix per run, and emits only sanitized metadata:
+The checked-in preregistered confirmation covers the two routes where the
+exploratory route-aware policy differed from the uniform 60K fallback. To
+repeat it, run each command once. Each command executes
+`uniform → route-aware → route-aware → uniform`, with a fresh unique cache
+prefix per run, and emits only sanitized metadata:
 
 ```sh
 PSS_LIVE_CONFIRMATION=true \
