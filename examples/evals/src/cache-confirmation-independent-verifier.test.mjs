@@ -30,8 +30,20 @@ const MARKDOWN_PATTERN = /independently regenerated document/u;
 const FIXTURE_PATTERN = /independently pinned deterministic fixture/u;
 const DATA_PROPERTY_PATTERN = /own data property/u;
 const DENSE_PATTERN = /dense/u;
-const IMPORT_SPECIFIER_PATTERN = /^import .* from "([^"]+)";$/gmu;
+const PROXY_PATTERN = /must not be a Proxy/u;
+const ARRAY_BOUND_PATTERN = /length must be at most/u;
+const STATIC_IMPORT_DECLARATION_PATTERN = /^\s*import(?!\s*\()[\s\S]*?;\s*$/gmu;
+const IMPORT_FROM_SPECIFIER_PATTERN = /\bfrom\s+["']([^"']+)["']/u;
+const IMPORT_SIDE_EFFECT_SPECIFIER_PATTERN = /^\s*import\s+["']([^"']+)["']/u;
 const DYNAMIC_IMPORT_PATTERN = /\bimport\s*\(/u;
+const EXPECTED_VERIFIER_IMPORTS = [
+  "node:assert/strict",
+  "node:crypto",
+  "node:fs",
+  "node:path",
+  "node:url",
+  "node:util",
+];
 const BENCHMARK_SOURCE_PATHS = [
   "broad-context-cache-benchmark.mjs",
   "broad-context-cache-response.mjs",
@@ -188,15 +200,56 @@ describe("independent confirmation verifier", () => {
     );
   });
 
+  it("rejects proxies and oversized arrays before traps or allocation", () => {
+    let prototypeTrapCalls = 0;
+    const proxyDocument = new Proxy(confirmationDocument(), {
+      getPrototypeOf() {
+        prototypeTrapCalls += 1;
+        throw new Error("prototype trap must stay inert");
+      },
+    });
+    assert.throws(
+      () =>
+        verifyIndependentConfirmationDocument(proxyDocument, {
+          verifyCurrentSources: false,
+        }),
+      PROXY_PATTERN
+    );
+    assert.equal(prototypeTrapCalls, 0);
+
+    const oversizedDocument = confirmationDocument();
+    oversizedDocument.campaigns.conversation.runs = new Array(10_001);
+    assert.throws(
+      () =>
+        verifyIndependentConfirmationDocument(oversizedDocument, {
+          verifyCurrentSources: false,
+        }),
+      ARRAY_BOUND_PATTERN
+    );
+  });
+
   it("imports only Node standard-library modules", () => {
     const source = readFileSync(verifierSourceUrl, "utf8");
-    const specifiers = [...source.matchAll(IMPORT_SPECIFIER_PATTERN)].map(
-      (match) => match[1]
-    );
+    const specifiers = staticImportSpecifiers(source);
 
-    assert.ok(specifiers.length > 0);
-    assert.ok(specifiers.every((specifier) => specifier.startsWith("node:")));
+    assert.deepEqual(specifiers, EXPECTED_VERIFIER_IMPORTS);
     assert.doesNotMatch(source, DYNAMIC_IMPORT_PATTERN);
+  });
+
+  it("recognizes multiline and side-effect static imports", () => {
+    const source = [
+      'import "./producer-side-effect.mjs";',
+      "import {",
+      "  producer,",
+      '} from "./producer.mjs";',
+      'import assert from "node:assert/strict";',
+    ].join("\n");
+
+    assert.deepEqual(staticImportSpecifiers(source), [
+      "./producer-side-effect.mjs",
+      "./producer.mjs",
+      "node:assert/strict",
+    ]);
   });
 
   it("detects equal-sized telemetry samples at different replicate-step coordinates", () => {
@@ -277,6 +330,18 @@ describe("independent confirmation verifier", () => {
     );
   });
 });
+
+function staticImportSpecifiers(source) {
+  return [...source.matchAll(STATIC_IMPORT_DECLARATION_PATTERN)].map(
+    ([declaration]) => {
+      const match =
+        declaration.match(IMPORT_FROM_SPECIFIER_PATTERN) ??
+        declaration.match(IMPORT_SIDE_EFFECT_SPECIFIER_PATTERN);
+      assert.ok(match, `unrecognized static import: ${declaration}`);
+      return match[1];
+    }
+  );
+}
 
 function confirmationDocument() {
   const document = JSON.parse(readFileSync(confirmationSnapshotUrl, "utf8"));

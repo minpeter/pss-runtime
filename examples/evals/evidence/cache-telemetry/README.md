@@ -98,7 +98,7 @@ are unambiguous evidence that the runtime event and eval aggregation path carry
 provider cache telemetry. Provider-level missing-versus-zero audits must use a
 raw protocol probe or an adapter that preserves omission.
 
-These campaigns measured cache **reads** only. [Current OpenAI APIs](https://developers.openai.com/api/docs/guides/prompt-caching#requirements)
+These campaigns measured cache **reads** only. [Current OpenAI APIs](https://developers.openai.com/api/docs/guides/prompt-caching#prompt-cache-breakpoints)
 can also report cache writes as `prompt_tokens_details.cache_write_tokens`
 (Chat Completions) or the corresponding input-token details (Responses). The runtime
 already preserves `cacheWriteTokens` when an adapter supplies it, and the new
