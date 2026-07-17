@@ -245,9 +245,11 @@ event emission, or durable persistence fails permanently. Internal automatic
 compaction model calls are also outside this stream. Reconcile authoritative
 billing against provider invoices or provider request IDs.
 
-Eval cache summaries reject malformed token counts, impossible read/input
-pairs, and unsafe aggregate overflow instead of clamping them. Gate both sample
-size and coverage when making a cache claim:
+Eval cache summaries reject malformed token counts, impossible
+read/write/input envelopes, and unsafe aggregate overflow instead of clamping
+them. `cacheReadTokens + cacheWriteTokens` may not exceed `inputTokens` when a
+provider reports all three. `noCacheTokens` remains descriptive because adapter
+semantics differ. Gate both sample size and coverage when making a cache claim:
 
 ```ts
 t.cacheHitRateAtLeast(0.3, {
@@ -257,9 +259,14 @@ t.cacheHitRateAtLeast(0.3, {
 });
 ```
 
-`minTelemetryCoverage` is the fraction of post-warmup model attempts with a
-valid cache-read/input pair. It prevents a high rate from a tiny reported
-subset from passing only because `minTrackedRequests` was met.
+`minTelemetryCoverage` is the fraction of post-warmup runtime model attempts
+(`step-start`) with a valid cache-read/input pair, including failed or aborted
+attempts in the denominator. It prevents a high rate from a tiny reported
+subset from passing only because `minTrackedRequests` was met. A cache-rate
+gate is indeterminate and fails when a selected post-warmup run emits
+`turn-error`, an attempted model request never produces `model-usage`, or a
+replayed `model-usage` record reuses an `attemptId`. Duplicate records are
+reported but never counted as additional samples or token totals.
 
 ## Delegation
 

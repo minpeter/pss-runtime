@@ -32,13 +32,13 @@ function summarize(caseResult: CaseResult): string {
 }
 
 function cacheSummary(cache: CaseResult["cache"]): string | undefined {
-  if (cache.requests === 0) {
+  if (cache.attemptedRequests === 0) {
     return;
   }
   if (cache.cacheHitRate === undefined) {
-    return `cache hit n/a (${cache.trackedRequests}/${cache.requests} requests tracked)`;
+    return `cache hit n/a (${cache.trackedRequests}/${cache.attemptedRequests} requests tracked)`;
   }
-  return `cache hit ${(cache.cacheHitRate * 100).toFixed(1)}% (${cache.trackedCacheReadTokens}/${cache.trackedInputTokens} tokens, ${cache.trackedRequests}/${cache.requests} requests tracked)`;
+  return `cache hit ${(cache.cacheHitRate * 100).toFixed(1)}% (${cache.trackedCacheReadTokens}/${cache.trackedInputTokens} tokens, ${cache.trackedRequests}/${cache.attemptedRequests} requests tracked)`;
 }
 
 function failureLine(record: {

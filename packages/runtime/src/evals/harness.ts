@@ -21,9 +21,11 @@ export async function runAgent(
   const events: AgentEvent[] = [];
   const output: string[] = [];
   const modelUsage: ModelUsage[] = [];
+  const observedAttemptIds = new Set<string>();
   const toolCalls: EvalToolCall[] = [];
   const toolResults: EvalToolResult[] = [];
   let error: string | undefined;
+  let modelAttempts = 0;
 
   for await (const event of turn.events()) {
     events.push(event);
@@ -33,6 +35,10 @@ export async function runAgent(
         break;
       case "model-usage":
         modelUsage.push(event);
+        observedAttemptIds.add(event.attemptId);
+        break;
+      case "step-start":
+        modelAttempts += 1;
         break;
       case "tool-call":
         toolCalls.push({
@@ -57,7 +63,9 @@ export async function runAgent(
   }
 
   return {
-    cache: summarizeCacheUsage(modelUsage),
+    cache: summarizeCacheUsage(modelUsage, {
+      attemptedRequests: Math.max(modelAttempts, observedAttemptIds.size),
+    }),
     error,
     events,
     input,

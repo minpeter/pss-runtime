@@ -26,6 +26,7 @@ export type {
   AssertionRecord,
   AssertionSeverity,
   CacheHitRateOptions,
+  CacheUsageSummaryOptions,
   CaseResult,
   EvalCacheStats,
   EvalCase,
