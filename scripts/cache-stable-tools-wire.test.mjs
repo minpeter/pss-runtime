@@ -80,7 +80,7 @@ describe("cache-stable tool wire order", () => {
           ),
           runtimeStepIndex,
           selectionDurationMs: expect.any(Number),
-          semanticFingerprintUnavailableToolCount: 0,
+          semanticFingerprintUnavailableToolCount: wireNames.length,
           toolLoadingStrategy: "eager-active-tools",
         });
       }
