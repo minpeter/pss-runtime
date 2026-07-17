@@ -225,19 +225,21 @@ async function requestModelCatalog() {
     );
   }
   const body = await response.json().catch(() => undefined);
-  if (!Array.isArray(body?.data)) {
+  const data = ownDataValue(body, "data");
+  if (!Array.isArray(data)) {
     throw new Error("model catalog preflight returned an invalid data array");
   }
-  const availableIds = new Set(
-    body.data.flatMap((entry) =>
-      entry &&
-      typeof entry === "object" &&
-      typeof entry.id === "string" &&
-      SAFE_MODEL_ID_PATTERN.test(entry.id)
-        ? [entry.id]
-        : []
-    )
-  );
+  const availableIds = new Set();
+  for (let index = 0; index < data.length; index += 1) {
+    const entry = ownDataProperty(data, String(index));
+    if (!(entry.present && entry.valid)) {
+      throw new Error("model catalog preflight returned a sparse data array");
+    }
+    const id = ownDataValue(entry.value, "id");
+    if (typeof id === "string" && SAFE_MODEL_ID_PATTERN.test(id)) {
+      availableIds.add(id);
+    }
+  }
   const presentModelIds = requestedModelIds.filter((id) =>
     availableIds.has(id)
   );
@@ -619,13 +621,14 @@ async function requestModel({ maxOutputTokens, messages, model }) {
         signal: AbortSignal.timeout(120_000),
       });
       const json = await response.json().catch(() => undefined);
-      const usage = extractUsage(json?.usage);
+      const usage = extractUsage(ownDataValue(json, "usage"));
       if (response.ok) {
         const parsed = parseCompletionResponse(json, model.id);
         if (!parsed.ok) {
           return {
             attempts: attempt,
             errorCode: parsed.errorCode,
+            finishReason: parsed.finishReason ?? null,
             httpStatus: response.status,
             ok: false,
             responseModel: parsed.responseModel,
@@ -1047,18 +1050,39 @@ function auditedNumber(input, paths) {
 function valueAtPath(input, path) {
   let current = input;
   for (const segment of path.split(".")) {
-    if (
-      !(
-        current &&
-        typeof current === "object" &&
-        Object.hasOwn(current, segment)
-      )
-    ) {
+    const property = ownDataProperty(current, segment);
+    if (!property.present) {
       return { present: false, value: undefined };
     }
-    current = current[segment];
+    if (!property.valid) {
+      return { present: true, value: undefined };
+    }
+    current = property.value;
   }
   return { present: true, value: current };
+}
+
+function ownDataProperty(value, key) {
+  if (value === null || typeof value !== "object") {
+    return { present: false, valid: true, value: undefined };
+  }
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined) {
+      return { present: false, valid: true, value: undefined };
+    }
+    if (!Object.hasOwn(descriptor, "value")) {
+      return { present: true, valid: false, value: undefined };
+    }
+    return { present: true, valid: true, value: descriptor.value };
+  } catch {
+    return { present: true, valid: false, value: undefined };
+  }
+}
+
+function ownDataValue(value, key) {
+  const property = ownDataProperty(value, key);
+  return property.present && property.valid ? property.value : undefined;
 }
 
 function isSafeTokenCount(value) {
@@ -1066,9 +1090,12 @@ function isSafeTokenCount(value) {
 }
 
 function safeResponseErrorCode(body, status) {
-  const error = body && typeof body === "object" ? body.error : undefined;
+  const error = ownDataValue(body, "error");
   if (error && typeof error === "object") {
-    for (const candidate of [error.code, error.type]) {
+    for (const candidate of [
+      ownDataValue(error, "code"),
+      ownDataValue(error, "type"),
+    ]) {
       if (
         typeof candidate === "string" &&
         SAFE_ERROR_CODE_PATTERN.test(candidate)

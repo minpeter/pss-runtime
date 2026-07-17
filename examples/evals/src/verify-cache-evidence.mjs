@@ -2,15 +2,15 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import {
-  assertNoForbiddenContent,
-  confirmationJsonPath,
-  confirmationMarkdown,
-  confirmationMarkdownPath,
-  verifyCombinedConfirmation,
-} from "./cache-confirmation-evidence.mjs";
+  independentConfirmationJsonPath as confirmationJsonPath,
+  independentConfirmationMarkdownPath as confirmationMarkdownPath,
+  verifyCheckedInConfirmationEvidence,
+} from "./cache-confirmation-independent-verifier.mjs";
 
 const SAFE_MODEL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,199}$/u;
 const SAFE_CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/u;
+const SAFE_ARTIFACT_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/u;
+const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 const BEARER_TOKEN_PATTERN = /Bearer\s+[A-Za-z0-9._-]{8,}/i;
 const BROAD_TOP_KEYS = [
   "campaignDate",
@@ -96,6 +96,20 @@ exactKeys(broad, BROAD_TOP_KEYS, "broad-context top level");
 exactKeys(tuning, TUNING_TOP_KEYS, "policy-tuning top level");
 verifySanitizedSnapshot("broad-context", broad);
 verifySanitizedSnapshot("policy-tuning", tuning);
+validateHistoricalSourceArtifactMetadata(
+  broad.sourceArtifacts,
+  "broad-context"
+);
+validateHistoricalSourceArtifactMetadata(
+  tuning.sourceArtifacts,
+  "policy-tuning"
+);
+verifyLegacyBenchmarkSource(tuning.benchmarkSource);
+assert.match(
+  tuning.parentEvidenceCampaignSha256,
+  SHA256_PATTERN,
+  "policy-tuning historical parentEvidenceCampaignSha256"
+);
 assert.equal(
   createHash("sha256").update(broadSource).digest("hex"),
   tuning.parentEvidenceSha256,
@@ -284,21 +298,13 @@ if (existsSync(confirmationJsonPath)) {
     existsSync(confirmationMarkdownPath),
     "confirmation markdown is required with confirmation JSON"
   );
-  const confirmation = JSON.parse(readFileSync(confirmationJsonPath, "utf8"));
-  verifyCombinedConfirmation(confirmation);
-  confirmationCampaignsVerified = Object.keys(confirmation.campaigns).length;
+  const confirmationVerification = verifyCheckedInConfirmationEvidence();
+  confirmationCampaignsVerified = confirmationVerification.campaignsVerified;
   assert.equal(confirmationCampaignsVerified, 2, "confirmation campaign count");
   assert.equal(
-    Object.values(confirmation.campaigns).flatMap((campaign) =>
-      campaign.runs.flatMap((run) => run.turns)
-    ).length,
+    confirmationVerification.logicalTurnsVerified,
     48,
     "confirmation logical turn count"
-  );
-  assert.equal(
-    readFileSync(confirmationMarkdownPath, "utf8"),
-    confirmationMarkdown(confirmation),
-    "confirmation markdown must be generated from the verified JSON"
   );
 } else {
   assert.equal(
@@ -312,6 +318,7 @@ console.log(
   JSON.stringify({
     broadContextRunsVerified: broadRuns.length,
     confirmationCampaignsVerified,
+    historicalSourceArtifactMetadataValidated: true,
     parentEvidenceSha256Verified: true,
     policyTuningRunsVerified: allTuningRuns.length,
     sanitizedSnapshotsVerified: true,
@@ -618,7 +625,6 @@ function verifySanitizedSnapshot(label, report) {
     },
     `${label}.checkedInContent`
   );
-  assertNoForbiddenContent(report, label);
   walk(report, (key, value) => {
     assert.ok(
       ![
@@ -638,6 +644,69 @@ function verifySanitizedSnapshot(label, report) {
       assert.doesNotMatch(value, BEARER_TOKEN_PATTERN, `${label} bearer token`);
     }
   });
+}
+
+function validateHistoricalSourceArtifactMetadata(artifacts, label) {
+  assert.ok(Array.isArray(artifacts), `${label}.sourceArtifacts`);
+  assert.ok(artifacts.length > 0, `${label}.sourceArtifacts must not be empty`);
+  const names = new Set();
+  for (const [index, artifact] of artifacts.entries()) {
+    const artifactLabel = `${label}.sourceArtifacts[${index}]`;
+    assertPlainObject(artifact, artifactLabel);
+    const allowedKeys = new Set(["completedAt", "name", "sha256", "variant"]);
+    assert.ok(
+      Object.keys(artifact).every((key) => allowedKeys.has(key)),
+      `${artifactLabel} keys`
+    );
+    assert.match(
+      artifact.name,
+      SAFE_ARTIFACT_NAME_PATTERN,
+      `${artifactLabel}.name`
+    );
+    assert.match(artifact.sha256, SHA256_PATTERN, `${artifactLabel}.sha256`);
+    assert.ok(!names.has(artifact.name), `${artifactLabel}.name duplicate`);
+    names.add(artifact.name);
+    if (Object.hasOwn(artifact, "completedAt")) {
+      assert.ok(
+        typeof artifact.completedAt === "string" &&
+          Number.isFinite(Date.parse(artifact.completedAt)),
+        `${artifactLabel}.completedAt`
+      );
+    }
+    if (Object.hasOwn(artifact, "variant")) {
+      assert.match(
+        artifact.variant,
+        SAFE_ARTIFACT_NAME_PATTERN,
+        `${artifactLabel}.variant`
+      );
+    }
+  }
+}
+
+function verifyLegacyBenchmarkSource(source) {
+  assertPlainObject(source, "policy-tuning.benchmarkSource");
+  exactKeys(
+    source,
+    ["baseName", "baseSha256", "streamedTransformations"],
+    "policy-tuning.benchmarkSource"
+  );
+  assert.match(
+    source.baseName,
+    SAFE_ARTIFACT_NAME_PATTERN,
+    "policy-tuning.benchmarkSource.baseName"
+  );
+  assert.match(
+    source.baseSha256,
+    SHA256_PATTERN,
+    "policy-tuning.benchmarkSource.baseSha256"
+  );
+  assert.ok(
+    Array.isArray(source.streamedTransformations) &&
+      source.streamedTransformations.every(
+        (value) => typeof value === "string" && value.length <= 200
+      ),
+    "policy-tuning.benchmarkSource.streamedTransformations"
+  );
 }
 
 function verifyLegacyRunShape(run, label) {

@@ -153,7 +153,59 @@ describe("confirmation response-model verification", () => {
       "indeterminate"
     );
   });
+
+  it("requires the same tracked replicate and step coordinates in both arms", () => {
+    const campaign = confirmationCampaign();
+    omitCacheRead(campaign.runs[0].turns[1]);
+    omitCacheRead(campaign.runs[1].turns[2]);
+    refreshRun(campaign.runs[0], campaign.runs[0].modelId);
+    refreshRun(campaign.runs[1], campaign.runs[1].modelId);
+
+    const summaries = armSummary(campaign.runs);
+    const guardrails = evaluateRouteGuardrails({
+      conversation: summaries,
+      "file-search": summaries,
+    });
+
+    assert.equal(guardrails["file-search"].status, "indeterminate");
+    assert.deepEqual(guardrails["file-search"].indeterminateReasons, [
+      "arms:tracked-coordinate-mismatch",
+    ]);
+    assert.ok(
+      !guardrails["file-search"].failedGuardrails.includes(
+        "cache-hit-regression"
+      )
+    );
+  });
+
+  it("does not mask an observed correctness failure with missing telemetry", () => {
+    const campaign = confirmationCampaign();
+    campaign.runs[1].turns[1].correct = false;
+    omitCacheRead(campaign.runs[0].turns[1]);
+    refreshRun(campaign.runs[0], campaign.runs[0].modelId);
+    refreshRun(campaign.runs[1], campaign.runs[1].modelId);
+
+    const summaries = armSummary(campaign.runs);
+    const guardrails = evaluateRouteGuardrails({
+      conversation: summaries,
+      "file-search": summaries,
+    });
+
+    assert.equal(guardrails["file-search"].status, "fail");
+    assert.ok(
+      guardrails["file-search"].failedGuardrails.includes(
+        "perfect-strict-correctness"
+      )
+    );
+    assert.ok(guardrails["file-search"].indeterminateReasons.length > 0);
+  });
 });
+
+function omitCacheRead(turn) {
+  turn.cacheFieldReported = false;
+  turn.cachedTokens = null;
+  turn.usageFieldAudit.cacheRead = "absent";
+}
 
 function successfulTurn(responseModel, responseModelMatchesRequested) {
   return {

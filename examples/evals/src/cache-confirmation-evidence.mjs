@@ -31,6 +31,10 @@ const evidenceToolSourceEntries = [
   ],
   ["cache-confirmation-evidence.mjs", new URL(import.meta.url)],
   [
+    "cache-confirmation-independent-verifier.mjs",
+    new URL("./cache-confirmation-independent-verifier.mjs", import.meta.url),
+  ],
+  [
     "verify-cache-evidence.mjs",
     new URL("./verify-cache-evidence.mjs", import.meta.url),
   ],
@@ -74,6 +78,7 @@ const CONFIRMATION_GUARDRAILS = {
   exactResponseModelCoverage: 1,
   minTelemetryCoverage: 0.6,
   minTrackedWarmRequests: 6,
+  requireIdenticalTrackedCoordinates: true,
   requireEqualTrackedRequests: true,
   requireKnownFinishReasons: true,
   requireNoCacheHitRegression: true,
@@ -479,6 +484,24 @@ export function aggregateConfirmationRuns(runs) {
   const writeTracked = attributedWarm.filter(
     (turn) => turn.cacheWriteTokens !== null && turn.usageEnvelopeValid
   );
+  const trackedWarmCoordinates = runs
+    .flatMap((run, runIndex) =>
+      run.turns
+        .filter(
+          (turn) =>
+            turn.step > 0 &&
+            turn.requestSuccessful &&
+            turn.responseModelMatchesRequested === true &&
+            turn.cachedTokens !== null &&
+            turn.inputTokens !== null &&
+            turn.usageEnvelopeValid
+        )
+        .map(
+          (turn) =>
+            `${run.modelId ?? "synthetic"}:${run.replicate ?? runIndex}:${turn.step}`
+        )
+    )
+    .sort();
   const trackedInputTokens = safeSum(
     tracked.map((turn) => turn.inputTokens),
     "tracked input tokens"
@@ -541,6 +564,7 @@ export function aggregateConfirmationRuns(runs) {
       writeTracked.length === 0 ? null : trackedCacheWriteTokens,
     trackedInputTokens: tracked.length === 0 ? null : trackedInputTokens,
     trackedRequests: tracked.length,
+    trackedWarmCoordinates,
     trackedUncachedTokens:
       tracked.length === 0 ? null : trackedInputTokens - trackedCacheReadTokens,
     responseModelAudit: aggregateResponseModelAudit(turns),
@@ -583,7 +607,9 @@ ${routeRows}
 
 Each arm must complete 12/12 turns with perfect strict correctness and exact
 response-model attribution, report valid read/input pairs for at least 6 of 10
-attribution-eligible warm turns (60%), and have equal tracked sample counts.
+attribution-eligible warm turns (60%), and track the identical replicate/step
+coordinates in both arms. An observed correctness or completion failure remains
+a failure even when another comparison metric is indeterminate.
 Route-aware must not regress cache hit, tracked uncached tokens, p95, strict
 correctness, or length finishes. A coverage or attribution miss is
 \`indeterminate\`, not a pass.
@@ -601,10 +627,16 @@ latency, strict-correctness and token-recall booleans, response-model audit,
 and cache read/write/input telemetry. It contains no prompt, model output, raw
 request or response body, authorization header, or credential.
 
+The independent verifier can recompute aggregates and guardrail decisions from
+the recorded strict-correctness booleans, but cannot independently re-grade
+strict correctness because model outputs are intentionally absent.
+
 This remains a small router-specific measurement. Cache hit rate is reported
 only where the provider returned a valid read/input pair; cache-write coverage
 and totals are separate because read hit alone does not establish billed cache
-economics or savings.
+economics or savings. With only 12 turns per arm, the reported p95 is the sample
+maximum, fixed ABBA ordering can only partially balance time drift, and no
+interval or causal/generalized policy claim is made.
 `;
 }
 
@@ -1218,12 +1250,20 @@ function routeGuardrailResult(summary) {
     "route-aware": guardrailObservation(routeAware),
     uniform: guardrailObservation(uniform),
   };
+  const trackedCoordinatesMatch =
+    JSON.stringify(uniform.trackedWarmCoordinates) ===
+    JSON.stringify(routeAware.trackedWarmCoordinates);
   const indeterminateReasons = routeIndeterminateReasons(
     observed,
     uniform,
-    routeAware
+    routeAware,
+    trackedCoordinatesMatch
   );
-  const failedGuardrails = routeFailedGuardrails(uniform, routeAware);
+  const failedGuardrails = routeFailedGuardrails(
+    uniform,
+    routeAware,
+    trackedCoordinatesMatch
+  );
   return {
     failedGuardrails,
     indeterminateReasons,
@@ -1232,7 +1272,12 @@ function routeGuardrailResult(summary) {
   };
 }
 
-function routeIndeterminateReasons(observed, uniform, routeAware) {
+function routeIndeterminateReasons(
+  observed,
+  uniform,
+  routeAware,
+  trackedCoordinatesMatch
+) {
   const reasons = [];
   for (const [arm, value] of Object.entries(observed)) {
     if (value.logicalTurns !== 12 || value.successfulTurns !== 12) {
@@ -1268,10 +1313,13 @@ function routeIndeterminateReasons(observed, uniform, routeAware) {
   if (uniform.trackedRequests !== routeAware.trackedRequests) {
     reasons.push("arms:tracked-request-count-mismatch");
   }
+  if (!trackedCoordinatesMatch) {
+    reasons.push("arms:tracked-coordinate-mismatch");
+  }
   return reasons;
 }
 
-function routeFailedGuardrails(uniform, routeAware) {
+function routeFailedGuardrails(uniform, routeAware, trackedCoordinatesMatch) {
   const failures = [];
   if (uniform.accuracyRate !== 1 || routeAware.accuracyRate !== 1) {
     failures.push("perfect-strict-correctness");
@@ -1280,6 +1328,7 @@ function routeFailedGuardrails(uniform, routeAware) {
     failures.push("strict-correctness-regression");
   }
   if (
+    trackedCoordinatesMatch &&
     routeAware.cacheHitRate !== null &&
     uniform.cacheHitRate !== null &&
     routeAware.cacheHitRate < uniform.cacheHitRate
@@ -1287,6 +1336,7 @@ function routeFailedGuardrails(uniform, routeAware) {
     failures.push("cache-hit-regression");
   }
   if (
+    trackedCoordinatesMatch &&
     routeAware.trackedUncachedTokens !== null &&
     uniform.trackedUncachedTokens !== null &&
     routeAware.trackedUncachedTokens > uniform.trackedUncachedTokens
@@ -1294,6 +1344,8 @@ function routeFailedGuardrails(uniform, routeAware) {
     failures.push("tracked-uncached-token-regression");
   }
   if (
+    uniform.successfulTurns === uniform.logicalTurns &&
+    routeAware.successfulTurns === routeAware.logicalTurns &&
     routeAware.p95LatencyMs !== null &&
     uniform.p95LatencyMs !== null &&
     routeAware.p95LatencyMs > uniform.p95LatencyMs
@@ -1307,11 +1359,11 @@ function routeFailedGuardrails(uniform, routeAware) {
 }
 
 function routeGuardrailStatus(indeterminateReasons, failedGuardrails) {
-  if (indeterminateReasons.length > 0) {
-    return "indeterminate";
-  }
   if (failedGuardrails.length > 0) {
     return "fail";
+  }
+  if (indeterminateReasons.length > 0) {
+    return "indeterminate";
   }
   return "pass";
 }
@@ -1333,6 +1385,7 @@ function guardrailObservation(summary) {
     successfulTurns: summary.successfulTurns,
     telemetryCoverage: summary.telemetryCoverage,
     trackedRequests: summary.trackedRequests,
+    trackedWarmCoordinates: summary.trackedWarmCoordinates,
     trackedUncachedTokens: summary.trackedUncachedTokens,
   };
 }
@@ -1353,7 +1406,7 @@ export function evaluateConfirmationConclusion(routeGuardrails) {
       .map(([scenario]) => scenario)
       .join(", ");
     return {
-      reason: `At least one route had sufficient evidence but failed a non-regression guardrail: ${failed}.`,
+      reason: `At least one route had a directly observed correctness, completion, or comparable-metric guardrail failure: ${failed}.`,
       status: "fail",
     };
   }

@@ -169,6 +169,14 @@ run, variant, uniform candidate, route-aware composite, full-coverage control,
 percentile, and parent snapshot hash from per-turn metadata. It also rejects
 raw prompt, response, credential, or authorization fields:
 
+Only `policy-tuning.parentEvidenceSha256` is authenticated against the current
+checked-in broad-context JSON bytes. The older
+`parentEvidenceCampaignSha256`, `benchmarkSource`, and `sourceArtifacts`
+entries are retained as historical provenance metadata and validated for a
+sanitized bounded shape, but their original `/tmp` inputs are not checked in
+and cannot be independently re-hashed now. They are not reported as currently
+verified source artifacts.
+
 ```sh
 pnpm --filter @minpeter/pss-example-evals evidence:verify-cache
 ```

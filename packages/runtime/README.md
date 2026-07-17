@@ -191,6 +191,19 @@ cached-token field to normalized zero. `LanguageModelUsage.raw` may retain a
 provider-specific shape, but the generic PSS event intentionally reads only the
 normalized adapter fields and does not expose or guess raw provider keys.
 
+These fields retain inputs that overlap the audited 2026-07-16 development
+[OpenTelemetry GenAI semantic-conventions snapshot](https://github.com/open-telemetry/semantic-conventions-genai/commit/33b7f9da9ade6162d4a5c16247d0bc6ad5f8b469),
+including cache-creation/read input counts, actual response model, and finish
+reasons. Those conventions moved to a separate development repository in May
+2026 and do not yet publish a stable schema URL, so this event does not claim
+OTel conformance or emit OTel attributes. Its per-successful-attempt usage
+records are also not equivalent to the snapshot's per-invocation inference and
+tool-call counts, which include failed and partial calls. In particular, the
+newer
+`gen_ai.conversation.compacted` signal is defined only for known-true
+compaction; PSS keeps typed compaction provenance separately and does not infer
+that attribute here.
+
 `attemptId` is generated once per PSS runtime model-step invocation. It
 correlates runtime telemetry and durable replay; it does not identify or count
 HTTP retries hidden inside an AI SDK or provider adapter. Plugins observe the
@@ -198,12 +211,13 @@ same record through `model.usage` after the durable usage-flush boundary. A
 failing observer can fail the turn without erasing an already persisted usage
 record.
 
-When the host supports durable thread-event replay, the runtime immediately
-publishes `model-usage` to the live turn stream and then flushes pending
-lifecycle events through that usage record before calling observers. If the
+When the host supports durable thread-event replay, the runtime first stages
+`model-usage` with pending lifecycle events and attempts the durable flush. It
+then publishes the usage record to the live turn stream from a `finally`
+boundary, and calls observers only after a successful durable flush. If the
 durable append fails, the observer is not called and the pending buffer is
-restored; turn-error recovery can persist the same usage record once. A
-permanent durable failure can still leave a live-only record. Durable
+restored; turn-error recovery can persist the same usage record once, while
+the failed attempt can still leave a live-only record. Durable
 `thread.events()` may expose lifecycle and usage records before the terminal
 thread-state commit, so replay is not proof that the generated state committed.
 Later state-commit failures and retries keep the original attempt record, with

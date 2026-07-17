@@ -51,6 +51,66 @@ globalThis.fetch = async (input, init = {}) => {
 `;
 const fetchMockUrl = `data:text/javascript,${encodeURIComponent(fetchMockSource)}`;
 
+const accessorUsageFetchMockUrl = mockModuleUrl(`
+globalThis.fetch = async (input) => {
+  const url = typeof input === "string" ? input : input.url;
+  if (url === "${apiRoot}/models") {
+    return Response.json({ data: [{ id: "${modelId}" }] });
+  }
+  if (url === "${apiRoot}/chat/completions") {
+    const usage = {};
+    Object.defineProperty(usage, "prompt_tokens", {
+      enumerable: true,
+      get() {
+        throw new Error("usage getter must not run");
+      },
+    });
+    return {
+      json: async () => ({
+        choices: [{
+          finish_reason: "stop",
+          message: {
+            content: JSON.stringify({
+              evidence: "DECISION-ORION-000",
+              value: "owner-amber",
+            }),
+          },
+        }],
+        model: "${modelId}",
+        usage,
+      }),
+      ok: true,
+      status: 200,
+    };
+  }
+  throw new Error(\`unexpected fetch: \${url}\`);
+};
+`);
+
+const accessorErrorFetchMockUrl = mockModuleUrl(`
+globalThis.fetch = async (input) => {
+  const url = typeof input === "string" ? input : input.url;
+  if (url === "${apiRoot}/models") {
+    return Response.json({ data: [{ id: "${modelId}" }] });
+  }
+  if (url === "${apiRoot}/chat/completions") {
+    const error = {};
+    Object.defineProperty(error, "code", {
+      enumerable: true,
+      get() {
+        throw new Error("error getter must not run");
+      },
+    });
+    return {
+      json: async () => ({ error }),
+      ok: false,
+      status: 400,
+    };
+  }
+  throw new Error(\`unexpected fetch: \${url}\`);
+};
+`);
+
 describe("broad-context cache benchmark live flow", () => {
   it("extracts usage through a synthetic no-network campaign after source initialization", () => {
     const output = execFileSync(
@@ -118,7 +178,55 @@ describe("broad-context cache benchmark live flow", () => {
       sha256(JSON.stringify(expectedFiles))
     );
   });
+
+  it("marks accessor-backed usage invalid without invoking the accessor", () => {
+    const report = runSyntheticCampaign(accessorUsageFetchMockUrl);
+    const turn = report.runs[0]?.turns[0];
+
+    assert.equal(turn?.requestSuccessful, true);
+    assert.equal(turn?.usageEnvelopeValid, false);
+    assert.equal(turn?.usageFieldAudit.input, "invalid");
+  });
+
+  it("falls back to the HTTP status without invoking error accessors", () => {
+    const report = runSyntheticCampaign(accessorErrorFetchMockUrl);
+    const turn = report.runs[0]?.turns[0];
+
+    assert.equal(turn?.requestSuccessful, false);
+    assert.equal(turn?.errorClass, "http-client");
+    assert.equal(turn?.httpStatus, 400);
+  });
 });
+
+function runSyntheticCampaign(importUrl) {
+  const output = execFileSync(
+    process.execPath,
+    ["--import", importUrl, fileURLToPath(runnerUrl), "conversation", repoRoot],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        FREEROUTER_API_KEY: "synthetic-live-flow-test",
+        FREEROUTER_BASE_URL: apiRoot,
+        PSS_LIVE_CHUNK_CHARACTERS: "1",
+        PSS_LIVE_CONFIRMATION: "",
+        PSS_LIVE_FIXTURE_ONLY: "",
+        PSS_LIVE_HIGH_WATER_TOKENS: "100",
+        PSS_LIVE_MINIMAX_MAX_OUTPUT_TOKENS: "16",
+        PSS_LIVE_MODELS: modelId,
+        PSS_LIVE_POLICIES: "high-water-stable-prefix",
+        PSS_LIVE_STEPS: "1",
+      },
+      maxBuffer: 1_000_000,
+      timeout: 30_000,
+    }
+  );
+  return JSON.parse(output);
+}
+
+function mockModuleUrl(source) {
+  return `data:text/javascript,${encodeURIComponent(source)}`;
+}
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
