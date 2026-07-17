@@ -1,5 +1,5 @@
 {
-  "assembledAt": "2026-07-17T07:41:35.479Z",
+  "assembledAt": "2026-07-17T08:12:19.497Z",
   "byScenario": {
     "file-search": {
       "uniform": {
@@ -1913,14 +1913,14 @@
       },
       {
         "path": "cache-confirmation-independent-verifier.mjs",
-        "sha256": "fac13398f2e05b0e6aaac1345df430b103cd4b8c0be9397f91b738d598021fb3"
+        "sha256": "923b106f1c232f7e69ae2341d2aa811fa5652f359f30498c5bd8d6a1bfc1b68f"
       },
       {
         "path": "verify-cache-evidence.mjs",
         "sha256": "f40dac02c6cb923bb069239be15023ba6cb1ec20c3c37db15c535071c37c1973"
       }
     ],
-    "manifestSha256": "fd89c395b171726cb00c9d11ead8cc19aced2ac4b4cec0abe0053e82b2537d5d"
+    "manifestSha256": "9319e00949b5c031917d52cf1eebc7ef0282722719e979028265a3d70a395d6e"
   },
   "confirmationConclusion": {
     "reason": "At least one route had a directly observed correctness, completion, or comparable-metric guardrail failure: conversation, file-search.",

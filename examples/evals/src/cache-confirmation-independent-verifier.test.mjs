@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import {
   deriveIndependentConfirmationFields,
   recomputeIndependentRunFields,
+  renderIndependentConfirmationIndexBlock,
   renderIndependentConfirmationMarkdown,
   STRICT_CORRECTNESS_VERIFICATION_LIMIT,
   verifyIndependentConfirmationArtifacts,
@@ -13,6 +14,10 @@ import {
 
 const confirmationSnapshotUrl = new URL(
   "../evidence/cache-telemetry/2026-07-17-route-aware-confirmation.json",
+  import.meta.url
+);
+const evidenceIndexUrl = new URL(
+  "../evidence/cache-telemetry/README.md",
   import.meta.url
 );
 const verifierSourceUrl = new URL(
@@ -76,6 +81,34 @@ describe("independent confirmation verifier", () => {
       verifyIndependentConfirmationArtifacts({
         document,
         markdown,
+      })
+    );
+  });
+
+  it("binds the evidence index summary to independently derived route rows", () => {
+    const document = confirmationDocument();
+    const indexReadme = readFileSync(evidenceIndexUrl, "utf8");
+    const markdown = renderIndependentConfirmationMarkdown(document, {
+      verifyCurrentSources: false,
+    });
+
+    assert.match(
+      indexReadme,
+      new RegExp(
+        escapeRegExp(
+          renderIndependentConfirmationIndexBlock(document, {
+            verifyCurrentSources: false,
+          })
+        ),
+        "u"
+      )
+    );
+    assert.doesNotThrow(() =>
+      verifyIndependentConfirmationArtifacts({
+        document,
+        indexReadme,
+        markdown,
+        verifyCurrentSources: false,
       })
     );
   });
@@ -341,6 +374,10 @@ function staticImportSpecifiers(source) {
       return match[1];
     }
   );
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function confirmationDocument() {

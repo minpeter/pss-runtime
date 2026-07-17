@@ -19,6 +19,9 @@ export const independentConfirmationMarkdownPath = resolve(
   EVIDENCE_DIRECTORY,
   "2026-07-17-route-aware-confirmation.md"
 );
+const independentEvidenceIndexPath = resolve(EVIDENCE_DIRECTORY, "README.md");
+const INDEX_SUMMARY_START = "<!-- route-aware-confirmation-index:start -->";
+const INDEX_SUMMARY_END = "<!-- route-aware-confirmation-index:end -->";
 
 export const STRICT_CORRECTNESS_VERIFICATION_LIMIT =
   "The independent verifier can recompute aggregates and guardrail decisions from the recorded strict-correctness booleans, but cannot independently re-grade strict correctness because model outputs are intentionally absent.";
@@ -294,6 +297,7 @@ export function verifyCheckedInConfirmationEvidence(options = {}) {
   const jsonPath = options.jsonPath ?? independentConfirmationJsonPath;
   const markdownPath =
     options.markdownPath ?? independentConfirmationMarkdownPath;
+  const indexPath = options.indexPath ?? independentEvidenceIndexPath;
   const jsonSource = readRegularArtifact(
     jsonPath,
     5_000_000,
@@ -304,17 +308,27 @@ export function verifyCheckedInConfirmationEvidence(options = {}) {
     1_000_000,
     "confirmation Markdown"
   ).toString("utf8");
+  const indexReadme = readRegularArtifact(
+    indexPath,
+    1_000_000,
+    "confirmation evidence index"
+  ).toString("utf8");
   let document;
   try {
     document = JSON.parse(jsonSource.toString("utf8"));
   } catch (error) {
     throw new Error("confirmation JSON is not valid JSON", { cause: error });
   }
-  return verifyIndependentConfirmationArtifacts({ document, markdown });
+  return verifyIndependentConfirmationArtifacts({
+    document,
+    indexReadme,
+    markdown,
+  });
 }
 
 export function verifyIndependentConfirmationArtifacts({
   document,
+  indexReadme = null,
   markdown,
   verifyCurrentSources = true,
 }) {
@@ -326,7 +340,19 @@ export function verifyIndependentConfirmationArtifacts({
     renderVerifiedMarkdown(document),
     "confirmation Markdown must equal the independently regenerated document"
   );
-  return { ...result, markdownVerified: true };
+  if (indexReadme !== null) {
+    assert.equal(
+      typeof indexReadme,
+      "string",
+      "confirmation evidence index must be text"
+    );
+    verifyIndexSummary(indexReadme, document);
+  }
+  return {
+    ...result,
+    indexSummaryVerified: indexReadme !== null,
+    markdownVerified: true,
+  };
 }
 
 export function verifyIndependentConfirmationDocument(document, options = {}) {
@@ -591,6 +617,14 @@ export function summarizeIndependentRuns(runs) {
 export function renderIndependentConfirmationMarkdown(document, options = {}) {
   verifyIndependentConfirmationDocument(document, options);
   return renderVerifiedMarkdown(document);
+}
+
+export function renderIndependentConfirmationIndexBlock(
+  document,
+  options = {}
+) {
+  verifyIndependentConfirmationDocument(document, options);
+  return renderVerifiedIndexBlock(document);
 }
 
 function verifyCampaign(campaign, scenario, currentBenchmarkSource) {
@@ -1482,6 +1516,41 @@ economics or savings. With only 12 turns per arm, the reported p95 is the sample
 maximum, fixed ABBA ordering can only partially balance time drift, and no
 interval or causal/generalized policy claim is made.
 `;
+}
+
+function renderVerifiedIndexBlock(document) {
+  const routeRows = ["file-search", "conversation"]
+    .map((scenario) =>
+      markdownRouteRow(scenario, document.routeGuardrails[scenario])
+    )
+    .join("\n");
+  return `${INDEX_SUMMARY_START}
+| Route | Result | Strict correct, uniform → route-aware | Cache hit, uniform → route-aware | Read coverage | Tracked uncached tokens | p95 | Exact response-model attribution |
+|---|---:|---:|---:|---:|---:|---:|---:|
+${routeRows}
+${INDEX_SUMMARY_END}`;
+}
+
+function verifyIndexSummary(indexReadme, document) {
+  const start = indexReadme.indexOf(INDEX_SUMMARY_START);
+  const end = indexReadme.indexOf(INDEX_SUMMARY_END);
+  assert.ok(start >= 0, "confirmation evidence index is missing start marker");
+  assert.ok(end > start, "confirmation evidence index has invalid markers");
+  assert.equal(
+    indexReadme.indexOf(INDEX_SUMMARY_START, start + 1),
+    -1,
+    "confirmation evidence index has duplicate start markers"
+  );
+  assert.equal(
+    indexReadme.indexOf(INDEX_SUMMARY_END, end + 1),
+    -1,
+    "confirmation evidence index has duplicate end markers"
+  );
+  assert.equal(
+    indexReadme.slice(start, end + INDEX_SUMMARY_END.length),
+    renderVerifiedIndexBlock(document),
+    "confirmation evidence index summary must equal the independently regenerated block"
+  );
 }
 
 function markdownSummaryRow(label, summary) {
