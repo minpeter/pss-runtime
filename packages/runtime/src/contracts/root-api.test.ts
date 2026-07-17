@@ -20,10 +20,12 @@ import type {
   AgentEvent,
   AgentInput,
   AgentOptions,
+  CompactionContextMessage,
   HostAttachmentStore,
   ModelUsage,
   PluginEventMap,
   ThreadCompactionInput,
+  ThreadContextMessage,
   ThreadHandle,
 } from "../index";
 import {
@@ -147,10 +149,19 @@ describe("runtime public exports", () => {
       startSeq: 0,
       summary: "Earlier turns established the durable context.",
     } satisfies ThreadCompactionInput;
+    const contextCompaction = {
+      endSeqExclusive: 8,
+      role: "compaction",
+      startSeq: 0,
+      summary: "Earlier turns established the durable context.",
+    } satisfies CompactionContextMessage;
 
     expectTypeOf<
       Parameters<ThreadHandle["compact"]>[0]
     >().toEqualTypeOf<ThreadCompactionInput>();
+    expectTypeOf<PluginEventMap["model.context"]["messages"]>().toEqualTypeOf<
+      readonly ThreadContextMessage[]
+    >();
     expectTypeOf<
       Parameters<ThreadHandle["overlay"]>[0]
     >().toEqualTypeOf<AgentInput>();
@@ -175,6 +186,7 @@ describe("runtime public exports", () => {
     expect(enabledOptions.notificationOverlays).toEqual(["runtime context"]);
     expect(disabledOptions.autoCompaction).toBe(false);
     expect(compaction.startSeq).toBe(0);
+    expect(contextCompaction.role).toBe("compaction");
   });
 
   it("types advanced host contracts", () => {
