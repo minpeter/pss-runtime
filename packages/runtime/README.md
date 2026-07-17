@@ -407,17 +407,25 @@ zero. Some adapters normalize an omitted provider field to zero before PSS sees
 it. For example, `@ai-sdk/openai-compatible` 3.0.11 still maps an omitted raw
 cached-token field to normalized zero. `LanguageModelUsage.raw` may retain a
 provider-specific shape, but the generic PSS event intentionally reads only the
-normalized adapter fields and does not expose or guess raw provider keys.
+normalized adapter fields and does not expose or guess raw provider keys. The
+same adapter version does not normalize raw `cache_write_tokens`; its
+normalized `noCacheTokens` subtracts cache reads but can still include provider
+cache writes. Treat `noCacheTokens` as adapter-normalized telemetry, not a
+cross-provider billing quantity, unless the adapter's read/write semantics have
+also been audited.
 
 These fields retain inputs that overlap the audited 2026-07-16 development
 [OpenTelemetry GenAI semantic-conventions snapshot](https://github.com/open-telemetry/semantic-conventions-genai/commit/33b7f9da9ade6162d4a5c16247d0bc6ad5f8b469),
-including cache-creation/read input counts, actual response model, and finish
-reasons. Those conventions moved to a separate development repository in May
-2026 and do not yet publish a stable schema URL, so this event does not claim
-OTel conformance or emit OTel attributes. Its per-successful-attempt usage
-records are also not equivalent to the snapshot's per-invocation inference and
-tool-call counts, which include failed and partial calls. In particular, the
-newer
+including cache-creation/read input counts, model attribution, and finish
+reasons. PSS prefers a provider-returned response model when available, then
+falls back to final-step and configured model metadata. The `provider` and
+fallback model identifiers are the adapter/client view; behind a proxy or
+router they need not identify the actual upstream provider. Those conventions
+moved to a separate development repository in May 2026 and do not yet publish
+a stable schema URL, so this event does not claim OTel conformance or emit OTel
+attributes. Its per-successful-attempt usage records are also not equivalent to
+the snapshot's per-invocation inference and tool-call counts, which include
+failed and partial calls. In particular, the newer
 `gen_ai.conversation.compacted` signal is defined only for known-true
 compaction; PSS keeps typed compaction provenance separately and does not infer
 that attribute here.

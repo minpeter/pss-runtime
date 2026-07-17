@@ -3,8 +3,10 @@ import { createHash } from "node:crypto";
 import { lstatSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { types as utilTypes } from "node:util";
 
 const SOURCE_DIRECTORY = fileURLToPath(new URL("./", import.meta.url));
+const MAX_DATA_ARRAY_LENGTH = 10_000;
 const EVIDENCE_DIRECTORY = fileURLToPath(
   new URL("../evidence/cache-telemetry/", import.meta.url)
 );
@@ -1566,6 +1568,11 @@ function assertDataOnlyJsonTree(value, label) {
       continue;
     }
     assert.equal(typeof current, "object", `${path} must be JSON data`);
+    assert.equal(
+      utilTypes.isProxy(current),
+      false,
+      `${path} must not be a Proxy`
+    );
     assert.ok(
       !activeAncestors.has(current),
       `${path} must not contain a cycle`
@@ -1603,6 +1610,10 @@ function queueDenseArrayValues(value, path, prototype, keys, stack) {
   );
   const length = lengthDescriptor.value;
   assertSafeNonNegativeInteger(length, `${path}.length`);
+  assert.ok(
+    length <= MAX_DATA_ARRAY_LENGTH,
+    `${path}.length must be at most ${MAX_DATA_ARRAY_LENGTH}`
+  );
   assert.deepEqual(
     keys,
     [...Array.from({ length }, (_, index) => String(index)), "length"],
