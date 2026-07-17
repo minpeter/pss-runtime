@@ -180,17 +180,64 @@ continuation state, not a public history API.
 
 Every successful agent-loop model attempt emits a metadata-only `model-usage`
 event before its generated message events. It normalizes the AI SDK fields as
-`provider`, `modelId`, `finishReason`, `durationMs`, `inputTokens`,
+`attemptId`, `provider`, `modelId`, `finishReason`, `durationMs`, `inputTokens`,
 `cacheReadTokens`, `cacheWriteTokens`, `noCacheTokens`, `outputTokens`,
 `reasoningTokens`, and `totalTokens`. `durationMs` is the AI SDK response wait
 time and excludes client-side tool execution; provider-reported token fields
 stay absent when unsupported, preserving the difference between missing and
-zero. Plugins can observe the same record through `model.usage`.
+zero. Some adapters normalize an omitted provider field to zero before PSS sees
+it. For example, `@ai-sdk/openai-compatible` 3.0.11 still maps an omitted raw
+cached-token field to normalized zero. `LanguageModelUsage.raw` may retain a
+provider-specific shape, but the generic PSS event intentionally reads only the
+normalized adapter fields and does not expose or guess raw provider keys.
+
+`attemptId` is generated once per PSS runtime model-step invocation. It
+correlates runtime telemetry and durable replay; it does not identify or count
+HTTP retries hidden inside an AI SDK or provider adapter. Plugins observe the
+same record through `model.usage` after the durable usage-flush boundary. A
+failing observer can fail the turn without erasing an already persisted usage
+record.
+
+When the host supports durable thread-event replay, the runtime immediately
+publishes `model-usage` to the live turn stream and then flushes pending
+lifecycle events through that usage record before calling observers. If the
+durable append fails, the observer is not called and the pending buffer is
+restored; turn-error recovery can persist the same usage record once. A
+permanent durable failure can still leave a live-only record. Durable
+`thread.events()` may expose lifecycle and usage records before the terminal
+thread-state commit, so replay is not proof that the generated state committed.
+Later state-commit failures and retries keep the original attempt record, with
+a distinct `attemptId` on the retry.
 
 The event is scoped to attempts in the public turn loop. Internal automatic
 compaction summary requests run outside that stream and do not emit it. Durable
 resume retries emit one record per successful provider attempt, including an
-attempt whose generated state later fails to commit and is retried.
+attempt whose generated state later fails to commit and is retried. Each retry
+invokes a new runtime model step and therefore receives a new `attemptId`.
+
+`model-usage` is operational telemetry, not an exactly-once billing ledger.
+There can be no local record when an SDK/provider retry is hidden from PSS, an
+adapter cannot parse the response, tool-call ID post-processing fails after a
+billed response, the process stops between the provider response and local
+event emission, or durable persistence fails permanently. Internal automatic
+compaction model calls are also outside this stream. Reconcile authoritative
+billing against provider invoices or provider request IDs.
+
+Eval cache summaries reject malformed token counts, impossible read/input
+pairs, and unsafe aggregate overflow instead of clamping them. Gate both sample
+size and coverage when making a cache claim:
+
+```ts
+t.cacheHitRateAtLeast(0.3, {
+  minTelemetryCoverage: 0.9,
+  minTrackedRequests: 10,
+  warmupRuns: 1,
+});
+```
+
+`minTelemetryCoverage` is the fraction of post-warmup model attempts with a
+valid cache-read/input pair. It prevents a high rate from a tiny reported
+subset from passing only because `minTrackedRequests` was met.
 
 ## Delegation
 

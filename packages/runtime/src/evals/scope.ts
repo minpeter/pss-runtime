@@ -94,18 +94,26 @@ export class EvalScopeImpl implements EvalScope {
     assertRate(minimum);
     const warmupRuns = options.warmupRuns ?? 0;
     const minTrackedRequests = options.minTrackedRequests ?? 1;
+    const minTelemetryCoverage = options.minTelemetryCoverage ?? 0;
     assertNonNegativeInteger("warmupRuns", warmupRuns);
     assertNonNegativeInteger("minTrackedRequests", minTrackedRequests);
+    assertRate(minTelemetryCoverage, "minTelemetryCoverage");
 
     const cache = summarizeCacheUsage(
       this.#runs.slice(warmupRuns).flatMap((run) => run.modelUsage)
     );
     const rate = cache.cacheHitRate;
     const enoughRequests = cache.trackedRequests >= minTrackedRequests;
-    const pass = rate !== undefined && enoughRequests && rate >= minimum;
+    const enoughCoverage =
+      cache.telemetryCoverage !== undefined &&
+      cache.telemetryCoverage >= minTelemetryCoverage;
+    const pass =
+      rate !== undefined && enoughRequests && enoughCoverage && rate >= minimum;
     const detail = cacheHitRateFailure({
       cache,
+      enoughCoverage,
       enoughRequests,
+      minTelemetryCoverage,
       minTrackedRequests,
       minimum,
       rate,
@@ -298,9 +306,9 @@ export class EvalScopeImpl implements EvalScope {
   }
 }
 
-function assertRate(value: number): void {
+function assertRate(value: number, name = "cache hit rate"): void {
   if (!(Number.isFinite(value) && value >= 0 && value <= 1)) {
-    throw new RangeError("cache hit rate must be between 0 and 1");
+    throw new RangeError(`${name} must be between 0 and 1`);
   }
 }
 
@@ -312,13 +320,17 @@ function assertNonNegativeInteger(name: string, value: number): void {
 
 function cacheHitRateFailure({
   cache,
+  enoughCoverage,
   enoughRequests,
+  minTelemetryCoverage,
   minTrackedRequests,
   minimum,
   rate,
 }: {
   readonly cache: EvalCacheStats;
+  readonly enoughCoverage: boolean;
   readonly enoughRequests: boolean;
+  readonly minTelemetryCoverage: number;
   readonly minTrackedRequests: number;
   readonly minimum: number;
   readonly rate: number | undefined;
@@ -326,7 +338,20 @@ function cacheHitRateFailure({
   if (!enoughRequests) {
     return `provider cache usage tracked for ${cache.trackedRequests} request(s); expected at least ${minTrackedRequests}`;
   }
+  if (!enoughCoverage) {
+    const observed = cache.telemetryCoverage;
+    return observed === undefined
+      ? `provider cache telemetry coverage was unavailable; expected at least ${minTelemetryCoverage.toFixed(4)}`
+      : `provider cache telemetry coverage ${observed.toFixed(4)} was below ${minTelemetryCoverage.toFixed(4)} (${cache.trackedRequests}/${cache.requests} requests)`;
+  }
   if (rate === undefined) {
+    if (
+      cache.trackedRequests > 0 &&
+      cache.trackedInputTokens === undefined &&
+      cache.trackedCacheReadTokens === undefined
+    ) {
+      return "provider-reported paired token totals exceeded the safe integer range";
+    }
     return cache.trackedInputTokens === 0
       ? "provider-reported tracked input token total was zero"
       : "provider did not report cache-read and input token counts";

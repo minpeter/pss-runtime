@@ -6,6 +6,7 @@ import {
   runAgent,
   summarizeCacheUsage,
 } from "@minpeter/pss-runtime/evals";
+import { validatedFreerouterBaseUrl } from "./freerouter-url.mjs";
 
 const ADAPTER = "@ai-sdk/openai-compatible@3.0.2";
 const ADAPTER_CACHE_BOUNDARY =
@@ -30,7 +31,9 @@ interface LiveModelResult {
 
 async function main(): Promise<void> {
   const apiKey = requiredEnv("FREEROUTER_API_KEY");
-  const baseURL = publicBaseUrl(requiredEnv("FREEROUTER_BASE_URL"));
+  const baseURL = validatedFreerouterBaseUrl(
+    requiredEnv("FREEROUTER_BASE_URL")
+  );
   const modelIds = [
     ...new Set(
       process.argv
@@ -165,6 +168,7 @@ function metadataOnlyUsage(
   attempt: number
 ): ModelUsage & { readonly attempt: number } {
   const {
+    attemptId,
     cacheReadTokens,
     cacheWriteTokens,
     durationMs,
@@ -180,6 +184,7 @@ function metadataOnlyUsage(
   } = usage;
   return {
     attempt,
+    attemptId,
     cacheReadTokens,
     cacheWriteTokens,
     durationMs,
@@ -213,20 +218,6 @@ function integerEnv(name: string, fallback: number, minimum: number): number {
     throw new Error(`${name} must be an integer >= ${minimum}`);
   }
   return value;
-}
-
-function publicBaseUrl(value: string): string {
-  const url = new URL(value);
-  if (url.protocol !== "https:" && url.protocol !== "http:") {
-    throw new Error("FREEROUTER_BASE_URL must use http or https");
-  }
-  if (url.username || url.password || url.search || url.hash) {
-    throw new Error(
-      "FREEROUTER_BASE_URL must not contain credentials, a query, or a fragment"
-    );
-  }
-  const serialized = url.toString();
-  return serialized.endsWith("/") ? serialized.slice(0, -1) : serialized;
 }
 
 main().catch((error: unknown) => {

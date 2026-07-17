@@ -94,6 +94,17 @@ export interface ModelStepOptions extends ModelGenerationOptions {
   toolExecution?: RuntimeToolExecutionContext;
 }
 
+const SAFE_TELEMETRY_IDENTIFIER_PATTERN =
+  /^[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,199}$/u;
+const FINISH_REASONS = new Set<ModelUsage["finishReason"]>([
+  "content-filter",
+  "error",
+  "length",
+  "other",
+  "stop",
+  "tool-calls",
+]);
+
 export async function generateModelStep({
   attachmentStore,
   contextGate,
@@ -136,6 +147,7 @@ export async function generateModelStepResult({
   toolExecution,
   tools,
 }: ModelStepOptions): Promise<ModelStepResult> {
+  const attemptId = crypto.randomUUID();
   const toolCallIds = new Map<string, string>();
   const prompt = promptForModel({ history, instructions });
   const messages = await hydrateRuntimeAttachments(
@@ -163,61 +175,137 @@ export async function generateModelStepResult({
       rewriteMessageToolCallIds(message, toolCallIds)
     ),
     usage: modelUsageEvent({
+      attemptId,
       durationMs: finalStep?.performance.responseTimeMs,
       finishReason,
-      modelId:
-        finalStep?.model.modelId ??
+      modelId: firstSafeTelemetryIdentifier(
         response?.modelId ??
-        configuredModelId(model),
-      provider: finalStep?.model.provider ?? configuredProvider(model),
+          finalStep?.model.modelId ??
+          configuredModelId(model),
+        finalStep?.model.modelId,
+        configuredModelId(model)
+      ),
+      provider: firstSafeTelemetryIdentifier(
+        finalStep?.model.provider,
+        configuredProvider(model)
+      ),
       usage,
     }),
   };
 }
 
 function modelUsageEvent({
+  attemptId,
   durationMs,
   finishReason,
   modelId,
   provider,
   usage,
 }: {
+  readonly attemptId: string;
   readonly durationMs?: number;
   readonly finishReason?: ModelUsage["finishReason"];
   readonly modelId?: string;
   readonly provider?: string;
   readonly usage?: LanguageModelUsage;
 }): ModelUsage {
-  const inputDetails = usage?.inputTokenDetails;
-  const outputDetails = usage?.outputTokenDetails;
+  const { cacheReadTokens, cacheWriteTokens, noCacheTokens } =
+    usage?.inputTokenDetails ?? {};
+  const { reasoningTokens } = usage?.outputTokenDetails ?? {};
+  const { inputTokens, outputTokens, totalTokens } = usage ?? {};
+  const normalized = {
+    cacheReadTokens: safeTokenCount(cacheReadTokens),
+    cacheWriteTokens: safeTokenCount(cacheWriteTokens),
+    durationMs: safeDuration(durationMs),
+    finishReason: safeFinishReason(finishReason),
+    inputTokens: safeTokenCount(inputTokens),
+    modelId: safeTelemetryIdentifier(modelId),
+    noCacheTokens: safeTokenCount(noCacheTokens),
+    outputTokens: safeTokenCount(outputTokens),
+    provider: safeTelemetryIdentifier(provider),
+    reasoningTokens: safeTokenCount(reasoningTokens),
+    totalTokens: safeTokenCount(totalTokens),
+  };
+
   return {
-    ...(inputDetails?.cacheReadTokens === undefined
+    attemptId,
+    ...(normalized.cacheReadTokens === undefined
       ? {}
-      : { cacheReadTokens: inputDetails.cacheReadTokens }),
-    ...(inputDetails?.cacheWriteTokens === undefined
+      : { cacheReadTokens: normalized.cacheReadTokens }),
+    ...(normalized.cacheWriteTokens === undefined
       ? {}
-      : { cacheWriteTokens: inputDetails.cacheWriteTokens }),
-    ...(durationMs === undefined ? {} : { durationMs }),
-    ...(finishReason === undefined ? {} : { finishReason }),
-    ...(usage?.inputTokens === undefined
+      : { cacheWriteTokens: normalized.cacheWriteTokens }),
+    ...(normalized.durationMs === undefined
       ? {}
-      : { inputTokens: usage.inputTokens }),
-    ...(modelId === undefined ? {} : { modelId }),
-    ...(inputDetails?.noCacheTokens === undefined
+      : { durationMs: normalized.durationMs }),
+    ...(normalized.finishReason === undefined
       ? {}
-      : { noCacheTokens: inputDetails.noCacheTokens }),
-    ...(usage?.outputTokens === undefined
+      : { finishReason: normalized.finishReason }),
+    ...(normalized.inputTokens === undefined
       ? {}
-      : { outputTokens: usage.outputTokens }),
-    ...(provider === undefined ? {} : { provider }),
-    ...(outputDetails?.reasoningTokens === undefined
+      : { inputTokens: normalized.inputTokens }),
+    ...(normalized.modelId === undefined
       ? {}
-      : { reasoningTokens: outputDetails.reasoningTokens }),
-    ...(usage?.totalTokens === undefined
+      : { modelId: normalized.modelId }),
+    ...(normalized.noCacheTokens === undefined
       ? {}
-      : { totalTokens: usage.totalTokens }),
+      : { noCacheTokens: normalized.noCacheTokens }),
+    ...(normalized.outputTokens === undefined
+      ? {}
+      : { outputTokens: normalized.outputTokens }),
+    ...(normalized.provider === undefined
+      ? {}
+      : { provider: normalized.provider }),
+    ...(normalized.reasoningTokens === undefined
+      ? {}
+      : { reasoningTokens: normalized.reasoningTokens }),
+    ...(normalized.totalTokens === undefined
+      ? {}
+      : { totalTokens: normalized.totalTokens }),
     type: "model-usage",
   };
+}
+
+function safeTokenCount(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : undefined;
+}
+
+function safeDuration(value: unknown): number | undefined {
+  if (!(typeof value === "number" && Number.isFinite(value) && value >= 0)) {
+    return;
+  }
+  const rounded = Math.round(value);
+  return Number.isSafeInteger(rounded) ? rounded : undefined;
+}
+
+function safeFinishReason(
+  value: unknown
+): ModelUsage["finishReason"] | undefined {
+  return typeof value === "string" &&
+    FINISH_REASONS.has(value as ModelUsage["finishReason"])
+    ? (value as ModelUsage["finishReason"])
+    : undefined;
+}
+
+function safeTelemetryIdentifier(value: unknown): string | undefined {
+  return typeof value === "string" &&
+    SAFE_TELEMETRY_IDENTIFIER_PATTERN.test(value)
+    ? value
+    : undefined;
+}
+
+function firstSafeTelemetryIdentifier(
+  ...values: readonly unknown[]
+): string | undefined {
+  for (const value of values) {
+    const safe = safeTelemetryIdentifier(value);
+    if (safe !== undefined) {
+      return safe;
+    }
+  }
+  return;
 }
 
 function configuredModelId(model: LanguageModel): string | undefined {

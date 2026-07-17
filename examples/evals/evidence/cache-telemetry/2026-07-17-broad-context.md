@@ -57,8 +57,10 @@ the first step and filling context rapidly.
 | Deep research | Large distractor corpus; select the newest source that is both primary and active, rejecting newer secondary or retracted sources | 0.22% → 34.44% | 94.4% → 77.8% | 70,426 |
 
 Scenario rows exclude Llama Scout because its route was not healthy enough for
-a paired comparison. Accuracy checks whether the response contains the exact
-expected evidence tokens; it is not a general model-quality score.
+a paired comparison. Accuracy here is a narrow **exact expected-token recall
+proxy**: it checks whether the requested evidence tokens were recovered. It
+does not score continuation quality, unsupported extra claims, false positives,
+or hallucinations, and is not a general model-quality score.
 
 ## Policy isolation
 
@@ -98,9 +100,8 @@ MiniMax's lower stable-prefix accuracy came mostly from `finish_reason=length`
 responses that spent the small output allowance without returning the required
 evidence. Ministral retained accuracy with a moderate cache gain. GLM retained
 accuracy and cache reuse but developed a large tail, including a 31.2 s p95 in
-file search. Llama Scout returned repeated upstream empty-assistant-response
-errors, so its row is availability evidence rather than a fair model or context
-window result.
+file search. Llama Scout returned repeated upstream errors, so its row is
+availability evidence rather than a fair model or context-window result.
 
 ## Interpretation
 
@@ -128,9 +129,11 @@ global threshold: keep immutable instructions, tool schemas, and durable indexes
 byte-stable; append confirmed state changes; compact at semantic checkpoints or
 a measured token high-water; reserve enough output tokens for reasoning models;
 and fail the eval when cache telemetry coverage is too low to trust the rate.
-A 45K–60K starting high-water is worth a follow-up sweep for MiniMax and
-research-heavy workloads, while Ministral and GLM can be evaluated at higher
-thresholds with explicit p95 gates.
+The [45K/60K policy-tuning follow-up](./2026-07-17-policy-tuning.md) completed
+that sweep. A uniform 60K high-water plus a 512-token MiniMax output budget
+reached 54/54 exact correctness, 31.92% warm cache hit, and 12.798 s p95. A
+post-hoc route-aware composite measured 38.34% hit at the same correctness and
+p95, but it still needs an independent interleaved confirmation run.
 
 ## Measurement boundaries
 

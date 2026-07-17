@@ -12,6 +12,8 @@ import { assistantMessage } from "../testing/test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
 const unsupportedApprovalPattern = /needsApproval.*not supported/;
+const UUID_V4_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 describe("generateModelStep", () => {
   beforeEach(() => {
@@ -130,6 +132,88 @@ describe("generateModelStep", () => {
         toolChoice,
       })
     );
+  });
+
+  it("attributes usage to the provider response model before the configured model", async () => {
+    generateTextMock.mockResolvedValue({
+      finalStep: {
+        model: { modelId: "configured-step-model", provider: "provider-a" },
+        performance: { responseTimeMs: 125 },
+      },
+      finishReason: "stop",
+      response: { modelId: "provider-routed-model" },
+      responseMessages: [assistantMessage("DONE")],
+      usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12 },
+    });
+    const { generateModelStepResult } = await import("./llm");
+
+    const result = await generateModelStepResult({
+      history: [{ role: "user", content: "hello" }],
+      model: fakeModel,
+      signal: new AbortController().signal,
+    });
+
+    expect(result.usage).toMatchObject({
+      modelId: "provider-routed-model",
+      provider: "provider-a",
+      type: "model-usage",
+    });
+  });
+
+  it("drops malformed usage metadata and falls back to safe model attribution", async () => {
+    generateTextMock.mockResolvedValue({
+      finalStep: {
+        model: { modelId: "safe/fallback-model", provider: "safe.provider" },
+        performance: { responseTimeMs: 12.6 },
+      },
+      finishReason: "provider-secret\ninvalid",
+      response: { modelId: "routed-model\ninvalid" },
+      responseMessages: [assistantMessage("DONE")],
+      usage: {
+        inputTokenDetails: {
+          cacheReadTokens: 1.5,
+          cacheWriteTokens: 2,
+          noCacheTokens: Number.NaN,
+        },
+        inputTokens: -1,
+        outputTokenDetails: { reasoningTokens: 3 },
+        outputTokens: 0,
+        totalTokens: Number.MAX_SAFE_INTEGER + 1,
+      },
+    });
+    const { generateModelStepResult } = await import("./llm");
+
+    const result = await generateModelStepResult({
+      history: [{ role: "user", content: "hello" }],
+      model: fakeModel,
+      signal: new AbortController().signal,
+    });
+
+    expect(result.usage).toEqual({
+      attemptId: expect.any(String),
+      cacheWriteTokens: 2,
+      durationMs: 13,
+      modelId: "safe/fallback-model",
+      outputTokens: 0,
+      provider: "safe.provider",
+      reasoningTokens: 3,
+      type: "model-usage",
+    });
+  });
+
+  it("creates one distinct opaque attempt ID per runtime model-step invocation", async () => {
+    const { generateModelStepResult } = await import("./llm");
+    const options = {
+      history: [{ role: "user" as const, content: "hello" }],
+      model: fakeModel,
+      signal: new AbortController().signal,
+    };
+
+    const first = await generateModelStepResult(options);
+    const second = await generateModelStepResult(options);
+
+    expect(first.usage.attemptId).toMatch(UUID_V4_PATTERN);
+    expect(second.usage.attemptId).not.toBe(first.usage.attemptId);
   });
 
   it("rejects tools using AI SDK tool approval before generateText", async () => {

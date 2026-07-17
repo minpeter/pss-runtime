@@ -15,6 +15,14 @@ with preserving a stable prefix until a projected token high-water mark. That
 campaign is a raw protocol policy control, not a PSS automatic-compaction E2E
 run.
 
+The [policy-tuning follow-up](./2026-07-17-policy-tuning.md) adds another 168
+logical turns / 168 HTTP attempts at 45K and 60K high-water marks plus a MiniMax
+output-budget sweep. Its [sanitized snapshot](./2026-07-17-policy-tuning.json)
+and [visual summary](./2026-07-17-policy-tuning.png) show a 100%-correct uniform
+fallback and an exploratory route-aware composite that raises measured cache
+hit to 38.34% without regressing aggregate p95. The composite is post-hoc and
+still requires an independent interleaved confirmation run.
+
 ## Method
 
 The campaign ran on 2026-07-17 against the OpenAI-compatible Freerouter
@@ -68,14 +76,28 @@ completed without an HTTP failure.
 
 The campaign used `@ai-sdk/openai-compatible@3.0.2`. Its usage converter maps
 an omitted raw `prompt_tokens_details.cached_tokens` field to normalized zero
-with `?? 0`. Consequently, an individual zero in the PSS-path snapshot is
-ambiguous: it can mean either an explicit upstream zero or an omitted field.
+with `?? 0`. The converter source was rechecked in 3.0.11 (the latest release
+on 2026-07-17) and still has the same omission-collapsing behavior.
+Consequently, an individual zero in the PSS-path snapshot is ambiguous: it can
+mean either an explicit upstream zero or an omitted field.
 
 PSS preserves `undefined` when the AI SDK supplies `undefined`, but it cannot
 recover information already collapsed by an adapter. Nonzero cache-read counts
 are unambiguous evidence that the runtime event and eval aggregation path carry
 provider cache telemetry. Provider-level missing-versus-zero audits must use a
 raw protocol probe or an adapter that preserves omission.
+
+These campaigns measured cache **reads** only. [Current OpenAI APIs](https://developers.openai.com/api/docs/guides/prompt-caching#requirements)
+can also report cache writes as `prompt_tokens_details.cache_write_tokens`
+(Chat Completions) or the corresponding input-token details (Responses). The runtime
+already preserves `cacheWriteTokens` when an adapter supplies it, and the new
+broad-context harness parses raw write fields, but openai-compatible 3.0.11 does
+not normalize them. Read hit rate alone therefore does not establish net cache
+economics for providers or models that charge separately for writes. The same
+OpenAI guide currently documents cache-write tokens for GPT-5.6+ at 1.25× the
+standard input-token price. That pricing is model- and provider-specific; none
+of these router read-token measurements is presented as a savings claim without
+write telemetry and the applicable price schedule.
 
 ## Reproduce the PSS path
 
@@ -98,6 +120,96 @@ credential. It intentionally omits prompts, event bodies, and model outputs.
 The defaults reproduce the five-turn PSS campaign. Override them with
 `PSS_CACHE_BENCH_TURNS`, `PSS_CACHE_BENCH_WARMUP_RUNS`,
 `PSS_CACHE_BENCH_PREFIX_LINES`, and `PSS_CACHE_BENCH_MAX_OUTPUT_TOKENS`.
+
+## Reproduce and verify the broad-context evidence
+
+The checked-in [broad-context harness](../../src/broad-context-cache-benchmark.mjs)
+preserves the original scenario and request construction while making its
+default report metadata-only. It never writes prompts, expected tokens, raw
+responses, or credentials to stdout. Inspect a deterministic fixture manifest
+without a key:
+
+```sh
+PSS_LIVE_FIXTURE_ONLY=true pnpm --filter @minpeter/pss-example-evals \
+  eval:cache-broad -- conversation .
+```
+
+For a live run, set the endpoint, enter the key through a hidden prompt, and
+redirect the sanitized report outside the repository:
+
+```sh
+export FREEROUTER_BASE_URL=https://freerouter.minpeter.workers.dev/v1
+read -rsp 'Freerouter API key: ' FREEROUTER_API_KEY
+export FREEROUTER_API_KEY
+PSS_LIVE_MODELS=mistralai/ministral-14b-latest \
+PSS_LIVE_POLICIES=high-water-stable-prefix \
+PSS_LIVE_HIGH_WATER_TOKENS=60000 \
+pnpm --filter @minpeter/pss-example-evals eval:cache-broad -- \
+  file-search . > /tmp/pss-broad-context.json
+unset FREEROUTER_API_KEY
+```
+
+The URL validator requires HTTPS at the exact `/v1` API root and rejects URL
+credentials, query data, and fragments before constructing a Bearer request.
+The `/models` preflight is mandatory and fails closed unless every requested
+model ID is present. It records only requested and present model IDs. The
+offline verifier independently recomputes every checked-in
+run, variant, uniform candidate, route-aware composite, full-coverage control,
+percentile, and parent snapshot hash from per-turn metadata. It also rejects
+raw prompt, response, credential, or authorization fields:
+
+```sh
+pnpm --filter @minpeter/pss-example-evals evidence:verify-cache
+```
+
+For a preregistered confirmation of the two routes where the exploratory
+route-aware policy differs from the uniform 60K fallback, run each command once.
+Each command executes `uniform → route-aware → route-aware → uniform`, with a
+fresh unique cache prefix per run, and emits only sanitized metadata:
+
+```sh
+PSS_LIVE_CONFIRMATION=true \
+PSS_LIVE_STEPS=6 \
+PSS_LIVE_CHUNK_CHARACTERS=60000 \
+PSS_LIVE_HIGH_WATER_TOKENS=75000 \
+PSS_LIVE_MODELS=mistralai/ministral-14b-latest \
+pnpm --filter @minpeter/pss-example-evals eval:cache-broad -- \
+  file-search > /tmp/pss-confirm-file-search.json
+
+PSS_LIVE_CONFIRMATION=true \
+PSS_LIVE_STEPS=6 \
+PSS_LIVE_CHUNK_CHARACTERS=60000 \
+PSS_LIVE_HIGH_WATER_TOKENS=75000 \
+PSS_LIVE_MODELS=minimaxai/minimax-m2.7 \
+pnpm --filter @minpeter/pss-example-evals eval:cache-broad -- \
+  conversation > /tmp/pss-confirm-conversation.json
+```
+
+After both one-shot campaigns complete, import them through the validator and
+atomic evidence writer rather than copying or redirecting files into the
+repository:
+
+```sh
+pnpm --filter @minpeter/pss-example-evals \
+  evidence:assemble-cache-confirmation -- \
+  /tmp/pss-confirm-file-search.json \
+  /tmp/pss-confirm-conversation.json
+pnpm --filter @minpeter/pss-example-evals evidence:verify-cache
+```
+
+The runner records a manifest for itself, response parser, and URL validator,
+then checks the manifest again after the campaign. The assembler also records
+its verifier/schema source manifest. Verification fails if the current source
+corpus fixture, behavior source, ABBA order, single-attempt rule, model catalog,
+usage envelope, response-model audit, successful-turn finish-reason coverage,
+or generated Markdown differs. Valid
+content from a missing or aliased response-model field remains in the workload
+so auditing cannot change later prompts; cache aggregates include only turns
+whose response model exactly matches the requested route, while mismatch and
+missing counts remain explicit evidence.
+
+The file-search command sends the current non-test runtime source corpus to the
+configured endpoint. Run it only when that external-data transfer is authorized.
 
 ## Limits
 

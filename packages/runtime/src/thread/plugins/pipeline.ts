@@ -78,8 +78,13 @@ function normalizeInterceptResult(
   return;
 }
 
-function eventForPluginHandler(event: AgentPluginEvent): AgentPluginEvent {
-  return isPluginToolCallBeforeEvent(event) ? structuredClone(event) : event;
+function eventForPluginHandler(
+  event: AgentPluginEvent,
+  observeOnly: boolean
+): AgentPluginEvent {
+  return observeOnly || isPluginToolCallBeforeEvent(event)
+    ? structuredClone(event)
+    : event;
 }
 
 function canInterceptEvent(
@@ -118,7 +123,7 @@ async function runPluginPipeline(
 
     const result = await handler({
       ...context,
-      event: eventForPluginHandler(currentEvent),
+      event: eventForPluginHandler(currentEvent, observeOnly),
     });
     if (!canInterceptEvent(currentEvent, observeOnly)) {
       continue;

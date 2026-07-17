@@ -39,6 +39,8 @@ export interface AssistantReasoning {
  * counts stay optional because not every provider reports every field.
  */
 export interface ModelUsage {
+  /** Opaque identifier for this runtime model-step invocation. */
+  attemptId: string;
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
   /** AI SDK response wait time in milliseconds, excluding client tool execution. */

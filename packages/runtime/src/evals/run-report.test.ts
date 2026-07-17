@@ -91,6 +91,7 @@ describe("eval run reports", () => {
         await t.run("turn 2");
         await t.run("turn 3");
         t.cacheHitRateAtLeast(0.8, {
+          minTelemetryCoverage: 1,
           minTrackedRequests: 2,
           warmupRuns: 1,
         });
@@ -177,9 +178,57 @@ describe("eval run reports", () => {
       passed: false,
     });
     expect(JSON.parse(formatJsonReport(report)).cache).toEqual({
+      invalidPairedRequests: 0,
       requests: 1,
+      telemetryCoverage: 0,
       trackedRequests: 0,
     });
+  });
+
+  it("jointly gates cache rate on tracked request count and telemetry coverage", async () => {
+    clearEvals();
+    defineEval(
+      "cache-sparse-telemetry",
+      {
+        thread: () =>
+          new Agent({
+            model: createMockLanguageModelV4([
+              mockLanguageModelV4Text("tracked one", cacheUsage(100, 90)),
+              mockLanguageModelV4Text("unreported one"),
+              mockLanguageModelV4Text("tracked two", cacheUsage(100, 90)),
+              mockLanguageModelV4Text("unreported two"),
+            ]),
+          }).thread("cache-sparse-telemetry"),
+      },
+      (it) => {
+        it("does not trust a high rate from sparse telemetry", async (t) => {
+          await t.run("one");
+          await t.run("two");
+          await t.run("three");
+          await t.run("four");
+          t.cacheHitRateAtLeast(0.8, {
+            minTelemetryCoverage: 0.75,
+            minTrackedRequests: 2,
+          });
+        });
+      }
+    );
+
+    const result = (await runEvals()).results[0];
+    expect(result.cache).toMatchObject({
+      cacheHitRate: 0.9,
+      requests: 4,
+      telemetryCoverage: 0.5,
+      trackedRequests: 2,
+    });
+    expect(result.assertions[0]).toMatchObject({
+      failure: expect.stringContaining(
+        "cache telemetry coverage 0.5000 was below 0.7500"
+      ),
+      passed: false,
+      score: 0.9,
+    });
+    expect(result.passed).toBe(false);
   });
 
   it("rejects a cache-rate gate when tracked input is explicitly zero", async () => {
@@ -213,7 +262,9 @@ describe("eval run reports", () => {
       cache: {
         cacheReadTokens: 0,
         inputTokens: 0,
+        invalidPairedRequests: 0,
         requests: 1,
+        telemetryCoverage: 1,
         trackedCacheReadTokens: 0,
         trackedInputTokens: 0,
         trackedRequests: 1,

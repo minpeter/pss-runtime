@@ -61,6 +61,7 @@ function agentEventVariants(): readonly AgentEvent[] {
     { type: "turn-end" },
     { type: "step-start" },
     {
+      attemptId: "attempt-provider-a",
       cacheReadTokens: 768,
       cacheWriteTokens: 256,
       durationMs: 125.5,

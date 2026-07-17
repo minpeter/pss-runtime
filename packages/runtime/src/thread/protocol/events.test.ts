@@ -51,6 +51,7 @@ describe("thread event protocol boundary", () => {
         type: "assistant-reasoning",
       },
       {
+        attemptId: "attempt-telemetry",
         cacheReadTokens: 80,
         inputTokens: 100,
         type: "model-usage",

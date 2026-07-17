@@ -39,8 +39,12 @@ export interface EvalCacheStats {
   readonly cacheReadTokens?: number;
   readonly cacheWriteTokens?: number;
   readonly inputTokens?: number;
+  /** Requests that reported both read and input counts but not a valid pair. */
+  readonly invalidPairedRequests: number;
   readonly noCacheTokens?: number;
   readonly requests: number;
+  /** Fraction of attempts with a valid paired cache-read/input observation. */
+  readonly telemetryCoverage?: number;
   /** Cache-read tokens from requests used in `cacheHitRate`. */
   readonly trackedCacheReadTokens?: number;
   /** Input tokens from requests used in `cacheHitRate`. */
@@ -49,6 +53,8 @@ export interface EvalCacheStats {
 }
 
 export interface CacheHitRateOptions {
+  /** Require this fraction of post-warmup attempts to have a valid token pair. */
+  readonly minTelemetryCoverage?: number;
   /** Require at least this many attempts with both input and cache-read counts. */
   readonly minTrackedRequests?: number;
   /** Exclude this many initial `t.run()` calls from the steady-state rate. */
