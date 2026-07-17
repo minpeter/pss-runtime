@@ -312,7 +312,28 @@ function coordinateMismatchDocument() {
   const campaign = document.campaigns["file-search"];
   for (const run of campaign.runs) {
     for (const turn of run.turns) {
-      turn.correct = true;
+      Object.assign(turn, {
+        cacheFieldReported: true,
+        cachedTokens: 500,
+        cacheWriteFieldReported: false,
+        cacheWriteTokens: null,
+        correct: true,
+        errorClass: null,
+        finishReason: "stop",
+        httpStatus: 200,
+        inputTokens: 1000,
+        latencyMs: 100,
+        requestSuccessful: true,
+        responseModel: run.modelId,
+        responseModelMatchesRequested: true,
+        tokenRecallCorrect: true,
+        usageEnvelopeValid: true,
+        usageFieldAudit: {
+          cacheRead: "valid",
+          cacheWrite: "absent",
+          input: "valid",
+        },
+      });
     }
     refreshRun(run);
   }
