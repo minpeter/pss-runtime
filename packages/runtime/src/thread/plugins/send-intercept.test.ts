@@ -1,40 +1,39 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
-import { Agent } from "../../agent/core/agent";
+import { createAgent } from "../../agent/core/agent";
+import { definePlugin } from "../../plugins/api";
 import {
   assistantMessage,
   createCallbackModel,
-  eventTypes,
   userText,
 } from "../../testing/test-fixtures";
 import { collect } from "../handle/test-support";
-import type { AgentPlugin } from "../plugins/pipeline";
 import { userTextToModelMessage } from "../protocol/mapping";
 
 describe("thread.send intercept", () => {
   it("queues transformed user-input into model history", async () => {
     const seenHistory: ModelMessage[][] = [];
-    const transformPlugin: AgentPlugin = {
-      on: ({ event }) => {
+    const tagPlugin = definePlugin((pss) => {
+      pss.on("input.accept", (event) => {
         if (
           event.type !== "user-input" ||
           !("text" in event) ||
           typeof event.text !== "string"
         ) {
-          return;
+          return undefined;
         }
         return {
           action: "transform",
-          event: { ...event, text: `TAG:${event.text}` },
+          value: { ...event, text: `TAG:${event.text}` },
         };
-      },
-    };
-    const agent = new Agent({
+      });
+    });
+    const agent = await createAgent({
       model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
       }),
-      plugins: [transformPlugin],
+      plugins: [tagPlugin],
     });
 
     await collect(await agent.send("hello"));
@@ -45,10 +44,10 @@ describe("thread.send intercept", () => {
   });
 
   it("skips turn-start when send input is handled", async () => {
-    const handledPlugin: AgentPlugin = {
-      on: () => ({ action: "handled" }),
-    };
-    const agent = new Agent({
+    const handledPlugin = definePlugin((pss) => {
+      pss.on("input.accept", () => ({ action: "handled" }));
+    });
+    const agent = await createAgent({
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
       ),
@@ -57,6 +56,6 @@ describe("thread.send intercept", () => {
 
     const events = await collect(await agent.send("hello"));
 
-    expect(eventTypes(events)).toEqual([]);
+    expect(events.map((event) => event.type)).toEqual([]);
   });
 });

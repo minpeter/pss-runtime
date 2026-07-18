@@ -1,6 +1,7 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
-import { Agent } from "../../agent/core/agent";
+import { createAgent } from "../../agent/core/agent";
+import { definePlugin } from "../../plugins/api";
 import {
   assistantMessage,
   createCallbackModel,
@@ -13,14 +14,29 @@ import { userTextToModelMessage } from "../protocol/mapping";
 describe("Agent thread plugin events", () => {
   it("calls event plugins for queued turn events", async () => {
     const pluginCalls: string[] = [];
-    const agent = new Agent({
-      plugins: [
-        {
-          on: ({ event, history }) => {
-            pluginCalls.push(`${event.type}:${history.length}`);
-          },
-        },
-      ],
+    const observerPlugin = definePlugin((pss) => {
+      pss.on("input.accept", (event, { history }) => {
+        pluginCalls.push(`${event.type}:${history.length}`);
+        return undefined;
+      });
+      pss.on("turn.start", (event, { history }) => {
+        pluginCalls.push(`${event.type}:${history.length}`);
+      });
+      pss.on("step.start", (event, { history }) => {
+        pluginCalls.push(`${event.type}:${history.length}`);
+      });
+      pss.on("message.end", (event, { history }) => {
+        pluginCalls.push(`${event.type}:${history.length}`);
+      });
+      pss.on("step.end", (event, { history }) => {
+        pluginCalls.push(`${event.type}:${history.length}`);
+      });
+      pss.on("turn.end", (event, { history }) => {
+        pluginCalls.push(`${event.type}:${history.length}`);
+      });
+    });
+    const agent = await createAgent({
+      plugins: [observerPlugin],
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
       ),
@@ -48,17 +64,19 @@ describe("Agent thread plugin events", () => {
 
   it("lets plugins branch on emitted run events", async () => {
     const pluginEventTypes: string[] = [];
-    const agent = new Agent({
-      plugins: [
-        {
-          on: async ({ event }) => {
-            if (event.type === "assistant-reasoning") {
-              await Promise.resolve();
-            }
-            pluginEventTypes.push(event.type);
-          },
-        },
-      ],
+    const observerPlugin = definePlugin((pss) => {
+      pss.on("input.accept", (event) => {
+        pluginEventTypes.push(event.type);
+        return undefined;
+      });
+      pss.on("turn.start", (event) => { pluginEventTypes.push(event.type); });
+      pss.on("step.start", (event) => { pluginEventTypes.push(event.type); });
+      pss.on("message.end", (event) => { pluginEventTypes.push(event.type); });
+      pss.on("step.end", (event) => { pluginEventTypes.push(event.type); });
+      pss.on("turn.end", (event) => { pluginEventTypes.push(event.type); });
+    });
+    const agent = await createAgent({
+      plugins: [observerPlugin],
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
       ),
@@ -72,15 +90,13 @@ describe("Agent thread plugin events", () => {
   it("commits successful output before terminal event plugin failures", async () => {
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
-    const agent = new Agent({
+    const agent = await createAgent({
       plugins: [
-        {
-          on: ({ event }) => {
-            if (event.type === "turn-end") {
-              throw new Error("turn-end plugin failed");
-            }
-          },
-        },
+        definePlugin((pss) => {
+          pss.on("turn.end", () => {
+            throw new Error("turn-end plugin failed");
+          });
+        }),
       ],
       model: createCallbackModel(({ history }) => {
         calls += 1;

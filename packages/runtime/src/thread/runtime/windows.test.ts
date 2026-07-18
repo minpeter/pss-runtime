@@ -1,6 +1,7 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
-import { Agent } from "../../agent/core/agent";
+import { createAgent } from "../../agent/core/agent";
+import { definePlugin } from "../../plugins/api";
 import {
   assistantMessage,
   createCallbackModel,
@@ -19,15 +20,35 @@ describe("Agent thread runtime input windows", () => {
     const trace: string[] = [];
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
-    const agent = new Agent({
-      plugins: [
-        {
-          on: ({ event, history }) => {
-            pluginCalls.push(`${event.type}:${history.length}`);
-            trace.push(`plugin:${event.type}`);
-          },
-        },
-      ],
+    const observerPlugin = definePlugin((pss) => {
+      pss.on("input.accept", (event, { history }) => {
+        pluginCalls.push(`${event.type}:${history.length}`);
+        trace.push(`plugin:${event.type}`);
+        return undefined;
+      });
+      pss.on("turn.start", (event, { history }) => {
+        pluginCalls.push(`${event.type}:${history.length}`);
+        trace.push(`plugin:${event.type}`);
+      });
+      pss.on("step.start", (event, { history }) => {
+        pluginCalls.push(`${event.type}:${history.length}`);
+        trace.push(`plugin:${event.type}`);
+      });
+      pss.on("message.end", (event, { history }) => {
+        pluginCalls.push(`${event.type}:${history.length}`);
+        trace.push(`plugin:${event.type}`);
+      });
+      pss.on("step.end", (event, { history }) => {
+        pluginCalls.push(`${event.type}:${history.length}`);
+        trace.push(`plugin:${event.type}`);
+      });
+      pss.on("turn.end", (event, { history }) => {
+        pluginCalls.push(`${event.type}:${history.length}`);
+        trace.push(`plugin:${event.type}`);
+      });
+    });
+    const agent = await createAgent({
+      plugins: [observerPlugin],
       model: createCallbackModel(({ history }) => {
         trace.push(`llm:${calls}`);
         seenHistory.push([...history]);
@@ -167,7 +188,7 @@ describe("Agent thread runtime input windows", () => {
 
   it("active thread.steer at turn-start and step-start is visible before the first LLM snapshot", async () => {
     const seenHistory: ModelMessage[][] = [];
-    const agent = new Agent({
+    const agent = await createAgent({
       model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);

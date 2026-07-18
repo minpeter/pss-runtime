@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { definePlugin } from "../plugins/api";
 import { throwIfManualToolRecoveryRequired } from "../execution/resume/checkpoints";
 import { ToolExecutionNeedsRecoveryError } from "../llm/tool-execution";
 import {
@@ -12,7 +13,6 @@ import {
   executableTool,
   fakeModel,
   getGenerateTextMock,
-  loadAgent,
 } from "./llm-test-utils";
 import { assistantMessage } from "./test-fixtures";
 
@@ -29,7 +29,7 @@ describe("plugin-forced tool recovery through Agent", () => {
   });
 
   it("lets plugins stop tool execution after the before-tool checkpoint", async () => {
-    const Agent = await loadAgent();
+    const { createAgent } = await import("../agent/core/agent");
     const { checkpoints, host } = createCheckpointSpyHost();
     const signal = new AbortController().signal;
     let executions = 0;
@@ -48,21 +48,17 @@ describe("plugin-forced tool recovery through Agent", () => {
       }
     );
 
-    const agent = new Agent({
+    const recoveryPlugin = definePlugin((pss) => {
+      pss.on("tool.call.before", (event) => {
+        interceptedToolNames.push(event.toolName);
+        return { action: "needs-recovery" };
+      });
+    });
+
+    const agent = await createAgent({
       host,
       model: fakeModel,
-      plugins: [
-        {
-          on: ({ event }) => {
-            if (event.type !== "tool.call.before") {
-              return;
-            }
-
-            interceptedToolNames.push(event.toolName);
-            return { action: "needs-recovery" };
-          },
-        },
-      ],
+      plugins: [recoveryPlugin],
       tools: {
         dangerous_tool: checkpointedTool("manual-recovery", () => {
           executions += 1;
@@ -91,7 +87,7 @@ describe("plugin-forced tool recovery through Agent", () => {
   });
 
   it("persists plugin-forced recovery so idempotent tools cannot replay on resume", async () => {
-    const Agent = await loadAgent();
+    const { createAgent } = await import("../agent/core/agent");
     const { checkpoints, host } = createCheckpointSpyHost();
     const signal = new AbortController().signal;
     let executions = 0;
@@ -109,17 +105,14 @@ describe("plugin-forced tool recovery through Agent", () => {
       }
     );
 
-    const agent = new Agent({
+    const recoveryPlugin = definePlugin((pss) => {
+      pss.on("tool.call.before", () => ({ action: "needs-recovery" }));
+    });
+
+    const agent = await createAgent({
       host,
       model: fakeModel,
-      plugins: [
-        {
-          on: ({ event }) =>
-            event.type === "tool.call.before"
-              ? { action: "needs-recovery" }
-              : undefined,
-        },
-      ],
+      plugins: [recoveryPlugin],
       tools: {
         dangerous_tool: checkpointedTool("idempotent", () => {
           executions += 1;

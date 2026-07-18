@@ -1,6 +1,7 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
-import { Agent } from "../../agent/core/agent";
+import { createAgent } from "../../agent/core/agent";
+import { definePlugin } from "../../plugins/api";
 import {
   assistantMessage,
   createCallbackModel,
@@ -19,33 +20,30 @@ describe("Agent thread runtime input plugins", () => {
       | undefined;
     let turnEndSteered = false;
     let step = 0;
-    let thread: ReturnType<Agent["thread"]>;
-    const agent = new Agent({
-      plugins: [
-        {
-          on: async ({ event }) => {
-            if (event.type === "turn-start") {
-              await thread.steer("turn start steer");
-              return;
-            }
-
-            if (event.type === "step-start" && step === 0) {
-              await thread.steer("step start steer");
-              return;
-            }
-
-            if (event.type === "step-end" && step === 1) {
-              await thread.steer("step end steer");
-              return;
-            }
-
-            if (event.type === "turn-end" && !turnEndSteered) {
-              turnEndSteered = true;
-              turnEndRun = thread.steer("turn end steer");
-            }
-          },
-        },
-      ],
+    let thread: ReturnType<Awaited<ReturnType<typeof createAgent>>["thread"]>;
+    const steeringPlugin = definePlugin((pss) => {
+      pss.on("turn.start", async () => {
+        await thread.steer("turn start steer");
+      });
+      pss.on("step.start", async () => {
+        if (step === 0) {
+          await thread.steer("step start steer");
+        }
+      });
+      pss.on("step.end", async () => {
+        if (step === 1) {
+          await thread.steer("step end steer");
+        }
+      });
+      pss.on("turn.end", async () => {
+        if (!turnEndSteered) {
+          turnEndSteered = true;
+          turnEndRun = thread.steer("turn end steer");
+        }
+      });
+    });
+    const agent = await createAgent({
+      plugins: [steeringPlugin],
       model: createCallbackModel(({ history }) => {
         step += 1;
         seenHistory.push([...history]);
