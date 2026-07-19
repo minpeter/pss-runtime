@@ -20,7 +20,7 @@ describe("thread.send intercept", () => {
           !("text" in event) ||
           typeof event.text !== "string"
         ) {
-          return undefined;
+          return;
         }
         return {
           action: "transform",

@@ -14,10 +14,7 @@ import {
   type RuntimeAttachmentReference,
   stageAgentEventAttachments,
 } from "../input/attachments";
-import type {
-  AgentEvent,
-  ToolResult,
-} from "../protocol/events";
+import type { AgentEvent, ToolResult } from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
 import type { ThreadCompactionInput, ThreadState } from "../state/thread-state";
 

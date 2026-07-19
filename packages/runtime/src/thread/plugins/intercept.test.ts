@@ -17,10 +17,10 @@ describe("thread plugin intercept integration", () => {
     const tagPlugin = definePlugin((pss) => {
       pss.on("input.accept", (event) => {
         if (event.type !== "user-input" || event.meta?.source !== "send") {
-          return undefined;
+          return;
         }
         if (!("text" in event) || typeof event.text !== "string") {
-          return undefined;
+          return;
         }
         return {
           action: "transform",
@@ -54,7 +54,7 @@ describe("thread plugin intercept integration", () => {
       });
       pss.on("input.accept", (event) => {
         seen.push(event.type);
-        return undefined;
+        return;
       });
     });
     const agent = await createAgent({
@@ -100,7 +100,7 @@ describe("thread plugin intercept integration", () => {
           !("text" in event) ||
           typeof event.text !== "string"
         ) {
-          return undefined;
+          return;
         }
         return {
           action: "transform",

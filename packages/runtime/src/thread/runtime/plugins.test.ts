@@ -35,7 +35,7 @@ describe("Agent thread runtime input plugins", () => {
           await thread.steer("step end steer");
         }
       });
-      pss.on("turn.end", async () => {
+      pss.on("turn.end", () => {
         if (!turnEndSteered) {
           turnEndSteered = true;
           turnEndRun = thread.steer("turn end steer");

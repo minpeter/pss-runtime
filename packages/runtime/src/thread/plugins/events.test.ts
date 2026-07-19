@@ -17,7 +17,7 @@ describe("Agent thread plugin events", () => {
     const observerPlugin = definePlugin((pss) => {
       pss.on("input.accept", (event, { history }) => {
         pluginCalls.push(`${event.type}:${history.length}`);
-        return undefined;
+        return;
       });
       pss.on("turn.start", (event, { history }) => {
         pluginCalls.push(`${event.type}:${history.length}`);
@@ -67,13 +67,23 @@ describe("Agent thread plugin events", () => {
     const observerPlugin = definePlugin((pss) => {
       pss.on("input.accept", (event) => {
         pluginEventTypes.push(event.type);
-        return undefined;
+        return;
       });
-      pss.on("turn.start", (event) => { pluginEventTypes.push(event.type); });
-      pss.on("step.start", (event) => { pluginEventTypes.push(event.type); });
-      pss.on("message.end", (event) => { pluginEventTypes.push(event.type); });
-      pss.on("step.end", (event) => { pluginEventTypes.push(event.type); });
-      pss.on("turn.end", (event) => { pluginEventTypes.push(event.type); });
+      pss.on("turn.start", (event) => {
+        pluginEventTypes.push(event.type);
+      });
+      pss.on("step.start", (event) => {
+        pluginEventTypes.push(event.type);
+      });
+      pss.on("message.end", (event) => {
+        pluginEventTypes.push(event.type);
+      });
+      pss.on("step.end", (event) => {
+        pluginEventTypes.push(event.type);
+      });
+      pss.on("turn.end", (event) => {
+        pluginEventTypes.push(event.type);
+      });
     });
     const agent = await createAgent({
       plugins: [observerPlugin],

@@ -6,6 +6,7 @@ import type {
 } from "../../execution/host/types";
 import { createInMemoryHost } from "../../platform/memory";
 import { MemoryAttachmentStore } from "../../platform/memory/storage/memory-attachment-store";
+import { definePlugin } from "../../plugins/api";
 import { noopRuntimeDiagnostics } from "../../plugins/diagnostics";
 import { PluginRuntime } from "../../plugins/runtime";
 import { solidTestPng } from "../../testing/valid-image-fixture";
@@ -15,7 +16,6 @@ import type {
   RuntimeAttachmentPutInput,
   RuntimeAttachmentReference,
 } from "../input/attachments";
-import { definePlugin } from "../../plugins/api";
 import type { UserInput } from "../input/input";
 import { BufferedAgentTurn } from "../protocol/turn";
 import { ThreadEventDispatcher } from "../runtime/events";
@@ -100,7 +100,9 @@ describe("createQueuedSendInput", () => {
   });
 });
 
-async function createPluginRuntime(definitions: ReturnType<typeof definePlugin>[]) {
+async function createPluginRuntime(
+  definitions: ReturnType<typeof definePlugin>[]
+) {
   return await PluginRuntime.create(definitions, {
     diagnostics: noopRuntimeDiagnostics,
     factoryTimeoutMs: 10_000,

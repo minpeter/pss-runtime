@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { MemoryAttachmentStore } from "../../platform/memory";
+import { definePlugin } from "../../plugins/api";
 import { noopRuntimeDiagnostics } from "../../plugins/diagnostics";
 import { PluginRuntime } from "../../plugins/runtime";
-import { definePlugin } from "../../plugins/api";
 import {
   decodeRuntimeAttachmentData,
   isRuntimeAttachmentData,
@@ -37,7 +37,7 @@ describe("ThreadEventDispatcher.emitRunEvent", () => {
           !("text" in event) ||
           typeof event.text !== "string"
         ) {
-          return undefined;
+          return;
         }
         return {
           action: "transform",
@@ -67,7 +67,7 @@ describe("ThreadEventDispatcher.emitRunEvent", () => {
     const transformPlugin = definePlugin((pss) => {
       pss.on("input.accept", (event) => {
         if (event.type !== "user-input") {
-          return undefined;
+          return;
         }
         return {
           action: "transform",
@@ -84,7 +84,10 @@ describe("ThreadEventDispatcher.emitRunEvent", () => {
         };
       });
     });
-    const dispatcher = await createDispatcher([transformPlugin], attachmentStore);
+    const dispatcher = await createDispatcher(
+      [transformPlugin],
+      attachmentStore
+    );
     const run = new BufferedAgentTurn();
 
     const emitted = await dispatcher.emitRunEvent(run, {
@@ -117,7 +120,7 @@ describe("ThreadEventDispatcher.emitRunEvent", () => {
     const transformPlugin = definePlugin((pss) => {
       pss.on("input.accept", (event) => {
         if (event.type !== "runtime-input") {
-          return undefined;
+          return;
         }
         return {
           action: "transform",
@@ -138,7 +141,10 @@ describe("ThreadEventDispatcher.emitRunEvent", () => {
         };
       });
     });
-    const dispatcher = await createDispatcher([transformPlugin], attachmentStore);
+    const dispatcher = await createDispatcher(
+      [transformPlugin],
+      attachmentStore
+    );
 
     const emitted = await dispatcher.interceptEvent({
       input: { text: "hint", type: "user-input" },
