@@ -366,6 +366,66 @@ for await (const event of turn.events()) {
 
 `agent.send(...)` is shorthand for `agent.thread("default").send(...)`.
 
+## Channel adapters
+
+`@minpeter/pss-runtime/channel` is a minimal boundary for app-owned channel
+integrations. It exports only the `ChannelInboundMessage`,
+`ChannelAssistantTextDelivery`, and `ChannelAssistantDelivery` types plus
+`projectChannelAssistantDelivery(event)`. Apps map provider-specific inbound
+data to the runtime contract and own delivery back to the provider:
+
+```ts
+import type { Agent } from "@minpeter/pss-runtime";
+import {
+  projectChannelAssistantDelivery,
+  type ChannelAssistantDelivery,
+  type ChannelInboundMessage,
+} from "@minpeter/pss-runtime/channel";
+
+interface ChatMessage {
+  readonly roomId: string;
+  readonly text: string;
+  readonly userId: string;
+}
+
+function toChannelInbound(message: ChatMessage): ChannelInboundMessage {
+  return {
+    input: message.text,
+    threadKey: { key: message.userId, scope: message.roomId },
+  };
+}
+
+async function handleChannelMessage(
+  agent: Agent,
+  message: ChatMessage
+): Promise<void> {
+  const inbound = toChannelInbound(message);
+  const turn = await agent.thread(inbound.threadKey).send(inbound.input);
+
+  for await (const event of turn.events()) {
+    const delivery = projectChannelAssistantDelivery(event);
+    if (delivery !== undefined) {
+      await deliverToChannel(message.roomId, delivery);
+    }
+  }
+}
+
+async function deliverToChannel(
+  roomId: string,
+  delivery: ChannelAssistantDelivery
+): Promise<void> {
+  // App-owned provider call.
+  await chatClient.post(roomId, delivery.text);
+}
+```
+
+The projector emits a delivery only for an `assistant-output` event containing
+non-whitespace text, and it preserves the original text. Other visible,
+lifecycle, tool, telemetry, and control events remain available through
+`turn.events()` but are not delivered by default. The runtime provides no
+provider adapters and never owns a channel loop; control flow remains
+`Agent -> Thread -> Turn -> events()`.
+
 ## Plugins
 
 Plugins are async factories. The public plugin kernel stays fixed at `on()` for

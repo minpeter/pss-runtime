@@ -7,6 +7,13 @@ export const REQUIRED_RUNTIME_ROOT_EXPORTS = [
   "RuntimeInput",
 ];
 
+export const REQUIRED_RUNTIME_CHANNEL_EXPORTS = [
+  "ChannelInboundMessage",
+  "ChannelAssistantTextDelivery",
+  "ChannelAssistantDelivery",
+  "projectChannelAssistantDelivery",
+];
+
 export const REQUIRED_RUNTIME_EXECUTION_EXPORTS = [
   "AdmitReceipt",
   "AdmitThreadInput",
@@ -193,6 +200,7 @@ export const FORBIDDEN_RUNTIME_ROOT_NAMES = [
     ...REQUIRED_RUNTIME_CLOUDFLARE_WORKER_EXPORTS,
     ...REQUIRED_RUNTIME_FILE_EXPORTS,
     ...REQUIRED_RUNTIME_MEMORY_EXPORTS,
+    ...REQUIRED_RUNTIME_CHANNEL_EXPORTS,
     ["create", "Llm"].join(""),
     ["Runtime", "Create", "Llm", "Options"].join(""),
     ["Runtime", "Llm"].join(""),

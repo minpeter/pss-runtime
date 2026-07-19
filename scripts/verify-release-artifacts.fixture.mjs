@@ -11,6 +11,11 @@ export const runtimeRootDeclaration = [
   'export type { AgentTurn, RuntimeInput } from "./thread";',
   "",
 ].join("\n");
+export const runtimeChannelDeclaration = [
+  'export type { ChannelInboundMessage, ChannelAssistantTextDelivery, ChannelAssistantDelivery } from "./index";',
+  'export { projectChannelAssistantDelivery } from "./index";',
+  "",
+].join("\n");
 export const runtimeExecutionDeclaration = [
   'export type { AdmitReceipt, AdmitThreadInput, CheckpointStore, ClaimedThreadInput, ClaimThreadInputOptions, EventStore, AgentHost, HostScheduler, HostStore, HostStoreTransaction, NotificationInbox, NotificationRecord, RecoverThreadInputClaimsResult, ThreadInputBoundary, ThreadInputInbox, ThreadInputKind, ThreadInputPlacement, ThreadInputRecord, ThreadInputStatus, TurnRecord, TurnStatus, TurnStore } from "./types";',
   'export { threadStoreFromHost } from "./host";',
@@ -126,6 +131,13 @@ function writePackageDeclarationFixtures(cwd, packageName, packageRoot) {
 }
 
 function writeRuntimeDeclarationFixtures(cwd, packageName) {
+  mkdirSync(join(cwd, "packages", packageName, "dist", "channel"), {
+    recursive: true,
+  });
+  writeFileSync(
+    join(cwd, "packages", packageName, "dist", "channel", "index.d.ts"),
+    runtimeChannelDeclaration
+  );
   mkdirSync(join(cwd, "packages", packageName, "dist", "execution"), {
     recursive: true,
   });

@@ -62,6 +62,12 @@ const forbiddenModelAdapterRootExports = [
   ["Runtime", "Llm", "Output", "Part"].join(""),
   ["create", "Llm"].join(""),
 ] as const;
+const forbiddenChannelRootExports = [
+  ["Channel", "Inbound", "Message"].join(""),
+  ["Channel", "Assistant", "Text", "Delivery"].join(""),
+  ["Channel", "Assistant", "Delivery"].join(""),
+  ["project", "Channel", "Assistant", "Delivery"].join(""),
+] as const;
 
 describe("runtime public exports", () => {
   it("does not expose internal agent loop runner from package root", async () => {
@@ -128,6 +134,14 @@ describe("runtime public exports", () => {
     const runtime = await import("../index");
 
     for (const forbiddenName of forbiddenModelAdapterRootExports) {
+      expect(runtime).not.toHaveProperty(forbiddenName);
+    }
+  });
+
+  it("keeps channel adapter contracts off the package root", async () => {
+    const runtime = await import("../index");
+
+    for (const forbiddenName of forbiddenChannelRootExports) {
       expect(runtime).not.toHaveProperty(forbiddenName);
     }
   });

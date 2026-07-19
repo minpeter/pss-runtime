@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { verifyReleaseArtifacts } from "./verify-release-artifacts/core.mjs";
 import {
+  REQUIRED_RUNTIME_CHANNEL_EXPORTS,
   REQUIRED_RUNTIME_CLOUDFLARE_AGENTS_EXPORTS,
   REQUIRED_RUNTIME_CLOUDFLARE_WORKER_EXPORTS,
   REQUIRED_RUNTIME_EXECUTION_EXPORTS,
@@ -21,6 +22,27 @@ function runtimeDistDeclaration(cwd, ...segments) {
 }
 
 describe("verifyReleaseArtifacts runtime subpath checks", () => {
+  it("requires the runtime channel declaration entrypoint", () => {
+    const cwd = createFixture();
+    rmSync(runtimeDistDeclaration(cwd, "channel"));
+
+    expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
+      "packages/runtime/dist/channel/index.d.ts: missing channel runtime declaration",
+    ]);
+  });
+
+  it("checks the channel contract on its declaration subpath", () => {
+    const cwd = createFixture();
+    writeFileSync(runtimeDistDeclaration(cwd, "channel"), "export {};\n");
+
+    expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual(
+      REQUIRED_RUNTIME_CHANNEL_EXPORTS.map(
+        (name) =>
+          `packages/runtime/dist/channel/index.d.ts: missing explicit channel runtime export ${name}`
+      )
+    );
+  });
+
   it("requires the runtime execution declaration entrypoint", () => {
     const cwd = createFixture();
     rmSync(join(cwd, "packages", "runtime", "dist", "execution", "index.d.ts"));
