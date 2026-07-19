@@ -22,7 +22,6 @@ export {
   type StartCloudflareAgentsResumeFiberOptions,
   startCloudflareAgentsResumeFiber,
 } from "./agents/fiber";
-export type { CloudflareAgentsHostOptions } from "./agents/host";
 export {
   ackScheduledCloudflareAgentsRun,
   ackScheduledCloudflareAgentsThreadPrompt,
@@ -102,9 +101,7 @@ export {
   sourceCloudflareAgentNotificationIdempotencyKey,
 } from "./dispatch/notification-dispatch";
 export {
-  type CloudflareHostAgentsOptions,
   type CloudflareHostOptions,
-  createCloudflareAgentsHost,
   createCloudflareHost,
 } from "./host/create-cloudflare-host";
 export type {

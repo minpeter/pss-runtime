@@ -163,8 +163,7 @@ or TUI entrypoint.
 
 The `pss` TUI stores threads in `~/.pss/threads` by default. Override with
 `PSS_THREAD_DIR` and `PSS_THREAD_KEY` when you want repo-local storage or a
-shared conversation key. `PSS_SESSION_DIR` and `PSS_SESSION_KEY` remain accepted
-as legacy aliases.
+shared conversation key.
 
 ## Release
 

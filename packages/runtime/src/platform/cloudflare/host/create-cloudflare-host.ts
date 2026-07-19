@@ -43,12 +43,6 @@ export type CloudflareHostOptions<
 > = CloudflareHostBaseOptions<TAgent> &
   Pick<CloudflareAgentsFiberSchedulerOptions<TAgent>, "delayedResumeCallback">;
 
-/** @deprecated Use {@link CloudflareHostOptions}. */
-export type CloudflareHostAgentsOptions<
-  TAgent extends
-    CloudflareAgentsDefaultResumeAgent = CloudflareAgentsDefaultResumeAgent,
-> = CloudflareHostOptions<TAgent>;
-
 /**
  * Create the supported Cloudflare `AgentHost` (Agents SDK fibers + schedule).
  *
@@ -95,9 +89,3 @@ export function createCloudflareHost<
     threadStore,
   });
 }
-
-/**
- * @deprecated Use {@link createCloudflareHost}. Same factory; kept under the
- * pre-unification Agents-specific name for migration.
- */
-export const createCloudflareAgentsHost = createCloudflareHost;
