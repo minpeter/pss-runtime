@@ -82,7 +82,7 @@ export function recordRuntimeTraceEvent(
     case "user-input":
       return;
     default:
-      assertNever(event);
+      assertNever(event, "Unexpected event variant");
   }
 }
 

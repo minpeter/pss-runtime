@@ -1,5 +1,5 @@
 import type { ToolSet } from "ai";
-import { ModelToolSelectionError } from "./model-step-selection";
+import { ModelToolSelectionError } from "./model-step-error";
 import { compareToolNames } from "./tool-property-descriptors";
 
 export function snapshotToolNames(

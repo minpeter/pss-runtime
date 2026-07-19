@@ -3,7 +3,7 @@ import type {
   PreparedModelToolChoice,
   PrepareModelStep,
   PrepareModelStepResult,
-} from "./model-step-preparation";
+} from "./model-step-preparation-types";
 import {
   dataPropertyInPrototypeChain,
   isObjectRecord,
@@ -15,9 +15,8 @@ import {
 } from "./tool-property-descriptors";
 import { snapshotToolNames } from "./tool-registry-snapshot";
 
-export class ModelToolSelectionError extends TypeError {
-  readonly name = "ModelToolSelectionError";
-}
+import { ModelToolSelectionError } from "./model-step-error";
+export { ModelToolSelectionError };
 
 const PREPARED_RESULT_KEYS = new Set(["activeTools", "model", "toolChoice"]);
 

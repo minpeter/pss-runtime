@@ -1,6 +1,12 @@
 import type { LanguageModel, ToolChoice, ToolSet } from "ai";
 import type { RuntimeDiagnosticsSink } from "../plugins/diagnostics";
 import type { ThreadContextMessage } from "../thread/state/context";
+import type {
+  PreparedModelToolChoice,
+  PrepareModelStep,
+  PrepareModelStepInput,
+  PrepareModelStepResult,
+} from "./model-step-preparation-types";
 import {
   ModelToolSelectionError,
   parsePrepareModelStepResult,
@@ -19,26 +25,12 @@ import {
 export { ModelToolSelectionError } from "./model-step-selection";
 export { mapPrepareModelStepModel } from "./model-step-selection";
 
-export type PreparedModelToolChoice = ToolChoice<ToolSet>;
-
-export interface PrepareModelStepInput {
-  readonly history: readonly ThreadContextMessage[];
-  readonly runtimeStepIndex: number;
-  readonly signal: AbortSignal;
-  readonly threadKey: string;
-  readonly tools: Readonly<ToolSet>;
-}
-
-export interface PrepareModelStepResult {
-  readonly activeTools?: readonly string[];
-  readonly model?: Exclude<LanguageModel, string>;
-  readonly toolChoice?: PreparedModelToolChoice;
-}
-
-export type PrepareModelStep = (input: PrepareModelStepInput) =>
-  | PrepareModelStepResult
-  | PromiseLike<PrepareModelStepResult | void>
-  | void;
+export type {
+  PreparedModelToolChoice,
+  PrepareModelStep,
+  PrepareModelStepInput,
+  PrepareModelStepResult,
+} from "./model-step-preparation-types";
 
 export interface ResolveModelStepOptions {
   readonly alwaysActiveTools?: readonly string[];

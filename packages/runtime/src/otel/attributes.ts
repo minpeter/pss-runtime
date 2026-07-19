@@ -57,7 +57,7 @@ export function defaultAgentEventAttributes(event: AgentEvent): Attributes {
     case "user-input":
       return { ...base, ...inputAttributes("pss.user_input", event) };
     default:
-      return assertNever(event);
+      return assertNever(event, "Unexpected event variant");
   }
 }
 
@@ -125,7 +125,7 @@ function messageContentSummary(content: readonly UserMessageContentPart[]) {
         textPartCount += 1;
         break;
       default:
-        assertNever(part);
+        assertNever(part, "Unexpected event variant");
     }
   }
 
