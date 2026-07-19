@@ -7,7 +7,7 @@ import {
   type CloudflareDurableObjectStorage as DurableObjectStoragePort,
 } from "../storage/durable-object/durable-object-storage";
 import { DurableObjectExecutionStore } from "../storage/execution/store";
-import type { CloudflareScheduledThreadPrompt } from "./scheduled-work-queue";
+import type { CloudflareScheduledThreadPrompt } from "./scheduled-work-codec";
 import {
   ackScheduledRun,
   ackScheduledThreadPrompt,
@@ -21,7 +21,7 @@ import {
 
 const defaultPrefix = "pss-runtime";
 
-export type { CloudflareScheduledThreadPrompt } from "./scheduled-work-queue";
+export type { CloudflareScheduledThreadPrompt } from "./scheduled-work-codec";
 
 export type CloudflareDurableObjectStorage = DurableObjectStoragePort;
 

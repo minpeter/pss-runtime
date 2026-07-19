@@ -6,36 +6,16 @@ import {
   type RgbaImage,
   scaleRgbaNearest,
 } from "./attachment-image-rgba";
-import { RuntimeAttachmentStagingError } from "./attachment-types";
+import {
+  type ImagePrepareDiagnostics,
+  RuntimeAttachmentStagingError,
+} from "./attachment-types";
 
 const JPEG_QUALITY_STEPS = [22, 28, 35, 45, 55, 65, 75, 85] as const;
 const FULL_RES_PIXEL_BUDGET = 1_200_000;
 const JPEG_TARGET_BPP = 0.65;
 const MIN_EDGE_PX = 64;
 const MAX_SCALE_ATTEMPTS = 10;
-
-/** How prepareAttachmentBytesForStorage handled an image (or non-image). */
-export type ImagePreparePath =
-  | "non_image"
-  | "passthrough_jpeg"
-  | "passthrough_png"
-  | "reencode_jpeg"
-  | "reencode_png"
-  /** Alpha source reencoded as JPEG after PNG budget failure. */
-  | "reencode_png_fallback_jpeg";
-
-/** Safe, queryable fields for Workers logs / dashboards (no pixel/base64 payloads). */
-export interface ImagePrepareDiagnostics {
-  readonly decodedHeight?: number;
-  readonly decodedWidth?: number;
-  readonly hasAlpha?: boolean;
-  readonly inputBytes: number;
-  readonly inputMediaType: string;
-  readonly maxImageBytes: number;
-  readonly outputBytes: number;
-  readonly outputMediaType: string;
-  readonly path: ImagePreparePath;
-}
 
 export interface PreparedAttachmentBytes {
   readonly bytes: Uint8Array;

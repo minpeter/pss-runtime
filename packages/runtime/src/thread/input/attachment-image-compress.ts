@@ -8,8 +8,6 @@ import {
 import {
   encodeJpegUnderBudget,
   encodePngUnderBudget,
-  type ImagePrepareDiagnostics,
-  type ImagePreparePath,
   type PreparedAttachmentBytes,
 } from "./attachment-image-encode";
 import {
@@ -30,13 +28,17 @@ import {
   needsWasmImageCodecs,
   sniffImageMediaType,
 } from "./attachment-image-sniff";
-import { RuntimeAttachmentImageLimitError } from "./attachment-types";
+import {
+  type ImagePrepareDiagnostics,
+  type ImagePreparePath,
+  RuntimeAttachmentImageLimitError,
+} from "./attachment-types";
 
+export type { PreparedAttachmentBytes } from "./attachment-image-encode";
 export type {
   ImagePrepareDiagnostics,
   ImagePreparePath,
-  PreparedAttachmentBytes,
-} from "./attachment-image-encode";
+} from "./attachment-types";
 export {
   assertDecodedImageWithinLimits,
   DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,

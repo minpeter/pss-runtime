@@ -69,9 +69,7 @@ export {
   type ImageCodecWasmModules,
   type ImageOmitDiagnostics,
   type ImageOmitDiagnosticsListener,
-  type ImagePrepareDiagnostics,
   type ImagePrepareDiagnosticsListener,
-  type ImagePreparePath,
   installImageCodecWasm,
   installImageCodecWasmFromNodeModules,
   isCompressibleImageMediaType,
@@ -95,6 +93,10 @@ export {
   STORED_IMAGE_MEDIA_TYPES,
   type StoredImageMediaType,
 } from "./thread/input/attachments";
+export type {
+  ImagePrepareDiagnostics,
+  ImagePreparePath,
+} from "./thread/input/attachment-types";
 export { delegateUserInput } from "./thread/input/delegate-input";
 export type { AgentInput, ThreadInput } from "./thread/input/input";
 export {

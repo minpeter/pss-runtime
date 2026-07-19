@@ -14,7 +14,7 @@ import {
 import type { AgentEvent } from "../../thread/protocol/events";
 import { userTextToModelMessage } from "../../thread/protocol/mapping";
 import { ModelMessageHistory } from "../../thread/state/history";
-import { runAgentLoop } from "./loop";
+import { runAgentLoop } from "./run";
 
 const seedUserTurn = (history: ModelMessageHistory) => {
   const message = userTextToModelMessage(userText("start"));

@@ -9,7 +9,7 @@ import {
 } from "@minpeter/pss-runtime/namespace";
 import { createInMemoryHost } from "@minpeter/pss-runtime/platform/memory";
 import { describe, expect, it } from "vitest";
-import { createAppAgent } from "./app-agent";
+import { createAppAgent } from "./app-agent-factory";
 import { launchDurableBackgroundDelegation } from "./background-delegation";
 import { createBackgroundOutputTool } from "./background-output-tool";
 import { readerChildName } from "./delegate-tool";

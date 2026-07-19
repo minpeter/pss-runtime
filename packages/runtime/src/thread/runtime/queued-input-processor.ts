@@ -1,4 +1,4 @@
-import { runAgentLoop } from "../../agent/loop/loop";
+import { runAgentLoop } from "../../agent/loop/run";
 import { stageUserInputAttachments } from "../input/attachments";
 import {
   closeRuntimeInput,

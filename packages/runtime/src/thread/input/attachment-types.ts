@@ -1,5 +1,3 @@
-import type { ImagePrepareDiagnostics } from "./attachment-image-encode";
-
 export interface RuntimeAttachmentReference {
   readonly id: string;
   readonly schemaVersion: 1;
@@ -21,6 +19,29 @@ export interface HostAttachmentStore {
   delete(ref: RuntimeAttachmentReference): Promise<void>;
   get(ref: RuntimeAttachmentReference): Promise<RuntimeAttachmentBlob | null>;
   put(input: RuntimeAttachmentPutInput): Promise<RuntimeAttachmentReference>;
+}
+
+/** How prepareAttachmentBytesForStorage handled an image (or non-image). */
+export type ImagePreparePath =
+  | "non_image"
+  | "passthrough_jpeg"
+  | "passthrough_png"
+  | "reencode_jpeg"
+  | "reencode_png"
+  /** Alpha source reencoded as JPEG after PNG budget failure. */
+  | "reencode_png_fallback_jpeg";
+
+/** Safe, queryable fields for Workers logs / dashboards (no pixel/base64 payloads). */
+export interface ImagePrepareDiagnostics {
+  readonly decodedHeight?: number;
+  readonly decodedWidth?: number;
+  readonly hasAlpha?: boolean;
+  readonly inputBytes: number;
+  readonly inputMediaType: string;
+  readonly maxImageBytes: number;
+  readonly outputBytes: number;
+  readonly outputMediaType: string;
+  readonly path: ImagePreparePath;
 }
 
 export interface ImageOmitDiagnostics {
