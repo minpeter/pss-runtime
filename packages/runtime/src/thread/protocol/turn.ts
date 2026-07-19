@@ -2,6 +2,7 @@ import type { AgentEvent } from "./events";
 
 export interface AgentTurn {
   events(): AsyncIterable<AgentEvent>;
+  readonly runId?: string;
 }
 
 interface QueuedEvent {
@@ -20,8 +21,27 @@ export class BufferedAgentTurn implements AgentTurn {
   #error: unknown;
   #pendingAck: (() => void) | undefined;
   #resultPending = false;
+  #runId: string | undefined;
   #eventsStarted = false;
   #waiter: NextWaiter | undefined;
+
+  constructor(runId?: string) {
+    this.#runId = runId;
+  }
+
+  get runId(): string | undefined {
+    return this.#runId;
+  }
+
+  bindRunId(runId: string): void {
+    if (this.#runId === undefined) {
+      this.#runId = runId;
+      return;
+    }
+    if (this.#runId !== runId) {
+      throw new Error(`AgentTurn is already bound to run id ${this.#runId}`);
+    }
+  }
 
   emit(event: AgentEvent): void {
     if (this.#closed) {

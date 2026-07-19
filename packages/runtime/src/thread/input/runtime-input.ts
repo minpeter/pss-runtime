@@ -1,6 +1,7 @@
 import type { ClaimedThreadInput } from "../../execution/host/types";
 import type { AgentEvent, RuntimeInput } from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
+import type { QueuedThreadExecutionRun } from "../runtime/execution";
 import {
   cleanupStagedRuntimeAttachments,
   type HostAttachmentStore,
@@ -34,6 +35,7 @@ export interface QueuedInput {
   readonly durableInput?: boolean;
   readonly durableInputClaim?: ClaimedThreadInput;
   readonly durableMessageId?: string;
+  readonly executionRun?: QueuedThreadExecutionRun;
   readonly initialEvents: AgentEvent[];
   readonly input?: UserInput;
   readonly preUserRuntimeInputs: QueuedRuntimeInput[];

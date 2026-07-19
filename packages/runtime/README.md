@@ -963,7 +963,34 @@ internal plugin paths. App code should use `thread.send()`, `thread.steer()`,
 or `agent.resume(runId)` for host-scheduled durable work.
 
 Each accepted call returns one `AgentTurn`. Drain that turn's `events()` stream to
-observe the turn; each `AgentTurn.events()` stream is single-consumer.
+observe the turn; each `AgentTurn.events()` stream is single-consumer. Durable
+turns accepted by an `AgentHost` also expose `turn.runId`. A resumed notification
+uses the same run ID returned by `dispatchAgentNotification`, so dispatch,
+`agent.resume(runId)`, checkpoints, and terminal state share one correlation ID.
+
+Read durable state from the existing execution subpath without changing the turn
+event model:
+
+```ts
+import { inspectDurableTurn } from "@minpeter/pss-runtime/execution";
+
+if (turn.runId) {
+  const report = await inspectDurableTurn(agent.host, turn.runId);
+  console.log(report);
+}
+```
+
+Recorded runs report `runId`, `status`, `threadKey`, `checkpointVersion`,
+`latestCheckpoint`, and `state`. `state` is `"checkpointed"` or
+`"no-checkpoint"`; absent IDs return `"unknown-run"`, and a thread-only store
+returns `"unsupported"`. Lifecycle status distinguishes queued (`queued`),
+active (`running`), claimed/resumed (`leased`), completed (`completed`), failed
+(`error`), and cancelled (`cancelled`) work. Inspection is read-only and does
+not grant resume or cancellation authority.
+
+`dispatchAgentNotification` returns its durable `runId` and deduplicates by the
+owner-, thread-, and caller-scoped `idempotencyKey`. Repeated dispatches return
+the existing run ID with `deduplicated: true`.
 
 Input APIs accept strings, arrays of strings, or multipart arrays such as
 `[{ type: "text", text: "hello" }, { type: "file", data: imageBytes, mediaType: "image/png" }]`. Inline

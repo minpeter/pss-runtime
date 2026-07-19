@@ -21,6 +21,8 @@ export const REQUIRED_RUNTIME_EXECUTION_EXPORTS = [
   "ClaimedThreadInput",
   "ClaimThreadInputOptions",
   "AgentHost",
+  "DurableTurnInspectionResult",
+  "DurableTurnInspectionSource",
   "EventStore",
   "HostScheduler",
   "HostStore",
@@ -43,6 +45,7 @@ export const REQUIRED_RUNTIME_EXECUTION_EXPORTS = [
   "RuntimeToolExecutionDecision",
   "RuntimeToolRetryPolicy",
   "ToolExecutionNeedsRecoveryError",
+  "inspectDurableTurn",
   "threadStoreFromHost",
 ];
 

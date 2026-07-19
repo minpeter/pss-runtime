@@ -17,8 +17,8 @@ export const runtimeChannelDeclaration = [
   "",
 ].join("\n");
 export const runtimeExecutionDeclaration = [
-  'export type { AdmitReceipt, AdmitThreadInput, CheckpointStore, ClaimedThreadInput, ClaimThreadInputOptions, EventStore, AgentHost, HostScheduler, HostStore, HostStoreTransaction, NotificationInbox, NotificationRecord, RecoverThreadInputClaimsResult, ThreadInputBoundary, ThreadInputInbox, ThreadInputKind, ThreadInputPlacement, ThreadInputRecord, ThreadInputStatus, TurnRecord, TurnStatus, TurnStore } from "./types";',
-  'export { threadStoreFromHost } from "./host";',
+  'export type { AdmitReceipt, AdmitThreadInput, CheckpointStore, ClaimedThreadInput, ClaimThreadInputOptions, DurableTurnInspectionResult, DurableTurnInspectionSource, EventStore, AgentHost, HostScheduler, HostStore, HostStoreTransaction, NotificationInbox, NotificationRecord, RecoverThreadInputClaimsResult, ThreadInputBoundary, ThreadInputInbox, ThreadInputKind, ThreadInputPlacement, ThreadInputRecord, ThreadInputStatus, TurnRecord, TurnStatus, TurnStore } from "./types";',
+  'export { inspectDurableTurn, threadStoreFromHost } from "./host";',
   'export { ThreadInputDuplicateConflictError } from "./types";',
   'export type { RuntimeToolExecutionCheckpoint, RuntimeToolExecutionContext, RuntimeToolExecutionDecision, RuntimeToolRetryPolicy } from "../llm-tool-execution";',
   'export { ToolExecutionNeedsRecoveryError } from "../llm-tool-execution";',

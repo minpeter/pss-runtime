@@ -1,3 +1,4 @@
+import { createThreadExecutionRunId } from "../../execution/host/thread-execution-run-id";
 import type {
   AdmitReceipt,
   AgentHost,
@@ -7,10 +8,13 @@ import type {
   ThreadInputKind,
   ThreadInputPlacement,
   ThreadInputRecord,
+  TurnRecord,
 } from "../../execution/host/types";
 import { ThreadInputInboxUnavailableError } from "../../execution/host/unsupported-thread-input-inbox";
 import type { UserInput } from "../input/input";
+import type { QueuedInput } from "../input/runtime-input";
 import type { ThreadState } from "../state/thread-state";
+import { precreateThreadExecutionRun } from "./execution";
 import {
   appendDurableThreadEvents,
   type DurableThreadEventBuffer,
@@ -21,6 +25,7 @@ import {
 
 export type DurableInputAdmission =
   | {
+      readonly executionRun?: TurnRecord;
       readonly kind: "admitted";
       readonly receipt: AdmitReceipt;
     }
@@ -38,12 +43,14 @@ export async function admitDurableThreadInput({
   input,
   kind,
   placement,
+  precreateExecutionRun = false,
   threadKey,
 }: {
   readonly executionHost: AgentHost | undefined;
   readonly input: UserInput;
   readonly kind: ThreadInputKind;
   readonly placement?: ThreadInputPlacement;
+  readonly precreateExecutionRun?: boolean;
   readonly threadKey: string;
 }): Promise<DurableInputAdmission> {
   if (!executionHost) {
@@ -51,10 +58,33 @@ export async function admitDurableThreadInput({
   }
 
   try {
+    const messageId = crypto.randomUUID();
+    if (precreateExecutionRun) {
+      return await executionHost.store.transaction(async (transaction) => {
+        const receipt = await transaction.inputs.admit({
+          input,
+          kind,
+          messageId,
+          placement,
+          threadKey,
+        });
+        if (receipt.duplicate) {
+          return { kind: "admitted", receipt };
+        }
+        const executionRun = await precreateThreadExecutionRun({
+          kind: "user-turn",
+          runId: createThreadExecutionRunId({ threadKey, turnId: messageId }),
+          threadKey,
+          turnStore: transaction.turns,
+        });
+        return { executionRun, kind: "admitted", receipt };
+      });
+    }
+
     const receipt = await executionHost.store.inputs.admit({
       input,
       kind,
-      messageId: crypto.randomUUID(),
+      messageId,
       placement,
       threadKey,
     });
@@ -235,6 +265,63 @@ export async function releaseDurableThreadInputClaim({
   }
 
   await executionHost.store.inputs.releaseClaim(record);
+}
+
+export async function cancelQueuedDurableThreadInputs({
+  executionHost,
+  items,
+  threadKey,
+}: {
+  readonly executionHost: AgentHost | undefined;
+  readonly items: readonly QueuedInput[];
+  readonly threadKey: string;
+}): Promise<void> {
+  const durableItems = items.filter(
+    (item): item is QueuedInput & { readonly durableMessageId: string } =>
+      typeof item.durableMessageId === "string"
+  );
+  if (!(executionHost && durableItems.length > 0)) {
+    return;
+  }
+
+  await executionHost.store.transaction(async (transaction) => {
+    for (const item of durableItems) {
+      const claimed = await transaction.inputs.claimNext(
+        threadKey,
+        "turn-idle",
+        { messageId: item.durableMessageId }
+      );
+      if (!claimed) {
+        continue;
+      }
+      const promoted = await transaction.inputs.markPromoted(claimed);
+      if (!promoted) {
+        throw new DurableThreadInputClaimError("promote", claimed);
+      }
+      const acked = await transaction.inputs.ack(promoted);
+      if (!acked) {
+        throw new DurableThreadInputClaimError("ack", claimed);
+      }
+
+      const runId = item.executionRun?.runId ?? item.run.runId;
+      if (!runId) {
+        continue;
+      }
+      const run = await transaction.turns.get(runId);
+      if (run && !isTerminalTurnStatus(run.status)) {
+        await transaction.turns.update({ ...run, status: "cancelled" });
+      }
+    }
+  });
+}
+
+function isTerminalTurnStatus(status: TurnRecord["status"]): boolean {
+  return (
+    status === "cancelled" ||
+    status === "completed" ||
+    status === "error" ||
+    status === "needs-recovery"
+  );
 }
 
 function isThreadInputInboxUnavailable(
