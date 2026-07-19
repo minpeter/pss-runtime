@@ -2,6 +2,7 @@ import {
   createOpenSearch,
   type FetchOptions,
   type FetchResult,
+  type OpenSearchEnvironment,
   type OpenSearchOptions,
   type SearchResult,
 } from "@minpeter/opensearch/node";
@@ -10,8 +11,23 @@ import { jsonSchema, type Tool, type ToolSet, tool } from "ai";
 const DEFAULT_SEARCH_RESULT_COUNT = 5;
 const MAX_FETCH_URLS = 10;
 const MAX_SEARCH_RESULTS = 15;
+const TINYFISH_API_KEY_ENV = "TINYFISH_API_KEY";
+
+export const WEB_TOOLS_DISABLED_MESSAGE = `web tools disabled: missing ${TINYFISH_API_KEY_ENV}`;
 
 type CodingAgentToolName = "web_fetch" | "web_search";
+
+/**
+ * Availability mode for the provider-backed web tools:
+ *
+ * - `required`: fail fast during tool/agent initialization when the provider
+ *   configuration (TINYFISH_API_KEY) is missing.
+ * - `optional` (default): omit the web tools when the provider configuration
+ *   is missing and report the omission through `onWebToolsDisabled`
+ *   (default: `console.warn`).
+ * - `disabled`: never register the web tools.
+ */
+export type WebToolsAvailability = "disabled" | "optional" | "required";
 
 export interface CodingAgentOpenSearchClient {
   fetch(
@@ -23,7 +39,9 @@ export interface CodingAgentOpenSearchClient {
 
 export interface CreateCodingAgentToolsOptions {
   readonly client?: CodingAgentOpenSearchClient;
+  readonly onWebToolsDisabled?: (message: string) => void;
   readonly openSearchOptions?: OpenSearchOptions;
+  readonly webToolsAvailability?: WebToolsAvailability;
 }
 
 export interface WebSearchInput {
@@ -58,6 +76,15 @@ export class CodingAgentToolsConfigError extends Error {
   }
 }
 
+export class CodingAgentWebToolsUnavailableError extends Error {
+  readonly code = "web-tools-config-missing";
+
+  constructor() {
+    super(`web tools required: missing ${TINYFISH_API_KEY_ENV}`);
+    this.name = "CodingAgentWebToolsUnavailableError";
+  }
+}
+
 export class CodingAgentToolAbortError extends Error {
   readonly reason: unknown;
   readonly toolName: CodingAgentToolName;
@@ -70,9 +97,43 @@ export class CodingAgentToolAbortError extends Error {
   }
 }
 
+/**
+ * Create the provider-backed web tools, gated on TINYFISH_API_KEY before the
+ * OpenSearch client is wired. An injected `client` counts as provider
+ * configuration in `optional` and `required` modes; `disabled` always returns
+ * an empty tool set. Defaults to `optional`, so startup succeeds without a
+ * key and the omission is reported instead of advertising tools that can only
+ * fail at execution time.
+ */
+export function createCodingAgentTools(
+  options: CreateCodingAgentToolsOptions & {
+    readonly client: CodingAgentOpenSearchClient;
+    readonly webToolsAvailability?: "optional" | "required";
+  }
+): CodingAgentToolSet;
+export function createCodingAgentTools(
+  options?: CreateCodingAgentToolsOptions
+): ToolSet;
 export function createCodingAgentTools(
   options: CreateCodingAgentToolsOptions = {}
-): CodingAgentToolSet {
+): ToolSet {
+  const availability = options.webToolsAvailability ?? "optional";
+  if (availability === "disabled") {
+    return {};
+  }
+
+  if (
+    options.client === undefined &&
+    !hasTinyFishApiKey(options.openSearchOptions?.env ?? process.env)
+  ) {
+    if (availability === "required") {
+      throw new CodingAgentWebToolsUnavailableError();
+    }
+
+    (options.onWebToolsDisabled ?? console.warn)(WEB_TOOLS_DISABLED_MESSAGE);
+    return {};
+  }
+
   const client = resolveOpenSearchClient(options);
   return {
     web_search: createWebSearchTool(client),
@@ -80,8 +141,17 @@ export function createCodingAgentTools(
   };
 }
 
-export function resolveStartTuiTools(tools?: ToolSet): ToolSet {
-  return tools ?? createCodingAgentTools();
+export function resolveStartTuiTools(
+  tools?: ToolSet,
+  options?: CreateCodingAgentToolsOptions
+): ToolSet {
+  return tools ?? createCodingAgentTools(options);
+}
+
+function hasTinyFishApiKey(env: OpenSearchEnvironment): boolean {
+  return (env[TINYFISH_API_KEY_ENV] ?? "")
+    .split(";")
+    .some((apiKey) => apiKey.trim().length > 0);
 }
 
 function resolveOpenSearchClient({

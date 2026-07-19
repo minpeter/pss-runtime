@@ -19,7 +19,9 @@ import { createTuiRunner, formatTuiHeader } from "./tui-runner";
 export interface StartTuiOptions {
   /**
    * Optional tool set passed straight to the `Agent`. When omitted, the TUI
-   * enables OpenSearch-backed web_search and web_fetch tools.
+   * enables OpenSearch-backed web_search and web_fetch tools when
+   * TINYFISH_API_KEY is configured; otherwise the web tools are omitted and a
+   * warning is logged (availability mode "optional").
    */
   readonly tools?: ToolSet;
 }

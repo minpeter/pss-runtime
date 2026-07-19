@@ -1,6 +1,13 @@
 import type { ToolExecutionOptions } from "ai";
-import { describe, expect, it, vi } from "vitest";
-import { createCodingAgentTools, resolveStartTuiTools } from "./tools";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  CodingAgentWebToolsUnavailableError,
+  createCodingAgentTools,
+  resolveStartTuiTools,
+  WEB_TOOLS_DISABLED_MESSAGE,
+} from "./tools";
+
+const tinyfishApiKeyPattern = /TINYFISH_API_KEY/;
 
 const toolExecutionOptions: ToolExecutionOptions<Record<string, unknown>> = {
   context: {},
@@ -22,12 +29,21 @@ const fetchResult = {
   url: "https://example.com/",
 };
 
+function createStubClient() {
+  return {
+    fetch: vi.fn().mockResolvedValue([fetchResult]),
+    search: vi.fn().mockResolvedValue([searchResult]),
+  };
+}
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
+
 describe("coding-agent web tools", () => {
   it("creates OpenSearch-backed web_search and web_fetch tools", async () => {
-    const client = {
-      fetch: vi.fn().mockResolvedValue([fetchResult]),
-      search: vi.fn().mockResolvedValue([searchResult]),
-    };
+    const client = createStubClient();
 
     const tools = createCodingAgentTools({ client });
     const searchExecute = tools.web_search.execute;
@@ -62,6 +78,8 @@ describe("coding-agent web tools", () => {
   });
 
   it("uses OpenSearch tools by default for the TUI and preserves overrides", () => {
+    vi.stubEnv("TINYFISH_API_KEY", "test-key");
+
     const defaultTools = resolveStartTuiTools();
     const overrideTools = { custom_tool: defaultTools.web_search };
 
@@ -70,5 +88,177 @@ describe("coding-agent web tools", () => {
       "web_fetch",
     ]);
     expect(resolveStartTuiTools(overrideTools)).toBe(overrideTools);
+  });
+});
+
+describe("web tools availability modes", () => {
+  beforeEach(() => {
+    vi.stubEnv("TINYFISH_API_KEY", undefined);
+  });
+
+  it("registers web tools by default when TINYFISH_API_KEY is present", () => {
+    const tools = createCodingAgentTools({
+      openSearchOptions: { env: { TINYFISH_API_KEY: "test-key" } },
+    });
+
+    expect(Object.keys(tools)).toStrictEqual(["web_search", "web_fetch"]);
+  });
+
+  it("reads TINYFISH_API_KEY from process.env by default", () => {
+    vi.stubEnv("TINYFISH_API_KEY", "test-key");
+
+    const tools = createCodingAgentTools();
+
+    expect(Object.keys(tools)).toStrictEqual(["web_search", "web_fetch"]);
+  });
+
+  it("omits web tools in default optional mode when TINYFISH_API_KEY is missing and reports it", () => {
+    const onWebToolsDisabled = vi.fn();
+
+    const tools = createCodingAgentTools({ onWebToolsDisabled });
+
+    expect(Object.keys(tools)).toStrictEqual([]);
+    expect(onWebToolsDisabled).toHaveBeenCalledTimes(1);
+    expect(onWebToolsDisabled).toHaveBeenCalledWith(WEB_TOOLS_DISABLED_MESSAGE);
+    expect(WEB_TOOLS_DISABLED_MESSAGE).toBe(
+      "web tools disabled: missing TINYFISH_API_KEY"
+    );
+  });
+
+  it("warns by default when optional mode omits web tools", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const tools = createCodingAgentTools();
+
+    expect(Object.keys(tools)).toStrictEqual([]);
+    expect(warn).toHaveBeenCalledWith(WEB_TOOLS_DISABLED_MESSAGE);
+  });
+
+  it("registers web tools in required mode when TINYFISH_API_KEY is present", () => {
+    const tools = createCodingAgentTools({
+      openSearchOptions: { env: { TINYFISH_API_KEY: "test-key" } },
+      webToolsAvailability: "required",
+    });
+
+    expect(Object.keys(tools)).toStrictEqual(["web_search", "web_fetch"]);
+  });
+
+  it("fails fast in required mode when TINYFISH_API_KEY is missing", () => {
+    expect(() =>
+      createCodingAgentTools({ webToolsAvailability: "required" })
+    ).toThrowError(CodingAgentWebToolsUnavailableError);
+    expect(() =>
+      createCodingAgentTools({ webToolsAvailability: "required" })
+    ).toThrowError(tinyfishApiKeyPattern);
+  });
+
+  it("never registers web tools in disabled mode, even when configured", () => {
+    const onWebToolsDisabled = vi.fn();
+
+    const tools = createCodingAgentTools({
+      onWebToolsDisabled,
+      openSearchOptions: { env: { TINYFISH_API_KEY: "test-key" } },
+      webToolsAvailability: "disabled",
+    });
+
+    expect(Object.keys(tools)).toStrictEqual([]);
+    expect(onWebToolsDisabled).not.toHaveBeenCalled();
+  });
+
+  it("treats an injected client as configured in required mode", () => {
+    const tools = createCodingAgentTools({
+      client: createStubClient(),
+      webToolsAvailability: "required",
+    });
+
+    expect(Object.keys(tools)).toStrictEqual(["web_search", "web_fetch"]);
+  });
+
+  it("omits web tools in disabled mode even with an injected client", () => {
+    const tools = createCodingAgentTools({
+      client: createStubClient(),
+      webToolsAvailability: "disabled",
+    });
+
+    expect(Object.keys(tools)).toStrictEqual([]);
+  });
+
+  it("parses semicolon-separated TINYFISH_API_KEY pools like OpenSearch", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    expect(
+      Object.keys(
+        createCodingAgentTools({
+          openSearchOptions: {
+            env: { TINYFISH_API_KEY: " ; key-a ;; key-b ; " },
+          },
+        })
+      )
+    ).toStrictEqual(["web_search", "web_fetch"]);
+    expect(
+      Object.keys(
+        createCodingAgentTools({
+          openSearchOptions: { env: { TINYFISH_API_KEY: " ; ; " } },
+        })
+      )
+    ).toStrictEqual([]);
+    expect(
+      Object.keys(
+        createCodingAgentTools({
+          openSearchOptions: { env: { TINYFISH_API_KEY: "" } },
+        })
+      )
+    ).toStrictEqual([]);
+  });
+
+  it("gates on the OpenSearch env override instead of process.env", () => {
+    vi.stubEnv("TINYFISH_API_KEY", "process-env-key");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const tools = createCodingAgentTools({ openSearchOptions: { env: {} } });
+
+    expect(Object.keys(tools)).toStrictEqual([]);
+    expect(warn).toHaveBeenCalledWith(WEB_TOOLS_DISABLED_MESSAGE);
+  });
+});
+
+describe("resolveStartTuiTools availability", () => {
+  beforeEach(() => {
+    vi.stubEnv("TINYFISH_API_KEY", undefined);
+  });
+
+  it("starts the TUI without web tools and warns when TINYFISH_API_KEY is missing", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const tools = resolveStartTuiTools();
+
+    expect(Object.keys(tools)).toStrictEqual([]);
+    expect(warn).toHaveBeenCalledWith(WEB_TOOLS_DISABLED_MESSAGE);
+  });
+
+  it("fails TUI tool resolution in required mode when TINYFISH_API_KEY is missing", () => {
+    expect(() =>
+      resolveStartTuiTools(undefined, { webToolsAvailability: "required" })
+    ).toThrowError(CodingAgentWebToolsUnavailableError);
+  });
+
+  it("omits TUI web tools in disabled mode even when TINYFISH_API_KEY is present", () => {
+    vi.stubEnv("TINYFISH_API_KEY", "test-key");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const tools = resolveStartTuiTools(undefined, {
+      webToolsAvailability: "disabled",
+    });
+
+    expect(Object.keys(tools)).toStrictEqual([]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("returns override tools unchanged regardless of availability mode", () => {
+    const overrideTools = {};
+
+    expect(
+      resolveStartTuiTools(overrideTools, { webToolsAvailability: "required" })
+    ).toBe(overrideTools);
   });
 });
