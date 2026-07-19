@@ -2,10 +2,10 @@ import type {
   LanguageModel,
   LanguageModelUsage,
   ModelMessage,
-  ToolChoice,
   ToolSet,
 } from "ai";
 import { generateText } from "ai";
+import type { RuntimeDiagnosticsSink } from "../plugins/diagnostics";
 import {
   type HostAttachmentStore,
   hydrateRuntimeAttachments,
@@ -15,6 +15,12 @@ import {
   compactionContextForModel,
   type ThreadContextMessage,
 } from "../thread/state/context";
+import {
+  ModelToolSelectionError,
+  type PreparedModelToolChoice,
+  type PrepareModelStep,
+  resolveModelStepOptions,
+} from "./model-step-preparation";
 import { assertNoUnsupportedToolApproval } from "./tool-approval";
 import type { RuntimeToolExecutionContext } from "./tool-execution";
 import {
@@ -31,8 +37,7 @@ export type {
   RuntimeToolExecutionResult,
   RuntimeToolRetryPolicy,
 } from "./tool-execution";
-
-export type AgentToolChoice = ToolChoice<ToolSet>;
+export type AgentToolChoice = PreparedModelToolChoice;
 export type ModelStepOutput = Awaited<
   ReturnType<typeof generateText>
 >["responseMessages"];
@@ -84,17 +89,23 @@ export class ContextBudgetExceededError extends Error {
 }
 
 export interface ModelGenerationOptions {
+  alwaysActiveTools?: readonly string[];
   attachmentStore?: HostAttachmentStore;
   contextGate?: false | ModelContextGateOptions;
+  diagnostics?: RuntimeDiagnosticsSink;
   instructions?: string;
   model: LanguageModel;
+  prepareModelStep?: PrepareModelStep;
   toolChoice?: AgentToolChoice;
+  toolOrder?: readonly string[];
   tools?: ToolSet;
 }
 
 export interface ModelStepOptions extends ModelGenerationOptions {
   history: readonly ThreadContextMessage[];
+  runtimeStepIndex?: number;
   signal: AbortSignal;
+  threadKey?: string;
   toolExecution?: RuntimeToolExecutionContext;
 }
 
@@ -109,30 +120,10 @@ const FINISH_REASONS = new Set<ModelUsage["finishReason"]>([
   "tool-calls",
 ]);
 
-export async function generateModelStep({
-  attachmentStore,
-  contextGate,
-  history,
-  model,
-  instructions,
-  signal,
-  toolChoice,
-  toolExecution,
-  tools,
-}: ModelStepOptions): Promise<ModelStepOutput> {
-  return (
-    await generateModelStepResult({
-      attachmentStore,
-      contextGate,
-      history,
-      instructions,
-      model,
-      signal,
-      toolChoice,
-      toolExecution,
-      tools,
-    })
-  ).messages;
+export async function generateModelStep(
+  options: ModelStepOptions
+): Promise<ModelStepOutput> {
+  return (await generateModelStepResult(options)).messages;
 }
 
 /**
@@ -141,19 +132,45 @@ export async function generateModelStep({
  * only need messages can keep using {@link generateModelStep}.
  */
 export async function generateModelStepResult({
+  alwaysActiveTools,
   attachmentStore,
   contextGate,
+  diagnostics,
   history,
   model,
   instructions,
+  prepareModelStep,
+  runtimeStepIndex = 0,
   signal,
+  threadKey,
   toolChoice,
+  toolOrder,
   toolExecution,
   tools,
 }: ModelStepOptions): Promise<ModelStepResult> {
+  if (prepareModelStep && threadKey === undefined) {
+    throw new ModelToolSelectionError(
+      "prepareModelStep requires a runtime threadKey."
+    );
+  }
   const attemptId = crypto.randomUUID();
+  const historySnapshot = snapshotModelHistory(history);
   const toolCallIds = new Map<string, string>();
-  const prompt = promptForModel({ history, instructions });
+  const prepared = await resolveModelStepOptions({
+    alwaysActiveTools,
+    attemptId,
+    diagnostics,
+    history: historySnapshot,
+    model,
+    prepareModelStep,
+    runtimeStepIndex,
+    signal,
+    threadKey,
+    toolChoice,
+    toolOrder,
+    tools,
+  });
+  const prompt = promptForModel({ history: historySnapshot, instructions });
   const messages = await hydrateRuntimeAttachments(
     prompt.messages,
     attachmentStore
@@ -163,16 +180,20 @@ export async function generateModelStepResult({
     instructions: prompt.instructions,
     messages,
   });
-  assertNoUnsupportedToolApproval(tools);
+  assertNoUnsupportedToolApproval(prepared.tools);
+  const modelRequest = generateText({
+    activeTools: prepared.activeTools,
+    abortSignal: signal,
+    instructions: prompt.instructions,
+    messages,
+    model: prepared.model,
+    toolChoice: prepared.toolChoice,
+    toolOrder: prepared.toolOrder,
+    tools: normalizeToolCallIds(prepared.tools, toolCallIds, toolExecution),
+  });
+  prepared.startToolCacheFingerprintReport?.();
   const { finalStep, finishReason, response, responseMessages, usage } =
-    await generateText({
-      abortSignal: signal,
-      instructions: prompt.instructions,
-      messages,
-      model,
-      toolChoice,
-      tools: normalizeToolCallIds(tools, toolCallIds, toolExecution),
-    });
+    await modelRequest;
 
   return {
     messages: responseMessages.map((message) =>
@@ -185,13 +206,13 @@ export async function generateModelStepResult({
       modelId: firstSafeTelemetryIdentifier(
         response?.modelId ??
           finalStep?.model.modelId ??
-          configuredModelId(model),
+          configuredModelId(prepared.model),
         finalStep?.model.modelId,
-        configuredModelId(model)
+        configuredModelId(prepared.model)
       ),
       provider: firstSafeTelemetryIdentifier(
         finalStep?.model.provider,
-        configuredProvider(model)
+        configuredProvider(prepared.model)
       ),
       usage,
     }),
@@ -313,11 +334,77 @@ function firstSafeTelemetryIdentifier(
 }
 
 function configuredModelId(model: LanguageModel): string | undefined {
-  return typeof model === "string" ? model : model.modelId;
+  return typeof model === "string"
+    ? model
+    : dataPropertyStringInPrototypeChain(model, "modelId");
 }
 
 function configuredProvider(model: LanguageModel): string | undefined {
-  return typeof model === "string" ? undefined : model.provider;
+  return typeof model === "string"
+    ? undefined
+    : dataPropertyStringInPrototypeChain(model, "provider");
+}
+
+function dataPropertyStringInPrototypeChain(
+  value: object,
+  property: string
+): string | undefined {
+  try {
+    let current: object | null = value;
+    while (current !== null) {
+      const descriptor = Object.getOwnPropertyDescriptor(current, property);
+      if (descriptor) {
+        return "value" in descriptor && typeof descriptor.value === "string"
+          ? descriptor.value
+          : undefined;
+      }
+      current = Object.getPrototypeOf(current);
+    }
+  } catch {
+    // Provider model objects may be proxies. Telemetry must fail closed.
+  }
+  return;
+}
+
+function snapshotModelHistory(
+  history: readonly ThreadContextMessage[]
+): readonly ThreadContextMessage[] {
+  if (!Array.isArray(history)) {
+    throw new TypeError("history must be an array of model messages.");
+  }
+  let lengthDescriptor: PropertyDescriptor | undefined;
+  try {
+    lengthDescriptor = Object.getOwnPropertyDescriptor(history, "length");
+  } catch {
+    throw new TypeError("history has an invalid length descriptor.");
+  }
+  if (
+    !(
+      lengthDescriptor &&
+      "value" in lengthDescriptor &&
+      typeof lengthDescriptor.value === "number" &&
+      Number.isSafeInteger(lengthDescriptor.value) &&
+      lengthDescriptor.value >= 0
+    )
+  ) {
+    throw new TypeError("history has an invalid length.");
+  }
+  const snapshot: ThreadContextMessage[] = [];
+  for (let index = 0; index < lengthDescriptor.value; index += 1) {
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(history, String(index));
+    } catch {
+      throw new TypeError("history contains an invalid message descriptor.");
+    }
+    if (!(descriptor && "value" in descriptor)) {
+      throw new TypeError(
+        "history must be a dense array of data-property model messages."
+      );
+    }
+    snapshot.push(descriptor.value as ThreadContextMessage);
+  }
+  return Object.freeze(snapshot);
 }
 
 function enforceContextGate({

@@ -19,6 +19,7 @@ describe("release workflow", () => {
     expect(workflow).not.toContain("      - v0.1\n");
     expect(workflow).not.toContain("workflow_dispatch:");
     expect(workflow).toContain("fetch-depth: 0");
+    expect(ciWorkflow).toContain("fetch-depth: 0");
     expect(workflow).toContain("node-version-file: .node-version");
     expect(ciWorkflow).toContain("node-version-file: .node-version");
     expect(workflow).toContain("pnpm tegami ci");

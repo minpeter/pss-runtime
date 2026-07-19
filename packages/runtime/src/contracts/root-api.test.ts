@@ -22,14 +22,19 @@ import type {
   AgentOptions,
   CompactionContextMessage,
   HostAttachmentStore,
+  ModelToolCacheFingerprintMetadata,
   ModelUsage,
   PluginEventMap,
+  PrepareModelStep,
+  PrepareModelStepInput,
+  PrepareModelStepResult,
   ThreadCompactionInput,
   ThreadContextMessage,
   ThreadHandle,
 } from "../index";
 import {
   createAgent,
+  ModelToolSelectionError,
   registerTool,
   threadStoreKey as runtimeThreadStoreKey,
   ThreadEventReplayUnsupportedError,
@@ -187,6 +192,51 @@ describe("runtime public exports", () => {
     expect(disabledOptions.autoCompaction).toBe(false);
     expect(compaction.startSeq).toBe(0);
     expect(contextCompaction.role).toBe("compaction");
+  });
+
+  it("exports cache-stable model-step contracts from the package root", async () => {
+    const runtime = await import("../index");
+    expectTypeOf<PrepareModelStepInput["history"]>().toEqualTypeOf<
+      readonly ThreadContextMessage[]
+    >();
+    const prepareModelStep: PrepareModelStep = (input) => {
+      expectTypeOf(input).toEqualTypeOf<PrepareModelStepInput>();
+      return { activeTools: [] } satisfies PrepareModelStepResult;
+    };
+    const asyncVoidCallback = (): Promise<void> => Promise.resolve();
+    const asyncPrepareModelStep: PrepareModelStep = asyncVoidCallback;
+    const model = {} as AgentOptions["model"];
+    const options = {
+      alwaysActiveTools: ["status"],
+      model,
+      prepareModelStep,
+      toolOrder: ["status"],
+    } satisfies AgentOptions;
+    const metadata = {
+      activeToolCount: 1,
+      activeToolsFingerprint: "sha256:active",
+      alwaysActiveToolCount: 1,
+      attemptId: "attempt-1",
+      dynamicDescriptionToolCount: 0,
+      modelIdentityFingerprint: "sha256:model",
+      modelIdentityFingerprintUnavailable: false,
+      orderedToolSemanticFingerprint: "sha256:semantic",
+      orderedToolNamesFingerprint: "sha256:order",
+      registeredToolCount: 2,
+      registryToolNamesFingerprint: "sha256:registry",
+      runtimeStepIndex: 0,
+      selectionDurationMs: 1,
+      semanticFingerprintUnavailableToolCount: 0,
+      toolLoadingStrategy: "eager-active-tools",
+    } satisfies ModelToolCacheFingerprintMetadata;
+
+    expect(runtime).toHaveProperty(
+      "ModelToolSelectionError",
+      ModelToolSelectionError
+    );
+    expect(options.prepareModelStep).toBe(prepareModelStep);
+    expect(asyncPrepareModelStep).toBe(asyncVoidCallback);
+    expect(metadata.runtimeStepIndex).toBe(0);
   });
 
   it("types advanced host contracts", () => {

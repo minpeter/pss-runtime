@@ -49,7 +49,10 @@ export async function loadModelStepRunner() {
   const { generateModelStep } = await import("../llm/llm");
   return (
     options: ModelGenerationOptions,
-    context: Pick<ModelStepOptions, "history" | "signal" | "toolExecution">
+    context: Pick<
+      ModelStepOptions,
+      "history" | "runtimeStepIndex" | "signal" | "threadKey" | "toolExecution"
+    >
   ) => generateModelStep({ ...options, ...context });
 }
 

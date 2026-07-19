@@ -526,7 +526,10 @@ export class PluginRuntime {
     return current;
   }
 
-  wrapModel(model: LanguageModel, threadKey: string): LanguageModel {
+  wrapModel(
+    model: LanguageModel,
+    threadKey: string
+  ): Exclude<LanguageModel, string> {
     return wrapLanguageModel({
       middleware: {
         transformParams: async ({ params }) =>

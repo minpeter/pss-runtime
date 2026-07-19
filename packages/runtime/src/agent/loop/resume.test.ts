@@ -1,5 +1,5 @@
 import type { ModelMessage } from "ai";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { AgentHost } from "../../execution/host/types";
 import { resumeRun } from "../../execution/resume/resume";
 import { createInMemoryHost } from "../../platform/memory";
@@ -32,6 +32,42 @@ const collectEvents = async (
 const queuedUserMessage = () => userTextToModelMessage(userText("queued"));
 
 describe("resumeRun", () => {
+  it("uses host diagnostics instead of a model-supplied sink", async () => {
+    const hostDiagnostics: unknown[] = [];
+    const modelDiagnostics: unknown[] = [];
+    const host = {
+      ...createInMemoryHost(),
+      diagnostics: {
+        report: (diagnostic: unknown) => {
+          hostDiagnostics.push(diagnostic);
+        },
+      },
+    } satisfies AgentHost;
+    const model = {
+      ...createScriptedModelOptions([[assistantMessage("DONE")]]),
+      diagnostics: {
+        report: (diagnostic: unknown) => {
+          modelDiagnostics.push(diagnostic);
+        },
+      },
+    };
+    await host.store.turns.create(createQueuedUserTurnRun());
+
+    await expect(
+      resumeRun({
+        budget: { maxSteps: 1 },
+        host,
+        model,
+        loadState: () => Promise.resolve({ history: [queuedUserMessage()] }),
+        runId: "run-1",
+        saveState: () => Promise.resolve(),
+      })
+    ).resolves.toEqual({ status: "completed", steps: 1 });
+
+    await vi.waitFor(() => expect(hostDiagnostics).toHaveLength(1));
+    expect(modelDiagnostics).toHaveLength(0);
+  });
+
   it("suspends without calling the model when maxSteps is zero", async () => {
     const host = createInMemoryHost();
     const model = createScriptedModelOptions([[assistantMessage("DONE")]]);
@@ -80,16 +116,27 @@ describe("resumeRun", () => {
     const toolCall = toolCallPart("call-tool-1");
     const initialUserMessage = queuedUserMessage();
     const history: ModelMessage[] = [initialUserMessage];
-    const model = createScriptedModelOptions([
-      [
-        assistantMessage([
-          { text: "I need the tool.", type: "text" },
-          toolCall,
-        ]),
-        toolResultFor(toolCall),
-      ],
-      [assistantMessage("DONE")],
-    ]);
+    const indices: number[] = [];
+    const model = {
+      ...createScriptedModelOptions([
+        [
+          assistantMessage([
+            { text: "I need the tool.", type: "text" },
+            toolCall,
+          ]),
+          toolResultFor(toolCall),
+        ],
+        [assistantMessage("DONE")],
+      ]),
+      prepareModelStep: ({
+        runtimeStepIndex,
+      }: {
+        runtimeStepIndex: number;
+      }) => {
+        indices.push(runtimeStepIndex);
+        return;
+      },
+    };
     await host.store.turns.create(createQueuedUserTurnRun());
 
     const first = await resumeRun({
@@ -126,6 +173,7 @@ describe("resumeRun", () => {
     });
 
     expect(second).toEqual({ status: "completed", steps: 1 });
+    expect(indices).toEqual([0, 1]);
     expect(model.model.doGenerateCalls).toHaveLength(2);
     expect(eventTypes(await collectEvents(host))).toEqual([
       "step-start",
@@ -146,6 +194,7 @@ describe("resumeRun", () => {
     const initialUserMessage = queuedUserMessage();
     const history: ModelMessage[] = [initialUserMessage];
     let modelCalls = 0;
+    const indices: number[] = [];
     let failCommit = true;
     const model = createMockLanguageModelV4(() => {
       modelCalls += 1;
@@ -157,7 +206,13 @@ describe("resumeRun", () => {
       resumeRun({
         budget: { maxSteps: 1 },
         host,
-        model: { model },
+        model: {
+          model,
+          prepareModelStep: ({ runtimeStepIndex }) => {
+            indices.push(runtimeStepIndex);
+            return;
+          },
+        },
         loadState: () => Promise.resolve({ history }),
         runId: "run-1",
         saveState: (state) => {
@@ -183,7 +238,13 @@ describe("resumeRun", () => {
       resumeRun({
         budget: { maxSteps: 1 },
         host,
-        model: { model },
+        model: {
+          model,
+          prepareModelStep: ({ runtimeStepIndex }) => {
+            indices.push(runtimeStepIndex);
+            return;
+          },
+        },
         loadState: () => Promise.resolve({ history }),
         runId: "run-1",
         saveState: (state) => {
@@ -195,6 +256,7 @@ describe("resumeRun", () => {
     ).resolves.toEqual({ status: "completed", steps: 1 });
 
     expect(model.doGenerateCalls).toHaveLength(2);
+    expect(indices).toEqual([0, 0]);
     const events = await collectEvents(host);
     expect(eventTypes(events)).toEqual([
       "step-start",

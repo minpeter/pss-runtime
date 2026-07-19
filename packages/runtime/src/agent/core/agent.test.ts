@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createNoopTool } from "../../testing/llm-test-utils";
 import {
   createMockLanguageModelV4,
@@ -14,6 +14,9 @@ const invalidModelPattern = /invalid options\.model/;
 const missingModelPattern = /missing options\.model/;
 const missingOptionsPattern = /Agent options are required/;
 const unsupportedApprovalPattern = /needsApproval.*not supported/;
+const prepareModelStepPattern = /prepareModelStep/;
+const duplicateToolOrderPattern = /toolOrder.*duplicate/;
+const duplicateAlwaysActiveToolsPattern = /alwaysActiveTools.*duplicate/;
 const agentOptionsSourceUrl = new URL("./options.ts", import.meta.url);
 const agentSourceUrl = new URL("./agent.ts", import.meta.url);
 const forbiddenAgentSubagentSurface = [
@@ -186,6 +189,68 @@ describe("Agent", () => {
           tools,
         })
     ).toThrow(unsupportedApprovalPattern);
+  });
+
+  it("rejects malformed model-step preparation options", () => {
+    expect(() =>
+      Reflect.construct(Agent, [
+        { model: fakeModel, prepareModelStep: "invalid" },
+      ])
+    ).toThrow(prepareModelStepPattern);
+    expect(
+      () =>
+        new Agent({
+          model: fakeModel,
+          toolOrder: ["duplicate", "duplicate"],
+        })
+    ).toThrow(duplicateToolOrderPattern);
+    expect(
+      () =>
+        new Agent({
+          alwaysActiveTools: ["duplicate", "duplicate"],
+          model: fakeModel,
+        })
+    ).toThrow(duplicateAlwaysActiveToolsPattern);
+  });
+
+  it.each([
+    "alwaysActiveTools",
+    "toolOrder",
+  ] as const)("keeps a custom %s iterator inert through the public factory", async (field) => {
+    const names = ["stable"];
+    const iteratorGetter = vi.fn(() => {
+      throw new Error(`${field} iterator must stay inert`);
+    });
+    Object.defineProperty(names, Symbol.iterator, {
+      get: iteratorGetter,
+    });
+
+    const agent = await createAgent({
+      [field]: names,
+      model: fakeModel,
+      tools: { stable: createNoopTool() },
+    });
+    await collectRun(await agent.send("use stable tools"));
+
+    expect(iteratorGetter).not.toHaveBeenCalled();
+  });
+
+  it("rejects accessor-backed tool registries without invoking them", async () => {
+    const registryGetter = vi.fn(() => {
+      throw new Error("registry getter must stay inert");
+    });
+    const prepareModelStep = vi.fn(() => ({ activeTools: [] }));
+    const tools = {} as NonNullable<AgentOptions["tools"]>;
+    Object.defineProperty(tools, "inactive", {
+      enumerable: true,
+      get: registryGetter,
+    });
+
+    await expect(
+      createAgent({ model: fakeModel, prepareModelStep, tools })
+    ).rejects.toThrow("must be a data property");
+    expect(registryGetter).not.toHaveBeenCalled();
+    expect(prepareModelStep).not.toHaveBeenCalled();
   });
 
   it("does not implement legacy llm configuration", () => {

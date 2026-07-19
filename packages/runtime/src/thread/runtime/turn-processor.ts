@@ -88,6 +88,7 @@ export async function processQueuedInput({
           signal
         )
     : undefined;
+  const agentLoopRuntimeState = { runtimeStepIndex: 0 };
 
   try {
     executionRun = await startThreadExecutionRun({
@@ -192,9 +193,11 @@ export async function processQueuedInput({
             }),
           history: state.history,
           model,
+          runtimeState: agentLoopRuntimeState,
           captureObserverEvents: (callback) =>
             events.captureObserverEvents(run, callback),
           signal: activeAbort.signal,
+          threadKey,
           toolExecution: executionRun?.toolExecution,
           transformModelContext,
           transformModelStep,

@@ -25,6 +25,7 @@ describe("Agent thread automatic compaction", () => {
   it("summarizes old history in the background and uses the summary plus latest tail on the next model call", async () => {
     const store = new SpyStore();
     const seenHistory: ModelMessage[][] = [];
+    const preparedStepIndices: number[] = [];
     let calls = 0;
     const agent = agentWithAutoCompaction({
       autoCompaction: { minMessages: 4, retainMessages: 2 },
@@ -43,12 +44,17 @@ describe("Agent thread automatic compaction", () => {
         }
         return [assistantMessage("after compaction")];
       }),
+      prepareModelStep: ({ runtimeStepIndex }) => {
+        preparedStepIndices.push(runtimeStepIndex);
+        return;
+      },
     });
     const thread = agent.thread("auto");
 
     await collect(await thread.send("old"));
     await collect(await thread.send("tail"));
     await waitForModelCalls(() => calls, 3);
+    expect(preparedStepIndices).toEqual([0, 0]);
 
     expect(store.threads.get("auto")?.state).toEqual({
       compactions: [
@@ -69,6 +75,7 @@ describe("Agent thread automatic compaction", () => {
     });
 
     await collect(await thread.send("next"));
+    expect(preparedStepIndices).toEqual([0, 0, 0]);
 
     expect(seenHistory[3]).toEqual([
       expect.objectContaining({

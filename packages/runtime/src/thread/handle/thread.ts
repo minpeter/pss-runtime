@@ -3,6 +3,7 @@ import type {
   ThreadEventReadOptions,
 } from "../../execution/host/types";
 import type { ModelGenerationOptions } from "../../llm/llm";
+import { mapPrepareModelStepModel } from "../../llm/model-step-preparation";
 import type { AgentInput, UserInput } from "../input/input";
 import type {
   QueuedInput,
@@ -67,13 +68,20 @@ export class AgentThread {
     persistence: ThreadPersistenceOptions,
     execution: ThreadExecutionOptions = {}
   ) {
-    this.#model = execution.pluginRuntime
+    const pluginRuntime = execution.pluginRuntime;
+    this.#model = pluginRuntime
       ? {
           ...model,
-          model: execution.pluginRuntime.wrapModel(
-            model.model,
-            persistence.key
-          ),
+          model: pluginRuntime.wrapModel(model.model, persistence.key),
+          ...(model.prepareModelStep
+            ? {
+                prepareModelStep: mapPrepareModelStepModel(
+                  model.prepareModelStep,
+                  (preparedModel) =>
+                    pluginRuntime.wrapModel(preparedModel, persistence.key)
+                ),
+              }
+            : {}),
         }
       : model;
     this.#execution = execution;

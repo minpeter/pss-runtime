@@ -7,7 +7,12 @@ export function assertNoUnsupportedToolApproval(
     return;
   }
 
-  for (const [toolName, toolDefinition] of Object.entries(tools)) {
+  for (const toolName of Object.keys(tools)) {
+    const descriptor = Object.getOwnPropertyDescriptor(tools, toolName);
+    if (!(descriptor && "value" in descriptor)) {
+      throw new TypeError(`Agent tools.${toolName} must be a data property.`);
+    }
+    const toolDefinition = descriptor.value;
     if (
       (typeof toolDefinition === "object" ||
         typeof toolDefinition === "function") &&
