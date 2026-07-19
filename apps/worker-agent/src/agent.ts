@@ -23,6 +23,7 @@ import {
 } from "./tools";
 
 const DEFAULT_BASE_URL = "https://apis.opengateway.ai/v1";
+export const WORKER_AGENT_NAMESPACE = "worker-agent";
 
 /** Default model id when `AI_MODEL` is unset (also used on wide-event `ai.model`). */
 export const DEFAULT_MODEL = "minimax/MiniMax-M2.7";
@@ -149,6 +150,7 @@ export async function createConfiguredAgent(
     host,
     instructions: WORKER_AGENT_INSTRUCTIONS,
     model: provider(env.AI_MODEL?.trim() || DEFAULT_MODEL),
+    namespace: WORKER_AGENT_NAMESPACE,
     plugins,
     ...(tools ? { tools } : {}),
   });

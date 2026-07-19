@@ -3,12 +3,14 @@ import type {
   AgentInput,
   ImageOmitDiagnostics,
   ImagePrepareDiagnostics,
+  ThreadHandle,
 } from "@minpeter/pss-runtime";
 import {
   IMAGE_PREPARE_LOG_MESSAGE,
   runWithImageOmitDiagnosticsListener,
   runWithImagePrepareDiagnosticsListener,
 } from "@minpeter/pss-runtime";
+import { dispatchAgentNotification } from "@minpeter/pss-runtime/execution";
 import {
   type CloudflareAgentsFiberRecoveryContext,
   type CloudflareAgentsFiberRecoveryResult,
@@ -18,7 +20,11 @@ import {
 import { installCloudflareImageCodecs } from "@minpeter/pss-runtime/platform/cloudflare/image-codecs";
 import { Agent as CloudflareAgent } from "agents";
 
-import { createConfiguredAgent, DEFAULT_MODEL } from "./agent";
+import {
+  createConfiguredAgent,
+  DEFAULT_MODEL,
+  WORKER_AGENT_NAMESPACE,
+} from "./agent";
 import {
   type WorkerAgentDeliveredMessage,
   withCapturedMessages,
@@ -45,6 +51,10 @@ import type { Env } from "./env";
 import { AGENT_TURN_ADMISSION_LAYER } from "./message-path-layers";
 import { createTurnEventCollector } from "./observability";
 import {
+  ReplayEventsRequestSchema,
+  SubmitTurnRequestSchema,
+} from "./session-contract";
+import {
   createSessionIndexStore,
   type SessionIndexStore,
 } from "./session-index";
@@ -55,6 +65,7 @@ import {
 } from "./session-index-client";
 import { handleSessionIndexRequest } from "./session-index-routes";
 import { createSqlSessionIndexRepository } from "./session-index-sql";
+import { replayDurableThreadEvents } from "./session-runtime";
 import {
   createThreadStoreSessionTranscriptReader,
   type SessionTranscriptReader,
@@ -81,6 +92,10 @@ import {
 // DO isolate may load this module without worker-entry side-effects.
 installCloudflareImageCodecs();
 
+const SESSION_SUBMIT_PATH = "/session/turn";
+const SESSION_REPLAY_PATH = "/session/events/replay";
+const SESSION_BINDING_STORAGE_KEY = "session:binding";
+
 /**
  * Channel agent Durable Object on the Cloudflare Agents SDK.
  * Scheduling/resume uses Agents fibers; HTTP remains app-owned via onRequest.
@@ -102,6 +117,7 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
   /** Layer 2: reused so send/steer share in-memory active-run state. */
   #turnSession: TurnSession | undefined;
   #turnSessionPromise: Promise<TurnSession> | undefined;
+  #runtimeThread: ThreadHandle | undefined;
   #channel: ChannelAddress | undefined;
   #sessionScopeKey: string | undefined;
   #observability: ReturnType<typeof createTurnEventCollector> | undefined;
@@ -130,6 +146,7 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
 
   /** Agents scheduler callback for delayed PSS run/thread resumes. */
   async resumePssRuntimeFiber(payload: unknown): Promise<void> {
+    await this.#restoreSessionBinding();
     await this.#platform.resumeScheduledFiber(payload);
   }
 
@@ -149,6 +166,12 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
     }
 
     const pathname = new URL(request.url).pathname;
+    if (pathname === SESSION_SUBMIT_PATH) {
+      return await this.#handleSessionSubmitRequest(request);
+    }
+    if (pathname === SESSION_REPLAY_PATH) {
+      return await this.#handleSessionReplayRequest(request);
+    }
     if (isSessionIndexPath(pathname)) {
       return await handleSessionIndexRequest({
         pathname,
@@ -402,6 +425,84 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
     });
   }
 
+  async #handleSessionSubmitRequest(request: Request): Promise<Response> {
+    const body = await readRequestJson(request);
+    const parsed = SubmitTurnRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      return new Response("invalid session turn", { status: 400 });
+    }
+
+    const channelId = parsed.data.channel.id.trim();
+    const text = parsed.data.text.trim();
+    if (!(channelId && text)) {
+      return new Response("invalid session turn", { status: 400 });
+    }
+    const channel = { id: channelId, kind: parsed.data.channel.kind };
+    const sessionScopeKey = parsed.data.sessionScopeKey?.trim();
+    this.#channel = channel;
+    this.#sessionScopeKey = sessionScopeKey || undefined;
+    await this.#storage.put(SESSION_BINDING_STORAGE_KEY, {
+      channel,
+      ...(sessionScopeKey ? { sessionScopeKey } : {}),
+    } satisfies SessionBindingRecord);
+
+    const admitted = await dispatchAgentNotification({
+      host: this.#platform.host(),
+      idempotencyKey: parsed.data.idempotencyKey?.trim() || crypto.randomUUID(),
+      input: { text, type: "user-input" },
+      namespace: WORKER_AGENT_NAMESPACE,
+      threadKey: CHANNEL_DURABLE_OBJECT_THREAD_KEY,
+    });
+    return Response.json({
+      accepted: true,
+      runId: admitted.runId,
+      threadKey: CHANNEL_DURABLE_OBJECT_THREAD_KEY,
+    });
+  }
+
+  async #handleSessionReplayRequest(request: Request): Promise<Response> {
+    const body = await readRequestJson(request);
+    const parsed = ReplayEventsRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      return new Response("invalid session replay", { status: 400 });
+    }
+
+    const channelId = parsed.data.channel.id.trim();
+    if (!channelId) {
+      return new Response("invalid session replay", { status: 400 });
+    }
+    const channel = { id: channelId, kind: parsed.data.channel.kind };
+    this.#channel = channel;
+    this.#sessionScopeKey = parsed.data.sessionScopeKey?.trim() || undefined;
+    await this.#ensureTurnSession(durableObjectChannelBinding(channel));
+    const thread = this.#runtimeThread;
+    if (!thread) {
+      throw new AgentDurableObjectInvariantError(
+        "Session runtime thread was not initialized."
+      );
+    }
+
+    return Response.json(
+      await replayDurableThreadEvents(thread, {
+        ...(parsed.data.after ? { after: parsed.data.after } : {}),
+        ...(parsed.data.limit === undefined
+          ? {}
+          : { limit: parsed.data.limit }),
+      })
+    );
+  }
+
+  async #restoreSessionBinding(): Promise<void> {
+    const stored = await this.#storage.get<SessionBindingRecord>(
+      SESSION_BINDING_STORAGE_KEY
+    );
+    if (!stored) {
+      return;
+    }
+    this.#channel = stored.channel;
+    this.#sessionScopeKey = stored.sessionScopeKey;
+  }
+
   async #handleSessionTranscriptRequest(request: Request): Promise<Response> {
     let body: unknown;
     try {
@@ -484,7 +585,9 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
         }
       );
       try {
-        const session = createTurnSession(agent.thread(binding.thread));
+        const thread = agent.thread(binding.thread);
+        const session = createTurnSession(thread);
+        this.#runtimeThread = thread;
         this.#turnSession = session;
         return session;
       } catch (error) {
@@ -558,6 +661,19 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
         { scope: "agent-do" }
       );
     }
+  }
+}
+
+interface SessionBindingRecord {
+  readonly channel: ChannelAddress;
+  readonly sessionScopeKey?: string;
+}
+
+async function readRequestJson(request: Request): Promise<unknown> {
+  try {
+    return await request.json();
+  } catch {
+    return;
   }
 }
 
