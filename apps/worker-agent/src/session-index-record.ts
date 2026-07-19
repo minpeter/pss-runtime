@@ -44,6 +44,9 @@ export function isSessionRecordVisible(
   record: SessionIndexRecord,
   options: SessionRecordFilterOptions = {}
 ): boolean {
+  if (!record.threadKey) {
+    return false;
+  }
   if (record.conversationKey === options.excludeKey) {
     return false;
   }
