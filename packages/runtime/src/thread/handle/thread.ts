@@ -10,7 +10,6 @@ import type {
   QueuedRuntimeInput,
   RuntimeInputState,
 } from "../input/runtime-input";
-import type { AgentPlugin } from "../plugins/pipeline";
 import { type AgentTurn, BufferedAgentTurn } from "../protocol/turn";
 import { ThreadEventDispatcher } from "../runtime/events";
 import type { ThreadExecutionOptions } from "../runtime/execution";
@@ -67,7 +66,6 @@ export class AgentThread {
   constructor(
     model: ModelGenerationOptions,
     persistence: ThreadPersistenceOptions,
-    plugins: readonly AgentPlugin[] = [],
     execution: ThreadExecutionOptions = {}
   ) {
     const pluginRuntime = execution.pluginRuntime;
@@ -93,7 +91,6 @@ export class AgentThread {
       attachmentStore: model.attachmentStore,
       history: () => this.#state.modelSnapshot(),
       pluginRuntime: execution.pluginRuntime,
-      plugins,
       signal: () => this.#activeAbort?.signal,
       threadKey: persistence.key,
     });

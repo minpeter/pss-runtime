@@ -177,7 +177,7 @@ test("rejects legacy schema-v2 evidence before interpreting it", async () => {
   await rejectsWith(evidence, ["schemaVersion"]);
 });
 
-test("rejects a source manifest hash that is not backed by current bytes", async () => {
+test("rejects a source manifest hash that is not backed by frozen bytes", async () => {
   const evidence = await copyPristine();
   evidence.configuration.implementationSourcesSha256[
     "packages/runtime/src/llm/llm.ts"

@@ -59,6 +59,7 @@ export type PluginInputDecision = InputAcceptEvent | "handled";
 
 export type PluginToolExecutionDecision =
   | { readonly status: "blocked"; readonly output: unknown }
+  | { readonly input: unknown; readonly status: "continue" }
   | { readonly status: "needs-recovery" }
   | undefined;
 
@@ -223,14 +224,20 @@ export class PluginRuntime {
     history: readonly ModelMessage[],
     signal: AbortSignal = this.#abort.signal
   ): Promise<PluginToolExecutionDecision> {
+    let currentInput = structuredClone(event.input);
+    let inputTransformed = false;
     for (const { registered, registration } of this.#handlers(
       "tool.call.before"
     )) {
+      const snapshot: PluginToolCallBeforeEvent = {
+        ...event,
+        input: structuredClone(currentInput),
+      };
       const result = await this.#invoke(
         registration,
         "tool.call.before",
         registered,
-        structuredClone(event),
+        snapshot,
         { history, signal, threadKey }
       );
       const decision = result as
@@ -240,7 +247,7 @@ export class PluginRuntime {
         registration,
         "tool.call.before",
         decision,
-        ["block", "continue", "needs-recovery"]
+        ["block", "continue", "needs-recovery", "transform"]
       );
       if (decision?.action === "needs-recovery") {
         return { status: "needs-recovery" };
@@ -254,13 +261,28 @@ export class PluginRuntime {
           status: "blocked",
         };
       }
+      if (decision?.action === "transform") {
+        try {
+          currentInput = cloneToolCallInput(decision.input);
+        } catch (cause) {
+          await this.#throwHookFailure(registration, "tool.call.before", cause);
+        }
+        inputTransformed = true;
+      }
     }
 
-    await this.#notify("tool.execution.start", event, {
+    const finalEvent: PluginToolCallBeforeEvent = {
+      ...event,
+      input: structuredClone(currentInput),
+    };
+    await this.#notify("tool.execution.start", finalEvent, {
       history,
       signal,
       threadKey,
     });
+    if (inputTransformed) {
+      return { input: currentInput, status: "continue" };
+    }
     return;
   }
 
@@ -791,12 +813,27 @@ export class PluginRuntime {
       typeof result.action === "string" &&
       actions.includes(result.action)
     ) {
-      if (result.action === "transform" && !("value" in result)) {
-        throw await this.#invalidResult(
-          registration,
-          event,
-          `Plugin ${event} transform result is missing value.`
-        );
+      if (result.action === "transform") {
+        if (event === "tool.call.before") {
+          // Require an own/enumerable `input` that is not undefined. `"input" in
+          // result` alone would accept `{ action: "transform", input: undefined }`.
+          if (
+            !("input" in result) ||
+            (result as { readonly input?: unknown }).input === undefined
+          ) {
+            throw await this.#invalidResult(
+              registration,
+              event,
+              `Plugin ${event} transform result is missing input.`
+            );
+          }
+        } else if (!("value" in result)) {
+          throw await this.#invalidResult(
+            registration,
+            event,
+            `Plugin ${event} transform result is missing value.`
+          );
+        }
       }
       if (
         result.action === "block" &&
@@ -995,6 +1032,17 @@ function cloneEvent<T>(event: T): T {
     return structuredClone(event);
   } catch {
     return event;
+  }
+}
+
+function cloneToolCallInput(input: unknown): unknown {
+  try {
+    return structuredClone(input);
+  } catch (cause) {
+    throw new TypeError(
+      "Plugin tool.call.before transform input must be structured-cloneable.",
+      { cause }
+    );
   }
 }
 

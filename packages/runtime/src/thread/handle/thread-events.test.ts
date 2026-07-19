@@ -133,42 +133,6 @@ describe("AgentThread durable event replay", () => {
     ]);
   });
 
-  it("streams and replays billed usage before a legacy observer failure", async () => {
-    const host = createInMemoryHost();
-    const agent = new Agent({
-      host,
-      model: createCallbackModel(() => [assistantMessage("UNREACHABLE")]),
-      plugins: [
-        {
-          on: ({ event }) => {
-            if (event.type === "model-usage") {
-              throw new Error("legacy usage observer failed");
-            }
-          },
-        },
-      ],
-    });
-    const thread = agent.thread("durable-legacy-usage-observer-error");
-
-    const live = await collect(await thread.send("hello"));
-    const replayed = await collectThreadEvents(thread.events());
-    const liveUsage = live.find((event) => event.type === "model-usage");
-
-    expect(live.map((event) => event.type)).toEqual([
-      "user-input",
-      "turn-start",
-      "step-start",
-      "model-usage",
-      "turn-error",
-    ]);
-    expect(replayed.map(({ event }) => event.type)).toEqual(
-      live.map((event) => event.type)
-    );
-    expect(
-      replayed.find(({ event }) => event.type === "model-usage")?.event
-    ).toEqual(liveUsage);
-  });
-
   it("restores a transient usage flush and persists it once during recovery", async () => {
     const base = createInMemoryHost();
     let failedUsageAppend = false;

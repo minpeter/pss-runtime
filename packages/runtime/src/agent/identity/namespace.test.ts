@@ -16,7 +16,7 @@ describe("agent namespace helpers", () => {
     ).toBe("agent:coordinator:thread:room%2F1:generation:2");
   });
 
-  it("accepts current thread owner namespaces and legacy session owner namespaces", () => {
+  it("accepts current thread owner namespaces only", () => {
     const ownerNamespace = agentNamespace("coordinator");
 
     expect(ownsAgentNamespace(ownerNamespace, ownerNamespace)).toBe(true);
@@ -31,7 +31,7 @@ describe("agent namespace helpers", () => {
         `${ownerNamespace}:session:room%2F1:generation:2`,
         ownerNamespace
       )
-    ).toBe(true);
+    ).toBe(false);
     expect(
       ownsAgentNamespace(
         `${agentNamespace("other")}:thread:room%2F1:generation:2`,

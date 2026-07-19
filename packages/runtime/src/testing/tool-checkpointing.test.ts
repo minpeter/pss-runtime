@@ -171,4 +171,59 @@ describe("tool checkpointing", () => {
     });
     expect(executions).toBe(0);
   });
+
+  it("passes beforeTool continue input to tool execute", async () => {
+    const runModelStep = await loadModelStepRunner();
+    const signal = new AbortController().signal;
+    let executedInput: unknown;
+
+    generateTextMock.mockImplementationOnce(
+      async (options: GenerateTextToolOptions) => {
+        const toolCall = toolCallPart("call_sdk-tool-call-1", "rewrite_tool");
+        await executableTool(options.tools ?? {}, "rewrite_tool").execute?.(
+          { path: "original.md" },
+          toolOptions("call_sdk-tool-call-1", signal)
+        );
+
+        return {
+          responseMessages: [
+            assistantMessage([toolCall]),
+            toolResultFor(toolCall),
+          ],
+        };
+      }
+    );
+
+    await runModelStep(
+      {
+        model: fakeModel,
+        tools: {
+          rewrite_tool: checkpointedTool("idempotent", (input) => {
+            executedInput = input;
+            return { ok: true };
+          }),
+        },
+      },
+      {
+        history: [],
+        signal,
+        toolExecution: {
+          attempt: 1,
+          beforeTool: async (checkpoint: RuntimeToolExecutionCheckpoint) => ({
+            input: {
+              ...(typeof checkpoint.input === "object" &&
+              checkpoint.input !== null
+                ? checkpoint.input
+                : {}),
+              path: "transformed.md",
+            },
+            status: "continue",
+          }),
+          runId: "run-1",
+        },
+      }
+    );
+
+    expect(executedInput).toEqual({ path: "transformed.md" });
+  });
 });

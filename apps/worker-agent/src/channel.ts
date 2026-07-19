@@ -56,10 +56,6 @@ export function durableObjectChannelBinding(
   return bindChannelToThread(channel, CHANNEL_DURABLE_OBJECT_THREAD_KEY);
 }
 
-export function legacyChannelThreadKey(channel: ChannelAddress): string {
-  return channelKey(channel);
-}
-
 function bindChannelToThread(
   channel: ChannelAddress,
   thread: ThreadKey

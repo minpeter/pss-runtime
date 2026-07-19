@@ -1,17 +1,19 @@
 ---
 packages:
-  npm:@minpeter/pss-runtime: minor
+  "npm:@minpeter/pss-runtime": minor
 ---
 
 ## Add cache-aware model-step preparation
 
-Add a PSS-owned, zero-based `prepareModelStep` callback with logical indices
-that survive outer-loop overflow retries and durable resume. Support AI SDK 7
-`toolOrder`, fixed always-active prefixes, deterministic dynamic suffixes, and
-fail-closed validation for duplicate, unknown, overlapping, and inactive named
-tool selections. Snapshot configured and callback-returned tool-name arrays
-through bounded own data descriptors without invoking custom iterators or index
-getters.
+Add a PSS-owned, zero-based `prepareModelStep` callback with a logical index
+that is reused across overflow and pre-commit retries, then advances from
+committed history after durable resume. Support AI SDK 7 `toolOrder`, fixed
+`alwaysActiveTools` prefixes, and deterministic dynamic suffixes. Preserve
+factory-plugin middleware when the callback overrides the model, and fail
+closed on duplicate, unknown, overlapping, or inactive tool selections,
+malformed model overrides, and invalid tool-choice values. Snapshot configured
+and callback-returned tool-name arrays through bounded own data descriptors
+without invoking custom iterators or index getters.
 
 Emit opt-in metadata-only name and semantic cache fingerprints through host
 diagnostics. The diagnostic contains bounded counts, hashes, duration, an

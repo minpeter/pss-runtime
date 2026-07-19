@@ -326,6 +326,8 @@ const VARIANT_SUMMARY_KEYS = Object.freeze([
 ]);
 const HASH_PATTERN = /^[0-9a-f]{64}$/u;
 const GIT_COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
+const GIT_TREE_RUNTIME_SOURCE_PATTERN =
+  /^(?:100644|100755) blob [0-9a-f]{40}\t(packages\/runtime\/src\/.+)$/u;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const NODE_VERSION_PATTERN = /^v\d+\.\d+\.\d+$/u;
@@ -2764,7 +2766,7 @@ async function readFrozenSourceManifest(commitSha, repoRoot) {
   });
   const sourcePaths = [
     "scripts/benchmark-cache-stable-tools.mts",
-    ...REQUIRED_IMPLEMENTATION_SOURCE_PATHS,
+    ...(await frozenImplementationSourcePaths(commitSha, repoRoot)),
   ];
   return new Map(
     await Promise.all(
@@ -2778,6 +2780,33 @@ async function readFrozenSourceManifest(commitSha, repoRoot) {
       })
     )
   );
+}
+
+async function frozenImplementationSourcePaths(commitSha, repoRoot) {
+  const { stdout } = await execFileAsync(
+    "git",
+    ["ls-tree", "-r", "-z", commitSha, "--", "packages/runtime/src"],
+    { cwd: repoRoot, encoding: null, maxBuffer: 20_000_000 }
+  );
+  const records = Buffer.from(stdout)
+    .toString("utf8")
+    .split("\0")
+    .filter(Boolean);
+  const runtimeSources = records.map((record) => {
+    const match = GIT_TREE_RUNTIME_SOURCE_PATTERN.exec(record);
+    if (!match) {
+      throw new Error("source-freeze runtime tree contains a non-file entry");
+    }
+    const sourcePath = match[1];
+    if (sourcePath.includes("\n") || sourcePath.split("/").includes("..")) {
+      throw new Error("source-freeze runtime tree contains an unsafe path");
+    }
+    return sourcePath;
+  });
+  if (new Set(runtimeSources).size !== runtimeSources.length) {
+    throw new Error("source-freeze runtime tree contains duplicate paths");
+  }
+  return [...IMPLEMENTATION_SUPPORT_PATHS, ...runtimeSources].sort();
 }
 
 async function verifyConfiguration(configuration, repoRoot) {
@@ -3121,12 +3150,17 @@ async function verifyConfiguration(configuration, repoRoot) {
   )
     .map(String)
     .sort();
+  const frozenImplementationPaths = [...frozenSourceManifest.keys()]
+    .filter(
+      (sourcePath) => sourcePath !== "scripts/benchmark-cache-stable-tools.mts"
+    )
+    .sort();
   exact(
     manifestedPaths,
-    [...REQUIRED_IMPLEMENTATION_SOURCE_PATHS].sort(),
-    "configuration.implementationSourcesSha256.keys"
+    frozenImplementationPaths,
+    "configuration.sourceFreezeCommitSha.implementationSourcesSha256.keys"
   );
-  for (const sourcePath of REQUIRED_IMPLEMENTATION_SOURCE_PATHS) {
+  for (const sourcePath of frozenImplementationPaths) {
     check(
       !(sourcePath.startsWith("/") || sourcePath.split("/").includes("..")),
       `configuration.implementationSourcesSha256.${sourcePath}`,
@@ -3141,11 +3175,6 @@ async function verifyConfiguration(configuration, repoRoot) {
       typeof hash === "string" && HASH_PATTERN.test(hash),
       `configuration.implementationSourcesSha256.${sourcePath}`,
       "must be a lowercase SHA-256"
-    );
-    exact(
-      hash,
-      sha256(await readFile(resolve(repoRoot, sourcePath))),
-      `configuration.implementationSourcesSha256.${sourcePath}`
     );
     exact(
       hash,

@@ -26,6 +26,7 @@ export type RuntimePersistedToolExecutionCheckpoint =
 
 export type RuntimeToolExecutionDecision =
   | { readonly output: unknown; readonly status: "blocked" }
+  | { readonly input: unknown; readonly status: "continue" }
   | { readonly status: "needs-recovery" }
   | undefined;
 
@@ -148,8 +149,14 @@ function wrapToolExecute(
       if (decision?.status === "blocked") {
         return decision.output;
       }
+      const executeInput =
+        decision?.status === "continue" ? decision.input : input;
+      const executionCheckpoint =
+        decision?.status === "continue"
+          ? { ...checkpoint, input: executeInput }
+          : checkpoint;
 
-      const output = await execute(input, {
+      const output = await execute(executeInput, {
         ...options,
         attempt: checkpoint.attempt,
         idempotencyKey: checkpoint.idempotencyKey,
@@ -160,7 +167,7 @@ function wrapToolExecute(
         toolCallId,
       });
       const transformed = await toolExecution.afterTool?.({
-        ...checkpoint,
+        ...executionCheckpoint,
         output,
       });
       return transformed ? transformed.output : output;

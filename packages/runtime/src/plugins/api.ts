@@ -126,7 +126,8 @@ export interface PluginRequestResultMap {
   readonly "tool.call.before":
     | PluginContinue
     | { readonly action: "block"; readonly reason?: string }
-    | { readonly action: "needs-recovery" };
+    | { readonly action: "needs-recovery" }
+    | { readonly action: "transform"; readonly input: unknown };
   readonly "tool.result":
     | PluginContinue
     | PluginEventTransform<PluginToolResultEvent>;

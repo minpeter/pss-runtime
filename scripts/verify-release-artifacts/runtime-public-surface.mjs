@@ -77,7 +77,6 @@ export const REQUIRED_RUNTIME_CLOUDFLARE_AGENTS_EXPORTS = [
   "CloudflareAgentsCallbackName",
   "CloudflareAgentsDurableObjectContext",
   "CloudflareAgentsEventHandler",
-  "CloudflareAgentsHostOptions",
   "CloudflareAgentsFiberContext",
   "CloudflareAgentsFiberPayload",
   "CloudflareAgentsFiberRecoveryContext",

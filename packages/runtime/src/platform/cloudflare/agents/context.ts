@@ -1,6 +1,8 @@
 import type { AgentHost } from "../../../execution";
-import type { CloudflareHostAgentsOptions } from "../host/create-cloudflare-host";
-import { createCloudflareHost } from "../host/create-cloudflare-host";
+import {
+  type CloudflareHostOptions,
+  createCloudflareHost,
+} from "../host/create-cloudflare-host";
 import { recoverCloudflareAgentsFiber } from "./fiber";
 import { createCloudflareAgentsFiberRetryScheduler } from "./retry-scheduler";
 import { resumeScheduledCloudflareAgentsFiber } from "./scheduled-fiber";
@@ -61,7 +63,7 @@ export type CloudflarePlatformContextOptions<
   TAgent extends
     CloudflareAgentsDefaultResumeAgent = CloudflareAgentsDefaultResumeAgent,
 > = CloudflarePlatformContextBaseOptions<Env, CreatedAgent, TAgent> &
-  Pick<CloudflareHostAgentsOptions<TAgent>, "delayedResumeCallback">;
+  Pick<CloudflareHostOptions<TAgent>, "delayedResumeCallback">;
 
 export interface CloudflarePlatformContext<
   CreatedAgent extends CloudflareAgentsResumableAgent,

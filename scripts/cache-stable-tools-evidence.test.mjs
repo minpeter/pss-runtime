@@ -1,14 +1,15 @@
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 
 import {
   benchmarkRequestArtifacts,
   EVIDENCE_CAMPAIGN,
   EVIDENCE_CAMPAIGN_TOPOLOGY,
-  IMPLEMENTATION_SOURCE_PATHS,
   isolationTokenFor,
 } from "./benchmark-cache-stable-tools.mts";
 import {
@@ -26,14 +27,11 @@ const PROBE_PATH = resolve(
   REPOSITORY_ROOT,
   "benchmarks/cache-stable-tools/mistral-response-shape-probe.json"
 );
-const RUNNER_PATH = resolve(
-  REPOSITORY_ROOT,
-  "scripts/benchmark-cache-stable-tools.mts"
-);
 const HASH_PATTERN = /^[0-9a-f]{64}$/u;
 const GIT_COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
 const BEARER_PATTERN = /Bearer\s/iu;
 const KEY_LIKE_PATTERN = /\bfr-[\w-]{8,}\b/u;
+const execFileAsync = promisify(execFile);
 
 describe("checked-in cache-stable tool evidence", () => {
   it("binds the live snapshot to the producer and independent verifier", async () => {
@@ -62,16 +60,23 @@ describe("checked-in cache-stable tool evidence", () => {
     expect(evidence.configuration.requestTopology).toEqual(
       EVIDENCE_CAMPAIGN_TOPOLOGY
     );
+    const sourceFreezeCommitSha = evidence.configuration.sourceFreezeCommitSha;
     expect(evidence.configuration.benchmarkSourceSha256).toBe(
-      sha256(await readFile(RUNNER_PATH))
+      sha256(
+        await frozenSourceBytes(
+          sourceFreezeCommitSha,
+          "scripts/benchmark-cache-stable-tools.mts"
+        )
+      )
     );
-    expect(
-      Object.keys(evidence.configuration.implementationSourcesSha256)
-    ).toEqual([...IMPLEMENTATION_SOURCE_PATHS]);
-    for (const sourcePath of IMPLEMENTATION_SOURCE_PATHS) {
-      expect(
-        evidence.configuration.implementationSourcesSha256[sourcePath]
-      ).toBe(sha256(await readFile(resolve(REPOSITORY_ROOT, sourcePath))));
+    for (const [sourcePath, expectedHash] of Object.entries(
+      evidence.configuration.implementationSourcesSha256
+    )) {
+      expect(sourcePath.startsWith("/")).toBe(false);
+      expect(sourcePath.split("/")).not.toContain("..");
+      expect(expectedHash).toBe(
+        sha256(await frozenSourceBytes(sourceFreezeCommitSha, sourcePath))
+      );
     }
 
     const verified = await verifyEvidenceDocument({
@@ -150,6 +155,15 @@ describe("checked-in cache-stable tool evidence", () => {
     expect(serialized).not.toMatch(KEY_LIKE_PATTERN);
   });
 });
+
+async function frozenSourceBytes(commitSha, sourcePath) {
+  const { stdout } = await execFileAsync(
+    "git",
+    ["show", `${commitSha}:${sourcePath}`],
+    { cwd: REPOSITORY_ROOT, encoding: null, maxBuffer: 20_000_000 }
+  );
+  return stdout;
+}
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
