@@ -56,10 +56,12 @@ describe("runAgentLoop tool results", () => {
     expect(model.model.doGenerateCalls).toHaveLength(2);
     expect(eventTypes(events)).toEqual([
       "step-start",
+      "model-usage",
       "tool-call",
       "tool-result",
       "step-end",
       "step-start",
+      "model-usage",
       "assistant-output",
       "step-end",
     ]);

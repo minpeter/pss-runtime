@@ -178,6 +178,96 @@ The public transcript protocol is `AgentEvent`: live turns emit runtime-defined
 events through `turn.events()`. Provider/model message history is internal
 continuation state, not a public history API.
 
+Every successful agent-loop model attempt emits a metadata-only `model-usage`
+event before its generated message events. It normalizes the AI SDK fields as
+`attemptId`, `provider`, `modelId`, `finishReason`, `durationMs`, `inputTokens`,
+`cacheReadTokens`, `cacheWriteTokens`, `noCacheTokens`, `outputTokens`,
+`reasoningTokens`, and `totalTokens`. `durationMs` is the AI SDK response wait
+time and excludes client-side tool execution; provider-reported token fields
+stay absent when unsupported, preserving the difference between missing and
+zero. Some adapters normalize an omitted provider field to zero before PSS sees
+it. For example, `@ai-sdk/openai-compatible` 3.0.11 still maps an omitted raw
+cached-token field to normalized zero. `LanguageModelUsage.raw` may retain a
+provider-specific shape, but the generic PSS event intentionally reads only the
+normalized adapter fields and does not expose or guess raw provider keys. The
+same adapter version does not normalize raw `cache_write_tokens`; its
+normalized `noCacheTokens` subtracts cache reads but can still include provider
+cache writes. Treat `noCacheTokens` as adapter-normalized telemetry, not a
+cross-provider billing quantity, unless the adapter's read/write semantics have
+also been audited.
+
+These fields retain inputs that overlap the audited 2026-07-16 development
+[OpenTelemetry GenAI semantic-conventions snapshot](https://github.com/open-telemetry/semantic-conventions-genai/commit/33b7f9da9ade6162d4a5c16247d0bc6ad5f8b469),
+including cache-creation/read input counts, model attribution, and finish
+reasons. PSS prefers a provider-returned response model when available, then
+falls back to final-step and configured model metadata. The `provider` and
+fallback model identifiers are the adapter/client view; behind a proxy or
+router they need not identify the actual upstream provider. Those conventions
+moved to a separate development repository in May 2026 and do not yet publish
+a stable schema URL, so this event does not claim OTel conformance or emit OTel
+attributes. Its per-successful-attempt usage records are also not equivalent to
+the snapshot's per-invocation inference and tool-call counts, which include
+failed and partial calls. In particular, the newer
+`gen_ai.conversation.compacted` signal is defined only for known-true
+compaction; PSS keeps typed compaction provenance separately and does not infer
+that attribute here.
+
+`attemptId` is generated once per PSS runtime model-step invocation. It
+correlates runtime telemetry and durable replay; it does not identify or count
+HTTP retries hidden inside an AI SDK or provider adapter. Plugins observe the
+same record through `model.usage` after the durable usage-flush boundary. A
+failing observer can fail the turn without erasing an already persisted usage
+record.
+
+When the host supports durable thread-event replay, the runtime first stages
+`model-usage` with pending lifecycle events and attempts the durable flush. It
+then publishes the usage record to the live turn stream from a `finally`
+boundary, and calls observers only after a successful durable flush. If the
+durable append fails, the observer is not called and the pending buffer is
+restored; turn-error recovery can persist the same usage record once, while
+the failed attempt can still leave a live-only record. Durable
+`thread.events()` may expose lifecycle and usage records before the terminal
+thread-state commit, so replay is not proof that the generated state committed.
+Later state-commit failures and retries keep the original attempt record, with
+a distinct `attemptId` on the retry.
+
+The event is scoped to attempts in the public turn loop. Internal automatic
+compaction summary requests run outside that stream and do not emit it. Durable
+resume retries emit one record per successful provider attempt, including an
+attempt whose generated state later fails to commit and is retried. Each retry
+invokes a new runtime model step and therefore receives a new `attemptId`.
+
+`model-usage` is operational telemetry, not an exactly-once billing ledger.
+There can be no local record when an SDK/provider retry is hidden from PSS, an
+adapter cannot parse the response, tool-call ID post-processing fails after a
+billed response, the process stops between the provider response and local
+event emission, or durable persistence fails permanently. Internal automatic
+compaction model calls are also outside this stream. Reconcile authoritative
+billing against provider invoices or provider request IDs.
+
+Eval cache summaries reject malformed token counts, impossible
+read/write/input envelopes, and unsafe aggregate overflow instead of clamping
+them. `cacheReadTokens + cacheWriteTokens` may not exceed `inputTokens` when a
+provider reports all three. `noCacheTokens` remains descriptive because adapter
+semantics differ. Gate both sample size and coverage when making a cache claim:
+
+```ts
+t.cacheHitRateAtLeast(0.3, {
+  minTelemetryCoverage: 0.9,
+  minTrackedRequests: 10,
+  warmupRuns: 1,
+});
+```
+
+`minTelemetryCoverage` is the fraction of post-warmup runtime model attempts
+(`step-start`) with a valid cache-read/input pair, including failed or aborted
+attempts in the denominator. It prevents a high rate from a tiny reported
+subset from passing only because `minTrackedRequests` was met. A cache-rate
+gate is indeterminate and fails when a selected post-warmup run emits
+`turn-error`, an attempted model request never produces `model-usage`, or a
+replayed `model-usage` record reuses an `attemptId`. Duplicate records are
+reported but never counted as additional samples or token totals.
+
 ## Delegation
 
 Delegation is app-owned. Build ordinary tools that call another `Agent`,
@@ -324,12 +414,13 @@ Notification events are observe-only. Request events such as `input.accept`,
 `turn.start.before` may return a typed decision. Invalid runtime results fail
 closed with `PluginHookError`.
 
-Request hooks cover these boundaries:
+Request and telemetry hooks cover these boundaries:
 
 - `input.accept` for `user-input` and `runtime-input`
 - `turn.start.before` before `turn.start`
 - `model.context` before each model call
 - `model.step.before` after generation and before atomic step append
+- `model.usage` after a successful agent-loop model attempt and before output
 - `provider.request.before` immediately before the provider request
 - `thread.compaction.before` before manual, background, or overflow compaction
 - `tool.call.before` is plugin-only; it is synthesized after the `before-tool`

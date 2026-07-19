@@ -99,6 +99,7 @@ describe("Agent thread terminal state", () => {
       "user-input",
       "turn-start",
       "step-start",
+      "model-usage",
       "assistant-output",
       "step-end",
       "turn-error",

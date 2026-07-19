@@ -1,0 +1,251 @@
+<svg
+  aria-labelledby="title desc"
+  height="920"
+  role="img"
+  viewBox="0 0 1400 920"
+  width="1400"
+  xmlns="http://www.w3.org/2000/svg"
+>
+  <title id="title">Live long-context cache policy comparison</title>
+  <desc id="desc">
+    Results from 144 logical eval turns and 173 HTTP attempts comparing
+    rewrite-every-step with a stable prefix until a 75,000-token projected
+    high-water mark.
+  </desc>
+  <defs>
+    <linearGradient id="stable" x1="0" x2="1">
+      <stop offset="0" stop-color="#2563eb" />
+      <stop offset="1" stop-color="#06b6d4" />
+    </linearGradient>
+    <style>
+    text {
+      font-family: Inter, Arial, sans-serif;
+    }
+    .title {
+      font-size: 34px;
+      font-weight: 700;
+      fill: #0f172a;
+    }
+    .subtitle {
+      font-size: 16px;
+      font-weight: 400;
+      fill: #475569;
+    }
+    .panel-title {
+      font-size: 20px;
+      font-weight: 700;
+      fill: #0f172a;
+    }
+    .label {
+      font-size: 15px;
+      font-weight: 600;
+      fill: #334155;
+    }
+    .small {
+      font-size: 13px;
+      font-weight: 400;
+      fill: #64748b;
+    }
+    .value-old {
+      font-size: 22px;
+      font-weight: 700;
+      fill: #64748b;
+    }
+    .value-new {
+      font-size: 22px;
+      font-weight: 700;
+      fill: #2563eb;
+    }
+    .delta-good {
+      font-size: 14px;
+      font-weight: 700;
+      fill: #059669;
+    }
+    .delta-warn {
+      font-size: 14px;
+      font-weight: 700;
+      fill: #dc2626;
+    }
+    .axis {
+      stroke: #cbd5e1;
+      stroke-width: 1;
+    }
+    .grid {
+      stroke: #e2e8f0;
+      stroke-width: 1;
+      stroke-dasharray: 4 5;
+    }
+    </style>
+  </defs>
+
+  <rect fill="#f8fafc" height="920" width="1400" />
+  <text class="title" x="42" y="52">Live long-context cache A/B</text>
+  <text class="subtitle" x="42" y="80">
+    144 logical turns · 173 HTTP attempts
+  </text>
+  <text class="subtitle" x="360" y="80">
+    · 4 models · 3 workloads · 60K characters per step
+  </text>
+
+  <rect fill="#ffffff" height="338" rx="18" width="646" x="36" y="106" />
+  <text class="panel-title" x="62" y="141">Comparable aggregate</text>
+  <text class="small" x="62" y="164">
+    MiniMax M2.7 + Ministral 14B + GLM-4.7; 54 logical turns per policy
+  </text>
+
+  <text class="label" x="62" y="207">Warm cache hit</text>
+  <text class="value-old" x="270" y="208">0.22%</text>
+  <text class="small" x="343" y="207">→</text>
+  <text class="value-new" x="378" y="208">44.82%</text>
+  <text class="delta-good" x="515" y="207">+44.61 pp</text>
+
+  <text class="label" x="62" y="255">Content accuracy</text>
+  <text class="value-old" x="270" y="256">96.3%</text>
+  <text class="small" x="343" y="255">→</text>
+  <text class="value-new" x="378" y="256">87.0%</text>
+  <text class="delta-warn" x="515" y="255">−9.3 pp</text>
+
+  <text class="label" x="62" y="303">Median latency</text>
+  <text class="value-old" x="270" y="304">4.03s</text>
+  <text class="small" x="343" y="303">→</text>
+  <text class="value-new" x="378" y="304">6.94s</text>
+  <text class="delta-warn" x="515" y="303">+72%</text>
+
+  <text class="label" x="62" y="351">Median max input</text>
+  <text class="value-old" x="270" y="352">21.2K</text>
+  <text class="small" x="343" y="351">→</text>
+  <text class="value-new" x="378" y="352">63.7K</text>
+  <text class="delta-good" x="515" y="351">3.0× context</text>
+
+  <text class="label" x="62" y="399">Policy compactions</text>
+  <text class="value-old" x="270" y="400">45</text>
+  <text class="small" x="343" y="399">→</text>
+  <text class="value-new" x="378" y="400">9</text>
+  <text class="delta-good" x="515" y="399">−80%</text>
+
+  <rect fill="#ffffff" height="338" rx="18" width="658" x="706" y="106" />
+  <text class="panel-title" x="732" y="141">Warm cache hit by scenario</text>
+  <text class="small" x="732" y="164">
+    Gray = rewrite each step · blue = stable prefix to projected high-water
+  </text>
+
+  <text class="label" x="732" y="210">File search</text>
+  <rect fill="#94a3b8" height="12" rx="6" width="2" x="872" y="187" />
+  <rect fill="#2563eb" height="18" rx="9" width="383" x="872" y="205" />
+  <text class="small" x="1268" y="199">0.29%</text>
+  <text class="label" x="1264" y="220">57.51%</text>
+
+  <text class="label" x="732" y="285">Conversation</text>
+  <rect fill="#94a3b8" height="12" rx="6" width="1" x="872" y="262" />
+  <rect fill="#2563eb" height="18" rx="9" width="291" x="872" y="280" />
+  <text class="small" x="1268" y="274">0.15%</text>
+  <text class="label" x="1175" y="295">43.65%</text>
+
+  <text class="label" x="732" y="360">Deep research</text>
+  <rect fill="#94a3b8" height="12" rx="6" width="2" x="872" y="337" />
+  <rect fill="#2563eb" height="18" rx="9" width="230" x="872" y="355" />
+  <text class="small" x="1268" y="349">0.22%</text>
+  <text class="label" x="1114" y="370">34.44%</text>
+
+  <line class="axis" x1="872" x2="1272" y1="405" y2="405" />
+  <text class="small" x="868" y="425">0%</text>
+  <text class="small" x="992" y="425">20%</text>
+  <text class="small" x="1123" y="425">40%</text>
+  <text class="small" x="1254" y="425">60%</text>
+
+  <rect fill="#ffffff" height="408" rx="18" width="806" x="36" y="468" />
+  <text class="panel-title" x="62" y="504">Median input tokens by step</text>
+  <text class="small" x="62" y="527">
+    Stable prefix fills quickly; compacts before projected 75K
+  </text>
+
+  <line class="grid" x1="104" x2="800" y1="568" y2="568" />
+  <line class="grid" x1="104" x2="800" y1="632" y2="632" />
+  <line class="grid" x1="104" x2="800" y1="696" y2="696" />
+  <line class="grid" x1="104" x2="800" y1="760" y2="760" />
+  <line class="axis" x1="104" x2="800" y1="824" y2="824" />
+  <line class="axis" x1="104" x2="104" y1="558" y2="824" />
+  <text class="small" x="64" y="573">75K</text>
+  <text class="small" x="64" y="637">56K</text>
+  <text class="small" x="64" y="701">38K</text>
+  <text class="small" x="64" y="765">19K</text>
+  <text class="small" x="76" y="829">0</text>
+
+  <polyline
+    fill="none"
+    points="104,766 243,766 382,765 521,762 660,756 800,752"
+    stroke="#94a3b8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    stroke-width="5"
+  />
+  <polyline
+    fill="none"
+    points="104,766 243,708 382,651 521,614 660,756 800,703"
+    stroke="#2563eb"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    stroke-width="6"
+  />
+  <g fill="#94a3b8">
+    <circle cx="104" cy="766" r="5" />
+    <circle cx="243" cy="766" r="5" />
+    <circle cx="382" cy="765" r="5" />
+    <circle cx="521" cy="762" r="5" />
+    <circle cx="660" cy="756" r="5" />
+    <circle cx="800" cy="752" r="5" />
+  </g>
+  <g fill="#2563eb" stroke="#ffffff" stroke-width="2">
+    <circle cx="104" cy="766" r="6" />
+    <circle cx="243" cy="708" r="6" />
+    <circle cx="382" cy="651" r="6" />
+    <circle cx="521" cy="614" r="6" />
+    <circle cx="660" cy="756" r="6" />
+    <circle cx="800" cy="703" r="6" />
+  </g>
+  <text class="small" x="99" y="850">0</text>
+  <text class="small" x="238" y="850">1</text>
+  <text class="small" x="377" y="850">2</text>
+  <text class="small" x="516" y="850">3</text>
+  <text class="small" x="655" y="850">4</text>
+  <text class="small" x="795" y="850">5</text>
+  <line stroke="#94a3b8" stroke-width="5" x1="114" x2="148" y1="549" y2="549" />
+  <text class="small" x="158" y="554">rewrite every step</text>
+  <line stroke="#2563eb" stroke-width="6" x1="310" x2="344" y1="549" y2="549" />
+  <text class="small" x="354" y="554">stable to high-water</text>
+
+  <rect fill="#ffffff" height="408" rx="18" width="498" x="866" y="468" />
+  <text class="panel-title" x="892" y="504">Stable-prefix provider result</text>
+  <text class="small" x="892" y="527">
+    All scenarios; cache-field coverage shown in parentheses
+  </text>
+
+  <text class="label" x="892" y="579">MiniMax M2.7</text>
+  <rect fill="#2563eb" height="22" rx="11" width="307" x="892" y="594" />
+  <text class="value-new" x="1214" y="614">69.80%</text>
+  <text class="small" x="892" y="635">
+    47% coverage · accuracy 66.7% · output truncation risk
+  </text>
+
+  <text class="label" x="892" y="682">GLM-4.7</text>
+  <rect fill="#2563eb" height="22" rx="11" width="194" x="892" y="697" />
+  <text class="value-new" x="1101" y="717">44.19%</text>
+  <text class="small" x="892" y="738">
+    100% coverage · accuracy 100% · file-search p95 31.2s
+  </text>
+
+  <text class="label" x="892" y="785">Ministral 14B</text>
+  <rect fill="#2563eb" height="22" rx="11" width="145" x="892" y="800" />
+  <text class="value-new" x="1052" y="820">33.09%</text>
+  <text class="small" x="892" y="841">
+    100% coverage · accuracy unchanged at 94.4%
+  </text>
+
+  <text class="small" x="42" y="906">
+    Cache excludes warmup and missing fields. Scout route failed 29/36.
+  </text>
+  <text class="small" x="500" y="906">
+    Full-coverage control: 0.23% → 38.39%.
+  </text>
+  <text class="small" x="820" y="906">Compaction-call cost excluded.</text>
+</svg>

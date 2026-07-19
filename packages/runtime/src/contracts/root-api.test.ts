@@ -22,6 +22,7 @@ import type {
   AgentOptions,
   CompactionContextMessage,
   HostAttachmentStore,
+  ModelUsage,
   PluginEventMap,
   ThreadCompactionInput,
   ThreadContextMessage,
@@ -100,6 +101,7 @@ describe("runtime public exports", () => {
     expectTypeOf<
       PluginEventMap["tool.call.before"]["type"]
     >().toEqualTypeOf<"tool.call.before">();
+    expectTypeOf<PluginEventMap["model.usage"]>().toEqualTypeOf<ModelUsage>();
     expectTypeOf<
       Extract<AgentEvent, { type: "tool.call.before" }>
     >().toEqualTypeOf<never>();

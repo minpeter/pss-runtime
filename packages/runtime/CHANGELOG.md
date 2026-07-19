@@ -51,6 +51,27 @@ Session-index write paths already pass explicit `threadKey` values.
 
 ## @minpeter/pss-runtime@0.3.0-next.0 (next)
 
+### Trace model-request prompt cache usage
+
+Emit normalized, metadata-only `model-usage` events for successful agent-loop
+model attempts, including an opaque per-runtime-step `attemptId`, the provider's
+response model, finish metadata, response latency, and provider-reported
+reasoning and prompt-cache token counts. Usage enters live and durable event
+streams before `model.usage` observers run, so a failing observer cannot erase
+already billed telemetry. Hosts with durable thread-event replay flush through
+the usage record immediately rather than waiting for the terminal state commit.
+Eval runs now retain
+per-attempt cache traces, preserve unreported-versus-zero counts, aggregate
+cache statistics at turn, case, and report levels, reject malformed pairs and
+unsafe aggregate overflow, and expose `cacheHitRateAtLeast()` with warmup,
+minimum sample, and minimum telemetry-coverage gates. Internal
+automatic-compaction summary requests remain outside the public turn event
+stream. Add a reproducible live-provider eval script and sanitized evidence
+snapshots that distinguish raw unreported cache fields from explicit zeroes,
+document the OpenAI-compatible adapter's omitted-field normalization boundary,
+and record long-context cache, exact-token recall, latency, and uncached-token
+tradeoffs.
+
 ### Introduce a factory-based plugin runtime
 
 Replace object plugins with an async factory registration kernel built around

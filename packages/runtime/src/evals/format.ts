@@ -20,12 +20,25 @@ function severityTag(record: {
 }
 
 function summarize(caseResult: CaseResult): string {
+  const cache = cacheSummary(caseResult.cache);
   if (caseResult.assertions.length === 0) {
-    return "no assertions";
+    return cache ?? "no assertions";
   }
   const gates = caseResult.assertions.filter((a) => a.severity === "gate");
   const gatePassed = gates.filter((a) => a.passed).length;
-  return `gates ${gatePassed}/${gates.length}`;
+  return [`gates ${gatePassed}/${gates.length}`, cache]
+    .filter((value) => value !== undefined)
+    .join(", ");
+}
+
+function cacheSummary(cache: CaseResult["cache"]): string | undefined {
+  if (cache.attemptedRequests === 0) {
+    return;
+  }
+  if (cache.cacheHitRate === undefined) {
+    return `cache hit n/a (${cache.trackedRequests}/${cache.attemptedRequests} requests tracked)`;
+  }
+  return `cache hit ${(cache.cacheHitRate * 100).toFixed(1)}% (${cache.trackedCacheReadTokens}/${cache.trackedInputTokens} tokens, ${cache.trackedRequests}/${cache.attemptedRequests} requests tracked)`;
 }
 
 function failureLine(record: {
@@ -81,9 +94,11 @@ export function formatTextReport(report: EvalReport): string {
   const verdict = report.failed === 0 ? "PASSED" : "FAILED";
   const scored = report.results.filter((r) => r.scored && r.passed).length;
   const scoredNote = scored > 0 ? `, ${scored} scored` : "";
+  const cache = cacheSummary(report.cache);
+  const cacheNote = cache ? `, ${cache}` : "";
   lines.push("");
   lines.push(
-    `Evals: ${report.passed} passed, ${report.failed} failed, ${report.total} total${scoredNote} - ${verdict}${strictTag}`
+    `Evals: ${report.passed} passed, ${report.failed} failed, ${report.total} total${scoredNote}${cacheNote} - ${verdict}${strictTag}`
   );
   return lines.join("\n");
 }

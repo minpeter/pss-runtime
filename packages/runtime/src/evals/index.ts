@@ -4,6 +4,7 @@
 // severity, tool input/output matchers). No separate eval universe and no new
 // runtime dependency — evals drive a real Agent thread and drain its event stream.
 
+export { summarizeCacheUsage } from "./cache";
 export type { ParsedArgs } from "./cli";
 export { compileFilters, discoverEvalFiles, parseArgs, runCli } from "./cli";
 export { formatJsonReport, formatTextReport } from "./format";
@@ -24,7 +25,10 @@ export type {
   AssertionHandle,
   AssertionRecord,
   AssertionSeverity,
+  CacheHitRateOptions,
+  CacheUsageSummaryOptions,
   CaseResult,
+  EvalCacheStats,
   EvalCase,
   EvalDefinition,
   EvalOptions,

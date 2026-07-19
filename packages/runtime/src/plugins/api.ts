@@ -74,6 +74,7 @@ export interface PluginEventMap {
   readonly "message.update": PluginMessageEvent;
   readonly "model.context": ModelContextEvent;
   readonly "model.step.before": ModelStepBeforeEvent;
+  readonly "model.usage": AgentEventOf<"model-usage">;
   readonly "provider.request.before": ProviderBeforeRequestEvent;
   readonly "provider.response.after": { readonly response: unknown };
   readonly "step.end": AgentEventOf<"step-end">;

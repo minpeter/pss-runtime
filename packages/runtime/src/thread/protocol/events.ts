@@ -34,6 +34,37 @@ export interface AssistantReasoning {
   type: "assistant-reasoning";
 }
 
+/**
+ * Normalized metadata for one successful agent-loop model attempt. Token
+ * counts stay optional because not every provider reports every field.
+ */
+export interface ModelUsage {
+  /** Opaque identifier for this runtime model-step invocation. */
+  attemptId: string;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  /** AI SDK response wait time in milliseconds, excluding client tool execution. */
+  durationMs?: number;
+  /** Unified finish reason reported by the AI SDK. */
+  finishReason?:
+    | "content-filter"
+    | "error"
+    | "length"
+    | "other"
+    | "stop"
+    | "tool-calls";
+  inputTokens?: number;
+  /** Response model identifier reported by the AI SDK. */
+  modelId?: string;
+  noCacheTokens?: number;
+  outputTokens?: number;
+  /** Provider identifier reported by the AI SDK, when available. */
+  provider?: string;
+  reasoningTokens?: number;
+  totalTokens?: number;
+  type: "model-usage";
+}
+
 export interface ToolCall {
   input: unknown;
   toolCallId: string;
@@ -66,6 +97,8 @@ export type AgentEvent =
   | { type: "step-start" }
   /** The model produced reasoning content. */
   | AssistantReasoning
+  /** Normalized metadata and provider usage for one successful model attempt. */
+  | ModelUsage
   /** The model produced visible assistant text. */
   | AssistantOutput
   /** The model requested a tool call. */
@@ -98,6 +131,7 @@ const toolAgentEventTypes = {
 
 const telemetryAgentEventTypes = {
   "assistant-reasoning": true,
+  "model-usage": true,
   "runtime-input": true,
 } satisfies Partial<Record<AgentEvent["type"], true>>;
 

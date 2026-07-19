@@ -9,7 +9,10 @@ import type { BufferedAgentTurn } from "../protocol/turn";
 import type { ThreadState } from "../state/thread-state";
 import { drainRuntimeInput } from "./drain";
 import type { ThreadEventDispatcher } from "./events";
-import type { DurableThreadEventBuffer } from "./thread-event-log";
+import {
+  type DurableThreadEventBuffer,
+  flushDurableThreadEvents,
+} from "./thread-event-log";
 
 export async function emitTurnEvent({
   durableEvents,
@@ -36,6 +39,18 @@ export async function emitTurnEvent({
   readonly state: ThreadState;
   readonly threadKey: string;
 }): Promise<{ readonly runtimeInputAdded: boolean } | undefined> {
+  if (event.type === "model-usage") {
+    await events.emitModelUsageEvent(run, event, async (usage) => {
+      recordEvent?.(usage);
+      await flushDurableThreadEvents({
+        buffer: durableEvents,
+        executionHost,
+        threadKey,
+      });
+    });
+    return;
+  }
+
   if (event.type !== "step-start" && event.type !== "step-end") {
     const processed = await events.emitRunEvent(run, event);
     if (processed !== "handled") {

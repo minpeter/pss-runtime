@@ -51,6 +51,7 @@ describe("runAgentLoop", () => {
 
     expect(events).toEqual([
       { type: "step-start" },
+      expect.objectContaining({ type: "model-usage" }),
       { type: "assistant-output", text: "I should keep going." },
       {
         type: "tool-call",
@@ -66,6 +67,7 @@ describe("runAgentLoop", () => {
       },
       { type: "step-end" },
       { type: "step-start" },
+      expect.objectContaining({ type: "model-usage" }),
       { type: "assistant-output", text: "DONE" },
       { type: "step-end" },
     ]);
@@ -134,7 +136,7 @@ describe("runAgentLoop", () => {
       })
     ).resolves.toBe("aborted");
 
-    expect(eventTypes(events)).toEqual(["step-start"]);
+    expect(eventTypes(events)).toEqual(["step-start", "model-usage"]);
     expect(history.modelSnapshot()).toEqual([userMessage]);
   });
 });

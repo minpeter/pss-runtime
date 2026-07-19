@@ -25,6 +25,9 @@ describe("Agent thread plugin events", () => {
       pss.on("step.start", (event, { history }) => {
         pluginCalls.push(`${event.type}:${history.length}`);
       });
+      pss.on("model.usage", (event, { history }) => {
+        pluginCalls.push(`${event.type}:${history.length}`);
+      });
       pss.on("message.end", (event, { history }) => {
         pluginCalls.push(`${event.type}:${history.length}`);
       });
@@ -48,6 +51,7 @@ describe("Agent thread plugin events", () => {
       "user-input",
       "turn-start",
       "step-start",
+      "model-usage",
       "assistant-output",
       "step-end",
       "turn-end",
@@ -56,6 +60,7 @@ describe("Agent thread plugin events", () => {
       "user-input:0",
       "turn-start:1",
       "step-start:1",
+      "model-usage:1",
       "assistant-output:2",
       "step-end:2",
       "turn-end:2",
@@ -73,6 +78,9 @@ describe("Agent thread plugin events", () => {
         pluginEventTypes.push(event.type);
       });
       pss.on("step.start", (event) => {
+        pluginEventTypes.push(event.type);
+      });
+      pss.on("model.usage", (event) => {
         pluginEventTypes.push(event.type);
       });
       pss.on("message.end", (event) => {
@@ -126,6 +134,7 @@ describe("Agent thread plugin events", () => {
       "user-input",
       "turn-start",
       "step-start",
+      "model-usage",
       "assistant-output",
       "step-end",
       "turn-error",
@@ -134,6 +143,7 @@ describe("Agent thread plugin events", () => {
       "user-input",
       "turn-start",
       "step-start",
+      "model-usage",
       "assistant-output",
       "step-end",
       "turn-error",

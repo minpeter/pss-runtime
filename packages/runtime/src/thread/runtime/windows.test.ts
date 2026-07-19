@@ -34,6 +34,10 @@ describe("Agent thread runtime input windows", () => {
         pluginCalls.push(`${event.type}:${history.length}`);
         trace.push(`plugin:${event.type}`);
       });
+      pss.on("model.usage", (event, { history }) => {
+        pluginCalls.push(`${event.type}:${history.length}`);
+        trace.push(`plugin:${event.type}`);
+      });
       pss.on("message.end", (event, { history }) => {
         pluginCalls.push(`${event.type}:${history.length}`);
         trace.push(`plugin:${event.type}`);
@@ -115,10 +119,12 @@ describe("Agent thread runtime input windows", () => {
       "runtime-input:3",
       "step-start:4",
       "runtime-input:4",
+      "model-usage:5",
       "assistant-output:6",
       "step-end:6",
       "runtime-input:6",
       "step-start:7",
+      "model-usage:7",
       "assistant-output:8",
       "step-end:8",
       "turn-end:8",
@@ -129,10 +135,12 @@ describe("Agent thread runtime input windows", () => {
       "runtime-input",
       "step-start",
       "runtime-input",
+      "model-usage",
       "assistant-output",
       "step-end",
       "runtime-input",
       "step-start",
+      "model-usage",
       "assistant-output",
       "step-end",
       "turn-end",
@@ -159,6 +167,8 @@ describe("Agent thread runtime input windows", () => {
       "plugin:runtime-input",
       "event:runtime-input",
       "llm:1",
+      "plugin:model-usage",
+      "event:model-usage",
       "plugin:assistant-output",
       "event:assistant-output",
       "plugin:step-end",
@@ -168,6 +178,8 @@ describe("Agent thread runtime input windows", () => {
       "plugin:step-start",
       "event:step-start",
       "llm:2",
+      "plugin:model-usage",
+      "event:model-usage",
       "plugin:assistant-output",
       "event:assistant-output",
       "plugin:step-end",
@@ -225,6 +237,7 @@ describe("Agent thread runtime input windows", () => {
       steerRuntimeInput("turn runtime", "turn-start"),
       { type: "step-start" },
       steerRuntimeInput("step runtime", "step-start"),
+      expect.objectContaining({ type: "model-usage" }),
       { type: "assistant-output", text: "DONE" },
       { type: "step-end" },
       { type: "turn-end" },

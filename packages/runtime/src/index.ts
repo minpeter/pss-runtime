@@ -101,6 +101,7 @@ export type {
   InputEventMeta,
   InputSource,
   LifecycleAgentEvent,
+  ModelUsage,
   RuntimeInput,
   TelemetryAgentEvent,
   ToolAgentEvent,
