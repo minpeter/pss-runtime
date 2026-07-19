@@ -92,9 +92,8 @@ async function claimNotificationForRun({
 }
 
 function canAccessRun(run: TurnRecord, ownerNamespace: string): boolean {
-  if (!run.ownerNamespace) {
-    return false;
-  }
+  // Owner-less runs are denied: ownsAgentNamespace(undefined, …) is false,
+  // and there is no parent-threadKey fallback.
   return ownsAgentNamespace(run.ownerNamespace, ownerNamespace);
 }
 

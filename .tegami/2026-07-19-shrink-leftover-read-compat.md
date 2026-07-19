@@ -11,3 +11,4 @@ based only on a `parent:${owner}:` thread-key prefix.
 
 Resume requires a present `ownerNamespace` accepted by `ownsAgentNamespace`.
 Session-index write paths already pass explicit `threadKey` values.
+`canRead` / list / search share the same rule: missing `threadKey` is not readable.

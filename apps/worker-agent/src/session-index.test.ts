@@ -279,5 +279,7 @@ describe("session index store", () => {
 
     expect(await store.resolveThreadKey("telegram:orphan")).toBeUndefined();
     expect(await store.list()).toEqual([]);
+    expect(await store.search("thread")).toEqual([]);
+    await expect(store.canRead("telegram:orphan")).resolves.toBe(false);
   });
 });
