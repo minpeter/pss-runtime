@@ -1,6 +1,8 @@
 ---
 packages:
-  "npm:@minpeter/pss-runtime": minor
+  npm:@minpeter/pss-runtime:
+    replay:
+      - exit-prerelease(npm:@minpeter/pss-runtime)
 ---
 
 ## Expose AgentTurn test helpers via the `./testing` subpath

@@ -1,30 +1,28 @@
 core:changelogs:
-  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: minor\n  npm:@minpeter/pss-coding-agent:\n    type: minor\n---\n\n## Remove Cloudflare host and `PSS_SESSION_*` aliases\n\nDrop `createCloudflareAgentsHost`, `CloudflareHostAgentsOptions`, and\n`CloudflareAgentsHostOptions`. Use `createCloudflareHost` /\n`CloudflareHostOptions` only.\n\nCoding-agent env falls back only on `PSS_THREAD_DIR` / `PSS_THREAD_KEY`;\n`PSS_SESSION_DIR` / `PSS_SESSION_KEY` are no longer accepted.\n"
-    filename: 2026-07-19-remove-cloudflare-session-aliases.md
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n---\n\n## Preserve compaction provenance until provider rendering\n\nExpose compacted history to `model.context` as typed `role: \"compaction\"`\nmessages with their summary and source sequence range. Lower retained\ncompactions to user-scoped `<summary>` messages only at the provider boundary,\nso model-generated summaries are not promoted to system instructions and\nplugins can remove contaminated compactions without rewriting stored history.\n"
+    filename: 2026-07-16-preserve-compaction-provenance.md
     v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: minor\n---\n\n## Remove the legacy object-style plugin pipeline\n\nDrop dual dispatch for object plugins (`AgentPlugin` / `{ on(context) }` /\n`runPluginsForEvent`). Plugin behavior now runs only through factory-style\n`definePlugin` handlers on `PluginRuntime`.\n\n`createAgent({ plugins })` remains the supported registration path.\n`new Agent(...)` no longer accepts a `plugins` option; use `createAgent` so\nplugin factories initialize before the agent is returned.\n\nMigrate any remaining object plugins to:\n\n```ts\ndefinePlugin((pss) => {\n  pss.on(\"input.accept\", handler);\n});\n```\n"
-    filename: 2026-07-19-remove-legacy-plugin-pipeline-cc9f6bd5.md
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: minor\n---\n\n## Add cache-aware model-step preparation\n\nAdd a PSS-owned, zero-based `prepareModelStep` callback with a logical index\nthat is reused across overflow and pre-commit retries, then advances from\ncommitted history after durable resume. Support AI SDK 7 `toolOrder`, fixed\n`alwaysActiveTools` prefixes, and deterministic dynamic suffixes. Preserve\nfactory-plugin middleware when the callback overrides the model, and fail\nclosed on duplicate, unknown, overlapping, or inactive tool selections,\nmalformed model overrides, and invalid tool-choice values. Snapshot configured\nand callback-returned tool-name arrays through bounded own data descriptors\nwithout invoking custom iterators or index getters.\n\nEmit opt-in metadata-only name and semantic cache fingerprints through host\ndiagnostics. The diagnostic contains bounded counts, hashes, duration, an\nattempt ID, and the logical step index, never raw prompts, tool inputs, tool\ndefinitions, or thread keys. Automatic-compaction summary calls remain outside\nmodel-step selection.\n\nAdd a source-hashed OpenAI-compatible live-provider benchmark for stable order,\nactive-set reduction, and an equal-byte membership swap. Seeded alternating\nAB/BA trials derive namespaces and inert canaries from first/second execution\nslots, not variant identity, so control and changed arms are counterbalanced\nacross cache-affinity slots. Audit response model, output compliance, input\nparity, cache-read/cache-write telemetry, sanitized backend-metadata drift, and\nwarmup prerequisites independently. Require a sanitized `finish_reason=stop`\nand exact trimmed `OK` from exactly one choice, fail closed on unsafe\ntoken-aggregate overflow, and bound/cancel oversized JSON responses at 1 MB for\nChat Completions and 5 MB for `/models`. Retain provider HTTP failures only as\nstatus-derived codes so reflected\ncredentials cannot reach artifacts or logs. Record response-ID duplicate and\ncross-request-body reuse counts.\n\nTreat provider-reported raw cache-read tokens and cache-read/input coverage\nratio as parallel descriptive endpoints. Require all four pairs in every AB/BA\nmodel stratum, derive ratio pair and median signs with exact `BigInt` rational\narithmetic, and make any endpoint disagreement indeterminate; opposing\ndirections are explicitly denominator-sensitive. Neither endpoint is a causal\nsaving or cost estimate, and same-set/membership conclusions remain descriptive\nwithout exact input parity. Track separate read/write ratio-eligible counts and\ncoverage, require every model-level conclusion to agree before publishing a\npooled direction, and reserve input-token parity for full exact equality rather\nthan cancelling median-zero differences.\n\nThe evidence source manifest includes root and runtime TypeScript, build,\ntask-runner, and formatter configurations. An evidence campaign refuses a dirty\nworktree, fixes the output path, and before authenticated provider preflight\nbyte- and hash-compares every current manifested source with its source-freeze\nGit tree blob. It records the freeze SHA plus clean-at-start status and rechecks\nHEAD around source snapshots and atomic output. Keep all-sample descriptive\nviews, but gate `primaryComparisons` and primary membership input parity on one\nmatched non-null `system_fingerprint` and `service_tier` across both arms'\nwarmups and measurements. Any campaign-global repeated response ID, including a\nsame-body replay, also excludes the affected primary pair; cross-body reuse is\naudited separately. The checked-in result and dated benchmark README findings\nare authoritative only when schema, campaign topology, and source-hash\nverification pass; no raw response content, provider payload, or credential is\nretained.\n\nKeep the generic eager selector distinct from provider-native loading. Official\nAI SDK OpenAI Responses and Anthropic adapters expose their own native tool\nsearch/defer lowering, while `@ai-sdk/openai-compatible` and the eager\nFreeRouter Chat Completions benchmark make no such preservation guarantee. Pi's\nKimi work is a direct-provider-only system-message compatibility mode, not a\nrouter capability. Gate any native follow-up by adapter, provider, model, and\nversion; verify it with a wire canary and fall back to eager selection when the\ntuple is unknown or the canary fails.\nThe canary must pin and inspect an explicit approval policy because the OpenAI\nAPI and current AI SDK OpenAI adapter have different omitted-value behavior.\nTreat cache-write telemetry as a separate required signal for GPT-5.6+\neconomics; the generic compatible adapter does not normalize that field.\nFor Anthropic, reject a deferred tool that also carries `cache_control`, keep\nthe complete tools array stable across continuation, and canary the documented\nserver/custom search-result replay shapes before enabling native loading.\n"
+    filename: 2026-07-17-cache-stable-dynamic-tools.md
     v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n---\n\n## Remove orphan `@deprecated` comments\n\nDelete leftover deprecation comments after `SessionInput` and `FileSessionStore`\naliases were already removed. No API or behavior change.\n"
-    filename: 2026-07-19-remove-orphan-deprecated-comments.md
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: minor\n---\n\n## Trace model usage and cache telemetry\n\nEmit one metadata-only `model-usage` event for every successful model\ninvocation in the public agent loop. Expose the same normalized record through\nthe factory-plugin `model.usage` hook and durable thread event replay.\n\nAggregate prompt-cache telemetry at run, eval-case, and report scope. Add\n`cacheHitRateAtLeast()` with warmup, minimum-sample, and attempted-request\ncoverage gates, and fail cache assertions closed when required telemetry is\nmissing or incomplete.\n"
+    filename: 2026-07-19-model-usage-cache-telemetry.md
     v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: minor\n---\n\n## Drop legacy storage and namespace read-compat\n\nStop hydrating SQLite `legacy-json` thread-message chunk markers and stop\ntreating `:session:` owner namespaces as valid for ownership/resume.\n\nCurrent chunk markers and `:thread:` owner namespaces only.\n"
-    filename: 2026-07-19-remove-storage-namespace-read-compat.md
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: minor\n---\n\n## Expose AgentTurn test helpers via the `./testing` subpath\n\n`@minpeter/pss-runtime/testing` is now a public subpath for downstream tests\nthat consume `AgentTurn.events()`:\n\n- `createMockAgentTurn(events)` builds an `AgentTurn` from an `AgentEvent`\n  array or an `AsyncIterable<AgentEvent>`. Like a real turn, `events()` is\n  single-consumption and throws on a second call.\n- `agentEventStream(events)` replays an event array as a deterministic async\n  iterable.\n- `agentEvent` provides typed builders for public event payloads:\n  `assistantOutput`, `assistantReasoning`, `toolCall`, `toolResult`,\n  `stepStart` / `stepEnd`, the `turn-*` lifecycle events, and `userText` /\n  `userMessage`.\n\nInternal fixtures stay unexported; the subpath surface is only the helpers\nabove, so downstream mocks no longer drift when event names or turn APIs\nchange.\n"
+    filename: 2026-07-19-runtime-testing-subpath.md
     v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: minor\n---\n\n## Shrink leftover read-compat defaults\n\nStop inventing session-index `thread_key` values from channel identity when\nstored keys are missing, and stop granting resume access to owner-less runs\nbased only on a `parent:${owner}:` thread-key prefix.\n\nResume requires a present `ownerNamespace` accepted by `ownsAgentNamespace`.\nSession-index write paths already pass explicit `threadKey` values.\n`canRead` / list / search share the same rule: missing `threadKey` is not readable.\n"
-    filename: 2026-07-19-shrink-leftover-read-compat.md
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: minor\n---\n\n## Allow explicit tool.call.before input transforms\n\n`tool.call.before` handlers may return\n`{ action: \"transform\", input }` to replace the arguments passed to tool\n`execute`. Transforms chain in plugin registration order. Each handler still\nreceives a structured clone of the current event, so in-place mutation of the\nevent object does not affect later plugins or execution.\n\n`continue`, `block`, and `needs-recovery` decisions are unchanged. A transform\nmissing `input`, or an input that is not structured-cloneable, fails closed\nwith `PluginHookError`.\n"
+    filename: 2026-07-19-tool-call-before-input-transform.md
     v: 0.0.0
 core:packages:
+  - id: npm:@minpeter/pss-coding-agent
+    updated: false
   - changelogIds:
-      - 2026-07-19-remove-cloudflare-session-aliases.md
-    id: npm:@minpeter/pss-coding-agent
-    updated: true
-  - changelogIds:
-      - 2026-07-19-remove-cloudflare-session-aliases.md
-      - 2026-07-19-remove-legacy-plugin-pipeline-cc9f6bd5.md
-      - 2026-07-19-remove-orphan-deprecated-comments.md
-      - 2026-07-19-remove-storage-namespace-read-compat.md
-      - 2026-07-19-shrink-leftover-read-compat.md
+      - 2026-07-16-preserve-compaction-provenance.md
+      - 2026-07-17-cache-stable-dynamic-tools.md
+      - 2026-07-19-model-usage-cache-telemetry.md
+      - 2026-07-19-runtime-testing-subpath.md
+      - 2026-07-19-tool-call-before-input-transform.md
     id: npm:@minpeter/pss-runtime
     updated: true
 npm:packages:
@@ -33,10 +31,10 @@ npm:packages:
   - distTag: next
     id: npm:@minpeter/pss-runtime
   - id: npm:@minpeter/pss-worker-agent
-  - id: npm:@minpeter/pss-example-background-subagent
   - id: npm:@minpeter/pss-example-basic
   - id: npm:@minpeter/pss-example-evals
-  - id: npm:@minpeter/pss-example-plugin
+  - id: npm:@minpeter/pss-example-background-subagent
   - id: npm:@minpeter/pss-example-local-file-agent
+  - id: npm:@minpeter/pss-example-plugin
   - id: npm:@minpeter/pss-example-sync-subagent
   - id: npm:@minpeter/pss-runtime-edge-image-qa
