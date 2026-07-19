@@ -5,6 +5,7 @@ import {
   FORBIDDEN_RUNTIME_PUBLIC_PATTERNS,
   FORBIDDEN_RUNTIME_ROOT_NAMES,
   FORBIDDEN_RUNTIME_SUBAGENT_NAMES,
+  REQUIRED_RUNTIME_CHANNEL_EXPORTS,
   REQUIRED_RUNTIME_CLOUDFLARE_EXPORTS,
   REQUIRED_RUNTIME_EXECUTION_EXPORTS,
   REQUIRED_RUNTIME_FILE_EXPORTS,
@@ -26,6 +27,12 @@ export function findRuntimeDeclarationLeaks({ cwd, packages }) {
       file: join(packageDistPath(cwd, "runtime"), "index.d.ts"),
       requiredExports: REQUIRED_RUNTIME_ROOT_EXPORTS,
       surface: "root",
+    }),
+    ...findRuntimeDeclarationExportLeaks({
+      cwd,
+      file: join(packageDistPath(cwd, "runtime"), "channel", "index.d.ts"),
+      requiredExports: REQUIRED_RUNTIME_CHANNEL_EXPORTS,
+      surface: "channel",
     }),
     ...findRuntimeDeclarationExportLeaks({
       cwd,
