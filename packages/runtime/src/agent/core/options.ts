@@ -7,6 +7,10 @@ import type { PluginDefinition } from "../../plugins/api";
 import type { RuntimeDiagnosticsSink } from "../../plugins/diagnostics";
 import type { HostAttachmentStore } from "../../thread/input/attachments";
 import type { AgentInput, UserInput } from "../../thread/input/input";
+import {
+  type AgentInstrumentation,
+  normalizeAgentInstrumentations,
+} from "./instrumentation";
 
 export interface AgentAutoCompactionOptions {
   readonly background?: boolean;
@@ -23,6 +27,7 @@ export interface AgentOptions {
   readonly autoCompaction?: AgentAutoCompactionOptions | false;
   readonly host?: AgentHost;
   readonly instructions?: string;
+  readonly instrumentations?: readonly AgentInstrumentation[];
   readonly model: LanguageModel;
   readonly namespace?: string;
   readonly notificationOverlays?: readonly (AgentInput | UserInput)[];
@@ -93,6 +98,7 @@ export function assertAgentOptions(
   const candidate = options as {
     readonly alwaysActiveTools?: AgentOptions["alwaysActiveTools"];
     readonly autoCompaction?: AgentOptions["autoCompaction"];
+    readonly instrumentations?: AgentOptions["instrumentations"];
     readonly prepareModelStep?: AgentOptions["prepareModelStep"];
     readonly toolOrder?: AgentOptions["toolOrder"];
     readonly tools?: AgentOptions["tools"];
@@ -107,6 +113,7 @@ export function assertAgentOptions(
     throw new TypeError("Agent: options.prepareModelStep must be a function.");
   }
   normalizeAgentAutoCompactionOptions(candidate.autoCompaction);
+  normalizeAgentInstrumentations(candidate.instrumentations);
 }
 
 function assertToolNameList(

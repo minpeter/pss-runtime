@@ -1,6 +1,9 @@
 export {
   type Agent,
   type AgentAutoCompactionOptions,
+  type AgentInstrumentation,
+  type AgentInstrumentationContext,
+  type AgentInstrumentationOperation,
   type AgentOptions,
   type CreateAgentOptions,
   createAgent,
