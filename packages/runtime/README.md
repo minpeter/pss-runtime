@@ -647,8 +647,7 @@ via `createCloudflarePlatformContext` / fibers.
 removed. Pending work that used the shared scheduled-work kinds (`run`,
 thread prompts) is still listed/acked through Agents fibers and
 `createCloudflareScheduledWorkScheduler` storage rows; do not re-arm DO `setAlarm`
-for PSS turn drain. `createCloudflareAgentsHost` remains a **deprecated alias** of
-`createCloudflareHost` for older call sites.
+for PSS turn drain.
 
 ### Platform adapter parity
 
