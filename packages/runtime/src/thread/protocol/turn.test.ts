@@ -10,6 +10,19 @@ const expectPending = async (promise: Promise<unknown>) => {
 };
 
 describe("AgentTurn", () => {
+  it("binds one stable optional durable run id", () => {
+    const local = new BufferedAgentTurn();
+    expect(local.runId).toBeUndefined();
+
+    local.bindRunId("run-1");
+    local.bindRunId("run-1");
+
+    expect(local.runId).toBe("run-1");
+    expect(() => local.bindRunId("run-2")).toThrow(
+      "AgentTurn is already bound to run id run-1"
+    );
+  });
+
   it("delivers events emitted before events consumption", async () => {
     const run = new BufferedAgentTurn();
     run.emit({ type: "user-input", text: "hello" });

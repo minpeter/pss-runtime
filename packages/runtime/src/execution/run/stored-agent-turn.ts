@@ -22,6 +22,10 @@ export class StoredAgentTurn implements AgentTurn {
     this.#runId = runId;
   }
 
+  get runId(): string {
+    return this.#runId;
+  }
+
   events(): AsyncIterable<AgentEvent> {
     if (this.#eventsStarted) {
       throw new Error("AgentTurn.events() can only be consumed once");

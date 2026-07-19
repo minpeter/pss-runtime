@@ -155,11 +155,16 @@ function transformAnyInputToTextPlugin() {
 
 function duplicateAdmissionHost(): AgentHost {
   const base = createInMemoryHost();
+  const inputs = duplicateAdmissionInbox(base.store.inputs);
   return {
     ...base,
     store: {
       ...base.store,
-      inputs: duplicateAdmissionInbox(base.store.inputs),
+      inputs,
+      transaction: (callback) =>
+        base.store.transaction((transaction) =>
+          callback({ ...transaction, inputs })
+        ),
     },
   };
 }

@@ -45,7 +45,9 @@ export async function resumeAgentTurn({
 
     try {
       const notificationRun = await resumeNotification(notification);
-      await completeNotificationRun(host, claimed.runId);
+      if (notificationRun.runId !== claimed.runId) {
+        await completeNotificationRun(host, claimed.runId);
+      }
       return notificationRun;
     } catch (error) {
       await host.store.notifications.releaseByIdempotencyKey(idempotencyKey);
@@ -102,7 +104,13 @@ export async function completeNotificationRun(
   runId: string
 ): Promise<void> {
   const run = await host.store.turns.get(runId);
-  if (run?.kind !== "notification" || run.status === "completed") {
+  if (
+    run?.kind !== "notification" ||
+    run.status === "cancelled" ||
+    run.status === "completed" ||
+    run.status === "error" ||
+    run.status === "needs-recovery"
+  ) {
     return;
   }
 

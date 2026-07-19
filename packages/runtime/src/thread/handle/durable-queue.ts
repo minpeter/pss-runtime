@@ -1,3 +1,4 @@
+import { createThreadExecutionRunId } from "../../execution/host/thread-execution-run-id";
 import type { AgentHost } from "../../execution/host/types";
 import {
   cleanupStagedRuntimeAttachments,
@@ -22,6 +23,10 @@ import {
   recoverDurableThreadInputs,
 } from "../runtime/durable-inputs";
 import type { ThreadEventDispatcher } from "../runtime/events";
+import {
+  cancelThreadExecutionRun,
+  precreateThreadExecutionRun,
+} from "../runtime/execution";
 import { startThreadQueueDrain } from "../runtime/notification";
 
 export class DurableInputRecoveryState {
@@ -159,11 +164,21 @@ export async function createQueuedSendInput({
       executionHost,
       input: queuedInput,
       kind: "send",
+      precreateExecutionRun: true,
       threadKey,
     });
-    if (admission.kind === "admitted" && admission.receipt.duplicate) {
-      run.close();
-      return { kind: "handled" };
+    let executionRun: QueuedInput["executionRun"];
+    if (admission.kind === "admitted") {
+      if (admission.receipt.duplicate) {
+        run.close();
+        return { kind: "handled" };
+      }
+
+      const precreated = admission.executionRun;
+      if (precreated) {
+        executionRun = { kind: precreated.kind, runId: precreated.runId };
+        run.bindRunId(precreated.runId);
+      }
     }
 
     const item = {
@@ -173,6 +188,7 @@ export async function createQueuedSendInput({
       ...(admission.kind === "admitted"
         ? { durableMessageId: admission.receipt.record.messageId }
         : {}),
+      ...(executionRun ? { executionRun } : {}),
       initialEvents: [],
       ...(admission.kind === "unavailable"
         ? { input: structuredClone(queuedInput) }
@@ -211,13 +227,26 @@ export async function claimOrphanDurableThreadInput({
     return;
   }
 
+  const runId = createThreadExecutionRunId({
+    threadKey: claimed.record.threadKey,
+    turnId: claimed.record.messageId,
+  });
+  const precreated = await precreateThreadExecutionRun({
+    executionHost,
+    kind: "user-turn",
+    runId,
+    threadKey,
+  });
   return {
     acceptedEvent: claimed.record.input,
     awaitBoundaries: false,
     durableInputClaim: claimed.record,
+    ...(precreated
+      ? { executionRun: { kind: precreated.kind, runId: precreated.runId } }
+      : {}),
     initialEvents: [],
     preUserRuntimeInputs: [],
-    run: new BufferedAgentTurn(),
+    run: new BufferedAgentTurn(precreated?.runId),
     runtimeInput: createRuntimeInputState([]),
   };
 }
@@ -245,6 +274,10 @@ export async function prepareQueuedDurableInput({
     return { ...item, durableInputClaim: claimed.record };
   }
 
+  await cancelThreadExecutionRun({
+    executionHost,
+    executionRun: item.executionRun,
+  });
   item.run.close();
   return;
 }

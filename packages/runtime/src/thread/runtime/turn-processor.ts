@@ -44,6 +44,7 @@ export async function processQueuedInput({
   const activeAbort = new AbortController();
   const {
     durableInputClaim,
+    executionRun: queuedExecutionRun,
     awaitBoundaries = true,
     initialEvents,
     input: queuedInput,
@@ -92,6 +93,7 @@ export async function processQueuedInput({
 
   try {
     executionRun = await startThreadExecutionRun({
+      executionRun: queuedExecutionRun,
       executionHost: execution.executionHost,
       interceptToolCall: (checkpoint) =>
         events.interceptBeforeToolCall(checkpoint),

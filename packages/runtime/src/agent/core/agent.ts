@@ -158,7 +158,6 @@ export class Agent {
     const publicHandle: ThreadHandle = {
       compact: (input) => thread.compact(input),
       delete: async () => {
-        thread.kill();
         this.#evictThreadHandle(key);
         try {
           await thread.delete();
@@ -199,6 +198,7 @@ export class Agent {
     return this.#threadEntry(notification.threadKey).notify(
       notification.input,
       {
+        executionRun: { kind: "notification", runId: notification.runId },
         observerEvents: notification.observerEvents,
         overlays: [
           ...(notification.overlays ?? []),

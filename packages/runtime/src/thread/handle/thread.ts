@@ -57,6 +57,7 @@ export class AgentThread {
   #drainRequested = false;
   #inputAdmissionQueue: Promise<void> = Promise.resolve();
   #killed = false;
+  #killPromise?: Promise<void>;
   #running = false;
   #runToCloseOnKill?: BufferedAgentTurn;
   #shutdownPromise?: Promise<void>;
@@ -128,6 +129,7 @@ export class AgentThread {
       run,
       threadKey: this.#threadKey,
     });
+    this.#assertOpen();
   }
 
   overlay(input: AgentInput): this {
@@ -155,8 +157,11 @@ export class AgentThread {
       drain: () => this.#drainInputQueue(),
       emitObserverEvent: (run, event) =>
         this.#events.emitObserverEvent(run, event),
+      executionHost: this.#execution.executionHost,
       inputQueue: this.#inputQueue,
       pendingRuntimeInputs: this.#pendingRuntimeInputs,
+      threadKey: this.#threadKey,
+      throwIfTerminal: () => this.#assertOpen(),
     });
   }
 
@@ -206,27 +211,29 @@ export class AgentThread {
 
   delete(): Promise<void> {
     if (!this.#deletePromise) {
-      this.kill();
-      this.#deletePromise = this.#deleteThread().catch((error: unknown) => {
-        this.#deletePromise = undefined;
-        throw error;
-      });
+      this.#deletePromise = this.kill()
+        .then(() => this.#deleteThread())
+        .catch((error: unknown) => {
+          this.#deletePromise = undefined;
+          throw error;
+        });
     }
     return this.#deletePromise;
   }
 
   async dispose(): Promise<void> {
-    this.kill();
+    const kill = this.kill();
     try {
       await this.#drainPromise;
     } finally {
+      await kill;
       await this.#shutdownThread();
     }
   }
 
-  kill(): void {
+  kill(): Promise<void> {
     if (this.#killed) {
-      return;
+      return this.#killPromise ?? Promise.resolve();
     }
 
     this.#killed = true;
@@ -234,12 +241,29 @@ export class AgentThread {
     this.#pendingOverlays.length = 0;
     this.#pendingRuntimeInputs.length = 0;
     this.#activeAbort?.abort();
-    closeKilledRuntimeInputs({
+    const immediateClose = closeKilledRuntimeInputs({
       activeRuntimeInput: this.#activeRuntimeInput,
+      executionHost: this.#execution.executionHost,
       inputQueue: this.#inputQueue,
       message: killedError.message,
       runToClose: this.#runToCloseOnKill ?? this.#activeRun,
+      threadKey: this.#threadKey,
     });
+    const admissionClose = this.#inputAdmissionQueue.then(() =>
+      closeKilledRuntimeInputs({
+        activeRuntimeInput: undefined,
+        executionHost: this.#execution.executionHost,
+        inputQueue: this.#inputQueue,
+        message: killedError.message,
+        runToClose: undefined,
+        threadKey: this.#threadKey,
+      })
+    );
+    this.#killPromise = Promise.all([immediateClose, admissionClose]).then(
+      () => undefined
+    );
+    this.#killPromise.catch(() => undefined);
+    return this.#killPromise;
   }
 
   async #deleteThread(): Promise<void> {

@@ -1,7 +1,10 @@
+import { createThreadExecutionRunId } from "../../execution/host/thread-execution-run-id";
 import type {
   AgentHost,
+  TurnKind,
   TurnRecord,
   TurnStatus,
+  TurnStore,
 } from "../../execution/host/types";
 import type { RuntimeToolExecutionContext } from "../../llm/llm";
 import type { PluginRuntime } from "../../plugins/runtime";
@@ -19,6 +22,11 @@ export interface ThreadExecutionOptions {
   readonly pluginRuntime?: PluginRuntime;
 }
 
+export interface QueuedThreadExecutionRun {
+  readonly kind: TurnKind;
+  readonly runId: string;
+}
+
 export interface ThreadExecutionRun {
   complete(status: ThreadExecutionTerminalStatus): Promise<void>;
   readonly runId: string;
@@ -30,7 +38,43 @@ export type ThreadExecutionTerminalStatus = Extract<
   "cancelled" | "completed" | "error" | "needs-recovery"
 >;
 
+export async function precreateThreadExecutionRun({
+  executionHost,
+  kind,
+  runId: requestedRunId,
+  threadKey,
+  turnStore,
+}: {
+  readonly executionHost?: AgentHost;
+  readonly kind: TurnKind;
+  readonly runId?: string;
+  readonly threadKey: string;
+  readonly turnStore?: TurnStore;
+}): Promise<TurnRecord | undefined> {
+  const turns = turnStore ?? executionHost?.store.turns;
+  if (!turns) {
+    return;
+  }
+
+  const runId =
+    requestedRunId ??
+    createThreadExecutionRunId({
+      threadKey,
+      turnId: crypto.randomUUID(),
+    });
+  const created = await turns.create(
+    createThreadExecutionRunRecord({
+      kind,
+      runId,
+      status: "queued",
+      threadKey,
+    })
+  );
+  return created.record;
+}
+
 export async function startThreadExecutionRun({
+  executionRun,
   executionHost,
   interceptToolCall,
   interceptToolResult,
@@ -38,6 +82,7 @@ export async function startThreadExecutionRun({
   state,
   turnId,
 }: {
+  readonly executionRun?: QueuedThreadExecutionRun;
   readonly executionHost?: AgentHost;
   readonly interceptToolCall?: ThreadToolCallInterceptor;
   readonly interceptToolResult?: ThreadToolResultInterceptor;
@@ -49,17 +94,22 @@ export async function startThreadExecutionRun({
     return;
   }
 
-  const runId = `turn:${threadKey}:${turnId}`;
-  const run: TurnRecord = {
-    checkpointVersion: 0,
-    dedupeKey: runId,
-    kind: "user-turn",
-    rootRunId: runId,
-    runId,
-    threadKey,
-    status: "running",
-  };
-  await executionHost.store.turns.create(run);
+  const runId =
+    executionRun?.runId ?? createThreadExecutionRunId({ threadKey, turnId });
+  const created = await executionHost.store.turns.create(
+    createThreadExecutionRunRecord({
+      kind: executionRun?.kind ?? "user-turn",
+      runId,
+      status: "running",
+      threadKey,
+    })
+  );
+  if (!(created.ok || isTerminalTurnStatus(created.record.status))) {
+    await executionHost.store.turns.update({
+      ...created.record,
+      status: "running",
+    });
+  }
 
   return {
     complete: (status) =>
@@ -75,6 +125,49 @@ export async function startThreadExecutionRun({
   };
 }
 
+export async function cancelThreadExecutionRun({
+  executionHost,
+  executionRun,
+  runId,
+}: {
+  readonly executionHost?: AgentHost;
+  readonly executionRun?: QueuedThreadExecutionRun;
+  readonly runId?: string;
+}): Promise<void> {
+  const targetRunId = runId ?? executionRun?.runId;
+  if (!(executionHost && targetRunId)) {
+    return;
+  }
+
+  const run = await executionHost.store.turns.get(targetRunId);
+  if (!run || isTerminalTurnStatus(run.status)) {
+    return;
+  }
+  await executionHost.store.turns.update({ ...run, status: "cancelled" });
+}
+
+export function createThreadExecutionRunRecord({
+  kind,
+  runId,
+  status,
+  threadKey,
+}: {
+  readonly kind: TurnKind;
+  readonly runId: string;
+  readonly status: Extract<TurnStatus, "queued" | "running">;
+  readonly threadKey: string;
+}): TurnRecord {
+  return {
+    checkpointVersion: 0,
+    dedupeKey: runId,
+    kind,
+    rootRunId: runId,
+    runId,
+    threadKey,
+    status,
+  };
+}
+
 async function completeThreadExecutionRun({
   executionHost,
   runId,
@@ -85,9 +178,18 @@ async function completeThreadExecutionRun({
   readonly status: ThreadExecutionTerminalStatus;
 }): Promise<void> {
   const run = await executionHost.store.turns.get(runId);
-  if (!run) {
+  if (!run || isTerminalTurnStatus(run.status)) {
     return;
   }
 
   await executionHost.store.turns.update({ ...run, status });
+}
+
+function isTerminalTurnStatus(status: TurnStatus): boolean {
+  return (
+    status === "cancelled" ||
+    status === "completed" ||
+    status === "error" ||
+    status === "needs-recovery"
+  );
 }
