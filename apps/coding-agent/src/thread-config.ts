@@ -22,8 +22,7 @@ export function resolveCodingAgentThreadConfig(
 ): CodingAgentThreadConfig {
   return {
     autoCompaction: resolveAutoCompaction(env),
-    directory:
-      nonEmpty(env.PSS_THREAD_DIR) ?? join(home, ".pss", "threads"),
+    directory: nonEmpty(env.PSS_THREAD_DIR) ?? join(home, ".pss", "threads"),
     key: nonEmpty(env.PSS_THREAD_KEY) ?? `cwd:${cwd}`,
   };
 }
