@@ -7,7 +7,13 @@ export const cliBinReadFailurePattern =
 export const forbiddenModelName = ["Agent", "Model"].join("");
 export const runtimeRootDeclaration = [
   'export type { AgentHost } from "./execution/types";',
+  'export type { AgentInstrumentation, AgentInstrumentationContext, AgentInstrumentationOperation } from "./agent";',
   'export type { AgentTurn, RuntimeInput } from "./thread";',
+  "",
+].join("\n");
+export const runtimeChannelDeclaration = [
+  'export type { ChannelInboundMessage, ChannelAssistantTextDelivery, ChannelAssistantDelivery } from "./index";',
+  'export { projectChannelAssistantDelivery } from "./index";',
   "",
 ].join("\n");
 export const runtimeExecutionDeclaration = [
@@ -40,6 +46,11 @@ export const runtimeCloudflareDeclaration = [
 export const runtimeFileDeclaration = [
   'export { ackScheduledNodeRun, ackScheduledNodeThreadPrompt, appendScheduledNodeRun, appendScheduledNodeThreadPrompt, createNodeFileAgentContext, createFileHost, createFileScheduler, drainScheduledNodeWork, FileExecutionStore, FileThreadStore, listScheduledNodeRuns, listScheduledNodeThreadPrompts } from "./index";',
   'export type { NodeFileAgentContext, NodeFileAgentContextFactoryOptions, NodeFileAgentContextOptions, FileHostOptions, NodeScheduledThreadPrompt, NodeScheduledWorkAppendOptions, NodeScheduledWorkDrainOptions, NodeScheduledWorkDrainResult, NodeScheduledWorkListOptions, NodeScheduledWorkRunContext } from "./index";',
+  "",
+].join("\n");
+export const runtimeOtelDeclaration = [
+  'export { openTelemetry, traceAgentTurn } from "./index";',
+  'export type { TraceAgentTurnEventAttributes, TraceAgentTurnOptions, TraceAgentTurnSpan, TraceAgentTurnTracer } from "./index";',
   "",
 ].join("\n");
 
@@ -120,6 +131,13 @@ function writePackageDeclarationFixtures(cwd, packageName, packageRoot) {
 }
 
 function writeRuntimeDeclarationFixtures(cwd, packageName) {
+  mkdirSync(join(cwd, "packages", packageName, "dist", "channel"), {
+    recursive: true,
+  });
+  writeFileSync(
+    join(cwd, "packages", packageName, "dist", "channel", "index.d.ts"),
+    runtimeChannelDeclaration
+  );
   mkdirSync(join(cwd, "packages", packageName, "dist", "execution"), {
     recursive: true,
   });
@@ -172,6 +190,13 @@ function writeRuntimeDeclarationFixtures(cwd, packageName) {
       "index.d.ts"
     ),
     runtimeFileDeclaration
+  );
+  mkdirSync(join(cwd, "packages", packageName, "dist", "otel"), {
+    recursive: true,
+  });
+  writeFileSync(
+    join(cwd, "packages", packageName, "dist", "otel", "index.d.ts"),
+    runtimeOtelDeclaration
   );
   writeFileSync(
     join(cwd, "packages", packageName, "dist", "llm.d.ts"),

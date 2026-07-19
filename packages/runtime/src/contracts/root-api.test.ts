@@ -19,6 +19,9 @@ import type {
   AgentAutoCompactionOptions,
   AgentEvent,
   AgentInput,
+  AgentInstrumentation,
+  AgentInstrumentationContext,
+  AgentInstrumentationOperation,
   AgentOptions,
   CompactionContextMessage,
   HostAttachmentStore,
@@ -39,6 +42,7 @@ import {
   threadStoreKey as runtimeThreadStoreKey,
   ThreadEventReplayUnsupportedError,
 } from "../index";
+import type { TraceAgentTurnOptions } from "../otel";
 
 type EmptyHostIsRejected =
   Record<string, never> extends AgentHost ? true : false;
@@ -57,6 +61,12 @@ const forbiddenModelAdapterRootExports = [
   ["Runtime", "Llm", "Output"].join(""),
   ["Runtime", "Llm", "Output", "Part"].join(""),
   ["create", "Llm"].join(""),
+] as const;
+const forbiddenChannelRootExports = [
+  ["Channel", "Inbound", "Message"].join(""),
+  ["Channel", "Assistant", "Text", "Delivery"].join(""),
+  ["Channel", "Assistant", "Delivery"].join(""),
+  ["project", "Channel", "Assistant", "Delivery"].join(""),
 ] as const;
 
 describe("runtime public exports", () => {
@@ -128,6 +138,14 @@ describe("runtime public exports", () => {
     }
   });
 
+  it("keeps channel adapter contracts off the package root", async () => {
+    const runtime = await import("../index");
+
+    for (const forbiddenName of forbiddenChannelRootExports) {
+      expect(runtime).not.toHaveProperty(forbiddenName);
+    }
+  });
+
   it("types public thread compaction options from the package root", () => {
     const autoCompaction = {
       contextGate: {
@@ -139,9 +157,19 @@ describe("runtime public exports", () => {
     } satisfies AgentAutoCompactionOptions;
     const model = {} as AgentOptions["model"];
     const attachmentStore = {} as HostAttachmentStore;
+    const instrumentation = {
+      wrapTurn: (turn, context) => {
+        expectTypeOf(context).toEqualTypeOf<AgentInstrumentationContext>();
+        expectTypeOf(
+          context.operation
+        ).toEqualTypeOf<AgentInstrumentationOperation>();
+        return turn;
+      },
+    } satisfies AgentInstrumentation;
     const enabledOptions = {
       attachmentStore,
       autoCompaction,
+      instrumentations: [instrumentation],
       model,
       notificationOverlays: ["runtime context"],
     } satisfies AgentOptions;
@@ -188,10 +216,22 @@ describe("runtime public exports", () => {
     >().toEqualTypeOf<string>();
     expect(enabledOptions.autoCompaction).toEqual(autoCompaction);
     expect(enabledOptions.attachmentStore).toBe(attachmentStore);
+    expect(enabledOptions.instrumentations).toEqual([instrumentation]);
     expect(enabledOptions.notificationOverlays).toEqual(["runtime context"]);
     expect(disabledOptions.autoCompaction).toBe(false);
     expect(compaction.startSeq).toBe(0);
     expect(contextCompaction.role).toBe("compaction");
+  });
+
+  it("types OpenTelemetry adapter options from its subpath", () => {
+    const options = {
+      eventAttributes: (event: AgentEvent) => ({
+        "app.event_type": event.type,
+      }),
+      tracerName: "support-agent",
+    } satisfies TraceAgentTurnOptions;
+
+    expect(options.tracerName).toBe("support-agent");
   });
 
   it("exports cache-stable model-step contracts from the package root", async () => {

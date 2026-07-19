@@ -8,7 +8,7 @@ import {
   userText,
 } from "../../testing/test-fixtures";
 import { collect } from "../../thread/handle/test-support";
-import { Agent } from "../core/agent";
+import { Agent, type AgentInstrumentationContext } from "../core/agent";
 import { agentNamespace } from "../identity/namespace";
 import {
   createThreadLoadFailingHost,
@@ -20,9 +20,18 @@ describe("host notification resume", () => {
   it("host resumes parent notification run once without direct prompt resume surface", async () => {
     const host = createInMemoryHost();
     const seenHistory: ModelMessage[][] = [];
+    const instrumentationContexts: AgentInstrumentationContext[] = [];
     let calls = 0;
     const agent = new Agent({
       host,
+      instrumentations: [
+        {
+          wrapTurn: (turn, context) => {
+            instrumentationContexts.push(context);
+            return turn;
+          },
+        },
+      ],
       model: createCallbackModel(({ history }) => {
         calls += 1;
         seenHistory.push([...history]);
@@ -72,6 +81,14 @@ describe("host notification resume", () => {
       "assistant-output",
       "step-end",
       "turn-end",
+    ]);
+    expect(instrumentationContexts).toEqual([
+      {
+        namespace: "notify-owner",
+        operation: "resume",
+        runId: notification.runId,
+        threadKey: "default",
+      },
     ]);
     expect(seenHistory).toHaveLength(1);
     expect(JSON.stringify(seenHistory[0])).toContain("bg_1");

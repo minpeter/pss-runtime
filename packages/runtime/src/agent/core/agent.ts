@@ -9,6 +9,12 @@ import { stableAgentNamespace } from "../identity/namespace";
 import { resumeAgentTurn } from "../resume/resume";
 import { threadStoreForHost } from "./host-thread-store";
 import {
+  type AgentInstrumentation,
+  type AgentInstrumentationContext,
+  applyAgentInstrumentations,
+  normalizeAgentInstrumentations,
+} from "./instrumentation";
+import {
   type AgentAutoCompactionOptions,
   type AgentModelOptions,
   type AgentOptions,
@@ -26,6 +32,11 @@ import {
 
 export type { AgentHost } from "../../execution/host/types";
 export type { ThreadCompactionInput } from "../../thread/handle/thread";
+export type {
+  AgentInstrumentation,
+  AgentInstrumentationContext,
+  AgentInstrumentationOperation,
+} from "./instrumentation";
 export type {
   AgentAutoCompactionOptions,
   AgentOptions,
@@ -47,6 +58,7 @@ export class Agent {
   readonly #ownerNamespace: string;
   readonly #store: ThreadStore;
   readonly #host: AgentHost;
+  readonly #instrumentations: readonly AgentInstrumentation[];
   readonly #pluginRuntime?: PluginRuntime;
   readonly #notificationOverlays?: AgentOptions["notificationOverlays"];
   readonly #autoCompaction?: AgentAutoCompactionOptions;
@@ -63,6 +75,9 @@ export class Agent {
     this.#host = providedHost ?? createInMemoryHost();
     this.host = this.#host;
     this.#store = threadStoreForHost(this.#host);
+    this.#instrumentations = normalizeAgentInstrumentations(
+      options.instrumentations
+    );
     this.#pluginRuntime = pluginRuntime;
     this.#notificationOverlays = options.notificationOverlays;
     this.#autoCompaction = normalizeAgentAutoCompactionOptions(
@@ -114,7 +129,7 @@ export class Agent {
       host: this.#host,
       ownerNamespace: this.#ownerNamespace,
       resumeNotification: (notification) =>
-        this.#resumeNotification(notification),
+        this.#resumeNotification(notification, runId),
       runId,
     });
   }
@@ -179,8 +194,18 @@ export class Agent {
         thread.overlay(input);
         return publicHandle;
       },
-      send: (input) => thread.send(input),
-      steer: (input) => thread.steer(input),
+      send: async (input) =>
+        this.#instrumentTurn(await thread.send(input), {
+          namespace: this.namespace,
+          operation: "send",
+          threadKey: key,
+        }),
+      steer: async (input) =>
+        this.#instrumentTurn(await thread.steer(input), {
+          namespace: this.namespace,
+          operation: "steer",
+          threadKey: key,
+        }),
     };
     const entry: AgentThreadEntry = {
       notify: (input, options) => thread.notify(input, options),
@@ -194,8 +219,11 @@ export class Agent {
     this.#threads.delete(key);
   }
 
-  #resumeNotification(notification: NotificationRecord): Promise<AgentTurn> {
-    return this.#threadEntry(notification.threadKey).notify(
+  async #resumeNotification(
+    notification: NotificationRecord,
+    runId: string
+  ): Promise<AgentTurn> {
+    const turn = await this.#threadEntry(notification.threadKey).notify(
       notification.input,
       {
         executionRun: { kind: "notification", runId: notification.runId },
@@ -206,6 +234,19 @@ export class Agent {
         ],
       }
     );
+    return this.#instrumentTurn(turn, {
+      namespace: this.namespace,
+      operation: "resume",
+      runId,
+      threadKey: notification.threadKey,
+    });
+  }
+
+  #instrumentTurn(
+    turn: AgentTurn,
+    context: AgentInstrumentationContext
+  ): AgentTurn {
+    return applyAgentInstrumentations(turn, this.#instrumentations, context);
   }
 }
 

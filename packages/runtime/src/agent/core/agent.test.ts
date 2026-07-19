@@ -5,7 +5,13 @@ import {
   createMockLanguageModelV4,
   mockLanguageModelV4Text,
 } from "../../testing/mock-language-model-v4-test-utils";
-import { Agent, type AgentOptions, createAgent } from "./agent";
+import {
+  Agent,
+  type AgentInstrumentation,
+  type AgentInstrumentationContext,
+  type AgentOptions,
+  createAgent,
+} from "./agent";
 import { threadStoreKey } from "./thread-entry";
 
 const fakeModel = createMockLanguageModelV4([mockLanguageModelV4Text("DONE")]);
@@ -121,6 +127,40 @@ describe("Agent", () => {
   it("uses the default thread for agent.send", async () => {
     const agent = new Agent({ model: fakeModel });
     await expect(agent.send("hello")).resolves.toBeDefined();
+  });
+
+  it("wraps send and steer turns with operation context", async () => {
+    const contexts: AgentInstrumentationContext[] = [];
+    const instrumentation: AgentInstrumentation = {
+      wrapTurn: (turn, context) => {
+        contexts.push(context);
+        return turn;
+      },
+    };
+    const agent = new Agent({
+      instrumentations: [instrumentation],
+      model: createMockLanguageModelV4(() =>
+        Promise.resolve(mockLanguageModelV4Text("DONE"))
+      ),
+      namespace: "support",
+    });
+    const thread = agent.thread("customer-1");
+
+    await collectRun(await thread.send("hello"));
+    await collectRun(await thread.steer("one more thing"));
+
+    expect(contexts).toEqual([
+      {
+        namespace: "support",
+        operation: "send",
+        threadKey: "customer-1",
+      },
+      {
+        namespace: "support",
+        operation: "steer",
+        threadKey: "customer-1",
+      },
+    ]);
   });
 
   it("reuses handles for named threads", () => {

@@ -5,10 +5,12 @@ import {
   FORBIDDEN_RUNTIME_PUBLIC_PATTERNS,
   FORBIDDEN_RUNTIME_ROOT_NAMES,
   FORBIDDEN_RUNTIME_SUBAGENT_NAMES,
+  REQUIRED_RUNTIME_CHANNEL_EXPORTS,
   REQUIRED_RUNTIME_CLOUDFLARE_EXPORTS,
   REQUIRED_RUNTIME_EXECUTION_EXPORTS,
   REQUIRED_RUNTIME_FILE_EXPORTS,
   REQUIRED_RUNTIME_MEMORY_EXPORTS,
+  REQUIRED_RUNTIME_OTEL_EXPORTS,
   REQUIRED_RUNTIME_ROOT_EXPORTS,
 } from "./runtime-public-surface.mjs";
 import { listFiles, packageDistPath, relativeToCwd } from "./shared.mjs";
@@ -26,6 +28,12 @@ export function findRuntimeDeclarationLeaks({ cwd, packages }) {
       file: join(packageDistPath(cwd, "runtime"), "index.d.ts"),
       requiredExports: REQUIRED_RUNTIME_ROOT_EXPORTS,
       surface: "root",
+    }),
+    ...findRuntimeDeclarationExportLeaks({
+      cwd,
+      file: join(packageDistPath(cwd, "runtime"), "channel", "index.d.ts"),
+      requiredExports: REQUIRED_RUNTIME_CHANNEL_EXPORTS,
+      surface: "channel",
     }),
     ...findRuntimeDeclarationExportLeaks({
       cwd,
@@ -65,6 +73,12 @@ export function findRuntimeDeclarationLeaks({ cwd, packages }) {
       ),
       requiredExports: REQUIRED_RUNTIME_FILE_EXPORTS,
       surface: "file",
+    }),
+    ...findRuntimeDeclarationExportLeaks({
+      cwd,
+      file: join(packageDistPath(cwd, "runtime"), "otel", "index.d.ts"),
+      requiredExports: REQUIRED_RUNTIME_OTEL_EXPORTS,
+      surface: "otel",
     }),
     ...findRuntimePublicPatternLeaks({ cwd }),
   ];

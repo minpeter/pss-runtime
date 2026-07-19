@@ -11,6 +11,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./otel": {
+      "@minpeter/pss-source": "./src/otel/index.ts",
+      "types": "./dist/otel/index.d.ts",
+      "import": "./dist/otel/index.js"
+    },
     "./platform/memory": {
       "@minpeter/pss-source": "./src/platform/memory/index.ts",
       "types": "./dist/platform/memory/index.d.ts",
@@ -45,6 +50,11 @@
       "@minpeter/pss-source": "./src/evals/index.ts",
       "types": "./dist/evals/index.d.ts",
       "import": "./dist/evals/index.js"
+    },
+    "./channel": {
+      "@minpeter/pss-source": "./src/channel/index.ts",
+      "types": "./dist/channel/index.d.ts",
+      "import": "./dist/channel/index.js"
     },
     "./testing": {
       "@minpeter/pss-source": "./src/testing/index.ts",
@@ -81,6 +91,7 @@
   "dependencies": {
     "@jsquash/avif": "^2.1.1",
     "@jsquash/webp": "^1.5.0",
+    "@opentelemetry/api": "^1.9.1",
     "ai": "7.0.30",
     "fast-png": "^8.0.0",
     "heic-decode": "^2.1.0",

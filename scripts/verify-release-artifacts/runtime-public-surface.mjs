@@ -1,7 +1,17 @@
 export const REQUIRED_RUNTIME_ROOT_EXPORTS = [
   "AgentHost",
+  "AgentInstrumentation",
+  "AgentInstrumentationContext",
+  "AgentInstrumentationOperation",
   "AgentTurn",
   "RuntimeInput",
+];
+
+export const REQUIRED_RUNTIME_CHANNEL_EXPORTS = [
+  "ChannelInboundMessage",
+  "ChannelAssistantTextDelivery",
+  "ChannelAssistantDelivery",
+  "projectChannelAssistantDelivery",
 ];
 
 export const REQUIRED_RUNTIME_EXECUTION_EXPORTS = [
@@ -151,6 +161,11 @@ export const REQUIRED_RUNTIME_FILE_EXPORTS =
     " "
   );
 
+export const REQUIRED_RUNTIME_OTEL_EXPORTS =
+  "TraceAgentTurnEventAttributes TraceAgentTurnOptions TraceAgentTurnSpan TraceAgentTurnTracer openTelemetry traceAgentTurn".split(
+    " "
+  );
+
 export const FORBIDDEN_RUNTIME_ROOT_NAMES = [
   ...new Set([
     ...[
@@ -188,6 +203,7 @@ export const FORBIDDEN_RUNTIME_ROOT_NAMES = [
     ...REQUIRED_RUNTIME_CLOUDFLARE_WORKER_EXPORTS,
     ...REQUIRED_RUNTIME_FILE_EXPORTS,
     ...REQUIRED_RUNTIME_MEMORY_EXPORTS,
+    ...REQUIRED_RUNTIME_CHANNEL_EXPORTS,
     ["create", "Llm"].join(""),
     ["Runtime", "Create", "Llm", "Options"].join(""),
     ["Runtime", "Llm"].join(""),

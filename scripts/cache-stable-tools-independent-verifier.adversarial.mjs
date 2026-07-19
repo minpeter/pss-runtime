@@ -201,11 +201,20 @@ test("rejects a false clean-at-start attestation and mismatched freeze tree", as
   await rejectsWith(dirty, ["sourceWorktreeCleanAtStart"]);
 
   const wrongCommit = await copyPristine();
-  wrongCommit.configuration.sourceFreezeCommitSha = execFileSync(
+  // The swapped freeze reference must mismatch the synthesized manifest under
+  // every history shape. HEAD^ only differs from the working tree when the
+  // last commit touched packages/runtime/src, so docs-/app-only commits made
+  // the verifier accept the swap and this leg fail nondeterministically. The
+  // repository root commit predates the benchmark script, so rejection is
+  // deterministic regardless of what HEAD last touched.
+  const [rootCommit] = execFileSync(
     "git",
-    ["rev-parse", "--verify", "HEAD^"],
+    ["rev-list", "--max-parents=0", "HEAD"],
     { cwd: REPOSITORY_ROOT, encoding: "utf8" }
-  ).trim();
+  )
+    .trim()
+    .split("\n");
+  wrongCommit.configuration.sourceFreezeCommitSha = rootCommit;
   await rejectsWith(wrongCommit, ["sourceFreezeCommit"]);
 });
 
