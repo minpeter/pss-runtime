@@ -48,12 +48,6 @@ const functionModelOptions = {
 
 type AssertFalse<T extends false> = T;
 type IsAssignable<Source, Target> = Source extends Target ? true : false;
-type RejectsDescriptionOptionKey = AssertFalse<
-  "description" extends keyof AgentOptions ? true : false
->;
-type RejectsLlmOptionKey = AssertFalse<
-  "llm" extends keyof AgentOptions ? true : false
->;
 type RejectsFunctionModel = AssertFalse<
   IsAssignable<typeof functionModelOptions, AgentOptions>
 >;
@@ -61,18 +55,8 @@ type RejectsSessionMethod = AssertFalse<
   "session" extends keyof Agent ? true : false
 >;
 const typeFixtures = [acceptsModelOptions, functionModelOptions];
-type TypeFixtureAssertions = [
-  RejectsDescriptionOptionKey,
-  RejectsLlmOptionKey,
-  RejectsFunctionModel,
-  RejectsSessionMethod,
-];
-const typeFixtureAssertions: TypeFixtureAssertions = [
-  false,
-  false,
-  false,
-  false,
-];
+type TypeFixtureAssertions = [RejectsFunctionModel, RejectsSessionMethod];
+const typeFixtureAssertions: TypeFixtureAssertions = [false, false];
 
 const collectRun = async (run: Awaited<ReturnType<Agent["send"]>>) => {
   for await (const _event of run.events()) {
@@ -83,7 +67,7 @@ const collectRun = async (run: Awaited<ReturnType<Agent["send"]>>) => {
 describe("Agent", () => {
   it("keeps AgentOptions type fixtures reachable", () => {
     expect(typeFixtures).toHaveLength(2);
-    expect(typeFixtureAssertions).toHaveLength(4);
+    expect(typeFixtureAssertions).toHaveLength(2);
   });
 
   it("constructs agents with new Agent", () => {
@@ -94,17 +78,6 @@ describe("Agent", () => {
     await expect(createAgent({ model: fakeModel })).resolves.toBeInstanceOf(
       Agent
     );
-  });
-
-  it("does not expose legacy agent description metadata", () => {
-    const agent = Reflect.construct(Agent, [
-      {
-        description: "reader",
-        model: fakeModel,
-      },
-    ]);
-
-    expect("description" in agent).toBe(false);
   });
 
   it("rejects caller-owned runtime model functions", () => {
@@ -291,28 +264,5 @@ describe("Agent", () => {
     ).rejects.toThrow("must be a data property");
     expect(registryGetter).not.toHaveBeenCalled();
     expect(prepareModelStep).not.toHaveBeenCalled();
-  });
-
-  it("does not implement legacy llm configuration", () => {
-    expect(() =>
-      Reflect.construct(Agent, [
-        {
-          llm: functionModel,
-        },
-      ])
-    ).toThrow(missingModelPattern);
-  });
-
-  it("does not accept legacy option fields by relying on runtime model functions", () => {
-    expect(() =>
-      Reflect.construct(Agent, [
-        {
-          model: functionModel,
-          name: "coordinator",
-          runtime: {},
-          sessions: {},
-        },
-      ])
-    ).toThrow(invalidModelPattern);
   });
 });

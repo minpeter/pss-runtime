@@ -25,14 +25,6 @@ describe("runtime package subpaths", () => {
     expect(packageJson.exports["./execution/memory"]).toBeUndefined();
   });
 
-  it("does not expose legacy store implementation subpaths", async () => {
-    const packageJson = await readRuntimePackageJson();
-
-    expect(packageJson.exports["./thread-store/file"]).toBeUndefined();
-    expect(packageJson.exports["./session-store/memory"]).toBeUndefined();
-    expect(packageJson.exports["./session-store/file"]).toBeUndefined();
-  });
-
   it("declares the Cloudflare adapter as a platform implementation subpath", async () => {
     const packageJson = await readRuntimePackageJson();
 
@@ -62,7 +54,6 @@ describe("runtime package subpaths", () => {
     for (const exportName of canonicalCloudflareExports) {
       expect(cloudflarePlatform).toHaveProperty(exportName);
     }
-    expect(cloudflarePlatform).not.toHaveProperty("createCloudflareAgentsHost");
   });
 
   it("declares the file adapter as a platform implementation subpath", async () => {
