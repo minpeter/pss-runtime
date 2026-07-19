@@ -27,6 +27,20 @@ export default defineConfig({
         ),
       },
       {
+        find: /^@minpeter\/pss-runtime\/otel$/,
+        replacement: resolve(
+          import.meta.dirname,
+          "../../packages/runtime/src/otel/index.ts"
+        ),
+      },
+      {
+        find: /^@minpeter\/pss-runtime\/platform\/memory$/,
+        replacement: resolve(
+          import.meta.dirname,
+          "../../packages/runtime/src/platform/memory/index.ts"
+        ),
+      },
+      {
         find: /^@minpeter\/pss-runtime\/platform\/file$/,
         replacement: resolve(
           import.meta.dirname,
