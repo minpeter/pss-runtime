@@ -65,8 +65,7 @@ export function ownsAgentNamespace(
 ): boolean {
   return (
     ownerNamespace === agentOwnerNamespace ||
-    ownerNamespace?.startsWith(`${agentOwnerNamespace}:thread:`) === true ||
-    ownerNamespace?.startsWith(`${agentOwnerNamespace}:session:`) === true
+    ownerNamespace?.startsWith(`${agentOwnerNamespace}:thread:`) === true
   );
 }
 

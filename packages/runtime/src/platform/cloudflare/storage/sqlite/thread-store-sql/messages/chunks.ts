@@ -130,9 +130,6 @@ export function reconstructThreadMessagePayload(
   chunks: readonly ThreadMessageChunkRow[]
 ): string {
   if (chunks.length !== marker.n) {
-    if (marker.kind === "legacy-json" && chunks.length === 0) {
-      return row.message;
-    }
     throw new Error(
       `Missing chunked thread message payload for ${key} seq ${row.seq}`
     );
@@ -169,12 +166,10 @@ export function parseThreadMessageChunkMarker(
   message: string
 ): ThreadMessageChunkMarker | null {
   if (!message.startsWith(threadMessageChunkMarkerPrefix)) {
-    return parseLegacyThreadMessageChunkMarker(message);
+    return null;
   }
   const count = Number(message.slice(threadMessageChunkMarkerPrefix.length));
-  return Number.isInteger(count) && count > 0
-    ? { kind: "raw-prefix", n: count }
-    : null;
+  return Number.isInteger(count) && count > 0 ? { n: count } : null;
 }
 
 function avoidTrailingHighSurrogate(value: string, index: number): number {
@@ -197,33 +192,6 @@ function nextCodePointEnd(value: string, index: number): number {
     second <= 0xdf_ff
     ? index + 2
     : index + 1;
-}
-
-function parseLegacyThreadMessageChunkMarker(
-  message: string
-): ThreadMessageChunkMarker | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(message);
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      return null;
-    }
-    throw error;
-  }
-  if (
-    typeof parsed !== "object" ||
-    parsed === null ||
-    !("$pss" in parsed) ||
-    !("n" in parsed) ||
-    parsed.$pss !== "chunk" ||
-    typeof parsed.n !== "number"
-  ) {
-    return null;
-  }
-  return Number.isInteger(parsed.n) && parsed.n > 0
-    ? { kind: "legacy-json", n: parsed.n }
-    : null;
 }
 
 function createThreadChunkMarker(
