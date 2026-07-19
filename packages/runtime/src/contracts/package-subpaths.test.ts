@@ -76,6 +76,16 @@ describe("runtime package subpaths", () => {
     expect(packageJson.exports["./platform/node"]).toBeUndefined();
     expect(packageJson.exports["./node"]).toBeUndefined();
   });
+
+  it("declares the testing subpath for AgentTurn test helpers", async () => {
+    const packageJson = await readRuntimePackageJson();
+
+    expect(packageJson.exports["./testing"]).toMatchObject({
+      "@minpeter/pss-source": "./src/testing/index.ts",
+      import: "./dist/testing/index.js",
+      types: "./dist/testing/index.d.ts",
+    });
+  });
 });
 
 async function readRuntimePackageJson(): Promise<RuntimePackageJson> {
