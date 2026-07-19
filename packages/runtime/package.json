@@ -45,6 +45,11 @@
       "@minpeter/pss-source": "./src/evals/index.ts",
       "types": "./dist/evals/index.d.ts",
       "import": "./dist/evals/index.js"
+    },
+    "./testing": {
+      "@minpeter/pss-source": "./src/testing/index.ts",
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js"
     }
   },
   "bin": {
