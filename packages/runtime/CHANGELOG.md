@@ -1,3 +1,54 @@
+## @minpeter/pss-runtime@0.3.0-next.1 (next)
+
+### Remove Cloudflare host and `PSS_SESSION_*` aliases
+
+Drop `createCloudflareAgentsHost`, `CloudflareHostAgentsOptions`, and
+`CloudflareAgentsHostOptions`. Use `createCloudflareHost` /
+`CloudflareHostOptions` only.
+
+Coding-agent env falls back only on `PSS_THREAD_DIR` / `PSS_THREAD_KEY`;
+`PSS_SESSION_DIR` / `PSS_SESSION_KEY` are no longer accepted.
+
+### Remove the legacy object-style plugin pipeline
+
+Drop dual dispatch for object plugins (`AgentPlugin` / `{ on(context) }` /
+`runPluginsForEvent`). Plugin behavior now runs only through factory-style
+`definePlugin` handlers on `PluginRuntime`.
+
+`createAgent({ plugins })` remains the supported registration path.
+`new Agent(...)` no longer accepts a `plugins` option; use `createAgent` so
+plugin factories initialize before the agent is returned.
+
+Migrate any remaining object plugins to:
+
+```ts
+definePlugin((pss) => {
+  pss.on("input.accept", handler);
+});
+```
+
+### Remove orphan `@deprecated` comments
+
+Delete leftover deprecation comments after `SessionInput` and `FileSessionStore`
+aliases were already removed. No API or behavior change.
+
+### Drop legacy storage and namespace read-compat
+
+Stop hydrating SQLite `legacy-json` thread-message chunk markers and stop
+treating `:session:` owner namespaces as valid for ownership/resume.
+
+Current chunk markers and `:thread:` owner namespaces only.
+
+### Shrink leftover read-compat defaults
+
+Stop inventing session-index `thread_key` values from channel identity when
+stored keys are missing, and stop granting resume access to owner-less runs
+based only on a `parent:${owner}:` thread-key prefix.
+
+Resume requires a present `ownerNamespace` accepted by `ownsAgentNamespace`.
+Session-index write paths already pass explicit `threadKey` values.
+`canRead` / list / search share the same rule: missing `threadKey` is not readable.
+
 ## @minpeter/pss-runtime@0.3.0-next.0 (next)
 
 ### Introduce a factory-based plugin runtime
