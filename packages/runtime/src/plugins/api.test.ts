@@ -417,6 +417,95 @@ describe("factory plugin API", () => {
     );
   });
 
+  it("transforms tool.call.before input for later plugins and execute", async () => {
+    const call = toolCallPart("call-transform-input", "rewrite_tool");
+    const model = createScriptedModelOptions([
+      [assistantMessage([call]), toolResultFor(call)],
+      [assistantMessage("DONE")],
+    ]);
+    let executedInput: unknown;
+    const secondSaw: unknown[] = [];
+    model.tools = {
+      rewrite_tool: tool({
+        execute: (input) => {
+          executedInput = input;
+          return { ok: true };
+        },
+        inputSchema: jsonSchema({
+          additionalProperties: true,
+          properties: {
+            path: { type: "string" },
+          },
+          type: "object",
+        }),
+      }),
+    };
+    const first = definePlugin((pss) => {
+      pss.on("tool.call.before", (event) => ({
+        action: "transform",
+        input: {
+          ...(typeof event.input === "object" && event.input !== null
+            ? event.input
+            : {}),
+          path: "first.md",
+        },
+      }));
+    });
+    const second = definePlugin((pss) => {
+      pss.on("tool.call.before", (event) => {
+        secondSaw.push(structuredClone(event.input));
+        return {
+          action: "transform",
+          input: {
+            ...(typeof event.input === "object" && event.input !== null
+              ? event.input
+              : {}),
+            path: "second.md",
+          },
+        };
+      });
+    });
+    const agent = await createAgent({
+      ...model,
+      plugins: [first, second],
+    });
+
+    await collect(await agent.send("rewrite"));
+
+    expect(secondSaw).toEqual([{ path: "first.md" }]);
+    expect(executedInput).toEqual({ path: "second.md" });
+  });
+
+  it("rejects tool.call.before transform without input", async () => {
+    const beforeEvent = {
+      attempt: 1,
+      idempotencyKey: "run:call_1",
+      input: { path: "a.md" },
+      policy: "idempotent" as const,
+      toolCallId: "call_1",
+      toolName: "write_file",
+      type: "tool.call.before" as const,
+    };
+    const runtime = await PluginRuntime.create(
+      [
+        definePlugin((pss) => {
+          pss.on("tool.call.before", () => ({ action: "transform" }) as never);
+        }),
+      ],
+      {
+        diagnostics: { report: () => undefined },
+        factoryTimeoutMs: 1000,
+        hookTimeoutMs: 1000,
+      }
+    );
+
+    await expect(
+      runtime.beforeToolExecution("thread", beforeEvent, [])
+    ).rejects.toBeInstanceOf(PluginHookError);
+
+    await runtime.dispose();
+  });
+
   it("transforms tool results before they return to the model", async () => {
     const call = toolCallPart("call-transform", "lookup");
     const model = createScriptedModelOptions([
