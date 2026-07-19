@@ -1,6 +1,8 @@
 ---
 packages:
-  "npm:@minpeter/pss-runtime": minor
+  npm:@minpeter/pss-runtime:
+    replay:
+      - exit-prerelease(npm:@minpeter/pss-runtime)
 ---
 
 ## Drop legacy storage and namespace read-compat

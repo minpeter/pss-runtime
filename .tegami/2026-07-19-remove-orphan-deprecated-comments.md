@@ -1,6 +1,8 @@
 ---
 packages:
-  "npm:@minpeter/pss-runtime": patch
+  npm:@minpeter/pss-runtime:
+    replay:
+      - exit-prerelease(npm:@minpeter/pss-runtime)
 ---
 
 ## Remove orphan `@deprecated` comments

@@ -1,7 +1,11 @@
 ---
 packages:
-  "npm:@minpeter/pss-runtime": minor
-  "npm:@minpeter/pss-coding-agent": minor
+  npm:@minpeter/pss-runtime:
+    replay:
+      - exit-prerelease(npm:@minpeter/pss-runtime)
+  npm:@minpeter/pss-coding-agent:
+    replay:
+      - exit-prerelease(npm:@minpeter/pss-coding-agent)
 ---
 
 ## Remove Cloudflare host and `PSS_SESSION_*` aliases
