@@ -92,11 +92,10 @@ async function claimNotificationForRun({
 }
 
 function canAccessRun(run: TurnRecord, ownerNamespace: string): boolean {
-  if (run.ownerNamespace) {
-    return ownsAgentNamespace(run.ownerNamespace, ownerNamespace);
+  if (!run.ownerNamespace) {
+    return false;
   }
-
-  return run.threadKey.startsWith(`parent:${ownerNamespace}:`);
+  return ownsAgentNamespace(run.ownerNamespace, ownerNamespace);
 }
 
 export async function completeNotificationRun(
