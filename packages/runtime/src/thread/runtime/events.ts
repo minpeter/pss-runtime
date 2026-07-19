@@ -14,12 +14,6 @@ import {
   type RuntimeAttachmentReference,
   stageAgentEventAttachments,
 } from "../input/attachments";
-import {
-  type AgentPlugin,
-  type AgentPluginEvent,
-  type PluginPipelineResult,
-  runPluginsForEvent,
-} from "../plugins/pipeline";
 import type { AgentEvent, ToolResult } from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
 import type { ThreadCompactionInput, ThreadState } from "../state/thread-state";
@@ -28,7 +22,6 @@ interface ThreadEventDispatcherOptions {
   readonly attachmentStore?: HostAttachmentStore;
   readonly history: () => readonly ModelMessage[];
   readonly pluginRuntime?: PluginRuntime;
-  readonly plugins: readonly AgentPlugin[];
   readonly signal: () => AbortSignal | undefined;
   readonly threadKey: string;
 }
@@ -42,7 +35,6 @@ export class ThreadEventDispatcher {
   readonly #history: () => readonly ModelMessage[];
   #observerEventBuffer?: AgentEvent[];
   readonly #pluginRuntime: PluginRuntime | undefined;
-  readonly #plugins: readonly AgentPlugin[];
   readonly #signal: () => AbortSignal | undefined;
   readonly #threadKey: string;
 
@@ -50,7 +42,6 @@ export class ThreadEventDispatcher {
     this.#attachmentStore = options.attachmentStore;
     this.#history = options.history;
     this.#pluginRuntime = options.pluginRuntime;
-    this.#plugins = options.plugins;
     this.#signal = options.signal;
     this.#threadKey = options.threadKey;
   }
@@ -127,15 +118,6 @@ export class ThreadEventDispatcher {
   }
 
   async observeRunEvent(event: AgentEvent): Promise<void> {
-    await runPluginsForEvent(
-      this.#plugins,
-      {
-        event,
-        history: this.#history(),
-        signal: this.#signal(),
-      },
-      { observeOnly: true }
-    );
     await this.#pluginRuntime?.observeAgentEvent(
       this.#threadKey,
       event,
@@ -161,11 +143,6 @@ export class ThreadEventDispatcher {
     checkpoint: RuntimeToolExecutionCheckpoint
   ): Promise<RuntimeToolExecutionDecision> {
     const event = beforeToolCallEvent(checkpoint);
-    const legacy = await this.#runLegacyPipeline(event);
-    if (legacy.kind === "needs-recovery") {
-      return { status: "needs-recovery" };
-    }
-
     return await this.#pluginRuntime?.beforeToolExecution(
       this.#threadKey,
       event,
@@ -245,25 +222,18 @@ export class ThreadEventDispatcher {
     event: AgentEvent,
     options: InterceptEventOptions = {}
   ): Promise<AgentEvent | "handled"> {
-    const legacy = await this.#runLegacyPipeline(event);
-    if (legacy.kind === "handled") {
-      return "handled";
-    }
-
-    const legacyEvent =
-      legacy.kind === "emit" ? assertAgentEvent(legacy.event) : event;
-    let processed: AgentEvent | "handled" = legacyEvent;
-    if (isInputAcceptEvent(legacyEvent) && this.#pluginRuntime) {
+    let processed: AgentEvent | "handled" = event;
+    if (isInputAcceptEvent(event) && this.#pluginRuntime) {
       processed = await this.#pluginRuntime.interceptInput(
         this.#threadKey,
-        legacyEvent,
+        event,
         this.#history(),
         this.#activeSignal()
       );
     } else {
       await this.#pluginRuntime?.observeAgentEvent(
         this.#threadKey,
-        legacyEvent,
+        event,
         this.#history(),
         this.#activeSignal()
       );
@@ -280,14 +250,6 @@ export class ThreadEventDispatcher {
 
   emitProcessedEvent(run: BufferedAgentTurn, event: AgentEvent): void {
     run.emit(event);
-  }
-
-  #runLegacyPipeline(event: AgentPluginEvent): Promise<PluginPipelineResult> {
-    return runPluginsForEvent(this.#plugins, {
-      event,
-      history: this.#history(),
-      signal: this.#signal(),
-    });
   }
 
   #activeSignal(): AbortSignal {
@@ -307,15 +269,6 @@ function beforeToolCallEvent(
     toolName: checkpoint.toolName,
     type: "tool.call.before",
   };
-}
-
-function assertAgentEvent(event: AgentPluginEvent): AgentEvent {
-  if (event.type === "tool.call.before") {
-    throw new TypeError(
-      "Plugin-only tool.call.before events cannot enter the AgentEvent stream."
-    );
-  }
-  return event;
 }
 
 function isInputAcceptEvent(event: AgentEvent): event is InputAcceptEvent {

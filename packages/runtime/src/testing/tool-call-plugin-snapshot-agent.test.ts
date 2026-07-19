@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { definePlugin } from "../plugins/api";
 import {
   checkpointedTool,
   createCheckpointSpyHost,
@@ -10,7 +11,6 @@ import {
   executableTool,
   fakeModel,
   getGenerateTextMock,
-  loadAgent,
 } from "./llm-test-utils";
 import { assistantMessage, toolCallPart, toolResultFor } from "./test-fixtures";
 
@@ -45,7 +45,7 @@ describe("tool-call plugin snapshots through Agent", () => {
   });
 
   it("keeps plugin input mutations out of tool execution", async () => {
-    const Agent = await loadAgent();
+    const { createAgent } = await import("../agent/core/agent");
     const { host } = createCheckpointSpyHost();
     const signal = new AbortController().signal;
     let executedInput: unknown;
@@ -69,22 +69,19 @@ describe("tool-call plugin snapshots through Agent", () => {
         responseMessages: [assistantMessage("DONE")],
       }));
 
-    const agent = new Agent({
+    const mutationPlugin = definePlugin((pss) => {
+      pss.on("tool.call.before", (event) => {
+        if (isMutableNestedInput(event.input)) {
+          event.input.payload.path = "MUTATED.md";
+        }
+        return { action: "continue" };
+      });
+    });
+
+    const agent = await createAgent({
       host,
       model: fakeModel,
-      plugins: [
-        {
-          on: ({ event }) => {
-            if (event.type !== "tool.call.before") {
-              return;
-            }
-
-            if (isMutableNestedInput(event.input)) {
-              event.input.payload.path = "MUTATED.md";
-            }
-          },
-        },
-      ],
+      plugins: [mutationPlugin],
       tools: {
         checked_tool: checkpointedTool("idempotent", (input) => {
           executedInput = input;
@@ -101,7 +98,7 @@ describe("tool-call plugin snapshots through Agent", () => {
   });
 
   it("keeps tool.call.before events out of public turn events", async () => {
-    const Agent = await loadAgent();
+    const { createAgent } = await import("../agent/core/agent");
     const { host } = createCheckpointSpyHost();
     const signal = new AbortController().signal;
     const interceptedToolNames: string[] = [];
@@ -125,20 +122,17 @@ describe("tool-call plugin snapshots through Agent", () => {
         responseMessages: [assistantMessage("DONE")],
       }));
 
-    const agent = new Agent({
+    const observerPlugin = definePlugin((pss) => {
+      pss.on("tool.call.before", (event) => {
+        interceptedToolNames.push(event.toolName);
+        return { action: "continue" };
+      });
+    });
+
+    const agent = await createAgent({
       host,
       model: fakeModel,
-      plugins: [
-        {
-          on: ({ event }) => {
-            if (event.type !== "tool.call.before") {
-              return;
-            }
-
-            interceptedToolNames.push(event.toolName);
-          },
-        },
-      ],
+      plugins: [observerPlugin],
       tools: {
         checked_tool: checkpointedTool("idempotent", () => ({ ok: true })),
       },

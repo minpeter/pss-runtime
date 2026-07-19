@@ -1,6 +1,7 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
-import { Agent } from "../../agent/core/agent";
+import { createAgent } from "../../agent/core/agent";
+import { definePlugin } from "../../plugins/api";
 import { hostWithThreads } from "../../testing/host-with-threads";
 import {
   assistantMessage,
@@ -18,13 +19,14 @@ describe("Agent thread terminal state", () => {
   it("rejects runtime input after dispose and settles queued runs", async () => {
     const llmStarted = createDeferred();
     const llmGate = createDeferred();
-    const thread = new Agent({
+    const agent = await createAgent({
       model: createCallbackModel(async () => {
         llmStarted.resolve();
         await llmGate.promise;
         return [assistantMessage("DONE")];
       }),
-    }).thread("kill-terminal");
+    });
+    const thread = agent.thread("kill-terminal");
     const firstRun = await thread.send("first");
     const secondRun = await thread.send("second");
     const firstEvents = collect(firstRun);
@@ -44,7 +46,7 @@ describe("Agent thread terminal state", () => {
 
   it("closes the active run when a disposed thread has a pending model call", async () => {
     const llmStarted = createDeferred();
-    const agent = new Agent({
+    const agent = await createAgent({
       model: createCallbackModel(() => {
         llmStarted.resolve();
         return new Promise<never>(() => undefined);
@@ -70,16 +72,14 @@ describe("Agent thread terminal state", () => {
 
   it("closes the active run when a disposed thread has a pending terminal event plugin", async () => {
     const terminalPluginStarted = createDeferred();
-    const agent = new Agent({
+    const agent = await createAgent({
       plugins: [
-        {
-          on: ({ event }) => {
-            if (event.type === "turn-end") {
-              terminalPluginStarted.resolve();
-              return new Promise<never>(() => undefined);
-            }
-          },
-        },
+        definePlugin((pss) => {
+          pss.on("turn.end", () => {
+            terminalPluginStarted.resolve();
+            return new Promise<never>(() => undefined);
+          });
+        }),
       ],
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
@@ -109,7 +109,7 @@ describe("Agent thread terminal state", () => {
     const llmStarted = createDeferred();
     const llmGate = createDeferred();
     const seenHistory: ModelMessage[][] = [];
-    const agent = new Agent({
+    const agent = await createAgent({
       model: createCallbackModel(async ({ history }) => {
         seenHistory.push([...history]);
         if (seenHistory.length === 1) {
@@ -136,7 +136,7 @@ describe("Agent thread terminal state", () => {
   it("closes the active run while thread delete is pending", async () => {
     const llmStarted = createDeferred();
     const store = new BlockingDeleteStore();
-    const agent = new Agent({
+    const agent = await createAgent({
       host: hostWithThreads(store),
       model: createCallbackModel(() => {
         llmStarted.resolve();
@@ -166,12 +166,13 @@ describe("Agent thread terminal state", () => {
 
   it("rejects new input while thread delete is pending", async () => {
     const store = new BlockingDeleteStore();
-    const thread = new Agent({
+    const agent = await createAgent({
       host: hostWithThreads(store),
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
       ),
-    }).thread("delete-pending");
+    });
+    const thread = agent.thread("delete-pending");
 
     await collect(await thread.send("before"));
     const deletion = thread.delete();
