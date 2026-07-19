@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -141,6 +142,44 @@ test("pins manual topology and request-artifact oracles", () => {
         "011ee0de97c3f67c6103bfc1b3d39ccf9b55f87da7a277532eec9c53fc23a76e",
     }
   );
+});
+
+test("uses HEAD when only tracked-file stat metadata changed", async (t) => {
+  const repositoryRoot = await mkdtemp(
+    resolve(tmpdir(), "cache-verifier-stale-index-")
+  );
+  t.after(() => rm(repositoryRoot, { force: true, recursive: true }));
+  execFileSync("git", ["init", "--quiet"], { cwd: repositoryRoot });
+  const sourcePath = resolve(repositoryRoot, "source.txt");
+  await writeFile(sourcePath, "unchanged\n");
+  const indexedTime = new Date("2020-01-01T00:00:00.000Z");
+  await utimes(sourcePath, indexedTime, indexedTime);
+  execFileSync("git", ["add", "source.txt"], { cwd: repositoryRoot });
+  execFileSync(
+    "git",
+    [
+      "-c",
+      "user.name=Cache Verifier Test",
+      "-c",
+      "user.email=cache-verifier@example.invalid",
+      "commit",
+      "--quiet",
+      "-m",
+      "fixture",
+    ],
+    { cwd: repositoryRoot }
+  );
+  await utimes(
+    sourcePath,
+    new Date(indexedTime.getTime() + 2000),
+    new Date(indexedTime.getTime() + 2000)
+  );
+  const head = execFileSync("git", ["rev-parse", "--verify", "HEAD"], {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+  }).trim();
+
+  assert.equal(sourceFreezeCommit(repositoryRoot), head);
 });
 
 test("accepts a complete synthetic 480-request schema-v3 campaign", async () => {
@@ -1289,18 +1328,32 @@ function refreshEvidence(evidence) {
   evidence.responseIdAudit = deriveResponseIdAudit(allRequests);
 }
 
+function sourceFreezeCommit(repositoryRoot) {
+  const head = execFileSync("git", ["rev-parse", "--verify", "HEAD"], {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+  }).trim();
+  try {
+    execFileSync("git", ["diff", "--quiet", head, "--"], {
+      cwd: repositoryRoot,
+    });
+    return head;
+  } catch (error) {
+    if (!(error instanceof Error && error.status === 1)) {
+      throw error;
+    }
+  }
+  return (
+    execFileSync(
+      "git",
+      ["stash", "create", "synthetic cache verifier source freeze"],
+      { cwd: repositoryRoot, encoding: "utf8" }
+    ).trim() || head
+  );
+}
+
 async function syntheticConfiguration() {
-  const workingTreeCommit = execFileSync(
-    "git",
-    ["stash", "create", "synthetic cache verifier source freeze"],
-    { cwd: REPOSITORY_ROOT, encoding: "utf8" }
-  ).trim();
-  const sourceFreezeCommitSha =
-    workingTreeCommit ||
-    execFileSync("git", ["rev-parse", "--verify", "HEAD"], {
-      cwd: REPOSITORY_ROOT,
-      encoding: "utf8",
-    }).trim();
+  const sourceFreezeCommitSha = sourceFreezeCommit(REPOSITORY_ROOT);
   const implementationSourcesSha256 = {};
   for (const sourcePath of REQUIRED_IMPLEMENTATION_SOURCE_PATHS) {
     implementationSourcesSha256[sourcePath] = sha256(
