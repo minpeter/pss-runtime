@@ -1,3 +1,56 @@
+## @minpeter/pss-runtime@0.3.0-next.3 (next)
+
+### Add the app-owned channel adapter contract
+
+Expose `@minpeter/pss-runtime/channel` with typed inbound channel messages and
+assistant text deliveries. Apps retain ownership of provider mapping, the
+`Agent -> Thread -> Turn -> events()` control flow, and outbound delivery.
+
+`projectChannelAssistantDelivery(event)` projects only non-empty
+`assistant-output` events. The runtime does not add provider adapters or own a
+channel loop.
+
+### Inspect durable turn lifecycle by run ID
+
+Expose a stable optional `AgentTurn.runId` for durable work accepted by an
+execution host. Precreate queued user-turn runs after durable input admission,
+carry the same run through execution and checkpoints, and bind resumed
+notifications to the run ID returned by `dispatchAgentNotification`.
+
+Add read-only `inspectDurableTurn(source, runId)` to the existing `./execution`
+subpath. Recorded runs report status, thread key, checkpoint version, and the
+latest checkpoint, with explicit unsupported, unknown-run, and no-checkpoint
+states.
+
+Make thread shutdown await durable cancellation of queued, active, and
+admission-racing runs while preserving completed, failed, recovery, and already
+cancelled terminal statuses.
+
+### Add OpenTelemetry turn tracing
+
+Add the `@minpeter/pss-runtime/otel` subpath with `traceAgentTurn()` for one
+turn and `openTelemetry()` for agent-wide instrumentation. Record turn, step,
+and tool spans plus metadata-only runtime events through
+`@opentelemetry/api`, leaving SDK and exporter configuration to applications.
+
+Expose general `AgentOptions.instrumentations` hooks for send, steer, and
+resume operations. Wrapped turns preserve single-consumption and pass through
+every original event, including model-usage telemetry, while payload summaries
+avoid raw content and do not invoke `toJSON()`.
+
+### Remove legacy negative assertions and orphan probe script
+
+Drop test-only assertions that verify already-removed legacy APIs
+(`createCloudflareAgentsHost`, `PSS_SESSION_*` env aliases, object-style
+plugin pipeline, legacy `llm`/`description`/`sessions` option fields) do not
+exist. The APIs themselves were removed in prior releases; these negative
+checks no longer guard a live migration boundary.
+
+Also delete `scripts/probe-cache-stable-response-shape.mts`, a one-off
+investigation script not referenced by any npm script or test.
+
+No API or behavior change.
+
 ## @minpeter/pss-runtime@0.3.0-next.2 (next)
 
 ### Preserve compaction provenance until provider rendering
