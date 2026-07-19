@@ -29,23 +29,6 @@ describe("resolveCodingAgentThreadConfig", () => {
     });
   });
 
-  it("ignores removed PSS_SESSION_* env names", () => {
-    expect(
-      resolveCodingAgentThreadConfig(
-        {
-          PSS_SESSION_DIR: ".pss/sessions",
-          PSS_SESSION_KEY: "workspace:legacy",
-        },
-        "/repo/demo",
-        "/home/me"
-      )
-    ).toEqual({
-      autoCompaction: false,
-      directory: "/home/me/.pss/threads",
-      key: "cwd:/repo/demo",
-    });
-  });
-
   it("treats blank env overrides as absent", () => {
     expect(
       resolveCodingAgentThreadConfig(

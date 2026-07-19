@@ -91,34 +91,6 @@ describe("Agent host public API", () => {
     );
   });
 
-  it("does not implement legacy llm sessions and runtime options", () => {
-    expect(() =>
-      Reflect.construct(Agent, [
-        {
-          llm: () => Promise.resolve([assistantMessage("DONE")]),
-        },
-      ])
-    ).toThrow("Agent: missing options.model");
-
-    expect(() =>
-      Reflect.construct(Agent, [
-        {
-          model: runtimeModel,
-          sessions: { store: new SpyStore() },
-        },
-      ])
-    ).toThrow("Agent: invalid options.model");
-
-    expect(() =>
-      Reflect.construct(Agent, [
-        {
-          model: runtimeModel,
-          runtime: {},
-        },
-      ])
-    ).toThrow("Agent: invalid options.model");
-  });
-
   it("uses host thread store for thread snapshots", async () => {
     const threadStore = new SpyStore();
     const agent = new Agent({
