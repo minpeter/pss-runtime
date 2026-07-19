@@ -8,6 +8,7 @@ import {
   createAgent,
   type PluginDefinition,
 } from "@minpeter/pss-runtime";
+import { openTelemetry } from "@minpeter/pss-runtime/otel";
 import { drainAgentTurn } from "@minpeter/pss-runtime/platform/cloudflare";
 
 import type { EnvironmentName } from "./env";
@@ -148,6 +149,7 @@ export async function createConfiguredAgent(
     autoCompaction: WORKER_AGENT_AUTO_COMPACTION,
     host,
     instructions: WORKER_AGENT_INSTRUCTIONS,
+    instrumentations: [openTelemetry()],
     model: provider(env.AI_MODEL?.trim() || DEFAULT_MODEL),
     plugins,
     ...(tools ? { tools } : {}),

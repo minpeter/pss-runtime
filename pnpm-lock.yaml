@@ -108,6 +108,9 @@ importers:
       '@minpeter/pss-runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
+      '@opentelemetry/api':
+        specifier: ^1.9.1
+        version: 1.9.1
       '@trpc/client':
         specifier: 11.18.0
         version: 11.18.0(@trpc/server@11.18.0(typescript@7.0.2))(typescript@7.0.2)
