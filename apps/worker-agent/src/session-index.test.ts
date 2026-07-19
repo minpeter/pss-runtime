@@ -135,9 +135,23 @@ describe("summarizeSessionRecord", () => {
       turnCount: 2,
     });
 
-    expect(summary.snippet).toBe("latest user line");
-    expect(summary.channel).toEqual({ id: "123", kind: "telegram" });
-    expect(summary.threadKey).toBe("thread:telegram:123");
+    expect(summary?.snippet).toBe("latest user line");
+    expect(summary?.channel).toEqual({ id: "123", kind: "telegram" });
+    expect(summary?.threadKey).toBe("thread:telegram:123");
+  });
+
+  it("does not invent a thread key from channel identity", () => {
+    expect(
+      summarizeSessionRecord({
+        channelId: "123",
+        channelKind: "telegram",
+        conversationKey: "telegram:123",
+        lastSeenAt: 1,
+        recentAssistantText: [],
+        recentUserText: ["hi"],
+        turnCount: 1,
+      })
+    ).toBeNull();
   });
 });
 
@@ -248,5 +262,24 @@ describe("session index store", () => {
     const store = createSessionIndexStore(createMemorySessionIndexRepository());
 
     expect(await store.resolveThreadKey("tui:missing")).toBeUndefined();
+  });
+
+  it("does not synthesize thread keys for records that omit them", async () => {
+    const repository = createMemorySessionIndexRepository();
+    await repository.put({
+      channelId: "orphan",
+      channelKind: "telegram",
+      conversationKey: "telegram:orphan",
+      lastSeenAt: 1,
+      recentAssistantText: [],
+      recentUserText: ["no thread key"],
+      turnCount: 1,
+    });
+    const store = createSessionIndexStore(repository);
+
+    expect(await store.resolveThreadKey("telegram:orphan")).toBeUndefined();
+    expect(await store.list()).toEqual([]);
+    expect(await store.search("thread")).toEqual([]);
+    await expect(store.canRead("telegram:orphan")).resolves.toBe(false);
   });
 });

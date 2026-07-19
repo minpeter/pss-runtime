@@ -2,15 +2,6 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentOptions } from "@minpeter/pss-runtime";
 
-interface ThreadConfigEnv {
-  readonly PSS_AUTO_COMPACTION_MIN_MESSAGES?: string;
-  readonly PSS_AUTO_COMPACTION_RETAIN_MESSAGES?: string;
-  readonly PSS_SESSION_DIR?: string;
-  readonly PSS_SESSION_KEY?: string;
-  readonly PSS_THREAD_DIR?: string;
-  readonly PSS_THREAD_KEY?: string;
-}
-
 export interface CodingAgentThreadConfig {
   readonly autoCompaction: AgentOptions["autoCompaction"];
   readonly directory: string;
@@ -18,25 +9,19 @@ export interface CodingAgentThreadConfig {
 }
 
 export function resolveCodingAgentThreadConfig(
-  env: ThreadConfigEnv = process.env,
+  env: NodeJS.ProcessEnv = process.env,
   cwd = process.cwd(),
   home = homedir()
 ): CodingAgentThreadConfig {
   return {
     autoCompaction: resolveAutoCompaction(env),
-    directory:
-      nonEmpty(env.PSS_THREAD_DIR) ??
-      nonEmpty(env.PSS_SESSION_DIR) ??
-      join(home, ".pss", "threads"),
-    key:
-      nonEmpty(env.PSS_THREAD_KEY) ??
-      nonEmpty(env.PSS_SESSION_KEY) ??
-      `cwd:${cwd}`,
+    directory: nonEmpty(env.PSS_THREAD_DIR) ?? join(home, ".pss", "threads"),
+    key: nonEmpty(env.PSS_THREAD_KEY) ?? `cwd:${cwd}`,
   };
 }
 
 function resolveAutoCompaction(
-  env: ThreadConfigEnv
+  env: NodeJS.ProcessEnv
 ): AgentOptions["autoCompaction"] {
   const minMessagesValue = nonEmpty(env.PSS_AUTO_COMPACTION_MIN_MESSAGES);
   const retainMessagesValue = nonEmpty(env.PSS_AUTO_COMPACTION_RETAIN_MESSAGES);

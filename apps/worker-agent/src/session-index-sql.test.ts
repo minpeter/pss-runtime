@@ -54,7 +54,25 @@ describe("sql session index repository", () => {
     ]);
   });
 
-  it("defaults legacy rows without session_scope_key to their conversation key", async () => {
+  it("leaves null thread_key unset instead of synthesizing a channel key", async () => {
+    const sql = createNodeTestSqlStorage();
+    const repository = createSqlSessionIndexRepository(sql);
+    await repository.put({
+      channelId: "missing-thread",
+      channelKind: "telegram",
+      conversationKey: "telegram:missing-thread",
+      lastSeenAt: 5,
+      recentAssistantText: [],
+      recentUserText: ["no key"],
+      turnCount: 1,
+    });
+
+    const record = await repository.get("telegram:missing-thread");
+    expect(record?.threadKey).toBeUndefined();
+    expect(record?.conversationKey).toBe("telegram:missing-thread");
+  });
+
+  it("leaves null session_scope_key unset instead of defaulting to conversation key", async () => {
     const sql = createNodeTestSqlStorage();
     sql.exec(
       `CREATE TABLE pss_worker_session_index (
@@ -93,6 +111,6 @@ describe("sql session index repository", () => {
     const [record] = await repository.all();
 
     expect(record?.conversationKey).toBe("telegram:legacy");
-    expect(record?.sessionScopeKey).toBe("telegram:legacy");
+    expect(record?.sessionScopeKey).toBeUndefined();
   });
 });

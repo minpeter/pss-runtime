@@ -342,6 +342,8 @@ Return one of:
 - `{ action: "transform", value: event }` — replace the value for transformable
   input, context, model-step, provider, compaction, tool-result, and turn-start
   requests
+- `{ action: "transform", input }` — replace tool arguments for
+  `tool.call.before` only (not `value`; chained; drives tool `execute`)
 - `{ action: "handled" }` — skip emit; for `thread.send`, close the run without
   starting a turn (`user-input` and `runtime-input` only)
 - `{ action: "cancel" }` — cancel compaction without changing thread state
@@ -369,18 +371,43 @@ const approvalPlugin = definePlugin((pss) =>
     return { action: "continue" };
   })
 );
+
+const pathJailPlugin = definePlugin((pss) =>
+  pss.on("tool.call.before", (event) => {
+    if (event.toolName !== "write_file" || !isWriteInput(event.input)) {
+      return { action: "continue" };
+    }
+    return {
+      action: "transform",
+      input: { ...event.input, path: jailPath(event.input.path) },
+    };
+  })
+);
 ```
 
 `tool.call.before` events carry `toolName`, `toolCallId`, `input`, `policy`,
 `attempt`, and `idempotencyKey`. Plugin handlers also receive current
 model-message `history` and `signal` through `PluginEventContext`. The runtime
-snapshots `tool.call.before` payloads before each plugin runs, so input mutations
-do not affect later plugins or tool execution. Keep tool inputs
-structured-cloneable and reasonably sized, because the runtime clones the input
-once per plugin before tool execution. `transform` and `handled` returns are
-not valid for `tool.call.before`; invalid decisions fail closed.
+snapshots `tool.call.before` payloads before each plugin runs, so **in-place
+mutations of the event object do not affect later plugins or tool execution**.
+To change the input that reaches `execute`, return an explicit decision:
 
-`tool.execution.start` runs only after every `tool.call.before` handler continues.
+- `{ action: "transform", input }` — replace the tool input (chained in
+  registration order; the final value is what `execute` receives)
+- `{ action: "block", reason? }` — skip execution and synthesize a blocked result
+- `{ action: "needs-recovery" }` — stop before real execution for durable recovery
+- `{ action: "continue" }` — leave the current input unchanged (default when omitted)
+
+Keep tool inputs structured-cloneable and reasonably sized: the runtime clones
+the working input once per plugin, and transform inputs must also be
+structured-cloneable. `handled` is not valid for `tool.call.before`; invalid
+decisions fail closed with `PluginHookError`, including a transform missing
+`input`, `input: undefined`, or a non-cloneable `input` (for example a function).
+If an earlier plugin transforms and a later one returns `block` or
+`needs-recovery`, execution and `tool.execution.start` are skipped.
+
+`tool.execution.start` runs only after every `tool.call.before` handler continues
+(and carries the final transformed input when transforms were applied).
 `tool.result` transforms chain in registration order, followed by the
 observe-only `tool.execution.end` event carrying the final result.
 
@@ -661,8 +688,7 @@ via `createCloudflarePlatformContext` / fibers.
 removed. Pending work that used the shared scheduled-work kinds (`run`,
 thread prompts) is still listed/acked through Agents fibers and
 `createCloudflareScheduledWorkScheduler` storage rows; do not re-arm DO `setAlarm`
-for PSS turn drain. `createCloudflareAgentsHost` remains a **deprecated alias** of
-`createCloudflareHost` for older call sites.
+for PSS turn drain.
 
 ### Platform adapter parity
 

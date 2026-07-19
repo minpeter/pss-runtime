@@ -1,6 +1,6 @@
 import type { SqlStorage } from "@minpeter/pss-runtime/platform/cloudflare";
 
-import { ChannelAddressSchema, legacyChannelThreadKey } from "./channel";
+import { ChannelAddressSchema } from "./channel";
 import type {
   SessionIndexRecord,
   SessionIndexRepository,
@@ -95,12 +95,8 @@ export function createSqlSessionIndexRepository(
         record.conversationKey,
         record.channelKind,
         record.channelId,
-        record.threadKey ??
-          legacyChannelThreadKey({
-            id: record.channelId,
-            kind: record.channelKind,
-          }),
-        record.sessionScopeKey ?? record.conversationKey,
+        record.threadKey ?? null,
+        record.sessionScopeKey ?? null,
         record.lastSeenAt,
         record.turnCount,
         JSON.stringify(record.recentUserText),
@@ -121,10 +117,10 @@ function toRecord(row: SessionIndexRow): SessionIndexRecord {
     lastSeenAt: Number(row.last_seen_at),
     recentAssistantText: parseStringArray(row.recent_assistant_text),
     recentUserText: parseStringArray(row.recent_user_text),
-    sessionScopeKey: row.session_scope_key ?? row.conversation_key,
-    threadKey:
-      row.thread_key ??
-      legacyChannelThreadKey({ id: channelId, kind: channelKind }),
+    ...(row.session_scope_key
+      ? { sessionScopeKey: row.session_scope_key }
+      : {}),
+    ...(row.thread_key ? { threadKey: row.thread_key } : {}),
     turnCount: Number(row.turn_count),
   };
 }

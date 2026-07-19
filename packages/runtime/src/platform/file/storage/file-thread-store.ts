@@ -124,8 +124,6 @@ function parseStoredFileThread(value: unknown, file: string): StoredThread {
   });
 }
 
-/** @deprecated Use FileThreadStore. */
-
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
 }
