@@ -121,10 +121,11 @@ function toRecord(row: SessionIndexRow): SessionIndexRecord {
     lastSeenAt: Number(row.last_seen_at),
     recentAssistantText: parseStringArray(row.recent_assistant_text),
     recentUserText: parseStringArray(row.recent_user_text),
-    ...(row.session_scope_key ? { sessionScopeKey: row.session_scope_key } : {}),
+    ...(row.session_scope_key
+      ? { sessionScopeKey: row.session_scope_key }
+      : {}),
     threadKey:
-      row.thread_key ??
-      channelKey({ id: channelId, kind: channelKind }),
+      row.thread_key ?? channelKey({ id: channelId, kind: channelKind }),
     turnCount: Number(row.turn_count),
   };
 }
