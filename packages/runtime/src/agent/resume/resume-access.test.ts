@@ -11,9 +11,13 @@ describe("resumeAgentTurn access control", () => {
     const host = createInMemoryHost();
     const ownerNamespace = agentNamespace("coordinator");
     const runId = "orphan-run";
+    const dedupeKey = "orphan-dedupe";
+    // Run has no ownerNamespace but a parent-prefixed threadKey that the old
+    // canAccessRun would accept. Notification owner is valid so claim would
+    // succeed if access were wrongly granted — then resumeNotification throws.
     const run: TurnRecord = {
       checkpointVersion: 0,
-      dedupeKey: "orphan-dedupe",
+      dedupeKey,
       kind: "notification",
       rootRunId: runId,
       runId,
@@ -21,6 +25,15 @@ describe("resumeAgentTurn access control", () => {
       threadKey: `parent:${ownerNamespace}:subagent:child`,
     };
     await host.store.turns.create(run);
+    await host.store.notifications.enqueue({
+      idempotencyKey: dedupeKey,
+      input: userText("orphan ready"),
+      notificationId: "n-orphan",
+      ownerNamespace,
+      runId,
+      status: "pending",
+      threadKey: run.threadKey,
+    });
 
     await expect(
       resumeAgentTurn({
