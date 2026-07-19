@@ -5,7 +5,11 @@ import type {
 } from "@minpeter/pss-runtime";
 import { z } from "zod";
 
-import { type ChannelAddress, ChannelAddressSchema } from "./channel";
+import {
+  type ChannelAddress,
+  ChannelAddressSchema,
+  channelKey,
+} from "./channel";
 
 const SERIALIZED_CURSOR_PATTERN = /^(0|[1-9]\d*)$/u;
 const SESSION_REPLAY_MAX_LIMIT = 100;
@@ -119,6 +123,32 @@ function isAgentEvent(value: unknown): value is AgentEvent {
     "type" in value &&
     typeof value.type === "string"
   );
+}
+
+export function serializeSessionChannel(channel: ChannelAddress): string {
+  return channelKey(channel);
+}
+
+export function parseSessionChannel(serialized: string): ChannelAddress {
+  const separator = serialized.indexOf(":");
+  if (separator < 1) {
+    throw new InvalidSessionChannelError();
+  }
+  const parsed = ChannelAddressSchema.safeParse({
+    id: serialized.slice(separator + 1),
+    kind: serialized.slice(0, separator),
+  });
+  if (!(parsed.success && parsed.data.id.trim())) {
+    throw new InvalidSessionChannelError();
+  }
+  return { id: parsed.data.id.trim(), kind: parsed.data.kind };
+}
+
+export class InvalidSessionChannelError extends Error {
+  constructor() {
+    super("invalid session channel");
+    this.name = "InvalidSessionChannelError";
+  }
 }
 
 export function serializeThreadEventCursor(

@@ -51,9 +51,16 @@ import type { Env } from "./env";
 import { AGENT_TURN_ADMISSION_LAYER } from "./message-path-layers";
 import { createTurnEventCollector } from "./observability";
 import {
+  parseSessionChannel,
+  parseThreadEventCursor,
   ReplayEventsRequestSchema,
   SubmitTurnRequestSchema,
+  type ThreadEventCursor,
 } from "./session-contract";
+import {
+  createSessionEventLiveSignal,
+  createSessionEventStreamResponse,
+} from "./session-events";
 import {
   createSessionIndexStore,
   type SessionIndexStore,
@@ -94,6 +101,7 @@ installCloudflareImageCodecs();
 
 const SESSION_SUBMIT_PATH = "/session/turn";
 const SESSION_REPLAY_PATH = "/session/events/replay";
+const SESSION_STREAM_PATH = "/session/events";
 const SESSION_BINDING_STORAGE_KEY = "session:binding";
 
 /**
@@ -122,6 +130,7 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
   #sessionScopeKey: string | undefined;
   #observability: ReturnType<typeof createTurnEventCollector> | undefined;
   #tuiMessageCapture: WorkerAgentDeliveredMessage[] = [];
+  readonly #sessionEventLive = createSessionEventLiveSignal();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -139,6 +148,9 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
         createConfiguredAgent(agentEnv, host, {
           sendMessage: createSendMessageToolOptions(agentEnv, () => undefined),
         }),
+      drain: {
+        onEvent: () => this.#sessionEventLive.publish(),
+      },
       durableObjectContext: this.ctx,
       env,
     });
@@ -147,25 +159,39 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
   /** Agents scheduler callback for delayed PSS run/thread resumes. */
   async resumePssRuntimeFiber(payload: unknown): Promise<void> {
     await this.#restoreSessionBinding();
-    await this.#platform.resumeScheduledFiber(payload);
+    try {
+      await this.#platform.resumeScheduledFiber(payload);
+    } finally {
+      this.#sessionEventLive.publish();
+    }
   }
 
   override async onFiberRecovered(
     ctx: CloudflareAgentsFiberRecoveryContext
   ): Promise<undefined | CloudflareAgentsFiberRecoveryResult> {
-    const result = await this.#platform.recoverFiber(ctx);
-    if (result === false) {
-      return;
+    try {
+      const result = await this.#platform.recoverFiber(ctx);
+      if (result === false) {
+        return;
+      }
+      return result;
+    } finally {
+      this.#sessionEventLive.publish();
     }
-    return result;
   }
 
   override async onRequest(request: Request): Promise<Response> {
+    const pathname = new URL(request.url).pathname;
+    if (pathname === SESSION_STREAM_PATH) {
+      if (request.method !== "GET") {
+        return new Response("method not allowed", { status: 405 });
+      }
+      return await this.#handleSessionEventStreamRequest(request);
+    }
     if (request.method !== "POST") {
       return new Response("method not allowed", { status: 405 });
     }
 
-    const pathname = new URL(request.url).pathname;
     if (pathname === SESSION_SUBMIT_PATH) {
       return await this.#handleSessionSubmitRequest(request);
     }
@@ -222,14 +248,19 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
         : {}),
     });
 
-    const runTurn = (): Promise<Response> =>
-      this.#runPayloadTurn({
-        imageOmits,
-        imagePrepares,
-        log,
-        payload,
-        turnEvents,
-      });
+    const runTurn = async (): Promise<Response> => {
+      try {
+        return await this.#runPayloadTurn({
+          imageOmits,
+          imagePrepares,
+          log,
+          payload,
+          turnEvents,
+        });
+      } finally {
+        this.#sessionEventLive.publish();
+      }
+    };
 
     return await runWithImagePrepareDiagnosticsListener(
       (diagnostics) => {
@@ -422,6 +453,47 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
     return Response.json({
       ...withCapturedMessages({ delivered: true }, sendMessage.messages()),
       mode: delivery.mode,
+    });
+  }
+
+  async #handleSessionEventStreamRequest(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const serializedChannel = url.searchParams.get("channel");
+    if (!serializedChannel) {
+      return new Response("channel required", { status: 400 });
+    }
+
+    let channel: ChannelAddress;
+    let after: ThreadEventCursor | undefined;
+    try {
+      channel = parseSessionChannel(serializedChannel);
+      const serializedAfter = url.searchParams.get("after");
+      after =
+        serializedAfter === null
+          ? undefined
+          : parseThreadEventCursor(serializedAfter);
+    } catch {
+      return new Response("invalid session event stream", { status: 400 });
+    }
+    this.#channel = channel;
+    this.#sessionScopeKey =
+      url.searchParams.get("sessionScopeKey")?.trim() || undefined;
+    await this.#ensureTurnSession(durableObjectChannelBinding(channel));
+    const thread = this.#runtimeThread;
+    if (!thread) {
+      throw new AgentDurableObjectInvariantError(
+        "Session runtime thread was not initialized."
+      );
+    }
+
+    return createSessionEventStreamResponse({
+      ...(after ? { after } : {}),
+      live: this.#sessionEventLive,
+      replay: (cursor) =>
+        replayDurableThreadEvents(thread, {
+          ...(cursor ? { after: cursor } : {}),
+          limit: 100,
+        }),
     });
   }
 

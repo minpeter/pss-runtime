@@ -41,3 +41,24 @@ RFC 0002 names the generalized transport fields as follows:
 | `SubmitTurnResponse.eventCursor` | Not present | Clients use durable replay cursors when replay is available. |
 
 The current route is intentionally retained while the `session` transport is added. Telegram continues to use its webhook delivery path.
+
+## Session submit and replay
+
+Authenticated clients can use the generalized tRPC procedures at `/trpc`:
+
+- `session.submitTurn` accepts `{ channel, text, sessionScopeKey?, idempotencyKey? }` and returns immediately after durable admission with `{ accepted: true, runId, threadKey }`.
+- `session.replayEvents` accepts `{ channel, after?, limit?, sessionScopeKey? }` and returns committed runtime thread events plus the last `nextCursor` in the page.
+
+Cursor polling through `session.replayEvents` is the baseline reconnect mechanism. Store the latest event cursor, pass it as `after`, and repeat; replay is exclusive of that cursor, so reconnect does not duplicate the last processed event. Replay reads `ThreadHandle.events({ after, limit })` from the runtime's canonical durable thread event history, not a projected `ThreadStore` snapshot.
+
+## Optional SSE stream
+
+Browser-like clients may additionally connect to:
+
+```text
+GET /session/events?channel=tui%3Alocal&after=<serialized-cursor>
+Authorization: Bearer <WORKER_AGENT_TUI_TOKEN>
+Accept: text/event-stream
+```
+
+The stream replays committed events after `after` before waiting for newly committed events. Each `thread-event` frame has the serialized cursor as its SSE `id` and a `StoredThreadEvent` JSON object as `data`. `streamRemoteSessionEvents()` reconnects a dropped response with its last received cursor. SSE is an optimization only: clients must retain cursor-polling replay as the deployment-neutral fallback.

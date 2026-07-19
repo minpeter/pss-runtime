@@ -28,7 +28,7 @@ interface TuiRpcContext {
 const trpc = initTRPC.context<TuiRpcContext>().create({ isDev: false });
 
 const authorizedProcedure = trpc.procedure.use(({ ctx, next }) => {
-  if (!isAuthorizedTuiRequest(ctx.request, ctx.env)) {
+  if (!isAuthorizedWorkerRequest(ctx.request, ctx.env)) {
     throw new TRPCError({
       code: "UNAUTHORIZED",
       message: UNAUTHORIZED_MESSAGE,
@@ -95,7 +95,7 @@ async function translateServerErrors<T>(operation: () => Promise<T>) {
   }
 }
 
-function isAuthorizedTuiRequest(request: Request, env: Env): boolean {
+export function isAuthorizedWorkerRequest(request: Request, env: Env): boolean {
   const token = env.WORKER_AGENT_TUI_TOKEN?.trim();
   if (!token) {
     return isDevelopment(env);
