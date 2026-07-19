@@ -1,6 +1,5 @@
 packages:
   - "apps/*"
-  - "!apps/bori-agent-backend"
   - "packages/*"
   - "examples/*"
   - "experimental/*"
