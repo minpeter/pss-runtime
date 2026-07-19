@@ -77,6 +77,22 @@ describe("runtime package subpaths", () => {
     expect(packageJson.exports["./node"]).toBeUndefined();
   });
 
+  it("declares the OpenTelemetry observability subpath", async () => {
+    const packageJson = await readRuntimePackageJson();
+    const root = await import("../index");
+    const otel = await import("../otel");
+
+    expect(packageJson.exports["./otel"]).toMatchObject({
+      "@minpeter/pss-source": "./src/otel/index.ts",
+      import: "./dist/otel/index.js",
+      types: "./dist/otel/index.d.ts",
+    });
+    expect(otel).toHaveProperty("openTelemetry");
+    expect(otel).toHaveProperty("traceAgentTurn");
+    expect(root).not.toHaveProperty("openTelemetry");
+    expect(root).not.toHaveProperty("traceAgentTurn");
+  });
+
   it("declares the channel adapter contract subpath", async () => {
     const packageJson = await readRuntimePackageJson();
 

@@ -49,7 +49,7 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
     const cwd = createFixture();
     writeFileSync(
       join(cwd, "packages", "runtime", "dist", "index.d.ts"),
-      `export type { AgentMessage, ${forbiddenModelName}, AgentRun, AgentTool, AgentTools, CreateLlmOptions, Llm, LlmContext, LlmOutput, LlmOutputPart, ${removedRuntimeModelNames.join(", ")}, RuntimeInput } from "./llm";\nexport type { AgentHost } from "./execution/types";\nexport type { AgentTurn } from "./thread";\n`
+      `export type { AgentMessage, ${forbiddenModelName}, AgentRun, AgentTool, AgentTools, CreateLlmOptions, Llm, LlmContext, LlmOutput, LlmOutputPart, ${removedRuntimeModelNames.join(", ")}, RuntimeInput } from "./llm";\nexport type { AgentInstrumentation, AgentInstrumentationContext, AgentInstrumentationOperation } from "./agent";\nexport type { AgentHost } from "./execution/types";\nexport type { AgentTurn } from "./thread";\n`
     );
 
     expect(
@@ -175,6 +175,9 @@ describe("verifyReleaseArtifacts runtime declaration checks", () => {
     );
     expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
       "packages/runtime/dist/index.d.ts: missing explicit root runtime export AgentHost",
+      "packages/runtime/dist/index.d.ts: missing explicit root runtime export AgentInstrumentation",
+      "packages/runtime/dist/index.d.ts: missing explicit root runtime export AgentInstrumentationContext",
+      "packages/runtime/dist/index.d.ts: missing explicit root runtime export AgentInstrumentationOperation",
       "packages/runtime/dist/index.d.ts: missing explicit root runtime export AgentTurn",
       "packages/runtime/dist/index.d.ts: missing explicit root runtime export RuntimeInput",
     ]);

@@ -611,6 +611,46 @@ gate is indeterminate and fails when a selected post-warmup run emits
 replayed `model-usage` record reuses an `attemptId`. Duplicate records are
 reported but never counted as additional samples or token totals.
 
+## OpenTelemetry
+
+The OpenTelemetry adapter is published separately from the runtime root. Add
+`openTelemetry()` to `instrumentations` to trace every turn returned by an
+agent:
+
+```ts
+import { createAgent } from "@minpeter/pss-runtime";
+import { openTelemetry } from "@minpeter/pss-runtime/otel";
+
+const agent = await createAgent({
+  instrumentations: [
+    openTelemetry({
+      spanAttributes: { "app.agent": "support" },
+      tracerName: "my-app",
+    }),
+  ],
+  model,
+});
+```
+
+`openTelemetry()` records `pss.runtime.turn`, `pss.runtime.step`, and
+`pss.runtime.tool` spans with `pss.runtime.event` events. Applications configure
+their own OpenTelemetry SDK, processors, and exporters; this package depends
+only on `@opentelemetry/api`. Use `traceAgentTurn(turn, options)` from the same
+subpath to wrap one turn manually.
+
+The first-party attributes are metadata-only. User and assistant content is
+summarized by part count and text length, tool payloads by JavaScript type and
+item/key count, and errors by sanitized status. There is no built-in
+raw-payload capture mode. The wrapper passes every original event through unchanged, including
+`model-usage`, and preserves the turn's single-consumption `events()` contract.
+Stopping iteration calls the source iterator's `return()` and closes all open
+spans.
+
+Agent instrumentations run for `send`, `steer`, and durable `resume` turns.
+Custom `AgentInstrumentation.wrapTurn(turn, context)` implementations receive
+the operation, canonical thread key, optional agent namespace, and the durable
+run ID for resume operations.
+
 ## Delegation
 
 Delegation is app-owned. Build ordinary tools that call another `Agent`,

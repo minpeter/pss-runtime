@@ -1,5 +1,8 @@
 export const REQUIRED_RUNTIME_ROOT_EXPORTS = [
   "AgentHost",
+  "AgentInstrumentation",
+  "AgentInstrumentationContext",
+  "AgentInstrumentationOperation",
   "AgentTurn",
   "RuntimeInput",
 ];
@@ -152,6 +155,11 @@ export const REQUIRED_RUNTIME_CLOUDFLARE_EXPORTS = [
 
 export const REQUIRED_RUNTIME_FILE_EXPORTS =
   "FileExecutionStore FileThreadStore NodeFileAgentContext NodeFileAgentContextFactoryOptions NodeFileAgentContextOptions FileHostOptions NodeScheduledThreadPrompt NodeScheduledWorkAppendOptions NodeScheduledWorkDrainOptions NodeScheduledWorkDrainResult NodeScheduledWorkListOptions NodeScheduledWorkRunContext ackScheduledNodeRun ackScheduledNodeThreadPrompt appendScheduledNodeRun appendScheduledNodeThreadPrompt createNodeFileAgentContext createFileHost createFileScheduler drainScheduledNodeWork listScheduledNodeRuns listScheduledNodeThreadPrompts".split(
+    " "
+  );
+
+export const REQUIRED_RUNTIME_OTEL_EXPORTS =
+  "TraceAgentTurnEventAttributes TraceAgentTurnOptions TraceAgentTurnSpan TraceAgentTurnTracer openTelemetry traceAgentTurn".split(
     " "
   );
 

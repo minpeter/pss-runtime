@@ -7,6 +7,7 @@ import {
   REQUIRED_RUNTIME_CLOUDFLARE_AGENTS_EXPORTS,
   REQUIRED_RUNTIME_CLOUDFLARE_WORKER_EXPORTS,
   REQUIRED_RUNTIME_EXECUTION_EXPORTS,
+  REQUIRED_RUNTIME_OTEL_EXPORTS,
 } from "./verify-release-artifacts/runtime-public-surface.mjs";
 import {
   cleanupFixtures,
@@ -49,6 +50,27 @@ describe("verifyReleaseArtifacts runtime subpath checks", () => {
     expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
       "packages/runtime/dist/execution/index.d.ts: missing execution runtime declaration",
     ]);
+  });
+
+  it("requires the runtime otel declaration entrypoint", () => {
+    const cwd = createFixture();
+    rmSync(runtimeDistDeclaration(cwd, "otel"));
+
+    expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual([
+      "packages/runtime/dist/otel/index.d.ts: missing otel runtime declaration",
+    ]);
+  });
+
+  it("checks the OpenTelemetry adapter declaration subpath", () => {
+    const cwd = createFixture();
+    writeFileSync(runtimeDistDeclaration(cwd, "otel"), "export {};\n");
+
+    expect(verifyReleaseArtifacts({ cwd, packages: ["runtime"] })).toEqual(
+      REQUIRED_RUNTIME_OTEL_EXPORTS.map(
+        (name) =>
+          `packages/runtime/dist/otel/index.d.ts: missing explicit otel runtime export ${name}`
+      )
+    );
   });
 
   it("requires the runtime cloudflare declaration entrypoint", () => {

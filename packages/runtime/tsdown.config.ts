@@ -3,6 +3,7 @@ import { defineConfig } from "tsdown";
 export default defineConfig({
   entry: [
     "src/index.ts",
+    "src/otel/index.ts",
     "src/platform/cloudflare/index.ts",
     // Edge-only: static .wasm imports for Workers (not pulled into Node CF barrel).
     "src/platform/cloudflare/image-codecs-edge.ts",

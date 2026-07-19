@@ -10,6 +10,7 @@ import {
   REQUIRED_RUNTIME_EXECUTION_EXPORTS,
   REQUIRED_RUNTIME_FILE_EXPORTS,
   REQUIRED_RUNTIME_MEMORY_EXPORTS,
+  REQUIRED_RUNTIME_OTEL_EXPORTS,
   REQUIRED_RUNTIME_ROOT_EXPORTS,
 } from "./runtime-public-surface.mjs";
 import { listFiles, packageDistPath, relativeToCwd } from "./shared.mjs";
@@ -72,6 +73,12 @@ export function findRuntimeDeclarationLeaks({ cwd, packages }) {
       ),
       requiredExports: REQUIRED_RUNTIME_FILE_EXPORTS,
       surface: "file",
+    }),
+    ...findRuntimeDeclarationExportLeaks({
+      cwd,
+      file: join(packageDistPath(cwd, "runtime"), "otel", "index.d.ts"),
+      requiredExports: REQUIRED_RUNTIME_OTEL_EXPORTS,
+      surface: "otel",
     }),
     ...findRuntimePublicPatternLeaks({ cwd }),
   ];
