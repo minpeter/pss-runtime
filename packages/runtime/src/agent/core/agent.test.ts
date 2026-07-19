@@ -55,14 +55,8 @@ type RejectsSessionMethod = AssertFalse<
   "session" extends keyof Agent ? true : false
 >;
 const typeFixtures = [acceptsModelOptions, functionModelOptions];
-type TypeFixtureAssertions = [
-  RejectsFunctionModel,
-  RejectsSessionMethod,
-];
-const typeFixtureAssertions: TypeFixtureAssertions = [
-  false,
-  false,
-];
+type TypeFixtureAssertions = [RejectsFunctionModel, RejectsSessionMethod];
+const typeFixtureAssertions: TypeFixtureAssertions = [false, false];
 
 const collectRun = async (run: Awaited<ReturnType<Agent["send"]>>) => {
   for await (const _event of run.events()) {
@@ -271,5 +265,4 @@ describe("Agent", () => {
     expect(registryGetter).not.toHaveBeenCalled();
     expect(prepareModelStep).not.toHaveBeenCalled();
   });
-
 });
