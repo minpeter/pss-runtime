@@ -77,6 +77,16 @@ describe("runtime package subpaths", () => {
     expect(packageJson.exports["./node"]).toBeUndefined();
   });
 
+  it("declares the channel adapter contract subpath", async () => {
+    const packageJson = await readRuntimePackageJson();
+
+    expect(packageJson.exports["./channel"]).toMatchObject({
+      "@minpeter/pss-source": "./src/channel/index.ts",
+      import: "./dist/channel/index.js",
+      types: "./dist/channel/index.d.ts",
+    });
+  });
+
   it("declares the testing subpath for AgentTurn test helpers", async () => {
     const packageJson = await readRuntimePackageJson();
 
