@@ -2,12 +2,9 @@ import type {
   StoredThreadEvent,
   ThreadEventReadOptions,
 } from "../../execution/host/types";
-import type {
-  AgentInput,
-  NotifyOptions,
-  ThreadCompactionInput,
-  UserInput,
-} from "../../thread/handle/thread";
+import type { AgentInput, UserInput } from "../../thread/input/input";
+import type { NotifyOptions } from "../../thread/runtime/notification";
+import type { ThreadCompactionInput } from "../../thread/state/thread-state";
 import type { AgentTurn } from "../../thread/protocol/turn";
 import { namespacePart } from "../identity/namespace";
 

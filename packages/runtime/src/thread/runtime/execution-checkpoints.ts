@@ -1,12 +1,14 @@
 import { createCheckpointId } from "../../execution/host/checkpoint-ids";
 import type { AgentHost, CheckpointPhase } from "../../execution/host/types";
+import {
+  persistedToolExecutionCheckpoint,
+} from "../../llm/tool-execution-checkpoint";
 import type {
   RuntimeToolExecutionCheckpoint,
   RuntimeToolExecutionContext,
   RuntimeToolExecutionDecision,
   RuntimeToolExecutionResult,
-} from "../../llm/llm";
-import { persistedToolExecutionCheckpoint } from "../../llm/tool-execution";
+} from "../../llm/tool-execution-types";
 import type { ThreadState } from "../state/thread-state";
 
 const maxCheckpointWriteAttempts = 5;

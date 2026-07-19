@@ -6,10 +6,10 @@ import type {
   TurnStatus,
   TurnStore,
 } from "../../execution/host/types";
-import type { RuntimeToolExecutionContext } from "../../llm/llm";
-import type { PluginRuntime } from "../../plugins/runtime";
+import type { RuntimeToolExecutionContext } from "../../llm/tool-execution-types";
+import type { PluginRuntime } from "../../plugins/plugin-runtime";
 import type { ThreadState } from "../state/thread-state";
-import type { ThreadAutoCompactionOptions } from "./auto-compaction";
+import type { ThreadAutoCompactionOptions } from "./auto-compaction-types";
 import {
   createThreadToolExecutionContext,
   type ThreadToolCallInterceptor,

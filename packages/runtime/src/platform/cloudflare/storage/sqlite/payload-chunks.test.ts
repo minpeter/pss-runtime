@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { InMemorySqlStorage } from "../../sql/node-test/node-sqlite-storage";
-import {
-  ensurePayloadChunkSchema,
-  readJsonPayloadFromSqlRows,
-  writeJsonPayloadToSqlRows,
-} from "./payload-chunks";
+import { readJsonPayloadFromSqlRows } from "./payload-chunk-read";
+import { ensurePayloadChunkSchema } from "./payload-chunk-table";
+import { writeJsonPayloadToSqlRows } from "./payload-chunk-write";
 
 describe("payload chunk rows", () => {
   it("deletes stale chunks when a payload is rewritten inline", () => {

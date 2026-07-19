@@ -1,5 +1,7 @@
-import type { RuntimeToolExecutionCheckpointMetadata } from "../../llm/llm";
-import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution";
+import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution-checkpoint";
+import type {
+  RuntimeToolExecutionCheckpointMetadata,
+} from "../../llm/tool-execution-types";
 import { createCheckpointId } from "../host/checkpoint-ids";
 import type { AgentHost, Checkpoint, CheckpointPhase } from "../host/types";
 import type { ResumeRunState } from "./types";

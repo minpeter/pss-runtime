@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 import { MemoryAttachmentStore } from "../../platform/memory";
 import { definePlugin } from "../../plugins/api";
 import { noopRuntimeDiagnostics } from "../../plugins/diagnostics";
-import { PluginRuntime } from "../../plugins/runtime";
+import { PluginRuntime } from "../../plugins/plugin-runtime";
 import {
   decodeRuntimeAttachmentData,
   isRuntimeAttachmentData,
 } from "../input/attachments";
 import { BufferedAgentTurn } from "../protocol/turn";
-import { ThreadEventDispatcher } from "./events";
+import { ThreadEventDispatcher } from "./thread-event-dispatcher";
 
 async function createDispatcher(
   plugins: ReturnType<typeof definePlugin>[],

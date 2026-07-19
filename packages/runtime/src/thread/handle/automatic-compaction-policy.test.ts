@@ -14,7 +14,7 @@ import {
   storedAssistantOutput,
 } from "./automatic-compaction.test-support";
 import { collect, SpyStore } from "./test-support";
-import { AgentThread } from "./thread";
+import { AgentThread } from "./agent-thread";
 
 const minMessagesError = /autoCompaction\.minMessages/;
 const retainMessagesError = /autoCompaction\.retainMessages/;

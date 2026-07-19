@@ -20,13 +20,13 @@ export type {
   ThreadEventCursor,
   ThreadEventReadOptions,
 } from "./execution/host/types";
-export type { AgentToolChoice } from "./llm/llm";
-export {
-  ModelToolSelectionError,
-  type PrepareModelStep,
-  type PrepareModelStepInput,
-  type PrepareModelStepResult,
-} from "./llm/model-step-preparation";
+export type { AgentToolChoice } from "./llm/model-step-types";
+export { ModelToolSelectionError } from "./llm/model-step-error";
+export type {
+  PrepareModelStep,
+  PrepareModelStepInput,
+  PrepareModelStepResult,
+} from "./llm/model-step-preparation-types";
 export {
   definePlugin,
   type PluginAPI,
@@ -57,7 +57,7 @@ export {
   PluginHookError,
   PluginInitializationError,
   PluginRegistrationClosedError,
-} from "./plugins/runtime";
+} from "./plugins/plugin-errors";
 export { ThreadEventReplayUnsupportedError } from "./thread/handle/thread-event-replay";
 export {
   DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,

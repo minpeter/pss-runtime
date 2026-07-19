@@ -1,7 +1,10 @@
 import type { Tool, ToolSet } from "ai";
 import { jsonSchema, tool } from "ai";
 import { expect, type Mock, vi } from "vitest";
-import type { ModelGenerationOptions, ModelStepOptions } from "../llm/llm";
+import type {
+  ModelGenerationOptions,
+  ModelStepOptions,
+} from "../llm/model-step-types";
 import type { AgentEvent } from "../thread/protocol/events";
 import {
   createMockLanguageModelV4,
@@ -46,7 +49,7 @@ export const createNoopTool = (): Tool =>
   });
 
 export async function loadModelStepRunner() {
-  const { generateModelStep } = await import("../llm/llm");
+  const { generateModelStep } = await import("../llm/model-step");
   return (
     options: ModelGenerationOptions,
     context: Pick<

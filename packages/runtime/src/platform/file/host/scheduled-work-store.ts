@@ -176,6 +176,4 @@ async function deleteScheduledWork(
   await rm(fileForScheduledWork(directory, kind, workId), { force: true });
 }
 
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error;
-}
+import { isNodeError } from "../../../internal/guards";

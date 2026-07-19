@@ -2,8 +2,10 @@ import type { ModelMessage } from "ai";
 import { jsonSchema, tool } from "ai";
 import { describe, expect, it } from "vitest";
 import { resumeRun } from "../../execution/resume/resume";
-import type { RuntimeToolExecutionCheckpoint } from "../../llm/llm";
-import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution";
+import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution-checkpoint";
+import type {
+  RuntimeToolExecutionCheckpoint,
+} from "../../llm/tool-execution-types";
 import { createInMemoryHost } from "../../platform/memory";
 import {
   createCheckpointSpyHost,

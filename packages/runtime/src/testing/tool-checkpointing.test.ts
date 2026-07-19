@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { RuntimeToolExecutionCheckpoint } from "../llm/llm";
+import type { RuntimeToolExecutionCheckpoint } from "../llm/tool-execution-types";
 import { createInMemoryHost } from "../platform/memory";
 import {
   checkpointedTool,

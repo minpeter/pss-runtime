@@ -12,11 +12,9 @@ import {
   resolveStoragePayloadMaxBytes,
   type StoragePayloadBudgetOptions,
 } from "../payload-guard";
-import {
-  ensurePayloadChunkSchema,
-  readJsonPayloadFromSqlRows,
-  writeJsonPayloadToSqlRows,
-} from "./payload-chunks";
+import { readJsonPayloadFromSqlRows } from "./payload-chunk-read";
+import { ensurePayloadChunkSchema } from "./payload-chunk-table";
+import { writeJsonPayloadToSqlRows } from "./payload-chunk-write";
 
 interface CheckpointRow {
   readonly checkpoint: string;

@@ -1,12 +1,8 @@
-import {
-  ContextBudgetExceededError,
-  type ModelGenerationOptions,
-} from "../../llm/llm";
+import { ContextBudgetExceededError } from "../../llm/context-gate";
+import type { ModelGenerationOptions } from "../../llm/model-step-types";
 import type { ThreadCompactionInput, ThreadState } from "../state/thread-state";
-import {
-  compactThreadBlocking,
-  type ThreadModelContextTransform,
-} from "./auto-compaction";
+import { compactThreadBlocking } from "./auto-compaction-runner";
+import type { ThreadModelContextTransform } from "./auto-compaction-types";
 import type { ThreadExecutionOptions } from "./execution";
 
 export async function runAgentLoopWithOverflowCompaction({
@@ -109,6 +105,4 @@ function errorText(
   return typeof field === "string" ? field : "";
 }
 
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object";
-}
+import { isRecord as isObjectRecord } from "../../internal/guards";

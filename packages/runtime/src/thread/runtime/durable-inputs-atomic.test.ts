@@ -3,7 +3,7 @@ import type { AgentHost, HostStoreTransaction } from "../../execution";
 import { createInMemoryHost } from "../../platform/memory";
 import { userText } from "../../testing/test-fixtures";
 import { ThreadState } from "../state/thread-state";
-import { commitAndAckDurableThreadInput } from "./durable-inputs";
+import { commitAndAckDurableThreadInput } from "./durable-input-acknowledgement";
 
 describe("durable input atomic commits", () => {
   it("rolls back thread commit when durable input ack fails", async () => {

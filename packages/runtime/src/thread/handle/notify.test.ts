@@ -1,7 +1,7 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../../agent/core/agent";
-import type { ModelStepOutput } from "../../llm/llm";
+import type { ModelStepOutput } from "../../llm/model-step-types";
 import { MemoryThreadStore } from "../../platform/memory/storage/memory-thread-store";
 import {
   assistantMessage,
@@ -14,7 +14,7 @@ import {
 import type { AgentEvent } from "../protocol/events";
 import { userTextToModelMessage } from "../protocol/mapping";
 import type { AgentTurn } from "../protocol/turn";
-import { AgentThread } from "./thread";
+import { AgentThread } from "./agent-thread";
 
 describe("AgentThread.notify", () => {
   it("keeps direct user sends observable through the returned run", async () => {

@@ -74,9 +74,7 @@ function isUserText(input: Record<string, unknown>): boolean {
   return typeof input.text === "string" || isStringArrayInput(input.text);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
+import { isPlainRecord as isRecord } from "../../internal/guards";
 
 function assertUserMessageContent(
   input: readonly unknown[]

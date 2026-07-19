@@ -5,7 +5,7 @@ import {
   type RuntimeInputState,
 } from "../input/runtime-input";
 import type { BufferedAgentTurn } from "../protocol/turn";
-import { cancelQueuedDurableThreadInputs } from "./durable-inputs";
+import { cancelQueuedDurableThreadInputs } from "./durable-input-cancellation";
 import { cancelThreadExecutionRun } from "./execution";
 
 interface CloseKilledRuntimeInputsOptions {

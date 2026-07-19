@@ -37,11 +37,13 @@ export {
   cleanupUnreferencedStagedRuntimeAttachments,
   stageAgentEventAttachments,
   stageAgentEventsAttachments,
+} from "./attachment-staging-events";
+export {
   stageUserInputAttachments,
   userInputContainsRuntimeAttachmentRefs,
   userInputRequiresAttachmentProcessing,
   userInputRequiresAttachmentStaging,
-} from "./attachment-staging";
+} from "./attachment-staging-input";
 export {
   type HostAttachmentStore,
   type ImageOmitDiagnostics,

@@ -8,7 +8,7 @@ import { createInMemoryHost } from "../../platform/memory";
 import { MemoryAttachmentStore } from "../../platform/memory/storage/memory-attachment-store";
 import { definePlugin } from "../../plugins/api";
 import { noopRuntimeDiagnostics } from "../../plugins/diagnostics";
-import { PluginRuntime } from "../../plugins/runtime";
+import { PluginRuntime } from "../../plugins/plugin-runtime";
 import { solidTestPng } from "../../testing/valid-image-fixture";
 import type {
   HostAttachmentStore,
@@ -18,8 +18,8 @@ import type {
 } from "../input/attachments";
 import type { UserInput } from "../input/input";
 import { BufferedAgentTurn } from "../protocol/turn";
-import { ThreadEventDispatcher } from "../runtime/events";
-import { createQueuedSendInput } from "./durable-queue";
+import { ThreadEventDispatcher } from "../runtime/thread-event-dispatcher";
+import { createQueuedSendInput } from "./durable-queue-send";
 
 describe("createQueuedSendInput", () => {
   it("deletes plugin-transformed attachment bytes when durable admission dedupes", async () => {

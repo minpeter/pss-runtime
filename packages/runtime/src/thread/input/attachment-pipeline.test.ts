@@ -24,7 +24,7 @@ import {
   decodeRuntimeAttachmentData,
   isRuntimeAttachmentData,
 } from "./attachment-refs";
-import { stageUserInputAttachments } from "./attachment-staging";
+import { stageUserInputAttachments } from "./attachment-staging-input";
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 const generateTextMock = getGenerateTextMock();

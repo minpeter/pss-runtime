@@ -1,6 +1,6 @@
 import { summarizeCacheUsage } from "./cache";
 import { getEvals } from "./registry";
-import { EvalScopeImpl } from "./scope";
+import { EvalScopeImpl } from "./scope-impl";
 import type {
   AssertionRecord,
   CaseResult,

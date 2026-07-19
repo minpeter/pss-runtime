@@ -200,6 +200,4 @@ function textContentAttributes(
   };
 }
 
-function assertNever(_value: never): never {
-  throw new Error("Unexpected event variant");
-}
+import { assertNever } from "../internal/guards";

@@ -15,7 +15,7 @@ import {
   queueRuntimeInput,
   type RuntimeInputState,
 } from "../input/runtime-input";
-import { admitDurableThreadInput } from "../runtime/durable-inputs";
+import { admitDurableThreadInput } from "../runtime/durable-input-admission";
 
 export async function addDurableSteeringInput({
   attachmentStore,
