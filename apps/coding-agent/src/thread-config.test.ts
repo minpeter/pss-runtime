@@ -35,7 +35,7 @@ describe("resolveCodingAgentThreadConfig", () => {
         {
           PSS_SESSION_DIR: ".pss/sessions",
           PSS_SESSION_KEY: "workspace:legacy",
-        } as Parameters<typeof resolveCodingAgentThreadConfig>[0],
+        },
         "/repo/demo",
         "/home/me"
       )

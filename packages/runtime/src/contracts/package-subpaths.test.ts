@@ -63,12 +63,6 @@ describe("runtime package subpaths", () => {
       expect(cloudflarePlatform).toHaveProperty(exportName);
     }
     expect(cloudflarePlatform).not.toHaveProperty("createCloudflareAgentsHost");
-    expect(cloudflarePlatform).not.toHaveProperty(
-      "CloudflareHostAgentsOptions"
-    );
-    expect(cloudflarePlatform).not.toHaveProperty(
-      "CloudflareAgentsHostOptions"
-    );
   });
 
   it("declares the file adapter as a platform implementation subpath", async () => {
