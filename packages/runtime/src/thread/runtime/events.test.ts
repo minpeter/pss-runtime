@@ -247,10 +247,10 @@ describe("ThreadEventDispatcher.emitObserverEvent", () => {
 });
 
 describe("ThreadEventDispatcher.emitRunBoundaryEvent", () => {
-  it("ignores observer returns on boundary events", async () => {
+  it("observes turn.start on boundary emit without rewriting the event", async () => {
     const observed: string[] = [];
     const observerPlugin = definePlugin((pss) => {
-      pss.on("step.start", (event) => {
+      pss.on("turn.start", (event) => {
         observed.push(event.type);
       });
     });
@@ -266,6 +266,7 @@ describe("ThreadEventDispatcher.emitRunBoundaryEvent", () => {
       done: false,
       value: { type: "turn-start" },
     });
+    expect(observed).toEqual(["turn-start"]);
 
     const waiting = iterator.next();
     await boundary;

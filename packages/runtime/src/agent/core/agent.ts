@@ -38,6 +38,9 @@ export type {
   ThreadMetadata,
 } from "./thread-entry";
 
+/** Options for `new Agent(...)`. Plugins are only accepted via `createAgent`. */
+export type AgentConstructorOptions = Omit<AgentOptions, "plugins">;
+
 export class Agent {
   readonly #modelOptions: AgentModelOptions;
   readonly #threads = new Map<string, AgentThreadEntry>();
@@ -49,7 +52,7 @@ export class Agent {
   readonly #autoCompaction?: AgentAutoCompactionOptions;
   readonly host: AgentHost;
   readonly namespace?: string;
-  constructor(options: AgentOptions, pluginRuntime?: PluginRuntime) {
+  constructor(options: AgentConstructorOptions, pluginRuntime?: PluginRuntime) {
     assertAgentOptions(options);
 
     const providedHost = options.host;
