@@ -24,7 +24,7 @@ describe("Agent thread runtime input windows", () => {
       pss.on("input.accept", (event, { history }) => {
         pluginCalls.push(`${event.type}:${history.length}`);
         trace.push(`plugin:${event.type}`);
-        return;
+        return { action: "continue" };
       });
       pss.on("turn.start", (event, { history }) => {
         pluginCalls.push(`${event.type}:${history.length}`);

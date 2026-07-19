@@ -54,7 +54,7 @@ describe("thread plugin intercept integration", () => {
       });
       pss.on("input.accept", (event) => {
         seen.push(event.type);
-        return;
+        return { action: "continue" };
       });
     });
     const agent = await createAgent({

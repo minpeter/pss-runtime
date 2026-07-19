@@ -17,7 +17,7 @@ describe("Agent thread plugin events", () => {
     const observerPlugin = definePlugin((pss) => {
       pss.on("input.accept", (event, { history }) => {
         pluginCalls.push(`${event.type}:${history.length}`);
-        return;
+        return { action: "continue" };
       });
       pss.on("turn.start", (event, { history }) => {
         pluginCalls.push(`${event.type}:${history.length}`);
@@ -67,7 +67,7 @@ describe("Agent thread plugin events", () => {
     const observerPlugin = definePlugin((pss) => {
       pss.on("input.accept", (event) => {
         pluginEventTypes.push(event.type);
-        return;
+        return { action: "continue" };
       });
       pss.on("turn.start", (event) => {
         pluginEventTypes.push(event.type);

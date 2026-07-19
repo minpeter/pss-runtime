@@ -74,7 +74,7 @@ describe("tool-call plugin snapshots through Agent", () => {
         if (isMutableNestedInput(event.input)) {
           event.input.payload.path = "MUTATED.md";
         }
-        return;
+        return { action: "continue" };
       });
     });
 
@@ -125,7 +125,7 @@ describe("tool-call plugin snapshots through Agent", () => {
     const observerPlugin = definePlugin((pss) => {
       pss.on("tool.call.before", (event) => {
         interceptedToolNames.push(event.toolName);
-        return;
+        return { action: "continue" };
       });
     });
 
