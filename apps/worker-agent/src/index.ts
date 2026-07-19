@@ -2,6 +2,7 @@ import { installCloudflareImageCodecs } from "@minpeter/pss-runtime/platform/clo
 import { defineWorkerFetch } from "evlog/workers";
 
 import type { Env } from "./env";
+import { handleSessionEventsRequest } from "./session-events-server";
 import { handleTelegramWebhook } from "./telegram";
 import { handleTuiRpcRequest } from "./tui-rpc";
 import { ensureWorkerLogger, newCorrelationId } from "./worker-log";
@@ -13,6 +14,7 @@ installCloudflareImageCodecs();
 export { AgentDurableObject } from "./agent-do";
 export type { Env } from "./env";
 
+const SESSION_EVENTS_PATHNAME = "/session/events";
 const TUI_RPC_PATHNAME = "/trpc";
 
 export default defineWorkerFetch<Env>(async (request, env, ctx, log) => {
@@ -22,11 +24,7 @@ export default defineWorkerFetch<Env>(async (request, env, ctx, log) => {
   });
   const url = new URL(request.url);
   const correlationId = newCorrelationId();
-  const handler =
-    url.pathname === TUI_RPC_PATHNAME ||
-    url.pathname.startsWith(`${TUI_RPC_PATHNAME}/`)
-      ? "tui-rpc"
-      : "telegram-webhook";
+  const handler = selectRequestHandler(url.pathname);
 
   log.set({
     correlationId,
@@ -36,12 +34,25 @@ export default defineWorkerFetch<Env>(async (request, env, ctx, log) => {
   });
 
   try {
-    const response =
-      handler === "tui-rpc"
-        ? await handleTuiRpcRequest(request, env)
-        : await handleTelegramWebhook(request, env, ctx as ExecutionContext, {
-            correlationId,
-          });
+    let response: Response;
+    switch (handler) {
+      case "session-events":
+        response = await handleSessionEventsRequest(request, env);
+        break;
+      case "tui-rpc":
+        response = await handleTuiRpcRequest(request, env);
+        break;
+      case "telegram-webhook":
+        response = await handleTelegramWebhook(
+          request,
+          env,
+          ctx as ExecutionContext,
+          { correlationId }
+        );
+        break;
+      default:
+        response = assertNever(handler);
+    }
 
     log.set({ status: response.status });
     log.emit({ status: response.status });
@@ -52,3 +63,22 @@ export default defineWorkerFetch<Env>(async (request, env, ctx, log) => {
     throw error;
   }
 });
+
+function selectRequestHandler(
+  pathname: string
+): "session-events" | "telegram-webhook" | "tui-rpc" {
+  if (pathname === SESSION_EVENTS_PATHNAME) {
+    return "session-events";
+  }
+  if (
+    pathname === TUI_RPC_PATHNAME ||
+    pathname.startsWith(`${TUI_RPC_PATHNAME}/`)
+  ) {
+    return "tui-rpc";
+  }
+  return "telegram-webhook";
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unexpected worker request handler: ${String(value)}`);
+}

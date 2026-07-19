@@ -2,6 +2,14 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 
 import { type Env, isDevelopment } from "./env";
+import {
+  ReplayEventsRequestSchema,
+  SubmitTurnRequestSchema,
+} from "./session-contract";
+import {
+  dispatchSessionEventReplay,
+  dispatchSessionSubmitTurn,
+} from "./session-server";
 import { TuiTurnInputSchema, TuiTurnOutputSchema } from "./tui-contract";
 import {
   dispatchTuiTurn,
@@ -20,7 +28,7 @@ interface TuiRpcContext {
 const trpc = initTRPC.context<TuiRpcContext>().create({ isDev: false });
 
 const authorizedProcedure = trpc.procedure.use(({ ctx, next }) => {
-  if (!isAuthorizedTuiRequest(ctx.request, ctx.env)) {
+  if (!isAuthorizedWorkerRequest(ctx.request, ctx.env)) {
     throw new TRPCError({
       code: "UNAUTHORIZED",
       message: UNAUTHORIZED_MESSAGE,
@@ -31,29 +39,25 @@ const authorizedProcedure = trpc.procedure.use(({ ctx, next }) => {
 });
 
 export const workerAgentRouter = trpc.router({
+  session: trpc.router({
+    replayEvents: authorizedProcedure
+      .input(ReplayEventsRequestSchema)
+      .query(async ({ ctx, input }) =>
+        translateServerErrors(() => dispatchSessionEventReplay(input, ctx.env))
+      ),
+    submitTurn: authorizedProcedure
+      .input(SubmitTurnRequestSchema)
+      .mutation(async ({ ctx, input }) =>
+        translateServerErrors(() => dispatchSessionSubmitTurn(input, ctx.env))
+      ),
+  }),
   tui: trpc.router({
     turn: authorizedProcedure
       .input(TuiTurnInputSchema)
       .output(TuiTurnOutputSchema)
-      .mutation(async ({ ctx, input }) => {
-        try {
-          return await dispatchTuiTurn(input, ctx.env);
-        } catch (error) {
-          if (error instanceof TuiServerBadRequestError) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: error.message,
-            });
-          }
-          if (error instanceof TuiServerUpstreamError) {
-            throw new TRPCError({
-              code: "BAD_GATEWAY",
-              message: error.message,
-            });
-          }
-          throw error;
-        }
-      }),
+      .mutation(async ({ ctx, input }) =>
+        translateServerErrors(() => dispatchTuiTurn(input, ctx.env))
+      ),
   }),
 });
 
@@ -71,7 +75,27 @@ export function handleTuiRpcRequest(
   });
 }
 
-function isAuthorizedTuiRequest(request: Request, env: Env): boolean {
+async function translateServerErrors<T>(operation: () => Promise<T>) {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof TuiServerBadRequestError) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: error.message,
+      });
+    }
+    if (error instanceof TuiServerUpstreamError) {
+      throw new TRPCError({
+        code: "BAD_GATEWAY",
+        message: error.message,
+      });
+    }
+    throw error;
+  }
+}
+
+export function isAuthorizedWorkerRequest(request: Request, env: Env): boolean {
   const token = env.WORKER_AGENT_TUI_TOKEN?.trim();
   if (!token) {
     return isDevelopment(env);

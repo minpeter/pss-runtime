@@ -3,9 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prebuild": "pnpm -F @minpeter/pss-runtime build",
     "predev": "pnpm -F @minpeter/pss-runtime build",
     "pretypecheck": "pnpm -F @minpeter/pss-runtime build",
     "preship:worker": "pnpm -F @minpeter/pss-runtime build",
+    "build": "wrangler deploy --dry-run --env=\"\"",
     "dev": "run-p dev:worker dev:relay",
     "dev:ingress": "run-p dev:worker:ingress dev:relay",
     "dev:worker": "wrangler dev -e dev",

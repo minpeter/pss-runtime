@@ -121,6 +121,92 @@ describe("TUI worker tRPC route", () => {
     });
   });
 
+  it("returns a durable admission receipt from session.submitTurn", async () => {
+    const env = createEnv({ ENVIRONMENT: "development" });
+    durableObjectMock.responses.push(
+      Response.json({
+        accepted: true,
+        runId: "run-durable-1",
+        threadKey: "default",
+      })
+    );
+    const client = createTuiRpcTestClient(env);
+
+    await expect(
+      client.session.submitTurn.mutate({
+        channel: { id: " local ", kind: "tui" },
+        idempotencyKey: " turn-1 ",
+        sessionScopeKey: " tui:user ",
+        text: " hello ",
+      })
+    ).resolves.toEqual({
+      accepted: true,
+      runId: "run-durable-1",
+      threadKey: "default",
+    });
+
+    const [request] = durableObjectMock.requests;
+    if (!request) {
+      throw new Error("Expected a Durable Object request.");
+    }
+    expect(new URL(request.request.url).pathname).toBe("/session/turn");
+    await expect(request.request.json()).resolves.toEqual({
+      channel: { id: "local", kind: "tui" },
+      idempotencyKey: "turn-1",
+      sessionScopeKey: "tui:user",
+      text: "hello",
+    });
+  });
+
+  it("replays durable session events after a cursor", async () => {
+    const env = createEnv({ ENVIRONMENT: "development" });
+    durableObjectMock.responses.push(
+      Response.json({
+        events: [
+          {
+            cursor: { offset: 3 },
+            event: { type: "turn-end" },
+            threadKey: "default",
+          },
+        ],
+        nextCursor: { offset: 3 },
+      })
+    );
+    const client = createTuiRpcTestClient(env);
+
+    await expect(
+      client.session.replayEvents.query({
+        after: { offset: 2 },
+        channel: { id: "local", kind: "tui" },
+        limit: 25,
+        sessionScopeKey: "tui:user",
+      })
+    ).resolves.toEqual({
+      events: [
+        {
+          cursor: { offset: 3 },
+          event: { type: "turn-end" },
+          threadKey: "default",
+        },
+      ],
+      nextCursor: { offset: 3 },
+    });
+
+    const [request] = durableObjectMock.requests;
+    if (!request) {
+      throw new Error("Expected a Durable Object request.");
+    }
+    expect(new URL(request.request.url).pathname).toBe(
+      "/session/events/replay"
+    );
+    await expect(request.request.json()).resolves.toEqual({
+      after: { offset: 2 },
+      channel: { id: "local", kind: "tui" },
+      limit: 25,
+      sessionScopeKey: "tui:user",
+    });
+  });
+
   it("rejects production TUI turns without the configured token", async () => {
     const env = createEnv({
       ENVIRONMENT: "production",
