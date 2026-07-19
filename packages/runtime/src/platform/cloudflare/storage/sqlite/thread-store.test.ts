@@ -306,7 +306,7 @@ describe("DurableObjectSqliteThreadStore", () => {
     });
   });
 
-  it("hydrates existing rows that use the legacy JSON chunk marker", async () => {
+  it("does not treat legacy JSON chunk markers as chunk pointers", async () => {
     const { storage, store } = createStore();
     const threadKey = storeKey(PREFIX, "thread", "legacy");
     const serializedMessage = JSON.stringify({
@@ -344,9 +344,10 @@ describe("DurableObjectSqliteThreadStore", () => {
       serializedMessage.slice(midpoint)
     );
 
+    // Current format only: `$pss:chunk` JSON is ordinary payload, not a marker.
     await expect(store.load("legacy")).resolves.toEqual({
       state: {
-        history: [{ content: "legacy chunked message", role: "user" }],
+        history: [{ $pss: "chunk", n: 2 }],
         schemaVersion: 1,
       },
       version: "1",

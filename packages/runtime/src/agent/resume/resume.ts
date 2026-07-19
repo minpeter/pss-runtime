@@ -96,10 +96,7 @@ function canAccessRun(run: TurnRecord, ownerNamespace: string): boolean {
     return ownsAgentNamespace(run.ownerNamespace, ownerNamespace);
   }
 
-  return (
-    run.threadKey.startsWith(`parent:${ownerNamespace}:`) ||
-    run.parentRunId?.startsWith(`${ownerNamespace}:session:`) === true
-  );
+  return run.threadKey.startsWith(`parent:${ownerNamespace}:`);
 }
 
 export async function completeNotificationRun(

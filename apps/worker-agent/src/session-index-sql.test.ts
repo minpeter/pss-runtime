@@ -54,7 +54,7 @@ describe("sql session index repository", () => {
     ]);
   });
 
-  it("defaults legacy rows without session_scope_key to their conversation key", async () => {
+  it("leaves null session_scope_key unset instead of defaulting to conversation key", async () => {
     const sql = createNodeTestSqlStorage();
     sql.exec(
       `CREATE TABLE pss_worker_session_index (
@@ -93,6 +93,6 @@ describe("sql session index repository", () => {
     const [record] = await repository.all();
 
     expect(record?.conversationKey).toBe("telegram:legacy");
-    expect(record?.sessionScopeKey).toBe("telegram:legacy");
+    expect(record?.sessionScopeKey).toBeUndefined();
   });
 });

@@ -4,7 +4,6 @@ import {
   type ChannelAddress,
   ChannelAddressSchema,
   channelKey,
-  legacyChannelThreadKey,
 } from "./channel";
 import {
   buildSessionSnippet,
@@ -120,7 +119,7 @@ export function summarizeSessionRecord(
     snippet: buildSessionSnippet(record),
     threadKey:
       record.threadKey ??
-      legacyChannelThreadKey({
+      channelKey({
         id: record.channelId,
         kind: record.channelKind,
       }),
@@ -168,7 +167,7 @@ export function createSessionIndexStore(
       }
       return (
         record.threadKey ??
-        legacyChannelThreadKey({
+        channelKey({
           id: record.channelId,
           kind: record.channelKind,
         })
