@@ -387,8 +387,10 @@ To change the input that reaches `execute`, return an explicit decision:
 Keep tool inputs structured-cloneable and reasonably sized: the runtime clones
 the working input once per plugin, and transform inputs must also be
 structured-cloneable. `handled` is not valid for `tool.call.before`; invalid
-decisions (including a transform missing `input`) fail closed with
-`PluginHookError`.
+decisions fail closed with `PluginHookError`, including a transform missing
+`input`, `input: undefined`, or a non-cloneable `input` (for example a function).
+If an earlier plugin transforms and a later one returns `block` or
+`needs-recovery`, execution and `tool.execution.start` are skipped.
 
 `tool.execution.start` runs only after every `tool.call.before` handler continues
 (and carries the final transformed input when transforms were applied).

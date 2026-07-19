@@ -805,7 +805,12 @@ export class PluginRuntime {
     ) {
       if (result.action === "transform") {
         if (event === "tool.call.before") {
-          if (!("input" in result)) {
+          // Require an own/enumerable `input` that is not undefined. `"input" in
+          // result` alone would accept `{ action: "transform", input: undefined }`.
+          if (
+            !("input" in result) ||
+            (result as { readonly input?: unknown }).input === undefined
+          ) {
             throw await this.#invalidResult(
               registration,
               event,
