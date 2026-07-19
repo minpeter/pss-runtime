@@ -1,10 +1,9 @@
 import type { LanguageModel } from "ai";
-import { ModelToolSelectionError } from "./model-step-error";
 import type {
   PreparedModelToolChoice,
   PrepareModelStep,
   PrepareModelStepResult,
-} from "./model-step-preparation-types";
+} from "./model-step-preparation";
 import {
   dataPropertyInPrototypeChain,
   isObjectRecord,
@@ -13,8 +12,12 @@ import {
   ownProperty,
   propertyCanProvideValue,
   propertyDescriptorInPrototypeChain,
-} from "./tool-descriptor-utils";
+} from "./tool-property-descriptors";
 import { snapshotToolNames } from "./tool-registry-snapshot";
+
+export class ModelToolSelectionError extends TypeError {
+  readonly name = "ModelToolSelectionError";
+}
 
 const PREPARED_RESULT_KEYS = new Set(["activeTools", "model", "toolChoice"]);
 

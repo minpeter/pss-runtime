@@ -1,19 +1,17 @@
 import type { ModelMessage } from "ai";
 import type { ModelStepOutput } from "../llm/model-step-types";
-import type { ThreadContextMessage } from "../thread/state/context";
+import {
+  isCompactionContextMessage,
+  type ThreadContextMessage,
+} from "../thread/state/context";
 import type { ThreadCompactionInput } from "../thread/state/thread-state";
 import type { PluginRequestResultMap } from "./api";
-import {
-  assertCompactionInput,
-  assertModelContextEvent,
-  assertModelStep,
-} from "./plugin-helpers";
 import {
   invokeHandler,
   throwHookFailure,
   validateRequestResult,
 } from "./plugin-invocation";
-import { activeHandlers } from "./plugin-state";
+import { activeHandlers } from "./plugin-registry";
 import type {
   PluginCompactionDecision,
   PluginRuntimeState,
@@ -154,4 +152,79 @@ export async function transformModelStep(
     }
   }
   return current;
+}
+
+function assertCompactionInput(
+  value: unknown
+): asserts value is ThreadCompactionInput {
+  if (
+    !(
+      value &&
+      typeof value === "object" &&
+      "startSeq" in value &&
+      typeof value.startSeq === "number" &&
+      "endSeqExclusive" in value &&
+      typeof value.endSeqExclusive === "number" &&
+      "summary" in value &&
+      typeof value.summary === "string"
+    )
+  ) {
+    throw new TypeError(
+      "Plugin thread.compaction.before transform must return a compaction input."
+    );
+  }
+}
+
+function assertModelContextEvent(
+  value: unknown
+): asserts value is { readonly messages: readonly ThreadContextMessage[] } {
+  const message =
+    "Plugin model.context transform must return a messages array.";
+  if (!(value && typeof value === "object" && "messages" in value)) {
+    throw new TypeError(message);
+  }
+  if (
+    !(
+      Array.isArray(value.messages) &&
+      value.messages.every(
+        (item) => isModelMessage(item) || isCompactionContextMessage(item)
+      )
+    )
+  ) {
+    throw new TypeError(message);
+  }
+}
+
+function assertModelStep(
+  value: unknown,
+  message: string
+): asserts value is { readonly messages: ModelStepOutput } {
+  if (!(value && typeof value === "object" && "messages" in value)) {
+    throw new TypeError(message);
+  }
+  if (
+    !(
+      Array.isArray(value.messages) &&
+      value.messages.every(
+        (item) =>
+          isModelMessage(item) &&
+          (item.role === "assistant" || item.role === "tool")
+      )
+    )
+  ) {
+    throw new TypeError(message);
+  }
+}
+
+function isModelMessage(value: unknown): value is ModelMessage {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "role" in value &&
+      (value.role === "system" ||
+        value.role === "user" ||
+        value.role === "assistant" ||
+        value.role === "tool") &&
+      "content" in value
+  );
 }

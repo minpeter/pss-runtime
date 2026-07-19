@@ -10,7 +10,7 @@ import {
 } from "../testing/llm-test-utils";
 import { assistantMessage } from "../testing/test-fixtures";
 import { encodeRuntimeAttachmentData } from "../thread/input/attachments";
-import { ModelToolSelectionError } from "./model-step-error";
+import { ModelToolSelectionError } from "./model-step-selection";
 
 const generateTextMock = getGenerateTextMock();
 const unsupportedApprovalPattern = /needsApproval.*not supported/;

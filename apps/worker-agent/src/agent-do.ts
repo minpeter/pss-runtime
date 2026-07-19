@@ -9,16 +9,20 @@ import { installCloudflareImageCodecs } from "@minpeter/pss-runtime/platform/clo
 import { Agent as CloudflareAgent } from "agents";
 
 import { createConfiguredAgent } from "./agent";
-import { createSendMessageToolOptions } from "./agent-do-send-message";
+import {
+  createRequestSendMessageToolSetup,
+  createSendMessageToolOptions,
+  type SendMessageToolSetup,
+} from "./agent-do-send-message";
 import { AgentDoSession } from "./agent-do-session";
-import { AgentDoSessionRoutes } from "./agent-do-session-routes";
-import { AgentDoTurn } from "./agent-do-turn";
+import { AgentDoTurn } from "./agent-do-turn-delivery";
 import {
   AgentDoState,
   SESSION_REPLAY_PATH,
   SESSION_STREAM_PATH,
   SESSION_SUBMIT_PATH,
 } from "./agent-do-types";
+import type { ChannelAddress } from "./channel";
 import type { Env } from "./env";
 import {
   createSessionIndexClient,
@@ -29,6 +33,7 @@ import {
   createSessionTranscriptClient,
   isSessionTranscriptPath,
 } from "./session-transcript-client";
+import type { WorkerAgentSendMessageToolOptions } from "./tools";
 import { ensureWorkerLogger } from "./worker-log";
 
 installCloudflareImageCodecs();
@@ -36,7 +41,6 @@ installCloudflareImageCodecs();
 export class AgentDurableObject extends CloudflareAgent<Env> {
   readonly #platform: CloudflarePlatformContext<Agent>;
   readonly #session: AgentDoSession;
-  readonly #sessionRoutes: AgentDoSessionRoutes;
   readonly #state = new AgentDoState();
   readonly #turn: AgentDoTurn;
 
@@ -61,6 +65,8 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
       env,
     });
     this.#session = new AgentDoSession({
+      createSendMessage: () =>
+        createLongLivedSendMessageOptions(env, this.#state),
       env,
       platform: this.#platform,
       sessionIndexClient,
@@ -68,13 +74,9 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
       state: this.#state,
       storage: ctx.storage,
     });
-    this.#sessionRoutes = new AgentDoSessionRoutes({
-      platform: this.#platform,
-      session: this.#session,
-      state: this.#state,
-      storage: ctx.storage,
-    });
     this.#turn = new AgentDoTurn({
+      createSendMessage: (channel) =>
+        createTurnSendMessageSetup(env, this.#state, channel),
       env,
       session: this.#session,
       sessionIndexClient,
@@ -111,17 +113,17 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
       if (request.method !== "GET") {
         return new Response("method not allowed", { status: 405 });
       }
-      return await this.#sessionRoutes.handleEventStream(request);
+      return await this.#session.handleEventStream(request);
     }
     if (request.method !== "POST") {
       return new Response("method not allowed", { status: 405 });
     }
 
     if (pathname === SESSION_SUBMIT_PATH) {
-      return await this.#sessionRoutes.handleSubmit(request);
+      return await this.#session.handleSubmit(await readRequestJson(request));
     }
     if (pathname === SESSION_REPLAY_PATH) {
-      return await this.#sessionRoutes.handleReplay(request);
+      return await this.#session.handleReplay(await readRequestJson(request));
     }
     if (isSessionIndexPath(pathname)) {
       return await handleSessionIndexRequest({
@@ -131,9 +133,56 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
       });
     }
     if (isSessionTranscriptPath(pathname)) {
-      return await this.#sessionRoutes.handleTranscript(request);
+      return await this.#session.handleTranscript(
+        await readRequestJson(request)
+      );
     }
 
     return await this.#turn.handle(request);
+  }
+}
+
+export function createLongLivedSendMessageOptions(
+  env: Env,
+  state: AgentDoState
+): WorkerAgentSendMessageToolOptions {
+  return {
+    channel: () => state.channel,
+    sink: {
+      send: async (channel, text) => {
+        const setup = createRequestSendMessageToolSetup(env, channel);
+        const sent = await setup.options.sink.send(channel, text);
+        if (channel.kind === "tui") {
+          state.tuiMessageCapture.push({
+            channel: sent.channel,
+            messageId: sent.messageId,
+            text,
+          });
+        }
+        return sent;
+      },
+    },
+  };
+}
+
+export function createTurnSendMessageSetup(
+  env: Env,
+  state: AgentDoState,
+  channel: ChannelAddress
+): SendMessageToolSetup {
+  if (channel.kind === "tui") {
+    return {
+      messages: () => state.tuiMessageCapture,
+      options: createLongLivedSendMessageOptions(env, state),
+    };
+  }
+  return createRequestSendMessageToolSetup(env, channel);
+}
+
+async function readRequestJson(request: Request): Promise<unknown> {
+  try {
+    return await request.json();
+  } catch {
+    return;
   }
 }

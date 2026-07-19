@@ -49,11 +49,19 @@ export interface PluginInvocationContext {
   readonly threadKey: string;
 }
 
+export type PluginFailureReporter = (
+  pluginIndex: number,
+  phase: "factory" | "handler",
+  cause: unknown,
+  event?: string
+) => Promise<void>;
+
 export interface PluginRuntimeState {
   readonly abort: AbortController;
   readonly diagnostics: RuntimeDiagnosticsSink;
   readonly hookTimeoutMs: number;
   readonly registrations: PluginRegistration[];
+  readonly reportPluginFailure: PluginFailureReporter;
   readonly threadStateClearers: Set<(key: string) => void>;
   readonly tools: ToolSet;
 }

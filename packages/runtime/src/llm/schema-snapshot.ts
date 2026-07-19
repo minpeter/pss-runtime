@@ -2,7 +2,7 @@ import { asSchema, jsonSchema, type ToolSet } from "ai";
 import {
   isPlainRecord,
   propertyDescriptorInPrototypeChain,
-} from "./tool-descriptor-utils";
+} from "./tool-property-descriptors";
 
 export const INPUT_SCHEMA_SNAPSHOT_UNAVAILABLE = Symbol(
   "input-schema-snapshot-unavailable"

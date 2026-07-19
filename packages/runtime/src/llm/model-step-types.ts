@@ -7,7 +7,7 @@ import type { ModelContextGateOptions } from "./context-gate";
 import type {
   PreparedModelToolChoice,
   PrepareModelStep,
-} from "./model-step-preparation-types";
+} from "./model-step-preparation";
 import type { RuntimeToolExecutionContext } from "./tool-execution-types";
 
 export type AgentToolChoice = PreparedModelToolChoice;

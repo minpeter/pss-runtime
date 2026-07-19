@@ -1,13 +1,12 @@
 import { type LanguageModel, wrapLanguageModel } from "ai";
 import type { PluginRequestResultMap, ProviderCallOptions } from "./api";
-import { assertProviderBeforeRequestEvent } from "./plugin-helpers";
 import {
   invokeHandler,
   notifyHandlers,
   throwHookFailure,
   validateRequestResult,
 } from "./plugin-invocation";
-import { activeHandlers } from "./plugin-state";
+import { activeHandlers } from "./plugin-registry";
 import type { PluginRuntimeState } from "./plugin-types";
 
 export function wrapRuntimeModel(
@@ -78,6 +77,24 @@ async function transformProviderParams(
     }
   }
   return current;
+}
+
+function assertProviderBeforeRequestEvent(
+  value: unknown
+): asserts value is { readonly params: ProviderCallOptions } {
+  if (
+    !(
+      value &&
+      typeof value === "object" &&
+      "params" in value &&
+      value.params &&
+      typeof value.params === "object"
+    )
+  ) {
+    throw new TypeError(
+      "Plugin provider.request.before transform must return provider params."
+    );
+  }
 }
 
 function notifyProviderResponse(

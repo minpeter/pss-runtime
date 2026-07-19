@@ -1,5 +1,5 @@
 import { isRecord as isObjectRecord } from "../internal/guards";
-import { ModelToolSelectionError } from "./model-step-error";
+import { ModelToolSelectionError } from "./model-step-selection";
 
 export { isObjectRecord };
 

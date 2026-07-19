@@ -2,7 +2,7 @@ import type {
   StoredThreadEvent,
   ThreadEventReadOptions,
 } from "../../execution/host/types";
-import type { ThreadExecutionOptions } from "../runtime/execution";
+import type { ThreadExecutionOptions } from "./execution";
 
 export class ThreadEventReplayUnsupportedError extends Error {
   readonly name = "ThreadEventReplayUnsupportedError";

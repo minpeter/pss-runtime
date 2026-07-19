@@ -8,8 +8,8 @@ import {
   assistantMessage,
   createCallbackModel,
 } from "../../testing/test-fixtures";
+import { ThreadEventReplayUnsupportedError } from "../runtime/thread-event-replay";
 import { collect } from "./test-support";
-import { ThreadEventReplayUnsupportedError } from "./thread-event-replay";
 
 describe("AgentThread durable event replay", () => {
   it("replays committed thread events with cursor pagination", async () => {

@@ -21,12 +21,12 @@ export type {
   ThreadEventReadOptions,
 } from "./execution/host/types";
 export type { AgentToolChoice } from "./llm/model-step-types";
-export { ModelToolSelectionError } from "./llm/model-step-error";
+export { ModelToolSelectionError } from "./llm/model-step-selection";
 export type {
   PrepareModelStep,
   PrepareModelStepInput,
   PrepareModelStepResult,
-} from "./llm/model-step-preparation-types";
+} from "./llm/model-step-preparation";
 export {
   definePlugin,
   type PluginAPI,
@@ -58,7 +58,6 @@ export {
   PluginInitializationError,
   PluginRegistrationClosedError,
 } from "./plugins/plugin-errors";
-export { ThreadEventReplayUnsupportedError } from "./thread/handle/thread-event-replay";
 export {
   DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,
   decodeRuntimeAttachmentData,
@@ -138,6 +137,7 @@ export {
   isVisibleAgentEvent,
 } from "./thread/protocol/events";
 export type { AgentTurn } from "./thread/protocol/turn";
+export { ThreadEventReplayUnsupportedError } from "./thread/runtime/thread-event-replay";
 export type {
   CompactionContextMessage,
   ThreadContextMessage,

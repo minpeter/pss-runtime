@@ -8,6 +8,7 @@ import type {
   PluginDefinition,
   PluginToolCallBeforeEvent,
 } from "./api";
+import type { RuntimeDiagnosticsSink } from "./diagnostics";
 import {
   afterToolExecution,
   beforeToolExecution,
@@ -15,23 +16,23 @@ import {
   interceptInput,
 } from "./plugin-input-hooks";
 import {
+  clearThreadState,
+  createRuntimeState,
+  disposeRuntime,
+  loadPlugin,
+} from "./plugin-lifecycle";
+import {
   beforeCompact,
   transformModelContext,
   transformModelStep,
-} from "./plugin-model-hooks";
+} from "./plugin-model-transforms";
 import {
   notifyCompacted,
   observeAgentEvent,
   shutdownThread,
   startThread,
 } from "./plugin-notifications";
-import { wrapRuntimeModel } from "./plugin-provider";
-import {
-  clearThreadState,
-  createRuntimeState,
-  disposeRuntime,
-  loadPlugin,
-} from "./plugin-state";
+import { wrapRuntimeModel } from "./plugin-tool-provider";
 import type {
   PluginCompactionDecision,
   PluginInputDecision,
@@ -40,11 +41,42 @@ import type {
   PluginToolExecutionDecision,
 } from "./plugin-types";
 
+async function reportPluginFailure(
+  diagnostics: RuntimeDiagnosticsSink,
+  pluginIndex: number,
+  phase: "factory" | "handler",
+  cause: unknown,
+  event?: string
+): Promise<void> {
+  try {
+    await diagnostics.report({
+      cause,
+      code: `plugin.${phase}_failed`,
+      ...(event ? { event } : {}),
+      level: "error",
+      phase,
+      pluginIndex,
+    });
+  } catch {
+    return;
+  }
+}
+
 export class PluginRuntime {
   readonly #state: PluginRuntimeState;
 
   private constructor(options: PluginRuntimeOptions) {
-    this.#state = createRuntimeState(options);
+    this.#state = createRuntimeState(
+      options,
+      (pluginIndex, phase, cause, event) =>
+        reportPluginFailure(
+          options.diagnostics,
+          pluginIndex,
+          phase,
+          cause,
+          event
+        )
+    );
   }
 
   static async create(

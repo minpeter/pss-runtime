@@ -9,7 +9,7 @@ import {
   fingerprintValueIsSafe,
   isObjectRecord,
   safeOwnDataProperty,
-} from "./tool-descriptor-utils";
+} from "./tool-property-descriptors";
 
 export const SEMANTIC_TOOL_UNAVAILABLE = Symbol("semantic-tool-unavailable");
 

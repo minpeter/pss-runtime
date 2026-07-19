@@ -8,12 +8,12 @@ import { diagnosticToolRegistry } from "./diagnostic-tool-registry";
 import {
   countDynamicDescriptions,
   toolSemanticFingerprint,
-} from "./semantic-tool-entry";
+} from "./tool-semantic-metadata";
 import {
   compareToolNames,
   dataPropertyInPrototypeChain,
   MISSING_DATA_PROPERTY,
-} from "./tool-descriptor-utils";
+} from "./tool-property-descriptors";
 
 interface ToolCacheFingerprintInput {
   readonly activeTools: readonly string[];
