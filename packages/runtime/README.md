@@ -247,6 +247,15 @@ Use `model.context` as an ephemeral read guard immediately before each model
 call. Its result changes only the provider-visible messages; it does not rewrite
 stored thread history. The same hook runs for automatic-compaction model calls.
 
+Compacted ranges remain typed as `CompactionContextMessage` values with
+`role: "compaction"`, their summary, and source sequence range while
+`model.context` handlers run. This lets a guard remove a contaminated summary
+by provenance instead of matching arbitrary text. After the hook completes, the
+runtime lowers each retained compaction to a user-scoped `<summary>` message at
+the provider boundary; model-generated summaries are never promoted to system
+instructions. User-authored text that happens to contain protocol-like literals
+is not rewritten.
+
 Use `model.step.before` to validate or transform a complete model step after
 generation and before any message from that step is appended or any mapped
 output event is emitted. Multiple transforms chain in plugin registration
@@ -258,7 +267,12 @@ import { definePlugin } from "@minpeter/pss-runtime";
 const protocolGuard = definePlugin((pss) => {
   pss.on("model.context", ({ messages }) => ({
     action: "transform",
-    value: { messages: sanitizeModelContext(messages) },
+    value: {
+      messages: messages.filter(
+        (message) =>
+          message.role !== "compaction" || isSafeSummary(message.summary)
+      ),
+    },
   }));
 
   pss.on("model.step.before", ({ messages }) => ({

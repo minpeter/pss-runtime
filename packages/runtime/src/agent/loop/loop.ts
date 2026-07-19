@@ -7,10 +7,11 @@ import {
 import type { RuntimeToolExecutionContext } from "../../llm/tool-execution";
 import type { AgentEvent } from "../../thread/protocol/events";
 import { modelMessageToAgentEvents } from "../../thread/protocol/mapping";
+import type { ThreadContextMessage } from "../../thread/state/context";
 
 interface ModelHistory {
   appendModelMessage(message: ModelMessage): void;
-  modelContextSnapshot(): ModelMessage[];
+  modelContextSnapshot(): ThreadContextMessage[];
   modelSnapshot(): ModelMessage[];
 }
 
@@ -22,9 +23,9 @@ interface RunAgentLoopOptions {
   signal?: AbortSignal;
   toolExecution?: RuntimeToolExecutionContext;
   transformModelContext?: (
-    messages: readonly ModelMessage[],
+    messages: readonly ThreadContextMessage[],
     signal: AbortSignal
-  ) => Promise<readonly ModelMessage[]>;
+  ) => Promise<readonly ThreadContextMessage[]>;
   transformModelStep?: (
     messages: ModelStepOutput,
     signal: AbortSignal

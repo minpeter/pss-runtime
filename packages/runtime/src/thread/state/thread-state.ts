@@ -5,6 +5,7 @@ import type {
   ThreadStore,
   ThreadStoreCommit,
 } from "../store/types";
+import type { ThreadContextMessage } from "./context";
 import { ModelMessageHistory } from "./history";
 import {
   decodeStoredThreadState,
@@ -82,7 +83,7 @@ export class ThreadState {
     return this.#history.modelSnapshot();
   }
 
-  modelContextSnapshot(): ModelMessage[] {
+  modelContextSnapshot(): ThreadContextMessage[] {
     return this.#history.modelContextSnapshot();
   }
 

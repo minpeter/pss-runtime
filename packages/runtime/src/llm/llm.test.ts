@@ -85,6 +85,47 @@ describe("generateModelStep", () => {
     );
   });
 
+  it("lowers typed compaction context to a user-scoped summary", async () => {
+    const runModelStep = await loadModelStepRunner();
+    const signal = new AbortController().signal;
+    const userProtocolLiteral = "<tool_call>literal user text</tool_call>";
+
+    await expect(
+      runModelStep(
+        {
+          instructions: "base",
+          model: fakeModel,
+        },
+        {
+          history: [
+            {
+              endSeqExclusive: 4,
+              role: "compaction",
+              startSeq: 0,
+              summary: "old turns summarized",
+            },
+            { content: userProtocolLiteral, role: "user" },
+          ],
+          signal,
+        }
+      )
+    ).resolves.toEqual([assistantMessage("DONE")]);
+
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        instructions: "base",
+        messages: [
+          {
+            content:
+              "The conversation history before this point was compacted into the following summary:\n<summary>\nold turns summarized\n</summary>",
+            role: "user",
+          },
+          { content: userProtocolLiteral, role: "user" },
+        ],
+      })
+    );
+  });
+
   it("passes configured toolChoice to generateText", async () => {
     const runModelStep = await loadModelStepRunner();
     const signal = new AbortController().signal;

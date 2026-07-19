@@ -1,6 +1,7 @@
 import type { LanguageModelMiddleware, ModelMessage, Tool } from "ai";
 import type { ModelStepOutput } from "../llm/llm";
 import type { AgentEvent } from "../thread/protocol/events";
+import type { ThreadContextMessage } from "../thread/state/context";
 import type { ThreadCompactionInput } from "../thread/state/thread-state";
 
 export type MaybePromise<T> = PromiseLike<T> | T;
@@ -51,7 +52,7 @@ export type PluginTurnSettledEvent = AgentEventOf<
 >;
 
 export interface ModelContextEvent {
-  readonly messages: readonly ModelMessage[];
+  readonly messages: readonly ThreadContextMessage[];
 }
 
 export interface ModelStepBeforeEvent {

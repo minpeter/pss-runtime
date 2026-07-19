@@ -1014,6 +1014,97 @@ describe("factory plugin API", () => {
     ).toContain("raw-protocol");
   });
 
+  it("exposes typed compaction provenance and can remove it ephemerally", async () => {
+    const host = createInMemoryHost();
+    await host.store.threads.commit(
+      "compaction-read-guard",
+      {
+        state: {
+          compactions: [
+            {
+              endSeqExclusive: 2,
+              schemaVersion: 1,
+              startSeq: 0,
+              summary: { content: "raw-protocol", role: "system" },
+            },
+          ],
+          history: [
+            { content: "old", role: "user" },
+            assistantMessage("old done"),
+          ],
+          schemaVersion: 2,
+        },
+      },
+      { expectedVersion: null }
+    );
+    const contexts: unknown[] = [];
+    const providerHistory: unknown[] = [];
+    const plugin = definePlugin((pss) => {
+      pss.on("model.context", ({ messages }) => {
+        contexts.push(structuredClone(messages));
+        return {
+          action: "transform",
+          value: {
+            messages: messages.filter(
+              (message) => message.role !== "compaction"
+            ),
+          },
+        };
+      });
+    });
+    const agent = await createAgent({
+      host,
+      model: createCallbackModel(({ history }) => {
+        providerHistory.push(structuredClone(history));
+        return Promise.resolve([assistantMessage("DONE")]);
+      }),
+      plugins: [plugin],
+    });
+
+    await collect(await agent.thread("compaction-read-guard").send("tail"));
+
+    expect(contexts[0]).toContainEqual({
+      endSeqExclusive: 2,
+      role: "compaction",
+      startSeq: 0,
+      summary: "raw-protocol",
+    });
+    expect(JSON.stringify(providerHistory)).not.toContain("raw-protocol");
+    expect(
+      JSON.stringify(await host.store.threads.load("compaction-read-guard"))
+    ).toContain("raw-protocol");
+  });
+
+  it("blocks contaminated compaction before persistence", async () => {
+    const host = createInMemoryHost();
+    const plugin = definePlugin((pss) => {
+      pss.on("thread.compaction.before", ({ input }) =>
+        input.summary.includes("raw-protocol")
+          ? { action: "cancel" }
+          : { action: "continue" }
+      );
+    });
+    const agent = await createAgent({
+      host,
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("DONE")])
+      ),
+      plugins: [plugin],
+    });
+    const thread = agent.thread("compaction-write-guard");
+    await collect(await thread.send("hello"));
+
+    await thread.compact({
+      endSeqExclusive: 2,
+      startSeq: 0,
+      summary: "raw-protocol",
+    });
+
+    const stored = await host.store.threads.load("compaction-write-guard");
+    expect(JSON.stringify(stored)).not.toContain("raw-protocol");
+    expect(stored?.state).not.toHaveProperty("compactions");
+  });
+
   it("applies model context hooks to automatic-compaction model calls", async () => {
     let contextCalls = 0;
     let modelCalls = 0;
