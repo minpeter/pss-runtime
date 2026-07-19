@@ -33,7 +33,7 @@
     "repo:affected": "turbo query affected"
   },
   "devDependencies": {
-    "@ai-sdk/openai-compatible": "3.0.2",
+    "@ai-sdk/openai-compatible": "3.0.11",
     "@biomejs/biome": "2.5.1",
     "@minpeter/pss-coding-agent": "workspace:*",
     "@minpeter/pss-runtime": "workspace:*",
