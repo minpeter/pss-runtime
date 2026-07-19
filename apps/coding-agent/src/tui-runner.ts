@@ -8,6 +8,15 @@ import type {
   UserTextContent,
 } from "@minpeter/pss-runtime";
 import {
+  assistantText,
+  boldText,
+  dimText,
+  errorText,
+  reasoningText,
+  toolText,
+  userText,
+} from "./tui-theme";
+import {
   formatToolCallForTui,
   formatToolResultForTui,
   safeInlineText,
@@ -17,6 +26,12 @@ import {
 
 export interface TuiRunnerOptions {
   readonly addLine: (text: string) => void;
+  /**
+   * Render assistant output as rich markdown instead of a plain formatted
+   * line. When provided, `assistant-output` events are routed here and skip
+   * `formatEvent`/`addLine`.
+   */
+  readonly addMarkdown?: (text: string) => void;
   readonly requestRender: () => void;
   readonly thread: Pick<ThreadHandle, "send" | "steer">;
 }
@@ -27,9 +42,6 @@ export interface TuiRunner {
   consumeRun(run: AgentTurn): Promise<void>;
   submit(text: string): void;
 }
-
-const dimText = "\x1b[2m";
-const resetText = "\x1b[0m";
 
 export interface TuiHeaderOptions {
   readonly autoCompaction: AgentOptions["autoCompaction"];
@@ -43,7 +55,7 @@ export function formatTuiHeader({
   const compactionText = autoCompaction
     ? `compaction min=${autoCompaction.minMessages} retain=${autoCompaction.retainMessages}`
     : "compaction off";
-  return `\x1b[1mpss-next\x1b[0m \x1b[2m(thread ${safeInlineText(threadKey)} \u00b7 ${compactionText} \u00b7 Esc to interrupt \u00b7 Ctrl-C to quit)\x1b[0m`;
+  return `${boldText("pss-next")} ${dimText(`(thread ${safeInlineText(threadKey)} \u00b7 ${compactionText} \u00b7 Esc to interrupt \u00b7 Ctrl-C to quit)`)}`;
 }
 
 export const formatUserTextContent = (text: UserTextContent): string =>
@@ -52,25 +64,25 @@ export const formatUserTextContent = (text: UserTextContent): string =>
 export const formatEvent = (event: AgentEvent): string | undefined => {
   switch (event.type) {
     case "user-input":
-      return `\x1b[36myou\x1b[0m: ${safeText(formatUserInput(event))}`;
+      return `${userText("you")}: ${safeText(formatUserInput(event))}`;
     case "runtime-input":
-      return `${dimText}runtime: ${safeText(formatRuntimeInput(event.input))}${resetText}`;
+      return dimText(`runtime: ${safeText(formatRuntimeInput(event.input))}`);
     case "assistant-output":
-      return `\x1b[32massistant\x1b[0m: ${safeText(event.text)}`;
+      return `${assistantText("assistant")}: ${safeText(event.text)}`;
     case "assistant-reasoning":
-      return `\x1b[35mreasoning\x1b[0m: ${truncateDetail(safeInlineText(event.text), 240)}`;
+      return `${reasoningText("reasoning")}: ${truncateDetail(safeInlineText(event.text), 240)}`;
     case "tool-call":
-      return `\x1b[33mtool\x1b[0m ${formatToolCallForTui(event)}`;
+      return `${toolText("tool")} ${formatToolCallForTui(event)}`;
     case "tool-result":
-      return `\x1b[33mtool result\x1b[0m ${formatToolResultForTui(event)}`;
+      return `${toolText("tool result")} ${formatToolResultForTui(event)}`;
     case "turn-start":
-      return `${dimText}running...${resetText}`;
+      return dimText("running...");
     case "turn-abort":
-      return `${dimText}interrupted${resetText}`;
+      return dimText("interrupted");
     case "turn-error":
-      return `\x1b[31merror\x1b[0m: ${safeText(event.message)}`;
+      return `${errorText("error")}: ${safeText(event.message)}`;
     case "turn-end":
-      return `${dimText}done${resetText}`;
+      return dimText("done");
     case "step-start":
     case "step-end":
       return;
@@ -81,6 +93,7 @@ export const formatEvent = (event: AgentEvent): string | undefined => {
 
 export function createTuiRunner({
   addLine,
+  addMarkdown,
   requestRender,
   thread,
 }: TuiRunnerOptions): TuiRunner {
@@ -97,9 +110,13 @@ export function createTuiRunner({
 
     try {
       for await (const event of run.events()) {
-        const line = formatEvent(event);
-        if (line) {
-          addLine(line);
+        if (event.type === "assistant-output" && addMarkdown !== undefined) {
+          addMarkdown(event.text);
+        } else {
+          const line = formatEvent(event);
+          if (line) {
+            addLine(line);
+          }
         }
 
         if (isTerminalTurnEvent(event)) {

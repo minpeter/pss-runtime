@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 import {
   Container,
   Input,
+  Markdown,
   matchesKey,
   ProcessTerminal,
   Text,
@@ -15,6 +16,12 @@ import { createCodingLanguageModel } from "./model";
 import { resolveCodingAgentThreadConfig } from "./thread-config";
 import { resolveStartTuiTools } from "./tools";
 import { createTuiRunner, formatTuiHeader } from "./tui-runner";
+import {
+  assistantText,
+  markdownDefaultTextStyle,
+  markdownTheme,
+} from "./tui-theme";
+import { safeText } from "./tui-tool-printer";
 
 export interface StartTuiOptions {
   /**
@@ -69,8 +76,23 @@ export async function startTui(options: StartTuiOptions = {}): Promise<void> {
     tui.requestRender();
   };
 
+  const addMarkdown = (text: string): void => {
+    chat.addChild(new Text(assistantText("assistant:"), 1, 0));
+    chat.addChild(
+      new Markdown(
+        safeText(text),
+        1,
+        0,
+        markdownTheme,
+        markdownDefaultTextStyle
+      )
+    );
+    tui.requestRender();
+  };
+
   const runner = createTuiRunner({
     addLine,
+    addMarkdown,
     requestRender: () => tui.requestRender(),
     thread,
   });

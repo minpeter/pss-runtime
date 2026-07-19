@@ -1,3 +1,6 @@
+import { truncateToWidth } from "@earendil-works/pi-tui";
+import { darkGrayText } from "./tui-theme";
+
 export interface TuiToolCallView {
   input: unknown;
   toolCallId: string;
@@ -11,10 +14,8 @@ export interface TuiToolResultView {
 }
 
 const defaultJsonLength = 220;
-const darkGrayText = "\x1b[90m";
 const errorPrefixPattern = /^Error: /;
 const maxDetailLength = 600;
-const resetText = "\x1b[0m";
 const toolCallIdDisplayEnd = 13;
 const toolCallIdDisplayStart = 5;
 const whitespacePattern = /\s+/g;
@@ -27,11 +28,15 @@ export const safeText = (text: string): string =>
 export const safeInlineText = (text: string): string =>
   safeText(text).replace(whitespacePattern, " ").trim();
 
+/**
+ * Truncate detail text to a maximum visible terminal column width. Uses
+ * pi-tui's width-aware truncation so CJK/emoji (double-column) text cannot
+ * overflow the budget the way character-count slicing did.
+ */
 export const truncateDetail = (
   text: string,
   maxLength = maxDetailLength
-): string =>
-  text.length <= maxLength ? text : `${text.slice(0, maxLength - 3)}...`;
+): string => truncateToWidth(text, maxLength);
 
 export function formatToolCallForTui(event: TuiToolCallView): string {
   return `${formatToolLabel(event)} ${formatToolInput(event.input)}`;
@@ -45,7 +50,7 @@ function formatToolLabel(event: {
   toolCallId: string;
   toolName: string;
 }): string {
-  return `${safeInlineText(event.toolName)}${darkGrayText}#${shortToolCallId(event.toolCallId)}${resetText}`;
+  return `${safeInlineText(event.toolName)}${darkGrayText(`#${shortToolCallId(event.toolCallId)}`)}`;
 }
 
 function isTerminalControlCharacter(value: string): boolean {

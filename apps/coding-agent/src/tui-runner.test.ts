@@ -205,6 +205,51 @@ describe("TUI runner", () => {
       "Timed out waiting for TUI runner test condition"
     );
   });
+
+  it("routes assistant output to addMarkdown when provided", async () => {
+    const run = createRun([
+      { text: "**hi**", type: "assistant-output" },
+      { type: "turn-end" },
+    ]);
+    const lines: string[] = [];
+    const markdown: string[] = [];
+    const runner = createTuiRunner({
+      addLine: (line) => lines.push(line),
+      addMarkdown: (text) => markdown.push(text),
+      requestRender: vi.fn(),
+      thread: {
+        send: vi.fn().mockResolvedValue(run),
+        steer: vi.fn().mockResolvedValue(run),
+      },
+    });
+
+    runner.submit("go");
+    await run.done;
+
+    expect(markdown).toEqual(["**hi**"]);
+    expect(lines.some((line) => line.includes("assistant"))).toBe(false);
+  });
+
+  it("falls back to formatted lines when addMarkdown is absent", async () => {
+    const run = createRun([
+      { text: "**hi**", type: "assistant-output" },
+      { type: "turn-end" },
+    ]);
+    const lines: string[] = [];
+    const runner = createTuiRunner({
+      addLine: (line) => lines.push(line),
+      requestRender: vi.fn(),
+      thread: {
+        send: vi.fn().mockResolvedValue(run),
+        steer: vi.fn().mockResolvedValue(run),
+      },
+    });
+
+    runner.submit("go");
+    await run.done;
+
+    expect(lines).toContain("\x1b[32massistant\x1b[0m: **hi**");
+  });
 });
 
 function createRun(events: readonly EventItem[]): TestRun {
