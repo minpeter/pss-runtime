@@ -1,7 +1,8 @@
 # @minpeter/pss-coding-agent
 
 Model wiring and the `pss` TUI for pss-next. The TUI includes OpenSearch-backed
-`web_search` and `web_fetch` tools by default.
+`web_search` and `web_fetch` tools by default when `TINYFISH_API_KEY` is
+configured.
 
 ```ts
 import { createCodingLanguageModel } from "@minpeter/pss-coding-agent/model";
@@ -72,6 +73,35 @@ records, and version that runtime storage uses.
 The `pss` TUI starts with OpenSearch-backed `web_search` and `web_fetch` tools.
 Call `startTui({ tools })` from your own entrypoint when you want to replace the
 default tool set.
+
+## Web tools availability
+
+The web tools are backed by `@minpeter/opensearch` and need `TINYFISH_API_KEY`
+(one or more `;`-separated keys). `createCodingAgentTools()` gates on the key
+before wiring the OpenSearch client, controlled by `webToolsAvailability`:
+
+- `optional` (default): when the key is missing, the web tools are omitted
+  instead of advertised, and the omission is reported through
+  `onWebToolsDisabled` (default: `console.warn` logs
+  `web tools disabled: missing TINYFISH_API_KEY`). Startup still succeeds, so
+  environments without a key behave exactly as before minus the unusable tools.
+- `required`: throw `CodingAgentWebToolsUnavailableError` during tool/agent
+  initialization when the key is missing, so a model can never be offered a
+  tool that cannot execute.
+- `disabled`: never register the web tools.
+
+The key is read from `openSearchOptions.env` when provided, otherwise from
+`process.env`. An injected `client` counts as provider configuration in
+`optional` and `required` modes.
+
+```ts
+const tools = createCodingAgentTools({ webToolsAvailability: "required" });
+
+// Custom entrypoint around the TUI defaults:
+const tuiTools = resolveStartTuiTools(undefined, {
+  webToolsAvailability: "required",
+});
+```
 
 When the TUI is idle, submitting text starts a normal `thread.send()` turn. When
 a run is active, submitting text calls `thread.steer(trimmed)` so the text lands
