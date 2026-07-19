@@ -1,10 +1,8 @@
 import type { AgentHost, NotificationRecord } from "../../execution/host/types";
 import { createInMemoryHost } from "../../platform/memory";
-import type { PluginDefinition } from "../../plugins/api";
 import { noopRuntimeDiagnostics } from "../../plugins/diagnostics";
 import { PluginRuntime } from "../../plugins/runtime";
 import { type AgentInput, AgentThread } from "../../thread/handle/thread";
-import type { AgentPlugin } from "../../thread/plugins/pipeline";
 import type { AgentTurn } from "../../thread/protocol/turn";
 import type { ThreadStore } from "../../thread/store/types";
 import { stableAgentNamespace } from "../identity/namespace";
@@ -40,9 +38,8 @@ export type {
   ThreadMetadata,
 } from "./thread-entry";
 
-type InternalAgentOptions = Omit<AgentOptions, "plugins"> & {
-  readonly plugins?: readonly (AgentPlugin | PluginDefinition)[];
-};
+/** Options for `new Agent(...)`. Plugins are only accepted via `createAgent`. */
+export type AgentConstructorOptions = Omit<AgentOptions, "plugins">;
 
 export class Agent {
   readonly #modelOptions: AgentModelOptions;
@@ -50,15 +47,13 @@ export class Agent {
   readonly #ownerNamespace: string;
   readonly #store: ThreadStore;
   readonly #host: AgentHost;
-  readonly #plugins: readonly AgentPlugin[];
   readonly #pluginRuntime?: PluginRuntime;
   readonly #notificationOverlays?: AgentOptions["notificationOverlays"];
   readonly #autoCompaction?: AgentAutoCompactionOptions;
   readonly host: AgentHost;
   readonly namespace?: string;
-  constructor(options: InternalAgentOptions, pluginRuntime?: PluginRuntime) {
+  constructor(options: AgentConstructorOptions, pluginRuntime?: PluginRuntime) {
     assertAgentOptions(options);
-    const internalPlugins = (options as InternalAgentOptions).plugins ?? [];
 
     const providedHost = options.host;
     this.namespace = options.namespace;
@@ -69,7 +64,6 @@ export class Agent {
     this.host = this.#host;
     this.#store = threadStoreForHost(this.#host);
     this.#pluginRuntime = pluginRuntime;
-    this.#plugins = internalPlugins.filter(isLegacyPlugin);
     this.#notificationOverlays = options.notificationOverlays;
     this.#autoCompaction = normalizeAgentAutoCompactionOptions(
       options.autoCompaction
@@ -151,7 +145,6 @@ export class Agent {
     thread = new AgentThread(
       this.#modelOptions,
       { key, store: this.#store },
-      [...this.#plugins],
       {
         autoCompaction: this.#autoCompaction,
         executionHost: this.#host,
@@ -230,16 +223,4 @@ export async function createAgent(options: CreateAgentOptions): Promise<Agent> {
     await runtime.dispose();
     throw cause;
   }
-}
-
-function isPluginDefinition(
-  plugin: AgentPlugin | PluginDefinition
-): plugin is PluginDefinition {
-  return typeof plugin === "function";
-}
-
-function isLegacyPlugin(
-  plugin: AgentPlugin | PluginDefinition
-): plugin is AgentPlugin {
-  return !isPluginDefinition(plugin);
 }

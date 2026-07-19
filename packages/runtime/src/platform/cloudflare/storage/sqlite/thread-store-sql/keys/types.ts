@@ -32,7 +32,6 @@ export interface ThreadMessageChunkRow {
 }
 
 export interface ThreadMessageChunkMarker {
-  readonly kind: "legacy-json" | "raw-prefix";
   readonly n: number;
 }
 

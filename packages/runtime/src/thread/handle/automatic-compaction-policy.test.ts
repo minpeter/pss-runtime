@@ -116,7 +116,6 @@ describe("Agent thread automatic compaction policy", () => {
         }),
       },
       { key: "notify-only-auto-skip", store },
-      [],
       { autoCompaction: { minMessages: 4, retainMessages: 2 } }
     );
 

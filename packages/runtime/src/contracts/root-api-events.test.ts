@@ -74,11 +74,22 @@ describe("runtime root event API exports", () => {
     const recoveryResult = {
       action: "needs-recovery",
     } satisfies PluginRequestResultMap["tool.call.before"];
+    const transformResult = {
+      action: "transform",
+      input: { path: "docs/README.md" },
+    } satisfies PluginRequestResultMap["tool.call.before"];
+    const blockResult = {
+      action: "block",
+      reason: "path not allowed",
+    } satisfies PluginRequestResultMap["tool.call.before"];
 
     expect(event.toolName).toBe("write_file");
     expect(event.type).toBe("tool.call.before");
     expect(continueResult.action).toBe("continue");
     expect(recoveryResult.action).toBe("needs-recovery");
+    expect(transformResult.action).toBe("transform");
+    expect(transformResult.input).toEqual({ path: "docs/README.md" });
+    expect(blockResult.action).toBe("block");
   });
 
   it("types atomic model step transforms from the package root", () => {

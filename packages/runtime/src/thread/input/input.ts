@@ -45,5 +45,3 @@ export type AgentInput =
   | readonly UserMessageContentPart[]
   | string;
 export type ThreadInput = AgentInput;
-
-/** @deprecated Use ThreadInput or AgentInput. */

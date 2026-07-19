@@ -4,7 +4,6 @@ import {
   type ChannelAddress,
   ChannelAddressSchema,
   channelKey,
-  legacyChannelThreadKey,
 } from "./channel";
 import {
   buildSessionSnippet,
@@ -112,18 +111,16 @@ export interface SessionIndexRepository {
 
 export function summarizeSessionRecord(
   record: SessionIndexRecord
-): SessionSummary {
+): SessionSummary | null {
+  if (!record.threadKey) {
+    return null;
+  }
   return {
     channel: { id: record.channelId, kind: record.channelKind },
     conversationKey: record.conversationKey,
     lastSeenAt: record.lastSeenAt,
     snippet: buildSessionSnippet(record),
-    threadKey:
-      record.threadKey ??
-      legacyChannelThreadKey({
-        id: record.channelId,
-        kind: record.channelKind,
-      }),
+    threadKey: record.threadKey,
     turnCount: record.turnCount,
   };
 }
@@ -158,21 +155,15 @@ export function createSessionIndexStore(
       return records
         .slice()
         .sort(byRecency)
-        .slice(0, clampSessionLimit(options.limit, DEFAULT_SESSION_LIST_LIMIT))
-        .map(summarizeSessionRecord);
+        .flatMap((record) => {
+          const summary = summarizeSessionRecord(record);
+          return summary ? [summary] : [];
+        })
+        .slice(0, clampSessionLimit(options.limit, DEFAULT_SESSION_LIST_LIMIT));
     },
     resolveThreadKey: async (conversationKey) => {
       const record = await repository.get(conversationKey);
-      if (!record) {
-        return;
-      }
-      return (
-        record.threadKey ??
-        legacyChannelThreadKey({
-          id: record.channelId,
-          kind: record.channelKind,
-        })
-      );
+      return record?.threadKey;
     },
     search: async (query, options = {}) => {
       const normalizedQuery = normalizeSearchText(query);
@@ -188,14 +179,14 @@ export function createSessionIndexStore(
         }))
         .filter((entry) => entry.score > 0)
         .sort(byScoreThenRecency)
+        .flatMap((entry) => {
+          const summary = summarizeSessionRecord(entry.record);
+          return summary ? [{ ...summary, score: entry.score }] : [];
+        })
         .slice(
           0,
           clampSessionLimit(options.limit, DEFAULT_SESSION_SEARCH_LIMIT)
-        )
-        .map((entry) => ({
-          ...summarizeSessionRecord(entry.record),
-          score: entry.score,
-        }));
+        );
     },
     upsert: async (update) => {
       const conversationKey = channelKey(update.channel);

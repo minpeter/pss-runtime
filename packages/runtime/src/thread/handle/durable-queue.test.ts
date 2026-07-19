@@ -6,6 +6,9 @@ import type {
 } from "../../execution/host/types";
 import { createInMemoryHost } from "../../platform/memory";
 import { MemoryAttachmentStore } from "../../platform/memory/storage/memory-attachment-store";
+import { definePlugin } from "../../plugins/api";
+import { noopRuntimeDiagnostics } from "../../plugins/diagnostics";
+import { PluginRuntime } from "../../plugins/runtime";
 import { solidTestPng } from "../../testing/valid-image-fixture";
 import type {
   HostAttachmentStore,
@@ -14,7 +17,6 @@ import type {
   RuntimeAttachmentReference,
 } from "../input/attachments";
 import type { UserInput } from "../input/input";
-import type { AgentPlugin } from "../plugins/pipeline";
 import { BufferedAgentTurn } from "../protocol/turn";
 import { ThreadEventDispatcher } from "../runtime/events";
 import { createQueuedSendInput } from "./durable-queue";
@@ -22,10 +24,13 @@ import { createQueuedSendInput } from "./durable-queue";
 describe("createQueuedSendInput", () => {
   it("deletes plugin-transformed attachment bytes when durable admission dedupes", async () => {
     const attachmentStore = new TrackingAttachmentStore();
+    const pluginRuntime = await createPluginRuntime([
+      transformTextToFileInputPlugin(),
+    ]);
     const events = new ThreadEventDispatcher({
       attachmentStore,
       history: () => [],
-      plugins: [transformTextToFileInputPlugin()],
+      pluginRuntime,
       signal: () => undefined,
       threadKey: "plugin-duplicate",
     });
@@ -54,10 +59,13 @@ describe("createQueuedSendInput", () => {
 
   it("deletes staged attachment bytes dropped by a successful plugin transform", async () => {
     const attachmentStore = new TrackingAttachmentStore();
+    const pluginRuntime = await createPluginRuntime([
+      transformAnyInputToTextPlugin(),
+    ]);
     const events = new ThreadEventDispatcher({
       attachmentStore,
       history: () => [],
-      plugins: [transformAnyInputToTextPlugin()],
+      pluginRuntime,
       signal: () => undefined,
       threadKey: "plugin-transform",
     });
@@ -92,16 +100,26 @@ describe("createQueuedSendInput", () => {
   });
 });
 
-function transformTextToFileInputPlugin(): AgentPlugin {
-  return {
-    on: ({ event }) => {
+async function createPluginRuntime(
+  definitions: ReturnType<typeof definePlugin>[]
+) {
+  return await PluginRuntime.create(definitions, {
+    diagnostics: noopRuntimeDiagnostics,
+    factoryTimeoutMs: 10_000,
+    hookTimeoutMs: 10_000,
+  });
+}
+
+function transformTextToFileInputPlugin() {
+  return definePlugin((pss) => {
+    pss.on("input.accept", (event) => {
       if (event.type !== "user-input") {
         return { action: "continue" };
       }
 
       return {
         action: "transform",
-        event: {
+        value: {
           content: [
             {
               data: solidTestPng(),
@@ -113,26 +131,26 @@ function transformTextToFileInputPlugin(): AgentPlugin {
           type: "user-input",
         },
       };
-    },
-  };
+    });
+  });
 }
 
-function transformAnyInputToTextPlugin(): AgentPlugin {
-  return {
-    on: ({ event }) => {
+function transformAnyInputToTextPlugin() {
+  return definePlugin((pss) => {
+    pss.on("input.accept", (event) => {
       if (event.type !== "user-input") {
         return { action: "continue" };
       }
 
       return {
         action: "transform",
-        event: {
+        value: {
           text: "plugin replacement",
           type: "user-input",
         },
       };
-    },
-  };
+    });
+  });
 }
 
 function duplicateAdmissionHost(): AgentHost {

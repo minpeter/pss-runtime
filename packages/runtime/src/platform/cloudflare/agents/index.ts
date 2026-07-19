@@ -1,9 +1,7 @@
 // biome-ignore-all lint/performance/noBarrelFile: Internal Cloudflare Agents barrel for the canonical Cloudflare adapter.
 
 export {
-  type CloudflareHostAgentsOptions,
   type CloudflareHostOptions,
-  createCloudflareAgentsHost,
   createCloudflareHost,
 } from "../host/create-cloudflare-host";
 export {
@@ -21,7 +19,6 @@ export {
   type StartCloudflareAgentsResumeFiberOptions,
   startCloudflareAgentsResumeFiber,
 } from "./fiber";
-export type { CloudflareAgentsHostOptions } from "./host";
 export {
   ackScheduledCloudflareAgentsRun,
   ackScheduledCloudflareAgentsThreadPrompt,

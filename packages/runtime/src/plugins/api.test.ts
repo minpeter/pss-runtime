@@ -419,6 +419,445 @@ describe("factory plugin API", () => {
     );
   });
 
+  it("transforms tool.call.before input for later plugins and execute", async () => {
+    const call = toolCallPart("call-transform-input", "rewrite_tool");
+    const model = createScriptedModelOptions([
+      [assistantMessage([call]), toolResultFor(call)],
+      [assistantMessage("DONE")],
+    ]);
+    let executedInput: unknown;
+    const secondSaw: unknown[] = [];
+    model.tools = {
+      rewrite_tool: tool({
+        execute: (input) => {
+          executedInput = input;
+          return { ok: true };
+        },
+        inputSchema: jsonSchema({
+          additionalProperties: true,
+          properties: {
+            path: { type: "string" },
+          },
+          type: "object",
+        }),
+      }),
+    };
+    const first = definePlugin((pss) => {
+      pss.on("tool.call.before", (event) => ({
+        action: "transform",
+        input: {
+          ...(typeof event.input === "object" && event.input !== null
+            ? event.input
+            : {}),
+          path: "first.md",
+        },
+      }));
+    });
+    const second = definePlugin((pss) => {
+      pss.on("tool.call.before", (event) => {
+        secondSaw.push(structuredClone(event.input));
+        return {
+          action: "transform",
+          input: {
+            ...(typeof event.input === "object" && event.input !== null
+              ? event.input
+              : {}),
+            path: "second.md",
+          },
+        };
+      });
+    });
+    const agent = await createAgent({
+      ...model,
+      plugins: [first, second],
+    });
+
+    await collect(await agent.send("rewrite"));
+
+    expect(secondSaw).toEqual([{ path: "first.md" }]);
+    expect(executedInput).toEqual({ path: "second.md" });
+  });
+
+  it("rejects tool.call.before transform without input", async () => {
+    const beforeEvent = {
+      attempt: 1,
+      idempotencyKey: "run:call_1",
+      input: { path: "a.md" },
+      policy: "idempotent" as const,
+      toolCallId: "call_1",
+      toolName: "write_file",
+      type: "tool.call.before" as const,
+    };
+    const runtime = await PluginRuntime.create(
+      [
+        definePlugin((pss) => {
+          pss.on("tool.call.before", () => ({ action: "transform" }) as never);
+        }),
+      ],
+      {
+        diagnostics: { report: () => undefined },
+        factoryTimeoutMs: 1000,
+        hookTimeoutMs: 1000,
+      }
+    );
+
+    await expect(
+      runtime.beforeToolExecution("thread", beforeEvent, [])
+    ).rejects.toBeInstanceOf(PluginHookError);
+
+    await runtime.dispose();
+  });
+
+  it("rejects tool.call.before transform when input is undefined", async () => {
+    const beforeEvent = {
+      attempt: 1,
+      idempotencyKey: "run:call_1",
+      input: { path: "a.md" },
+      policy: "idempotent" as const,
+      toolCallId: "call_1",
+      toolName: "write_file",
+      type: "tool.call.before" as const,
+    };
+    const runtime = await PluginRuntime.create(
+      [
+        definePlugin((pss) => {
+          pss.on("tool.call.before", () => ({
+            action: "transform",
+            input: undefined,
+          }));
+        }),
+      ],
+      {
+        diagnostics: { report: () => undefined },
+        factoryTimeoutMs: 1000,
+        hookTimeoutMs: 1000,
+      }
+    );
+
+    await expect(
+      runtime.beforeToolExecution("thread", beforeEvent, [])
+    ).rejects.toBeInstanceOf(PluginHookError);
+
+    await runtime.dispose();
+  });
+
+  it("rejects non-cloneable tool.call.before transform input", async () => {
+    const beforeEvent = {
+      attempt: 1,
+      idempotencyKey: "run:call_1",
+      input: { path: "a.md" },
+      policy: "idempotent" as const,
+      toolCallId: "call_1",
+      toolName: "write_file",
+      type: "tool.call.before" as const,
+    };
+    const runtime = await PluginRuntime.create(
+      [
+        definePlugin((pss) => {
+          pss.on("tool.call.before", () => ({
+            action: "transform",
+            input: { fn: () => "nope" },
+          }));
+        }),
+      ],
+      {
+        diagnostics: { report: () => undefined },
+        factoryTimeoutMs: 1000,
+        hookTimeoutMs: 1000,
+      }
+    );
+
+    await expect(
+      runtime.beforeToolExecution("thread", beforeEvent, [])
+    ).rejects.toMatchObject({
+      name: "PluginHookError",
+      event: "tool.call.before",
+    });
+
+    await runtime.dispose();
+  });
+
+  it("does not emit tool.execution.start when a later plugin blocks after transform", async () => {
+    const phases: string[] = [];
+    const startInputs: unknown[] = [];
+    const beforeEvent = {
+      attempt: 1,
+      idempotencyKey: "run:call_1",
+      input: { path: "a.md" },
+      policy: "idempotent" as const,
+      toolCallId: "call_1",
+      toolName: "write_file",
+      type: "tool.call.before" as const,
+    };
+    const runtime = await PluginRuntime.create(
+      [
+        definePlugin((pss) => {
+          pss.on("tool.call.before", () => ({
+            action: "transform",
+            input: { path: "transformed.md" },
+          }));
+        }),
+        definePlugin((pss) => {
+          pss.on("tool.call.before", (event) => {
+            phases.push(`second:${JSON.stringify(event.input)}`);
+            return { action: "block", reason: "blocked after transform" };
+          });
+          pss.on("tool.execution.start", (event) => {
+            phases.push("tool.execution.start");
+            startInputs.push(structuredClone(event.input));
+          });
+        }),
+      ],
+      {
+        diagnostics: { report: () => undefined },
+        factoryTimeoutMs: 1000,
+        hookTimeoutMs: 1000,
+      }
+    );
+
+    const decision = await runtime.beforeToolExecution(
+      "thread",
+      beforeEvent,
+      []
+    );
+
+    expect(decision).toEqual({
+      output: {
+        blocked: true,
+        reason: "blocked after transform",
+      },
+      status: "blocked",
+    });
+    expect(phases).toEqual(['second:{"path":"transformed.md"}']);
+    expect(startInputs).toEqual([]);
+
+    await runtime.dispose();
+  });
+
+  it("does not emit tool.execution.start when a later plugin requests recovery after transform", async () => {
+    const phases: string[] = [];
+    const beforeEvent = {
+      attempt: 1,
+      idempotencyKey: "run:call_1",
+      input: { path: "a.md" },
+      policy: "manual-recovery" as const,
+      toolCallId: "call_1",
+      toolName: "write_file",
+      type: "tool.call.before" as const,
+    };
+    const runtime = await PluginRuntime.create(
+      [
+        definePlugin((pss) => {
+          pss.on("tool.call.before", () => ({
+            action: "transform",
+            input: { path: "transformed.md" },
+          }));
+        }),
+        definePlugin((pss) => {
+          pss.on("tool.call.before", () => {
+            phases.push("second:needs-recovery");
+            return { action: "needs-recovery" };
+          });
+          pss.on("tool.execution.start", () => {
+            phases.push("tool.execution.start");
+          });
+        }),
+      ],
+      {
+        diagnostics: { report: () => undefined },
+        factoryTimeoutMs: 1000,
+        hookTimeoutMs: 1000,
+      }
+    );
+
+    await expect(
+      runtime.beforeToolExecution("thread", beforeEvent, [])
+    ).resolves.toEqual({ status: "needs-recovery" });
+    expect(phases).toEqual(["second:needs-recovery"]);
+
+    await runtime.dispose();
+  });
+
+  it("notifies tool.execution.start with the final transformed input", async () => {
+    const startInputs: unknown[] = [];
+    const beforeEvent = {
+      attempt: 1,
+      idempotencyKey: "run:call_1",
+      input: { path: "a.md" },
+      policy: "idempotent" as const,
+      toolCallId: "call_1",
+      toolName: "write_file",
+      type: "tool.call.before" as const,
+    };
+    const runtime = await PluginRuntime.create(
+      [
+        definePlugin((pss) => {
+          pss.on("tool.call.before", () => ({
+            action: "transform",
+            input: { path: "first.md" },
+          }));
+        }),
+        definePlugin((pss) => {
+          pss.on("tool.call.before", () => ({
+            action: "transform",
+            input: { path: "final.md" },
+          }));
+          pss.on("tool.execution.start", (event) => {
+            startInputs.push(structuredClone(event.input));
+          });
+        }),
+      ],
+      {
+        diagnostics: { report: () => undefined },
+        factoryTimeoutMs: 1000,
+        hookTimeoutMs: 1000,
+      }
+    );
+
+    const decision = await runtime.beforeToolExecution(
+      "thread",
+      beforeEvent,
+      []
+    );
+
+    expect(decision).toEqual({
+      input: { path: "final.md" },
+      status: "continue",
+    });
+    expect(startInputs).toEqual([{ path: "final.md" }]);
+
+    await runtime.dispose();
+  });
+
+  it("notifies tool.execution.start with original input when no transform runs", async () => {
+    const startInputs: unknown[] = [];
+    const beforeEvent = {
+      attempt: 1,
+      idempotencyKey: "run:call_1",
+      input: { path: "original.md" },
+      policy: "idempotent" as const,
+      toolCallId: "call_1",
+      toolName: "write_file",
+      type: "tool.call.before" as const,
+    };
+    const runtime = await PluginRuntime.create(
+      [
+        definePlugin((pss) => {
+          pss.on("tool.call.before", () => ({ action: "continue" }));
+          pss.on("tool.execution.start", (event) => {
+            startInputs.push(structuredClone(event.input));
+          });
+        }),
+      ],
+      {
+        diagnostics: { report: () => undefined },
+        factoryTimeoutMs: 1000,
+        hookTimeoutMs: 1000,
+      }
+    );
+
+    const decision = await runtime.beforeToolExecution(
+      "thread",
+      beforeEvent,
+      []
+    );
+
+    expect(decision).toBeUndefined();
+    expect(startInputs).toEqual([{ path: "original.md" }]);
+
+    await runtime.dispose();
+  });
+
+  it("does not execute the tool when transform input is non-cloneable", async () => {
+    const call = toolCallPart("call-nonclone", "rewrite_tool");
+    const model = createScriptedModelOptions([
+      [assistantMessage([call]), toolResultFor(call)],
+    ]);
+    let executions = 0;
+    model.tools = {
+      rewrite_tool: tool({
+        execute: () => {
+          executions += 1;
+          return { ok: true };
+        },
+        inputSchema: jsonSchema({
+          additionalProperties: true,
+          type: "object",
+        }),
+      }),
+    };
+    const plugin = definePlugin((pss) => {
+      pss.on("tool.call.before", () => ({
+        action: "transform",
+        input: { fn: () => "nope" },
+      }));
+    });
+    const agent = await createAgent({ ...model, plugins: [plugin] });
+
+    const events = await collect(await agent.send("rewrite"));
+
+    expect(executions).toBe(0);
+    expect(events).toContainEqual(
+      expect.objectContaining({ type: "turn-error" })
+    );
+  });
+
+  it("blocks execute after an earlier plugin transforms input", async () => {
+    const call = toolCallPart("call-transform-then-block", "rewrite_tool");
+    const model = createScriptedModelOptions([
+      [assistantMessage([call]), toolResultFor(call)],
+      [assistantMessage("DONE")],
+    ]);
+    let executions = 0;
+    const phases: string[] = [];
+    model.tools = {
+      rewrite_tool: tool({
+        execute: () => {
+          executions += 1;
+          return { ok: true };
+        },
+        inputSchema: jsonSchema({
+          additionalProperties: true,
+          type: "object",
+        }),
+      }),
+    };
+    const transformThenBlock = [
+      definePlugin((pss) => {
+        pss.on("tool.call.before", () => ({
+          action: "transform",
+          input: { path: "transformed.md" },
+        }));
+      }),
+      definePlugin((pss) => {
+        pss.on("tool.call.before", () => ({
+          action: "block",
+          reason: "nope",
+        }));
+        pss.on("tool.execution.start", () => {
+          phases.push("tool.execution.start");
+        });
+      }),
+    ];
+    const agent = await createAgent({
+      ...model,
+      plugins: transformThenBlock,
+    });
+
+    const events = await collect(await agent.send("rewrite"));
+
+    expect(executions).toBe(0);
+    expect(phases).toEqual([]);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        output: expect.objectContaining({
+          value: expect.objectContaining({ blocked: true }),
+        }),
+        type: "tool-result",
+      })
+    );
+  });
+
   it("transforms tool results before they return to the model", async () => {
     const call = toolCallPart("call-transform", "lookup");
     const model = createScriptedModelOptions([

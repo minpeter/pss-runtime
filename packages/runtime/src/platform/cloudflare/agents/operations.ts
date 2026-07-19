@@ -10,7 +10,6 @@ import {
 } from "../host/create-cloudflare-host";
 import type { CloudflareScheduledThreadPrompt } from "../host/scheduled-work-queue";
 import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
-import type { CloudflareAgentsHostOptions } from "./host";
 import {
   ackListedCloudflareAgentsScheduledRun,
   ackListedCloudflareAgentsScheduledThreadPrompt,
@@ -38,14 +37,14 @@ export type DispatchCloudflareAgentsNotificationInput<
   (
     | ({
         readonly host: AgentHost;
-      } & ForbiddenCloudflareAgentsHostOptions<TAgent>)
-    | ({ readonly host?: never } & CloudflareAgentsHostOptions<TAgent>)
+      } & ForbiddenCloudflareHostOptions<TAgent>)
+    | ({ readonly host?: never } & CloudflareHostOptions<TAgent>)
   );
 
-type ForbiddenCloudflareAgentsHostOptions<
+type ForbiddenCloudflareHostOptions<
   TAgent extends CloudflareAgentsDefaultResumeAgent,
 > = {
-  readonly [Key in keyof CloudflareAgentsHostOptions<TAgent>]?: never;
+  readonly [Key in keyof CloudflareHostOptions<TAgent>]?: never;
 };
 
 export function listScheduledCloudflareAgentsRuns(

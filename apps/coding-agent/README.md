@@ -86,7 +86,6 @@ The TUI persists runtime-owned thread state to files by default:
 
 - `PSS_THREAD_DIR` overrides the store directory. Default: `~/.pss/threads`.
 - `PSS_THREAD_KEY` overrides the conversation key. Default: `cwd:<current working directory>`.
-- `PSS_SESSION_DIR` and `PSS_SESSION_KEY` remain accepted as legacy aliases.
 
 Local auto-compaction is disabled unless both thresholds are set:
 
