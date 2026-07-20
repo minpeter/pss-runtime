@@ -6,8 +6,8 @@ import type {
 import { defineEval } from "@minpeter/pss-runtime/evals";
 import { z } from "zod";
 
-import type { WorkerAgentDeliveryResponse } from "../agent-do-delivery";
-import { createRemoteTuiDeliveryClient } from "../tui-remote";
+import type { WorkerAgentDeliveryResponse } from "../agent/agent-do-delivery";
+import { createRemoteTuiDeliveryClient } from "../tui/tui-remote";
 import { loadWorkerAgentEvalEnv } from "./eval-env";
 
 const RemoteEvalEnvSchema = z.looseObject({

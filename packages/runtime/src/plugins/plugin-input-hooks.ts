@@ -1,23 +1,24 @@
 import type { ModelMessage } from "ai";
-import type { AgentEvent, ToolResult } from "../thread/protocol/events";
-import type {
-  InputAcceptEvent,
-  PluginRequestResultMap,
-  PluginToolCallBeforeEvent,
-} from "./api";
-import { cloneToolCallInput } from "./plugin-clone";
+
+import type { AgentEvent } from "../thread/protocol/events";
+import type { InputAcceptEvent, PluginRequestResultMap } from "./api";
+import {
+  assertInputAcceptEvent,
+  assertTurnStartEvent,
+} from "./plugin-input-hooks-asserts";
 import {
   invokeHandler,
-  notifyHandlers,
   throwHookFailure,
   validateRequestResult,
 } from "./plugin-invocation";
 import { activeHandlers } from "./plugin-registry";
-import type {
-  PluginInputDecision,
-  PluginRuntimeState,
-  PluginToolExecutionDecision,
-} from "./plugin-types";
+import type { PluginInputDecision, PluginRuntimeState } from "./plugin-types";
+
+// biome-ignore lint/performance/noBarrelFile: plugin-runtime and tests import all four hook runners from this module; the tool-call pair lives in plugin-input-hooks-tool-call.ts after the split.
+export {
+  afterToolExecution,
+  beforeToolExecution,
+} from "./plugin-input-hooks-tool-call";
 
 export async function interceptInput(
   state: PluginRuntimeState,
@@ -102,169 +103,4 @@ export async function beforeTurnStart(
     }
   }
   return current;
-}
-
-export async function beforeToolExecution(
-  state: PluginRuntimeState,
-  threadKey: string,
-  event: PluginToolCallBeforeEvent,
-  history: readonly ModelMessage[],
-  signal: AbortSignal
-): Promise<PluginToolExecutionDecision> {
-  let currentInput = structuredClone(event.input);
-  let inputTransformed = false;
-  for (const { registered, registration } of activeHandlers(
-    state,
-    "tool.call.before"
-  )) {
-    const snapshot: PluginToolCallBeforeEvent = {
-      ...event,
-      input: structuredClone(currentInput),
-    };
-    const result = await invokeHandler(
-      state,
-      registration,
-      "tool.call.before",
-      registered,
-      snapshot,
-      { history, signal, threadKey }
-    );
-    const decision = result as
-      | PluginRequestResultMap["tool.call.before"]
-      | undefined;
-    await validateRequestResult(
-      state,
-      registration,
-      "tool.call.before",
-      decision,
-      ["block", "continue", "needs-recovery", "transform"]
-    );
-    if (decision?.action === "needs-recovery") {
-      return { status: "needs-recovery" };
-    }
-    if (decision?.action === "block") {
-      return {
-        output: {
-          blocked: true,
-          reason: decision.reason ?? "Tool call blocked by plugin.",
-        },
-        status: "blocked",
-      };
-    }
-    if (decision?.action === "transform") {
-      try {
-        currentInput = cloneToolCallInput(decision.input);
-      } catch (cause) {
-        await throwHookFailure(state, registration, "tool.call.before", cause);
-      }
-      inputTransformed = true;
-    }
-  }
-
-  const finalEvent: PluginToolCallBeforeEvent = {
-    ...event,
-    input: structuredClone(currentInput),
-  };
-  await notifyHandlers(state, "tool.execution.start", finalEvent, {
-    history,
-    signal,
-    threadKey,
-  });
-  if (inputTransformed) {
-    return { input: currentInput, status: "continue" };
-  }
-  return;
-}
-
-export async function afterToolExecution(
-  state: PluginRuntimeState,
-  threadKey: string,
-  event: ToolResult,
-  history: readonly ModelMessage[],
-  signal: AbortSignal
-): Promise<ToolResult> {
-  let current = structuredClone(event);
-  for (const { registered, registration } of activeHandlers(
-    state,
-    "tool.result"
-  )) {
-    const result = await invokeHandler(
-      state,
-      registration,
-      "tool.result",
-      registered,
-      structuredClone(current),
-      { history, signal, threadKey }
-    );
-    const decision = result as
-      | PluginRequestResultMap["tool.result"]
-      | undefined;
-    await validateRequestResult(state, registration, "tool.result", decision, [
-      "continue",
-      "transform",
-    ]);
-    if (decision?.action === "transform") {
-      try {
-        assertToolResultEvent(decision.value);
-      } catch (cause) {
-        await throwHookFailure(state, registration, "tool.result", cause);
-      }
-      current = structuredClone(decision.value);
-    }
-  }
-
-  await notifyHandlers(state, "tool.execution.end", current, {
-    history,
-    signal,
-    threadKey,
-  });
-  return current;
-}
-
-function assertInputAcceptEvent(
-  value: unknown
-): asserts value is InputAcceptEvent {
-  if (
-    !(value && typeof value === "object" && "type" in value) ||
-    (value.type !== "runtime-input" && value.type !== "user-input")
-  ) {
-    throw new TypeError(
-      "Plugin input.accept transform must return a user-input or runtime-input event."
-    );
-  }
-}
-
-function assertTurnStartEvent(
-  value: unknown
-): asserts value is Extract<AgentEvent, { type: "turn-start" }> {
-  if (!(value && typeof value === "object" && "type" in value)) {
-    throw new TypeError(
-      "Plugin turn.start.before transform must return a turn-start event."
-    );
-  }
-  if (value.type !== "turn-start") {
-    throw new TypeError(
-      "Plugin turn.start.before transform must return a turn-start event."
-    );
-  }
-}
-
-function assertToolResultEvent(value: unknown): asserts value is ToolResult {
-  if (
-    !(
-      value &&
-      typeof value === "object" &&
-      "type" in value &&
-      value.type === "tool-result" &&
-      "toolCallId" in value &&
-      typeof value.toolCallId === "string" &&
-      "toolName" in value &&
-      typeof value.toolName === "string" &&
-      "output" in value
-    )
-  ) {
-    throw new TypeError(
-      "Plugin tool.result transform must return a complete tool-result event."
-    );
-  }
 }

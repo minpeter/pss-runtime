@@ -10,9 +10,7 @@ const SendMessageToolInputSchema = z
   })
   .strict();
 
-export type SendMessageToolInput = z.infer<typeof SendMessageToolInputSchema>;
-
-export interface SendMessageToolResult {
+interface SendMessageToolResult {
   readonly channel: string;
   readonly delivered: true;
   readonly messageId: string;

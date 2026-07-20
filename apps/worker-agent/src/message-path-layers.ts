@@ -40,7 +40,3 @@ export const TELEGRAM_INGRESS_LAYER =
 
 /** Layer 2 id — DO admission: idle send / running steer. */
 export const AGENT_TURN_ADMISSION_LAYER = "agent-turn-admission" as const;
-
-export type MessagePathLayer =
-  | typeof TELEGRAM_INGRESS_LAYER
-  | typeof AGENT_TURN_ADMISSION_LAYER;

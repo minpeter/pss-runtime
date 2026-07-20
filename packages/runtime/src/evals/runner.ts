@@ -1,13 +1,9 @@
 import { summarizeCacheUsage } from "./cache";
 import { getEvals } from "./registry";
 import { EvalScopeImpl } from "./scope-impl";
-import type {
-  AssertionRecord,
-  CaseResult,
-  EvalDefinition,
-  EvalReport,
-  RunEvalsOptions,
-} from "./types";
+import type { EvalDefinition } from "./types";
+import type { AssertionRecord } from "./types-assertions";
+import type { CaseResult, EvalReport, RunEvalsOptions } from "./types-results";
 
 function matchesId(id: string, filter: string | RegExp | undefined): boolean {
   if (filter === undefined) {

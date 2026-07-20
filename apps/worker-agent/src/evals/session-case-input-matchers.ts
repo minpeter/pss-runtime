@@ -1,7 +1,7 @@
 import {
   READ_SESSION_TOOL_NAME,
   SEARCH_SESSIONS_TOOL_NAME,
-} from "../session-tools";
+} from "../session/session-tools";
 import { channelInputEquals, queryInputIncludes } from "./eval-matchers";
 import type { SessionCase } from "./session-case-support";
 

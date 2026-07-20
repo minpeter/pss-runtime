@@ -13,13 +13,13 @@ export interface TurnObservabilityEntry {
   readonly toolName?: string;
 }
 
-export interface TurnObservabilityOptions {
+interface TurnObservabilityOptions {
   readonly label?: string;
   /** Defaults to a no-op collector — prefer folding into the request wide event. */
   readonly log?: (entry: TurnObservabilityEntry) => void;
 }
 
-export interface TurnObservabilitySummary {
+interface TurnObservabilitySummary {
   readonly errors: readonly string[];
   readonly steps: number;
   readonly toolCalls: readonly string[];

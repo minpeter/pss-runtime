@@ -1,10 +1,30 @@
 import type { LanguageModel } from "ai";
 import type { AgentEvent, ModelUsage } from "../thread/protocol/events";
-import type { StandardSchemaV1 } from "./standard-schema";
+import type {
+  AssertionHandle,
+  SchemaInput,
+  ToolCallMatcherOptions,
+  ValueBuilder,
+} from "./types-assertions";
+import type { JudgeSurface } from "./types-judge";
 
 type MaybePromise<T> = PromiseLike<T> | T;
 
 export type { AgentEvent } from "../thread/protocol/events";
+export type {
+  AssertionHandle,
+  AssertionRecord,
+  AssertionSeverity,
+  FieldMatcher,
+  SchemaInput,
+  ToolCallMatcherOptions,
+  ValueBuilder,
+} from "./types-assertions";
+export type {
+  JudgeAutoevals,
+  JudgeCallOptions,
+  JudgeSurface,
+} from "./types-judge";
 
 /**
  * A normalized view of a single agent turn, distilled from the real
@@ -127,131 +147,6 @@ export interface EvalOptions {
    * keeps conversation state isolated between checks.
    */
   readonly thread: () => MaybePromise<EvalThreadLike>;
-}
-
-export type AssertionSeverity = "gate" | "soft";
-
-/** One recorded assertion result on a scope. The runner aggregates these. */
-export interface AssertionRecord {
-  /** Detail describing a failure. */
-  readonly failure?: string;
-  readonly label: string;
-  /** Gate assertions are false here on a miss; soft assertions meet their bar. */
-  readonly passed: boolean;
-  /** 0..1 score for scored assertions (similarity). */
-  readonly score?: number;
-  readonly severity: AssertionSeverity;
-  /** True for soft assertions: only fatal under `--strict`. */
-  readonly strictOnly: boolean;
-  /** Threshold for soft assertions with a bar (`.atLeast`). */
-  readonly threshold?: number;
-}
-
-/**
- * Severity rides on the assertion (eve-style). Every assertion returns this
- * handle so you can override the default severity.
- */
-export interface AssertionHandle {
-  /** Soft with a bar: fatal under `--strict` when the score is below `threshold`. */
-  atLeast(threshold: number): AssertionHandle;
-  /** Hard: a miss fails the case (the default for gate assertions). */
-  gate(): AssertionHandle;
-  /** Tracked data; fatal only under `--strict`. With no threshold, tracked-only. */
-  soft(threshold?: number): AssertionHandle;
-}
-
-/** Field-level matcher: a literal (partial-deep-match), a RegExp, or a predicate. */
-export type FieldMatcher<T> = T | RegExp | ((value: T) => boolean | unknown);
-
-/** Constraints for {@link EvalScope.calledTool}. */
-export interface ToolCallMatcherOptions {
-  /** Match the tool call input (partial-deep / RegExp / predicate). */
-  readonly input?: FieldMatcher<unknown>;
-  /**
-   * Match the tool result output, joined to the call by `toolCallId`
-   * (partial-deep / RegExp / predicate).
-   */
-  readonly output?: FieldMatcher<unknown>;
-  /** Exact number of matching calls; default at least one. */
-  readonly times?: number;
-}
-
-/** A value builder for {@link EvalScope.check}. */
-export interface ValueBuilder<T> {
-  readonly defaultSeverity: AssertionSeverity;
-  readonly label: string;
-  /** Score the value: `pass` plus an optional 0..1 `score` and `detail`. */
-  readonly score: (value: T) => {
-    pass: boolean;
-    score?: number;
-    detail?: string;
-  };
-}
-
-/** Standard Schema input for {@link EvalScope.outputMatches}. */
-export type SchemaInput = StandardSchemaV1;
-
-/** The outcome of one case within a run. */
-export interface CaseResult {
-  readonly assertions: readonly AssertionRecord[];
-  /** Cache totals across every `t.run()` in this case. */
-  readonly cache: EvalCacheStats;
-  readonly durationMs: number;
-  /** Non-assertion exception thrown by the case body. */
-  readonly error?: string;
-  readonly evalId: string;
-  readonly name: string;
-  /** Gate-based pass (plus strict softs when run under `--strict`). */
-  readonly passed: boolean;
-  /** Per-`t.run()` traces, suitable for JSON report inspection. */
-  readonly runs: readonly EvalRun[];
-  /** True when a soft assertion missed its bar (tracked, non-fatal unless strict). */
-  readonly scored: boolean;
-}
-
-/** The full result of a {@link runEvals} invocation. */
-export interface EvalReport {
-  /** Cache totals across all selected cases. */
-  readonly cache: EvalCacheStats;
-  readonly failed: number;
-  readonly passed: number;
-  readonly results: readonly CaseResult[];
-  readonly startedAt: string;
-  readonly strict: boolean;
-  readonly total: number;
-}
-
-/** Options for {@link runEvals}. */
-export interface RunEvalsOptions {
-  /** Only run evals whose id matches (substring or RegExp). */
-  readonly filter?: string | RegExp;
-  /** Treat soft-threshold misses as failures (the `--strict` CLI mode). */
-  readonly strict?: boolean;
-  /** Only run evals carrying all of these tags. */
-  readonly tags?: readonly string[];
-}
-
-/** Options for a single judge call (per-call overrides). */
-export interface JudgeCallOptions {
-  /** Per-call judge model override. */
-  readonly model?: LanguageModel;
-  /** Value to grade; defaults to the scope's last reply. */
-  readonly on?: unknown;
-}
-
-/** The autoevals grader family, mirroring Braintrust autoevals. */
-export interface JudgeAutoevals {
-  /** Closed-QA: does the value meet the free-form `criterion`? */
-  closedQA(criterion: string, options?: JudgeCallOptions): AssertionHandle;
-  /** Factual consistency of the value against an expected reference answer. */
-  factuality(expected: string, options?: JudgeCallOptions): AssertionHandle;
-  /** How well the value summarizes the expected reference text. */
-  summarizes(expected: string, options?: JudgeCallOptions): AssertionHandle;
-}
-
-/** The `t.judge` surface: LLM-graded assertions (the only model-backed ones). */
-export interface JudgeSurface {
-  readonly autoevals: JudgeAutoevals;
 }
 
 /**

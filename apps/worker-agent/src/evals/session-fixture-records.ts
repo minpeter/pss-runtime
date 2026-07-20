@@ -1,5 +1,5 @@
-import type { SessionSummary } from "../session-index";
-import type { SessionTranscriptMessage } from "../session-transcript";
+import type { SessionTranscriptMessage } from "../session/session-transcript";
+import type { SessionSummary } from "../session-index/session-index";
 
 export interface EvalSessionRecord {
   readonly keywords: readonly string[];

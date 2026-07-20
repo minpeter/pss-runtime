@@ -2,16 +2,16 @@ import { installCloudflareImageCodecs } from "@minpeter/pss-runtime/platform/clo
 import { defineWorkerFetch } from "evlog/workers";
 
 import type { Env } from "./env";
-import { handleSessionEventsRequest } from "./session-events-server";
-import { handleTelegramWebhook } from "./telegram";
-import { handleTuiRpcRequest } from "./tui-rpc";
+import { handleWorkerRpcRequest } from "./rpc/worker-rpc";
+import { handleSessionEventsRequest } from "./session/session-events-server";
+import { handleTelegramWebhook } from "./telegram/telegram";
 import { ensureWorkerLogger, newCorrelationId } from "./worker-log";
 
 // Edge-first: static wasm for AVIF/WebP/HEIC before any attachment staging.
 installCloudflareImageCodecs();
 
 // biome-ignore lint/performance/noBarrelFile: Wrangler requires Durable Object classes to be exported from the worker entrypoint.
-export { AgentDurableObject } from "./agent-do";
+export { AgentDurableObject } from "./agent/agent-do";
 export type { Env } from "./env";
 
 const SESSION_EVENTS_PATHNAME = "/session/events";
@@ -40,7 +40,7 @@ export default defineWorkerFetch<Env>(async (request, env, ctx, log) => {
         response = await handleSessionEventsRequest(request, env);
         break;
       case "tui-rpc":
-        response = await handleTuiRpcRequest(request, env);
+        response = await handleWorkerRpcRequest(request, env);
         break;
       case "telegram-webhook":
         response = await handleTelegramWebhook(

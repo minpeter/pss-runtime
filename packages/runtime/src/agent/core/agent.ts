@@ -30,6 +30,7 @@ import {
   type ThreadKey,
   threadStoreKey,
 } from "./thread-entry";
+import { createThreadPublicHandle } from "./thread-handle-factory";
 
 export type { AgentHost } from "../../execution/host/types";
 export type { ThreadCompactionInput } from "../../thread/state/thread-state";
@@ -171,43 +172,14 @@ export class Agent {
         pluginRuntime: this.#pluginRuntime,
       }
     );
-    const publicHandle: ThreadHandle = {
-      compact: (input) => thread.compact(input),
-      delete: async () => {
-        this.#evictThreadHandle(key);
-        try {
-          await thread.delete();
-        } finally {
-          this.#pluginRuntime?.clearThread(key);
-        }
-      },
-      dispose: async () => {
-        this.#evictThreadHandle(key);
-        try {
-          await thread.dispose();
-        } finally {
-          this.#pluginRuntime?.clearThread(key);
-        }
-      },
-      events: (options) => thread.events(options),
-      interrupt: () => thread.interrupt(),
-      overlay: (input) => {
-        thread.overlay(input);
-        return publicHandle;
-      },
-      send: async (input) =>
-        this.#instrumentTurn(await thread.send(input), {
-          namespace: this.namespace,
-          operation: "send",
-          threadKey: key,
-        }),
-      steer: async (input) =>
-        this.#instrumentTurn(await thread.steer(input), {
-          namespace: this.namespace,
-          operation: "steer",
-          threadKey: key,
-        }),
-    };
+    const publicHandle = createThreadPublicHandle({
+      evict: (evictedKey) => this.#evictThreadHandle(evictedKey),
+      instrumentations: this.#instrumentations,
+      key,
+      namespace: this.namespace,
+      pluginRuntime: this.#pluginRuntime,
+      thread,
+    });
     const entry: AgentThreadEntry = {
       notify: (input, options) => thread.notify(input, options),
       publicHandle,
