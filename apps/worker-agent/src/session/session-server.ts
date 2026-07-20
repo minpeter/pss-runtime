@@ -3,9 +3,9 @@ import { fetchCloudflareDurableObject } from "@minpeter/pss-runtime/platform/clo
 import { channelKey } from "../channel";
 import { durableObjectName, type Env } from "../env";
 import {
-  TuiServerBadRequestError,
-  TuiServerUpstreamError,
-} from "../tui/tui-server";
+  WorkerServerBadRequestError,
+  WorkerServerUpstreamError,
+} from "../rpc/server-errors";
 import {
   type ReplayEventsRequest,
   ReplayEventsResponseSchema,
@@ -48,7 +48,7 @@ function normalizeSubmitTurnRequest(
   const channel = normalizeChannel(input.channel);
   const text = input.text.trim();
   if (!text) {
-    throw new TuiServerBadRequestError("text and channel required");
+    throw new WorkerServerBadRequestError("text and channel required");
   }
   const idempotencyKey = input.idempotencyKey?.trim();
   const sessionScopeKey = input.sessionScopeKey?.trim();
@@ -75,7 +75,7 @@ function normalizeReplayEventsRequest(
 function normalizeChannel(channel: SubmitTurnRequest["channel"]) {
   const id = channel.id.trim();
   if (!id) {
-    throw new TuiServerBadRequestError("text and channel required");
+    throw new WorkerServerBadRequestError("text and channel required");
   }
   return { id, kind: channel.kind };
 }
@@ -101,10 +101,10 @@ async function requestSessionDurableObject<T>({
     }),
   });
   if (!response) {
-    throw new TuiServerUpstreamError("agent durable object unavailable");
+    throw new WorkerServerUpstreamError("agent durable object unavailable");
   }
   if (!response.ok) {
-    throw new TuiServerUpstreamError(
+    throw new WorkerServerUpstreamError(
       `agent durable object session request failed: ${response.status}`
     );
   }

@@ -1,7 +1,7 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 
-import { type Env, isDevelopment } from "../env";
+import type { Env } from "../env";
 import {
   ReplayEventsRequestSchema,
   SubmitTurnRequestSchema,
@@ -10,12 +10,13 @@ import {
   dispatchSessionEventReplay,
   dispatchSessionSubmitTurn,
 } from "../session/session-server";
-import { TuiTurnInputSchema, TuiTurnOutputSchema } from "./tui-contract";
+import { TuiTurnInputSchema, TuiTurnOutputSchema } from "../tui/tui-contract";
+import { dispatchTuiTurn } from "../tui/tui-server";
 import {
-  dispatchTuiTurn,
-  TuiServerBadRequestError,
-  TuiServerUpstreamError,
-} from "./tui-server";
+  WorkerServerBadRequestError,
+  WorkerServerUpstreamError,
+} from "./server-errors";
+import { isAuthorizedWorkerRequest } from "./worker-rpc-auth";
 
 const TUI_RPC_ENDPOINT = "/trpc";
 const UNAUTHORIZED_MESSAGE = "unauthorized";
@@ -63,7 +64,7 @@ const workerAgentRouter = trpc.router({
 
 export type WorkerAgentRouter = typeof workerAgentRouter;
 
-export function handleTuiRpcRequest(
+export function handleWorkerRpcRequest(
   request: Request,
   env: Env
 ): Promise<Response> {
@@ -79,13 +80,13 @@ async function translateServerErrors<T>(operation: () => Promise<T>) {
   try {
     return await operation();
   } catch (error) {
-    if (error instanceof TuiServerBadRequestError) {
+    if (error instanceof WorkerServerBadRequestError) {
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: error.message,
       });
     }
-    if (error instanceof TuiServerUpstreamError) {
+    if (error instanceof WorkerServerUpstreamError) {
       throw new TRPCError({
         code: "BAD_GATEWAY",
         message: error.message,
@@ -93,13 +94,4 @@ async function translateServerErrors<T>(operation: () => Promise<T>) {
     }
     throw error;
   }
-}
-
-export function isAuthorizedWorkerRequest(request: Request, env: Env): boolean {
-  const token = env.WORKER_AGENT_TUI_TOKEN?.trim();
-  if (!token) {
-    return isDevelopment(env);
-  }
-
-  return request.headers.get("authorization") === `Bearer ${token}`;
 }

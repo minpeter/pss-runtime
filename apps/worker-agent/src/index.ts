@@ -2,9 +2,9 @@ import { installCloudflareImageCodecs } from "@minpeter/pss-runtime/platform/clo
 import { defineWorkerFetch } from "evlog/workers";
 
 import type { Env } from "./env";
+import { handleWorkerRpcRequest } from "./rpc/worker-rpc";
 import { handleSessionEventsRequest } from "./session/session-events-server";
 import { handleTelegramWebhook } from "./telegram/telegram";
-import { handleTuiRpcRequest } from "./tui/tui-rpc";
 import { ensureWorkerLogger, newCorrelationId } from "./worker-log";
 
 // Edge-first: static wasm for AVIF/WebP/HEIC before any attachment staging.
@@ -40,7 +40,7 @@ export default defineWorkerFetch<Env>(async (request, env, ctx, log) => {
         response = await handleSessionEventsRequest(request, env);
         break;
       case "tui-rpc":
-        response = await handleTuiRpcRequest(request, env);
+        response = await handleWorkerRpcRequest(request, env);
         break;
       case "telegram-webhook":
         response = await handleTelegramWebhook(

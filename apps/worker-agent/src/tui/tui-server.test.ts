@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { channelKey } from "../channel";
 import { durableObjectName, type Env } from "../env";
-import { handleTuiRpcRequest, type WorkerAgentRouter } from "./tui-rpc";
+import {
+  handleWorkerRpcRequest,
+  type WorkerAgentRouter,
+} from "../rpc/worker-rpc";
 
 const durableObjectMock = vi.hoisted(
   (): {
@@ -213,7 +216,7 @@ describe("TUI worker tRPC route", () => {
       WORKER_AGENT_TUI_TOKEN: "secret",
     });
 
-    const response = await handleTuiRpcRequest(
+    const response = await handleWorkerRpcRequest(
       new Request("https://worker.example.com/trpc/tui.turn", {
         body: JSON.stringify({
           channel: { id: "local", kind: "tui" },
@@ -235,7 +238,7 @@ describe("TUI worker tRPC route", () => {
       WORKER_AGENT_TUI_TOKEN: "secret",
     });
 
-    const response = await handleTuiRpcRequest(
+    const response = await handleWorkerRpcRequest(
       new Request("https://worker.example.com/trpc/tui.turn", {
         body: JSON.stringify({
           channel: { id: "local", kind: "tui" },
@@ -257,7 +260,7 @@ describe("TUI worker tRPC route", () => {
   it("rejects non-TUI channels", async () => {
     const env = createEnv({ ENVIRONMENT: "development" });
 
-    const response = await handleTuiRpcRequest(
+    const response = await handleWorkerRpcRequest(
       new Request("https://worker.example.com/trpc/tui.turn", {
         body: JSON.stringify({
           channel: { id: "chat-1", kind: "telegram" },
@@ -274,7 +277,7 @@ describe("TUI worker tRPC route", () => {
   });
 
   it("does not expose known-key inspect over tRPC", async () => {
-    const response = await handleTuiRpcRequest(
+    const response = await handleWorkerRpcRequest(
       new Request(
         'https://worker.example.com/trpc/tui.inspect?input={"conversationKey":"telegram:123"}',
         { method: "GET" }
@@ -292,7 +295,7 @@ function createTuiRpcTestClient(env: Env) {
     links: [
       httpLink({
         fetch: (input, init) =>
-          handleTuiRpcRequest(new Request(input, init), env),
+          handleWorkerRpcRequest(new Request(input, init), env),
         url: "https://worker.example.com/trpc",
       }),
     ],

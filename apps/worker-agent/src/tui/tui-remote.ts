@@ -2,8 +2,8 @@ import { createTRPCClient, httpLink } from "@trpc/client";
 
 import type { WorkerAgentDeliveryResponse } from "../agent/agent-do-delivery";
 import type { ChannelAddress } from "../channel";
+import type { WorkerAgentRouter } from "../rpc/worker-rpc";
 import { TUI_SESSION_SCOPE_KEY, TuiTurnOutputSchema } from "./tui-contract";
-import type { WorkerAgentRouter } from "./tui-rpc";
 
 const REMOTE_TUI_TIMEOUT_MS = 120_000;
 

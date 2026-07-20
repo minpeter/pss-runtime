@@ -2,7 +2,7 @@ import { fetchCloudflareDurableObject } from "@minpeter/pss-runtime/platform/clo
 
 import { type ChannelAddress, channelKey } from "../channel";
 import { durableObjectName, type Env } from "../env";
-import { isAuthorizedWorkerRequest } from "../tui/tui-rpc";
+import { isAuthorizedWorkerRequest } from "../rpc/worker-rpc-auth";
 import {
   parseSessionChannel,
   parseThreadEventCursor,

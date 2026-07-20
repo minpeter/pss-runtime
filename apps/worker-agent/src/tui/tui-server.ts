@@ -3,6 +3,10 @@ import { fetchCloudflareDurableObject } from "@minpeter/pss-runtime/platform/clo
 import type { WorkerAgentDeliveryResponse } from "../agent/agent-do-delivery";
 import { channelKey } from "../channel";
 import { durableObjectName, type Env } from "../env";
+import {
+  WorkerServerBadRequestError,
+  WorkerServerUpstreamError,
+} from "../rpc/server-errors";
 import { type TuiTurnInput, TuiTurnOutputSchema } from "./tui-contract";
 
 export async function dispatchTuiTurn(
@@ -12,14 +16,14 @@ export async function dispatchTuiTurn(
   const channelId = input.channel.id.trim();
   const text = input.text.trim();
   if (!(channelId && text)) {
-    throw new TuiServerBadRequestError("text and tui channel required");
+    throw new WorkerServerBadRequestError("text and tui channel required");
   }
 
   switch (input.channel.kind) {
     case "tui":
       break;
     case "telegram":
-      throw new TuiServerBadRequestError("text and tui channel required");
+      throw new WorkerServerBadRequestError("text and tui channel required");
     default:
       return assertNever(input.channel.kind);
   }
@@ -42,7 +46,7 @@ export async function dispatchTuiTurn(
   });
 
   if (!response) {
-    throw new TuiServerUpstreamError("agent durable object unavailable");
+    throw new WorkerServerUpstreamError("agent durable object unavailable");
   }
 
   const body: unknown = await response.json();
@@ -59,19 +63,5 @@ class TuiServerInvariantError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "TuiServerInvariantError";
-  }
-}
-
-export class TuiServerBadRequestError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "TuiServerBadRequestError";
-  }
-}
-
-export class TuiServerUpstreamError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "TuiServerUpstreamError";
   }
 }
