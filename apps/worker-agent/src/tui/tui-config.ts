@@ -21,14 +21,14 @@ export type WorkerAgentTuiConfig =
   | WorkerAgentLocalTuiConfig
   | WorkerAgentRemoteTuiConfig;
 
-export interface WorkerAgentLocalTuiConfig {
+interface WorkerAgentLocalTuiConfig {
   readonly channel: ChannelAddress;
   readonly directory: string;
   readonly env: WorkerAgentModelEnv;
   readonly mode: "local";
 }
 
-export interface WorkerAgentRemoteTuiConfig {
+interface WorkerAgentRemoteTuiConfig {
   readonly channel: ChannelAddress;
   readonly endpoint: string;
   readonly mode: "remote";

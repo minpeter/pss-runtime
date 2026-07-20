@@ -20,7 +20,7 @@ export const WORKER_AGENT_TUI_CHANNEL: ChannelAddress = {
 export const TUI_FAILURE_MESSAGE =
   "system: send_message was not called; no assistant text was shown.";
 export const TUI_DEBUG_ASSISTANT_PREFIX = "debug assistant:";
-export const TUI_DEBUG_REASONING_PREFIX = "debug reasoning:";
+const TUI_DEBUG_REASONING_PREFIX = "debug reasoning:";
 export const TUI_DEBUG_TOOL_CALL_PREFIX = "debug tool-call:";
 export const TUI_DEBUG_TOOL_RESULT_PREFIX = "debug tool-result:";
 const ASSISTANT_OUTPUT_LINE_SEPARATOR = /\r\n|\n|\r/u;
@@ -29,20 +29,20 @@ export interface TuiOutput {
   writeLine(line: string): void;
 }
 
-export interface DeliverTuiTurnOptions {
+interface DeliverTuiTurnOptions {
   readonly onAssistantOutput?: (text: string) => void;
   readonly output: TuiOutput;
   readonly text: string;
   readonly thread: WorkerAgentThreadSender;
 }
 
-export interface DeliverRemoteTuiTurnOptions {
+interface DeliverRemoteTuiTurnOptions {
   readonly client: RemoteTuiDeliveryClient;
   readonly output: TuiOutput;
   readonly text: string;
 }
 
-export class TuiMessageSinkError extends Error {
+class TuiMessageSinkError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "TuiMessageSinkError";

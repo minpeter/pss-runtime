@@ -28,13 +28,13 @@ import {
   type TuiOutput,
 } from "./tui-sink";
 
-export interface StartWorkerAgentTuiOptions {
+interface StartWorkerAgentTuiOptions {
   readonly config?: WorkerAgentTuiConfig;
   readonly host?: AgentHost;
   readonly output?: TuiOutput;
 }
 
-export async function startWorkerAgentTui(
+async function startWorkerAgentTui(
   options: StartWorkerAgentTuiOptions = {}
 ): Promise<void> {
   const config = options.config ?? resolveWorkerAgentTuiConfig();

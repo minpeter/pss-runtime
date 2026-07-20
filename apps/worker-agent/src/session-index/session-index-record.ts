@@ -1,15 +1,15 @@
 import type { SessionIndexRecord, SessionTurnUpdate } from "./session-index";
 
 export const MAX_RECENT_USER_TEXT = 5;
-export const MAX_RECENT_ASSISTANT_TEXT = 3;
-export const SESSION_SNIPPET_MAX_LENGTH = 160;
+const MAX_RECENT_ASSISTANT_TEXT = 3;
+const SESSION_SNIPPET_MAX_LENGTH = 160;
 
-export interface SessionRecordFilterOptions {
+interface SessionRecordFilterOptions {
   readonly excludeKey?: string;
   readonly sessionScopeKey?: string;
 }
 
-export function appendRecent(
+function appendRecent(
   existing: readonly string[],
   additions: readonly string[],
   max: number

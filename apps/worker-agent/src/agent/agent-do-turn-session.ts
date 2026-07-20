@@ -25,9 +25,9 @@ import {
   type WorkerAgentDeliveryResponse,
 } from "./agent-do-delivery";
 
-export type TurnDeliveryMode = "send" | "steer";
+type TurnDeliveryMode = "send" | "steer";
 
-export type TurnSessionDelivery =
+type TurnSessionDelivery =
   | {
       readonly delivered: true;
       readonly mode: TurnDeliveryMode;
@@ -46,7 +46,7 @@ export interface TurnSessionThread {
   steer(input: AgentInput): Promise<AgentTurn>;
 }
 
-export interface TurnSessionDeliverOptions extends DeliverToolOnlyTurnOptions {
+interface TurnSessionDeliverOptions extends DeliverToolOnlyTurnOptions {
   /** Called once when this delivery starts a new send turn (not on steer). */
   readonly onSendStarted?: () => void;
 }

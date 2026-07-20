@@ -52,7 +52,7 @@ export interface ReplayEventsResponse {
   readonly nextCursor?: ThreadEventCursor;
 }
 
-export const ThreadEventCursorSchema = z
+const ThreadEventCursorSchema = z
   .object({ offset: z.number().int().nonnegative().safe() })
   .strict();
 
@@ -144,7 +144,7 @@ export function parseSessionChannel(serialized: string): ChannelAddress {
   return { id: parsed.data.id.trim(), kind: parsed.data.kind };
 }
 
-export class InvalidSessionChannelError extends Error {
+class InvalidSessionChannelError extends Error {
   constructor() {
     super("invalid session channel");
     this.name = "InvalidSessionChannelError";
@@ -170,7 +170,7 @@ export function parseThreadEventCursor(serialized: string): ThreadEventCursor {
   return { offset };
 }
 
-export class InvalidThreadEventCursorError extends Error {
+class InvalidThreadEventCursorError extends Error {
   constructor() {
     super("invalid thread event cursor");
     this.name = "InvalidThreadEventCursorError";

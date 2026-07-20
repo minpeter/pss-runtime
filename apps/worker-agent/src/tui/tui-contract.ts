@@ -41,4 +41,3 @@ export const TuiTurnOutputSchema = z.discriminatedUnion("delivered", [
 ]);
 
 export type TuiTurnInput = z.infer<typeof TuiTurnInputSchema>;
-export type TuiTurnOutput = z.infer<typeof TuiTurnOutputSchema>;

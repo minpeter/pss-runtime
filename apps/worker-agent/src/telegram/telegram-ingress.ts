@@ -20,7 +20,7 @@ export function collectTurnTexts(
     .join("\n");
 }
 
-export interface IngressBatchSummary {
+interface IngressBatchSummary {
   readonly correlationId?: string;
   readonly hasImages: boolean;
   readonly imageCount: number;

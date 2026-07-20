@@ -1,13 +1,13 @@
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import { darkGrayText } from "./tui-theme";
 
-export interface TuiToolCallView {
+interface TuiToolCallView {
   input: unknown;
   toolCallId: string;
   toolName: string;
 }
 
-export interface TuiToolResultView {
+interface TuiToolResultView {
   output: unknown;
   toolCallId: string;
   toolName: string;

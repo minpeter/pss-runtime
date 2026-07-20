@@ -21,18 +21,15 @@ export const SessionTranscriptReadRequestSchema = z
   })
   .strict();
 
-export const SessionTranscriptReadResponseSchema = z.discriminatedUnion(
-  "found",
-  [
-    z
-      .object({
-        conversationKey: z.string(),
-        found: z.literal(false),
-      })
-      .strict(),
-    SessionTranscriptSchema.extend({ found: z.literal(true) }).strict(),
-  ]
-);
+const SessionTranscriptReadResponseSchema = z.discriminatedUnion("found", [
+  z
+    .object({
+      conversationKey: z.string(),
+      found: z.literal(false),
+    })
+    .strict(),
+  SessionTranscriptSchema.extend({ found: z.literal(true) }).strict(),
+]);
 
 export function createSessionTranscriptClient(
   env: Env

@@ -7,7 +7,7 @@ import type {
 } from "../channel";
 import { channelKey } from "../channel";
 
-export interface TelegramMessageSinkOptions {
+interface TelegramMessageSinkOptions {
   readonly botToken: string;
   readonly userName?: string;
 }

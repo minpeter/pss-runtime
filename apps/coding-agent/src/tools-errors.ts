@@ -1,6 +1,6 @@
 export const TINYFISH_API_KEY_ENV = "TINYFISH_API_KEY";
 
-export type CodingAgentToolName = "web_fetch" | "web_search";
+type CodingAgentToolName = "web_fetch" | "web_search";
 
 export class CodingAgentToolsConfigError extends Error {
   readonly code = "client-open-search-options-conflict";

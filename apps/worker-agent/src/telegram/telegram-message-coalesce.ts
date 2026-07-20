@@ -24,7 +24,7 @@
  * - Concurrent flushes are allowed so a later batch can mid-turn steer.
  */
 
-export interface CoalesceMessage {
+interface CoalesceMessage {
   readonly attachments?: readonly unknown[];
   readonly author?: {
     readonly userId?: string;
@@ -32,21 +32,21 @@ export interface CoalesceMessage {
   readonly text?: string;
 }
 
-export interface CoalescePushItem<TMessage extends CoalesceMessage> {
+interface CoalescePushItem<TMessage extends CoalesceMessage> {
   readonly correlationId?: string;
   readonly message: TMessage;
   readonly subscribe?: boolean;
 }
 
-export interface CoalesceBatch<TMessage extends CoalesceMessage> {
+interface CoalesceBatch<TMessage extends CoalesceMessage> {
   readonly correlationId?: string;
   readonly messages: readonly TMessage[];
   readonly subscribe: boolean;
 }
 
-export type WaitUntil = (task: Promise<unknown>) => void;
+type WaitUntil = (task: Promise<unknown>) => void;
 
-export interface MessageCoalescerOptions<TMessage extends CoalesceMessage> {
+interface MessageCoalescerOptions<TMessage extends CoalesceMessage> {
   /** Delay helper for tests (fake timers). Defaults to setTimeout. */
   readonly delay?: (ms: number) => Promise<void>;
   readonly onFlush: (

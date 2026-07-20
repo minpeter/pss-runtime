@@ -2,12 +2,12 @@ import type { WorkerAgentDeliveredMessage } from "../agent/agent-do-delivery";
 import type { ChannelMessageSink, ChannelSentMessage } from "../channel";
 import { channelKey } from "../channel";
 
-export interface TuiResponseMessageSink {
+interface TuiResponseMessageSink {
   readonly messages: () => readonly WorkerAgentDeliveredMessage[];
   readonly sink: ChannelMessageSink;
 }
 
-export class TuiResponseMessageSinkError extends Error {
+class TuiResponseMessageSinkError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "TuiResponseMessageSinkError";

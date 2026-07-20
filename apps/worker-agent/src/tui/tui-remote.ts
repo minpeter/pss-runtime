@@ -11,7 +11,7 @@ export interface RemoteTuiDeliveryClient {
   deliver(text: string): Promise<WorkerAgentDeliveryResponse>;
 }
 
-export interface RemoteTuiDeliveryClientConfig {
+interface RemoteTuiDeliveryClientConfig {
   readonly channel: ChannelAddress;
   readonly endpoint: string;
   readonly token?: string;
@@ -35,7 +35,7 @@ export function createRemoteTuiDeliveryClient(
   };
 }
 
-export async function requestRemoteTuiDelivery({
+async function requestRemoteTuiDelivery({
   client,
   config,
   text,

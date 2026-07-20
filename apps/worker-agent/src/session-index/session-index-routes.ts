@@ -15,7 +15,7 @@ import {
   SessionIndexUpsertRequestSchema,
 } from "./session-index-client";
 
-export interface HandleSessionIndexRequestOptions {
+interface HandleSessionIndexRequestOptions {
   readonly pathname: string;
   readonly request: Request;
   readonly store: SessionIndexStore;

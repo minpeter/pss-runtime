@@ -21,7 +21,7 @@ import {
   type SessionBindingRecord,
 } from "./agent-do-types";
 
-export interface AgentDoSessionOptions {
+interface AgentDoSessionOptions {
   readonly createSendMessage: () => WorkerAgentSendMessageToolOptions;
   readonly env: Env;
   readonly platform: CloudflarePlatformContext<Agent>;

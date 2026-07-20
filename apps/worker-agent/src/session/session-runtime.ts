@@ -14,7 +14,7 @@ import type {
   SubmitTurnResponse,
 } from "./session-contract";
 
-export interface DurableThreadEventReader {
+interface DurableThreadEventReader {
   events(options?: ThreadEventReadOptions): AsyncIterable<StoredThreadEvent>;
 }
 

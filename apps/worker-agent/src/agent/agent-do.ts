@@ -141,7 +141,7 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
   }
 }
 
-export function createLongLivedSendMessageOptions(
+function createLongLivedSendMessageOptions(
   env: Env,
   state: AgentDoState
 ): WorkerAgentSendMessageToolOptions {
@@ -164,7 +164,7 @@ export function createLongLivedSendMessageOptions(
   };
 }
 
-export function createTurnSendMessageSetup(
+function createTurnSendMessageSetup(
   env: Env,
   state: AgentDoState,
   channel: ChannelAddress

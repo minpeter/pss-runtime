@@ -1,8 +1,4 @@
 import type { AgentEvent, AgentInput, AgentTurn } from "@minpeter/pss-runtime";
-import {
-  isDeliveredSendMessageToolOutput,
-  SEND_MESSAGE_TOOL_NAME,
-} from "../tools";
 import { collectTurnDelivery } from "./agent";
 
 const MISSING_SEND_MESSAGE_ERROR = "missing_send_message";
@@ -78,12 +74,4 @@ export async function deliverToolOnlyTurn(
     delivered: false,
     error: MISSING_SEND_MESSAGE_ERROR,
   };
-}
-
-export function isSendMessageDeliveryEvent(event: AgentEvent): boolean {
-  return (
-    event.type === "tool-result" &&
-    event.toolName === SEND_MESSAGE_TOOL_NAME &&
-    isDeliveredSendMessageToolOutput(event.output)
-  );
 }

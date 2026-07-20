@@ -1,29 +1,13 @@
-import { createTRPCClient, httpLink } from "@trpc/client";
-import type { WorkerAgentRouter } from "../tui/tui-rpc";
 import {
-  type ReplayEventsRequest,
-  type ReplayEventsResponse,
   ReplayEventsResponseSchema,
   type StoredThreadEvent,
   type SubmitTurnRequest,
-  type SubmitTurnResponse,
-  SubmitTurnResponseSchema,
   serializeSessionChannel,
   serializeThreadEventCursor,
   type ThreadEventCursor,
 } from "./session-contract";
 
-export interface RemoteSessionClient {
-  replayEvents(input: ReplayEventsRequest): Promise<ReplayEventsResponse>;
-  submitTurn(input: SubmitTurnRequest): Promise<SubmitTurnResponse>;
-}
-
-export interface RemoteSessionClientConfig {
-  readonly endpoint: string;
-  readonly token?: string;
-}
-
-export interface RemoteSessionEventStreamConfig {
+interface RemoteSessionEventStreamConfig {
   readonly after?: ThreadEventCursor;
   readonly channel: SubmitTurnRequest["channel"];
   readonly endpoint: string;
@@ -31,31 +15,6 @@ export interface RemoteSessionEventStreamConfig {
   readonly sessionScopeKey?: string;
   readonly signal?: AbortSignal;
   readonly token?: string;
-}
-
-export function createRemoteSessionClient(
-  config: RemoteSessionClientConfig
-): RemoteSessionClient {
-  const client = createTRPCClient<WorkerAgentRouter>({
-    links: [
-      httpLink({
-        headers: () =>
-          config.token ? { authorization: `Bearer ${config.token}` } : {},
-        url: config.endpoint,
-      }),
-    ],
-  });
-
-  return {
-    replayEvents: async (input) => {
-      const response: unknown = await client.session.replayEvents.query(input);
-      return ReplayEventsResponseSchema.parse(response);
-    },
-    submitTurn: async (input) => {
-      const response: unknown = await client.session.submitTurn.mutate(input);
-      return SubmitTurnResponseSchema.parse(response);
-    },
-  };
 }
 
 export async function* streamRemoteSessionEvents(
@@ -145,7 +104,7 @@ function parseSessionEventFrame(frame: string): StoredThreadEvent | undefined {
   return event;
 }
 
-export class RemoteSessionEventStreamError extends Error {
+class RemoteSessionEventStreamError extends Error {
   constructor(status: number, detail = "request failed") {
     super(`session event stream ${detail}: ${status}`);
     this.name = "RemoteSessionEventStreamError";

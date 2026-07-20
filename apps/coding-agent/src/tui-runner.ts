@@ -24,7 +24,7 @@ import {
   truncateDetail,
 } from "./tui-tool-printer";
 
-export interface TuiRunnerOptions {
+interface TuiRunnerOptions {
   readonly addLine: (text: string) => void;
   /**
    * Render assistant output as rich markdown instead of a plain formatted
@@ -43,7 +43,7 @@ export interface TuiRunner {
   submit(text: string): void;
 }
 
-export interface TuiHeaderOptions {
+interface TuiHeaderOptions {
   readonly autoCompaction: AgentOptions["autoCompaction"];
   readonly threadKey: string;
 }

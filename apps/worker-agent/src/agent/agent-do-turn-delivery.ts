@@ -38,7 +38,7 @@ import { createDeliveryResponse } from "./agent-do-turn-delivery-response";
 import type { AgentDoState } from "./agent-do-types";
 import { agentTurnIndexText } from "./agent-input";
 
-export interface AgentDoTurnOptions {
+interface AgentDoTurnOptions {
   readonly createSendMessage: (channel: ChannelAddress) => SendMessageToolSetup;
   readonly env: Env;
   readonly session: AgentDoSession;

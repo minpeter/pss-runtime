@@ -74,7 +74,7 @@ const ReadSessionToolInputSchema = z
   })
   .strict();
 
-export interface SessionToolEntry {
+interface SessionToolEntry {
   readonly channel: string;
   readonly lastSeenAt: string;
   readonly snippet: string;
@@ -85,7 +85,7 @@ export interface ListSessionsToolResult {
   readonly sessions: readonly SessionToolEntry[];
 }
 
-export interface SearchSessionsToolEntry extends SessionToolEntry {
+interface SearchSessionsToolEntry extends SessionToolEntry {
   readonly score: number;
 }
 

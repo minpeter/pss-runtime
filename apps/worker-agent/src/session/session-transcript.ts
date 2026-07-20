@@ -6,7 +6,7 @@ import { extractSessionTranscriptMessages } from "./session-transcript-projectio
 export const DEFAULT_SESSION_READ_LIMIT = 20;
 export const MAX_SESSION_READ_LIMIT = 50;
 
-export const SessionTranscriptMessageSchema = z
+const SessionTranscriptMessageSchema = z
   .object({
     index: z.number().int().nonnegative(),
     role: z.enum(["assistant", "user"]),
@@ -42,7 +42,7 @@ export interface SessionTranscriptReader {
   ): Promise<SessionTranscript | undefined>;
 }
 
-export interface ThreadStoreSessionTranscriptReaderOptions {
+interface ThreadStoreSessionTranscriptReaderOptions {
   readonly resolveThreadKey: (
     conversationKey: string
   ) => string | undefined | Promise<string | undefined>;

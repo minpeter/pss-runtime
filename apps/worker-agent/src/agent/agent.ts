@@ -98,7 +98,7 @@ Session search tools:
 - If the tools return nothing relevant, say you do not have a record of that instead of guessing.
 - Do not expose raw channel keys, scores, cursors, or tool mechanics to the user; speak naturally about what was discussed.`.trim();
 
-export interface WorkerAgentRuntimeOptions {
+interface WorkerAgentRuntimeOptions {
   readonly observability?: {
     readonly log?: (entry: {
       readonly event: AgentEvent["type"];
@@ -118,11 +118,11 @@ export interface WorkerAgentModelEnv {
   readonly ENVIRONMENT: EnvironmentName;
 }
 
-export interface WorkerAgentTurnDelivery {
+interface WorkerAgentTurnDelivery {
   readonly deliveredByTool: boolean;
 }
 
-export interface CollectTurnDeliveryOptions {
+interface CollectTurnDeliveryOptions {
   readonly onAssistantOutput?: (text: string) => void;
   readonly onEvent?: (event: AgentEvent) => void;
 }

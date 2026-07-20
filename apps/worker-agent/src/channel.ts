@@ -36,7 +36,7 @@ export function channelKey(channel: ChannelAddress): string {
   return `${channel.kind}:${channel.id}`;
 }
 
-export function channelThreadAddress(channel: ChannelAddress): ThreadAddress {
+function channelThreadAddress(channel: ChannelAddress): ThreadAddress {
   return {
     key: channel.id,
     scope: `channel:${channel.kind}`,

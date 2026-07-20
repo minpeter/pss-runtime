@@ -125,7 +125,7 @@ export function summarizeSessionRecord(
   };
 }
 
-export function clampSessionLimit(
+function clampSessionLimit(
   limit: number | undefined,
   fallback: number
 ): number {

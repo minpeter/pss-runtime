@@ -12,7 +12,7 @@ import {
   type SessionTurnUpdate,
 } from "./session-index";
 
-export const SESSION_INDEX_OBJECT_NAME = "session-index:v1";
+const SESSION_INDEX_OBJECT_NAME = "session-index:v1";
 export const SESSION_INDEX_UPSERT_PATH = "/session-index/upsert";
 export const SESSION_INDEX_LIST_PATH = "/session-index/list";
 export const SESSION_INDEX_SEARCH_PATH = "/session-index/search";
@@ -68,7 +68,7 @@ const SessionIndexCanReadResponseSchema = z
   .object({ canRead: z.boolean() })
   .strict();
 
-export class SessionIndexClientError extends Error {
+class SessionIndexClientError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "SessionIndexClientError";

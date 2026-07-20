@@ -8,12 +8,12 @@ import {
 
 const SSE_EVENT_NAME = "thread-event";
 
-export interface SessionEventLiveSignal {
+interface SessionEventLiveSignal {
   publish(): void;
   subscribe(listener: () => void): () => void;
 }
 
-export interface SessionEventStreamOptions {
+interface SessionEventStreamOptions {
   readonly after?: ThreadEventCursor;
   readonly live: SessionEventLiveSignal;
   readonly replay: (
