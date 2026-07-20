@@ -11,19 +11,19 @@ import type {
 } from "@minpeter/pss-runtime/evals";
 import { z } from "zod";
 
-import { collectTurnDelivery, WORKER_AGENT_INSTRUCTIONS } from "../agent";
-import type { WorkerAgentThreadSender } from "../agent-do-delivery";
+import { collectTurnDelivery, WORKER_AGENT_INSTRUCTIONS } from "../agent/agent";
+import type { WorkerAgentThreadSender } from "../agent/agent-do-delivery";
 import {
   type DeliverToolOnlyTurnOptions,
   deliverToolOnlyTurn,
-} from "../agent-do-delivery";
+} from "../agent/agent-do-delivery";
 import {
   type ChannelAddress,
   type ChannelMessageSink,
   channelKey,
 } from "../channel";
-import type { WorkerAgentSessionToolOptions } from "../session-tools";
-import { createSessionTools } from "../session-tools";
+import type { WorkerAgentSessionToolOptions } from "../session/session-tools";
+import { createSessionTools } from "../session/session-tools";
 import { createWorkerAgentTools } from "../tools";
 import { loadWorkerAgentEvalEnv } from "./eval-env";
 import { createScriptedModel, type ScriptedResult } from "./scripted-model";

@@ -9,7 +9,7 @@ export default defineConfig({
         find: /^@minpeter\/pss-runtime\/platform\/cloudflare\/image-codecs$/,
         replacement: resolve(
           import.meta.dirname,
-          "src/image-codecs-test-shim.ts"
+          "src/testing/image-codecs-test-shim.ts"
         ),
       },
       {
@@ -51,12 +51,15 @@ export default defineConfig({
         find: /^cloudflare:workers$/,
         replacement: resolve(
           import.meta.dirname,
-          "src/cloudflare-workers-test-shim.ts"
+          "src/testing/cloudflare-workers-test-shim.ts"
         ),
       },
       {
         find: /^agents$/,
-        replacement: resolve(import.meta.dirname, "src/agents-test-shim.ts"),
+        replacement: resolve(
+          import.meta.dirname,
+          "src/testing/agents-test-shim.ts"
+        ),
       },
     ],
     conditions: ["@minpeter/pss-source", "import", "module", "default"],

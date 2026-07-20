@@ -2,8 +2,8 @@ import { defineEval } from "@minpeter/pss-runtime/evals";
 import {
   READ_SESSION_TOOL_NAME,
   SEARCH_SESSIONS_TOOL_NAME,
-} from "../session-tools";
-import type { SessionTranscriptReader } from "../session-transcript";
+} from "../session/session-tools";
+import type { SessionTranscriptReader } from "../session/session-transcript";
 import { SEND_MESSAGE_TOOL_NAME } from "../tools";
 import {
   channelInputEquals,

@@ -1,15 +1,15 @@
+import type { WorkerAgentSessionToolOptions } from "../session/session-tools";
+import type {
+  SessionTranscript,
+  SessionTranscriptReader,
+} from "../session/session-transcript";
 import type {
   SessionIndexReader,
   SessionListOptions,
   SessionReadAuthorizationOptions,
   SessionSearchOptions,
   SessionSearchResult,
-} from "../session-index";
-import type { WorkerAgentSessionToolOptions } from "../session-tools";
-import type {
-  SessionTranscript,
-  SessionTranscriptReader,
-} from "../session-transcript";
+} from "../session-index/session-index";
 import {
   defaultSessionRecords,
   type EvalSessionRecord,

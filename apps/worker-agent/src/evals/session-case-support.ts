@@ -8,7 +8,7 @@ import {
   READ_SESSION_TOOL_NAME,
   SEARCH_SESSIONS_TOOL_NAME,
   type WorkerAgentSessionToolOptions,
-} from "../session-tools";
+} from "../session/session-tools";
 import { SEND_MESSAGE_TOOL_NAME } from "../tools";
 import {
   foundOutputEquals,
