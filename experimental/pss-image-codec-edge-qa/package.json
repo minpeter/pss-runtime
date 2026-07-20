@@ -6,7 +6,8 @@
     "dev": "wrangler dev",
     "deploy": "CLOUDFLARE_ACCOUNT_ID=795b98fae2d3efac0afc7a41494cc697 wrangler deploy",
     "test:edge": "tsx qa-client.ts",
-    "test:edge:live": "EDGE_QA_URL=https://pss-image-codec-edge-qa.minpeter.workers.dev tsx qa-client.ts"
+    "test:edge:live": "EDGE_QA_URL=https://pss-image-codec-edge-qa.minpeter.workers.dev tsx qa-client.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.qa.json --noEmit"
   },
   "dependencies": {
     "@jsquash/avif": "^2.1.1",
@@ -18,6 +19,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260716.1",
+    "@types/node": "^26.1.1",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "wrangler": "^4.107.0"
