@@ -31,6 +31,7 @@ import { createThreadPublicHandle } from "./thread-handle-factory";
 
 export type { AgentHost } from "../../execution/host/types";
 export type { ThreadCompactionInput } from "../../thread/state/thread-state";
+// biome-ignore lint/performance/noBarrelFile: createAgent must stay a member of this module; existing importers and module spies depend on it.
 export { createAgent } from "./create-agent";
 export type {
   AgentInstrumentation,

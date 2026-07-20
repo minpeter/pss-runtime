@@ -16,6 +16,7 @@ import {
 import { createWebFetchTool, type WebFetchTool } from "./tools-web-fetch";
 import { createWebSearchTool, type WebSearchTool } from "./tools-web-search";
 
+// biome-ignore lint/performance/noBarrelFile: the published './tools' subpath must keep re-exporting the error classes and input types after the module split.
 export {
   CodingAgentToolAbortError,
   CodingAgentToolsConfigError,

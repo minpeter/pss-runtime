@@ -14,6 +14,7 @@ import {
 import { activeHandlers } from "./plugin-registry";
 import type { PluginInputDecision, PluginRuntimeState } from "./plugin-types";
 
+// biome-ignore lint/performance/noBarrelFile: plugin-runtime and tests import all four hook runners from this module; the tool-call pair lives in plugin-input-hooks-tool-call.ts after the split.
 export {
   afterToolExecution,
   beforeToolExecution,
