@@ -1,5 +1,7 @@
 .DS_Store
 .env
 .env.*
+.omo/
+.senpi/
 node_modules/
 !.env.example
