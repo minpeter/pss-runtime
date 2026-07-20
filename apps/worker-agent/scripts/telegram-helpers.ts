@@ -54,6 +54,13 @@ export async function telegramApi(
       signal,
     }
   );
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    const text = await response.text().catch(() => "");
+    throw new Error(
+      `${method} failed with status ${response.status}: ${text || response.statusText}`
+    );
+  }
   const payload = (await response.json()) as {
     readonly description?: string;
     readonly ok: boolean;

@@ -82,6 +82,8 @@ export async function relay(): Promise<void> {
       await sleepMs(RELAY_RETRY_MS, abort.signal);
     }
   }
+
+  await Promise.allSettled(inFlightForwards);
 }
 
 export async function webhook(): Promise<void> {
