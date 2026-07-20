@@ -1,8 +1,6 @@
 import { isRecord as isObjectRecord } from "../internal/guards";
 import { ModelToolSelectionError } from "./model-step-error";
 
-export { isObjectRecord };
-
 export const MISSING_DATA_PROPERTY = Symbol("missing-data-property");
 
 export function propertyDescriptorInPrototypeChain(

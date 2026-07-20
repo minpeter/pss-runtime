@@ -1,8 +1,11 @@
-import type { ModelStepOutput, ModelStepResult } from "../../llm/model-step-types";
+import { generateModelStepResult } from "../../llm/model-step";
+import type {
+  ModelStepOutput,
+  ModelStepResult,
+} from "../../llm/model-step-types";
 import type { RuntimeToolExecutionContext } from "../../llm/tool-execution-types";
 import type { AgentEvent } from "../../thread/protocol/events";
 import { modelMessageToAgentEvents } from "../../thread/protocol/mapping";
-import { generateModelStepResult } from "../../llm/model-step";
 import type {
   CapturedModelStepOutput,
   ModelHistory,

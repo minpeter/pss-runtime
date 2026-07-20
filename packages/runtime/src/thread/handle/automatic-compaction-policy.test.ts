@@ -8,13 +8,13 @@ import {
   userText,
 } from "../../testing/test-fixtures";
 import { userTextToModelMessage } from "../protocol/mapping";
+import { AgentThread } from "./agent-thread";
 import {
   agentWithAutoCompaction,
   nextMacrotask,
   storedAssistantOutput,
 } from "./automatic-compaction.test-support";
 import { collect, SpyStore } from "./test-support";
-import { AgentThread } from "./agent-thread";
 
 const minMessagesError = /autoCompaction\.minMessages/;
 const retainMessagesError = /autoCompaction\.retainMessages/;

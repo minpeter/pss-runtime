@@ -5,11 +5,12 @@ import type {
   CheckpointStore,
   CheckpointWriteResult,
 } from "../../../../execution/host/types";
+import { isNodeError } from "../../../../internal/guards";
 import { readJsonFile, writeJsonFile } from "./json";
 import type { FileRunStore } from "./run-store";
 import { parseRunCheckpoint } from "./schemas";
 import type { DataDirectoryResolver } from "./types";
-import { encodeKey, isNodeError } from "./utils";
+import { encodeKey } from "./utils";
 
 export class FileCheckpointStore implements CheckpointStore {
   readonly #directory: DataDirectoryResolver;

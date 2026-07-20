@@ -1,3 +1,4 @@
+// biome-ignore-all lint/performance/noBarrelFile: Stable internal import surface for attachment helpers split by responsibility.
 import type { AgentEvent, RuntimeInput } from "../protocol/events";
 import { decodeRuntimeAttachmentData } from "./attachment-refs";
 import { runtimeAttachmentDataRef } from "./attachment-staging-data";
@@ -8,8 +9,6 @@ import type {
   RuntimeAttachmentStagingOptions,
 } from "./attachment-types";
 import type { UserInput } from "./input";
-
-// biome-ignore-all lint/performance/noBarrelFile: Stable internal import surface for attachment helpers split by responsibility.
 
 export { hydrateRuntimeAttachments } from "./attachment-hydration";
 export {

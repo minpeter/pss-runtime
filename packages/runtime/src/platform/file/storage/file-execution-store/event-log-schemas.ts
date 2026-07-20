@@ -2,8 +2,8 @@ import type {
   StoredAgentEvent,
   StoredThreadEvent,
 } from "../../../../execution/host/types";
+import { isPlainRecord as isRecord } from "../../../../internal/guards";
 import type { AgentEvent } from "../../../../thread/protocol/events";
-import { isRecord } from "./utils";
 
 export function parseEventLogLine(
   line: string,

@@ -6,8 +6,8 @@ import type {
   TurnRecord,
   TurnStatus,
 } from "../../../../execution/host/types";
+import { isPlainRecord as isRecord } from "../../../../internal/guards";
 import type { AgentEvent, UserInput } from "../../../../thread/protocol/events";
-import { isRecord } from "./utils";
 
 export function parseRunRecord(value: unknown, file: string): TurnRecord {
   if (!isRecord(value)) {

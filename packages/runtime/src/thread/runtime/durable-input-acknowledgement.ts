@@ -1,7 +1,4 @@
-import type {
-  AgentHost,
-  ClaimedThreadInput,
-} from "../../execution/host/types";
+import type { AgentHost, ClaimedThreadInput } from "../../execution/host/types";
 import type { ThreadState } from "../state/thread-state";
 import {
   appendDurableThreadEvents,

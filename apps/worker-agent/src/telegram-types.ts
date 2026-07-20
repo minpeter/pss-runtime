@@ -21,8 +21,7 @@ export const TELEGRAM_MESSAGE_CONCURRENCY = {
 } as const;
 export const TELEGRAM_MAX_TURN_IMAGES = AGENT_MAX_TURN_IMAGES;
 export const TELEGRAM_MAX_RAW_IMAGE_BYTES = AGENT_MAX_RAW_IMAGE_BYTES;
-export const TELEGRAM_MAX_TURN_RAW_IMAGE_BYTES =
-  AGENT_MAX_TURN_RAW_IMAGE_BYTES;
+export const TELEGRAM_MAX_TURN_RAW_IMAGE_BYTES = AGENT_MAX_TURN_RAW_IMAGE_BYTES;
 
 export interface TurnDeliveryOptions {
   readonly attachments?: readonly AgentRequestAttachment[];

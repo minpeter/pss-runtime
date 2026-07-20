@@ -6,18 +6,18 @@ import {
 } from "../plugins/diagnostics";
 import { diagnosticToolRegistry } from "./diagnostic-tool-registry";
 import {
-  countDynamicDescriptions,
-  toolSemanticFingerprint,
-} from "./tool-semantic-metadata";
-import {
   compareToolNames,
   dataPropertyInPrototypeChain,
   MISSING_DATA_PROPERTY,
 } from "./tool-property-descriptors";
+import {
+  countDynamicDescriptions,
+  toolSemanticFingerprint,
+} from "./tool-semantic-metadata";
 
 interface ToolCacheFingerprintInput {
-  readonly activeTools: readonly string[];
   readonly activeToolRegistry: ToolSet;
+  readonly activeTools: readonly string[];
   readonly alwaysActiveToolCount: number;
   readonly attemptId: string;
   readonly model: LanguageModel;

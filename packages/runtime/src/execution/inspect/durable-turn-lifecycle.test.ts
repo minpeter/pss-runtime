@@ -8,8 +8,8 @@ import {
   eventTypes,
   userText,
 } from "../../testing/test-fixtures";
-import { collect } from "../../thread/handle/test-support";
 import { AgentThread } from "../../thread/handle/agent-thread";
+import { collect } from "../../thread/handle/test-support";
 import { dispatchAgentNotification } from "../dispatch/notification-dispatch";
 import { inspectDurableTurn } from "./durable-turn";
 

@@ -124,7 +124,10 @@ function parseStoredFileThread(value: unknown, file: string): StoredThread {
   });
 }
 
-import { isNodeError, isPlainRecord as isRecord } from "../../../internal/guards";
+import {
+  isNodeError,
+  isPlainRecord as isRecord,
+} from "../../../internal/guards";
 
 async function acquireFileLock(lockDirectory: string): Promise<void> {
   const startedAt = Date.now();

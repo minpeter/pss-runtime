@@ -1,4 +1,6 @@
 import type { LanguageModel } from "ai";
+import { isRecord as isObjectRecord } from "../internal/guards";
+import { ModelToolSelectionError } from "./model-step-error";
 import type {
   PreparedModelToolChoice,
   PrepareModelStep,
@@ -6,7 +8,6 @@ import type {
 } from "./model-step-preparation-types";
 import {
   dataPropertyInPrototypeChain,
-  isObjectRecord,
   isPlainRecord,
   ownDataProperty,
   ownProperty,
@@ -14,9 +15,6 @@ import {
   propertyDescriptorInPrototypeChain,
 } from "./tool-property-descriptors";
 import { snapshotToolNames } from "./tool-registry-snapshot";
-
-import { ModelToolSelectionError } from "./model-step-error";
-export { ModelToolSelectionError };
 
 const PREPARED_RESULT_KEYS = new Set(["activeTools", "model", "toolChoice"]);
 

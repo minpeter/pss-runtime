@@ -5,7 +5,7 @@ import {
   type ThreadContextMessage,
 } from "../thread/state/context";
 import { enforceContextGate } from "./context-gate";
-import { ModelToolSelectionError } from "./model-step-selection";
+import { ModelToolSelectionError } from "./model-step-error";
 import { resolveModelStepOptions } from "./model-step-preparation";
 import type {
   ModelPrompt,

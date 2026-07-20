@@ -19,5 +19,6 @@ export interface PrepareModelStepResult {
 
 export type PrepareModelStep = (input: PrepareModelStepInput) =>
   | PrepareModelStepResult
+  // biome-ignore lint/suspicious/noConfusingVoidType: async callbacks may intentionally resolve without a result.
   | PromiseLike<PrepareModelStepResult | void>
   | void;

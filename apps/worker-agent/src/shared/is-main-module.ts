@@ -3,7 +3,7 @@ import { pathToFileURL } from "node:url";
 
 export function isMainModule(
   moduleUrl: string,
-  argvPath = process.argv[1],
+  argvPath = process.argv[1]
 ): boolean {
   return (
     argvPath !== undefined &&

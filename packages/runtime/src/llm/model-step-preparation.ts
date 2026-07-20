@@ -1,14 +1,12 @@
-import type { LanguageModel, ToolChoice, ToolSet } from "ai";
+import type { LanguageModel, ToolSet } from "ai";
 import type { RuntimeDiagnosticsSink } from "../plugins/diagnostics";
 import type { ThreadContextMessage } from "../thread/state/context";
+import { ModelToolSelectionError } from "./model-step-error";
 import type {
   PreparedModelToolChoice,
   PrepareModelStep,
-  PrepareModelStepInput,
-  PrepareModelStepResult,
 } from "./model-step-preparation-types";
 import {
-  ModelToolSelectionError,
   parsePrepareModelStepResult,
   snapshotToolChoice,
   validateToolChoice,
@@ -21,9 +19,6 @@ import {
   snapshotToolNames,
   validateToolNames,
 } from "./tool-registry-snapshot";
-
-export { ModelToolSelectionError } from "./model-step-selection";
-export { mapPrepareModelStepModel } from "./model-step-selection";
 
 export type {
   PreparedModelToolChoice,

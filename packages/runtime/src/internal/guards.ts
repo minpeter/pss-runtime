@@ -3,14 +3,12 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function isPlainRecord(
-  value: unknown,
+  value: unknown
 ): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-export function isNodeError(
-  error: unknown,
-): error is NodeJS.ErrnoException {
+export function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
 }
 

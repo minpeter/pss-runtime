@@ -1,9 +1,5 @@
 import type { Case } from "./qa-client-cases";
-import {
-  loadFixture,
-  MAX_IMAGE_BYTES,
-  normalize,
-} from "./qa-client-support";
+import { loadFixture, MAX_IMAGE_BYTES, normalize } from "./qa-client-support";
 
 export async function runFunctional(cases: Case[]): Promise<number> {
   let failed = 0;

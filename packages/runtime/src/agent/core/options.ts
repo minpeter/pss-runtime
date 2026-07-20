@@ -1,8 +1,8 @@
 import type { LanguageModel, ToolSet } from "ai";
 import type { AgentHost } from "../../execution/host/types";
 import type { ModelContextGateOptions } from "../../llm/context-gate";
-import type { AgentToolChoice } from "../../llm/model-step-types";
 import type { PrepareModelStep } from "../../llm/model-step-preparation";
+import type { AgentToolChoice } from "../../llm/model-step-types";
 import { assertNoUnsupportedToolApproval } from "../../llm/tool-approval";
 import type { PluginDefinition } from "../../plugins/api";
 import type { RuntimeDiagnosticsSink } from "../../plugins/diagnostics";

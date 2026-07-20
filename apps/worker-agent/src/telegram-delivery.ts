@@ -4,7 +4,10 @@ import { z } from "zod";
 import type { AgentRequestAttachment } from "./agent-do-request";
 import { type ChannelAddress, channelKey } from "./channel";
 import { durableObjectName, type Env, isDevelopment } from "./env";
-import { collectTurnImages, TelegramAttachmentLimitError } from "./telegram-attachments";
+import {
+  collectTurnImages,
+  TelegramAttachmentLimitError,
+} from "./telegram-attachments";
 import { collectTurnTexts } from "./telegram-ingress";
 import type {
   ConversationContext,

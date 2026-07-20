@@ -2,8 +2,8 @@ import { mkdir, rm, stat, utimes } from "node:fs/promises";
 import { dirname } from "node:path";
 import { clearInterval, setInterval } from "node:timers";
 import { setTimeout } from "node:timers/promises";
+import { isNodeError } from "../../../../internal/guards";
 import type { FileExecutionLock } from "./types";
-import { isNodeError } from "./utils";
 
 const LOCK_HEARTBEAT_INTERVAL_MS = 100;
 const LOCK_POLL_INTERVAL_MS = 10;

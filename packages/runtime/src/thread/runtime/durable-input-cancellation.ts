@@ -1,7 +1,4 @@
-import type {
-  AgentHost,
-  TurnRecord,
-} from "../../execution/host/types";
+import type { AgentHost, TurnRecord } from "../../execution/host/types";
 import type { QueuedInput } from "../input/runtime-input";
 import { DurableThreadInputClaimError } from "./durable-input-acknowledgement";
 

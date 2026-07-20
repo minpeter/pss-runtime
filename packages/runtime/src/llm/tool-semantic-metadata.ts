@@ -1,4 +1,5 @@
 import { fingerprintTools, type ToolSet } from "ai";
+import { isRecord as isObjectRecord } from "../internal/guards";
 import {
   INPUT_SCHEMA_SNAPSHOT_UNAVAILABLE,
   snapshotInputSchema,
@@ -7,7 +8,6 @@ import {
   canonicalFingerprintValue,
   dataPropertyValue,
   fingerprintValueIsSafe,
-  isObjectRecord,
   safeOwnDataProperty,
 } from "./tool-property-descriptors";
 

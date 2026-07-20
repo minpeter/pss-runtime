@@ -1,11 +1,11 @@
 import { scheduledWorkIdPart } from "../../../execution/scheduled-work";
+import { isRecord } from "../../../internal/guards";
 import {
   assertOptionalPayloadAttempt,
   assertOptionalPayloadString,
   assertPayloadString,
   hasRunPayloadStrings,
   hasThreadPayloadStrings,
-  isRecord,
   maxIdLength,
   maxPrefixLength,
 } from "./payload-validation";

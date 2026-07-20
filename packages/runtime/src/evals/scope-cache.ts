@@ -1,9 +1,5 @@
 import { summarizeCacheUsage } from "./cache";
-import type {
-  CacheHitRateOptions,
-  EvalCacheStats,
-  EvalRun,
-} from "./types";
+import type { CacheHitRateOptions, EvalCacheStats, EvalRun } from "./types";
 
 interface CacheHitRateResult {
   readonly detail: string;
@@ -55,9 +51,7 @@ export function evaluateCacheHitRate(
   return { detail, pass, rate };
 }
 
-export function summarizeRunsCache(
-  runs: readonly EvalRun[]
-): EvalCacheStats {
+export function summarizeRunsCache(runs: readonly EvalRun[]): EvalCacheStats {
   return summarizeCacheUsage(
     runs.flatMap((run) => run.modelUsage),
     {

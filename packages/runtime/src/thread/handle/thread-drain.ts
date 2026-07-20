@@ -1,9 +1,9 @@
 import type { ModelGenerationOptions } from "../../llm/model-step-types";
 import type { QueuedInput, RuntimeInputState } from "../input/runtime-input";
 import type { BufferedAgentTurn } from "../protocol/turn";
-import type { ThreadEventDispatcher } from "../runtime/thread-event-dispatcher";
 import type { ThreadExecutionOptions } from "../runtime/execution";
 import { processQueuedInput } from "../runtime/queued-input-processor";
+import type { ThreadEventDispatcher } from "../runtime/thread-event-dispatcher";
 import type { ThreadState } from "../state/thread-state";
 import {
   claimOrphanDurableThreadInput,

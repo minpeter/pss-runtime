@@ -1,9 +1,10 @@
 import type { ToolSet } from "ai";
+import { isRecord as isObjectRecord } from "../internal/guards";
+import { isPlainRecord } from "./tool-property-descriptors";
 import {
-  SEMANTIC_TOOL_UNAVAILABLE,
   markSemanticToolUnavailable,
+  SEMANTIC_TOOL_UNAVAILABLE,
 } from "./tool-semantic-metadata";
-import { isObjectRecord, isPlainRecord } from "./tool-property-descriptors";
 
 const SEMANTIC_TOOL_FIELDS = [
   "args",

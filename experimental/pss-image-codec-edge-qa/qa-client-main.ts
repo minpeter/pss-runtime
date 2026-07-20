@@ -1,9 +1,6 @@
 import { runBench } from "./qa-client-bench";
 import { buildCases } from "./qa-client-cases";
-import {
-  runConcurrent,
-  runFunctional,
-} from "./qa-client-functional";
+import { runConcurrent, runFunctional } from "./qa-client-functional";
 import { baseUrl } from "./qa-client-support";
 
 export async function main(): Promise<void> {

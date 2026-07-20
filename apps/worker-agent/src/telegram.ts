@@ -3,12 +3,9 @@ import { createTelegramAdapter } from "@chat-adapter/telegram";
 import { Chat, type Message, type MessageContext, type Thread } from "chat";
 
 import type { Env } from "./env";
-import {
-  isTelegramIngressDryRun,
-  readWebhookSecretToken,
-} from "./env";
+import { isTelegramIngressDryRun, readWebhookSecretToken } from "./env";
 import { TELEGRAM_INGRESS_LAYER } from "./message-path-layers";
-import { requestAgentDelivery, replyToThread } from "./telegram-delivery";
+import { replyToThread, requestAgentDelivery } from "./telegram-delivery";
 import {
   formatIngressDryRunReply,
   summarizeIngressBatch,
@@ -204,25 +201,3 @@ function normalizeError(error: unknown): Error {
   }
   return new Error(`Non-Error thrown: ${String(error)}`);
 }
-
-export {
-  collectTurnImageAttachments,
-  collectTurnImages,
-  isImageAttachment,
-  TelegramAttachmentLimitError,
-} from "./telegram-attachments";
-export { replyToThread, requestAgentDelivery } from "./telegram-delivery";
-export {
-  collectTurnText,
-  collectTurnTexts,
-  formatIngressDryRunReply,
-  summarizeIngressBatch,
-} from "./telegram-ingress";
-export type { IngressBatchSummary } from "./telegram-ingress";
-export {
-  TELEGRAM_COALESCE_QUIET_MS,
-  TELEGRAM_MAX_RAW_IMAGE_BYTES,
-  TELEGRAM_MAX_TURN_IMAGES,
-  TELEGRAM_MAX_TURN_RAW_IMAGE_BYTES,
-  TELEGRAM_MESSAGE_CONCURRENCY,
-} from "./telegram-types";

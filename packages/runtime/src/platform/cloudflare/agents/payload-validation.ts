@@ -13,8 +13,6 @@ export interface ThreadPayloadFields extends RunPayloadFields {
   readonly threadKey: string;
 }
 
-export { isRecord } from "../../../internal/guards";
-
 export function hasRunPayloadStrings(
   value: Record<string, unknown>
 ): value is Record<string, unknown> & RunPayloadFields {

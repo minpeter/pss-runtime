@@ -15,10 +15,10 @@ import {
   type QueuedRuntimeInput,
 } from "../input/runtime-input";
 import type { AgentEvent } from "../protocol/events";
-import { BufferedAgentTurn } from "../protocol/turn";
+import type { BufferedAgentTurn } from "../protocol/turn";
 import { admitDurableThreadInput } from "../runtime/durable-input-admission";
-import type { ThreadEventDispatcher } from "../runtime/thread-event-dispatcher";
 import { startThreadQueueDrain } from "../runtime/notification";
+import type { ThreadEventDispatcher } from "../runtime/thread-event-dispatcher";
 
 export async function admitThreadSendInput({
   awaitBoundaries,

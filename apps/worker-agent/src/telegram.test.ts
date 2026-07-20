@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Env } from "./env";
+import { handleTelegramWebhook } from "./telegram";
 import {
   collectTurnImageAttachments,
   collectTurnImages,
@@ -13,7 +14,6 @@ import {
   formatIngressDryRunReply,
   summarizeIngressBatch,
 } from "./telegram-ingress";
-import { handleTelegramWebhook } from "./telegram";
 import {
   TELEGRAM_COALESCE_QUIET_MS,
   TELEGRAM_MAX_RAW_IMAGE_BYTES,

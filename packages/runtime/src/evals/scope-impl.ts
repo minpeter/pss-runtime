@@ -1,10 +1,7 @@
 import type { LanguageModel } from "ai";
 import { runAgent } from "./harness";
 import { deepEqual } from "./matchers";
-import {
-  evaluateCacheHitRate,
-  summarizeRunsCache,
-} from "./scope-cache";
+import { evaluateCacheHitRate, summarizeRunsCache } from "./scope-cache";
 import { createJudgeScope } from "./scope-judge";
 import {
   isPromise,

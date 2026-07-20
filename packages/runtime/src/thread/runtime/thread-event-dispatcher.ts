@@ -12,10 +12,7 @@ import type {
 import type { AgentEvent, ModelUsage, ToolResult } from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
 import type { ThreadCompactionInput, ThreadState } from "../state/thread-state";
-import {
-  beforeToolCallEvent,
-  interceptAgentEvent,
-} from "./event-interception";
+import { beforeToolCallEvent, interceptAgentEvent } from "./event-interception";
 
 interface ThreadEventDispatcherOptions {
   readonly attachmentStore?: HostAttachmentStore;

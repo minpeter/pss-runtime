@@ -3,9 +3,9 @@ import type {
   ThreadEventReadOptions,
 } from "../../execution/host/types";
 import type { AgentInput, UserInput } from "../../thread/input/input";
+import type { AgentTurn } from "../../thread/protocol/turn";
 import type { NotifyOptions } from "../../thread/runtime/notification";
 import type { ThreadCompactionInput } from "../../thread/state/thread-state";
-import type { AgentTurn } from "../../thread/protocol/turn";
 import { namespacePart } from "../identity/namespace";
 
 export interface ThreadMetadata {

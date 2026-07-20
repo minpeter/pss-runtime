@@ -1,4 +1,4 @@
-import { generateText, type LanguageModel, type ModelMessage, type ToolSet } from "ai";
+import type { generateText, LanguageModel, ModelMessage, ToolSet } from "ai";
 import type { RuntimeDiagnosticsSink } from "../plugins/diagnostics";
 import type { HostAttachmentStore } from "../thread/input/attachments";
 import type { ModelUsage } from "../thread/protocol/events";

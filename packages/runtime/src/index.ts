@@ -20,13 +20,13 @@ export type {
   ThreadEventCursor,
   ThreadEventReadOptions,
 } from "./execution/host/types";
-export type { AgentToolChoice } from "./llm/model-step-types";
-export { ModelToolSelectionError } from "./llm/model-step-selection";
+export { ModelToolSelectionError } from "./llm/model-step-error";
 export type {
   PrepareModelStep,
   PrepareModelStepInput,
   PrepareModelStepResult,
 } from "./llm/model-step-preparation";
+export type { AgentToolChoice } from "./llm/model-step-types";
 export {
   definePlugin,
   type PluginAPI,
@@ -58,6 +58,10 @@ export {
   PluginInitializationError,
   PluginRegistrationClosedError,
 } from "./plugins/plugin-errors";
+export type {
+  ImagePrepareDiagnostics,
+  ImagePreparePath,
+} from "./thread/input/attachment-types";
 export {
   DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,
   decodeRuntimeAttachmentData,
@@ -92,10 +96,6 @@ export {
   STORED_IMAGE_MEDIA_TYPES,
   type StoredImageMediaType,
 } from "./thread/input/attachments";
-export type {
-  ImagePrepareDiagnostics,
-  ImagePreparePath,
-} from "./thread/input/attachment-types";
 export { delegateUserInput } from "./thread/input/delegate-input";
 export type { AgentInput, ThreadInput } from "./thread/input/input";
 export {

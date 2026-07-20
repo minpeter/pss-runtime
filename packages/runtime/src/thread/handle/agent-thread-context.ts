@@ -1,13 +1,13 @@
-import type { ModelGenerationOptions } from "../../llm/model-step-types";
 import { mapPrepareModelStepModel } from "../../llm/model-step-selection";
+import type { ModelGenerationOptions } from "../../llm/model-step-types";
 import type {
   QueuedInput,
   QueuedRuntimeInput,
   RuntimeInputState,
 } from "../input/runtime-input";
 import type { BufferedAgentTurn } from "../protocol/turn";
-import { ThreadEventDispatcher } from "../runtime/thread-event-dispatcher";
 import type { ThreadExecutionOptions } from "../runtime/execution";
+import { ThreadEventDispatcher } from "../runtime/thread-event-dispatcher";
 import {
   type ThreadPersistenceOptions,
   ThreadState,
