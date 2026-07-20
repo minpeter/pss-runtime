@@ -1,37 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { appPackages, examplePackages } from "./examples.fixture.mjs";
 
-const examplePackages = [
-  {
-    name: "@minpeter/pss-example-basic",
-    path: "examples/basic",
-    requiredSource: "src/index.ts",
-  },
-  {
-    name: "@minpeter/pss-example-plugin",
-    path: "examples/plugin",
-    requiredSource: "src/index.ts",
-  },
-  {
-    name: "@minpeter/pss-example-sync-subagent",
-    path: "examples/sync-subagent",
-    requiredSource: "src/index.ts",
-  },
-  {
-    name: "@minpeter/pss-example-background-subagent",
-    path: "examples/background-subagent",
-    requiredSource: "src/index.ts",
-  },
-];
-const appPackages = [
-  {
-    name: "@minpeter/pss-coding-agent",
-    path: "apps/coding-agent",
-    requiredSource: "src/index.ts",
-    buildScript: "tsdown",
-  },
-];
 const finalRunEventsLoopPattern =
   /for await \(const event of run\.events\(\)\) \{\s+console\.log\(event\);\s+\}$/;
 
