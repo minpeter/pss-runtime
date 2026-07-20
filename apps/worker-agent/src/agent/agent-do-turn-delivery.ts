@@ -33,8 +33,8 @@ import {
 import type { AgentDoSession } from "./agent-do-session";
 import { indexTurnDelivery } from "./agent-do-turn-delivery-index";
 import { parseTurnAgentInput } from "./agent-do-turn-delivery-input";
-import { deliverWithObservability } from "./agent-do-turn-delivery-observability";
 import { createDeliveryResponse } from "./agent-do-turn-delivery-response";
+import { deliverWithTurnState } from "./agent-do-turn-delivery-state";
 import type { AgentDoState } from "./agent-do-types";
 import { agentTurnIndexText } from "./agent-input";
 
@@ -77,8 +77,22 @@ export class AgentDoTurn {
     const turnEvents = createTurnEventCollector();
     const imagePrepares: ImagePrepareDiagnostics[] = [];
     const imageOmits: ImageOmitDiagnostics[] = [];
-    const modelId = this.#env.AI_MODEL?.trim() || DEFAULT_MODEL;
+    this.#logTurnAdmission(log, payload);
 
+    return await this.#runWithImageDiagnostics({
+      imageOmits,
+      imagePrepares,
+      log,
+      payload,
+      turnEvents,
+    });
+  }
+
+  #logTurnAdmission(
+    log: ReturnType<typeof createTurnLogger>,
+    payload: AgentRequestPayload
+  ): void {
+    const modelId = this.#env.AI_MODEL?.trim() || DEFAULT_MODEL;
     log.set({
       action: "agent_turn",
       layer: AGENT_TURN_ADMISSION_LAYER,
@@ -95,7 +109,21 @@ export class AgentDoTurn {
         ? { correlationId: payload.correlationId }
         : {}),
     });
+  }
 
+  async #runWithImageDiagnostics({
+    imageOmits,
+    imagePrepares,
+    log,
+    payload,
+    turnEvents,
+  }: {
+    readonly imageOmits: ImageOmitDiagnostics[];
+    readonly imagePrepares: ImagePrepareDiagnostics[];
+    readonly log: ReturnType<typeof createTurnLogger>;
+    readonly payload: AgentRequestPayload;
+    readonly turnEvents: ReturnType<typeof createTurnEventCollector>;
+  }): Promise<Response> {
     const runTurn = async (): Promise<Response> => {
       try {
         return await this.#runPayloadTurn({
@@ -158,7 +186,7 @@ export class AgentDoTurn {
       }
 
       const assistantMessages: string[] = [];
-      const delivery = await deliverWithObservability(
+      const delivery = await deliverWithTurnState(
         this.#state,
         session,
         agentInput,
@@ -187,15 +215,31 @@ export class AgentDoTurn {
         turnEvents,
       });
     } catch (error) {
-      log.error(error instanceof Error ? error : new Error(String(error)));
-      log.set({
-        delivery: { delivered: false, outcome: "error" },
-        turn: turnEvents.summary(),
-        ...summarizeImagePrepares(imagePrepares),
-        ...summarizeImageOmits(imageOmits),
-      });
-      log.emit({ status: 500 });
+      this.#logTurnError({ error, imageOmits, imagePrepares, log, turnEvents });
       throw error;
     }
+  }
+
+  #logTurnError({
+    error,
+    imageOmits,
+    imagePrepares,
+    log,
+    turnEvents,
+  }: {
+    readonly error: unknown;
+    readonly imageOmits: ImageOmitDiagnostics[];
+    readonly imagePrepares: ImagePrepareDiagnostics[];
+    readonly log: ReturnType<typeof createTurnLogger>;
+    readonly turnEvents: ReturnType<typeof createTurnEventCollector>;
+  }): void {
+    log.error(error instanceof Error ? error : new Error(String(error)));
+    log.set({
+      delivery: { delivered: false, outcome: "error" },
+      turn: turnEvents.summary(),
+      ...summarizeImagePrepares(imagePrepares),
+      ...summarizeImageOmits(imageOmits),
+    });
+    log.emit({ status: 500 });
   }
 }

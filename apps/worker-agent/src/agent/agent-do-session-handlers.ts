@@ -1,5 +1,4 @@
 import type { Agent } from "@minpeter/pss-runtime";
-import { dispatchAgentNotification } from "@minpeter/pss-runtime/execution";
 import type { CloudflarePlatformContext } from "@minpeter/pss-runtime/platform/cloudflare";
 
 import {
@@ -15,7 +14,10 @@ import {
   type ThreadEventCursor,
 } from "../session/session-contract";
 import { createSessionEventStreamResponse } from "../session/session-events";
-import { replayDurableThreadEvents } from "../session/session-runtime";
+import {
+  replayDurableThreadEvents,
+  submitDurableSessionTurn,
+} from "../session/session-runtime";
 import { createThreadStoreSessionTranscriptReader } from "../session/session-transcript";
 import { SessionTranscriptReadRequestSchema } from "../session/session-transcript-client";
 import { WORKER_AGENT_NAMESPACE } from "./agent";
@@ -106,18 +108,14 @@ export class AgentDoSessionHandlers {
       ...(sessionScopeKey ? { sessionScopeKey } : {}),
     } satisfies SessionBindingRecord);
 
-    const admitted = await dispatchAgentNotification({
+    const admitted = await submitDurableSessionTurn({
       host: this.#platform.host(),
       idempotencyKey: parsed.data.idempotencyKey?.trim() || crypto.randomUUID(),
-      input: { text, type: "user-input" },
+      input: text,
       namespace: WORKER_AGENT_NAMESPACE,
       threadKey: CHANNEL_DURABLE_OBJECT_THREAD_KEY,
     });
-    return Response.json({
-      accepted: true,
-      runId: admitted.runId,
-      threadKey: CHANNEL_DURABLE_OBJECT_THREAD_KEY,
-    });
+    return Response.json(admitted);
   }
 
   async replay(body: unknown): Promise<Response> {

@@ -5,7 +5,7 @@ import type { createTurnEventCollector } from "../observability";
 import type { TurnSession } from "./agent-do-turn-session";
 import type { AgentDoState } from "./agent-do-types";
 
-export async function deliverWithObservability(
+export async function deliverWithTurnState(
   state: AgentDoState,
   session: TurnSession,
   agentInput: AgentInput,

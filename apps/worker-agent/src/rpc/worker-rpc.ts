@@ -18,15 +18,15 @@ import {
 } from "./server-errors";
 import { isAuthorizedWorkerRequest } from "./worker-rpc-auth";
 
-const TUI_RPC_ENDPOINT = "/trpc";
+const WORKER_RPC_ENDPOINT = "/trpc";
 const UNAUTHORIZED_MESSAGE = "unauthorized";
 
-interface TuiRpcContext {
+interface WorkerRpcContext {
   readonly env: Env;
   readonly request: Request;
 }
 
-const trpc = initTRPC.context<TuiRpcContext>().create({ isDev: false });
+const trpc = initTRPC.context<WorkerRpcContext>().create({ isDev: false });
 
 const authorizedProcedure = trpc.procedure.use(({ ctx, next }) => {
   if (!isAuthorizedWorkerRequest(ctx.request, ctx.env)) {
@@ -70,7 +70,7 @@ export function handleWorkerRpcRequest(
 ): Promise<Response> {
   return fetchRequestHandler({
     createContext: () => ({ env, request }),
-    endpoint: TUI_RPC_ENDPOINT,
+    endpoint: WORKER_RPC_ENDPOINT,
     req: request,
     router: workerAgentRouter,
   });
