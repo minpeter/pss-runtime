@@ -4,6 +4,7 @@ import type {
   ThreadInputRecord,
   ThreadInputStatus,
 } from "../../../../execution/host/types";
+import { isPlainRecord as isRecord } from "../../../../internal/guards";
 import type {
   InputEventMeta,
   InputSource,
@@ -12,7 +13,6 @@ import type {
   UserMessageFileData,
   UserTextContent,
 } from "../../../../thread/protocol/events";
-import { isRecord } from "./utils";
 
 export function parseThreadInputRecords(
   value: unknown,

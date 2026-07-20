@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { throwIfManualToolRecoveryRequired } from "../execution/resume/checkpoints";
-import { ToolExecutionNeedsRecoveryError } from "../llm/tool-execution";
+import { ToolExecutionNeedsRecoveryError } from "../llm/tool-execution-checkpoint";
 import { definePlugin } from "../plugins/api";
 import {
   checkpointedTool,

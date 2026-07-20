@@ -82,7 +82,7 @@ export function recordRuntimeTraceEvent(
     case "user-input":
       return;
     default:
-      assertNever(event);
+      assertNever(event, "Unexpected event variant");
   }
 }
 
@@ -232,6 +232,4 @@ function endSpan(
   span.end();
 }
 
-function assertNever(_value: never): never {
-  throw new Error("Unexpected event variant");
-}
+import { assertNever } from "../internal/guards";

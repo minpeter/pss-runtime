@@ -91,8 +91,6 @@ export function matchField(matcher: unknown, value: unknown): boolean {
   return partialDeepEqual(value, matcher);
 }
 
-// --- internals ---
-
 function stringify(value: unknown): string {
   if (typeof value === "string") {
     return value;

@@ -1,6 +1,6 @@
 import type { ModelMessage } from "ai";
 import type { AgentHost } from "../../execution/host/types";
-import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution";
+import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution-checkpoint";
 import {
   closeRuntimeInput,
   type RuntimeInputState,
@@ -12,11 +12,11 @@ import {
   ThreadCommitConflictError,
   type ThreadState,
 } from "../state/thread-state";
-import type { ThreadEventDispatcher } from "./events";
 import type {
   ThreadExecutionRun,
   ThreadExecutionTerminalStatus,
 } from "./execution";
+import type { ThreadEventDispatcher } from "./thread-event-dispatcher";
 import {
   commitThreadStateAndEvents,
   type DurableThreadEventBuffer,

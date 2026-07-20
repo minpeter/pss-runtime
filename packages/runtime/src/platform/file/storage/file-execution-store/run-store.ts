@@ -8,10 +8,11 @@ import type {
   TurnRecord,
   TurnStore,
 } from "../../../../execution/host/types";
+import { isNodeError } from "../../../../internal/guards";
 import { readJsonFile, writeJsonFile } from "./json";
 import { isClaimable, parseRunRecord } from "./schemas";
 import type { DataDirectoryResolver } from "./types";
-import { encodeKey, isNodeError } from "./utils";
+import { encodeKey } from "./utils";
 
 export class FileRunStore implements TurnStore {
   readonly #directory: DataDirectoryResolver;

@@ -20,13 +20,13 @@ export type {
   ThreadEventCursor,
   ThreadEventReadOptions,
 } from "./execution/host/types";
-export type { AgentToolChoice } from "./llm/llm";
-export {
-  ModelToolSelectionError,
-  type PrepareModelStep,
-  type PrepareModelStepInput,
-  type PrepareModelStepResult,
+export { ModelToolSelectionError } from "./llm/model-step-error";
+export type {
+  PrepareModelStep,
+  PrepareModelStepInput,
+  PrepareModelStepResult,
 } from "./llm/model-step-preparation";
+export type { AgentToolChoice } from "./llm/model-step-types";
 export {
   definePlugin,
   type PluginAPI,
@@ -57,8 +57,11 @@ export {
   PluginHookError,
   PluginInitializationError,
   PluginRegistrationClosedError,
-} from "./plugins/runtime";
-export { ThreadEventReplayUnsupportedError } from "./thread/handle/thread-event-replay";
+} from "./plugins/plugin-errors";
+export type {
+  ImagePrepareDiagnostics,
+  ImagePreparePath,
+} from "./thread/input/attachment-types";
 export {
   DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,
   decodeRuntimeAttachmentData,
@@ -69,9 +72,7 @@ export {
   type ImageCodecWasmModules,
   type ImageOmitDiagnostics,
   type ImageOmitDiagnosticsListener,
-  type ImagePrepareDiagnostics,
   type ImagePrepareDiagnosticsListener,
-  type ImagePreparePath,
   installImageCodecWasm,
   installImageCodecWasmFromNodeModules,
   isCompressibleImageMediaType,
@@ -136,6 +137,7 @@ export {
   isVisibleAgentEvent,
 } from "./thread/protocol/events";
 export type { AgentTurn } from "./thread/protocol/turn";
+export { ThreadEventReplayUnsupportedError } from "./thread/runtime/thread-event-replay";
 export type {
   CompactionContextMessage,
   ThreadContextMessage,

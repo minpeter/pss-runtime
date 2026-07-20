@@ -1,9 +1,11 @@
 import {
   isScheduledThreadPrompt,
+  type ScheduledThreadPrompt,
   threadPromptScheduledWorkId,
 } from "../../../execution/scheduled-work";
 import type { ScheduledWorkRow } from "../storage/sqlite/scheduled-work-table";
-import type { CloudflareScheduledThreadPrompt } from "./scheduled-work-queue";
+
+export type CloudflareScheduledThreadPrompt = ScheduledThreadPrompt;
 
 export function runScheduledWorkId(runId: string): string {
   return runId;

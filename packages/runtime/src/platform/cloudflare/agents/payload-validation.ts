@@ -13,10 +13,6 @@ export interface ThreadPayloadFields extends RunPayloadFields {
   readonly threadKey: string;
 }
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object";
-}
-
 export function hasRunPayloadStrings(
   value: Record<string, unknown>
 ): value is Record<string, unknown> & RunPayloadFields {

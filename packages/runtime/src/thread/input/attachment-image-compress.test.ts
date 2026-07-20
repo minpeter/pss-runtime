@@ -15,7 +15,7 @@ import {
   runWithImagePrepareDiagnosticsListener,
 } from "./attachment-image-compress";
 import { decodeRuntimeAttachmentData } from "./attachment-refs";
-import { stageUserInputAttachments } from "./attachment-staging";
+import { stageUserInputAttachments } from "./attachment-staging-input";
 import { RuntimeAttachmentStagingError } from "./attachment-types";
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), "fixtures");

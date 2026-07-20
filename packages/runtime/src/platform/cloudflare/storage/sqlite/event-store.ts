@@ -11,11 +11,9 @@ import {
   resolveStoragePayloadMaxBytes,
   type StoragePayloadBudgetOptions,
 } from "../payload-guard";
-import {
-  ensurePayloadChunkSchema,
-  readJsonPayloadsFromSqlRows,
-  writeJsonPayloadToSqlRows,
-} from "./payload-chunks";
+import { readJsonPayloadsFromSqlRows } from "./payload-chunk-read";
+import { ensurePayloadChunkSchema } from "./payload-chunk-table";
+import { writeJsonPayloadToSqlRows } from "./payload-chunk-write";
 
 interface EventRow {
   readonly event: string;

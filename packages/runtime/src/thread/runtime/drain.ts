@@ -11,11 +11,13 @@ import type { BufferedAgentTurn } from "../protocol/turn";
 import type { ThreadState } from "../state/thread-state";
 import {
   ackDurableThreadInput,
-  claimDurableThreadInput,
   commitAndAckDurableThreadInput,
+} from "./durable-input-acknowledgement";
+import {
+  claimDurableThreadInput,
   releaseDurableThreadInputClaim,
-} from "./durable-inputs";
-import type { ThreadEventDispatcher } from "./events";
+} from "./durable-input-claims";
+import type { ThreadEventDispatcher } from "./thread-event-dispatcher";
 import {
   commitThreadStateAndEvents,
   type DurableThreadEventBuffer,

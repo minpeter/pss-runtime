@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { isNodeError } from "./utils";
+import { isNodeError } from "../../../../internal/guards";
 
 const DATA_DIRECTORIES = [
   "checkpoints",

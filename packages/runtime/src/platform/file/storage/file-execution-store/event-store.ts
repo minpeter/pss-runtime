@@ -10,13 +10,14 @@ import type {
   ThreadEventLog,
   ThreadEventReadOptions,
 } from "../../../../execution/host/types";
+import { isNodeError } from "../../../../internal/guards";
 import type { AgentEvent } from "../../../../thread/protocol/events";
 import {
   parseEventLogLine,
   parseThreadEventLogLine,
 } from "./event-log-schemas";
 import type { DataDirectoryResolver } from "./types";
-import { encodeKey, isNodeError } from "./utils";
+import { encodeKey } from "./utils";
 
 export class FileEventStore implements EventStore {
   readonly #directory: DataDirectoryResolver;

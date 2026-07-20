@@ -1,8 +1,9 @@
 import type { AgentHost, NotificationRecord } from "../../execution/host/types";
 import { createInMemoryHost } from "../../platform/memory";
 import { noopRuntimeDiagnostics } from "../../plugins/diagnostics";
-import { PluginRuntime } from "../../plugins/runtime";
-import { type AgentInput, AgentThread } from "../../thread/handle/thread";
+import { PluginRuntime } from "../../plugins/plugin-runtime";
+import { AgentThread } from "../../thread/handle/agent-thread";
+import type { AgentInput } from "../../thread/input/input";
 import type { AgentTurn } from "../../thread/protocol/turn";
 import type { ThreadStore } from "../../thread/store/types";
 import { stableAgentNamespace } from "../identity/namespace";
@@ -31,7 +32,7 @@ import {
 } from "./thread-entry";
 
 export type { AgentHost } from "../../execution/host/types";
-export type { ThreadCompactionInput } from "../../thread/handle/thread";
+export type { ThreadCompactionInput } from "../../thread/state/thread-state";
 export type {
   AgentInstrumentation,
   AgentInstrumentationContext,

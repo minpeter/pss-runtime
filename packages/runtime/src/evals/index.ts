@@ -18,7 +18,7 @@ export {
 } from "./matchers";
 export { clearEvals, defineEval, type EvalIt, getEvals } from "./registry";
 export { runEvals } from "./runner";
-export { EvalScopeImpl } from "./scope";
+export { EvalScopeImpl } from "./scope-impl";
 export type { StandardSchemaResult, StandardSchemaV1 } from "./standard-schema";
 export type {
   AgentTurnLike,

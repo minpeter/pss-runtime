@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { channelKey } from "./channel";
 import type { Env } from "./env";
 import { durableObjectName } from "./env";
-import { requestAgentDelivery } from "./telegram";
+import { requestAgentDelivery } from "./telegram-delivery";
 
 const SEND_MESSAGE_ERROR_PATTERN = /send_message/i;
 

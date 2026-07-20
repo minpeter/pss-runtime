@@ -1,5 +1,5 @@
 import type { ModelMessage } from "ai";
-import type { ModelGenerationOptions } from "../../llm/llm";
+import type { ModelGenerationOptions } from "../../llm/model-step-types";
 import type { AgentHost } from "../host/types";
 
 export interface ResumeRunState {

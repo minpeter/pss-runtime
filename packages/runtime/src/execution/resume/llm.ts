@@ -1,11 +1,11 @@
-import {
-  generateModelStepResult,
-  type ModelGenerationOptions,
-  type ModelStepOutput,
-  type ModelStepResult,
-  type RuntimeToolExecutionContext,
-} from "../../llm/llm";
-import { persistedToolExecutionCheckpoint } from "../../llm/tool-execution";
+import { generateModelStepResult } from "../../llm/model-step";
+import type {
+  ModelGenerationOptions,
+  ModelStepOutput,
+  ModelStepResult,
+} from "../../llm/model-step-types";
+import { persistedToolExecutionCheckpoint } from "../../llm/tool-execution-checkpoint";
+import type { RuntimeToolExecutionContext } from "../../llm/tool-execution-types";
 import { modelMessageToAgentEvents } from "../../thread/protocol/mapping";
 import type { ThreadContextMessage } from "../../thread/state/context";
 import type { AgentHost } from "../host/types";

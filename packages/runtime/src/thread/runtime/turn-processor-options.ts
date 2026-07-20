@@ -1,9 +1,9 @@
-import type { ModelGenerationOptions } from "../../llm/llm";
+import type { ModelGenerationOptions } from "../../llm/model-step-types";
 import type { QueuedInput, RuntimeInputState } from "../input/runtime-input";
 import type { BufferedAgentTurn } from "../protocol/turn";
 import type { ThreadState } from "../state/thread-state";
-import type { ThreadEventDispatcher } from "./events";
 import type { ThreadExecutionOptions } from "./execution";
+import type { ThreadEventDispatcher } from "./thread-event-dispatcher";
 
 export interface ActiveTurn {
   readonly abort: AbortController;

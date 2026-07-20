@@ -1,8 +1,7 @@
 import { mkdir } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { argv, stdin, stdout } from "node:process";
+import { join } from "node:path";
+import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
-import { pathToFileURL } from "node:url";
 import type { AgentHost } from "@minpeter/pss-runtime";
 import { createFileHost } from "@minpeter/pss-runtime/platform/file";
 import { createConfiguredAgent } from "./agent";
@@ -162,12 +161,7 @@ async function configureTuiTurnDelivery(
   }
 }
 
-function isMainModule(moduleUrl: string, argvPath = argv[1]): boolean {
-  return (
-    argvPath !== undefined &&
-    moduleUrl === pathToFileURL(resolve(argvPath)).href
-  );
-}
+import { isMainModule } from "./shared/is-main-module";
 
 if (isMainModule(import.meta.url)) {
   await startWorkerAgentTui();

@@ -1,147 +1,57 @@
+import type { Agent } from "@minpeter/pss-runtime";
 import type {
-  Agent,
-  AgentInput,
-  ImageOmitDiagnostics,
-  ImagePrepareDiagnostics,
-  ThreadHandle,
-} from "@minpeter/pss-runtime";
-import {
-  IMAGE_PREPARE_LOG_MESSAGE,
-  runWithImageOmitDiagnosticsListener,
-  runWithImagePrepareDiagnosticsListener,
-} from "@minpeter/pss-runtime";
-import { dispatchAgentNotification } from "@minpeter/pss-runtime/execution";
-import {
-  type CloudflareAgentsFiberRecoveryContext,
-  type CloudflareAgentsFiberRecoveryResult,
-  type CloudflarePlatformContext,
-  createCloudflarePlatformContext,
+  CloudflareAgentsFiberRecoveryContext,
+  CloudflareAgentsFiberRecoveryResult,
+  CloudflarePlatformContext,
 } from "@minpeter/pss-runtime/platform/cloudflare";
+import { createCloudflarePlatformContext } from "@minpeter/pss-runtime/platform/cloudflare";
 import { installCloudflareImageCodecs } from "@minpeter/pss-runtime/platform/cloudflare/image-codecs";
 import { Agent as CloudflareAgent } from "agents";
 
-import {
-  createConfiguredAgent,
-  DEFAULT_MODEL,
-  WORKER_AGENT_NAMESPACE,
-} from "./agent";
-import {
-  type WorkerAgentDeliveredMessage,
-  withCapturedMessages,
-} from "./agent-do-delivery";
-import { parseAgentRequest } from "./agent-do-request";
+import { createConfiguredAgent } from "./agent";
 import {
   createRequestSendMessageToolSetup,
   createSendMessageToolOptions,
   type SendMessageToolSetup,
 } from "./agent-do-send-message";
-import { createTurnSession, type TurnSession } from "./agent-do-turn-session";
+import { AgentDoSession } from "./agent-do-session";
+import { AgentDoTurn } from "./agent-do-turn-delivery";
 import {
-  agentInputFromRequest,
-  agentTurnIndexText,
-  InvalidAttachmentBase64Error,
-} from "./agent-input";
-import {
-  CHANNEL_DURABLE_OBJECT_THREAD_KEY,
-  type ChannelAddress,
-  type ChannelRuntimeBinding,
-  durableObjectChannelBinding,
-} from "./channel";
+  AgentDoState,
+  SESSION_REPLAY_PATH,
+  SESSION_STREAM_PATH,
+  SESSION_SUBMIT_PATH,
+} from "./agent-do-types";
+import type { ChannelAddress } from "./channel";
 import type { Env } from "./env";
-import { AGENT_TURN_ADMISSION_LAYER } from "./message-path-layers";
-import { createTurnEventCollector } from "./observability";
-import {
-  parseSessionChannel,
-  parseThreadEventCursor,
-  ReplayEventsRequestSchema,
-  SubmitTurnRequestSchema,
-  type ThreadEventCursor,
-} from "./session-contract";
-import {
-  createSessionEventLiveSignal,
-  createSessionEventStreamResponse,
-} from "./session-events";
-import {
-  createSessionIndexStore,
-  type SessionIndexStore,
-} from "./session-index";
 import {
   createSessionIndexClient,
   isSessionIndexPath,
-  type SessionIndexClient,
 } from "./session-index-client";
 import { handleSessionIndexRequest } from "./session-index-routes";
-import { createSqlSessionIndexRepository } from "./session-index-sql";
-import { replayDurableThreadEvents } from "./session-runtime";
-import {
-  createThreadStoreSessionTranscriptReader,
-  type SessionTranscriptReader,
-} from "./session-transcript";
 import {
   createSessionTranscriptClient,
   isSessionTranscriptPath,
-  SessionTranscriptReadRequestSchema,
 } from "./session-transcript-client";
 import type { WorkerAgentSendMessageToolOptions } from "./tools";
-import { workerErrors } from "./worker-errors";
-import {
-  attachmentLogFields,
-  createTurnLogger,
-  ensureWorkerLogger,
-  imagePrepareLogEvent,
-  logError,
-  logInfo,
-  logWarn,
-  summarizeImageOmits,
-  summarizeImagePrepares,
-} from "./worker-log";
+import { ensureWorkerLogger } from "./worker-log";
 
-// DO isolate may load this module without worker-entry side-effects.
 installCloudflareImageCodecs();
 
-const SESSION_SUBMIT_PATH = "/session/turn";
-const SESSION_REPLAY_PATH = "/session/events/replay";
-const SESSION_STREAM_PATH = "/session/events";
-const SESSION_BINDING_STORAGE_KEY = "session:binding";
-
-/**
- * Channel agent Durable Object on the Cloudflare Agents SDK.
- * Scheduling/resume uses Agents fibers; HTTP remains app-owned via onRequest.
- *
- * Layer 2 — agent turn admission (`AGENT_TURN_ADMISSION_LAYER`):
- * reuses one Agent/ThreadHandle per DO so every user message is delivered
- * immediately — idle → send, running → mid-turn steer.
- *
- * Layer 1 Telegram fragment reassembly (quiet window) lives only in
- * telegram.ts / telegram-message-coalesce.ts and never inside this DO.
- */
 export class AgentDurableObject extends CloudflareAgent<Env> {
   readonly #platform: CloudflarePlatformContext<Agent>;
-  readonly #env: Env;
-  readonly #storage: DurableObjectStorage;
-  readonly #sessionIndexClient: SessionIndexClient;
-  readonly #sessionTranscriptClient: SessionTranscriptReader;
-  #sessionIndexStore: SessionIndexStore | undefined;
-  /** Layer 2: reused so send/steer share in-memory active-run state. */
-  #turnSession: TurnSession | undefined;
-  #turnSessionPromise: Promise<TurnSession> | undefined;
-  #runtimeThread: ThreadHandle | undefined;
-  #channel: ChannelAddress | undefined;
-  #sessionScopeKey: string | undefined;
-  #observability: ReturnType<typeof createTurnEventCollector> | undefined;
-  #tuiMessageCapture: WorkerAgentDeliveredMessage[] = [];
-  readonly #sessionEventLive = createSessionEventLiveSignal();
+  readonly #session: AgentDoSession;
+  readonly #state = new AgentDoState();
+  readonly #turn: AgentDoTurn;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    this.#env = env;
-    this.#storage = ctx.storage;
     ensureWorkerLogger({
       environment: env.ENVIRONMENT,
       version: env.CF_VERSION_METADATA?.id,
     });
-    this.#sessionIndexClient = createSessionIndexClient(env);
-    this.#sessionTranscriptClient = createSessionTranscriptClient(env);
+    const sessionIndexClient = createSessionIndexClient(env);
+    const sessionTranscriptClient = createSessionTranscriptClient(env);
     this.#platform = createCloudflarePlatformContext({
       cloudflareAgent: this,
       createAgent: ({ env: agentEnv, host }) =>
@@ -149,20 +59,37 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
           sendMessage: createSendMessageToolOptions(agentEnv, () => undefined),
         }),
       drain: {
-        onEvent: () => this.#sessionEventLive.publish(),
+        onEvent: () => this.#state.sessionEventLive.publish(),
       },
       durableObjectContext: this.ctx,
       env,
     });
+    this.#session = new AgentDoSession({
+      createSendMessage: () =>
+        createLongLivedSendMessageOptions(env, this.#state),
+      env,
+      platform: this.#platform,
+      sessionIndexClient,
+      sessionTranscriptClient,
+      state: this.#state,
+      storage: ctx.storage,
+    });
+    this.#turn = new AgentDoTurn({
+      createSendMessage: (channel) =>
+        createTurnSendMessageSetup(env, this.#state, channel),
+      env,
+      session: this.#session,
+      sessionIndexClient,
+      state: this.#state,
+    });
   }
 
-  /** Agents scheduler callback for delayed PSS run/thread resumes. */
   async resumePssRuntimeFiber(payload: unknown): Promise<void> {
-    await this.#restoreSessionBinding();
+    await this.#session.restoreBinding();
     try {
       await this.#platform.resumeScheduledFiber(payload);
     } finally {
-      this.#sessionEventLive.publish();
+      this.#state.sessionEventLive.publish();
     }
   }
 
@@ -176,7 +103,7 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
       }
       return result;
     } finally {
-      this.#sessionEventLive.publish();
+      this.#state.sessionEventLive.publish();
     }
   }
 
@@ -186,559 +113,70 @@ export class AgentDurableObject extends CloudflareAgent<Env> {
       if (request.method !== "GET") {
         return new Response("method not allowed", { status: 405 });
       }
-      return await this.#handleSessionEventStreamRequest(request);
+      return await this.#session.handleEventStream(request);
     }
     if (request.method !== "POST") {
       return new Response("method not allowed", { status: 405 });
     }
 
     if (pathname === SESSION_SUBMIT_PATH) {
-      return await this.#handleSessionSubmitRequest(request);
+      return await this.#session.handleSubmit(await readRequestJson(request));
     }
     if (pathname === SESSION_REPLAY_PATH) {
-      return await this.#handleSessionReplayRequest(request);
+      return await this.#session.handleReplay(await readRequestJson(request));
     }
     if (isSessionIndexPath(pathname)) {
       return await handleSessionIndexRequest({
         pathname,
         request,
-        store: this.#sessionIndex(),
+        store: this.#session.sessionIndex(),
       });
     }
     if (isSessionTranscriptPath(pathname)) {
-      return await this.#handleSessionTranscriptRequest(request);
-    }
-
-    const log = createTurnLogger(request);
-    const payload = await parseAgentRequest(request);
-    if (!payload) {
-      const invalid = workerErrors.INVALID_TURN_PAYLOAD();
-      log.error(invalid);
-      log.set({
-        action: "agent_turn",
-        outcome: "invalid_payload",
-      });
-      log.emit({ status: 400 });
-      return new Response(invalid.message, { status: 400 });
-    }
-
-    const turnEvents = createTurnEventCollector();
-    const imagePrepares: ImagePrepareDiagnostics[] = [];
-    const imageOmits: ImageOmitDiagnostics[] = [];
-    // AI SDK V4 here — log model id only until evlog/ai supports V4 wrap.
-    const modelId = this.#env.AI_MODEL?.trim() || DEFAULT_MODEL;
-
-    log.set({
-      action: "agent_turn",
-      layer: AGENT_TURN_ADMISSION_LAYER,
-      ai: {
-        model: modelId,
-        provider: "openai-compatible",
-      },
-      channel: {
-        kind: payload.channel.kind,
-        hasSessionScope: Boolean(payload.sessionScopeKey),
-      },
-      input: {
-        textChars: payload.text.length,
-        ...attachmentLogFields(payload.attachments),
-      },
-      ...(payload.correlationId
-        ? { correlationId: payload.correlationId }
-        : {}),
-    });
-
-    const runTurn = async (): Promise<Response> => {
-      try {
-        return await this.#runPayloadTurn({
-          imageOmits,
-          imagePrepares,
-          log,
-          payload,
-          turnEvents,
-        });
-      } finally {
-        this.#sessionEventLive.publish();
-      }
-    };
-
-    return await runWithImagePrepareDiagnosticsListener(
-      (diagnostics) => {
-        imagePrepares.push(diagnostics);
-        logInfo(
-          imagePrepareLogEvent({
-            ...diagnostics,
-            message: IMAGE_PREPARE_LOG_MESSAGE,
-          })
-        );
-      },
-      () =>
-        runWithImageOmitDiagnosticsListener((omit) => {
-          imageOmits.push(omit);
-          logWarn({
-            message: "pss-runtime image-omit",
-            limit: omit.limit,
-            mediaType: omit.mediaType,
-            ...(omit.filename === undefined ? {} : { filename: omit.filename }),
-          });
-        }, runTurn)
-    );
-  }
-
-  async #runPayloadTurn({
-    imageOmits,
-    imagePrepares,
-    log,
-    payload,
-    turnEvents,
-  }: {
-    readonly imageOmits: ImageOmitDiagnostics[];
-    readonly imagePrepares: ImagePrepareDiagnostics[];
-    readonly log: ReturnType<typeof createTurnLogger>;
-    readonly payload: NonNullable<
-      Awaited<ReturnType<typeof parseAgentRequest>>
-    >;
-    readonly turnEvents: ReturnType<typeof createTurnEventCollector>;
-  }): Promise<Response> {
-    try {
-      this.#channel = payload.channel;
-      this.#sessionScopeKey = payload.sessionScopeKey;
-      const binding = durableObjectChannelBinding(payload.channel);
-      const session = await this.#ensureTurnSession(binding);
-      const sendMessage = this.#sendMessageSetup(payload.channel);
-      const agentInput = this.#parseAgentInput(payload, log);
-      if (agentInput instanceof Response) {
-        return agentInput;
-      }
-
-      const assistantMessages: string[] = [];
-      const delivery = await this.#deliverWithObservability(
-        session,
-        agentInput,
-        turnEvents,
-        payload.channel.kind,
-        assistantMessages
-      );
-
-      if (delivery.mode === "send" && delivery.delivered) {
-        await this.#indexTurn(
-          binding,
-          agentTurnIndexText(payload),
-          sendMessage,
-          assistantMessages,
-          payload.sessionScopeKey
-        );
-      }
-
-      return this.#deliveryResponse({
-        delivery,
-        imageOmits,
-        imagePrepares,
-        log,
-        sendMessage,
-        turnEvents,
-      });
-    } catch (error) {
-      log.error(error instanceof Error ? error : new Error(String(error)));
-      log.set({
-        delivery: { delivered: false, outcome: "error" },
-        turn: turnEvents.summary(),
-        ...summarizeImagePrepares(imagePrepares),
-        ...summarizeImageOmits(imageOmits),
-      });
-      log.emit({ status: 500 });
-      throw error;
-    }
-  }
-
-  #parseAgentInput(
-    payload: NonNullable<Awaited<ReturnType<typeof parseAgentRequest>>>,
-    log: ReturnType<typeof createTurnLogger>
-  ): AgentInput | Response {
-    try {
-      return agentInputFromRequest(payload);
-    } catch (error) {
-      if (error instanceof InvalidAttachmentBase64Error) {
-        const invalid = workerErrors.INVALID_TURN_PAYLOAD();
-        log.error(invalid);
-        log.set({ outcome: "invalid_attachment_base64" });
-        log.emit({ status: 400 });
-        return new Response(invalid.message, { status: 400 });
-      }
-      throw error;
-    }
-  }
-
-  async #deliverWithObservability(
-    session: TurnSession,
-    agentInput: AgentInput,
-    turnEvents: ReturnType<typeof createTurnEventCollector>,
-    channelKind: ChannelAddress["kind"],
-    assistantMessages: string[]
-  ): Promise<Awaited<ReturnType<TurnSession["deliver"]>>> {
-    const previousObservability = this.#observability;
-    let ownsObservability = false;
-    try {
-      return await session.deliver(agentInput, {
-        onAssistantOutput: (text) => {
-          assistantMessages.push(text);
-        },
-        onSendStarted: () => {
-          ownsObservability = true;
-          this.#observability = turnEvents;
-          if (channelKind === "tui") {
-            this.#tuiMessageCapture = [];
-          }
-        },
-      });
-    } finally {
-      if (ownsObservability && this.#observability === turnEvents) {
-        this.#observability = previousObservability;
-      }
-    }
-  }
-
-  #deliveryResponse({
-    delivery,
-    imageOmits,
-    imagePrepares,
-    log,
-    sendMessage,
-    turnEvents,
-  }: {
-    readonly delivery: Awaited<ReturnType<TurnSession["deliver"]>>;
-    readonly imageOmits: ImageOmitDiagnostics[];
-    readonly imagePrepares: ImagePrepareDiagnostics[];
-    readonly log: ReturnType<typeof createTurnLogger>;
-    readonly sendMessage: SendMessageToolSetup;
-    readonly turnEvents: ReturnType<typeof createTurnEventCollector>;
-  }): Response {
-    const turnSummary = turnEvents.summary();
-    log.set({
-      delivery: {
-        delivered: delivery.delivered,
-        mode: delivery.mode,
-        outcome: deliveryLogOutcome(delivery),
-        ...(delivery.delivered
-          ? {}
-          : { error: "missing_send_message" as const }),
-      },
-      turn: {
-        steps: turnSummary.steps,
-        toolCalls: turnSummary.toolCalls,
-        ...(turnSummary.errors.length > 0
-          ? { errors: turnSummary.errors }
-          : {}),
-      },
-      ...summarizeImagePrepares(imagePrepares),
-      ...summarizeImageOmits(imageOmits),
-    });
-
-    if (!delivery.delivered) {
-      log.error(workerErrors.MISSING_SEND_MESSAGE());
-      log.emit({ status: 502 });
-      return Response.json(
-        {
-          ...withCapturedMessages(
-            { delivered: false, error: delivery.error },
-            sendMessage.messages()
-          ),
-          mode: delivery.mode,
-        },
-        { status: 502 }
+      return await this.#session.handleTranscript(
+        await readRequestJson(request)
       );
     }
 
-    log.emit({ status: 200 });
-    return Response.json({
-      ...withCapturedMessages({ delivered: true }, sendMessage.messages()),
-      mode: delivery.mode,
-    });
-  }
-
-  async #handleSessionEventStreamRequest(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-    const serializedChannel = url.searchParams.get("channel");
-    if (!serializedChannel) {
-      return new Response("channel required", { status: 400 });
-    }
-
-    let channel: ChannelAddress;
-    let after: ThreadEventCursor | undefined;
-    try {
-      channel = parseSessionChannel(serializedChannel);
-      const serializedAfter = url.searchParams.get("after");
-      after =
-        serializedAfter === null
-          ? undefined
-          : parseThreadEventCursor(serializedAfter);
-    } catch {
-      return new Response("invalid session event stream", { status: 400 });
-    }
-    this.#channel = channel;
-    this.#sessionScopeKey =
-      url.searchParams.get("sessionScopeKey")?.trim() || undefined;
-    await this.#ensureTurnSession(durableObjectChannelBinding(channel));
-    const thread = this.#runtimeThread;
-    if (!thread) {
-      throw new AgentDurableObjectInvariantError(
-        "Session runtime thread was not initialized."
-      );
-    }
-
-    return createSessionEventStreamResponse({
-      ...(after ? { after } : {}),
-      live: this.#sessionEventLive,
-      replay: (cursor) =>
-        replayDurableThreadEvents(thread, {
-          ...(cursor ? { after: cursor } : {}),
-          limit: 100,
-        }),
-    });
-  }
-
-  async #handleSessionSubmitRequest(request: Request): Promise<Response> {
-    const body = await readRequestJson(request);
-    const parsed = SubmitTurnRequestSchema.safeParse(body);
-    if (!parsed.success) {
-      return new Response("invalid session turn", { status: 400 });
-    }
-
-    const channelId = parsed.data.channel.id.trim();
-    const text = parsed.data.text.trim();
-    if (!(channelId && text)) {
-      return new Response("invalid session turn", { status: 400 });
-    }
-    const channel = { id: channelId, kind: parsed.data.channel.kind };
-    const sessionScopeKey = parsed.data.sessionScopeKey?.trim();
-    this.#channel = channel;
-    this.#sessionScopeKey = sessionScopeKey || undefined;
-    await this.#storage.put(SESSION_BINDING_STORAGE_KEY, {
-      channel,
-      ...(sessionScopeKey ? { sessionScopeKey } : {}),
-    } satisfies SessionBindingRecord);
-
-    const admitted = await dispatchAgentNotification({
-      host: this.#platform.host(),
-      idempotencyKey: parsed.data.idempotencyKey?.trim() || crypto.randomUUID(),
-      input: { text, type: "user-input" },
-      namespace: WORKER_AGENT_NAMESPACE,
-      threadKey: CHANNEL_DURABLE_OBJECT_THREAD_KEY,
-    });
-    return Response.json({
-      accepted: true,
-      runId: admitted.runId,
-      threadKey: CHANNEL_DURABLE_OBJECT_THREAD_KEY,
-    });
-  }
-
-  async #handleSessionReplayRequest(request: Request): Promise<Response> {
-    const body = await readRequestJson(request);
-    const parsed = ReplayEventsRequestSchema.safeParse(body);
-    if (!parsed.success) {
-      return new Response("invalid session replay", { status: 400 });
-    }
-
-    const channelId = parsed.data.channel.id.trim();
-    if (!channelId) {
-      return new Response("invalid session replay", { status: 400 });
-    }
-    const channel = { id: channelId, kind: parsed.data.channel.kind };
-    this.#channel = channel;
-    this.#sessionScopeKey = parsed.data.sessionScopeKey?.trim() || undefined;
-    await this.#ensureTurnSession(durableObjectChannelBinding(channel));
-    const thread = this.#runtimeThread;
-    if (!thread) {
-      throw new AgentDurableObjectInvariantError(
-        "Session runtime thread was not initialized."
-      );
-    }
-
-    return Response.json(
-      await replayDurableThreadEvents(thread, {
-        ...(parsed.data.after ? { after: parsed.data.after } : {}),
-        ...(parsed.data.limit === undefined
-          ? {}
-          : { limit: parsed.data.limit }),
-      })
-    );
-  }
-
-  async #restoreSessionBinding(): Promise<void> {
-    const stored = await this.#storage.get<SessionBindingRecord>(
-      SESSION_BINDING_STORAGE_KEY
-    );
-    if (!stored) {
-      return;
-    }
-    this.#channel = stored.channel;
-    this.#sessionScopeKey = stored.sessionScopeKey;
-  }
-
-  async #handleSessionTranscriptRequest(request: Request): Promise<Response> {
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      return new Response("invalid json", { status: 400 });
-    }
-
-    const parsed = SessionTranscriptReadRequestSchema.safeParse(body);
-    if (!parsed.success) {
-      return new Response("invalid transcript read", { status: 400 });
-    }
-
-    const transcript = await createThreadStoreSessionTranscriptReader({
-      resolveThreadKey: () => CHANNEL_DURABLE_OBJECT_THREAD_KEY,
-      store: this.#platform.host().store.threads,
-    }).read(parsed.data.conversationKey, {
-      ...(parsed.data.before === undefined
-        ? {}
-        : { before: parsed.data.before }),
-      ...(parsed.data.limit === undefined ? {} : { limit: parsed.data.limit }),
-    });
-
-    return Response.json(
-      transcript
-        ? { ...transcript, found: true }
-        : { conversationKey: parsed.data.conversationKey, found: false }
-    );
-  }
-
-  #sessionIndex(): SessionIndexStore {
-    if (!this.#sessionIndexStore) {
-      const sql = this.#storage.sql;
-      if (!sql) {
-        throw new AgentDurableObjectInvariantError(
-          "Session index requires a SQLite-backed Durable Object."
-        );
-      }
-      this.#sessionIndexStore = createSessionIndexStore(
-        createSqlSessionIndexRepository(sql)
-      );
-    }
-    return this.#sessionIndexStore;
-  }
-
-  async #ensureTurnSession(
-    binding: ChannelRuntimeBinding
-  ): Promise<TurnSession> {
-    if (this.#turnSession) {
-      return this.#turnSession;
-    }
-    if (this.#turnSessionPromise) {
-      return await this.#turnSessionPromise;
-    }
-
-    const initializing = (async () => {
-      const sendMessage = this.#longLivedSendMessageOptions();
-      const agent = await createConfiguredAgent(
-        this.#env,
-        this.#platform.host(),
-        {
-          sendMessage,
-          sessionTools: {
-            currentConversationKey: () => {
-              const channel = this.#channel;
-              if (!channel) {
-                return binding.channelKey;
-              }
-              return durableObjectChannelBinding(channel).channelKey;
-            },
-            currentSessionScopeKey: () => this.#sessionScopeKey,
-            reader: this.#sessionIndexClient,
-            transcriptReader: this.#sessionTranscriptClient,
-          },
-          observability: {
-            log: (entry) => {
-              this.#observability?.record(entry);
-            },
-          },
-        }
-      );
-      try {
-        const thread = agent.thread(binding.thread);
-        const session = createTurnSession(thread);
-        this.#runtimeThread = thread;
-        this.#turnSession = session;
-        return session;
-      } catch (error) {
-        await agent.dispose().catch(() => undefined);
-        throw error;
-      }
-    })();
-    this.#turnSessionPromise = initializing;
-    try {
-      return await initializing;
-    } catch (error) {
-      if (this.#turnSessionPromise === initializing) {
-        this.#turnSessionPromise = undefined;
-      }
-      throw error;
-    }
-  }
-
-  #longLivedSendMessageOptions(): WorkerAgentSendMessageToolOptions {
-    return {
-      channel: () => this.#channel,
-      sink: {
-        send: async (channel, text) => {
-          const setup = createRequestSendMessageToolSetup(this.#env, channel);
-          const sent = await setup.options.sink.send(channel, text);
-          if (channel.kind === "tui") {
-            this.#tuiMessageCapture.push({
-              channel: sent.channel,
-              messageId: sent.messageId,
-              text,
-            });
-          }
-          return sent;
-        },
-      },
-    };
-  }
-
-  #sendMessageSetup(channel: ChannelAddress): SendMessageToolSetup {
-    if (channel.kind === "tui") {
-      return {
-        messages: () => this.#tuiMessageCapture,
-        options: this.#longLivedSendMessageOptions(),
-      };
-    }
-    return createRequestSendMessageToolSetup(this.#env, channel);
-  }
-
-  async #indexTurn(
-    binding: ChannelRuntimeBinding,
-    userText: string,
-    sendMessage: SendMessageToolSetup,
-    assistantMessages: readonly string[],
-    sessionScopeKey: string | undefined
-  ): Promise<void> {
-    const delivered = sendMessage.messages().map((message) => message.text);
-    const assistantText = delivered.length > 0 ? delivered : assistantMessages;
-    try {
-      await this.#sessionIndexClient.upsert({
-        assistantText,
-        channel: binding.channel,
-        ...(sessionScopeKey ? { sessionScopeKey } : {}),
-        threadKey: binding.threadKey,
-        userText,
-      });
-    } catch (error) {
-      logError(
-        workerErrors.SESSION_INDEX_UPSERT_FAILED({
-          cause: normalizeIndexError(error),
-        }),
-        { scope: "agent-do" }
-      );
-    }
+    return await this.#turn.handle(request);
   }
 }
 
-interface SessionBindingRecord {
-  readonly channel: ChannelAddress;
-  readonly sessionScopeKey?: string;
+export function createLongLivedSendMessageOptions(
+  env: Env,
+  state: AgentDoState
+): WorkerAgentSendMessageToolOptions {
+  return {
+    channel: () => state.channel,
+    sink: {
+      send: async (channel, text) => {
+        const setup = createRequestSendMessageToolSetup(env, channel);
+        const sent = await setup.options.sink.send(channel, text);
+        if (channel.kind === "tui") {
+          state.tuiMessageCapture.push({
+            channel: sent.channel,
+            messageId: sent.messageId,
+            text,
+          });
+        }
+        return sent;
+      },
+    },
+  };
+}
+
+export function createTurnSendMessageSetup(
+  env: Env,
+  state: AgentDoState,
+  channel: ChannelAddress
+): SendMessageToolSetup {
+  if (channel.kind === "tui") {
+    return {
+      messages: () => state.tuiMessageCapture,
+      options: createLongLivedSendMessageOptions(env, state),
+    };
+  }
+  return createRequestSendMessageToolSetup(env, channel);
 }
 
 async function readRequestJson(request: Request): Promise<unknown> {
@@ -747,31 +185,4 @@ async function readRequestJson(request: Request): Promise<unknown> {
   } catch {
     return;
   }
-}
-
-class AgentDurableObjectInvariantError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "AgentDurableObjectInvariantError";
-  }
-}
-
-function deliveryLogOutcome(
-  delivery: Awaited<ReturnType<TurnSession["deliver"]>>
-): "delivered" | "missing_send_message" | "steered" {
-  if (delivery.mode === "steer") {
-    return "steered";
-  }
-  if (delivery.delivered) {
-    return "delivered";
-  }
-  return "missing_send_message";
-}
-
-function normalizeIndexError(error: unknown): Error {
-  return error instanceof Error
-    ? error
-    : new AgentDurableObjectInvariantError(
-        `Non-Error thrown: ${String(error)}`
-      );
 }

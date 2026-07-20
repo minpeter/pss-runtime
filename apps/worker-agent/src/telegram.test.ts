@@ -1,22 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Env } from "./env";
+import { handleTelegramWebhook } from "./telegram";
 import {
   collectTurnImageAttachments,
   collectTurnImages,
+  isImageAttachment,
+  TelegramAttachmentLimitError,
+} from "./telegram-attachments";
+import { replyToThread } from "./telegram-delivery";
+import {
   collectTurnText,
   formatIngressDryRunReply,
-  handleTelegramWebhook,
-  isImageAttachment,
-  replyToThread,
   summarizeIngressBatch,
+} from "./telegram-ingress";
+import {
   TELEGRAM_COALESCE_QUIET_MS,
   TELEGRAM_MAX_RAW_IMAGE_BYTES,
   TELEGRAM_MAX_TURN_IMAGES,
   TELEGRAM_MAX_TURN_RAW_IMAGE_BYTES,
   TELEGRAM_MESSAGE_CONCURRENCY,
-  TelegramAttachmentLimitError,
-} from "./telegram";
+} from "./telegram-types";
 import { logError } from "./worker-log";
 
 vi.mock("./worker-log", async (importOriginal) => {

@@ -4,7 +4,7 @@ import {
   createMockLanguageModelV4,
   mockLanguageModelV4ToolCall,
 } from "../testing/mock-language-model-v4-test-utils";
-import { generateModelStep } from "./llm";
+import { generateModelStep } from "./model-step";
 
 describe("inactive model-step tools", () => {
   it("does not execute a provider-emitted call for an inactive tool", async () => {

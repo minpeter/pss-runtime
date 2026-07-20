@@ -1,5 +1,5 @@
 import type { LanguageModelMiddleware, ModelMessage, Tool } from "ai";
-import type { ModelStepOutput } from "../llm/llm";
+import type { ModelStepOutput } from "../llm/model-step-types";
 import type { AgentEvent } from "../thread/protocol/events";
 import type { ThreadContextMessage } from "../thread/state/context";
 import type { ThreadCompactionInput } from "../thread/state/thread-state";

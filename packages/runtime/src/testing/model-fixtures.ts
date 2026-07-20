@@ -8,7 +8,10 @@ import type {
 } from "ai";
 import { jsonSchema, tool } from "ai";
 import type { MockLanguageModelV4 } from "ai/test";
-import type { ModelGenerationOptions, ModelStepOutput } from "../llm/llm";
+import type {
+  ModelGenerationOptions,
+  ModelStepOutput,
+} from "../llm/model-step-types";
 import {
   createMockLanguageModelV4,
   type MockLanguageModelV4CallOptions,

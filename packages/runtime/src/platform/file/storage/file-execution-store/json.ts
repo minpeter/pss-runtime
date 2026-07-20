@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { isNodeError } from "./utils";
+import { isNodeError } from "../../../../internal/guards";
 
 export async function readJsonFile<T>(
   file: string,

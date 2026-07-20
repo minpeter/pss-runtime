@@ -1,6 +1,6 @@
 import type { AgentEvent, RuntimeInput } from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
-import type { ThreadEventDispatcher } from "../runtime/events";
+import type { ThreadEventDispatcher } from "../runtime/thread-event-dispatcher";
 import type { ThreadState } from "../state/thread-state";
 import {
   type HostAttachmentStore,

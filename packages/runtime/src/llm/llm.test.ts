@@ -10,7 +10,7 @@ import {
 } from "../testing/llm-test-utils";
 import { assistantMessage } from "../testing/test-fixtures";
 import { encodeRuntimeAttachmentData } from "../thread/input/attachments";
-import { ModelToolSelectionError } from "./model-step-preparation";
+import { ModelToolSelectionError } from "./model-step-error";
 
 const generateTextMock = getGenerateTextMock();
 const unsupportedApprovalPattern = /needsApproval.*not supported/;
@@ -1031,7 +1031,7 @@ describe("generateModelStep", () => {
     const diagnostics: Array<{
       readonly metadata?: { readonly attemptId?: string };
     }> = [];
-    const { generateModelStepResult } = await import("./llm");
+    const { generateModelStepResult } = await import("./model-step");
 
     const result = await generateModelStepResult({
       diagnostics: {
@@ -1782,7 +1782,7 @@ describe("generateModelStep", () => {
       responseMessages: [assistantMessage("DONE")],
       usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12 },
     });
-    const { generateModelStepResult } = await import("./llm");
+    const { generateModelStepResult } = await import("./model-step");
 
     const result = await generateModelStepResult({
       history: [{ role: "user", content: "hello" }],
@@ -1818,7 +1818,7 @@ describe("generateModelStep", () => {
         totalTokens: Number.MAX_SAFE_INTEGER + 1,
       },
     });
-    const { generateModelStepResult } = await import("./llm");
+    const { generateModelStepResult } = await import("./model-step");
 
     const result = await generateModelStepResult({
       history: [{ role: "user", content: "hello" }],
@@ -1845,7 +1845,7 @@ describe("generateModelStep", () => {
       provider: "prepared-provider",
       supportedUrls: {},
     };
-    const { generateModelStepResult } = await import("./llm");
+    const { generateModelStepResult } = await import("./model-step");
 
     const result = await generateModelStepResult({
       history: [{ role: "user", content: "hello" }],
@@ -1862,7 +1862,7 @@ describe("generateModelStep", () => {
   });
 
   it("creates one distinct opaque attempt ID per runtime model-step invocation", async () => {
-    const { generateModelStepResult } = await import("./llm");
+    const { generateModelStepResult } = await import("./model-step");
     const options = {
       history: [{ role: "user" as const, content: "hello" }],
       model: fakeModel,

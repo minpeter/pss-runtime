@@ -8,7 +8,7 @@ import {
   type CloudflareHostOptions,
   createCloudflareHost,
 } from "../host/create-cloudflare-host";
-import type { CloudflareScheduledThreadPrompt } from "../host/scheduled-work-queue";
+import type { CloudflareScheduledThreadPrompt } from "../host/scheduled-work-codec";
 import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import {
   ackListedCloudflareAgentsScheduledRun,

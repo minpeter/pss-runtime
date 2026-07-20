@@ -257,7 +257,7 @@ describe("examples workspace packages", () => {
 
     for (const sourcePath of [
       "examples/background-subagent/src/agents.ts",
-      "examples/background-subagent/src/app-agent.ts",
+      "examples/background-subagent/src/app-agent-factory.ts",
       "examples/background-subagent/src/background-delegation.ts",
       "examples/background-subagent/src/background-output-tool.ts",
       "examples/background-subagent/src/delegate-tool.ts",
@@ -276,7 +276,7 @@ describe("examples workspace packages", () => {
       ]);
     }
     expect(existsSync("examples/background-subagent/src/app-agent.ts")).toBe(
-      true
+      false
     );
   });
 });

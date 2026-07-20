@@ -73,6 +73,4 @@ function inputNumberEquals(key: string, expected: number) {
     isRecord(value) && value[key] === expected;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
+import { isRecord } from "./eval-matchers";

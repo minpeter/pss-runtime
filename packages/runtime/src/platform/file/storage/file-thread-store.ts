@@ -124,13 +124,10 @@ function parseStoredFileThread(value: unknown, file: string): StoredThread {
   });
 }
 
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
+import {
+  isNodeError,
+  isPlainRecord as isRecord,
+} from "../../../internal/guards";
 
 async function acquireFileLock(lockDirectory: string): Promise<void> {
   const startedAt = Date.now();

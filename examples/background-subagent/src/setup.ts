@@ -5,7 +5,7 @@ import { createEnv } from "@t3-oss/env-core";
 import { config as loadEnv } from "dotenv";
 import { z } from "zod";
 import { createCoordinatorAgent, createReaderAgent } from "./agents";
-import { createAppAgent } from "./app-agent";
+import { createAppAgent } from "./app-agent-factory";
 import { type LocalHost, localHost } from "./local-host";
 
 loadEnv({ path: ".env", quiet: true, override: true });

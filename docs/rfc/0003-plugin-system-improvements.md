@@ -69,7 +69,7 @@ definePlugin(async (pss, { signal }) => {
 | State | `threadScope` in-memory only; cleared on thread dispose |
 | Context in handlers | `{ history, signal, thread: { key } }` only |
 
-Reference: `packages/runtime/src/plugins/api.ts`, `packages/runtime/src/plugins/runtime.ts`.
+Reference: `packages/runtime/src/plugins/api.ts`, `packages/runtime/src/plugins/plugin-runtime.ts`.
 
 ---
 
@@ -382,7 +382,7 @@ pss.on("model.context", async ({ messages }, ctx) => ({
 ## References
 
 - pss plugin API: `packages/runtime/src/plugins/api.ts`
-- pss plugin runtime: `packages/runtime/src/plugins/runtime.ts`
+- pss plugin runtime: `packages/runtime/src/plugins/plugin-runtime.ts`
 - pss plugin docs: `packages/runtime/README.md` (Plugins + Plugin event semantics)
 - Example observe plugin: `examples/plugin`
 - Worker observability plugin: `apps/worker-agent/src/observability.ts`

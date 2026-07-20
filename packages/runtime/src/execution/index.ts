@@ -1,11 +1,11 @@
 // biome-ignore-all lint/performance/noBarrelFile: Public package subpath entrypoint required by package exports.
+export { ToolExecutionNeedsRecoveryError } from "../llm/tool-execution-checkpoint";
 export type {
   RuntimeToolExecutionCheckpoint,
   RuntimeToolExecutionContext,
   RuntimeToolExecutionDecision,
   RuntimeToolRetryPolicy,
-} from "../llm/tool-execution";
-export { ToolExecutionNeedsRecoveryError } from "../llm/tool-execution";
+} from "../llm/tool-execution-types";
 export type {
   DispatchAgentNotificationInput,
   DispatchedAgentNotification,

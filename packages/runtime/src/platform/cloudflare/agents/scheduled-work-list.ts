@@ -1,11 +1,11 @@
 import { isDefined } from "../../../execution/scheduled-work";
 import {
+  type CloudflareScheduledThreadPrompt,
   isCanonicalRunWork,
   isCanonicalThreadPromptWork,
   parseScheduledRunPayload,
   parseScheduledThreadPromptPayload,
 } from "../host/scheduled-work-codec";
-import type { CloudflareScheduledThreadPrompt } from "../host/scheduled-work-queue";
 import type { CloudflareDurableObjectStorage } from "../storage/durable-object/durable-object-storage";
 import {
   deleteScheduledWork,

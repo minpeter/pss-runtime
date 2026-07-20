@@ -1,7 +1,7 @@
 import { jsonSchema, type Tool, tool } from "ai";
 import { describe, expect, it, vi } from "vitest";
 import { createAgent } from "../agent/core/agent";
-import type { ModelStepOutput } from "../llm/llm";
+import type { ModelStepOutput } from "../llm/model-step-types";
 import { createInMemoryHost } from "../platform/memory";
 import {
   createMockLanguageModelV4,
@@ -22,8 +22,8 @@ import {
   PluginHookError,
   PluginInitializationError,
   PluginRegistrationClosedError,
-  PluginRuntime,
-} from "./runtime";
+} from "./plugin-errors";
+import { PluginRuntime } from "./plugin-runtime";
 
 describe("factory plugin API", () => {
   it("names plugin tool capabilities without colliding with AI SDK tool", () => {

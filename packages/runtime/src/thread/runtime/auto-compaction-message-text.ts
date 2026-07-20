@@ -17,6 +17,4 @@ export function messageContentText(content: unknown): string[] {
   });
 }
 
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object";
-}
+import { isRecord as isObjectRecord } from "../../internal/guards";

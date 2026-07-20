@@ -1,7 +1,8 @@
 import type { LanguageModel, ToolSet } from "ai";
 import type { AgentHost } from "../../execution/host/types";
-import type { AgentToolChoice, ModelContextGateOptions } from "../../llm/llm";
+import type { ModelContextGateOptions } from "../../llm/context-gate";
 import type { PrepareModelStep } from "../../llm/model-step-preparation";
+import type { AgentToolChoice } from "../../llm/model-step-types";
 import { assertNoUnsupportedToolApproval } from "../../llm/tool-approval";
 import type { PluginDefinition } from "../../plugins/api";
 import type { RuntimeDiagnosticsSink } from "../../plugins/diagnostics";
@@ -274,6 +275,4 @@ function isTokenEstimator(
   return typeof value === "function";
 }
 
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object";
-}
+import { isRecord as isObjectRecord } from "../../internal/guards";

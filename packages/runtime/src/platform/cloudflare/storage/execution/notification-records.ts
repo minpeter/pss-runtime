@@ -6,11 +6,9 @@ import {
   resolveStoragePayloadMaxBytes,
   type StoragePayloadBudgetOptions,
 } from "../payload-guard";
-import {
-  ensurePayloadChunkSchema,
-  readJsonPayloadFromSqlRows,
-  writeJsonPayloadToSqlRows,
-} from "../sqlite/payload-chunks";
+import { readJsonPayloadFromSqlRows } from "../sqlite/payload-chunk-read";
+import { ensurePayloadChunkSchema } from "../sqlite/payload-chunk-table";
+import { writeJsonPayloadToSqlRows } from "../sqlite/payload-chunk-write";
 
 interface NotificationRow {
   readonly record: string;
