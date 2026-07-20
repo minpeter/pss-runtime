@@ -1,0 +1,48 @@
+export const TINYFISH_API_KEY_ENV = "TINYFISH_API_KEY";
+
+export type CodingAgentToolName = "web_fetch" | "web_search";
+
+export class CodingAgentToolsConfigError extends Error {
+  readonly code = "client-open-search-options-conflict";
+
+  constructor() {
+    super("Provide either client or openSearchOptions, not both.");
+    this.name = "CodingAgentToolsConfigError";
+  }
+}
+
+export class CodingAgentWebToolsUnavailableError extends Error {
+  readonly code = "web-tools-config-missing";
+
+  constructor() {
+    super(`web tools required: missing ${TINYFISH_API_KEY_ENV}`);
+    this.name = "CodingAgentWebToolsUnavailableError";
+  }
+}
+
+export class CodingAgentToolAbortError extends Error {
+  readonly reason: unknown;
+  readonly toolName: CodingAgentToolName;
+
+  constructor(toolName: CodingAgentToolName, reason: unknown) {
+    super(`${toolName} aborted.`);
+    this.name = "CodingAgentToolAbortError";
+    this.reason = reason;
+    this.toolName = toolName;
+  }
+}
+
+export function abortIfRequested(
+  signal: AbortSignal | undefined,
+  toolName: CodingAgentToolName
+): void {
+  if (signal === undefined || !signal.aborted) {
+    return;
+  }
+
+  if (signal.reason instanceof Error) {
+    throw signal.reason;
+  }
+
+  throw new CodingAgentToolAbortError(toolName, signal.reason);
+}

@@ -6,11 +6,10 @@ import type { ModelGenerationOptions } from "../../llm/model-step-types";
 import type { AgentInput, UserInput } from "../input/input";
 import { type AgentTurn, BufferedAgentTurn } from "../protocol/turn";
 import type { ThreadExecutionOptions } from "../runtime/execution";
-import { closeKilledRuntimeInputs } from "../runtime/kill";
 import type { NotifyOptions } from "../runtime/notification";
 import { queueThreadNotification } from "../runtime/notification";
 import { readThreadEvents } from "../runtime/thread-event-replay";
-import { threadKilledError, threadTerminalError } from "../state/thread-errors";
+import { threadTerminalError } from "../state/thread-errors";
 import type {
   ThreadCompactionInput,
   ThreadPersistenceOptions,
@@ -19,10 +18,11 @@ import {
   type AgentThreadContext,
   createAgentThreadContext,
 } from "./agent-thread-context";
+import { drainAgentThreadInputQueue } from "./agent-thread-drain";
+import { killAgentThread } from "./agent-thread-kill";
 import { recoverThreadDurableInputClaims } from "./durable-queue-claims";
 import { admitThreadSendInput } from "./durable-queue-send";
 import { addDurableSteeringInput } from "./durable-steering";
-import { runThreadInputDrainLoop } from "./thread-drain";
 import { createOverlayRuntimeInput } from "./thread-overlay";
 
 export class AgentThread {
@@ -146,39 +146,7 @@ export class AgentThread {
   }
 
   kill(): Promise<void> {
-    if (this.#context.killed) {
-      return this.#context.killPromise ?? Promise.resolve();
-    }
-
-    this.#context.killed = true;
-    const killedError = threadKilledError();
-    this.#context.pendingOverlays.length = 0;
-    this.#context.pendingRuntimeInputs.length = 0;
-    this.#context.activeAbort?.abort();
-    const immediateClose = closeKilledRuntimeInputs({
-      activeRuntimeInput: this.#context.activeRuntimeInput,
-      executionHost: this.#context.execution.executionHost,
-      inputQueue: this.#context.inputQueue,
-      message: killedError.message,
-      runToClose: this.#context.runToCloseOnKill ?? this.#context.activeRun,
-      threadKey: this.#context.threadKey,
-    });
-    const admissionClose = this.#context.inputAdmissionQueue.then(() =>
-      closeKilledRuntimeInputs({
-        activeRuntimeInput: undefined,
-        executionHost: this.#context.execution.executionHost,
-        inputQueue: this.#context.inputQueue,
-        message: killedError.message,
-        runToClose: undefined,
-        threadKey: this.#context.threadKey,
-      })
-    );
-    this.#context.killPromise = Promise.all([
-      immediateClose,
-      admissionClose,
-    ]).then(() => undefined);
-    this.#context.killPromise.catch(() => undefined);
-    return this.#context.killPromise;
+    return killAgentThread(this.#context);
   }
 
   async #admitSend(input: AgentInput, run: BufferedAgentTurn): Promise<void> {
@@ -222,52 +190,7 @@ export class AgentThread {
   }
 
   async #drainInputQueue(): Promise<void> {
-    if (this.#context.running) {
-      this.#context.drainRequested = true;
-      return await (this.#context.drainPromise ?? Promise.resolve());
-    }
-
-    this.#context.running = true;
-    this.#context.drainRequested = false;
-    const drain = runThreadInputDrainLoop({
-      activate: ({ abort, run, runtimeInput }) => {
-        this.#context.activeAbort = abort;
-        this.#context.activeRun = run;
-        this.#context.activeRuntimeInput = runtimeInput;
-        this.#context.runToCloseOnKill = run;
-      },
-      continueDraining: () =>
-        !(this.#context.killed || this.#context.drainRequested),
-      deactivateRun: () => {
-        this.#context.activeRun = undefined;
-        this.#context.activeRuntimeInput = undefined;
-      },
-      events: this.#context.events,
-      execution: this.#context.execution,
-      inputQueue: this.#context.inputQueue,
-      model: this.#context.model,
-      release: () => {
-        this.#context.activeAbort = undefined;
-        this.#context.activeRun = undefined;
-        this.#context.activeRuntimeInput = undefined;
-        this.#context.runToCloseOnKill = undefined;
-      },
-      state: this.#context.state,
-      threadKey: this.#context.threadKey,
-    });
-    this.#context.drainPromise = drain;
-    try {
-      await drain;
-    } finally {
-      const shouldRestart =
-        this.#context.drainRequested && !this.#context.killed;
-      this.#context.running = false;
-      this.#context.drainPromise = undefined;
-      if (shouldRestart) {
-        this.#context.drainRequested = false;
-        await this.#drainInputQueue();
-      }
-    }
+    await drainAgentThreadInputQueue(this.#context);
   }
 
   #assertOpen(): void {

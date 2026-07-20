@@ -1,7 +1,6 @@
 import type { AgentHost, NotificationRecord } from "../../execution/host/types";
 import { createInMemoryHost } from "../../platform/memory";
-import { noopRuntimeDiagnostics } from "../../plugins/diagnostics";
-import { PluginRuntime } from "../../plugins/plugin-runtime";
+import type { PluginRuntime } from "../../plugins/plugin-runtime";
 import { AgentThread } from "../../thread/handle/agent-thread";
 import type { AgentInput } from "../../thread/input/input";
 import type { AgentTurn } from "../../thread/protocol/turn";
@@ -20,9 +19,7 @@ import {
   type AgentModelOptions,
   type AgentOptions,
   assertAgentOptions,
-  type CreateAgentOptions,
   normalizeAgentAutoCompactionOptions,
-  normalizePluginTimeoutOptions,
 } from "./options";
 import {
   type AgentThreadEntry,
@@ -30,9 +27,11 @@ import {
   type ThreadKey,
   threadStoreKey,
 } from "./thread-entry";
+import { createThreadPublicHandle } from "./thread-handle-factory";
 
 export type { AgentHost } from "../../execution/host/types";
 export type { ThreadCompactionInput } from "../../thread/state/thread-state";
+export { createAgent } from "./create-agent";
 export type {
   AgentInstrumentation,
   AgentInstrumentationContext,
@@ -171,43 +170,14 @@ export class Agent {
         pluginRuntime: this.#pluginRuntime,
       }
     );
-    const publicHandle: ThreadHandle = {
-      compact: (input) => thread.compact(input),
-      delete: async () => {
-        this.#evictThreadHandle(key);
-        try {
-          await thread.delete();
-        } finally {
-          this.#pluginRuntime?.clearThread(key);
-        }
-      },
-      dispose: async () => {
-        this.#evictThreadHandle(key);
-        try {
-          await thread.dispose();
-        } finally {
-          this.#pluginRuntime?.clearThread(key);
-        }
-      },
-      events: (options) => thread.events(options),
-      interrupt: () => thread.interrupt(),
-      overlay: (input) => {
-        thread.overlay(input);
-        return publicHandle;
-      },
-      send: async (input) =>
-        this.#instrumentTurn(await thread.send(input), {
-          namespace: this.namespace,
-          operation: "send",
-          threadKey: key,
-        }),
-      steer: async (input) =>
-        this.#instrumentTurn(await thread.steer(input), {
-          namespace: this.namespace,
-          operation: "steer",
-          threadKey: key,
-        }),
-    };
+    const publicHandle = createThreadPublicHandle({
+      evict: (evictedKey) => this.#evictThreadHandle(evictedKey),
+      instrumentations: this.#instrumentations,
+      key,
+      namespace: this.namespace,
+      pluginRuntime: this.#pluginRuntime,
+      thread,
+    });
     const entry: AgentThreadEntry = {
       notify: (input, options) => thread.notify(input, options),
       publicHandle,
@@ -248,25 +218,5 @@ export class Agent {
     context: AgentInstrumentationContext
   ): AgentTurn {
     return applyAgentInstrumentations(turn, this.#instrumentations, context);
-  }
-}
-
-export async function createAgent(options: CreateAgentOptions): Promise<Agent> {
-  assertAgentOptions(options);
-  const definitions = options.plugins ?? [];
-  if (definitions.length === 0) {
-    return new Agent(options);
-  }
-  const timeouts = normalizePluginTimeoutOptions(options);
-  const runtime = await PluginRuntime.create(definitions, {
-    diagnostics: options.host?.diagnostics ?? noopRuntimeDiagnostics,
-    ...timeouts,
-    tools: options.tools,
-  });
-  try {
-    return new Agent(options, runtime);
-  } catch (cause) {
-    await runtime.dispose();
-    throw cause;
   }
 }
