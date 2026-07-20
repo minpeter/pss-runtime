@@ -10,6 +10,11 @@ import { Agent as CloudflareAgent } from "agents";
 import type { ChannelAddress } from "../channel";
 import type { Env } from "../env";
 import {
+  createRequestSendMessageToolSetup,
+  createSendMessageToolOptions,
+  type SendMessageToolSetup,
+} from "../message-sinks";
+import {
   createSessionTranscriptClient,
   isSessionTranscriptPath,
 } from "../session/session-transcript-client";
@@ -21,11 +26,6 @@ import { handleSessionIndexRequest } from "../session-index/session-index-routes
 import type { WorkerAgentSendMessageToolOptions } from "../tools";
 import { ensureWorkerLogger } from "../worker-log";
 import { createConfiguredAgent } from "./agent";
-import {
-  createRequestSendMessageToolSetup,
-  createSendMessageToolOptions,
-  type SendMessageToolSetup,
-} from "./agent-do-send-message";
 import { AgentDoSession } from "./agent-do-session";
 import { AgentDoTurn } from "./agent-do-turn-delivery";
 import {

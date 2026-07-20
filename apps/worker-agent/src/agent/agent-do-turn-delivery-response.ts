@@ -2,7 +2,7 @@ import type {
   ImageOmitDiagnostics,
   ImagePrepareDiagnostics,
 } from "@minpeter/pss-runtime";
-
+import type { SendMessageToolSetup } from "../message-sinks";
 import type { createTurnEventCollector } from "../observability";
 import { workerErrors } from "../worker-errors";
 import {
@@ -11,7 +11,6 @@ import {
   summarizeImagePrepares,
 } from "../worker-log";
 import { withCapturedMessages } from "./agent-do-delivery";
-import type { SendMessageToolSetup } from "./agent-do-send-message";
 import type { TurnSession } from "./agent-do-turn-session";
 
 type Delivery = Awaited<ReturnType<TurnSession["deliver"]>>;

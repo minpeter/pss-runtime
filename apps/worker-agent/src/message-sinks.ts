@@ -1,9 +1,9 @@
-import type { ChannelAddress } from "../channel";
-import type { Env } from "../env";
-import { createTelegramMessageSink } from "../telegram/telegram-sink";
-import type { WorkerAgentSendMessageToolOptions } from "../tools";
-import { createTuiResponseMessageSink } from "../tui/tui-response-sink";
-import type { WorkerAgentDeliveredMessage } from "./agent-do-delivery";
+import type { WorkerAgentDeliveredMessage } from "./agent/agent-do-delivery";
+import type { ChannelAddress } from "./channel";
+import type { Env } from "./env";
+import { createTelegramMessageSink } from "./telegram/telegram-sink";
+import type { WorkerAgentSendMessageToolOptions } from "./tools";
+import { createTuiResponseMessageSink } from "./tui/tui-response-sink";
 
 export interface SendMessageToolSetup {
   readonly messages: () => readonly WorkerAgentDeliveredMessage[];
@@ -50,14 +50,14 @@ export function createRequestSendMessageToolSetup(
 }
 
 function assertNever(value: never): never {
-  throw new SendMessageToolSetupError(
+  throw new MessageSinkRegistryError(
     `Unexpected channel variant: ${String(value)}`
   );
 }
 
-class SendMessageToolSetupError extends Error {
+class MessageSinkRegistryError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "SendMessageToolSetupError";
+    this.name = "MessageSinkRegistryError";
   }
 }

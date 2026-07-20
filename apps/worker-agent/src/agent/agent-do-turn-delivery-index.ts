@@ -1,8 +1,8 @@
 import type { ChannelRuntimeBinding } from "../channel";
+import type { SendMessageToolSetup } from "../message-sinks";
 import type { SessionIndexClient } from "../session-index/session-index-client";
 import { workerErrors } from "../worker-errors";
 import { logError } from "../worker-log";
-import type { SendMessageToolSetup } from "./agent-do-send-message";
 import { AgentDurableObjectInvariantError } from "./agent-do-types";
 
 export async function indexTurnDelivery({

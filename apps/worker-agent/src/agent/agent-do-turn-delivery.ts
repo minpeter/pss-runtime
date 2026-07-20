@@ -12,6 +12,7 @@ import type { ChannelAddress } from "../channel";
 import { durableObjectChannelBinding } from "../channel";
 import type { Env } from "../env";
 import { AGENT_TURN_ADMISSION_LAYER } from "../message-path-layers";
+import type { SendMessageToolSetup } from "../message-sinks";
 import { createTurnEventCollector } from "../observability";
 import type { SessionIndexClient } from "../session-index/session-index-client";
 import { workerErrors } from "../worker-errors";
@@ -29,7 +30,6 @@ import {
   type AgentRequestPayload,
   parseAgentRequest,
 } from "./agent-do-request";
-import type { SendMessageToolSetup } from "./agent-do-send-message";
 import type { AgentDoSession } from "./agent-do-session";
 import { indexTurnDelivery } from "./agent-do-turn-delivery-index";
 import { parseTurnAgentInput } from "./agent-do-turn-delivery-input";
