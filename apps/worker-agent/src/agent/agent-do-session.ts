@@ -1,27 +1,9 @@
 import type { Agent, ThreadHandle } from "@minpeter/pss-runtime";
-import { dispatchAgentNotification } from "@minpeter/pss-runtime/execution";
 import type { CloudflarePlatformContext } from "@minpeter/pss-runtime/platform/cloudflare";
-import {
-  CHANNEL_DURABLE_OBJECT_THREAD_KEY,
-  type ChannelAddress,
-  type ChannelRuntimeBinding,
-  durableObjectChannelBinding,
-} from "../channel";
+
+import type { ChannelRuntimeBinding } from "../channel";
 import type { Env } from "../env";
-import {
-  parseSessionChannel,
-  parseThreadEventCursor,
-  ReplayEventsRequestSchema,
-  SubmitTurnRequestSchema,
-  type ThreadEventCursor,
-} from "../session/session-contract";
-import { createSessionEventStreamResponse } from "../session/session-events";
-import { replayDurableThreadEvents } from "../session/session-runtime";
-import {
-  createThreadStoreSessionTranscriptReader,
-  type SessionTranscriptReader,
-} from "../session/session-transcript";
-import { SessionTranscriptReadRequestSchema } from "../session/session-transcript-client";
+import type { SessionTranscriptReader } from "../session/session-transcript";
 import {
   createSessionIndexStore,
   type SessionIndexStore,
@@ -29,12 +11,12 @@ import {
 import type { SessionIndexClient } from "../session-index/session-index-client";
 import { createSqlSessionIndexRepository } from "../session-index/session-index-sql";
 import type { WorkerAgentSendMessageToolOptions } from "../tools";
-import { createConfiguredAgent, WORKER_AGENT_NAMESPACE } from "./agent";
+import { createSessionAgent } from "./agent-do-session-agent";
+import { AgentDoSessionHandlers } from "./agent-do-session-handlers";
 import { createTurnSession, type TurnSession } from "./agent-do-turn-session";
 import {
   type AgentDoState,
   AgentDurableObjectInvariantError,
-  requireRuntimeThread,
   SESSION_BINDING_STORAGE_KEY,
   type SessionBindingRecord,
 } from "./agent-do-types";
@@ -57,6 +39,7 @@ export class AgentDoSession {
   readonly #sessionTranscriptClient: SessionTranscriptReader;
   readonly #state: AgentDoState;
   readonly #storage: DurableObjectStorage;
+  readonly #handlers: AgentDoSessionHandlers;
   #sessionIndexStore: SessionIndexStore | undefined;
   #turnSession: TurnSession | undefined;
   #turnSessionPromise: Promise<TurnSession> | undefined;
@@ -70,6 +53,12 @@ export class AgentDoSession {
     this.#sessionTranscriptClient = options.sessionTranscriptClient;
     this.#state = options.state;
     this.#storage = options.storage;
+    this.#handlers = new AgentDoSessionHandlers({
+      platform: options.platform,
+      session: this,
+      state: options.state,
+      storage: options.storage,
+    });
   }
 
   async restoreBinding(): Promise<void> {
@@ -113,30 +102,15 @@ export class AgentDoSession {
     }
 
     const initializing = (async () => {
-      const agent = await createConfiguredAgent(
-        this.#env,
-        this.#platform.host(),
-        {
-          sendMessage: this.#createSendMessage(),
-          sessionTools: {
-            currentConversationKey: () => {
-              const channel = this.#state.channel;
-              if (!channel) {
-                return binding.channelKey;
-              }
-              return durableObjectChannelBinding(channel).channelKey;
-            },
-            currentSessionScopeKey: () => this.#state.sessionScopeKey,
-            reader: this.#sessionIndexClient,
-            transcriptReader: this.#sessionTranscriptClient,
-          },
-          observability: {
-            log: (entry) => {
-              this.#state.observability?.record(entry);
-            },
-          },
-        }
-      );
+      const agent = await createSessionAgent({
+        binding,
+        createSendMessage: this.#createSendMessage,
+        env: this.#env,
+        platform: this.#platform,
+        sessionIndexClient: this.#sessionIndexClient,
+        sessionTranscriptClient: this.#sessionTranscriptClient,
+        state: this.#state,
+      });
       try {
         const thread = agent.thread(binding.thread);
         const session = createTurnSession(thread);
@@ -160,126 +134,18 @@ export class AgentDoSession {
   }
 
   async handleEventStream(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-    const serializedChannel = url.searchParams.get("channel");
-    if (!serializedChannel) {
-      return new Response("channel required", { status: 400 });
-    }
-
-    let channel: ChannelAddress;
-    let after: ThreadEventCursor | undefined;
-    try {
-      channel = parseSessionChannel(serializedChannel);
-      const serializedAfter = url.searchParams.get("after");
-      after =
-        serializedAfter === null
-          ? undefined
-          : parseThreadEventCursor(serializedAfter);
-    } catch {
-      return new Response("invalid session event stream", { status: 400 });
-    }
-    this.#state.channel = channel;
-    this.#state.sessionScopeKey =
-      url.searchParams.get("sessionScopeKey")?.trim() || undefined;
-    await this.ensureTurnSession(durableObjectChannelBinding(channel));
-    const thread = requireRuntimeThread(this.runtimeThread());
-
-    return createSessionEventStreamResponse({
-      ...(after ? { after } : {}),
-      live: this.#state.sessionEventLive,
-      replay: (cursor) =>
-        replayDurableThreadEvents(thread, {
-          ...(cursor ? { after: cursor } : {}),
-          limit: 100,
-        }),
-    });
+    return await this.#handlers.eventStream(request);
   }
 
   async handleSubmit(body: unknown): Promise<Response> {
-    const parsed = SubmitTurnRequestSchema.safeParse(body);
-    if (!parsed.success) {
-      return new Response("invalid session turn", { status: 400 });
-    }
-
-    const channelId = parsed.data.channel.id.trim();
-    const text = parsed.data.text.trim();
-    if (!(channelId && text)) {
-      return new Response("invalid session turn", { status: 400 });
-    }
-    const channel = { id: channelId, kind: parsed.data.channel.kind };
-    const sessionScopeKey = parsed.data.sessionScopeKey?.trim();
-    this.#state.channel = channel;
-    this.#state.sessionScopeKey = sessionScopeKey || undefined;
-    await this.#storage.put(SESSION_BINDING_STORAGE_KEY, {
-      channel,
-      ...(sessionScopeKey ? { sessionScopeKey } : {}),
-    } satisfies SessionBindingRecord);
-
-    const admitted = await dispatchAgentNotification({
-      host: this.#platform.host(),
-      idempotencyKey: parsed.data.idempotencyKey?.trim() || crypto.randomUUID(),
-      input: { text, type: "user-input" },
-      namespace: WORKER_AGENT_NAMESPACE,
-      threadKey: CHANNEL_DURABLE_OBJECT_THREAD_KEY,
-    });
-    return Response.json({
-      accepted: true,
-      runId: admitted.runId,
-      threadKey: CHANNEL_DURABLE_OBJECT_THREAD_KEY,
-    });
+    return await this.#handlers.submit(body);
   }
 
   async handleReplay(body: unknown): Promise<Response> {
-    const parsed = ReplayEventsRequestSchema.safeParse(body);
-    if (!parsed.success) {
-      return new Response("invalid session replay", { status: 400 });
-    }
-
-    const channelId = parsed.data.channel.id.trim();
-    if (!channelId) {
-      return new Response("invalid session replay", { status: 400 });
-    }
-    const channel = { id: channelId, kind: parsed.data.channel.kind };
-    this.#state.channel = channel;
-    this.#state.sessionScopeKey =
-      parsed.data.sessionScopeKey?.trim() || undefined;
-    await this.ensureTurnSession(durableObjectChannelBinding(channel));
-    const thread = requireRuntimeThread(this.runtimeThread());
-
-    return Response.json(
-      await replayDurableThreadEvents(thread, {
-        ...(parsed.data.after ? { after: parsed.data.after } : {}),
-        ...(parsed.data.limit === undefined
-          ? {}
-          : { limit: parsed.data.limit }),
-      })
-    );
+    return await this.#handlers.replay(body);
   }
 
   async handleTranscript(body: unknown): Promise<Response> {
-    if (body === undefined) {
-      return new Response("invalid json", { status: 400 });
-    }
-
-    const parsed = SessionTranscriptReadRequestSchema.safeParse(body);
-    if (!parsed.success) {
-      return new Response("invalid transcript read", { status: 400 });
-    }
-
-    const transcript = await createThreadStoreSessionTranscriptReader({
-      resolveThreadKey: () => CHANNEL_DURABLE_OBJECT_THREAD_KEY,
-      store: this.#platform.host().store.threads,
-    }).read(parsed.data.conversationKey, {
-      ...(parsed.data.before === undefined
-        ? {}
-        : { before: parsed.data.before }),
-      ...(parsed.data.limit === undefined ? {} : { limit: parsed.data.limit }),
-    });
-
-    return Response.json(
-      transcript
-        ? { ...transcript, found: true }
-        : { conversationKey: parsed.data.conversationKey, found: false }
-    );
+    return await this.#handlers.transcript(body);
   }
 }
