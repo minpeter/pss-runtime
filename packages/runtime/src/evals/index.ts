@@ -27,12 +27,10 @@ export type {
   AssertionSeverity,
   CacheHitRateOptions,
   CacheUsageSummaryOptions,
-  CaseResult,
   EvalCacheStats,
   EvalCase,
   EvalDefinition,
   EvalOptions,
-  EvalReport,
   EvalRun,
   EvalScope,
   EvalThreadLike,
@@ -42,8 +40,8 @@ export type {
   JudgeAutoevals,
   JudgeCallOptions,
   JudgeSurface,
-  RunEvalsOptions,
   SchemaInput,
   ToolCallMatcherOptions,
   ValueBuilder,
 } from "./types";
+export type { CaseResult, EvalReport, RunEvalsOptions } from "./types-results";

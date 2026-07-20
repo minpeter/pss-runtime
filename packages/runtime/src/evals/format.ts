@@ -1,4 +1,4 @@
-import type { CaseResult, EvalReport } from "./types";
+import type { CaseResult, EvalReport } from "./types-results";
 
 function stateOf(result: CaseResult): string {
   if (result.passed) {
