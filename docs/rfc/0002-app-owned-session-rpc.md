@@ -184,7 +184,7 @@ worker-agent transport
 
 - RFC 0001: https://github.com/minpeter/pss-next/issues/171
 - Existing worker entrypoint: `apps/worker-agent/src/index.ts`
-- Existing tRPC router: `apps/worker-agent/src/tui-rpc.ts`
-- Existing TUI dispatch: `apps/worker-agent/src/tui-server.ts`
-- Existing remote TUI client: `apps/worker-agent/src/tui-remote.ts`
-- Existing Durable Object request parser: `apps/worker-agent/src/agent-do-request.ts`
+- Existing tRPC router: `apps/worker-agent/src/rpc/worker-rpc.ts`
+- Existing TUI dispatch: `apps/worker-agent/src/tui/tui-server.ts`
+- Existing remote TUI client: `apps/worker-agent/src/tui/tui-remote.ts`
+- Existing Durable Object request parser: `apps/worker-agent/src/agent/agent-do-request.ts`
