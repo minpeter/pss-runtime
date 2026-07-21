@@ -430,9 +430,10 @@ describe("DurableObjectSqliteThreadStore", () => {
       version: "1",
     });
 
-    const loadedHistory = (
-      loaded?.state as { history: { nested: { value: number } }[] }
-    ).history;
+    const loadedState = loaded?.state as {
+      history: { nested: { value: number } }[];
+    };
+    const loadedHistory = loadedState.history;
     loadedHistory[0].nested.value = 3;
     await expect(store.load("key")).resolves.toEqual({
       state: { history: [{ nested: { value: 1 } }], schemaVersion: 1 },
@@ -483,7 +484,8 @@ describe("DurableObjectSqliteThreadStore", () => {
     ).resolves.toEqual({ ok: true, version: "1" });
 
     const loaded = await store.load("big");
-    expect((loaded?.state as { history: unknown[] }).history).toHaveLength(50);
+    const bigState = loaded?.state as { history: unknown[] };
+    expect(bigState.history).toHaveLength(50);
   });
 
   it("load output decodes via decodeStoredThreadSnapshot", async () => {
