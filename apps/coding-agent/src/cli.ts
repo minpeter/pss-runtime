@@ -8,17 +8,13 @@ import { startTui } from "./tui";
 import { cliVersion } from "./update/cli-version";
 import { runUpdateCommand } from "./update/command";
 
-interface CliWritable {
-  write(text: string): void;
-}
-
 interface RunCodingAgentCliOptions {
   readonly argv?: readonly string[];
   readonly cwd?: string;
   readonly env?: Parameters<typeof resolveCodingAgentThreadConfig>[0];
   readonly home?: string;
-  readonly start?: () => Promise<void>;
-  readonly stdout?: CliWritable;
+  readonly start?: () => Promise<number>;
+  readonly stdout?: { write(text: string): void };
   readonly update?: (args: readonly string[]) => Promise<number>;
 }
 
@@ -42,8 +38,7 @@ export async function runCodingAgentCli({
   const command = argv[0];
 
   if (command === undefined) {
-    await start();
-    return 0;
+    return start();
   }
 
   if (command === "help" || command === "--help" || command === "-h") {

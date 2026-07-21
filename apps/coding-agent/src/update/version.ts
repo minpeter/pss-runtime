@@ -1,11 +1,11 @@
 const VERSION_PATTERN =
-  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?$/;
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
 const NUMERIC_IDENTIFIER_PATTERN = /^\d+$/;
 
 interface ParsedVersion {
-  readonly major: number;
-  readonly minor: number;
-  readonly patch: number;
+  readonly major: string;
+  readonly minor: string;
+  readonly patch: string;
   readonly prerelease: readonly string[];
 }
 
@@ -15,11 +15,12 @@ export function isValidVersion(version: string): boolean {
 
 export function extractUpdateChannel(version: string): string {
   const match = VERSION_PATTERN.exec(version);
-  const prerelease = match !== null && match.length > 4 ? match[4] : undefined;
+  const prerelease = match?.[4];
   if (prerelease === undefined) {
     return "latest";
   }
-  return prerelease.split(".")[0];
+  const channel = prerelease.split(".")[0];
+  return NUMERIC_IDENTIFIER_PATTERN.test(channel) ? "latest" : channel;
 }
 
 export function isSameMajorVersion(left: string, right: string): boolean {
@@ -37,14 +38,17 @@ export function compareVersions(left: string, right: string): number {
     );
   }
 
-  if (a.major !== b.major) {
-    return a.major - b.major;
+  const major = compareNumericIdentifier(a.major, b.major);
+  if (major !== 0) {
+    return major;
   }
-  if (a.minor !== b.minor) {
-    return a.minor - b.minor;
+  const minor = compareNumericIdentifier(a.minor, b.minor);
+  if (minor !== 0) {
+    return minor;
   }
-  if (a.patch !== b.patch) {
-    return a.patch - b.patch;
+  const patch = compareNumericIdentifier(a.patch, b.patch);
+  if (patch !== 0) {
+    return patch;
   }
   return comparePrerelease(a.prerelease, b.prerelease);
 }
@@ -55,13 +59,23 @@ function parseVersion(version: string): ParsedVersion | undefined {
     return;
   }
 
-  const prereleaseText = match.length > 4 ? match[4] : undefined;
+  const prereleaseText = match[4];
   return {
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3]),
+    major: match[1],
+    minor: match[2],
+    patch: match[3],
     prerelease: prereleaseText === undefined ? [] : prereleaseText.split("."),
   };
+}
+
+function compareNumericIdentifier(left: string, right: string): number {
+  if (left.length !== right.length) {
+    return left.length - right.length;
+  }
+  if (left === right) {
+    return 0;
+  }
+  return left < right ? -1 : 1;
 }
 
 function comparePrerelease(
@@ -89,7 +103,7 @@ function comparePrerelease(
     const aNumeric = NUMERIC_IDENTIFIER_PATTERN.test(a);
     const bNumeric = NUMERIC_IDENTIFIER_PATTERN.test(b);
     if (aNumeric && bNumeric) {
-      return Number(a) - Number(b);
+      return compareNumericIdentifier(a, b);
     }
     if (aNumeric) {
       return -1;

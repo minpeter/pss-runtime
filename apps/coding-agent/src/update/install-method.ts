@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { CODING_AGENT_PACKAGE_NAME } from "./check";
 
-export type PackageManager = string;
+export type PackageManager = (typeof PACKAGE_MANAGERS)[number]["name"];
 
 export type InstallMethod =
   | { readonly kind: "global"; readonly manager: PackageManager }
@@ -23,15 +23,15 @@ export interface DetectInstallMethodOptions {
   readonly probe?: ProbeRunner;
 }
 
-export interface PackageManagerSpec {
+interface PackageManagerSpec {
   readonly ephemeral?: { readonly pattern: string; readonly runner: string };
   readonly globalPathPatterns: readonly string[];
   readonly installArgs: (spec: string) => readonly string[];
-  readonly name: PackageManager;
+  readonly name: string;
   readonly probeArgs: readonly string[];
 }
 
-export const PACKAGE_MANAGERS: readonly PackageManagerSpec[] = [
+export const PACKAGE_MANAGERS = [
   {
     name: "pnpm",
     globalPathPatterns: ["/pnpm/global/"],
@@ -59,7 +59,7 @@ export const PACKAGE_MANAGERS: readonly PackageManagerSpec[] = [
     probeArgs: ["global", "list"],
     installArgs: (spec) => ["global", "add", spec],
   },
-];
+] as const satisfies readonly PackageManagerSpec[];
 
 export function findPackageManagerSpec(
   name: string
@@ -74,24 +74,18 @@ export function classifyInstallPath(binPath: string): InstallMethod {
   const normalized = binPath.replaceAll("\\", "/");
 
   for (const spec of PACKAGE_MANAGERS) {
-    if (
-      spec.ephemeral !== undefined &&
-      normalized.includes(spec.ephemeral.pattern)
-    ) {
+    if ("ephemeral" in spec && normalized.includes(spec.ephemeral.pattern)) {
       return { kind: "ephemeral", runner: spec.ephemeral.runner };
     }
   }
 
   for (const spec of PACKAGE_MANAGERS) {
     if (
-      !spec.globalPathPatterns.some((pattern) => normalized.includes(pattern))
+      spec.globalPathPatterns.some((pattern) => normalized.includes(pattern)) &&
+      normalized.includes(PACKAGE_PATH_MARKER)
     ) {
-      continue;
+      return { kind: "global", manager: spec.name };
     }
-    if (!normalized.includes(PACKAGE_PATH_MARKER)) {
-      continue;
-    }
-    return { kind: "global", manager: spec.name };
   }
 
   return { kind: "unknown" };
@@ -110,7 +104,8 @@ export async function detectInstallMethod({
     PACKAGE_MANAGERS.map(async (spec) => {
       try {
         const result = await probe(spec.name, spec.probeArgs);
-        return result.stdout.includes(CODING_AGENT_PACKAGE_NAME)
+        return result.code === 0 &&
+          result.stdout.includes(CODING_AGENT_PACKAGE_NAME)
           ? spec.name
           : undefined;
       } catch {

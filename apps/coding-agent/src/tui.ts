@@ -30,16 +30,11 @@ import { cliVersion } from "./update/cli-version";
 import { emitUpdateNotice } from "./update/notifier";
 
 export interface StartTuiOptions {
-  /**
-   * Optional tool set passed straight to the `Agent`. When omitted, the TUI
-   * enables OpenSearch-backed web_search and web_fetch tools when
-   * TINYFISH_API_KEY is configured; otherwise the web tools are omitted and a
-   * warning is logged (availability mode "optional").
-   */
+  /** Replaces the TUI's default optional OpenSearch tools. */
   readonly tools?: ToolSet;
 }
 
-export async function startTui(options: StartTuiOptions = {}): Promise<void> {
+export async function startTui(options: StartTuiOptions = {}): Promise<number> {
   const startupNotices: string[] = [];
   const threadConfig = resolveCodingAgentThreadConfig();
   const agentOptions: AgentOptions = {
@@ -80,8 +75,11 @@ export async function startTui(options: StartTuiOptions = {}): Promise<void> {
     finish = resolveDone;
   });
 
-  const addLine = (text: string): void => {
+  const appendLine = (text: string): void => {
     chat.addChild(new Text(text, 1, 0));
+  };
+  const addLine = (text: string): void => {
+    appendLine(text);
     tui.requestRender();
   };
 
@@ -131,11 +129,11 @@ export async function startTui(options: StartTuiOptions = {}): Promise<void> {
   });
 
   for (const notice of startupNotices) {
-    addLine(dimText(notice));
+    appendLine(dimText(notice));
   }
   const deferredRefreshes: (() => Promise<void>)[] = [];
   const updateNotice = await emitUpdateNotice({
-    write: (line) => addLine(dimText(line)),
+    write: (line) => appendLine(dimText(line)),
     env: process.env,
     version: cliVersion,
     cachePath: join(homedir(), ".pss", UPDATE_CHECK_CACHE_FILENAME),
@@ -151,7 +149,7 @@ export async function startTui(options: StartTuiOptions = {}): Promise<void> {
           binPath: process.argv[1] ?? "",
         });
   if (autoUpdate !== undefined) {
-    addLine(
+    appendLine(
       dimText(
         `auto-update enabled: pss ${autoUpdate.target} will be installed on exit`
       )
@@ -167,11 +165,12 @@ export async function startTui(options: StartTuiOptions = {}): Promise<void> {
   await done;
 
   if (autoUpdate !== undefined) {
-    await runAutoUpdate(autoUpdate, {
+    return runAutoUpdate(autoUpdate, {
       platform: process.platform,
       stdout: process.stdout,
     });
   }
+  return 0;
 }
 
 function isMainModule(moduleUrl: string, argvPath = process.argv[1]): boolean {
@@ -182,5 +181,8 @@ function isMainModule(moduleUrl: string, argvPath = process.argv[1]): boolean {
 }
 
 if (isMainModule(import.meta.url)) {
-  await startTui();
+  const exitCode = await startTui();
+  if (exitCode !== 0) {
+    process.exitCode = exitCode;
+  }
 }

@@ -42,10 +42,8 @@ continues the current turn before the next model snapshot, even if the assistant
 already printed final-looking text. Adding input on every `step-end` can keep
 the turn running indefinitely.
 
-Runtime additions emit `runtime-input`: runtime/API-originated input mapped
+Steered additions emit `runtime-input`: runtime/API-originated input mapped
 internally to the model's user role, separate from human `user-input` events.
-`thread.send(input)` starts or enqueues a new turn; `thread.steer(input)` steers
-the active turn or starts a normal turn when idle.
 
 ## CLI
 
@@ -95,9 +93,8 @@ The inspection command uses the runtime Node adapter to decode stored thread
 snapshots, so the CLI reports the same file path, message count, compaction
 records, and version that runtime storage uses.
 
-The `pss` TUI starts with OpenSearch-backed `web_search` and `web_fetch` tools.
-Call `startTui({ tools })` from your own entrypoint when you want to replace the
-default tool set.
+Pass `tools` to `startTui` from a custom entrypoint to replace its default tool
+set.
 
 ## Updates
 

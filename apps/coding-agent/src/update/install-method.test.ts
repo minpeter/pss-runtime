@@ -1,14 +1,16 @@
 import { describe, expect, it } from "vitest";
+import { CODING_AGENT_PACKAGE_NAME } from "./check";
 import {
   classifyInstallPath,
   detectInstallMethod,
+  type InstallMethod,
   type ProbeRunner,
 } from "./install-method";
 
 describe("classifyInstallPath", () => {
   const cases: readonly {
     readonly path: string;
-    readonly expected: unknown;
+    readonly expected: InstallMethod;
   }[] = [
     {
       path: "/home/u/.local/share/pnpm/global/5/node_modules/.pnpm/@minpeter+pss-coding-agent@0.0.13/node_modules/@minpeter/pss-coding-agent/bin/pss.js",
@@ -131,6 +133,20 @@ describe("detectInstallMethod", () => {
     });
 
     expect(method).toEqual({ kind: "global", manager: "pnpm" });
+  });
+
+  it("ignores package output from a nonzero probe", async () => {
+    const method = await detectInstallMethod({
+      binPath: "/opt/custom/pss",
+      probe: (command) =>
+        Promise.resolve(
+          command === "npm"
+            ? { code: 1, stdout: CODING_AGENT_PACKAGE_NAME }
+            : { code: 0, stdout: "" }
+        ),
+    });
+
+    expect(method).toEqual({ kind: "unknown" });
   });
 
   it("reports unknown when no probe matches", async () => {

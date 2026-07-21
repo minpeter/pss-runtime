@@ -70,11 +70,11 @@ export const defaultSpawnInstall = (
   command: string,
   args: readonly string[]
 ): Promise<number> =>
-  new Promise((resolvePromise, reject) => {
+  new Promise((resolvePromise) => {
     const child = spawn(command, [...args], {
       shell: false,
       stdio: "inherit",
     });
-    child.on("error", reject);
+    child.on("error", () => resolvePromise(1));
     child.on("close", (code) => resolvePromise(code ?? 1));
   });

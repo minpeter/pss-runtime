@@ -1,4 +1,6 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { constants } from "node:fs";
+import { chmod, mkdir, open, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import { compareVersions, isValidVersion } from "./version";
@@ -24,6 +26,9 @@ export type UpdateNotice =
     };
 
 export const UPDATE_CHECK_TTL_MS = 86_400_000;
+const UPDATE_CHECK_CACHE_MAX_BYTES = 65_536;
+const UPDATE_CHECK_CACHE_READ_FLAGS =
+  constants.O_RDONLY + constants.O_NONBLOCK + constants.O_NOFOLLOW;
 export const UPDATE_CHECK_CACHE_FILENAME = "update-check.json";
 export const CODING_AGENT_PACKAGE_NAME = "@minpeter/pss-coding-agent";
 export const DEFAULT_REGISTRY_BASE_URL = "https://registry.npmjs.org";
@@ -49,11 +54,7 @@ export function isCacheFresh(
   now: number,
   ttlMs: number = UPDATE_CHECK_TTL_MS
 ): boolean {
-  const checkedAt = Date.parse(cache.checkedAt);
-  if (Number.isNaN(checkedAt)) {
-    return false;
-  }
-  const age = now - checkedAt;
+  const age = now - Date.parse(cache.checkedAt);
   return age >= 0 && age < ttlMs;
 }
 
@@ -128,8 +129,34 @@ export async function readUpdateCheckCache(
   path: string
 ): Promise<UpdateCheckCache | undefined> {
   try {
-    const text = await readFile(path, "utf8");
-    return parseUpdateCheckCache(text);
+    const handle = await open(path, UPDATE_CHECK_CACHE_READ_FLAGS);
+    try {
+      const metadata = await handle.stat();
+      if (!metadata.isFile() || metadata.size > UPDATE_CHECK_CACHE_MAX_BYTES) {
+        return;
+      }
+
+      const buffer = Buffer.allocUnsafe(UPDATE_CHECK_CACHE_MAX_BYTES + 1);
+      let length = 0;
+      while (length < buffer.length) {
+        const { bytesRead } = await handle.read(
+          buffer,
+          length,
+          buffer.length - length,
+          length
+        );
+        if (bytesRead === 0) {
+          break;
+        }
+        length += bytesRead;
+      }
+      if (length > UPDATE_CHECK_CACHE_MAX_BYTES) {
+        return;
+      }
+      return parseUpdateCheckCache(buffer.toString("utf8", 0, length));
+    } finally {
+      await handle.close();
+    }
   } catch {
     return;
   }
@@ -139,12 +166,18 @@ export async function writeUpdateCheckCache(
   path: string,
   cache: UpdateCheckCache
 ): Promise<void> {
-  await mkdir(dirname(path), { mode: 0o700, recursive: true });
+  const directory = dirname(path);
+  await mkdir(directory, { mode: 0o700, recursive: true });
+  await chmod(directory, 0o700);
   const temporaryPath = join(
-    dirname(path),
-    `.${UPDATE_CHECK_CACHE_FILENAME}.${process.pid}.tmp`
+    directory,
+    `.${UPDATE_CHECK_CACHE_FILENAME}.${process.pid}.${randomUUID()}.tmp`
   );
-  await writeFile(temporaryPath, `${JSON.stringify(cache)}\n`, "utf8");
+  await writeFile(temporaryPath, `${JSON.stringify(cache)}\n`, {
+    encoding: "utf8",
+    flag: "wx",
+    mode: 0o600,
+  });
   await rename(temporaryPath, path);
 }
 
@@ -176,22 +209,20 @@ export async function fetchDistTags({
       return {};
     }
 
-    const tags: Record<string, string> = {};
+    const entries: [string, string][] = [];
     for (const [tag, version] of Object.entries(distTags)) {
-      if (!DIST_TAG_NAME_PATTERN.test(tag)) {
+      if (tag === "" || encodeURIComponent(tag) !== tag) {
         continue;
       }
       if (typeof version === "string" && isValidVersion(version)) {
-        tags[tag] = version;
+        entries.push([tag, version]);
       }
     }
-    return tags;
+    return Object.fromEntries(entries);
   } catch {
     return {};
   }
 }
-
-const DIST_TAG_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 
 export function publishedTagVersion(
   tags: Readonly<Record<string, string>>,

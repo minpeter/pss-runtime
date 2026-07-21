@@ -53,7 +53,12 @@ describe("planAutoUpdate", () => {
     });
 
   it("arms an in-channel same-major update on a confident global install", () => {
-    expect(plan({})).toEqual({ manager: "pnpm", target: "0.0.14" });
+    expect(plan({})).toEqual({
+      channel: "latest",
+      currentVersion: "0.0.13",
+      manager: "pnpm",
+      target: "0.0.14",
+    });
   });
 
   it("stays disarmed without a notice", () => {
@@ -95,7 +100,10 @@ describe("planAutoUpdate", () => {
 });
 
 describe("runAutoUpdate", () => {
-  const collect = (spawnExitCode: number) => {
+  const collect = (
+    spawnExitCode: number,
+    tags: Readonly<Record<string, string>> = { latest: "0.0.14" }
+  ) => {
     let output = "";
     const spawns: { command: string; args: readonly string[] }[] = [];
     return {
@@ -103,7 +111,12 @@ describe("runAutoUpdate", () => {
       spawns,
       run: () =>
         runAutoUpdate(
-          { manager: "pnpm", target: "0.0.14" },
+          {
+            channel: "latest",
+            currentVersion: "0.0.13",
+            manager: "pnpm",
+            target: "0.0.14",
+          },
           {
             platform: "linux",
             stdout: {
@@ -111,6 +124,7 @@ describe("runAutoUpdate", () => {
                 output += text;
               },
             },
+            fetchTags: () => Promise.resolve(tags),
             spawnInstall: (command, args) => {
               spawns.push({ command, args });
               return Promise.resolve(spawnExitCode);
@@ -134,6 +148,32 @@ describe("runAutoUpdate", () => {
     ]);
     expect(harness.output()).toContain("0.0.14");
     expect(harness.output()).toContain("Restart pss");
+  });
+
+  it("rechecks the channel and installs its freshest exact pin", async () => {
+    const harness = collect(0, { latest: "0.0.15" });
+
+    const exitCode = await harness.run();
+
+    expect(exitCode).toBe(0);
+    expect(harness.spawns).toEqual([
+      {
+        command: "pnpm",
+        args: ["add", "-g", "@minpeter/pss-coding-agent@0.0.15"],
+      },
+    ]);
+  });
+
+  it("skips installation when the fresh channel is offline or crosses major", async () => {
+    const offline = collect(0, {});
+    const crossMajor = collect(0, { latest: "1.0.0" });
+
+    expect(await offline.run()).toBe(0);
+    expect(await crossMajor.run()).toBe(0);
+    expect(offline.spawns).toEqual([]);
+    expect(crossMajor.spawns).toEqual([]);
+    expect(offline.output()).toContain("skipped");
+    expect(crossMajor.output()).toContain("skipped");
   });
 
   it("propagates installer failures with the manual command", async () => {

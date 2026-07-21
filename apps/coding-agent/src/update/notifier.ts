@@ -31,7 +31,8 @@ export async function emitUpdateNotice({
   version,
   cachePath,
   now = Date.now,
-  fetchTags = defaultFetchTags(env),
+  fetchTags = () =>
+    fetchDistTags({ baseUrl: resolveUpdateRegistryBaseUrl(env) }),
   schedule = defaultSchedule,
 }: UpdateNotifierDeps): Promise<UpdateNotice | undefined> {
   // no-excuse-ok: catch — update notices are best-effort and must never break the session.
@@ -40,24 +41,23 @@ export async function emitUpdateNotice({
       return;
     }
 
-    let decided: UpdateNotice | undefined;
+    let notice: UpdateNotice | undefined;
     const cache = await readUpdateCheckCache(cachePath);
     if (cache !== undefined) {
-      const notice = decideUpdateNotice(
+      notice = decideUpdateNotice(
         { version, channel: extractUpdateChannel(version) },
         cache.tags
       );
       if (notice !== undefined) {
-        decided = notice;
         write(formatUpdateNotice(notice));
       }
       if (isCacheFresh(cache, now())) {
-        return decided;
+        return notice;
       }
     }
 
     schedule(() => refreshCacheBestEffort({ cachePath, now, fetchTags }));
-    return decided;
+    return notice;
   } catch {
     return;
   }
@@ -87,10 +87,6 @@ async function refreshCacheBestEffort({
     // Intentional degradation: a failed refresh only delays the next notice.
   }
 }
-
-const defaultFetchTags =
-  (env: NodeJS.ProcessEnv) => (): Promise<Readonly<Record<string, string>>> =>
-    fetchDistTags({ baseUrl: resolveUpdateRegistryBaseUrl(env) });
 
 const defaultSchedule = (task: () => Promise<void>): void => {
   task();

@@ -13,7 +13,11 @@ import {
   manualInstallCommands,
 } from "./install";
 import { detectInstallMethod, type InstallMethod } from "./install-method";
-import { compareVersions, extractUpdateChannel } from "./version";
+import {
+  compareVersions,
+  extractUpdateChannel,
+  isValidVersion,
+} from "./version";
 
 export interface UpdateCommandDeps {
   readonly args: readonly string[];
@@ -52,6 +56,12 @@ export async function runUpdateCommand({
     stdout.write("Usage: pss update [--check] [--channel <tag>]\n");
     return 1;
   }
+  if (version !== undefined && !isValidVersion(version)) {
+    stdout.write(
+      `pss has an invalid embedded version (${version}); reinstall pss before updating.\n`
+    );
+    return 1;
+  }
 
   const ownChannel =
     version === undefined ? undefined : extractUpdateChannel(version);
@@ -70,7 +80,8 @@ export async function runUpdateCommand({
       version,
       ownChannel,
       targetChannel,
-      channelExplicit: parsed.channel !== undefined,
+      channelTransition:
+        parsed.channel !== undefined && parsed.channel !== ownChannel,
       platform,
       fetchTags,
       detectInstall,
@@ -114,8 +125,11 @@ export async function runUpdateCommand({
   }
 
   if (
-    target === version ||
-    (parsed.channel === undefined && compareVersions(target, version) < 0)
+    isUpToDate(
+      version,
+      target,
+      parsed.channel !== undefined && parsed.channel !== ownChannel
+    )
   ) {
     stdout.write(`pss is up to date (${version}).\n`);
     return 0;
@@ -144,7 +158,7 @@ export async function runUpdateCommand({
 }
 
 interface RunUpdateCheckOptions {
-  readonly channelExplicit: boolean;
+  readonly channelTransition: boolean;
   readonly detectInstall: () => Promise<InstallMethod>;
   readonly fetchTags: () => Promise<Readonly<Record<string, string>>>;
   readonly ownChannel: UpdateChannel | undefined;
@@ -159,7 +173,7 @@ async function runUpdateCheck({
   version,
   ownChannel,
   targetChannel,
-  channelExplicit,
+  channelTransition,
   platform,
   fetchTags,
   detectInstall,
@@ -191,10 +205,7 @@ async function runUpdateCheck({
     }
     return 0;
   }
-  if (
-    target === version ||
-    (!channelExplicit && compareVersions(target, version) < 0)
-  ) {
+  if (isUpToDate(version, target, channelTransition)) {
     stdout.write(`pss is up to date (${version}).\n`);
     return 0;
   }
@@ -215,6 +226,17 @@ async function runUpdateCheck({
   return 0;
 }
 
+function isUpToDate(
+  currentVersion: string,
+  targetVersion: string,
+  channelTransition: boolean
+): boolean {
+  return (
+    targetVersion === currentVersion ||
+    (!channelTransition && compareVersions(targetVersion, currentVersion) < 0)
+  );
+}
+
 function parseUpdateArgs(
   args: readonly string[]
 ): ParsedUpdateArgs | undefined {
@@ -228,6 +250,9 @@ function parseUpdateArgs(
       continue;
     }
     if (arg === "--channel") {
+      if (channel !== undefined) {
+        return;
+      }
       const value = args[index + 1];
       if (value !== undefined && CHANNEL_NAME_PATTERN.test(value)) {
         channel = value;
@@ -242,4 +267,4 @@ function parseUpdateArgs(
   return { check, channel };
 }
 
-const CHANNEL_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+const CHANNEL_NAME_PATTERN = /^(?![vV]\d)[a-zA-Z][a-zA-Z0-9._-]*$/;

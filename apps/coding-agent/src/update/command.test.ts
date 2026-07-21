@@ -1,63 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { runUpdateCommand } from "./command";
-import type { InstallMethod } from "./install-method";
+import { createHarness } from "./command.test-harness";
 
-interface Harness {
-  readonly output: () => string;
-  readonly run: () => Promise<number>;
-  readonly spawns: readonly { command: string; args: readonly string[] }[];
-}
-
-const DEFAULT_METHOD: InstallMethod = { kind: "global", manager: "pnpm" };
-const DEFAULT_PLATFORM: NodeJS.Platform = "linux";
-
-function createHarness(
-  options: {
-    args?: readonly string[];
-    version?: string | undefined;
-    method?: InstallMethod;
-    tags?: Readonly<Record<string, string>>;
-    spawnExitCode?: number;
-    platform?: NodeJS.Platform;
-  } = {}
-): Harness {
-  const {
-    args = [],
-    method = DEFAULT_METHOD,
-    tags = { latest: "0.0.14" },
-    spawnExitCode = 0,
-    platform = DEFAULT_PLATFORM,
-  } = options;
-  const version = "version" in options ? options.version : "0.0.13";
-  let output = "";
-  const spawns: { command: string; args: readonly string[] }[] = [];
-
-  return {
-    output: () => output,
-    spawns,
-    run: () =>
-      runUpdateCommand({
-        args,
-        stdout: {
-          write(text: string): void {
-            output += text;
-          },
-        },
-        env: {},
-        version,
-        binPath: "/irrelevant/bin/pss.js",
-        platform,
-        fetchTags: () => Promise.resolve(tags),
-        detectInstall: () => Promise.resolve(method),
-        spawnInstall: (command, args) => {
-          spawns.push({ command, args });
-          return Promise.resolve(spawnExitCode);
-        },
-      }),
-  };
-}
-
-describe("pss update", () => {
+describe("pss update installation and refusal", () => {
   it("updates through the detected manager with an exact pinned version", async () => {
     const harness = createHarness({});
 
@@ -174,133 +118,18 @@ describe("pss update", () => {
     );
   });
 
-  it("keeps a next-channel install on the next channel by default", async () => {
-    const harness = createHarness({
-      version: "0.0.14-next.1",
-      tags: { latest: "0.0.13", next: "0.0.14-next.2" },
-    });
+  it.each([[[]], [["--check"]]] as const)(
+    "rejects an invalid embedded version for args %j",
+    async (args) => {
+      const harness = createHarness({ args, version: "not-semver" });
 
-    const exitCode = await harness.run();
+      const exitCode = await harness.run();
 
-    expect(exitCode).toBe(0);
-    expect(harness.spawns).toEqual([
-      {
-        command: "pnpm",
-        args: ["add", "-g", "@minpeter/pss-coding-agent@0.0.14-next.2"],
-      },
-    ]);
-  });
-
-  it("moves a next-channel install to stable when --channel latest is explicit", async () => {
-    const harness = createHarness({
-      args: ["--channel", "latest"],
-      version: "0.0.14-next.2",
-      tags: { latest: "0.0.14", next: "0.0.14-next.2" },
-    });
-
-    const exitCode = await harness.run();
-
-    expect(exitCode).toBe(0);
-    expect(harness.spawns).toEqual([
-      {
-        command: "pnpm",
-        args: ["add", "-g", "@minpeter/pss-coding-agent@0.0.14"],
-      },
-    ]);
-  });
-
-  it("tracks an arbitrary prerelease channel by default", async () => {
-    const harness = createHarness({
-      version: "1.0.0-beta.1",
-      tags: { beta: "1.0.0-beta.3", latest: "1.0.0" },
-    });
-
-    const exitCode = await harness.run();
-
-    expect(exitCode).toBe(0);
-    expect(harness.spawns).toEqual([
-      {
-        command: "pnpm",
-        args: ["add", "-g", "@minpeter/pss-coding-agent@1.0.0-beta.3"],
-      },
-    ]);
-  });
-
-  it("allows an explicit move between prerelease channels", async () => {
-    const harness = createHarness({
-      args: ["--channel", "canary"],
-      version: "1.0.0-beta.1",
-      tags: { beta: "1.0.0-beta.3", canary: "1.0.0-canary.2", latest: "1.0.0" },
-    });
-
-    const exitCode = await harness.run();
-
-    expect(exitCode).toBe(0);
-    expect(harness.spawns).toEqual([
-      {
-        command: "pnpm",
-        args: ["add", "-g", "@minpeter/pss-coding-agent@1.0.0-canary.2"],
-      },
-    ]);
-  });
-
-  it("refuses to move a stable install to any prerelease channel", async () => {
-    const harness = createHarness({
-      args: ["--channel", "canary"],
-      version: "1.0.0",
-      tags: { latest: "1.0.0", canary: "1.0.1-canary.0" },
-    });
-
-    const exitCode = await harness.run();
-
-    expect(exitCode).toBe(1);
-    expect(harness.output()).toContain("keeps stable installs");
-    expect(harness.spawns).toEqual([]);
-  });
-
-  it("treats prototype property names as unpublished channels", async () => {
-    const harness = createHarness({
-      args: ["--channel", "toString"],
-      version: "1.0.0-beta.1",
-      tags: { latest: "1.0.0" },
-    });
-
-    const exitCode = await harness.run();
-
-    expect(exitCode).toBe(1);
-    expect(harness.output()).toContain("not published");
-    expect(harness.spawns).toEqual([]);
-  });
-
-  it("reports published channels when the requested one is missing", async () => {
-    const harness = createHarness({
-      args: ["--channel", "canary"],
-      version: "1.0.0-beta.1",
-      tags: { beta: "1.0.0-beta.2", latest: "1.0.0" },
-    });
-
-    const exitCode = await harness.run();
-
-    expect(exitCode).toBe(1);
-    expect(harness.output()).toContain("canary");
-    expect(harness.output()).toContain("beta");
-    expect(harness.output()).toContain("latest");
-    expect(harness.spawns).toEqual([]);
-  });
-
-  it("rejects a stable install switching to the next channel", async () => {
-    const harness = createHarness({
-      args: ["--channel", "next"],
-      version: "0.0.13",
-      tags: { latest: "0.0.14", next: "0.0.15-next.0" },
-    });
-
-    const exitCode = await harness.run();
-
-    expect(exitCode).toBe(1);
-    expect(harness.output()).toContain("next");
-    expect(harness.spawns).toEqual([]);
-  });
+      expect(exitCode).toBe(1);
+      expect(harness.output()).toContain("invalid embedded version");
+      expect(harness.spawns).toEqual([]);
+    }
+  );
 
   it("rejects unknown arguments", async () => {
     const harness = createHarness({ args: ["--bogus"] });
@@ -312,61 +141,15 @@ describe("pss update", () => {
     expect(harness.spawns).toEqual([]);
   });
 
-  it("describes the update without changing anything for --check", async () => {
-    const harness = createHarness({ args: ["--check"] });
-
-    const exitCode = await harness.run();
-
-    expect(exitCode).toBe(0);
-    expect(harness.output()).toContain("0.0.13");
-    expect(harness.output()).toContain("latest");
-    expect(harness.output()).toContain("pnpm");
-    expect(harness.output()).toContain(
-      "pnpm add -g @minpeter/pss-coding-agent@0.0.14"
-    );
-    expect(harness.spawns).toEqual([]);
-  });
-
-  it("stays put for --check when the installed version is ahead of its channel", async () => {
+  it("rejects repeated channel flags instead of taking the last value", async () => {
     const harness = createHarness({
-      args: ["--check"],
-      version: "0.0.15",
-      tags: { latest: "0.0.14" },
+      args: ["--channel", "beta", "--channel", "next"],
     });
 
     const exitCode = await harness.run();
 
-    expect(exitCode).toBe(0);
-    expect(harness.output()).toContain("up to date");
-    expect(harness.output()).not.toContain("would run");
-    expect(harness.spawns).toEqual([]);
-  });
-
-  it("previews an explicit channel switch even when it lowers the version", async () => {
-    const harness = createHarness({
-      args: ["--check", "--channel", "latest"],
-      version: "0.0.15-next.0",
-      tags: { latest: "0.0.14", next: "0.0.15-next.0" },
-    });
-
-    const exitCode = await harness.run();
-
-    expect(exitCode).toBe(0);
-    expect(harness.output()).toContain("0.0.15-next.0 -> 0.0.14");
-    expect(harness.output()).toContain(
-      "pnpm add -g @minpeter/pss-coding-agent@0.0.14"
-    );
-    expect(harness.spawns).toEqual([]);
-  });
-
-  it("still reports registry state for --check on a dev build", async () => {
-    const harness = createHarness({ args: ["--check"], version: undefined });
-
-    const exitCode = await harness.run();
-
-    expect(exitCode).toBe(0);
-    expect(harness.output()).toContain("dev");
-    expect(harness.output()).toContain("0.0.14");
+    expect(exitCode).toBe(1);
+    expect(harness.output()).toContain("pss update");
     expect(harness.spawns).toEqual([]);
   });
 });

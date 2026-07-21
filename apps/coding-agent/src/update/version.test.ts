@@ -21,13 +21,20 @@ describe("extractUpdateChannel", () => {
     expect(extractUpdateChannel("1.0.0-rc.2")).toBe("rc");
     expect(extractUpdateChannel("1.0.0-alpha")).toBe("alpha");
   });
+
+  it("uses latest when a prerelease starts with a numeric identifier", () => {
+    expect(extractUpdateChannel("1.0.0-0")).toBe("latest");
+    expect(extractUpdateChannel("1.0.0-1.beta")).toBe("latest");
+  });
 });
 
 describe("isValidVersion", () => {
-  it("accepts release and prerelease versions", () => {
+  it("accepts release, prerelease, and build-metadata versions", () => {
     expect(isValidVersion("0.0.13")).toBe(true);
     expect(isValidVersion("0.0.14-next.2")).toBe(true);
     expect(isValidVersion("1.2.3-rc.10")).toBe(true);
+    expect(isValidVersion("1.2.3+build.7")).toBe(true);
+    expect(isValidVersion("1.2.3-next.4+sha.abcdef")).toBe(true);
   });
 
   it("accepts alphanumeric prerelease identifiers", () => {
@@ -84,5 +91,22 @@ describe("compareVersions", () => {
       0
     );
     expect(compareVersions("0.0.14-next.2", "0.0.14-next.10")).toBeLessThan(0);
+  });
+
+  it("orders numeric identifiers without losing integer precision", () => {
+    expect(
+      compareVersions("9007199254740993.0.0", "9007199254740992.0.0")
+    ).toBeGreaterThan(0);
+    expect(
+      compareVersions(
+        "1.0.0-next.9007199254740993",
+        "1.0.0-next.9007199254740992"
+      )
+    ).toBeGreaterThan(0);
+  });
+
+  it("ignores build metadata for precedence", () => {
+    expect(compareVersions("1.2.3+build.7", "1.2.3+build.8")).toBe(0);
+    expect(compareVersions("1.2.3-next.2+one", "1.2.3-next.2+two")).toBe(0);
   });
 });

@@ -40,6 +40,15 @@ describe("coding-agent CLI", () => {
     expect(received).toEqual([["--check"]]);
   });
 
+  it("propagates the TUI exit code", async () => {
+    const exitCode = await runCodingAgentCli({
+      argv: [],
+      start: () => Promise.resolve(7),
+    });
+
+    expect(exitCode).toBe(7);
+  });
+
   it("returns an error code with usage when the command is unknown", async () => {
     let output = "";
 
