@@ -99,12 +99,12 @@ describe("resolveCodingAgentThreadConfig", () => {
         "PSS_AUTO_COMPACTION_RETAIN_MESSAGES must be smaller than PSS_AUTO_COMPACTION_MIN_MESSAGES.",
       name: "retain threshold equals minimum threshold",
     },
-  ] as const)("rejects malformed auto compaction env: $name", ({
-    env,
-    message,
-  }) => {
-    expect(() =>
-      resolveCodingAgentThreadConfig(env, "/repo/demo", "/home/me")
-    ).toThrow(message);
-  });
+  ] as const)(
+    "rejects malformed auto compaction env: $name",
+    ({ env, message }) => {
+      expect(() =>
+        resolveCodingAgentThreadConfig(env, "/repo/demo", "/home/me")
+      ).toThrow(message);
+    }
+  );
 });

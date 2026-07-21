@@ -226,27 +226,27 @@ describe("Agent", () => {
     ).toThrow(duplicateAlwaysActiveToolsPattern);
   });
 
-  it.each([
-    "alwaysActiveTools",
-    "toolOrder",
-  ] as const)("keeps a custom %s iterator inert through the public factory", async (field) => {
-    const names = ["stable"];
-    const iteratorGetter = vi.fn(() => {
-      throw new Error(`${field} iterator must stay inert`);
-    });
-    Object.defineProperty(names, Symbol.iterator, {
-      get: iteratorGetter,
-    });
+  it.each(["alwaysActiveTools", "toolOrder"] as const)(
+    "keeps a custom %s iterator inert through the public factory",
+    async (field) => {
+      const names = ["stable"];
+      const iteratorGetter = vi.fn(() => {
+        throw new Error(`${field} iterator must stay inert`);
+      });
+      Object.defineProperty(names, Symbol.iterator, {
+        get: iteratorGetter,
+      });
 
-    const agent = await createAgent({
-      [field]: names,
-      model: fakeModel,
-      tools: { stable: createNoopTool() },
-    });
-    await collectRun(await agent.send("use stable tools"));
+      const agent = await createAgent({
+        [field]: names,
+        model: fakeModel,
+        tools: { stable: createNoopTool() },
+      });
+      await collectRun(await agent.send("use stable tools"));
 
-    expect(iteratorGetter).not.toHaveBeenCalled();
-  });
+      expect(iteratorGetter).not.toHaveBeenCalled();
+    }
+  );
 
   it("rejects accessor-backed tool registries without invoking them", async () => {
     const registryGetter = vi.fn(() => {
