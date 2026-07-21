@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { CODING_AGENT_PACKAGE_NAME } from "./update-check";
+import { CODING_AGENT_PACKAGE_NAME } from "./check";
 
 export type PackageManager = "pnpm" | "npm" | "bun" | "yarn";
 

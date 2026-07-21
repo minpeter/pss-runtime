@@ -7,8 +7,8 @@ import {
   resolveUpdateRegistryBaseUrl,
   type UpdateChannel,
   writeUpdateCheckCache,
-} from "./update-check";
-import { extractUpdateChannel } from "./update-version";
+} from "./check";
+import { extractUpdateChannel } from "./version";
 
 export interface UpdateNotifierDeps {
   readonly cachePath: string;

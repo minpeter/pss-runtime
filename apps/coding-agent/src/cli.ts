@@ -5,8 +5,8 @@ import {
   inspectCodingAgentThread,
 } from "./thread-inspect";
 import { startTui } from "./tui";
-import { runUpdateCommand } from "./update-command";
-import { cliVersion } from "./version";
+import { cliVersion } from "./update/cli-version";
+import { runUpdateCommand } from "./update/command";
 
 interface CliWritable {
   write(text: string): void;

@@ -24,9 +24,9 @@ import {
   markdownTheme,
 } from "./tui-theme";
 import { safeText } from "./tui-tool-printer";
-import { UPDATE_CHECK_CACHE_FILENAME } from "./update-check";
-import { emitUpdateNotice } from "./update-notifier";
-import { cliVersion } from "./version";
+import { UPDATE_CHECK_CACHE_FILENAME } from "./update/check";
+import { cliVersion } from "./update/cli-version";
+import { emitUpdateNotice } from "./update/notifier";
 
 export interface StartTuiOptions {
   /**

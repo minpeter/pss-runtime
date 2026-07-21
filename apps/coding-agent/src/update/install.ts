@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
+import type { UpdateChannel } from "./check";
+import { CODING_AGENT_PACKAGE_NAME } from "./check";
 import type { InstallMethod, PackageManager } from "./install-method";
-import type { UpdateChannel } from "./update-check";
-import { CODING_AGENT_PACKAGE_NAME } from "./update-check";
 
 export interface InstallInvocation {
   readonly args: readonly string[];

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { runUpdateCommand } from "./command";
 import type { InstallMethod } from "./install-method";
-import { runUpdateCommand } from "./update-command";
 
 interface Harness {
   readonly output: () => string;

@@ -14,7 +14,7 @@ import {
   resolveUpdateRegistryBaseUrl,
   UPDATE_CHECK_TTL_MS,
   writeUpdateCheckCache,
-} from "./update-check";
+} from "./check";
 
 describe("update check cache", () => {
   it("round-trips a cache file written atomically", async () => {

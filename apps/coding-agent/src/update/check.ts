@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
-import { compareVersions, isValidVersion } from "./update-version";
+import { compareVersions, isValidVersion } from "./version";
 
 export type UpdateChannel = "latest" | "next";
 

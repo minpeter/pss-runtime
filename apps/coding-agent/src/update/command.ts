@@ -1,18 +1,18 @@
-import { detectInstallMethod, type InstallMethod } from "./install-method";
 import {
   CODING_AGENT_PACKAGE_NAME,
   fetchLatestTags,
   resolveUpdateRegistryBaseUrl,
   type UpdateChannel,
-} from "./update-check";
+} from "./check";
 import {
   defaultSpawnInstall,
   describeInstallMethod,
   formatInvocation,
   installInvocation,
   manualInstallCommands,
-} from "./update-install";
-import { compareVersions, extractUpdateChannel } from "./update-version";
+} from "./install";
+import { detectInstallMethod, type InstallMethod } from "./install-method";
+import { compareVersions, extractUpdateChannel } from "./version";
 
 export interface UpdateCommandDeps {
   readonly args: readonly string[];

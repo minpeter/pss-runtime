@@ -6,8 +6,8 @@ import {
   readUpdateCheckCache,
   UPDATE_CHECK_TTL_MS,
   writeUpdateCheckCache,
-} from "./update-check";
-import { emitUpdateNotice, isUpdateCheckDisabled } from "./update-notifier";
+} from "./check";
+import { emitUpdateNotice, isUpdateCheckDisabled } from "./notifier";
 
 describe("isUpdateCheckDisabled", () => {
   it("is disabled by explicit opt-out values", () => {

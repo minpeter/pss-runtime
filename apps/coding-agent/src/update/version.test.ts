@@ -3,7 +3,7 @@ import {
   compareVersions,
   extractUpdateChannel,
   isValidVersion,
-} from "./update-version";
+} from "./version";
 
 describe("extractUpdateChannel", () => {
   it("tracks the latest channel for a stable release version", () => {
