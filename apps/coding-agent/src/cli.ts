@@ -5,18 +5,17 @@ import {
   inspectCodingAgentThread,
 } from "./thread-inspect";
 import { startTui } from "./tui";
-
-interface CliWritable {
-  write(text: string): void;
-}
+import { cliVersion } from "./update/cli-version";
+import { runUpdateCommand } from "./update/command";
 
 interface RunCodingAgentCliOptions {
   readonly argv?: readonly string[];
   readonly cwd?: string;
   readonly env?: Parameters<typeof resolveCodingAgentThreadConfig>[0];
   readonly home?: string;
-  readonly start?: () => Promise<void>;
-  readonly stdout?: CliWritable;
+  readonly start?: () => Promise<number>;
+  readonly stdout?: { write(text: string): void };
+  readonly update?: (args: readonly string[]) => Promise<number>;
 }
 
 export async function runCodingAgentCli({
@@ -26,12 +25,20 @@ export async function runCodingAgentCli({
   home = homedir(),
   start = startTui,
   stdout = process.stdout,
+  update = (args: readonly string[]) =>
+    runUpdateCommand({
+      args,
+      stdout,
+      env,
+      version: cliVersion,
+      binPath: process.argv[1] ?? "",
+      platform: process.platform,
+    }),
 }: RunCodingAgentCliOptions = {}): Promise<number> {
   const command = argv[0];
 
   if (command === undefined) {
-    await start();
-    return 0;
+    return start();
   }
 
   if (command === "help" || command === "--help" || command === "-h") {
@@ -46,6 +53,10 @@ export async function runCodingAgentCli({
     return 0;
   }
 
+  if (command === "update") {
+    return update(argv.slice(1));
+  }
+
   stdout.write(`Unknown pss command: ${command}\n\n${formatUsage()}\n`);
   return 1;
 }
@@ -57,6 +68,7 @@ function formatUsage(): string {
     "Commands:",
     "  (no command)     Start the interactive TUI",
     "  inspect-thread   Print a report for the configured thread",
+    "  update           Update pss (--check, --channel <tag>)",
     "  help             Show this help message",
   ].join("\n");
 }

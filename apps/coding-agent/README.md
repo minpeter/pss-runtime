@@ -42,10 +42,8 @@ continues the current turn before the next model snapshot, even if the assistant
 already printed final-looking text. Adding input on every `step-end` can keep
 the turn running indefinitely.
 
-Runtime additions emit `runtime-input`: runtime/API-originated input mapped
+Steered additions emit `runtime-input`: runtime/API-originated input mapped
 internally to the model's user role, separate from human `user-input` events.
-`thread.send(input)` starts or enqueues a new turn; `thread.steer(input)` steers
-the active turn or starts a normal turn when idle.
 
 ## CLI
 
@@ -60,6 +58,31 @@ pss
 
 CLI commands: `pss`, `pss-coding-agent`.
 
+Update a global install, or preview what an update would do:
+
+```sh
+pss update
+pss update --check
+```
+
+`pss update` re-checks the npm registry's dist-tags and installs the exact
+newest version of your channel through the detected package manager
+(pnpm/npm/bun/yarn global installs). Your channel follows the installed
+version: stable installs track `latest`, and a prerelease like `0.0.14-next.2`
+or `1.0.0-beta.3` tracks its own dist-tag (`next`, `beta`, or any published
+tag). Moving to stable is explicit:
+
+```sh
+pss update --channel latest
+```
+
+Any other published dist-tag can be targeted the same way (`pss update
+--channel beta`); moving a stable install to a prerelease channel is refused,
+and an unknown channel reports the published channel list.
+
+One-off runs (`pnpm dlx`, `npx`, `bunx`) cannot be updated in place; `pss
+update` prints the global install command instead.
+
 Inspect the configured local thread without starting the TUI:
 
 ```sh
@@ -70,9 +93,27 @@ The inspection command uses the runtime Node adapter to decode stored thread
 snapshots, so the CLI reports the same file path, message count, compaction
 records, and version that runtime storage uses.
 
-The `pss` TUI starts with OpenSearch-backed `web_search` and `web_fetch` tools.
-Call `startTui({ tools })` from your own entrypoint when you want to replace the
-default tool set.
+Pass `tools` to `startTui` from a custom entrypoint to replace its default tool
+set.
+
+## Updates
+
+The TUI checks for updates without blocking startup. The cached result in
+`~/.pss/update-check.json` (24h TTL) is read before the first render; when it
+names a newer version on your channel (or a stable release that surpasses a
+prerelease install), one dim line is printed into the scrollback, and a stale
+cache is refreshed in the background for the next run. Checks are skipped for
+dev/source runs. Set `PSS_DISABLE_UPDATE_CHECK=1` (or `true`) to opt out.
+
+### Auto-update (opt-in)
+
+Set `PSS_AUTO_UPDATE=1` (or `true`) to let pss update itself: when the cached
+check names a newer version on your channel and the install is a confidently
+detected global install (path-based pnpm/npm/bun/yarn layout), the exact
+pinned version is installed after the TUI exits — never during a session,
+never across a major version, and never as a channel switch. Ephemeral and
+unrecognized installs are skipped, and `PSS_DISABLE_UPDATE_CHECK=1` disables
+auto-update as well.
 
 ## Web tools availability
 
@@ -83,8 +124,10 @@ before wiring the OpenSearch client, controlled by `webToolsAvailability`:
 - `optional` (default): when the key is missing, the web tools are omitted
   instead of advertised, and the omission is reported through
   `onWebToolsDisabled` (default: `console.warn` logs
-  `web tools disabled: missing TINYFISH_API_KEY`). Startup still succeeds, so
-  environments without a key behave exactly as before minus the unusable tools.
+  `web tools disabled: missing TINYFISH_API_KEY`; the `pss` TUI overrides the
+  handler and renders the message as a dim scrollback line at startup).
+  Startup still succeeds, so environments without a key behave exactly as
+  before minus the unusable tools.
 - `required`: throw `CodingAgentWebToolsUnavailableError` during tool/agent
   initialization when the key is missing, so a model can never be offered a
   tool that cannot execute.
