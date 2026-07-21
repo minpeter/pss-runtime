@@ -1,35 +1,21 @@
 core:changelogs:
-  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Remove legacy negative assertions and orphan probe script\n\nDrop test-only assertions that verify already-removed legacy APIs\n(`createCloudflareAgentsHost`, `PSS_SESSION_*` env aliases, object-style\nplugin pipeline, legacy `llm`/`description`/`sessions` option fields) do not\nexist. The APIs themselves were removed in prior releases; these negative\nchecks no longer guard a live migration boundary.\n\nAlso delete `scripts/probe-cache-stable-response-shape.mts`, a one-off\ninvestigation script not referenced by any npm script or test.\n\nNo API or behavior change.\n"
-    filename: 2026-07-19-remove-legacy-test-assertions.md
-    v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: minor\n---\n\n## Add the app-owned channel adapter contract\n\nExpose `@minpeter/pss-runtime/channel` with typed inbound channel messages and\nassistant text deliveries. Apps retain ownership of provider mapping, the\n`Agent -> Thread -> Turn -> events()` control flow, and outbound delivery.\n\n`projectChannelAssistantDelivery(event)` projects only non-empty\n`assistant-output` events. The runtime does not add provider adapters or own a\nchannel loop.\n"
-    filename: 2026-07-19-channel-adapter-contract.md
-    v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: minor\n---\n\n## Inspect durable turn lifecycle by run ID\n\nExpose a stable optional `AgentTurn.runId` for durable work accepted by an\nexecution host. Precreate queued user-turn runs after durable input admission,\ncarry the same run through execution and checkpoints, and bind resumed\nnotifications to the run ID returned by `dispatchAgentNotification`.\n\nAdd read-only `inspectDurableTurn(source, runId)` to the existing `./execution`\nsubpath. Recorded runs report status, thread key, checkpoint version, and the\nlatest checkpoint, with explicit unsupported, unknown-run, and no-checkpoint\nstates.\n\nMake thread shutdown await durable cancellation of queued, active, and\nadmission-racing runs while preserving completed, failed, recovery, and already\ncancelled terminal statuses.\n"
-    filename: 2026-07-19-durable-execution-inspection.md
-    v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: minor\n---\n\n## Add OpenTelemetry turn tracing\n\nAdd the `@minpeter/pss-runtime/otel` subpath with `traceAgentTurn()` for one\nturn and `openTelemetry()` for agent-wide instrumentation. Record turn, step,\nand tool spans plus metadata-only runtime events through\n`@opentelemetry/api`, leaving SDK and exporter configuration to applications.\n\nExpose general `AgentOptions.instrumentations` hooks for send, steer, and\nresume operations. Wrapped turns preserve single-consumption and pass through\nevery original event, including model-usage telemetry, while payload summaries\navoid raw content and do not invoke `toJSON()`.\n"
-    filename: 2026-07-19-otel-trace-adapter.md
+  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Add update notices and the `pss update` command\n\nThe TUI now checks for updates without blocking startup: a cached registry\nresult in `~/.pss/update-check.json` (24h TTL, written atomically) is read\nbefore the first render, one dim scrollback line announces a newer version\nwhen present, and a stale cache refreshes in the background after the first\nrender so the startup path performs no network I/O. The version and channel\n(`latest` or `next`) are baked at build time, checks skip dev/source runs,\nand `PSS_DISABLE_UPDATE_CHECK=1` opts out.\n\n`pss update` re-checks the npm registry's dist-tags and installs the\nexact pinned version through the detected package manager. Channels follow\nthe installed version: stable installs track `latest`, and any prerelease\ntracks its own dist-tag (`next`, `beta`, `canary`, or any published tag),\nwith explicit `--channel <tag>` moves allowed toward stable or across\nprerelease channels and refused from stable to prerelease. Package managers\n(pnpm/npm/bun/yarn today) are described in a single descriptor registry —\ndetection patterns, probes, and install arguments — so new managers are one\ndata entry. dlx/npx/bunx one-off runs and unknown layouts are refused with\nmanual instructions. `pss update --check` prints the current version,\nchannel, install method, and the exact command without changing anything.\n\nWith `PSS_AUTO_UPDATE=1`, an in-channel, same-major update on a\nconfidently detected global install is installed automatically after the TUI\nexits — never during a session and never as a channel switch.\n\nThe TUI web-tools availability warning now renders through the same dim\nscrollback seam instead of a pre-start `console.warn`.\n"
+    filename: 2026-07-21-update-notifier-update-command.md
     v: 0.0.0
 core:packages:
   - changelogIds:
-      - 2026-07-19-remove-legacy-test-assertions.md
+      - 2026-07-21-update-notifier-update-command.md
     id: npm:@minpeter/pss-coding-agent
     updated: true
-  - changelogIds:
-      - 2026-07-19-channel-adapter-contract.md
-      - 2026-07-19-durable-execution-inspection.md
-      - 2026-07-19-otel-trace-adapter.md
-      - 2026-07-19-remove-legacy-test-assertions.md
-    id: npm:@minpeter/pss-runtime
-    updated: true
+  - id: npm:@minpeter/pss-runtime
+    updated: false
 npm:packages:
   - distTag: next
     id: npm:@minpeter/pss-coding-agent
   - distTag: next
     id: npm:@minpeter/pss-runtime
-  - id: npm:@minpeter/pss-worker-agent
   - id: npm:@minpeter/pss-example-background-subagent
+  - id: npm:@minpeter/pss-worker-agent
   - id: npm:@minpeter/pss-example-basic
   - id: npm:@minpeter/pss-example-evals
   - id: npm:@minpeter/pss-example-local-file-agent
