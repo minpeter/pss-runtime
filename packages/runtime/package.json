@@ -103,7 +103,7 @@
   },
   "devDependencies": {
     "agents": "0.17.4",
-    "tsdown": "^0.22.4",
+    "tsdown": "^0.22.12",
     "typescript": "^7.0.2",
     "vitest": "^4.1.9"
   }
