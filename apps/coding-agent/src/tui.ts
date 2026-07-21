@@ -1,4 +1,5 @@
-import { resolve } from "node:path";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   Container,
@@ -18,10 +19,14 @@ import { resolveStartTuiTools } from "./tools";
 import { createTuiRunner, formatTuiHeader } from "./tui-runner";
 import {
   assistantText,
+  dimText,
   markdownDefaultTextStyle,
   markdownTheme,
 } from "./tui-theme";
 import { safeText } from "./tui-tool-printer";
+import { UPDATE_CHECK_CACHE_FILENAME } from "./update-check";
+import { emitUpdateNotice } from "./update-notifier";
+import { cliVersion } from "./version";
 
 export interface StartTuiOptions {
   /**
@@ -34,6 +39,7 @@ export interface StartTuiOptions {
 }
 
 export async function startTui(options: StartTuiOptions = {}): Promise<void> {
+  const startupNotices: string[] = [];
   const threadConfig = resolveCodingAgentThreadConfig();
   const agentOptions: AgentOptions = {
     host: createFileHost({ directory: threadConfig.directory }),
@@ -41,7 +47,9 @@ export async function startTui(options: StartTuiOptions = {}): Promise<void> {
       "Answer in 2 short sentences and 280 characters or fewer unless the user explicitly asks for detail. Avoid headings.",
     model: createCodingLanguageModel(),
     autoCompaction: threadConfig.autoCompaction,
-    tools: resolveStartTuiTools(options.tools),
+    tools: resolveStartTuiTools(options.tools, {
+      onWebToolsDisabled: (message) => startupNotices.push(message),
+    }),
   };
   const agent = await createAgent(agentOptions);
   const thread = agent.thread(threadConfig.key);
@@ -121,8 +129,23 @@ export async function startTui(options: StartTuiOptions = {}): Promise<void> {
     return { consume: true };
   });
 
+  for (const notice of startupNotices) {
+    addLine(dimText(notice));
+  }
+  const deferredRefreshes: (() => Promise<void>)[] = [];
+  await emitUpdateNotice({
+    write: (line) => addLine(dimText(line)),
+    env: process.env,
+    version: cliVersion,
+    cachePath: join(homedir(), ".pss", UPDATE_CHECK_CACHE_FILENAME),
+    schedule: (task) => deferredRefreshes.push(task),
+  });
+
   tui.start();
   tui.requestRender();
+  for (const refresh of deferredRefreshes) {
+    refresh();
+  }
 
   await done;
 }

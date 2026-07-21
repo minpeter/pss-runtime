@@ -22,6 +22,22 @@ describe("coding-agent CLI", () => {
     expect(exitCode).toBe(0);
     expect(output).toContain("Usage: pss [command]\n");
     expect(output).toContain("inspect-thread");
+    expect(output).toContain("update");
+  });
+
+  it("routes update with the remaining arguments to the update command", async () => {
+    const received: (readonly string[])[] = [];
+
+    const exitCode = await runCodingAgentCli({
+      argv: ["update", "--check"],
+      update: (args) => {
+        received.push(args);
+        return Promise.resolve(0);
+      },
+    });
+
+    expect(exitCode).toBe(0);
+    expect(received).toEqual([["--check"]]);
   });
 
   it("returns an error code with usage when the command is unknown", async () => {

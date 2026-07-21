@@ -1,4 +1,16 @@
+import { readFileSync } from "node:fs";
 import { defineConfig } from "tsdown";
+
+const packageJson: unknown = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf8")
+);
+const version =
+  typeof packageJson === "object" &&
+  packageJson !== null &&
+  "version" in packageJson &&
+  typeof packageJson.version === "string"
+    ? packageJson.version
+    : undefined;
 
 export default defineConfig({
   entry: [
@@ -16,4 +28,6 @@ export default defineConfig({
   fixedExtension: false,
   sourcemap: true,
   dts: true,
+  define:
+    version === undefined ? {} : { PSS_CLI_VERSION: JSON.stringify(version) },
 });

@@ -5,6 +5,8 @@ import {
   inspectCodingAgentThread,
 } from "./thread-inspect";
 import { startTui } from "./tui";
+import { runUpdateCommand } from "./update-command";
+import { cliVersion } from "./version";
 
 interface CliWritable {
   write(text: string): void;
@@ -17,6 +19,7 @@ interface RunCodingAgentCliOptions {
   readonly home?: string;
   readonly start?: () => Promise<void>;
   readonly stdout?: CliWritable;
+  readonly update?: (args: readonly string[]) => Promise<number>;
 }
 
 export async function runCodingAgentCli({
@@ -26,6 +29,15 @@ export async function runCodingAgentCli({
   home = homedir(),
   start = startTui,
   stdout = process.stdout,
+  update = (args: readonly string[]) =>
+    runUpdateCommand({
+      args,
+      stdout,
+      env,
+      version: cliVersion,
+      binPath: process.argv[1] ?? "",
+      platform: process.platform,
+    }),
 }: RunCodingAgentCliOptions = {}): Promise<number> {
   const command = argv[0];
 
@@ -46,6 +58,10 @@ export async function runCodingAgentCli({
     return 0;
   }
 
+  if (command === "update") {
+    return update(argv.slice(1));
+  }
+
   stdout.write(`Unknown pss command: ${command}\n\n${formatUsage()}\n`);
   return 1;
 }
@@ -57,6 +73,7 @@ function formatUsage(): string {
     "Commands:",
     "  (no command)     Start the interactive TUI",
     "  inspect-thread   Print a report for the configured thread",
+    "  update           Update pss (--check, --channel latest|next)",
     "  help             Show this help message",
   ].join("\n");
 }

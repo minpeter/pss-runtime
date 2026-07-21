@@ -60,6 +60,25 @@ pss
 
 CLI commands: `pss`, `pss-coding-agent`.
 
+Update a global install, or preview what an update would do:
+
+```sh
+pss update
+pss update --check
+```
+
+`pss update` re-checks the npm registry and installs the exact newest version
+of your channel through the detected package manager (pnpm/npm/bun/yarn global
+installs). Stable installs stay on `latest`; prerelease installs stay on
+`next`. A prerelease install can move to stable explicitly:
+
+```sh
+pss update --channel latest
+```
+
+One-off runs (`pnpm dlx`, `npx`, `bunx`) cannot be updated in place; `pss
+update` prints the global install command instead.
+
 Inspect the configured local thread without starting the TUI:
 
 ```sh
@@ -74,6 +93,15 @@ The `pss` TUI starts with OpenSearch-backed `web_search` and `web_fetch` tools.
 Call `startTui({ tools })` from your own entrypoint when you want to replace the
 default tool set.
 
+## Updates
+
+The TUI checks for updates without blocking startup. The cached result in
+`~/.pss/update-check.json` (24h TTL) is read before the first render; when it
+names a newer version, one dim line is printed into the scrollback, and a
+stale cache is refreshed in the background for the next run. Checks are
+skipped for dev/source runs. Set `PSS_DISABLE_UPDATE_CHECK=1` (or `true`) to
+opt out.
+
 ## Web tools availability
 
 The web tools are backed by `@minpeter/opensearch` and need `TINYFISH_API_KEY`
@@ -83,8 +111,10 @@ before wiring the OpenSearch client, controlled by `webToolsAvailability`:
 - `optional` (default): when the key is missing, the web tools are omitted
   instead of advertised, and the omission is reported through
   `onWebToolsDisabled` (default: `console.warn` logs
-  `web tools disabled: missing TINYFISH_API_KEY`). Startup still succeeds, so
-  environments without a key behave exactly as before minus the unusable tools.
+  `web tools disabled: missing TINYFISH_API_KEY`; the `pss` TUI overrides the
+  handler and renders the message as a dim scrollback line at startup).
+  Startup still succeeds, so environments without a key behave exactly as
+  before minus the unusable tools.
 - `required`: throw `CodingAgentWebToolsUnavailableError` during tool/agent
   initialization when the key is missing, so a model can never be offered a
   tool that cannot execute.
