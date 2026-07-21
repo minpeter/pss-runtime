@@ -13,10 +13,13 @@ export function isValidVersion(version: string): boolean {
   return VERSION_PATTERN.test(version);
 }
 
-export function extractUpdateChannel(version: string): "latest" | "next" {
+export function extractUpdateChannel(version: string): string {
   const match = VERSION_PATTERN.exec(version);
   const prerelease = match !== null && match.length > 4 ? match[4] : undefined;
-  return prerelease?.startsWith("next") ? "next" : "latest";
+  if (prerelease === undefined) {
+    return "latest";
+  }
+  return prerelease.split(".")[0];
 }
 
 export function compareVersions(left: string, right: string): number {

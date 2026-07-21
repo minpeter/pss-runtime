@@ -14,8 +14,11 @@ describe("extractUpdateChannel", () => {
     expect(extractUpdateChannel("0.0.14-next.2")).toBe("next");
   });
 
-  it("falls back to the latest channel for an unrecognized prerelease", () => {
-    expect(extractUpdateChannel("1.0.0-beta.1")).toBe("latest");
+  it("maps any prerelease label to its own channel", () => {
+    expect(extractUpdateChannel("1.0.0-beta.1")).toBe("beta");
+    expect(extractUpdateChannel("2.0.0-canary.3")).toBe("canary");
+    expect(extractUpdateChannel("1.0.0-rc.2")).toBe("rc");
+    expect(extractUpdateChannel("1.0.0-alpha")).toBe("alpha");
   });
 });
 

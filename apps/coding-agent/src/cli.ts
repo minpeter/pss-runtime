@@ -73,7 +73,7 @@ function formatUsage(): string {
     "Commands:",
     "  (no command)     Start the interactive TUI",
     "  inspect-thread   Print a report for the configured thread",
-    "  update           Update pss (--check, --channel latest|next)",
+    "  update           Update pss (--check, --channel <tag>)",
     "  help             Show this help message",
   ].join("\n");
 }

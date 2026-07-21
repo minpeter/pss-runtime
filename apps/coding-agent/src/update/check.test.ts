@@ -6,7 +6,7 @@ import {
   CODING_AGENT_PACKAGE_NAME,
   DEFAULT_REGISTRY_BASE_URL,
   decideUpdateNotice,
-  fetchLatestTags,
+  fetchDistTags,
   formatUpdateNotice,
   isCacheFresh,
   parseUpdateCheckCache,
@@ -60,6 +60,23 @@ describe("update check cache", () => {
       expect(
         await readUpdateCheckCache(join(directory, "update-check.json"))
       ).toBeUndefined();
+    } finally {
+      await rm(directory, { force: true, recursive: true });
+    }
+  });
+
+  it("round-trips arbitrary channel tags", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "pss-update-check-"));
+    try {
+      const cachePath = join(directory, "update-check.json");
+      const cache = {
+        checkedAt: "2026-07-21T00:00:00.000Z",
+        tags: { canary: "0.0.16-canary.2", beta: "1.0.0-beta.3" },
+      };
+
+      await writeUpdateCheckCache(cachePath, cache);
+
+      expect(await readUpdateCheckCache(cachePath)).toEqual(cache);
     } finally {
       await rm(directory, { force: true, recursive: true });
     }
@@ -203,6 +220,33 @@ describe("decideUpdateNotice", () => {
     });
   });
 
+  it("notifies a user on any prerelease channel when that channel advances", () => {
+    const notice = decideUpdateNotice(
+      { version: "1.0.0-beta.1", channel: "beta" },
+      { beta: "1.0.0-beta.3", latest: "1.0.0" }
+    );
+
+    expect(notice).toEqual({
+      kind: "channel-update",
+      channel: "beta",
+      currentVersion: "1.0.0-beta.1",
+      latestVersion: "1.0.0-beta.3",
+    });
+  });
+
+  it("offers any prerelease user the stable release that surpasses them", () => {
+    const notice = decideUpdateNotice(
+      { version: "1.0.0-beta.3", channel: "beta" },
+      { beta: "1.0.0-beta.3", latest: "1.0.0" }
+    );
+
+    expect(notice).toEqual({
+      kind: "stable-surpassed",
+      currentVersion: "1.0.0-beta.3",
+      latestVersion: "1.0.0",
+    });
+  });
+
   it("stays silent when everything is up to date", () => {
     const notice = decideUpdateNotice(
       { version: "0.0.14-next.2", channel: "next" },
@@ -248,56 +292,68 @@ describe("formatUpdateNotice", () => {
   });
 });
 
-describe("fetchLatestTags", () => {
-  const okJson = (version: string) => ({
-    ok: true,
-    json: () => Promise.resolve({ version }),
-  });
-
-  it("fetches the version for every tracked channel", async () => {
+describe("fetchDistTags", () => {
+  it("returns every published dist-tag from one packument request", async () => {
     const urls: string[] = [];
-    const tags = await fetchLatestTags({
+    const tags = await fetchDistTags({
       fetchImpl: (url: string) => {
         urls.push(url);
-        return Promise.resolve(
-          okJson(url.endsWith("/next") ? "0.0.14-next.3" : "0.0.14")
-        );
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              "dist-tags": {
+                latest: "0.0.14",
+                next: "0.0.15-next.0",
+                canary: "0.0.16-canary.2",
+              },
+            }),
+        });
       },
     });
 
-    expect(tags).toEqual({ latest: "0.0.14", next: "0.0.14-next.3" });
-    expect(urls).toHaveLength(2);
-    expect(
-      urls.every((url) =>
-        url.startsWith(
-          `${DEFAULT_REGISTRY_BASE_URL}/${encodeURIComponent(CODING_AGENT_PACKAGE_NAME)}/`
-        )
-      )
-    ).toBe(true);
+    expect(tags).toEqual({
+      latest: "0.0.14",
+      next: "0.0.15-next.0",
+      canary: "0.0.16-canary.2",
+    });
+    expect(urls).toEqual([
+      `${DEFAULT_REGISTRY_BASE_URL}/${encodeURIComponent(CODING_AGENT_PACKAGE_NAME)}`,
+    ]);
   });
 
-  it("omits channels whose request fails", async () => {
-    const tags = await fetchLatestTags({
-      fetchImpl: (url: string) =>
-        url.endsWith("/next")
-          ? Promise.reject(new Error("network down"))
-          : Promise.resolve(okJson("0.0.14")),
+  it("drops dist-tags whose value is not a valid version", async () => {
+    const tags = await fetchDistTags({
+      fetchImpl: () =>
+        Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              "dist-tags": { latest: "0.0.14", bogus: "not-a-version" },
+            }),
+        }),
     });
 
     expect(tags).toEqual({ latest: "0.0.14" });
   });
 
-  it("omits channels with an error status or malformed payload", async () => {
-    const tags = await fetchLatestTags({
-      fetchImpl: (url: string) =>
-        Promise.resolve(
-          url.endsWith("/next")
-            ? { ok: false, json: () => Promise.resolve({}) }
-            : { ok: true, json: () => Promise.resolve({ nope: 1 }) }
-        ),
+  it("returns an empty map when the registry fails or the payload is malformed", async () => {
+    const rejected = await fetchDistTags({
+      fetchImpl: () => Promise.reject(new Error("network down")),
     });
+    expect(rejected).toEqual({});
 
-    expect(tags).toEqual({});
+    const notOk = await fetchDistTags({
+      fetchImpl: () =>
+        Promise.resolve({ ok: false, json: () => Promise.resolve({}) }),
+    });
+    expect(notOk).toEqual({});
+
+    const malformed = await fetchDistTags({
+      fetchImpl: () =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({ nope: 1 }) }),
+    });
+    expect(malformed).toEqual({});
   });
 });
 

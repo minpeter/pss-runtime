@@ -14,12 +14,16 @@ render so the startup path performs no network I/O. The version and channel
 (`latest` or `next`) are baked at build time, checks skip dev/source runs,
 and `PSS_DISABLE_UPDATE_CHECK=1` opts out.
 
-`pss update` re-checks the npm registry and installs the exact pinned
-version through the detected package manager (pnpm/npm/bun/yarn global
-installs; dlx/npx/bunx one-off runs and unknown layouts are refused with
-manual instructions). Stable installs stay on `latest`, prerelease installs
-stay on `next`, and `pss update --channel latest` moves a prerelease install
-to stable explicitly. `pss update --check` prints the current version,
+`pss update` re-checks the npm registry's dist-tags and installs the
+exact pinned version through the detected package manager. Channels follow
+the installed version: stable installs track `latest`, and any prerelease
+tracks its own dist-tag (`next`, `beta`, `canary`, or any published tag),
+with explicit `--channel <tag>` moves allowed toward stable or across
+prerelease channels and refused from stable to prerelease. Package managers
+(pnpm/npm/bun/yarn today) are described in a single descriptor registry —
+detection patterns, probes, and install arguments — so new managers are one
+data entry. dlx/npx/bunx one-off runs and unknown layouts are refused with
+manual instructions. `pss update --check` prints the current version,
 channel, install method, and the exact command without changing anything.
 
 The TUI web-tools availability warning now renders through the same dim

@@ -1,11 +1,10 @@
 import {
   decideUpdateNotice,
-  fetchLatestTags,
+  fetchDistTags,
   formatUpdateNotice,
   isCacheFresh,
   readUpdateCheckCache,
   resolveUpdateRegistryBaseUrl,
-  type UpdateChannel,
   writeUpdateCheckCache,
 } from "./check";
 import { extractUpdateChannel } from "./version";
@@ -13,9 +12,7 @@ import { extractUpdateChannel } from "./version";
 export interface UpdateNotifierDeps {
   readonly cachePath: string;
   readonly env: NodeJS.ProcessEnv;
-  readonly fetchTags?: () => Promise<
-    Readonly<Partial<Record<UpdateChannel, string>>>
-  >;
+  readonly fetchTags?: () => Promise<Readonly<Record<string, string>>>;
   readonly now?: () => number;
   readonly schedule?: (task: () => Promise<void>) => void;
   readonly version: string | undefined;
@@ -64,9 +61,7 @@ export async function emitUpdateNotice({
 
 interface RefreshCacheOptions {
   readonly cachePath: string;
-  readonly fetchTags: () => Promise<
-    Readonly<Partial<Record<UpdateChannel, string>>>
-  >;
+  readonly fetchTags: () => Promise<Readonly<Record<string, string>>>;
   readonly now: () => number;
 }
 
@@ -90,9 +85,8 @@ async function refreshCacheBestEffort({
 }
 
 const defaultFetchTags =
-  (env: NodeJS.ProcessEnv) =>
-  (): Promise<Readonly<Partial<Record<UpdateChannel, string>>>> =>
-    fetchLatestTags({ baseUrl: resolveUpdateRegistryBaseUrl(env) });
+  (env: NodeJS.ProcessEnv) => (): Promise<Readonly<Record<string, string>>> =>
+    fetchDistTags({ baseUrl: resolveUpdateRegistryBaseUrl(env) });
 
 const defaultSchedule = (task: () => Promise<void>): void => {
   task();

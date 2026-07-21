@@ -1,11 +1,11 @@
 import { spawn } from "node:child_process";
 import { CODING_AGENT_PACKAGE_NAME } from "./check";
 
-export type PackageManager = "pnpm" | "npm" | "bun" | "yarn";
+export type PackageManager = string;
 
 export type InstallMethod =
   | { readonly kind: "global"; readonly manager: PackageManager }
-  | { readonly kind: "ephemeral"; readonly runner: "pnpm dlx" | "npx" | "bunx" }
+  | { readonly kind: "ephemeral"; readonly runner: string }
   | { readonly kind: "unknown" };
 
 export interface ProbeResult {
@@ -23,77 +23,77 @@ export interface DetectInstallMethodOptions {
   readonly probe?: ProbeRunner;
 }
 
-interface PathRule {
-  readonly method: InstallMethod;
-  readonly pattern: string;
-  readonly requiresPackageMarker: boolean;
+export interface PackageManagerSpec {
+  readonly ephemeral?: { readonly pattern: string; readonly runner: string };
+  readonly globalPathPatterns: readonly string[];
+  readonly installArgs: (spec: string) => readonly string[];
+  readonly name: PackageManager;
+  readonly probeArgs: readonly string[];
+}
+
+export const PACKAGE_MANAGERS: readonly PackageManagerSpec[] = [
+  {
+    name: "pnpm",
+    globalPathPatterns: ["/pnpm/global/"],
+    ephemeral: { pattern: "/pnpm/dlx/", runner: "pnpm dlx" },
+    probeArgs: ["list", "-g", "--depth=0", CODING_AGENT_PACKAGE_NAME],
+    installArgs: (spec) => ["add", "-g", spec],
+  },
+  {
+    name: "npm",
+    globalPathPatterns: ["/lib/node_modules/", "/npm/node_modules/"],
+    ephemeral: { pattern: "/_npx/", runner: "npx" },
+    probeArgs: ["list", "-g", "--depth=0", CODING_AGENT_PACKAGE_NAME],
+    installArgs: (spec) => ["install", "-g", spec],
+  },
+  {
+    name: "bun",
+    globalPathPatterns: ["/.bun/install/global/"],
+    ephemeral: { pattern: "/.bun/install/cache/", runner: "bunx" },
+    probeArgs: ["pm", "ls", "-g"],
+    installArgs: (spec) => ["install", "-g", spec],
+  },
+  {
+    name: "yarn",
+    globalPathPatterns: ["/yarn/global/", "/yarn/data/global/"],
+    probeArgs: ["global", "list"],
+    installArgs: (spec) => ["global", "add", spec],
+  },
+];
+
+export function findPackageManagerSpec(
+  name: string
+): PackageManagerSpec | undefined {
+  return PACKAGE_MANAGERS.find((spec) => spec.name === name);
 }
 
 const PACKAGE_PATH_MARKER = `${CODING_AGENT_PACKAGE_NAME}/`;
 const PROBE_TIMEOUT_MS = 3000;
 
-const PATH_RULES: readonly PathRule[] = [
-  {
-    pattern: "/_npx/",
-    method: { kind: "ephemeral", runner: "npx" },
-    requiresPackageMarker: false,
-  },
-  {
-    pattern: "/pnpm/dlx/",
-    method: { kind: "ephemeral", runner: "pnpm dlx" },
-    requiresPackageMarker: false,
-  },
-  {
-    pattern: "/.bun/install/cache/",
-    method: { kind: "ephemeral", runner: "bunx" },
-    requiresPackageMarker: false,
-  },
-  {
-    pattern: "/pnpm/global/",
-    method: { kind: "global", manager: "pnpm" },
-    requiresPackageMarker: true,
-  },
-  {
-    pattern: "/.bun/install/global/",
-    method: { kind: "global", manager: "bun" },
-    requiresPackageMarker: true,
-  },
-  {
-    pattern: "/yarn/global/",
-    method: { kind: "global", manager: "yarn" },
-    requiresPackageMarker: true,
-  },
-  {
-    pattern: "/yarn/data/global/",
-    method: { kind: "global", manager: "yarn" },
-    requiresPackageMarker: true,
-  },
-  {
-    pattern: "/lib/node_modules/",
-    method: { kind: "global", manager: "npm" },
-    requiresPackageMarker: true,
-  },
-  {
-    pattern: "/npm/node_modules/",
-    method: { kind: "global", manager: "npm" },
-    requiresPackageMarker: true,
-  },
-];
-
 export function classifyInstallPath(binPath: string): InstallMethod {
   const normalized = binPath.replaceAll("\\", "/");
-  for (const rule of PATH_RULES) {
-    if (!normalized.includes(rule.pattern)) {
-      continue;
-    }
+
+  for (const spec of PACKAGE_MANAGERS) {
     if (
-      rule.requiresPackageMarker &&
-      !normalized.includes(PACKAGE_PATH_MARKER)
+      spec.ephemeral !== undefined &&
+      normalized.includes(spec.ephemeral.pattern)
+    ) {
+      return { kind: "ephemeral", runner: spec.ephemeral.runner };
+    }
+  }
+
+  for (const spec of PACKAGE_MANAGERS) {
+    if (
+      !spec.globalPathPatterns.some((pattern) => normalized.includes(pattern))
     ) {
       continue;
     }
-    return rule.method;
+    if (!normalized.includes(PACKAGE_PATH_MARKER)) {
+      continue;
+    }
+    return { kind: "global", manager: spec.name };
   }
+
   return { kind: "unknown" };
 }
 
@@ -106,28 +106,12 @@ export async function detectInstallMethod({
     return fromPath;
   }
 
-  const candidates: readonly {
-    manager: PackageManager;
-    args: readonly string[];
-  }[] = [
-    {
-      manager: "pnpm",
-      args: ["list", "-g", "--depth=0", CODING_AGENT_PACKAGE_NAME],
-    },
-    {
-      manager: "npm",
-      args: ["list", "-g", "--depth=0", CODING_AGENT_PACKAGE_NAME],
-    },
-    { manager: "bun", args: ["pm", "ls", "-g"] },
-    { manager: "yarn", args: ["global", "list"] },
-  ];
-
   const matches = await Promise.all(
-    candidates.map(async ({ manager, args }) => {
+    PACKAGE_MANAGERS.map(async (spec) => {
       try {
-        const result = await probe(manager, args);
+        const result = await probe(spec.name, spec.probeArgs);
         return result.stdout.includes(CODING_AGENT_PACKAGE_NAME)
-          ? manager
+          ? spec.name
           : undefined;
       } catch {
         return;

@@ -1,7 +1,10 @@
 import { spawn } from "node:child_process";
-import type { UpdateChannel } from "./check";
-import { CODING_AGENT_PACKAGE_NAME } from "./check";
-import type { InstallMethod, PackageManager } from "./install-method";
+import { CODING_AGENT_PACKAGE_NAME, type UpdateChannel } from "./check";
+import {
+  findPackageManagerSpec,
+  type InstallMethod,
+  PACKAGE_MANAGERS,
+} from "./install-method";
 
 export interface InstallInvocation {
   readonly args: readonly string[];
@@ -13,12 +16,16 @@ export function installInvocation({
   version,
   platform,
 }: {
-  manager: PackageManager;
+  manager: string;
   version: string;
   platform: NodeJS.Platform;
 }): InstallInvocation {
   const spec = `${CODING_AGENT_PACKAGE_NAME}@${version}`;
-  const baseArgs = managerInstallArgs(manager, spec);
+  const pm = findPackageManagerSpec(manager);
+  if (pm === undefined) {
+    throw new RangeError(`unknown package manager: ${manager}`);
+  }
+  const baseArgs = pm.installArgs(spec);
   if (platform === "win32") {
     return {
       command: "cmd.exe",
@@ -26,28 +33,6 @@ export function installInvocation({
     };
   }
   return { command: manager, args: baseArgs };
-}
-
-function managerInstallArgs(
-  manager: PackageManager,
-  spec: string
-): readonly string[] {
-  switch (manager) {
-    case "pnpm":
-      return ["add", "-g", spec];
-    case "npm":
-      return ["install", "-g", spec];
-    case "bun":
-      return ["install", "-g", spec];
-    case "yarn":
-      return ["global", "add", spec];
-    default:
-      return assertNever(manager);
-  }
-}
-
-function assertNever(value: never): never {
-  throw new Error(`unexpected package manager: ${JSON.stringify(value)}`);
 }
 
 export function formatInvocation(invocation: InstallInvocation): string {
@@ -67,11 +52,16 @@ export function describeInstallMethod(method: InstallMethod): string {
   }
 }
 
+function assertNever(value: never): never {
+  throw new Error(`unexpected install method: ${JSON.stringify(value)}`);
+}
+
 export function manualInstallCommands(channel: UpdateChannel): string {
+  const spec = `${CODING_AGENT_PACKAGE_NAME}@${channel}`;
   return [
-    `  pnpm add -g ${CODING_AGENT_PACKAGE_NAME}@${channel}`,
-    `  npm install -g ${CODING_AGENT_PACKAGE_NAME}@${channel}`,
-    `  bun install -g ${CODING_AGENT_PACKAGE_NAME}@${channel}`,
+    ...PACKAGE_MANAGERS.map(
+      (pm) => `  ${pm.name} ${pm.installArgs(spec).join(" ")}`
+    ),
     "",
   ].join("\n");
 }

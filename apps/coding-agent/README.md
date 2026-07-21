@@ -67,14 +67,20 @@ pss update
 pss update --check
 ```
 
-`pss update` re-checks the npm registry and installs the exact newest version
-of your channel through the detected package manager (pnpm/npm/bun/yarn global
-installs). Stable installs stay on `latest`; prerelease installs stay on
-`next`. A prerelease install can move to stable explicitly:
+`pss update` re-checks the npm registry's dist-tags and installs the exact
+newest version of your channel through the detected package manager
+(pnpm/npm/bun/yarn global installs). Your channel follows the installed
+version: stable installs track `latest`, and a prerelease like `0.0.14-next.2`
+or `1.0.0-beta.3` tracks its own dist-tag (`next`, `beta`, or any published
+tag). Moving to stable is explicit:
 
 ```sh
 pss update --channel latest
 ```
+
+Any other published dist-tag can be targeted the same way (`pss update
+--channel beta`); moving a stable install to a prerelease channel is refused,
+and an unknown channel reports the published channel list.
 
 One-off runs (`pnpm dlx`, `npx`, `bunx`) cannot be updated in place; `pss
 update` prints the global install command instead.
@@ -97,10 +103,10 @@ default tool set.
 
 The TUI checks for updates without blocking startup. The cached result in
 `~/.pss/update-check.json` (24h TTL) is read before the first render; when it
-names a newer version, one dim line is printed into the scrollback, and a
-stale cache is refreshed in the background for the next run. Checks are
-skipped for dev/source runs. Set `PSS_DISABLE_UPDATE_CHECK=1` (or `true`) to
-opt out.
+names a newer version on your channel (or a stable release that surpasses a
+prerelease install), one dim line is printed into the scrollback, and a stale
+cache is refreshed in the background for the next run. Checks are skipped for
+dev/source runs. Set `PSS_DISABLE_UPDATE_CHECK=1` (or `true`) to opt out.
 
 ## Web tools availability
 

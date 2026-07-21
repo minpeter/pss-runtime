@@ -16,7 +16,7 @@ function createHarness(
     args?: readonly string[];
     version?: string | undefined;
     method?: InstallMethod;
-    tags?: Readonly<Partial<Record<"latest" | "next", string>>>;
+    tags?: Readonly<Record<string, string>>;
     spawnExitCode?: number;
     platform?: NodeJS.Platform;
   } = {}
@@ -207,6 +207,71 @@ describe("pss update", () => {
         args: ["add", "-g", "@minpeter/pss-coding-agent@0.0.14"],
       },
     ]);
+  });
+
+  it("tracks an arbitrary prerelease channel by default", async () => {
+    const harness = createHarness({
+      version: "1.0.0-beta.1",
+      tags: { beta: "1.0.0-beta.3", latest: "1.0.0" },
+    });
+
+    const exitCode = await harness.run();
+
+    expect(exitCode).toBe(0);
+    expect(harness.spawns).toEqual([
+      {
+        command: "pnpm",
+        args: ["add", "-g", "@minpeter/pss-coding-agent@1.0.0-beta.3"],
+      },
+    ]);
+  });
+
+  it("allows an explicit move between prerelease channels", async () => {
+    const harness = createHarness({
+      args: ["--channel", "canary"],
+      version: "1.0.0-beta.1",
+      tags: { beta: "1.0.0-beta.3", canary: "1.0.0-canary.2", latest: "1.0.0" },
+    });
+
+    const exitCode = await harness.run();
+
+    expect(exitCode).toBe(0);
+    expect(harness.spawns).toEqual([
+      {
+        command: "pnpm",
+        args: ["add", "-g", "@minpeter/pss-coding-agent@1.0.0-canary.2"],
+      },
+    ]);
+  });
+
+  it("refuses to move a stable install to any prerelease channel", async () => {
+    const harness = createHarness({
+      args: ["--channel", "canary"],
+      version: "1.0.0",
+      tags: { latest: "1.0.0", canary: "1.0.1-canary.0" },
+    });
+
+    const exitCode = await harness.run();
+
+    expect(exitCode).toBe(1);
+    expect(harness.output()).toContain("keeps stable installs");
+    expect(harness.spawns).toEqual([]);
+  });
+
+  it("reports published channels when the requested one is missing", async () => {
+    const harness = createHarness({
+      args: ["--channel", "canary"],
+      version: "1.0.0-beta.1",
+      tags: { beta: "1.0.0-beta.2", latest: "1.0.0" },
+    });
+
+    const exitCode = await harness.run();
+
+    expect(exitCode).toBe(1);
+    expect(harness.output()).toContain("canary");
+    expect(harness.output()).toContain("beta");
+    expect(harness.output()).toContain("latest");
+    expect(harness.spawns).toEqual([]);
   });
 
   it("rejects a stable install switching to the next channel", async () => {

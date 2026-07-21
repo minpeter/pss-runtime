@@ -1,6 +1,6 @@
 import {
   CODING_AGENT_PACKAGE_NAME,
-  fetchLatestTags,
+  fetchDistTags,
   resolveUpdateRegistryBaseUrl,
   type UpdateChannel,
 } from "./check";
@@ -19,9 +19,7 @@ export interface UpdateCommandDeps {
   readonly binPath: string;
   readonly detectInstall?: () => Promise<InstallMethod>;
   readonly env: NodeJS.ProcessEnv;
-  readonly fetchTags?: () => Promise<
-    Readonly<Partial<Record<UpdateChannel, string>>>
-  >;
+  readonly fetchTags?: () => Promise<Readonly<Record<string, string>>>;
   readonly platform: NodeJS.Platform;
   readonly spawnInstall?: (
     command: string,
@@ -44,13 +42,13 @@ export async function runUpdateCommand({
   binPath,
   platform,
   fetchTags = () =>
-    fetchLatestTags({ baseUrl: resolveUpdateRegistryBaseUrl(env) }),
+    fetchDistTags({ baseUrl: resolveUpdateRegistryBaseUrl(env) }),
   detectInstall = () => detectInstallMethod({ binPath }),
   spawnInstall = defaultSpawnInstall,
 }: UpdateCommandDeps): Promise<number> {
   const parsed = parseUpdateArgs(args);
   if (parsed === undefined) {
-    stdout.write("Usage: pss update [--check] [--channel latest|next]\n");
+    stdout.write("Usage: pss update [--check] [--channel <tag>]\n");
     return 1;
   }
 
@@ -58,9 +56,9 @@ export async function runUpdateCommand({
     version === undefined ? undefined : extractUpdateChannel(version);
   const targetChannel = parsed.channel ?? ownChannel ?? "latest";
 
-  if (ownChannel === "latest" && targetChannel === "next") {
+  if (ownChannel === "latest" && targetChannel !== "latest") {
     stdout.write(
-      `pss update keeps stable installs on the latest channel. If you really want the next channel, install it manually:\n  pnpm add -g ${CODING_AGENT_PACKAGE_NAME}@next\n`
+      `pss update keeps stable installs on the latest channel. If you really want the ${targetChannel} channel, install it manually:\n  pnpm add -g ${CODING_AGENT_PACKAGE_NAME}@${targetChannel}\n`
     );
     return 1;
   }
@@ -102,9 +100,15 @@ export async function runUpdateCommand({
   const tags = await fetchTags();
   const target = tags[targetChannel];
   if (target === undefined) {
-    stdout.write(
-      `could not check for updates right now. Try again later or update manually:\n${manualInstallCommands(targetChannel)}`
-    );
+    if (Object.keys(tags).length === 0) {
+      stdout.write(
+        `could not check for updates right now. Try again later or update manually:\n${manualInstallCommands(targetChannel)}`
+      );
+    } else {
+      stdout.write(
+        `channel '${targetChannel}' is not published; available channels: ${Object.keys(tags).join(", ")}\n`
+      );
+    }
     return 1;
   }
 
@@ -141,9 +145,7 @@ export async function runUpdateCommand({
 interface RunUpdateCheckOptions {
   readonly channelExplicit: boolean;
   readonly detectInstall: () => Promise<InstallMethod>;
-  readonly fetchTags: () => Promise<
-    Readonly<Partial<Record<UpdateChannel, string>>>
-  >;
+  readonly fetchTags: () => Promise<Readonly<Record<string, string>>>;
   readonly ownChannel: UpdateChannel | undefined;
   readonly platform: NodeJS.Platform;
   readonly stdout: { write(text: string): void };
@@ -167,9 +169,10 @@ async function runUpdateCheck({
     `current version: ${version ?? "unknown (dev build)"}${ownChannel === undefined ? "" : ` (channel: ${ownChannel})`}\n`
   );
   stdout.write(`install method: ${describeInstallMethod(method)}\n`);
-  stdout.write(
-    `registry tags: latest=${tags.latest ?? "unknown"}, next=${tags.next ?? "unknown"}\n`
-  );
+  const tagList = Object.entries(tags)
+    .map(([tag, tagVersion]) => `${tag}=${tagVersion}`)
+    .join(", ");
+  stdout.write(`registry tags: ${tagList === "" ? "unknown" : tagList}\n`);
 
   if (version === undefined) {
     stdout.write("update status cannot be determined for a dev build.\n");
@@ -178,7 +181,13 @@ async function runUpdateCheck({
 
   const target = tags[targetChannel];
   if (target === undefined) {
-    stdout.write("could not check for updates right now.\n");
+    if (Object.keys(tags).length === 0) {
+      stdout.write("could not check for updates right now.\n");
+    } else {
+      stdout.write(
+        `channel '${targetChannel}' is not published; available channels: ${Object.keys(tags).join(", ")}\n`
+      );
+    }
     return 0;
   }
   if (
@@ -219,7 +228,7 @@ function parseUpdateArgs(
     }
     if (arg === "--channel") {
       const value = args[index + 1];
-      if (value === "latest" || value === "next") {
+      if (value !== undefined && CHANNEL_NAME_PATTERN.test(value)) {
         channel = value;
         index += 1;
         continue;
@@ -231,3 +240,5 @@ function parseUpdateArgs(
 
   return { check, channel };
 }
+
+const CHANNEL_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;

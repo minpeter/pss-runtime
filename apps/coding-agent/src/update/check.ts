@@ -3,11 +3,11 @@ import { dirname, join } from "node:path";
 import { z } from "zod";
 import { compareVersions, isValidVersion } from "./version";
 
-export type UpdateChannel = "latest" | "next";
+export type UpdateChannel = string;
 
 export interface UpdateCheckCache {
   readonly checkedAt: string;
-  readonly tags: Readonly<Partial<Record<UpdateChannel, string>>>;
+  readonly tags: Readonly<Record<string, string>>;
 }
 
 export type UpdateNotice =
@@ -38,13 +38,11 @@ export type RegistryFetch = (
   init: { signal: AbortSignal }
 ) => Promise<RegistryFetchResponse>;
 
-export interface FetchLatestTagsOptions {
+export interface FetchDistTagsOptions {
   readonly baseUrl?: string;
   readonly fetchImpl?: RegistryFetch;
   readonly timeoutMs?: number;
 }
-
-const TRACKED_CHANNELS: readonly UpdateChannel[] = ["latest", "next"];
 
 export function isCacheFresh(
   cache: UpdateCheckCache,
@@ -61,7 +59,7 @@ export function isCacheFresh(
 
 export function decideUpdateNotice(
   current: { version: string; channel: UpdateChannel },
-  tags: Readonly<Partial<Record<UpdateChannel, string>>>
+  tags: Readonly<Record<string, string>>
 ): UpdateNotice | undefined {
   const channelTag = tags[current.channel];
   if (
@@ -77,7 +75,7 @@ export function decideUpdateNotice(
     };
   }
 
-  if (current.channel === "next") {
+  if (current.channel !== "latest") {
     const stableTag = tags.latest;
     if (
       stableTag !== undefined &&
@@ -112,10 +110,7 @@ function assertNever(value: never): never {
 
 const updateCheckCacheSchema = z.object({
   checkedAt: z.string().min(1),
-  tags: z.object({
-    latest: z.string().min(1).optional(),
-    next: z.string().min(1).optional(),
-  }),
+  tags: z.record(z.string().min(1), z.string().min(1)),
 });
 
 export function parseUpdateCheckCache(
@@ -153,73 +148,47 @@ export async function writeUpdateCheckCache(
   await rename(temporaryPath, path);
 }
 
-export async function fetchLatestTags({
+export async function fetchDistTags({
   baseUrl = DEFAULT_REGISTRY_BASE_URL,
   fetchImpl = defaultRegistryFetch,
   timeoutMs = 3000,
-}: FetchLatestTagsOptions = {}): Promise<
-  Readonly<Partial<Record<UpdateChannel, string>>>
-> {
-  const entries = await Promise.all(
-    TRACKED_CHANNELS.map(async (channel) => {
-      const version = await fetchTagVersion({
-        baseUrl,
-        channel,
-        fetchImpl,
-        timeoutMs,
-      });
-      return version === undefined ? undefined : ([channel, version] as const);
-    })
-  );
-
-  const tags: Partial<Record<UpdateChannel, string>> = {};
-  for (const entry of entries) {
-    if (entry !== undefined) {
-      tags[entry[0]] = entry[1];
-    }
-  }
-  return tags;
-}
-
-const defaultRegistryFetch: RegistryFetch = (url, init) => fetch(url, init);
-
-interface FetchTagVersionOptions {
-  readonly baseUrl: string;
-  readonly channel: UpdateChannel;
-  readonly fetchImpl: RegistryFetch;
-  readonly timeoutMs: number;
-}
-
-async function fetchTagVersion({
-  baseUrl,
-  channel,
-  fetchImpl,
-  timeoutMs,
-}: FetchTagVersionOptions): Promise<string | undefined> {
-  const url = `${baseUrl}/${encodeURIComponent(CODING_AGENT_PACKAGE_NAME)}/${encodeURIComponent(channel)}`;
+}: FetchDistTagsOptions = {}): Promise<Readonly<Record<string, string>>> {
+  const url = `${baseUrl}/${encodeURIComponent(CODING_AGENT_PACKAGE_NAME)}`;
   try {
     const response = await fetchImpl(url, {
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) {
-      return;
+      return {};
     }
 
     const payload: unknown = await response.json();
     if (
-      typeof payload === "object" &&
-      payload !== null &&
-      "version" in payload &&
-      typeof payload.version === "string" &&
-      isValidVersion(payload.version)
+      typeof payload !== "object" ||
+      payload === null ||
+      !("dist-tags" in payload)
     ) {
-      return payload.version;
+      return {};
     }
-    return;
+
+    const distTags = payload["dist-tags"];
+    if (typeof distTags !== "object" || distTags === null) {
+      return {};
+    }
+
+    const tags: Record<string, string> = {};
+    for (const [tag, version] of Object.entries(distTags)) {
+      if (typeof version === "string" && isValidVersion(version)) {
+        tags[tag] = version;
+      }
+    }
+    return tags;
   } catch {
-    return;
+    return {};
   }
 }
+
+const defaultRegistryFetch: RegistryFetch = (url, init) => fetch(url, init);
 
 export function resolveUpdateRegistryBaseUrl(env: NodeJS.ProcessEnv): string {
   const override = env.PSS_UPDATE_REGISTRY_BASE_URL?.trim();
