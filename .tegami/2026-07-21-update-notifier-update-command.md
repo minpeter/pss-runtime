@@ -1,7 +1,7 @@
 ---
 packages:
   npm:@minpeter/pss-coding-agent:
-    type: minor
+    type: patch
 ---
 
 ## Add update notices and the `pss update` command
