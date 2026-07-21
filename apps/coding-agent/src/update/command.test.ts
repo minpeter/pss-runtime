@@ -258,6 +258,20 @@ describe("pss update", () => {
     expect(harness.spawns).toEqual([]);
   });
 
+  it("treats prototype property names as unpublished channels", async () => {
+    const harness = createHarness({
+      args: ["--channel", "toString"],
+      version: "1.0.0-beta.1",
+      tags: { latest: "1.0.0" },
+    });
+
+    const exitCode = await harness.run();
+
+    expect(exitCode).toBe(1);
+    expect(harness.output()).toContain("not published");
+    expect(harness.spawns).toEqual([]);
+  });
+
   it("reports published channels when the requested one is missing", async () => {
     const harness = createHarness({
       args: ["--channel", "canary"],

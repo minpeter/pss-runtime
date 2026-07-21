@@ -1,6 +1,7 @@
 import {
   CODING_AGENT_PACKAGE_NAME,
   fetchDistTags,
+  publishedTagVersion,
   resolveUpdateRegistryBaseUrl,
   type UpdateChannel,
 } from "./check";
@@ -98,7 +99,7 @@ export async function runUpdateCommand({
   }
 
   const tags = await fetchTags();
-  const target = tags[targetChannel];
+  const target = publishedTagVersion(tags, targetChannel);
   if (target === undefined) {
     if (Object.keys(tags).length === 0) {
       stdout.write(
@@ -179,7 +180,7 @@ async function runUpdateCheck({
     return 0;
   }
 
-  const target = tags[targetChannel];
+  const target = publishedTagVersion(tags, targetChannel);
   if (target === undefined) {
     if (Object.keys(tags).length === 0) {
       stdout.write("could not check for updates right now.\n");

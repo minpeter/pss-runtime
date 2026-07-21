@@ -178,6 +178,9 @@ export async function fetchDistTags({
 
     const tags: Record<string, string> = {};
     for (const [tag, version] of Object.entries(distTags)) {
+      if (!DIST_TAG_NAME_PATTERN.test(tag)) {
+        continue;
+      }
       if (typeof version === "string" && isValidVersion(version)) {
         tags[tag] = version;
       }
@@ -186,6 +189,15 @@ export async function fetchDistTags({
   } catch {
     return {};
   }
+}
+
+const DIST_TAG_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+
+export function publishedTagVersion(
+  tags: Readonly<Record<string, string>>,
+  channel: string
+): string | undefined {
+  return Object.hasOwn(tags, channel) ? tags[channel] : undefined;
 }
 
 const defaultRegistryFetch: RegistryFetch = (url, init) => fetch(url, init);

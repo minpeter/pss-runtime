@@ -10,6 +10,7 @@ import {
   formatUpdateNotice,
   isCacheFresh,
   parseUpdateCheckCache,
+  publishedTagVersion,
   readUpdateCheckCache,
   resolveUpdateRegistryBaseUrl,
   UPDATE_CHECK_TTL_MS,
@@ -335,6 +336,35 @@ describe("fetchDistTags", () => {
     });
 
     expect(tags).toEqual({ latest: "0.0.14" });
+  });
+
+  it("drops dist-tags whose names are outside the tag charset", async () => {
+    const tags = await fetchDistTags({
+      fetchImpl: () =>
+        Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              "dist-tags": {
+                latest: "0.0.14",
+                "evil\u001b[31m": "9.9.9",
+                "with space": "9.9.9",
+              },
+            }),
+        }),
+    });
+
+    expect(tags).toEqual({ latest: "0.0.14" });
+  });
+
+  it("reads only own tag entries through publishedTagVersion", () => {
+    expect(publishedTagVersion({ latest: "1.0.0" }, "latest")).toBe("1.0.0");
+    expect(
+      publishedTagVersion({ latest: "1.0.0" }, "toString")
+    ).toBeUndefined();
+    expect(
+      publishedTagVersion({ latest: "1.0.0" }, "constructor")
+    ).toBeUndefined();
   });
 
   it("returns an empty map when the registry fails or the payload is malformed", async () => {
