@@ -24,6 +24,7 @@ import {
   markdownTheme,
 } from "./tui-theme";
 import { safeText } from "./tui-tool-printer";
+import { planAutoUpdate, runAutoUpdate } from "./update/auto-update";
 import { UPDATE_CHECK_CACHE_FILENAME } from "./update/check";
 import { cliVersion } from "./update/cli-version";
 import { emitUpdateNotice } from "./update/notifier";
@@ -133,13 +134,29 @@ export async function startTui(options: StartTuiOptions = {}): Promise<void> {
     addLine(dimText(notice));
   }
   const deferredRefreshes: (() => Promise<void>)[] = [];
-  await emitUpdateNotice({
+  const updateNotice = await emitUpdateNotice({
     write: (line) => addLine(dimText(line)),
     env: process.env,
     version: cliVersion,
     cachePath: join(homedir(), ".pss", UPDATE_CHECK_CACHE_FILENAME),
     schedule: (task) => deferredRefreshes.push(task),
   });
+  const autoUpdate =
+    cliVersion === undefined
+      ? undefined
+      : planAutoUpdate({
+          notice: updateNotice,
+          version: cliVersion,
+          env: process.env,
+          binPath: process.argv[1] ?? "",
+        });
+  if (autoUpdate !== undefined) {
+    addLine(
+      dimText(
+        `auto-update enabled: pss ${autoUpdate.target} will be installed on exit`
+      )
+    );
+  }
 
   tui.start();
   tui.requestRender();
@@ -148,6 +165,13 @@ export async function startTui(options: StartTuiOptions = {}): Promise<void> {
   }
 
   await done;
+
+  if (autoUpdate !== undefined) {
+    await runAutoUpdate(autoUpdate, {
+      platform: process.platform,
+      stdout: process.stdout,
+    });
+  }
 }
 
 function isMainModule(moduleUrl: string, argvPath = process.argv[1]): boolean {

@@ -125,6 +125,48 @@ describe("emitUpdateNotice", () => {
   );
 
   it(
+    "returns the notice it wrote and undefined when silent",
+    withTempCache(async ({ cachePath, lines, tasks }) => {
+      const now = Date.parse("2026-07-21T00:00:00.000Z");
+      await writeUpdateCheckCache(cachePath, {
+        checkedAt: "2026-07-21T00:00:00.000Z",
+        tags: { latest: "0.0.14" },
+      });
+
+      const noticed = await emitUpdateNotice({
+        write: (line) => lines.push(line),
+        env: {},
+        version: "0.0.13",
+        cachePath,
+        now: () => now,
+        schedule: (task) => {
+          tasks.push(task);
+        },
+      });
+
+      expect(noticed).toEqual({
+        kind: "channel-update",
+        channel: "latest",
+        currentVersion: "0.0.13",
+        latestVersion: "0.0.14",
+      });
+
+      const silent = await emitUpdateNotice({
+        write: (line) => lines.push(line),
+        env: { PSS_DISABLE_UPDATE_CHECK: "1" },
+        version: "0.0.13",
+        cachePath,
+        now: () => now,
+        schedule: (task) => {
+          tasks.push(task);
+        },
+      });
+
+      expect(silent).toBeUndefined();
+    })
+  );
+
+  it(
     "writes nothing when the cached version is current",
     withTempCache(async ({ cachePath, lines, tasks }) => {
       const now = Date.parse("2026-07-21T00:00:00.000Z");

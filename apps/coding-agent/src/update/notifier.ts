@@ -5,6 +5,7 @@ import {
   isCacheFresh,
   readUpdateCheckCache,
   resolveUpdateRegistryBaseUrl,
+  type UpdateNotice,
   writeUpdateCheckCache,
 } from "./check";
 import { extractUpdateChannel } from "./version";
@@ -32,13 +33,14 @@ export async function emitUpdateNotice({
   now = Date.now,
   fetchTags = defaultFetchTags(env),
   schedule = defaultSchedule,
-}: UpdateNotifierDeps): Promise<void> {
+}: UpdateNotifierDeps): Promise<UpdateNotice | undefined> {
   // no-excuse-ok: catch — update notices are best-effort and must never break the session.
   try {
     if (version === undefined || isUpdateCheckDisabled(env)) {
       return;
     }
 
+    let decided: UpdateNotice | undefined;
     const cache = await readUpdateCheckCache(cachePath);
     if (cache !== undefined) {
       const notice = decideUpdateNotice(
@@ -46,14 +48,16 @@ export async function emitUpdateNotice({
         cache.tags
       );
       if (notice !== undefined) {
+        decided = notice;
         write(formatUpdateNotice(notice));
       }
       if (isCacheFresh(cache, now())) {
-        return;
+        return decided;
       }
     }
 
     schedule(() => refreshCacheBestEffort({ cachePath, now, fetchTags }));
+    return decided;
   } catch {
     return;
   }

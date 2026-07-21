@@ -26,5 +26,9 @@ data entry. dlx/npx/bunx one-off runs and unknown layouts are refused with
 manual instructions. `pss update --check` prints the current version,
 channel, install method, and the exact command without changing anything.
 
+With `PSS_AUTO_UPDATE=1`, an in-channel, same-major update on a
+confidently detected global install is installed automatically after the TUI
+exits — never during a session and never as a channel switch.
+
 The TUI web-tools availability warning now renders through the same dim
 scrollback seam instead of a pre-start `console.warn`.

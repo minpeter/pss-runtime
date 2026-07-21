@@ -108,6 +108,16 @@ prerelease install), one dim line is printed into the scrollback, and a stale
 cache is refreshed in the background for the next run. Checks are skipped for
 dev/source runs. Set `PSS_DISABLE_UPDATE_CHECK=1` (or `true`) to opt out.
 
+### Auto-update (opt-in)
+
+Set `PSS_AUTO_UPDATE=1` (or `true`) to let pss update itself: when the cached
+check names a newer version on your channel and the install is a confidently
+detected global install (path-based pnpm/npm/bun/yarn layout), the exact
+pinned version is installed after the TUI exits — never during a session,
+never across a major version, and never as a channel switch. Ephemeral and
+unrecognized installs are skipped, and `PSS_DISABLE_UPDATE_CHECK=1` disables
+auto-update as well.
+
 ## Web tools availability
 
 The web tools are backed by `@minpeter/opensearch` and need `TINYFISH_API_KEY`

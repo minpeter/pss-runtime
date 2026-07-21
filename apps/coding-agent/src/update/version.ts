@@ -22,6 +22,12 @@ export function extractUpdateChannel(version: string): string {
   return prerelease.split(".")[0];
 }
 
+export function isSameMajorVersion(left: string, right: string): boolean {
+  const a = parseVersion(left);
+  const b = parseVersion(right);
+  return a !== undefined && b !== undefined && a.major === b.major;
+}
+
 export function compareVersions(left: string, right: string): number {
   const a = parseVersion(left);
   const b = parseVersion(right);

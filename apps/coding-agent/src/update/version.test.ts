@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   compareVersions,
   extractUpdateChannel,
+  isSameMajorVersion,
   isValidVersion,
 } from "./version";
 
@@ -48,6 +49,19 @@ describe("isValidVersion", () => {
     expect(isValidVersion("1.0.0-01")).toBe(false);
     expect(isValidVersion("1.0.0-next.01")).toBe(false);
     expect(isValidVersion("1.0.0-0")).toBe(true);
+  });
+});
+
+describe("isSameMajorVersion", () => {
+  it("matches within the same major line", () => {
+    expect(isSameMajorVersion("0.0.13", "0.0.14")).toBe(true);
+    expect(isSameMajorVersion("0.0.14-next.2", "0.0.15-next.0")).toBe(true);
+    expect(isSameMajorVersion("0.0.13", "1.0.0")).toBe(false);
+    expect(isSameMajorVersion("1.0.0-next.0", "1.0.0")).toBe(true);
+  });
+
+  it("rejects invalid input", () => {
+    expect(isSameMajorVersion("0.0.13", "not-a-version")).toBe(false);
   });
 });
 
