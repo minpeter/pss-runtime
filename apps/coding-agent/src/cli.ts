@@ -1,4 +1,5 @@
 import { homedir } from "node:os";
+import { runExecCli } from "./exec-cli";
 import { resolveCodingAgentThreadConfig } from "./thread-config";
 import {
   formatThreadInspectionReport,
@@ -12,6 +13,7 @@ interface RunCodingAgentCliOptions {
   readonly argv?: readonly string[];
   readonly cwd?: string;
   readonly env?: Parameters<typeof resolveCodingAgentThreadConfig>[0];
+  readonly exec?: (args: readonly string[]) => Promise<number>;
   readonly home?: string;
   readonly start?: () => Promise<number>;
   readonly stdout?: { write(text: string): void };
@@ -22,6 +24,7 @@ export async function runCodingAgentCli({
   argv = process.argv.slice(2),
   cwd = process.cwd(),
   env = process.env,
+  exec,
   home = homedir(),
   start = startTui,
   stdout = process.stdout,
@@ -46,6 +49,14 @@ export async function runCodingAgentCli({
     return 0;
   }
 
+  if (command === "exec") {
+    return (
+      exec ??
+      ((args: readonly string[]) =>
+        runExecCli({ argv: args, cwd, env, stdout }))
+    )(argv.slice(1));
+  }
+
   if (command === "inspect-thread") {
     const config = resolveCodingAgentThreadConfig(env, cwd, home);
     const report = await inspectCodingAgentThread(config);
@@ -67,6 +78,7 @@ function formatUsage(): string {
     "",
     "Commands:",
     "  (no command)     Start the interactive TUI",
+    "  exec             Run one headless coding task",
     "  inspect-thread   Print a report for the configured thread",
     "  update           Update pss (--check, --channel <tag>)",
     "  help             Show this help message",
