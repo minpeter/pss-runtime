@@ -21,8 +21,24 @@ describe("coding-agent CLI", () => {
 
     expect(exitCode).toBe(0);
     expect(output).toContain("Usage: pss [command]\n");
+    expect(output).toContain("exec");
     expect(output).toContain("inspect-thread");
     expect(output).toContain("update");
+  });
+
+  it("routes exec with the remaining arguments to the headless command", async () => {
+    const received: (readonly string[])[] = [];
+
+    const exitCode = await runCodingAgentCli({
+      argv: ["exec", "--stdin"],
+      exec: (args) => {
+        received.push(args);
+        return Promise.resolve(0);
+      },
+    });
+
+    expect(exitCode).toBe(0);
+    expect(received).toEqual([["--stdin"]]);
   });
 
   it("routes update with the remaining arguments to the update command", async () => {

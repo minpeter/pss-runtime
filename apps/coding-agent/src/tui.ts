@@ -10,12 +10,10 @@ import {
   Text,
   TUI,
 } from "@earendil-works/pi-tui";
-import { type AgentOptions, createAgent } from "@minpeter/pss-runtime";
 import { createFileHost } from "@minpeter/pss-runtime/platform/file";
 import type { ToolSet } from "ai";
-import { createCodingLanguageModel } from "./model";
+import { createCodingAgent } from "./coding-agent";
 import { resolveCodingAgentThreadConfig } from "./thread-config";
-import { resolveStartTuiTools } from "./tools";
 import { createTuiRunner, formatTuiHeader } from "./tui-runner";
 import {
   assistantText,
@@ -37,17 +35,15 @@ export interface StartTuiOptions {
 export async function startTui(options: StartTuiOptions = {}): Promise<number> {
   const startupNotices: string[] = [];
   const threadConfig = resolveCodingAgentThreadConfig();
-  const agentOptions: AgentOptions = {
-    host: createFileHost({ directory: threadConfig.directory }),
-    instructions:
-      "Answer in 2 short sentences and 280 characters or fewer unless the user explicitly asks for detail. Avoid headings.",
-    model: createCodingLanguageModel(),
+  const agent = await createCodingAgent({
     autoCompaction: threadConfig.autoCompaction,
-    tools: resolveStartTuiTools(options.tools, {
+    host: createFileHost({ directory: threadConfig.directory }),
+    tools: options.tools,
+    webTools: {
       onWebToolsDisabled: (message) => startupNotices.push(message),
-    }),
-  };
-  const agent = await createAgent(agentOptions);
+    },
+    workspace: process.cwd(),
+  });
   const thread = agent.thread(threadConfig.key);
 
   const terminal = new ProcessTerminal();
