@@ -26,6 +26,9 @@ const lockPidPath = resolve(lockPath, "pid");
 // Unique owner token: pid for liveness and release checks plus randomness so
 // owners of successive lock instances can always be told apart.
 const lockToken = `${process.pid}-${randomBytes(6).toString("hex")}`;
+// Complete owner-token shape; anything else counts as malformed and follows
+// the mtime-based stale path instead of the liveness check.
+const lockTokenPattern = /^(\d+)-[0-9a-f]{12}$/u;
 
 function git(args) {
   const result = spawnSync("git", ["-C", checkout, ...args], {
@@ -80,9 +83,9 @@ async function reclaimStaleLock(expectedIdentity) {
   // Identity check: only remove the exact instance we validated. If another
   // process replaced the lock between validation and claim, restore the
   // replacement intact and back off.
-  const found = await readFile(resolve(tombstone, "pid"), "utf8").catch(
-    () => ""
-  );
+  const found = (
+    await readFile(resolve(tombstone, "pid"), "utf8").catch(() => "")
+  ).trim();
   if (found !== expectedIdentity) {
     try {
       await rename(tombstone, lockPath);
@@ -113,10 +116,12 @@ async function acquireLock() {
     if (!error || typeof error !== "object" || error.code !== "EEXIST") {
       throw error;
     }
-    const identity = await readFile(lockPidPath, "utf8").catch(() => "");
-    const pid = Number.parseInt(identity, 10);
-    if (identity !== "" && Number.isInteger(pid)) {
-      if (isProcessAlive(pid)) {
+    const identity = (
+      await readFile(lockPidPath, "utf8").catch(() => "")
+    ).trim();
+    const ownerMatch = lockTokenPattern.exec(identity);
+    if (ownerMatch) {
+      if (isProcessAlive(Number.parseInt(ownerMatch[1], 10))) {
         throw contentionError();
       }
     } else {
