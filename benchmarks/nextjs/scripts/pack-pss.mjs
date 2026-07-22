@@ -10,15 +10,18 @@ import {
 } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import codingAgentPackage from "../../../apps/coding-agent/package.json" with {
-  type: "json",
-};
 
 const benchmarkRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(benchmarkRoot, "../..");
 const codingAgentDirectory = resolve(repositoryRoot, "apps/coding-agent");
 const artifactsDirectory = resolve(benchmarkRoot, ".artifacts");
 const stableTarball = resolve(artifactsDirectory, "pss-coding-agent.tgz");
+
+// Read at runtime instead of a JSON module import: static imports crossing
+// the package boundary fail the repo's turbo boundaries check.
+const codingAgentPackage = JSON.parse(
+  await readFile(resolve(codingAgentDirectory, "package.json"), "utf8")
+);
 
 function run(command, args, cwd = repositoryRoot) {
   const result = spawnSync(command, args, {
