@@ -1,17 +1,8 @@
 import { spawnSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
-import {
-  cp,
-  mkdir,
-  readdir,
-  readFile,
-  rename,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
+import { cp, mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createDirectoryLock } from "@minpeter/pss-bench-shared/lock";
 import {
   NEXTJS_EVALS_REPOSITORY,
   NEXTJS_EVALS_SHA,
@@ -21,14 +12,13 @@ const benchmarkRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const checkout = resolve(benchmarkRoot, ".evals-checkout");
 const destination = resolve(benchmarkRoot, "evals");
 const stagedDestination = resolve(benchmarkRoot, ".evals-staging");
-const lockPath = resolve(benchmarkRoot, ".evals-sync.lock");
-const lockPidPath = resolve(lockPath, "pid");
-// Unique owner token: pid for liveness and release checks plus randomness so
-// owners of successive lock instances can always be told apart.
-const lockToken = `${process.pid}-${randomBytes(6).toString("hex")}`;
-// Complete owner-token shape; anything else counts as malformed and follows
-// the mtime-based stale path instead of the liveness check.
-const lockTokenPattern = /^(\d+)-[0-9a-f]{12}$/u;
+
+const lock = createDirectoryLock({
+  contentionMessage:
+    "Another eval sync is in progress (.evals-sync.lock exists); remove it if a previous run was interrupted.",
+  lockPath: resolve(benchmarkRoot, ".evals-sync.lock"),
+  tombstoneRoot: benchmarkRoot,
+});
 
 function git(args) {
   const result = spawnSync("git", ["-C", checkout, ...args], {
@@ -42,122 +32,7 @@ function git(args) {
   }
 }
 
-function isProcessAlive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    // EPERM means the process exists but is owned by another user.
-    return Boolean(
-      error && typeof error === "object" && error.code === "EPERM"
-    );
-  }
-}
-
-function contentionError() {
-  return new Error(
-    "Another eval sync is in progress (.evals-sync.lock exists); remove it if a previous run was interrupted."
-  );
-}
-
-// A lock without a valid pid file is only reclaimed once it is clearly
-// stale: a crash between mkdir and the pid write would otherwise block every
-// later sync forever.
-const STALE_LOCK_MS = 10 * 60 * 1000;
-
-async function reclaimStaleLock(expectedIdentity) {
-  // The takeover rename is atomic, so exactly one concurrent reclaimer wins.
-  const tombstone = resolve(
-    benchmarkRoot,
-    `.evals-sync.lock.stale-${process.pid}`
-  );
-  await rm(tombstone, { force: true, recursive: true });
-  try {
-    await rename(lockPath, tombstone);
-  } catch (error) {
-    if (error && typeof error === "object" && error.code === "ENOENT") {
-      throw contentionError();
-    }
-    throw error;
-  }
-  // Identity check: only remove the exact instance we validated. If another
-  // process replaced the lock between validation and claim, restore the
-  // replacement intact and back off.
-  const found = (
-    await readFile(resolve(tombstone, "pid"), "utf8").catch(() => "")
-  ).trim();
-  if (found !== expectedIdentity) {
-    try {
-      await rename(tombstone, lockPath);
-    } catch {
-      // A new lock already exists; leave the tombstone rather than deleting
-      // a lock we did not validate.
-    }
-    throw contentionError();
-  }
-  await rm(tombstone, { force: true, recursive: true });
-  try {
-    await mkdir(lockPath);
-  } catch (error) {
-    if (error && typeof error === "object" && error.code === "EEXIST") {
-      throw contentionError();
-    }
-    throw error;
-  }
-}
-
-// mkdir is atomic on POSIX: exactly one concurrent sync wins the lock. A
-// lock whose recorded owner is gone (or that is ownerless and stale) is
-// reclaimed.
-async function acquireLock() {
-  try {
-    await mkdir(lockPath);
-  } catch (error) {
-    if (!error || typeof error !== "object" || error.code !== "EEXIST") {
-      throw error;
-    }
-    const identity = (
-      await readFile(lockPidPath, "utf8").catch(() => "")
-    ).trim();
-    const ownerMatch = lockTokenPattern.exec(identity);
-    if (ownerMatch) {
-      if (isProcessAlive(Number.parseInt(ownerMatch[1], 10))) {
-        throw contentionError();
-      }
-    } else {
-      // Ownerless or malformed identity: reclaimable once clearly stale, so
-      // a corrupted or interrupted owner write cannot block every later sync.
-      const { mtimeMs } = await stat(lockPath);
-      if (Date.now() - mtimeMs < STALE_LOCK_MS) {
-        throw contentionError();
-      }
-    }
-    await reclaimStaleLock(identity);
-  }
-  // First writer wins: if our lock instance was reclaimed and recreated while
-  // we were suspended, the replacement already has an owner and the exclusive
-  // create fails instead of overwriting it.
-  try {
-    await writeFile(lockPidPath, lockToken, { encoding: "utf8", flag: "wx" });
-  } catch (error) {
-    if (error && typeof error === "object" && error.code === "EEXIST") {
-      throw contentionError();
-    }
-    throw error;
-  }
-}
-
-async function releaseLock() {
-  const owner = await readFile(resolve(lockPath, "pid"), "utf8").catch(
-    () => ""
-  );
-  // Only remove the lock while we still own it.
-  if (Number.parseInt(owner, 10) === process.pid) {
-    await rm(lockPath, { force: true, recursive: true });
-  }
-}
-
-await acquireLock();
+await lock.acquire();
 
 try {
   await rm(checkout, { force: true, recursive: true });
@@ -205,5 +80,5 @@ try {
 } finally {
   await rm(checkout, { force: true, recursive: true });
   await rm(stagedDestination, { force: true, recursive: true });
-  await releaseLock();
+  await lock.release();
 }

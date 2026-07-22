@@ -29,3 +29,14 @@ pnpm --filter @minpeter/pss-benchmark-nextjs score  # writes score.json/score.cs
 The fixture source is pinned to `vercel/next.js@34d92a50266d2b70be5ac8ac147bd270f52d4a12`, and `next` is pinned to `16.3.0-canary.89` (`DEFAULT_NEXT_VERSION` in `src/constants.mjs`) because newer canaries ERESOLVE-conflict with the pinned fixture. Pass `--next-version` or set `PSS_BENCH_NEXT_VERSION` only for non-reproducible experiments.
 
 Each result campaign contains `benchmark-manifest.json` plus agent-eval summaries and transcripts. Run `pnpm --filter @minpeter/pss-benchmark-nextjs score` to generate `score.json` and `score.csv` inside the campaign directory. Secrets are never written to the manifest.
+
+## Structure
+
+This package owns only the Next.js-specific pieces: the `@vercel/agent-eval`
+agent adapter (`src/pss-agent.mjs`, `src/sandbox-runner.mjs`), the pinned
+fixture source and Next.js version (`src/constants.mjs`), the scoring
+profiles (`src/profiles.mjs`), and the orchestrator (`src/run-benchmark.mjs`).
+Benchmark-agnostic machinery — the sync lock, artifact packing, campaign
+scoring, and config resolution — lives in `@minpeter/pss-bench-shared`
+(`benchmarks/shared`) so future benchmark packages only add an adapter and
+fixture pins.

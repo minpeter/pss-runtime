@@ -1,16 +1,10 @@
+import {
+  asSet,
+  resolvePositiveInteger,
+} from "@minpeter/pss-bench-shared/config";
 import { DEFAULT_NEXT_VERSION } from "./constants.mjs";
 
 const DEFAULT_STARTS_PER_MINUTE = 4;
-
-function asSet(value) {
-  // Blank values (e.g. an empty dotenv entry) count as unset so they cannot
-  // bypass the pinned fallback; padded values are returned trimmed.
-  if (typeof value !== "string") {
-    return;
-  }
-  const trimmed = value.trim();
-  return trimmed === "" ? undefined : trimmed;
-}
 
 /**
  * Resolution order: explicit CLI flag, then environment, then the pinned
@@ -27,8 +21,5 @@ export function resolveNextVersion(
 export function resolveStartsPerMinute(
   raw = process.env.PSS_BENCH_STARTS_PER_MINUTE
 ) {
-  const parsed = Number(raw);
-  return Number.isInteger(parsed) && parsed > 0
-    ? parsed
-    : DEFAULT_STARTS_PER_MINUTE;
+  return resolvePositiveInteger(raw, DEFAULT_STARTS_PER_MINUTE);
 }
