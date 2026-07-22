@@ -4,9 +4,10 @@ export const BENCHMARK_PROFILES = Object.freeze({
 });
 
 export function resolveBenchmarkProfile(name) {
-  const profile = BENCHMARK_PROFILES[name];
-  if (!profile) {
-    throw new Error(`Unknown benchmark profile: ${name}`);
+  if (!Object.hasOwn(BENCHMARK_PROFILES, name)) {
+    throw new Error(
+      `Unknown benchmark profile: ${name}. Expected one of: ${Object.keys(BENCHMARK_PROFILES).join(", ")}.`
+    );
   }
-  return profile;
+  return BENCHMARK_PROFILES[name];
 }

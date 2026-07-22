@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -9,6 +9,7 @@ import {
   StartRateLimiter,
 } from "@vercel/agent-eval";
 import { config as loadDotenv } from "dotenv";
+import { resolveNextVersion, resolveStartsPerMinute } from "./config.mjs";
 import {
   DEFAULT_BASE_URL,
   DEFAULT_MODEL,
@@ -24,7 +25,6 @@ const benchmarkRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(benchmarkRoot, "../..");
 const artifactsDirectory = resolve(benchmarkRoot, ".artifacts");
 const tarballPath = resolve(artifactsDirectory, "pss-coding-agent.tgz");
-const nextVersionPath = resolve(artifactsDirectory, "next-version.txt");
 loadDotenv({
   override: false,
   path: [resolve(benchmarkRoot, ".env"), resolve(repositoryRoot, ".env")],
@@ -98,26 +98,6 @@ async function readArtifactManifest() {
   }
 }
 
-async function resolveNextVersion(requested) {
-  if (requested) {
-    return requested;
-  }
-  try {
-    return (await readFile(nextVersionPath, "utf8")).trim();
-  } catch {
-    const resolvedVersion = execFileSync(
-      "npm",
-      ["view", "next@canary", "version"],
-      {
-        encoding: "utf8",
-      }
-    ).trim();
-    await mkdir(artifactsDirectory, { recursive: true });
-    await writeFile(nextVersionPath, `${resolvedVersion}\n`, "utf8");
-    return resolvedVersion;
-  }
-}
-
 async function createSetup(nextVersion) {
   const tarball = (await readFile(tarballPath)).toString("base64");
   return async (sandbox) => {
@@ -175,9 +155,7 @@ if (selectedFixtures.length === 0) {
 const model =
   process.env.PSS_BENCH_MODEL ?? process.env.AI_MODEL ?? DEFAULT_MODEL;
 const baseUrl = process.env.AI_BASE_URL ?? DEFAULT_BASE_URL;
-const nextVersion = await resolveNextVersion(
-  options.nextVersion ?? process.env.PSS_BENCH_NEXT_VERSION
-);
+const nextVersion = resolveNextVersion(options.nextVersion);
 const profile = resolveBenchmarkProfile(options.profile);
 const runs = options.runs ?? profile.runs;
 const earlyExit = profile.earlyExit;
@@ -244,10 +222,7 @@ const results = await runExperiment({
   resultsDir: resolve(benchmarkRoot, "results"),
   experimentName,
   smoke: options.smoke,
-  rateLimiter: new StartRateLimiter(
-    Number.parseInt(process.env.PSS_BENCH_STARTS_PER_MINUTE ?? "4", 10),
-    60_000
-  ),
+  rateLimiter: new StartRateLimiter(resolveStartsPerMinute(), 60_000),
   onProgress(event) {
     if (event.type === "experiment:saved") {
       outputDirectory = event.outputDir;

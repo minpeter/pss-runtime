@@ -21,3 +21,14 @@ test("internal profile preserves every attempt for pass-rate analysis", () => {
     unknownProfilePattern
   );
 });
+
+test("inherited property names are rejected as unknown profiles", () => {
+  assert.throws(
+    () => resolveBenchmarkProfile("__proto__"),
+    unknownProfilePattern
+  );
+  assert.throws(
+    () => resolveBenchmarkProfile("constructor"),
+    unknownProfilePattern
+  );
+});

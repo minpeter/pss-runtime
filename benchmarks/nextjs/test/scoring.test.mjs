@@ -6,6 +6,7 @@ import { after, before, test } from "node:test";
 import { formatScoreCsv, scoreCampaign } from "../src/scoring.mjs";
 
 const scoreRowPattern = /agent-a,true,1,2,1000/u;
+const MEAN_DURATION_MS = 1000;
 
 let campaign;
 
@@ -22,7 +23,8 @@ before(async () => {
       JSON.stringify({
         evalName: name,
         results: statuses.map((status) => ({
-          result: { duration: 1000, status },
+          // agent-eval reports durations in seconds.
+          result: { duration: 1, status },
         })),
       }),
       "utf8"
@@ -52,4 +54,11 @@ test("scores official any-pass and all-attempt reliability", async () => {
   assert.equal(score.totalEvals, 2);
   assert.equal(score.usage.totalTokens, 15);
   assert.match(formatScoreCsv(score), scoreRowPattern);
+});
+
+test("converts agent-eval second durations into milliseconds", async () => {
+  const score = await scoreCampaign(campaign);
+  const agentA = score.perEval.find((result) => result.eval === "agent-a");
+  assert.equal(agentA?.meanDurationMs, MEAN_DURATION_MS);
+  assert.equal(score.meanEvalDurationMs, MEAN_DURATION_MS);
 });

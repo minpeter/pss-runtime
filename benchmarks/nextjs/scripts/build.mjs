@@ -1,29 +1,45 @@
-import { spawnSync } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { execFile } from "node:child_process";
+import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
-const checkedFiles = [
-  "scripts/score.mjs",
-  "src/pss-agent.mjs",
-  "src/run-benchmark.mjs",
-  "src/sandbox-runner.mjs",
-  "src/scoring.mjs",
-];
+const execFileAsync = promisify(execFile);
+const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const sourceDirectories = ["scripts", "src", "test"];
 
-for (const file of checkedFiles) {
-  const result = spawnSync(process.execPath, ["--check", file], {
-    encoding: "utf8",
-    stdio: "pipe",
+async function collectCheckedFiles(directory) {
+  const entries = await readdir(join(packageRoot, directory), {
+    withFileTypes: true,
   });
-  if (result.status !== 0) {
-    throw new Error(
-      result.stderr || result.stdout || `${file} failed syntax check`
-    );
+  const files = [];
+  for (const entry of entries) {
+    const relative = `${directory}/${entry.name}`;
+    if (entry.isDirectory()) {
+      files.push(...(await collectCheckedFiles(relative)));
+    } else if (entry.isFile() && entry.name.endsWith(".mjs")) {
+      files.push(relative);
+    }
   }
+  return files;
 }
-await mkdir(resolve("dist"), { recursive: true });
+
+const checkedFiles = (
+  await Promise.all(sourceDirectories.map(collectCheckedFiles))
+).flat();
+
+await Promise.all(
+  checkedFiles.map((file) =>
+    execFileAsync(process.execPath, ["--check", join(packageRoot, file)])
+  )
+);
+
+const reportPath = resolve(packageRoot, "dist", "build.json");
+await mkdir(dirname(reportPath), { recursive: true });
 await writeFile(
-  resolve("dist/build.json"),
-  `${JSON.stringify({ checkedFiles }, null, 2)}\n`,
+  reportPath,
+  `${JSON.stringify({ checkedFiles, checkedAt: new Date().toISOString() }, null, 2)}\n`,
   "utf8"
 );
+
+console.log(`Checked ${checkedFiles.length} Node scripts.`);

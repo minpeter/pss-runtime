@@ -19,7 +19,16 @@ async function findManifests(directory) {
 }
 
 async function latestCampaign() {
-  const manifests = await findManifests(resolve(benchmarkRoot, "results"));
+  const manifests = await findManifests(
+    resolve(benchmarkRoot, "results")
+  ).catch((error) => {
+    if (error && typeof error === "object" && error.code === "ENOENT") {
+      throw new Error(
+        "No benchmark campaign result was found. Run `pnpm eval:official` first."
+      );
+    }
+    throw error;
+  });
   const dated = await Promise.all(
     manifests.map(async (path) => ({
       path,

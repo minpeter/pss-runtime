@@ -1,11 +1,5 @@
 import { spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,9 +9,6 @@ function lastLines(value, count = 12) {
 }
 
 function readExecResult(path) {
-  if (!existsSync(path)) {
-    return;
-  }
   try {
     return JSON.parse(readFileSync(path, "utf8"));
   } catch {

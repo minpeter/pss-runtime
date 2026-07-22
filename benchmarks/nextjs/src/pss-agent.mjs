@@ -7,6 +7,10 @@ function createPssDefinition() {
     name: "pss",
     displayName: "PSS",
     defaultModel: DEFAULT_MODEL,
+    // NOTE: agent-eval ships a closed parser registry (claude-code, codex,
+    // cursor, gemini, opencode); "pss" has no parser, so the injected o11y
+    // summary is empty (parseSuccess: false). Scoring is unaffected: it
+    // reads transcript-raw.jsonl directly (see scoring.mjs).
     o11yAgentName: "pss",
     runnerPath: fileURLToPath(new URL("./sandbox-runner.mjs", import.meta.url)),
     getApiKeyEnvVar() {

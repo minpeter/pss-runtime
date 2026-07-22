@@ -19,7 +19,7 @@ async function collectFiles(directory, name) {
       if (entry.isDirectory()) {
         return collectFiles(path, name);
       }
-      return Promise.resolve(entry.name === name ? [path] : []);
+      return entry.name === name ? [path] : [];
     })
   );
   return nested.flat();
@@ -99,7 +99,10 @@ async function readEvalScore(summaryPath) {
     passed: passedRuns > 0,
     passedRuns,
     totalRuns,
-    meanDurationMs: summary.meanDuration ?? mean(durations),
+    // agent-eval reports durations in seconds; normalize to milliseconds.
+    meanDurationMs: Math.round(
+      (summary.meanDuration ?? mean(durations)) * 1000
+    ),
   };
 }
 

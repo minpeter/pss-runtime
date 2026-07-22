@@ -2,3 +2,6 @@
 dist/
 evals/
 results/
+.evals-checkout/
+.evals-staging/
+.evals-sync.lock*/
