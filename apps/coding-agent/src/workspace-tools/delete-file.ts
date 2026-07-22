@@ -1,4 +1,4 @@
-import { lstat, readFile, rm } from "node:fs/promises";
+import { lstat, readFile, realpath, rm } from "node:fs/promises";
 import { type Tool, tool } from "ai";
 import { z } from "zod";
 import { computeFileHash } from "./hashline";
@@ -36,12 +36,15 @@ export function createDeleteFileTool(
         throw new Error("Directory deletion requires recursive=true.");
       }
       if (expectedHash !== undefined) {
-        if (!metadata.isFile()) {
+        if (!(metadata.isFile() || metadata.isSymbolicLink())) {
           throw new Error("expected_file_hash is only valid for files.");
         }
-        const currentHash = computeFileHash(
-          await readFile(absolutePath, "utf8")
-        );
+        // read_file follows a final symlink and reports the target's hash,
+        // so verify against the target even though rm removes the link.
+        const hashPath = metadata.isSymbolicLink()
+          ? await realpath(absolutePath)
+          : absolutePath;
+        const currentHash = computeFileHash(await readFile(hashPath, "utf8"));
         if (currentHash !== expectedHash) {
           throw new Error(
             `Stale file hash ${expectedHash}; current hash is ${currentHash}.`

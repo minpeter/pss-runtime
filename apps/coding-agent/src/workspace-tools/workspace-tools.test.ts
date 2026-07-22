@@ -380,6 +380,33 @@ describe("workspace coding tools", () => {
     expect(matcher.test("food.ts")).toBe(false);
   });
 
+  it("deletes a symlink with the target's expected_file_hash", async () => {
+    const tools = createWorkspaceTools({ workspace });
+    const read = executableTool(tools, "read_file");
+    const remove = executableTool(tools, "delete_file");
+    await symlink(
+      join(workspace, "src", "example.ts"),
+      join(workspace, "src", "hash-link.ts")
+    );
+    const output = String(
+      await read({ path: "src/hash-link.ts" }, executionOptions)
+    );
+    const fileHash = fileHashPattern.exec(output)?.[1];
+    if (fileHash === undefined) {
+      throw new Error("Expected file hash in read output.");
+    }
+    await remove(
+      { expected_file_hash: fileHash, path: "src/hash-link.ts" },
+      executionOptions
+    );
+    await expect(
+      lstat(join(workspace, "src", "hash-link.ts"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(
+      stat(join(workspace, "src", "example.ts"))
+    ).resolves.toBeTruthy();
+  });
+
   it("deletes dangling and outside-pointing symlinks as links", async () => {
     const dangling = join(workspace, "src", "dangling.ts");
     await symlink(join(workspace, "src", "gone.ts"), dangling);

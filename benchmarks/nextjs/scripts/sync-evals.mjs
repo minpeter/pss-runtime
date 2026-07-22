@@ -6,6 +6,7 @@ import {
   readFile,
   rename,
   rm,
+  stat,
   writeFile,
 } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -51,9 +52,40 @@ function contentionError() {
   );
 }
 
+// A lock without a valid pid file is only reclaimed once it is clearly
+// stale: a crash between mkdir and the pid write would otherwise block every
+// later sync forever.
+const STALE_LOCK_MS = 10 * 60 * 1000;
+
+async function reclaimStaleLock() {
+  // The takeover rename is atomic, so exactly one concurrent reclaimer wins.
+  const tombstone = resolve(
+    benchmarkRoot,
+    `.evals-sync.lock.stale-${process.pid}`
+  );
+  await rm(tombstone, { force: true, recursive: true });
+  try {
+    await rename(lockPath, tombstone);
+  } catch (error) {
+    if (error && typeof error === "object" && error.code === "ENOENT") {
+      throw contentionError();
+    }
+    throw error;
+  }
+  await rm(tombstone, { force: true, recursive: true });
+  try {
+    await mkdir(lockPath);
+  } catch (error) {
+    if (error && typeof error === "object" && error.code === "EEXIST") {
+      throw contentionError();
+    }
+    throw error;
+  }
+}
+
 // mkdir is atomic on POSIX: exactly one concurrent sync wins the lock. A
-// lock whose recorded owner is gone is reclaimed (interrupted run); the
-// takeover rename is atomic, so exactly one reclaimer wins.
+// lock whose recorded owner is gone (or that is ownerless and stale) is
+// reclaimed.
 async function acquireLock() {
   try {
     await mkdir(lockPath);
@@ -65,39 +97,17 @@ async function acquireLock() {
       () => ""
     );
     const pid = Number.parseInt(owner, 10);
-    if (!Number.isInteger(pid) || isProcessAlive(pid)) {
-      throw contentionError();
-    }
-    const tombstone = resolve(
-      benchmarkRoot,
-      `.evals-sync.lock.stale-${process.pid}`
-    );
-    await rm(tombstone, { force: true, recursive: true });
-    try {
-      await rename(lockPath, tombstone);
-    } catch (renameError) {
-      if (
-        renameError &&
-        typeof renameError === "object" &&
-        renameError.code === "ENOENT"
-      ) {
+    if (Number.isInteger(pid)) {
+      if (isProcessAlive(pid)) {
         throw contentionError();
       }
-      throw renameError;
-    }
-    await rm(tombstone, { force: true, recursive: true });
-    try {
-      await mkdir(lockPath);
-    } catch (mkdirError) {
-      if (
-        mkdirError &&
-        typeof mkdirError === "object" &&
-        mkdirError.code === "EEXIST"
-      ) {
+    } else {
+      const { mtimeMs } = await stat(lockPath);
+      if (Date.now() - mtimeMs < STALE_LOCK_MS) {
         throw contentionError();
       }
-      throw mkdirError;
     }
+    await reclaimStaleLock();
   }
   await writeFile(resolve(lockPath, "pid"), String(process.pid), "utf8");
 }
