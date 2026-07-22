@@ -114,14 +114,16 @@ async function acquireLock() {
       throw error;
     }
     const identity = await readFile(lockPidPath, "utf8").catch(() => "");
-    if (identity === "") {
-      const { mtimeMs } = await stat(lockPath);
-      if (Date.now() - mtimeMs < STALE_LOCK_MS) {
+    const pid = Number.parseInt(identity, 10);
+    if (identity !== "" && Number.isInteger(pid)) {
+      if (isProcessAlive(pid)) {
         throw contentionError();
       }
     } else {
-      const pid = Number.parseInt(identity, 10);
-      if (!Number.isInteger(pid) || isProcessAlive(pid)) {
+      // Ownerless or malformed identity: reclaimable once clearly stale, so
+      // a corrupted or interrupted owner write cannot block every later sync.
+      const { mtimeMs } = await stat(lockPath);
+      if (Date.now() - mtimeMs < STALE_LOCK_MS) {
         throw contentionError();
       }
     }

@@ -411,10 +411,9 @@ describe("workspace coding tools", () => {
   it("refuses hash validation for links pointing outside the workspace", async () => {
     const tools = createWorkspaceTools({ workspace });
     const remove = executableTool(tools, "delete_file");
-    const outsideDirectory = await mkdtemp(join(tmpdir(), "pss-outside-"));
-    await writeFile(join(outsideDirectory, "secret.txt"), "secret\n");
+    await writeFile(join(outside, "secret.txt"), "secret\n");
     await symlink(
-      join(outsideDirectory, "secret.txt"),
+      join(outside, "secret.txt"),
       join(workspace, "src", "outside-link.ts")
     );
     await expect(
