@@ -208,7 +208,7 @@ const config = {
   validation: "vitest",
   timeout: 1200,
   setup: await createSetup(nextVersion),
-  sandbox: "docker",
+  sandbox: "auto",
   copyFiles: "changed",
   agentOptions: { baseUrl },
   webResearch: false,
