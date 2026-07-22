@@ -93,8 +93,30 @@ The inspection command uses the runtime Node adapter to decode stored thread
 snapshots, so the CLI reports the same file path, message count, compaction
 records, and version that runtime storage uses.
 
-Pass `tools` to `startTui` from a custom entrypoint to replace its default tool
-set.
+Run one headless coding task (CI, benchmarks, scripts):
+
+```sh
+pss exec --workspace . --prompt "Fix the failing test"
+pss exec --workspace . --stdin --timeout-seconds 900 --result-file result.json
+```
+
+`pss exec` streams JSONL events (`metadata`, `agent_event`, `result`) to stdout
+and exits 0 only when the task completes. Flags: `--workspace`; exactly one of
+`--prompt`, `--prompt-file`, or `--stdin`; plus `--model`, `--base-url`,
+`--timeout-seconds` (1-1200), `--web-tools`, and `--result-file`. A `.env` next
+to the working directory is loaded automatically.
+
+Both the TUI and `pss exec` share the same workspace tools through
+`createCodingAgent`: `read_file`, `glob_files`, `grep_files`, `edit_file`
+(hashline-anchored), `write_file`, `delete_file`, and `shell_execute`. The file
+tools are confined to the workspace (path and symlink escapes are rejected).
+`shell_execute` is not a sandbox — commands run with the user's permissions,
+but AI provider API keys are withheld from the child environment. Untrusted
+workloads belong in a container (see `benchmarks/nextjs`, which runs the agent
+in Docker).
+
+Pass `tools` to `startTui` (or `createCodingAgent`) from a custom entrypoint to
+replace the optional web tools; the workspace tools are always included.
 
 ## Updates
 
