@@ -93,6 +93,25 @@ function assertNoOverlappingReplacements(edits: readonly ResolvedEdit[]): void {
   }
 }
 
+function assertNoIntersectingInsertions(edits: readonly ResolvedEdit[]): void {
+  const replacements = edits.filter((edit) => edit.op === "replace");
+  for (const insertion of edits) {
+    if (insertion.op === "replace") {
+      continue;
+    }
+    for (const replacement of replacements) {
+      if (
+        insertion.index >= replacement.index &&
+        insertion.index <= replacement.end
+      ) {
+        throw new Error(
+          "Insertion intersects a replace range; split it into a separate edit_file call."
+        );
+      }
+    }
+  }
+}
+
 function applyEdits(
   lines: readonly string[],
   edits: readonly ResolvedEdit[]
@@ -116,7 +135,15 @@ export function createEditFileTool(
       "Apply deterministic plugsuits-style hashline edits. Re-read the file, then use LINE#ID anchors. replace supports optional end; append/prepend support optional pos.",
     inputSchema,
     execute: async ({ path, expected_file_hash: expectedHash, edits }) => {
-      const absolutePath = await resolveWorkspacePath(workspace, path);
+      for (const edit of edits) {
+        if (edit.op !== "replace" && edit.end !== undefined) {
+          throw new Error(
+            `${edit.op} does not support end; only replace accepts an end anchor.`
+          );
+        }
+      }
+      const resolved = await resolveWorkspacePath(workspace, path);
+      const absolutePath = resolved.path;
       const original = await readFile(absolutePath, "utf8");
       const originalHash = computeFileHash(original);
       if (expectedHash !== undefined && expectedHash !== originalHash) {
@@ -126,20 +153,22 @@ export function createEditFileTool(
       }
       const eol = original.includes("\r\n") ? "\r\n" : "\n";
       const trailingNewline = original.endsWith("\n");
-      const sourceLines = original.split(END_OF_LINE_PATTERN);
+      const sourceLines =
+        original === "" ? [] : original.split(END_OF_LINE_PATTERN);
       if (trailingNewline) {
         sourceLines.pop();
       }
-      const resolved = edits.map((edit, order) =>
+      const resolvedEdits = edits.map((edit, order) =>
         resolveEdit(edit, sourceLines, order)
       );
-      assertNoOverlappingReplacements(resolved);
-      const outputLines = applyEdits(sourceLines, resolved);
+      assertNoOverlappingReplacements(resolvedEdits);
+      assertNoIntersectingInsertions(resolvedEdits);
+      const outputLines = applyEdits(sourceLines, resolvedEdits);
       const output = `${outputLines.join(eol)}${trailingNewline && outputLines.length > 0 ? eol : ""}`;
-      await atomicWrite(absolutePath, output);
+      await atomicWrite(absolutePath, output, originalHash);
       return [
         "OK - edited file",
-        `path: ${workspaceRelativePath(workspace, absolutePath)}`,
+        `path: ${workspaceRelativePath(resolved.root, absolutePath)}`,
         `edits: ${edits.length}`,
         `file_hash: ${computeFileHash(output)}`,
       ].join("\n");

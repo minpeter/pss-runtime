@@ -1,5 +1,4 @@
 import { lstat, readFile, rm } from "node:fs/promises";
-import { resolve } from "node:path";
 import { type Tool, tool } from "ai";
 import { z } from "zod";
 import { computeFileHash } from "./hashline";
@@ -25,8 +24,11 @@ export function createDeleteFileTool(
       recursive = false,
       expected_file_hash: expectedHash,
     }) => {
-      const absolutePath = await resolveWorkspacePath(workspace, path);
-      if (absolutePath === resolve(workspace)) {
+      const resolved = await resolveWorkspacePath(workspace, path, {
+        followFinalSymlink: false,
+      });
+      const absolutePath = resolved.path;
+      if (absolutePath === resolved.root) {
         throw new Error("Refusing to delete the workspace root.");
       }
       const metadata = await lstat(absolutePath);
@@ -47,7 +49,7 @@ export function createDeleteFileTool(
         }
       }
       await rm(absolutePath, { recursive, force: false });
-      return `OK - deleted\npath: ${workspaceRelativePath(workspace, absolutePath)}`;
+      return `OK - deleted\npath: ${workspaceRelativePath(resolved.root, absolutePath)}`;
     },
   });
 }

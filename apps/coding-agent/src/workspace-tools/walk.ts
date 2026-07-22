@@ -3,13 +3,15 @@ import { opendir } from "node:fs/promises";
 import { join } from "node:path";
 import { isIgnoredWorkspacePath, workspaceRelativePath } from "./path-safety";
 
-const GLOB_SPECIAL_CHARACTER = /[\^$+.()|[\]{}]/g;
+const GLOB_SPECIAL_CHARACTER = /[\\^$+.()|[\]{}]/g;
 const MAX_WALK_FILES = 10_000;
 
 interface WalkContext {
   readonly files: string[];
   readonly includeIgnored: boolean;
-  readonly workspace: string;
+  readonly maxFiles: number;
+  readonly root: string;
+  truncated: boolean;
 }
 
 async function visitDirectory(
@@ -23,7 +25,7 @@ async function visitDirectory(
   entries.sort((left, right) => left.name.localeCompare(right.name));
   for (const entry of entries) {
     const absolutePath = join(directory, entry.name);
-    const relativePath = workspaceRelativePath(context.workspace, absolutePath);
+    const relativePath = workspaceRelativePath(context.root, absolutePath);
     if (!context.includeIgnored && isIgnoredWorkspacePath(relativePath)) {
       continue;
     }
@@ -33,7 +35,8 @@ async function visitDirectory(
       }
     } else if (entry.isFile()) {
       context.files.push(absolutePath);
-      if (context.files.length >= MAX_WALK_FILES) {
+      if (context.files.length >= context.maxFiles) {
+        context.truncated = true;
         return true;
       }
     }
@@ -41,14 +44,26 @@ async function visitDirectory(
   return false;
 }
 
+export interface WalkWorkspaceFilesResult {
+  readonly files: readonly string[];
+  readonly truncated: boolean;
+}
+
 export async function walkWorkspaceFiles(
-  workspace: string,
+  root: string,
   startPath: string,
-  includeIgnored = false
-): Promise<readonly string[]> {
-  const context: WalkContext = { files: [], includeIgnored, workspace };
+  includeIgnored = false,
+  maxFiles = MAX_WALK_FILES
+): Promise<WalkWorkspaceFilesResult> {
+  const context: WalkContext = {
+    files: [],
+    includeIgnored,
+    maxFiles,
+    root,
+    truncated: false,
+  };
   await visitDirectory(context, startPath);
-  return context.files;
+  return { files: context.files, truncated: context.truncated };
 }
 
 export function globPatternToRegExp(pattern: string): RegExp {
@@ -69,7 +84,7 @@ export function globPatternToRegExp(pattern: string): RegExp {
     } else if (character === "?") {
       source += "[^/]";
     } else {
-      source += character?.replace(GLOB_SPECIAL_CHARACTER, "\\$&") ?? "";
+      source += character.replace(GLOB_SPECIAL_CHARACTER, "\\$&");
     }
   }
   return new RegExp(`^${source}$`, "u");

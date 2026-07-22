@@ -5,6 +5,7 @@ import {
   mkdir,
   readFile,
   rename,
+  rm,
   writeFile,
 } from "node:fs/promises";
 import { dirname } from "node:path";
@@ -50,16 +51,30 @@ async function existingMode(path: string): Promise<number | undefined> {
 
 export async function atomicWrite(
   path: string,
-  content: string
+  content: string,
+  expectedHash?: string
 ): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   const mode = await existingMode(path);
+  const permissions = mode === undefined ? undefined : mode % 0o1000;
   const temporaryPath = `${path}.pss-${process.pid}-${randomUUID()}.tmp`;
-  await writeFile(temporaryPath, content, "utf8");
-  if (mode !== undefined) {
-    await chmod(temporaryPath, mode);
+  try {
+    // Create the temp file with the target permissions from the outset so a
+    // concurrent reader never sees a broader-mode replacement.
+    await writeFile(temporaryPath, content, {
+      encoding: "utf8",
+      ...(permissions === undefined ? {} : { mode: permissions }),
+    });
+    if (permissions !== undefined) {
+      await chmod(temporaryPath, permissions);
+    }
+    // Re-verify immediately before the rename; the earlier caller-side check
+    // is separated from the swap by real I/O.
+    await assertExpectedHash(path, expectedHash);
+    await rename(temporaryPath, path);
+  } finally {
+    await rm(temporaryPath, { force: true }).catch(() => undefined);
   }
-  await rename(temporaryPath, path);
 }
 
 export function createWriteFileTool(
@@ -70,12 +85,12 @@ export function createWriteFileTool(
       "Create or replace a UTF-8 file atomically. Prefer edit_file for surgical changes. Pass expected_file_hash when overwriting a file you read.",
     inputSchema,
     execute: async ({ path, content, expected_file_hash: expectedHash }) => {
-      const absolutePath = await resolveWorkspacePath(workspace, path);
-      await assertExpectedHash(absolutePath, expectedHash);
-      await atomicWrite(absolutePath, content);
+      const resolved = await resolveWorkspacePath(workspace, path);
+      await assertExpectedHash(resolved.path, expectedHash);
+      await atomicWrite(resolved.path, content, expectedHash);
       return [
         "OK - wrote file",
-        `path: ${workspaceRelativePath(workspace, absolutePath)}`,
+        `path: ${workspaceRelativePath(resolved.root, resolved.path)}`,
         `bytes: ${Buffer.byteLength(content)}`,
         `file_hash: ${computeFileHash(content)}`,
       ].join("\n");

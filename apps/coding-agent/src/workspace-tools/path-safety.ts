@@ -1,32 +1,22 @@
 import { lstat, realpath } from "node:fs/promises";
-import { isAbsolute, relative, resolve, sep } from "node:path";
-
-const DEFAULT_IGNORED_SEGMENTS = new Set([
-  ".git",
-  ".next",
-  "coverage",
-  "dist",
-  "node_modules",
-]);
+import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 
 function isInside(root: string, candidate: string): boolean {
-  return candidate === root || candidate.startsWith(`${root}${sep}`);
+  const offset = relative(root, candidate);
+  return offset === "" || !(offset.startsWith("..") || isAbsolute(offset));
 }
 
-async function nearestExistingPath(path: string): Promise<string> {
-  let current = path;
-  while (true) {
+async function nearestExistingPath(candidate: string): Promise<string> {
+  let current = candidate;
+  for (;;) {
     try {
       await lstat(current);
       return current;
     } catch (error) {
-      if (
-        !(error instanceof Error && "code" in error) ||
-        error.code !== "ENOENT"
-      ) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
         throw error;
       }
-      const parent = resolve(current, "..");
+      const parent = dirname(current);
       if (parent === current) {
         return current;
       }
@@ -35,31 +25,94 @@ async function nearestExistingPath(path: string): Promise<string> {
   }
 }
 
+export interface ResolvedWorkspacePath {
+  /** Canonical absolute path inside the workspace. */
+  readonly path: string;
+  /** Canonical workspace root. */
+  readonly root: string;
+}
+
+interface ResolveWorkspacePathOptions {
+  /**
+   * Resolve a final path component that is a symlink to its target. Mutating
+   * tools keep this enabled so writes update the target instead of replacing
+   * the symlink; delete_file disables it so the link itself is removed.
+   */
+  readonly followFinalSymlink?: boolean;
+}
+
 export async function resolveWorkspacePath(
   workspace: string,
-  inputPath: string
-): Promise<string> {
+  inputPath: string,
+  options: ResolveWorkspacePathOptions = {}
+): Promise<ResolvedWorkspacePath> {
+  const { followFinalSymlink = true } = options;
   const root = await realpath(resolve(workspace));
-  const candidate = resolve(
+  const lexical = resolve(
     isAbsolute(inputPath) ? inputPath : resolve(root, inputPath)
   );
+
+  // Accept absolute paths spelled through a symlinked workspace alias by
+  // rebasing them onto the canonical root.
+  const lexicalRoot = resolve(workspace);
+  const candidate =
+    !isInside(root, lexical) && isInside(lexicalRoot, lexical)
+      ? resolve(root, relative(lexicalRoot, lexical))
+      : lexical;
   if (!isInside(root, candidate)) {
     throw new Error(`Path escapes workspace: ${inputPath}`);
   }
-  const existing = await nearestExistingPath(candidate);
-  const resolvedExisting = await realpath(existing);
+
+  const existingPath = await nearestExistingPath(candidate);
+
+  // No-follow mode removes or inspects the link node itself, so a dangling
+  // target or a target outside the workspace must not fail resolution; only
+  // the link's parent needs canonical containment.
+  if (existingPath === candidate && !followFinalSymlink) {
+    const metadata = await lstat(candidate);
+    if (metadata.isSymbolicLink()) {
+      const parent = await realpath(dirname(candidate));
+      if (!isInside(root, parent)) {
+        throw new Error(
+          `Path resolves outside workspace through a symlink: ${inputPath}`
+        );
+      }
+      return { path: resolve(parent, basename(candidate)), root };
+    }
+  }
+
+  const resolvedExisting = await realpath(existingPath);
   if (!isInside(root, resolvedExisting)) {
     throw new Error(
       `Path resolves outside workspace through a symlink: ${inputPath}`
     );
   }
-  return candidate;
+
+  const path =
+    existingPath === candidate
+      ? resolvedExisting
+      : resolve(resolvedExisting, relative(existingPath, candidate));
+  if (!isInside(root, path)) {
+    throw new Error(
+      `Path resolves outside workspace through a symlink: ${inputPath}`
+    );
+  }
+  return { path, root };
 }
 
-export function workspaceRelativePath(workspace: string, path: string): string {
-  const value = relative(resolve(workspace), path);
-  return value === "" ? "." : value.split(sep).join("/");
+/** Root must be the canonical root returned by resolveWorkspacePath. */
+export function workspaceRelativePath(root: string, path: string): string {
+  const relativePath = relative(root, path);
+  return relativePath === "" ? "." : relativePath;
 }
+
+const DEFAULT_IGNORED_SEGMENTS = new Set([
+  ".git",
+  ".next",
+  "coverage",
+  "dist",
+  "node_modules",
+]);
 
 export function isIgnoredWorkspacePath(relativePath: string): boolean {
   return relativePath

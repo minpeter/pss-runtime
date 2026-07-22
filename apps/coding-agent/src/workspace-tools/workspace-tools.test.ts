@@ -1,7 +1,9 @@
 import {
   chmod,
+  lstat,
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   rm,
   stat,
@@ -13,14 +15,26 @@ import { join } from "node:path";
 import type { ToolExecutionOptions } from "ai";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createWorkspaceTools } from "./index";
+import { truncateToolOutput } from "./output";
+import { resolveWorkspacePath } from "./path-safety";
+import { globPatternToRegExp } from "./walk";
+import { atomicWrite } from "./write-file";
 
+const directoryTruncationPattern = /truncated|showing 1000 of 1005/iu;
 const fileHashPattern = /file_hash: ([0-9a-f]{8})/u;
 const firstLineAnchorPattern = /1#[ZPMQVRWSNKTXJBYH]{2}(?=\|)/u;
 const grepResultPattern = /src\/new\.ts:1#[ZPMQVRWSNKTXJBYH]{2}\|needle/u;
+const intersectPattern = /intersect|overlap/iu;
+const phantomLinePattern = /3#[ZPMQVRWSNKTXJBYH]{2}/u;
 const secondLineAnchorPattern = /2#[ZPMQVRWSNKTXJBYH]{2}(?=\|)/u;
+const skippedPattern = /skipped/u;
 const staleFileHashPattern = /Stale file hash/u;
 const symlinkPattern = /symlink/u;
+const truncatedMarkerPattern = /\n\.\.\. truncated (\d+) bytes \.\.\.\n/u;
+const truncatedPattern = /truncated|\+/u;
+const unsupportedEndPattern = /end/u;
 const workspaceEscapePattern = /escapes workspace/u;
+const workspaceRootPattern = /workspace root/u;
 
 const executionOptions: ToolExecutionOptions<Record<string, unknown>> = {
   context: {},
@@ -171,5 +185,256 @@ describe("workspace coding tools", () => {
     await expect(
       readFile(join(workspace, "src", "new.ts"), "utf8")
     ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("resolves paths when the workspace is the filesystem root", async () => {
+    const resolved = await resolveWorkspacePath("/", "/tmp");
+    expect(resolved.root).toBe("/");
+    expect(resolved.path).toBe("/tmp");
+  });
+
+  it("accepts absolute paths through a symlinked workspace alias", async () => {
+    const alias = join(outside, "workspace-alias");
+    await symlink(workspace, alias, "dir");
+    const tools = createWorkspaceTools({ workspace: alias });
+    const read = executableTool(tools, "read_file");
+    const remove = executableTool(tools, "delete_file");
+
+    const output = String(
+      await read({ path: join(alias, "src", "example.ts") }, executionOptions)
+    );
+    expect(output).toContain("path: src/example.ts");
+    expect(output).not.toContain("..");
+
+    await expect(
+      remove({ path: ".", recursive: true }, executionOptions)
+    ).rejects.toThrow(workspaceRootPattern);
+    await expect(
+      stat(join(workspace, "src", "example.ts"))
+    ).resolves.toBeTruthy();
+  });
+
+  it("writes and edits through a file symlink update the target", async () => {
+    const target = join(workspace, "src", "target.ts");
+    const link = join(workspace, "src", "link.ts");
+    await writeFile(target, "before\n", { mode: 0o600 });
+    await symlink(target, link);
+    const tools = createWorkspaceTools({ workspace });
+    const write = executableTool(tools, "write_file");
+    const remove = executableTool(tools, "delete_file");
+
+    await write({ content: "after\n", path: "src/link.ts" }, executionOptions);
+    await expect(readFile(target, "utf8")).resolves.toBe("after\n");
+    expect((await lstat(link)).isSymbolicLink()).toBe(true);
+    expect((await stat(target)).mode % 0o1000).toBe(0o600);
+
+    await remove({ path: "src/link.ts" }, executionOptions);
+    await expect(lstat(link)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(target, "utf8")).resolves.toBe("after\n");
+  });
+
+  it("cleans up the temp file when an atomic write fails", async () => {
+    const directory = join(workspace, "src", "blocking-dir");
+    await mkdir(directory);
+    await expect(atomicWrite(directory, "payload")).rejects.toThrow();
+    const leftovers = (await readdir(join(workspace, "src"))).filter((entry) =>
+      entry.includes(".pss-")
+    );
+    expect(leftovers).toStrictEqual([]);
+  });
+
+  it("truncates on UTF-8 boundaries and honors tiny budgets", () => {
+    const emojis = "😀".repeat(100);
+    const truncated = truncateToolOutput(emojis, 50);
+    expect(Buffer.byteLength(truncated)).toBeLessThanOrEqual(50);
+    expect(truncated).not.toContain("\uFFFD");
+
+    const tiny = truncateToolOutput("x".repeat(1000), 10);
+    expect(Buffer.byteLength(tiny)).toBeLessThanOrEqual(10);
+  });
+
+  it("reports the actual omitted byte count in the truncation marker", () => {
+    const source = "a".repeat(1000);
+    const truncated = truncateToolOutput(source, 100);
+    const marker = truncatedMarkerPattern.exec(truncated);
+    expect(marker).not.toBeNull();
+    if (marker === null) {
+      throw new Error("Expected truncation marker.");
+    }
+    const actualOmitted =
+      Buffer.byteLength(source) -
+      (Buffer.byteLength(truncated) - Buffer.byteLength(marker[0]));
+    expect(Number(marker[1])).toBe(actualOmitted);
+  });
+
+  it("appends to an empty file without a leading blank line", async () => {
+    await writeFile(join(workspace, "src", "empty.ts"), "", "utf8");
+    const tools = createWorkspaceTools({ workspace });
+    const edit = executableTool(tools, "edit_file");
+    await edit(
+      { edits: [{ lines: ["first"], op: "append" }], path: "src/empty.ts" },
+      executionOptions
+    );
+    await expect(
+      readFile(join(workspace, "src", "empty.ts"), "utf8")
+    ).resolves.toBe("first");
+  });
+
+  it("rejects end on append/prepend and insertions intersecting replacements", async () => {
+    const tools = createWorkspaceTools({ workspace });
+    const read = executableTool(tools, "read_file");
+    const edit = executableTool(tools, "edit_file");
+    const initial = String(
+      await read({ path: "src/example.ts" }, executionOptions)
+    );
+    const anchor = initial.match(secondLineAnchorPattern)?.[0];
+    if (anchor === undefined) {
+      throw new Error("Expected hashline metadata.");
+    }
+
+    await expect(
+      edit(
+        {
+          edits: [{ end: anchor, lines: ["x"], op: "append" }],
+          path: "src/example.ts",
+        },
+        executionOptions
+      )
+    ).rejects.toThrow(unsupportedEndPattern);
+
+    await expect(
+      edit(
+        {
+          edits: [
+            { lines: ["replaced"], op: "replace", pos: anchor },
+            { lines: ["inserted"], op: "prepend", pos: anchor },
+          ],
+          path: "src/example.ts",
+        },
+        executionOptions
+      )
+    ).rejects.toThrow(intersectPattern);
+  });
+
+  it("does not advertise a phantom line for a trailing newline", async () => {
+    const tools = createWorkspaceTools({ workspace });
+    const read = executableTool(tools, "read_file");
+    const output = String(
+      await read({ path: "src/example.ts" }, executionOptions)
+    );
+    expect(output).toContain("lines: 1-2/2");
+    expect(output).not.toMatch(phantomLinePattern);
+  });
+
+  it("marks truncated directory listings", async () => {
+    const crowded = join(workspace, "crowded");
+    await mkdir(crowded);
+    for (let index = 0; index < 1005; index += 1) {
+      await writeFile(join(crowded, `f${index}.txt`), "x", "utf8");
+    }
+    const tools = createWorkspaceTools({ workspace });
+    const read = executableTool(tools, "read_file");
+    const output = String(await read({ path: "crowded" }, executionOptions));
+    expect(output).toMatch(directoryTruncationPattern);
+  });
+
+  it("marks truncated glob results", async () => {
+    await writeFile(join(workspace, "src", "second.ts"), "export {}\n", "utf8");
+    const tools = createWorkspaceTools({ workspace });
+    const glob = executableTool(tools, "glob_files");
+    const output = String(
+      await glob(
+        { max_results: 1, path: "src", pattern: "*.ts" },
+        executionOptions
+      )
+    );
+    expect(output).toMatch(truncatedPattern);
+  });
+
+  it("reports files skipped during grep for size", async () => {
+    await writeFile(
+      join(workspace, "src", "large.txt"),
+      `needle\n${"x".repeat(2 * 1024 * 1024)}`,
+      "utf8"
+    );
+    await writeFile(
+      join(workspace, "src", "small.txt"),
+      "needle here\n",
+      "utf8"
+    );
+    const tools = createWorkspaceTools({ workspace });
+    const grep = executableTool(tools, "grep_files");
+    const output = String(
+      await grep(
+        { fixed_strings: true, path: "src", pattern: "needle" },
+        executionOptions
+      )
+    );
+    expect(output).toContain("src/small.txt");
+    expect(output).toMatch(skippedPattern);
+  });
+
+  it("treats backslashes in glob patterns as literal characters", () => {
+    const matcher = globPatternToRegExp("foo\\d.ts");
+    expect(matcher.test("foo\\d.ts")).toBe(true);
+    expect(matcher.test("food.ts")).toBe(false);
+  });
+
+  it("deletes dangling and outside-pointing symlinks as links", async () => {
+    const dangling = join(workspace, "src", "dangling.ts");
+    await symlink(join(workspace, "src", "gone.ts"), dangling);
+    const outsideLink = join(workspace, "src", "outside-link.ts");
+    await symlink(join(outside, "secret.ts"), outsideLink);
+    await writeFile(join(outside, "secret.ts"), "secret\n", "utf8");
+    const tools = createWorkspaceTools({ workspace });
+    const remove = executableTool(tools, "delete_file");
+
+    await remove({ path: "src/dangling.ts" }, executionOptions);
+    await expect(lstat(dangling)).rejects.toMatchObject({ code: "ENOENT" });
+
+    await remove({ path: "src/outside-link.ts" }, executionOptions);
+    await expect(lstat(outsideLink)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(join(outside, "secret.ts"), "utf8")).resolves.toBe(
+      "secret\n"
+    );
+  });
+
+  it("force-kills commands that ignore SIGTERM", async () => {
+    const tools = createWorkspaceTools({ workspace });
+    const shell = executableTool(tools, "shell_execute");
+    const startedAt = Date.now();
+    const output = String(
+      await shell(
+        { command: "trap '' TERM; sleep 30", timeout_seconds: 1 },
+        executionOptions
+      )
+    );
+    expect(output).toContain("timed out");
+    expect(Date.now() - startedAt).toBeLessThan(15_000);
+  }, 20_000);
+
+  it("withholds provider API keys from shell commands", async () => {
+    process.env.AI_API_KEY = "pss-test-secret";
+    process.env.azure_openai_api_key = "pss-test-secret-2";
+    process.env.INTEGRATION_SERVICE_TOKEN = "pss-test-token-kept";
+    try {
+      const tools = createWorkspaceTools({ workspace });
+      const shell = executableTool(tools, "shell_execute");
+      const output = String(
+        await shell(
+          {
+            command:
+              "echo $AI_API_KEY $azure_openai_api_key $INTEGRATION_SERVICE_TOKEN",
+          },
+          executionOptions
+        )
+      );
+      expect(output).not.toContain("pss-test-secret");
+      expect(output).toContain("pss-test-token-kept");
+    } finally {
+      delete process.env.AI_API_KEY;
+      delete process.env.azure_openai_api_key;
+      delete process.env.INTEGRATION_SERVICE_TOKEN;
+    }
   });
 });

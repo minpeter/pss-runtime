@@ -23,6 +23,26 @@ function appendBounded(current: string, chunk: string): string {
   return next.length <= 2_000_000 ? next : next.slice(-2_000_000);
 }
 
+const SIGKILL_GRACE_MS = 5000;
+
+// Credentials must never leak into agent-spawned subprocesses. Every known
+// provider key (current and future) ends in _API_KEY, so withhold that whole
+// suffix family; tokens for CLIs the agent legitimately uses (gh, npm, cloud
+// providers) stay, and untrusted workloads belong in a container.
+const SECRET_ENV_SUFFIX = /_api_keys?$/iu;
+
+function shellEnvironment(): NodeJS.ProcessEnv {
+  const entries = Object.entries(process.env).filter(
+    ([key]) => !SECRET_ENV_SUFFIX.test(key)
+  );
+  return {
+    ...Object.fromEntries(entries),
+    CI: process.env.CI ?? "1",
+    GIT_PAGER: "cat",
+    PAGER: "cat",
+  };
+}
+
 function runCommand(
   workspace: string,
   command: string,
@@ -32,14 +52,19 @@ function runCommand(
     const child = spawn("/bin/bash", ["-c", command], {
       cwd: workspace,
       detached: true,
-      env: {
-        ...process.env,
-        CI: process.env.CI ?? "1",
-        GIT_PAGER: "cat",
-        PAGER: "cat",
-      },
+      env: shellEnvironment(),
       stdio: ["ignore", "pipe", "pipe"],
     });
+    const killGroup = (signal: NodeJS.Signals): void => {
+      if (child.pid === undefined) {
+        return;
+      }
+      try {
+        process.kill(-child.pid, signal);
+      } catch {
+        child.kill(signal);
+      }
+    };
     let stdout = "";
     let stderr = "";
     let timedOut = false;
@@ -52,18 +77,19 @@ function runCommand(
       stderr = appendBounded(stderr, chunk);
     });
     child.once("error", reject);
+    let killer: NodeJS.Timeout | undefined;
     const timer = setTimeout(() => {
       timedOut = true;
-      if (child.pid !== undefined) {
-        try {
-          process.kill(-child.pid, "SIGTERM");
-        } catch {
-          child.kill("SIGTERM");
-        }
-      }
+      killGroup("SIGTERM");
+      // Escalate so a command that ignores SIGTERM cannot hang the tool.
+      killer = setTimeout(() => killGroup("SIGKILL"), SIGKILL_GRACE_MS);
+      killer.unref();
     }, timeoutMs);
     child.once("close", (exitCode, signal) => {
       clearTimeout(timer);
+      if (killer !== undefined) {
+        clearTimeout(killer);
+      }
       resolve({ exitCode, signal, stderr, stdout, timedOut });
     });
   });
@@ -74,7 +100,7 @@ export function createShellExecuteTool(
 ): Tool<z.infer<typeof inputSchema>, string> {
   return tool({
     description:
-      "Execute a non-interactive shell command in the workspace. Use read_file/glob_files/grep_files for inspection and edit_file/write_file for mutations. Run tests and builds after changes.",
+      "Execute a non-interactive shell command from the workspace directory. Not a sandbox: commands run with the user's permissions, but AI provider API keys are withheld from the child environment. Prefer read_file/glob_files/grep_files for inspection and edit_file/write_file for mutations. Run tests and builds after changes.",
     inputSchema,
     execute: async ({ command, timeout_seconds: timeoutSeconds = 120 }) => {
       const result = await runCommand(

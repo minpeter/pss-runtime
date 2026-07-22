@@ -13,6 +13,12 @@ export interface CreateCodingAgentOptions {
   readonly host?: AgentOptions["host"];
   readonly instructions?: string;
   readonly model?: AgentOptions["model"];
+  /**
+   * Replaces the default optional web tools. Workspace tools are always
+   * included and win name collisions, so custom tools cannot shadow them.
+   * This factory always grants workspace file/shell access; build restricted
+   * agents on `createAgent` from @minpeter/pss-runtime instead.
+   */
   readonly tools?: ToolSet;
   readonly webTools?: CreateCodingAgentToolsOptions;
   readonly workspace?: string;
@@ -27,12 +33,10 @@ export function createCodingAgent({
   webTools,
   workspace = process.cwd(),
 }: CreateCodingAgentOptions = {}) {
-  const resolvedTools =
-    tools ??
-    ({
-      ...createWorkspaceTools({ workspace }),
-      ...createCodingAgentTools(webTools),
-    } satisfies ToolSet);
+  const resolvedTools = {
+    ...(tools ?? createCodingAgentTools(webTools)),
+    ...createWorkspaceTools({ workspace }),
+  } satisfies ToolSet;
 
   return createAgent({
     ...(autoCompaction === undefined ? {} : { autoCompaction }),

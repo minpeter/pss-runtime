@@ -35,23 +35,38 @@ function createMatcher(
   return (line) => expression.test(line);
 }
 
+function skippedNote(skippedFiles: number): string {
+  return skippedFiles > 0
+    ? `; skipped ${skippedFiles} file(s) over 2 MiB or binary`
+    : "";
+}
+
+interface SearchFileResult {
+  readonly matches: readonly string[];
+  readonly skipped: boolean;
+}
+
 async function searchFile(
   file: string,
   relativePath: string,
-  matchesLine: (line: string) => boolean
-): Promise<readonly string[]> {
+  matchesLine: (line: string) => boolean,
+  budget: number
+): Promise<SearchFileResult> {
   if ((await stat(file)).size > MAX_FILE_BYTES) {
-    return [];
+    return { matches: [], skipped: true };
   }
   const content = await readFile(file);
   if (content.includes(0)) {
-    return [];
+    return { matches: [], skipped: true };
   }
   const results: string[] = [];
   for (const [index, line] of content
     .toString("utf8")
     .split(END_OF_LINE_PATTERN)
     .entries()) {
+    if (results.length >= budget) {
+      break;
+    }
     if (matchesLine(line)) {
       const clipped = line.length > 500 ? `${line.slice(0, 500)}…` : line;
       results.push(
@@ -59,7 +74,7 @@ async function searchFile(
       );
     }
   }
-  return results;
+  return { matches: results, skipped: false };
 }
 
 export function createGrepFilesTool(
@@ -78,20 +93,22 @@ export function createGrepFilesTool(
       include_ignored: includeIgnored = false,
       max_results: maxResults = 200,
     }) => {
-      const startPath = await resolveWorkspacePath(workspace, path);
+      const resolved = await resolveWorkspacePath(workspace, path);
+      const startPath = resolved.path;
       if (!(await stat(startPath)).isDirectory()) {
         throw new Error(`Grep path is not a directory: ${path}`);
       }
       const includeMatcher = include ? globPatternToRegExp(include) : undefined;
       const matchesLine = createMatcher(pattern, fixedStrings, caseSensitive);
       const results: string[] = [];
-      const files = await walkWorkspaceFiles(
-        workspace,
+      let skippedFiles = 0;
+      const { files, truncated: walkTruncated } = await walkWorkspaceFiles(
+        resolved.root,
         startPath,
         includeIgnored
       );
       for (const file of files) {
-        const relativePath = workspaceRelativePath(workspace, file);
+        const relativePath = workspaceRelativePath(resolved.root, file);
         if (
           includeMatcher &&
           !includeMatcher.test(relativePath) &&
@@ -99,16 +116,25 @@ export function createGrepFilesTool(
         ) {
           continue;
         }
-        results.push(...(await searchFile(file, relativePath, matchesLine)));
+        const found = await searchFile(
+          file,
+          relativePath,
+          matchesLine,
+          maxResults - results.length
+        );
+        if (found.skipped) {
+          skippedFiles += 1;
+        }
+        results.push(...found.matches);
         if (results.length >= maxResults) {
-          const truncated = results.slice(0, maxResults);
           return truncateToolOutput(
-            `OK - ${truncated.length}+ match(es), truncated\n${truncated.join("\n")}`
+            `OK - ${results.length}+ match(es), truncated${skippedNote(skippedFiles)}\n${results.join("\n")}`
           );
         }
       }
+      const walkNote = walkTruncated ? ", file scan truncated" : "";
       return truncateToolOutput(
-        `OK - ${results.length} match(es)\n${results.join("\n")}`
+        `OK - ${results.length} match(es)${walkNote}${skippedNote(skippedFiles)}\n${results.join("\n")}`
       );
     },
   });

@@ -16,7 +16,7 @@ function hashToUInt32(input: string): number {
 export function computeLineHash(lineNumber: number, content: string): string {
   const stripped = content.replace(/\s+/g, "");
   const seed = SIGNIFICANT_TEXT.test(stripped) ? 0 : lineNumber;
-  return HASHLINE_DICTIONARY[hashToUInt32(`${seed}:${stripped}`) % 256] ?? "ZZ";
+  return HASHLINE_DICTIONARY[hashToUInt32(`${seed}:${stripped}`) % 256];
 }
 
 export function computeFileHash(content: string): string {
@@ -41,8 +41,7 @@ export function resolveLineAnchor(
       `Invalid hashline anchor: ${anchor}. Re-read the file and use LINE#ID.`
     );
   }
-  const lineNumber = Number.parseInt(match[1] ?? "", 10);
-  const expectedHash = match[2];
+  const lineNumber = Number.parseInt(match[1], 10);
   const content = lines[lineNumber - 1];
   if (content === undefined) {
     throw new Error(
@@ -50,7 +49,7 @@ export function resolveLineAnchor(
     );
   }
   const currentAnchor = formatLineAnchor(lineNumber, content);
-  if (currentAnchor !== anchor || expectedHash === undefined) {
+  if (currentAnchor !== anchor) {
     throw new Error(
       `Stale anchor ${anchor}; current anchor is ${currentAnchor}. Re-read the file.`
     );

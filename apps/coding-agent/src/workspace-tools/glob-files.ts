@@ -27,23 +27,27 @@ export function createGlobFilesTool(
       include_ignored: includeIgnored = false,
       max_results: maxResults = 500,
     }) => {
-      const startPath = await resolveWorkspacePath(workspace, path);
+      const resolved = await resolveWorkspacePath(workspace, path);
+      const startPath = resolved.path;
       if (!(await stat(startPath)).isDirectory()) {
         throw new Error(`Glob path is not a directory: ${path}`);
       }
       const matcher = globPatternToRegExp(pattern);
-      const files = await walkWorkspaceFiles(
-        workspace,
+      const { files, truncated } = await walkWorkspaceFiles(
+        resolved.root,
         startPath,
         includeIgnored
       );
       const matches = files
         .filter((file) => matcher.test(workspaceRelativePath(startPath, file)))
-        .map((file) => workspaceRelativePath(workspace, file))
-        .sort()
-        .slice(0, maxResults);
+        .map((file) => workspaceRelativePath(resolved.root, file))
+        .sort();
+      const limited = matches.slice(0, maxResults);
+      const hasMore = truncated || matches.length > limited.length;
+      const count = hasMore ? `${limited.length}+` : `${limited.length}`;
+      const suffix = hasMore ? ", truncated" : "";
       return truncateToolOutput(
-        `OK - ${matches.length} file(s)\n${matches.join("\n")}`
+        `OK - ${count} file(s)${suffix}\n${limited.join("\n")}`
       );
     },
   });
