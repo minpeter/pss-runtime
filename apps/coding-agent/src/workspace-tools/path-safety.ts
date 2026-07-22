@@ -1,7 +1,7 @@
 import { lstat, realpath } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 
-function isInside(root: string, candidate: string): boolean {
+export function isInsideWorkspace(root: string, candidate: string): boolean {
   const offset = relative(root, candidate);
   return offset === "" || !(offset.startsWith("..") || isAbsolute(offset));
 }
@@ -56,10 +56,10 @@ export async function resolveWorkspacePath(
   // rebasing them onto the canonical root.
   const lexicalRoot = resolve(workspace);
   const candidate =
-    !isInside(root, lexical) && isInside(lexicalRoot, lexical)
+    !isInsideWorkspace(root, lexical) && isInsideWorkspace(lexicalRoot, lexical)
       ? resolve(root, relative(lexicalRoot, lexical))
       : lexical;
-  if (!isInside(root, candidate)) {
+  if (!isInsideWorkspace(root, candidate)) {
     throw new Error(`Path escapes workspace: ${inputPath}`);
   }
 
@@ -72,7 +72,7 @@ export async function resolveWorkspacePath(
     const metadata = await lstat(candidate);
     if (metadata.isSymbolicLink()) {
       const parent = await realpath(dirname(candidate));
-      if (!isInside(root, parent)) {
+      if (!isInsideWorkspace(root, parent)) {
         throw new Error(
           `Path resolves outside workspace through a symlink: ${inputPath}`
         );
@@ -82,7 +82,7 @@ export async function resolveWorkspacePath(
   }
 
   const resolvedExisting = await realpath(existingPath);
-  if (!isInside(root, resolvedExisting)) {
+  if (!isInsideWorkspace(root, resolvedExisting)) {
     throw new Error(
       `Path resolves outside workspace through a symlink: ${inputPath}`
     );
@@ -92,7 +92,7 @@ export async function resolveWorkspacePath(
     existingPath === candidate
       ? resolvedExisting
       : resolve(resolvedExisting, relative(existingPath, candidate));
-  if (!isInside(root, path)) {
+  if (!isInsideWorkspace(root, path)) {
     throw new Error(
       `Path resolves outside workspace through a symlink: ${inputPath}`
     );

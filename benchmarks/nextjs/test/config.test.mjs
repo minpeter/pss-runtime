@@ -31,6 +31,14 @@ test("blank next version values count as unset", () => {
   assert.equal(resolveNextVersion("", "16.3.0-canary.91"), "16.3.0-canary.91");
 });
 
+test("padded next version values are trimmed", () => {
+  assert.equal(resolveNextVersion(" 16.3.0-canary.90 "), "16.3.0-canary.90");
+  assert.equal(
+    resolveNextVersion(undefined, "\t16.3.0-canary.91\n"),
+    "16.3.0-canary.91"
+  );
+});
+
 test("explicit next version overrides the pin", () => {
   assert.equal(resolveNextVersion("16.3.0-canary.90"), "16.3.0-canary.90");
   assert.equal(

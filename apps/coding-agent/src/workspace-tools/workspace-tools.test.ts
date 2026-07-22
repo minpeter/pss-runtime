@@ -25,6 +25,7 @@ const fileHashPattern = /file_hash: ([0-9a-f]{8})/u;
 const firstLineAnchorPattern = /1#[ZPMQVRWSNKTXJBYH]{2}(?=\|)/u;
 const grepResultPattern = /src\/new\.ts:1#[ZPMQVRWSNKTXJBYH]{2}\|needle/u;
 const intersectPattern = /intersect|overlap/iu;
+const outsideWorkspacePattern = /outside the workspace/u;
 const phantomLinePattern = /3#[ZPMQVRWSNKTXJBYH]{2}/u;
 const secondLineAnchorPattern = /2#[ZPMQVRWSNKTXJBYH]{2}(?=\|)/u;
 const skippedPattern = /skipped/u;
@@ -404,6 +405,26 @@ describe("workspace coding tools", () => {
     ).rejects.toMatchObject({ code: "ENOENT" });
     await expect(
       stat(join(workspace, "src", "example.ts"))
+    ).resolves.toBeTruthy();
+  });
+
+  it("refuses hash validation for links pointing outside the workspace", async () => {
+    const tools = createWorkspaceTools({ workspace });
+    const remove = executableTool(tools, "delete_file");
+    const outsideDirectory = await mkdtemp(join(tmpdir(), "pss-outside-"));
+    await writeFile(join(outsideDirectory, "secret.txt"), "secret\n");
+    await symlink(
+      join(outsideDirectory, "secret.txt"),
+      join(workspace, "src", "outside-link.ts")
+    );
+    await expect(
+      remove(
+        { expected_file_hash: "12345678", path: "src/outside-link.ts" },
+        executionOptions
+      )
+    ).rejects.toThrow(outsideWorkspacePattern);
+    await expect(
+      lstat(join(workspace, "src", "outside-link.ts"))
     ).resolves.toBeTruthy();
   });
 

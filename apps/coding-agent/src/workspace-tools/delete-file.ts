@@ -2,7 +2,11 @@ import { lstat, readFile, realpath, rm } from "node:fs/promises";
 import { type Tool, tool } from "ai";
 import { z } from "zod";
 import { computeFileHash } from "./hashline";
-import { resolveWorkspacePath, workspaceRelativePath } from "./path-safety";
+import {
+  isInsideWorkspace,
+  resolveWorkspacePath,
+  workspaceRelativePath,
+} from "./path-safety";
 
 const inputSchema = z
   .object({
@@ -11,6 +15,34 @@ const inputSchema = z
     expected_file_hash: z.string().length(8).optional(),
   })
   .strict();
+
+async function assertExpectedFileHash(
+  metadata: { isSymbolicLink: () => boolean },
+  absolutePath: string,
+  root: string,
+  expectedHash: string
+): Promise<void> {
+  // read_file follows a final symlink and reports the target's hash, so
+  // verify against the target even though rm removes the link. The target
+  // must stay inside the workspace: otherwise the hash check would read a
+  // file the file tools are not allowed to touch.
+  let hashPath = absolutePath;
+  if (metadata.isSymbolicLink()) {
+    const target = await realpath(absolutePath);
+    if (!isInsideWorkspace(root, target)) {
+      throw new Error(
+        "expected_file_hash cannot be validated: link target is outside the workspace."
+      );
+    }
+    hashPath = target;
+  }
+  const currentHash = computeFileHash(await readFile(hashPath, "utf8"));
+  if (currentHash !== expectedHash) {
+    throw new Error(
+      `Stale file hash ${expectedHash}; current hash is ${currentHash}.`
+    );
+  }
+}
 
 export function createDeleteFileTool(
   workspace: string
@@ -39,17 +71,12 @@ export function createDeleteFileTool(
         if (!(metadata.isFile() || metadata.isSymbolicLink())) {
           throw new Error("expected_file_hash is only valid for files.");
         }
-        // read_file follows a final symlink and reports the target's hash,
-        // so verify against the target even though rm removes the link.
-        const hashPath = metadata.isSymbolicLink()
-          ? await realpath(absolutePath)
-          : absolutePath;
-        const currentHash = computeFileHash(await readFile(hashPath, "utf8"));
-        if (currentHash !== expectedHash) {
-          throw new Error(
-            `Stale file hash ${expectedHash}; current hash is ${currentHash}.`
-          );
-        }
+        await assertExpectedFileHash(
+          metadata,
+          absolutePath,
+          resolved.root,
+          expectedHash
+        );
       }
       await rm(absolutePath, { recursive, force: false });
       return `OK - deleted\npath: ${workspaceRelativePath(resolved.root, absolutePath)}`;

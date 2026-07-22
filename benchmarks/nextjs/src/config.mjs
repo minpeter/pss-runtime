@@ -4,8 +4,12 @@ const DEFAULT_STARTS_PER_MINUTE = 4;
 
 function asSet(value) {
   // Blank values (e.g. an empty dotenv entry) count as unset so they cannot
-  // bypass the pinned fallback.
-  return typeof value === "string" && value.trim() !== "" ? value : undefined;
+  // bypass the pinned fallback; padded values are returned trimmed.
+  if (typeof value !== "string") {
+    return;
+  }
+  const trimmed = value.trim();
+  return trimmed === "" ? undefined : trimmed;
 }
 
 /**

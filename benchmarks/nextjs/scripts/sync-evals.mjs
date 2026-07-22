@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import {
   cp,
   mkdir,
@@ -21,6 +22,10 @@ const checkout = resolve(benchmarkRoot, ".evals-checkout");
 const destination = resolve(benchmarkRoot, "evals");
 const stagedDestination = resolve(benchmarkRoot, ".evals-staging");
 const lockPath = resolve(benchmarkRoot, ".evals-sync.lock");
+const lockPidPath = resolve(lockPath, "pid");
+// Unique owner token: pid for liveness and release checks plus randomness so
+// owners of successive lock instances can always be told apart.
+const lockToken = `${process.pid}-${randomBytes(6).toString("hex")}`;
 
 function git(args) {
   const result = spawnSync("git", ["-C", checkout, ...args], {
@@ -57,7 +62,7 @@ function contentionError() {
 // later sync forever.
 const STALE_LOCK_MS = 10 * 60 * 1000;
 
-async function reclaimStaleLock() {
+async function reclaimStaleLock(expectedIdentity) {
   // The takeover rename is atomic, so exactly one concurrent reclaimer wins.
   const tombstone = resolve(
     benchmarkRoot,
@@ -71,6 +76,21 @@ async function reclaimStaleLock() {
       throw contentionError();
     }
     throw error;
+  }
+  // Identity check: only remove the exact instance we validated. If another
+  // process replaced the lock between validation and claim, restore the
+  // replacement intact and back off.
+  const found = await readFile(resolve(tombstone, "pid"), "utf8").catch(
+    () => ""
+  );
+  if (found !== expectedIdentity) {
+    try {
+      await rename(tombstone, lockPath);
+    } catch {
+      // A new lock already exists; leave the tombstone rather than deleting
+      // a lock we did not validate.
+    }
+    throw contentionError();
   }
   await rm(tombstone, { force: true, recursive: true });
   try {
@@ -93,23 +113,31 @@ async function acquireLock() {
     if (!error || typeof error !== "object" || error.code !== "EEXIST") {
       throw error;
     }
-    const owner = await readFile(resolve(lockPath, "pid"), "utf8").catch(
-      () => ""
-    );
-    const pid = Number.parseInt(owner, 10);
-    if (Number.isInteger(pid)) {
-      if (isProcessAlive(pid)) {
-        throw contentionError();
-      }
-    } else {
+    const identity = await readFile(lockPidPath, "utf8").catch(() => "");
+    if (identity === "") {
       const { mtimeMs } = await stat(lockPath);
       if (Date.now() - mtimeMs < STALE_LOCK_MS) {
         throw contentionError();
       }
+    } else {
+      const pid = Number.parseInt(identity, 10);
+      if (!Number.isInteger(pid) || isProcessAlive(pid)) {
+        throw contentionError();
+      }
     }
-    await reclaimStaleLock();
+    await reclaimStaleLock(identity);
   }
-  await writeFile(resolve(lockPath, "pid"), String(process.pid), "utf8");
+  // First writer wins: if our lock instance was reclaimed and recreated while
+  // we were suspended, the replacement already has an owner and the exclusive
+  // create fails instead of overwriting it.
+  try {
+    await writeFile(lockPidPath, lockToken, { encoding: "utf8", flag: "wx" });
+  } catch (error) {
+    if (error && typeof error === "object" && error.code === "EEXIST") {
+      throw contentionError();
+    }
+    throw error;
+  }
 }
 
 async function releaseLock() {
