@@ -49,12 +49,14 @@ describe("headless exec arguments", () => {
     expect(() =>
       parseExecArguments(["--prompt", "one", "--wat"], "/repo")
     ).toThrow(unknownOptionPattern);
-    expect(() =>
-      parseExecArguments(
-        ["--prompt", "one", "--timeout-seconds", "1201"],
-        "/repo"
-      )
-    ).toThrow(timeoutPattern);
+    for (const timeout of ["1201", "30s", "1.5"]) {
+      expect(() =>
+        parseExecArguments(
+          ["--prompt", "one", "--timeout-seconds", timeout],
+          "/repo"
+        )
+      ).toThrow(timeoutPattern);
+    }
   });
 
   it("allows help without a prompt", () => {

@@ -45,17 +45,6 @@ export interface RunCodingAgentExecOptions {
   readonly workspace: string;
 }
 
-function emptyUsage(): TokenUsageSummary {
-  return {
-    cacheReadTokens: 0,
-    cacheWriteTokens: 0,
-    inputTokens: 0,
-    outputTokens: 0,
-    reasoningTokens: 0,
-    totalTokens: 0,
-  };
-}
-
 function addUsage(
   summary: TokenUsageSummary,
   event: Extract<AgentEvent, { type: "model-usage" }>
@@ -123,7 +112,14 @@ export async function runCodingAgentExec({
   const state: ExecState = {
     finalText: "",
     status: "error",
-    usage: emptyUsage(),
+    usage: {
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      reasoningTokens: 0,
+      totalTokens: 0,
+    },
   };
   const absoluteWorkspace = resolve(workspace);
   const agent = await createCodingAgent({
@@ -132,7 +128,11 @@ export async function runCodingAgentExec({
     workspace: absoluteWorkspace,
   });
   const thread = agent.thread(`exec:${randomUUID()}`);
-  const timeout = setTimeout(() => thread.interrupt(), timeoutMs);
+  let timeoutFired = false;
+  const timeout = setTimeout(() => {
+    timeoutFired = true;
+    thread.interrupt();
+  }, timeoutMs);
   writeJsonLine(stdout, {
     model: typeof model === "string" ? model : model.modelId,
     schema: "pss-headless-v1",
@@ -143,6 +143,11 @@ export async function runCodingAgentExec({
 
   try {
     const turn = await thread.send(prompt);
+    // If the timer fired while send() was still starting, interrupt() was a
+    // no-op; interrupt again now that the turn is active.
+    if (timeoutFired) {
+      thread.interrupt();
+    }
     for await (const event of turn.events()) {
       events.push(event);
       writeJsonLine(stdout, { event, type: "agent_event" });

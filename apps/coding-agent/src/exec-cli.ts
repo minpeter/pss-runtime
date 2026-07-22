@@ -85,10 +85,10 @@ function setValueOption(
       options.baseUrl = value;
       return;
     case "--result-file":
-      options.resultFile = value;
+      options.resultFile = resolve(cwd, value);
       return;
     case "--timeout-seconds":
-      options.timeoutSeconds = Number.parseInt(value, 10);
+      options.timeoutSeconds = Number(value);
       return;
     case "--web-tools":
       if (
@@ -182,7 +182,7 @@ export async function runExecCli({
     stdout.write(`${formatExecUsage()}\n`);
     return 0;
   }
-  config({ override: false, quiet: true });
+  config({ override: false, path: resolve(cwd, ".env"), quiet: true });
   const runtimeEnv: CodingAgentRuntimeEnv = {
     ...process.env,
     ...env,
