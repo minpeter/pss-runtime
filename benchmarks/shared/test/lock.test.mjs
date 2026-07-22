@@ -78,6 +78,29 @@ test("a malformed identity follows the same fresh/stale rule", async () => {
   await impatient.release();
 });
 
+test("a stale release handle cannot delete a newer same-process lock", async () => {
+  const first = makeLock();
+  await first.acquire();
+  await first.release();
+  const second = makeLock();
+  await second.acquire();
+  // A duplicate/stale release from the first instance must not delete the
+  // second instance's lock even though both share this process's PID.
+  await first.release();
+  const stats = await lstat(lockPath);
+  assert.equal(stats.isDirectory(), true);
+  await second.release();
+});
+
+test("a zero-pid owner token follows the stale path, not liveness", async () => {
+  await seedLockDir("0-aaaaaaaaaaaa");
+  // PID 0 must not count as a live owner; a fresh lock still refuses.
+  await assert.rejects(makeLock().acquire(), contentionPattern);
+  const impatient = makeLock({ staleMs: 0 });
+  await impatient.acquire();
+  await impatient.release();
+});
+
 test("release does not remove a lock owned by another token", async () => {
   const lock = makeLock();
   await lock.acquire();

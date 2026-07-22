@@ -14,8 +14,15 @@ export async function checkNodeScripts({
   sourceDirectories = ["scripts", "src", "test"],
 }) {
   async function collectCheckedFiles(directory) {
+    // A configured root directory that does not exist (e.g. no test/ yet)
+    // contributes no files; other filesystem errors still propagate.
     const entries = await readdir(join(packageRoot, directory), {
       withFileTypes: true,
+    }).catch((error) => {
+      if (error && typeof error === "object" && error.code === "ENOENT") {
+        return [];
+      }
+      throw error;
     });
     const files = [];
     for (const entry of entries) {

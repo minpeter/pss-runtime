@@ -38,5 +38,5 @@ fixture source and Next.js version (`src/constants.mjs`), the scoring
 profiles (`src/profiles.mjs`), and the orchestrator (`src/run-benchmark.mjs`).
 Benchmark-agnostic machinery — the sync lock, artifact packing, campaign
 scoring, and config resolution — lives in `@minpeter/pss-bench-shared`
-(`benchmarks/shared`) so future benchmark packages only add an adapter and
-fixture pins.
+(`benchmarks/shared`) so future benchmark packages only add their harness
+adapter, fixture pins, and any benchmark-specific profiles or orchestration.

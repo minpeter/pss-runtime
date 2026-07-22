@@ -20,7 +20,8 @@ profile definitions — everything reusable lives here.
 - `@minpeter/pss-bench-shared/config` — `asSet`/`resolvePositiveInteger`:
   environment/CLI value resolution (blank counts as unset, values trimmed).
 - `@minpeter/pss-bench-shared/check-scripts` — `checkNodeScripts`: the
-  syntax-check build gate for plain-.mjs benchmark packages.
+  syntax-check build gate for benchmark packages written as plain `.mjs`
+  (no transpile step).
 
 Consumers declare `"@minpeter/pss-bench-shared": "workspace:*"` and keep
 thin wrapper scripts so existing `pnpm <script>` entry points stay stable.

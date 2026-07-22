@@ -47,10 +47,9 @@ export function createDirectoryLock({
   async function reclaimStaleLock(expectedIdentity) {
     // The takeover rename is atomic, so exactly one concurrent reclaimer
     // wins.
-    const tombstone = resolve(
-      tombstoneRoot,
-      `.bench-lock.stale-${process.pid}`
-    );
+    // Per-instance token in the name: concurrent reclaims within one
+    // process never collide on the same tombstone path.
+    const tombstone = resolve(tombstoneRoot, `.bench-lock.stale-${lockToken}`);
     await rm(tombstone, { force: true, recursive: true });
     try {
       await rename(lockPath, tombstone);
@@ -93,8 +92,11 @@ export function createDirectoryLock({
       await readFile(lockPidPath, "utf8").catch(() => "")
     ).trim();
     const ownerMatch = lockTokenPattern.exec(identity);
-    if (ownerMatch) {
-      if (isProcessAlive(Number.parseInt(ownerMatch[1], 10))) {
+    const ownerPid = ownerMatch ? Number.parseInt(ownerMatch[1], 10) : 0;
+    // PID 0 is excluded: process.kill(0, 0) probes the whole process group
+    // and would pin a malformed lock as permanently alive.
+    if (ownerPid > 0) {
+      if (isProcessAlive(ownerPid)) {
         throw contentionError();
       }
     } else {
@@ -132,9 +134,11 @@ export function createDirectoryLock({
   }
 
   async function release() {
-    const owner = await readFile(lockPidPath, "utf8").catch(() => "");
-    // Only remove the lock while we still own it.
-    if (Number.parseInt(owner, 10) === process.pid) {
+    const owner = (await readFile(lockPidPath, "utf8").catch(() => "")).trim();
+    // Only remove the lock while this instance still owns it: comparing the
+    // full token (not just the pid) keeps a stale release handle from
+    // deleting a newer lock owned by the same process.
+    if (owner === lockToken) {
       await rm(lockPath, { force: true, recursive: true });
     }
   }
