@@ -1,21 +1,27 @@
 core:changelogs:
-  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Add update notices and the `pss update` command\n\nThe TUI now checks for updates without blocking startup: a cached registry\nresult in `~/.pss/update-check.json` (24h TTL, written atomically) is read\nbefore the first render, one dim scrollback line announces a newer version\nwhen present, and a stale cache refreshes in the background after the first\nrender so the startup path performs no network I/O. The version and channel\n(`latest` or `next`) are baked at build time, checks skip dev/source runs,\nand `PSS_DISABLE_UPDATE_CHECK=1` opts out.\n\n`pss update` re-checks the npm registry's dist-tags and installs the\nexact pinned version through the detected package manager. Channels follow\nthe installed version: stable installs track `latest`, and any prerelease\ntracks its own dist-tag (`next`, `beta`, `canary`, or any published tag),\nwith explicit `--channel <tag>` moves allowed toward stable or across\nprerelease channels and refused from stable to prerelease. Package managers\n(pnpm/npm/bun/yarn today) are described in a single descriptor registry —\ndetection patterns, probes, and install arguments — so new managers are one\ndata entry. dlx/npx/bunx one-off runs and unknown layouts are refused with\nmanual instructions. `pss update --check` prints the current version,\nchannel, install method, and the exact command without changing anything.\n\nWith `PSS_AUTO_UPDATE=1`, an in-channel, same-major update on a\nconfidently detected global install is installed automatically after the TUI\nexits — never during a session and never as a channel switch.\n\nThe TUI web-tools availability warning now renders through the same dim\nscrollback seam instead of a pre-start `console.warn`.\n"
-    filename: 2026-07-21-update-notifier-update-command.md
+  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Add workspace coding tools and the headless `pss exec` runner\n\nThe coding agent now ships a workspace tool set shared by the TUI and a new\nheadless runner: `read_file`, `glob_files`, `grep_files`, `edit_file`\n(hashline-anchored with stale-hash guards), `write_file`, `delete_file`, and\n`shell_execute`. The file tools are confined to the workspace — path and\nsymlink escapes are rejected — and writes are atomic with the target\npermissions applied from the outset. `shell_execute` is not a sandbox:\ncommands run with the user's permissions, but AI provider API keys are\nwithheld from the child environment.\n\n`pss exec` runs one headless coding task for CI, benchmarks, and scripts. It\nstreams JSONL events (`metadata`, `agent_event`, `result`) to stdout and\nexits 0 only when the task completes, with `--workspace`, exactly one of\n`--prompt`/`--prompt-file`/`--stdin`, plus `--model`, `--base-url`,\n`--timeout-seconds`, `--web-tools`, and `--result-file`. A `.env` next to the\nworking directory is loaded automatically.\n\nBoth surfaces share one production agent factory, `createCodingAgent`: the\nworkspace tools are always included and win name collisions, while a custom\n`tools` option replaces only the optional web tools.\n"
+    filename: 2026-07-23-workspace-coding-tools-exec.md
     v: 0.0.0
 core:packages:
   - changelogIds:
-      - 2026-07-21-update-notifier-update-command.md
+      - 2026-07-23-workspace-coding-tools-exec.md
     id: npm:@minpeter/pss-coding-agent
     updated: true
+  - id: npm:@minpeter/pss-benchmark-nextjs
+    updated: false
+  - id: npm:@minpeter/pss-bench-shared
+    updated: false
   - id: npm:@minpeter/pss-runtime
     updated: false
 npm:packages:
   - distTag: next
     id: npm:@minpeter/pss-coding-agent
+  - id: npm:@minpeter/pss-benchmark-nextjs
+  - id: npm:@minpeter/pss-bench-shared
   - distTag: next
     id: npm:@minpeter/pss-runtime
-  - id: npm:@minpeter/pss-example-background-subagent
   - id: npm:@minpeter/pss-worker-agent
+  - id: npm:@minpeter/pss-example-background-subagent
   - id: npm:@minpeter/pss-example-basic
   - id: npm:@minpeter/pss-example-evals
   - id: npm:@minpeter/pss-example-local-file-agent
