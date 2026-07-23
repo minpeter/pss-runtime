@@ -59,9 +59,11 @@ export const parseDiffSection = (output: string): DiffLine[][] | undefined => {
     });
   }
 
-  return groups.length > 0 ? groups : undefined;
+  // A trailing "@@ edit" with no lines can arrive from truncated streaming
+  // output; empty groups would render as stray blank separators.
+  const nonEmpty = groups.filter((group) => group.length > 0);
+  return nonEmpty.length > 0 ? nonEmpty : undefined;
 };
-
 /**
  * A segment that carries no emphasis: plain syntax color terminated by a
  * reset. Used for unchanged tokens, tinted whitespace, and context rows.

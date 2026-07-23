@@ -32,7 +32,7 @@ const theme: MarkdownTheme = {
   underline: (t) => t,
 };
 
-// senpi dark-theme diff scheme, mirrored from tui-tool-renderers.ts so the
+// senpi dark-theme diff scheme, mirrored from tui/renderers so the
 // assertions read as "what the user sees" rather than implementation trivia.
 const REMOVE_FG = "\x1b[31m";
 const ADD_FG = "\x1b[32m";
@@ -370,6 +370,27 @@ const scenarios: Scenario[] = [
       expect(lower).toBeGreaterThanOrEqual(0);
       expect(higher).toBeGreaterThanOrEqual(0);
       expect(lower).toBeLessThan(higher);
+    },
+  },
+  {
+    name: "control characters in content are sanitized before rendering",
+    initial: 'const x = "a\u0007b";\n',
+    buildEdits: (anchor) => [
+      { lines: ['const x = "a\u0007c";'], op: "replace", pos: anchor(1) },
+    ],
+    expectedFile: 'const x = "a\u0007c";\n',
+    expectRender: {
+      contains: [
+        // cat -v style placeholder, not the raw control character
+        "^G",
+      ],
+      notContains: [
+        // raw BEL must never reach the terminal through the renderer
+        "\u0007",
+        "@@",
+        "1#",
+        GRAY_BG,
+      ],
     },
   },
   {

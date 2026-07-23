@@ -89,10 +89,22 @@ const classifyWordToken = (word: string): string => {
   return SYN_VARIABLE;
 };
 
+// Terminals interpret raw C0 controls embedded in file content (OSC title
+// hacks, cursor moves); render them as cat -v style ^X placeholders.
+// biome-ignore lint/suspicious/noControlCharactersInRegex: sanitizing terminal escape injection requires matching the C0 range
+const CONTROL_CHAR_PATTERN = /[\x00-\x08\x0b-\x1f\x7f]/g;
+
+const sanitizeControlChars = (text: string): string =>
+  text.replace(CONTROL_CHAR_PATTERN, (char) => {
+    const code = char.charCodeAt(0);
+    return code === 0x7f ? "^?" : `^${String.fromCharCode(code + 0x40)}`;
+  });
+
 export const tokenizeCode = (line: string): CodeToken[] => {
   const tokens: CodeToken[] = [];
+  const sanitized = sanitizeControlChars(line);
   CODE_TOKEN_PATTERN.lastIndex = 0;
-  let match = CODE_TOKEN_PATTERN.exec(line);
+  let match = CODE_TOKEN_PATTERN.exec(sanitized);
   while (match !== null) {
     const [text, comment, str, num, word] = match;
     if (comment !== undefined) {
@@ -106,7 +118,7 @@ export const tokenizeCode = (line: string): CodeToken[] => {
     } else {
       tokens.push({ color: classifyWordToken(text), text });
     }
-    match = CODE_TOKEN_PATTERN.exec(line);
+    match = CODE_TOKEN_PATTERN.exec(sanitized);
   }
 
   // identifiers directly followed by "(" are function calls

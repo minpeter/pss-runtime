@@ -182,6 +182,22 @@ describe("createToolRenderers — workspace tools", () => {
     expect(text).not.toContain("#PV");
   });
 
+  it("ignores a trailing empty edit group from truncated streaming output", () => {
+    const input = {
+      edits: [{ lines: "new", op: "replace", pos: "1#AA" }],
+      path: "f.ts",
+    };
+    const base =
+      "OK - edited f.ts\nfile_hash: 12345678\ndiff:\n@@ edit 1\n-1#AA|old\n+1#BB|new";
+
+    const complete = createView("edit_file", input, base);
+    const truncated = createView("edit_file", input, `${base}\n@@ edit 2`);
+
+    expect(truncated.render(80).join("\n")).toBe(
+      complete.render(80).join("\n")
+    );
+  });
+
   it("edit_file highlights only the edited lines in green", () => {
     const view = createView(
       "edit_file",
