@@ -8,7 +8,9 @@ import { runCodingAgentExec } from "./exec";
 
 type MockStreamResult = Extract<
   Exclude<
-    NonNullable<ConstructorParameters<typeof MockLanguageModelV4>[0]>["doStream"],
+    NonNullable<
+      ConstructorParameters<typeof MockLanguageModelV4>[0]
+    >["doStream"],
     (...args: never[]) => unknown
   >,
   { readonly stream: unknown }
@@ -102,9 +104,9 @@ describe("runCodingAgentExec", () => {
     const resultLine = lines.find((line) => line.type === "result");
     expect(resultLine).toBeDefined();
     const resultPayload = resultLine?.result as { events: AgentEvent[] };
-    expect(resultPayload.events.some((event) => isStreamAgentEvent(event))).toBe(
-      false
-    );
+    expect(
+      resultPayload.events.some((event) => isStreamAgentEvent(event))
+    ).toBe(false);
 
     expect(result.events.some((event) => isStreamAgentEvent(event))).toBe(
       false
