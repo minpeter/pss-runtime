@@ -1,7 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { type Tool, tool } from "ai";
 import { z } from "zod";
-import { computeFileHash, resolveLineAnchor } from "./hashline";
+import {
+  computeFileHash,
+  formatLineAnchor,
+  resolveLineAnchor,
+} from "./hashline";
 import { resolveWorkspacePath, workspaceRelativePath } from "./path-safety";
 import { atomicWrite } from "./write-file";
 
@@ -127,6 +131,33 @@ function applyEdits(
   return output;
 }
 
+const buildDiffSectionLines = (
+  resolvedEdits: readonly ResolvedEdit[],
+  sourceLines: readonly string[]
+): string[] => {
+  const diffLines: string[] = [];
+  for (const [editIndex, resolved] of resolvedEdits.entries()) {
+    diffLines.push(`@@ edit ${editIndex + 1}`);
+    if (resolved.op === "replace") {
+      for (
+        let lineIndex = resolved.index;
+        lineIndex <= resolved.end;
+        lineIndex += 1
+      ) {
+        const sourceLine = sourceLines[lineIndex] ?? "";
+        diffLines.push(
+          `-${formatLineAnchor(lineIndex + 1, sourceLine)}|${sourceLine}`
+        );
+      }
+    }
+    for (const [offset, line] of resolved.lines.entries()) {
+      const lineNumber = resolved.index + 1 + offset;
+      diffLines.push(`+${formatLineAnchor(lineNumber, line)}|${line}`);
+    }
+  }
+  return diffLines;
+};
+
 export function createEditFileTool(
   workspace: string
 ): Tool<z.infer<typeof inputSchema>, string> {
@@ -166,11 +197,16 @@ export function createEditFileTool(
       const outputLines = applyEdits(sourceLines, resolvedEdits);
       const output = `${outputLines.join(eol)}${trailingNewline && outputLines.length > 0 ? eol : ""}`;
       await atomicWrite(absolutePath, output, originalHash);
+
+      const diffLines = buildDiffSectionLines(resolvedEdits, sourceLines);
+
       return [
         "OK - edited file",
         `path: ${workspaceRelativePath(resolved.root, absolutePath)}`,
         `edits: ${edits.length}`,
         `file_hash: ${computeFileHash(output)}`,
+        "diff:",
+        ...diffLines,
       ].join("\n");
     },
   });

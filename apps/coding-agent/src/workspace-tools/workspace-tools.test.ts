@@ -111,6 +111,46 @@ describe("workspace coding tools", () => {
     ).resolves.toBe("export const first = 1;\nexport const second = 3;\n");
   });
 
+  it("includes removed and added lines in a diff section of the output", async () => {
+    const tools = createWorkspaceTools({ workspace });
+    const read = executableTool(tools, "read_file");
+    const edit = executableTool(tools, "edit_file");
+
+    const output = await read({ path: "src/example.ts" }, executionOptions);
+    const anchor = String(output).match(secondLineAnchorPattern)?.[0];
+
+    const editOutput = String(
+      await edit(
+        {
+          path: "src/example.ts",
+          edits: [
+            {
+              op: "replace",
+              pos: anchor,
+              lines: "export const second = 3;",
+            },
+            { op: "append", lines: "export const third = 3;" },
+          ],
+        },
+        executionOptions
+      )
+    );
+
+    expect(editOutput).toContain("diff:");
+    expect(editOutput).toContain(`-${anchor}|export const second = 2;`);
+    expect(editOutput).toMatch(/\+2#[A-Z]+\|export const second = 3;/);
+    expect(editOutput).toMatch(/\+3#[A-Z]+\|export const third = 3;/);
+
+    // the returned anchors must match what a fresh read would compute,
+    // so the model can chain the next edit without re-reading
+    const freshOutput = String(
+      await read({ path: "src/example.ts" }, executionOptions)
+    );
+    const freshAnchor = freshOutput.match(/2#[A-Z]+/)?.[0];
+    expect(freshAnchor).toBeDefined();
+    expect(editOutput).toContain(`+${freshAnchor}|export const second = 3;`);
+  });
+
   it("rejects stale anchors and stale file hashes", async () => {
     const tools = createWorkspaceTools({ workspace });
     const read = executableTool(tools, "read_file");
