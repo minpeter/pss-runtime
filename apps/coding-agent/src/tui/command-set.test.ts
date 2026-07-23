@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { TuiCommand } from "./tui-command";
-import { buildTuiCommandSet } from "./tui-command-set";
+import type { TuiCommand } from "./command";
+import { buildTuiCommandSet } from "./command-set";
 
 describe("buildTuiCommandSet", () => {
   it("merges local commands with global help for autocomplete and execution", async () => {

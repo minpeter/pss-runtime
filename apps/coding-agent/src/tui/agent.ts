@@ -15,18 +15,18 @@ import {
   visibleWidth,
 } from "@earendil-works/pi-tui";
 import type { AgentTurn, ModelUsage } from "@minpeter/pss-runtime";
-import { agentEventStreamParts } from "./tui-agent-event-stream";
-import { createAliasAwareAutocompleteProvider } from "./tui-autocomplete";
+import { agentEventStreamParts } from "./agent-event-stream";
+import { createAliasAwareAutocompleteProvider } from "./autocomplete";
 import {
   isCommand,
   parseCommand,
   type TuiCommand,
   type TuiCommandAction,
   type TuiCommandResult,
-} from "./tui-command";
-import { buildTuiCommandSet } from "./tui-command-set";
-import { createSpinnerTicker, type SpinnerTicker } from "./tui-pending-spinner";
-import { createSpinnerOrchestrator } from "./tui-spinner-orchestrator";
+} from "./command";
+import { buildTuiCommandSet } from "./command-set";
+import { createSpinnerTicker, type SpinnerTicker } from "./pending-spinner";
+import { createSpinnerOrchestrator } from "./spinner-orchestrator";
 import {
   addChatComponent,
   createInfoMessage,
@@ -37,9 +37,9 @@ import {
   STREAM_HANDLERS,
   type ToolInputRenderState,
   type TuiStreamPart,
-} from "./tui-stream-handlers";
-import { AssistantStreamView } from "./tui-stream-views";
-import { BaseToolCallView, type ToolRendererMap } from "./tui-tool-call-view";
+} from "./stream-handlers";
+import { AssistantStreamView } from "./stream-views";
+import { BaseToolCallView, type ToolRendererMap } from "./tool-call-view";
 
 const ANSI_RESET = "\x1b[0m";
 const ANSI_BLACK = "\x1b[30m";

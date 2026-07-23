@@ -1,6 +1,6 @@
 import type { MarkdownTheme } from "@earendil-works/pi-tui";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BaseToolCallView } from "./tui-tool-call-view";
+import { BaseToolCallView } from "./tool-call-view";
 
 const markdownTheme: MarkdownTheme = {
   heading: (t) => t,

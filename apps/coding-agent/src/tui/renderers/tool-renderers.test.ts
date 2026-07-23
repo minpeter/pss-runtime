@@ -1,7 +1,7 @@
 import type { MarkdownTheme } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
-import { BaseToolCallView } from "./tui-tool-call-view";
-import { createToolRenderers } from "./tui-tool-renderers";
+import { BaseToolCallView } from "../tool-call-view";
+import { createToolRenderers } from "./tool-renderers";
 
 const theme: MarkdownTheme = {
   heading: (t) => t,

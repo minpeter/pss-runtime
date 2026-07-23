@@ -4,8 +4,8 @@ import { join } from "node:path";
 import type { MarkdownTheme } from "@earendil-works/pi-tui";
 import type { ToolExecutionOptions } from "ai";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { BaseToolCallView } from "./tui-tool-call-view";
-import { createToolRenderers } from "./tui-tool-renderers";
+import { createToolRenderers } from "./tui/renderers/tool-renderers";
+import { BaseToolCallView } from "./tui/tool-call-view";
 import { computeFileHash } from "./workspace-tools/hashline";
 import { createWorkspaceTools } from "./workspace-tools/index";
 

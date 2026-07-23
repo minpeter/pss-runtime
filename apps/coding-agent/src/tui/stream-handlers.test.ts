@@ -11,8 +11,8 @@ import {
   type PiTuiRenderFlags,
   type PiTuiStreamState,
   STREAM_HANDLERS,
-} from "./tui-stream-handlers";
-import { BaseToolCallView } from "./tui-tool-call-view";
+} from "./stream-handlers";
+import { BaseToolCallView } from "./tool-call-view";
 
 const markdownTheme = {
   heading: (text: string) => text,

@@ -11,7 +11,7 @@ import {
   createSpinnerTicker,
   type SpinnerTicker,
   stylePendingIndicator,
-} from "./tui-pending-spinner";
+} from "./pending-spinner";
 
 const UNKNOWN_TOOL_NAME = "tool";
 const TRAILING_NEWLINES = /\n+$/;

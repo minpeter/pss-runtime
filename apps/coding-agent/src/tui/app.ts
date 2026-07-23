@@ -4,20 +4,20 @@ import { pathToFileURL } from "node:url";
 import type { AgentOptions } from "@minpeter/pss-runtime";
 import { createFileHost } from "@minpeter/pss-runtime/platform/file";
 import type { ToolSet } from "ai";
-import { createCodingAgent } from "./coding-agent";
+import { createCodingAgent } from "../coding-agent";
 import {
   formatModelEnvSetupHelp,
   isModelEnvValidationError,
   readOpenAICompatibleModelEnv,
-} from "./env";
-import { resolveCodingAgentThreadConfig } from "./thread-config";
-import { type AgentTUIConfig, createAgentTUI } from "./tui-agent";
-import { createClearCommand } from "./tui-command-set";
-import { createToolRenderers } from "./tui-tool-renderers";
-import { planAutoUpdate, runAutoUpdate } from "./update/auto-update";
-import { UPDATE_CHECK_CACHE_FILENAME } from "./update/check";
-import { cliVersion } from "./update/cli-version";
-import { emitUpdateNotice } from "./update/notifier";
+} from "../env";
+import { resolveCodingAgentThreadConfig } from "../thread-config";
+import { planAutoUpdate, runAutoUpdate } from "../update/auto-update";
+import { UPDATE_CHECK_CACHE_FILENAME } from "../update/check";
+import { cliVersion } from "../update/cli-version";
+import { emitUpdateNotice } from "../update/notifier";
+import { type AgentTUIConfig, createAgentTUI } from "./agent";
+import { createClearCommand } from "./command-set";
+import { createToolRenderers } from "./renderers/tool-renderers";
 
 export interface StartTuiOptions {
   /** Overrides the language model (tests and scripted QA). */

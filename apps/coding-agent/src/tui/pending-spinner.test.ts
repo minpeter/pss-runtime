@@ -4,7 +4,7 @@ import {
   PENDING_SPINNER_FRAMES,
   PENDING_SPINNER_INTERVAL_MS,
   stylePendingIndicator,
-} from "./tui-pending-spinner";
+} from "./pending-spinner";
 
 describe("pending-spinner fixtures", () => {
   beforeEach(() => {

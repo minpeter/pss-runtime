@@ -1,5 +1,5 @@
 import type { AgentEvent, ModelUsage } from "@minpeter/pss-runtime";
-import type { TuiStreamPart } from "./tui-stream-handlers";
+import type { TuiStreamPart } from "./stream-handlers";
 
 /**
  * Options accepted by the agent-event to stream-part adapter.

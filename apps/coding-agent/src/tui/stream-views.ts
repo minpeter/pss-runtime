@@ -5,7 +5,7 @@ import {
   Spacer,
 } from "@earendil-works/pi-tui";
 
-import { colors } from "./tui-colors";
+import { colors } from "./colors";
 
 const LEADING_NEWLINES = /^\n+/;
 

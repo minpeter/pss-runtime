@@ -1,7 +1,7 @@
 import { Container, Spacer, Text } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
-import { stylePendingIndicator } from "./tui-pending-spinner";
-import { BaseToolCallView } from "./tui-tool-call-view";
+import { stylePendingIndicator } from "./pending-spinner";
+import { BaseToolCallView } from "./tool-call-view";
 
 const markdownTheme = {
   heading: (t: string) => t,

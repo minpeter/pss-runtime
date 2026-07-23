@@ -40,9 +40,9 @@
       "import": "./dist/tools.js"
     },
     "./tui": {
-      "@minpeter/pss-source": "./src/tui.ts",
-      "types": "./dist/tui.d.ts",
-      "import": "./dist/tui.js"
+      "@minpeter/pss-source": "./src/tui/app.ts",
+      "types": "./dist/tui/app.d.ts",
+      "import": "./dist/tui/app.js"
     }
   },
   "bin": {
@@ -64,7 +64,7 @@
     "provenance": true
   },
   "scripts": {
-    "start": "tsx --conditions=@minpeter/pss-source src/tui.ts",
+    "start": "tsx --conditions=@minpeter/pss-source src/tui/app.ts",
     "build": "tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",

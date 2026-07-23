@@ -4,8 +4,8 @@ import {
   Spacer,
   Text,
 } from "@earendil-works/pi-tui";
-import type { AssistantStreamView } from "./tui-stream-views";
-import type { ToolCallView } from "./tui-tool-call-view";
+import type { AssistantStreamView } from "./stream-views";
+import type { ToolCallView } from "./tool-call-view";
 
 /**
  * Stream-part shape consumed by the TUI dispatch table. This mirrors the AI

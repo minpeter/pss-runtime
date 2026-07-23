@@ -5,7 +5,7 @@ import {
   CombinedAutocompleteProvider,
   type SlashCommand,
 } from "@earendil-works/pi-tui";
-import type { TuiCommand } from "./tui-command";
+import type { TuiCommand } from "./command";
 
 type SlashAutocompleteEntry = SlashCommand | AutocompleteItem;
 

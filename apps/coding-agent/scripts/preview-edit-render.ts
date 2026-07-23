@@ -1,5 +1,7 @@
 /**
  * Visual preview of the edit_file hashline diff renderer.
+ * allow: SIZE_OK — self-contained dev showcase script; most of its size is
+ * the inline example fixture table, and it is never imported by src/.
  *
  * Runs real edit_file calls against fixture files in a temp workspace, then
  * prints both the raw tool output (diff section) and the TUI-rendered pretty
@@ -12,8 +14,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { MarkdownTheme } from "@earendil-works/pi-tui";
-import { BaseToolCallView } from "../src/tui-tool-call-view";
-import { createToolRenderers } from "../src/tui-tool-renderers";
+import { createToolRenderers } from "../src/tui/renderers/tool-renderers";
+import { BaseToolCallView } from "../src/tui/tool-call-view";
 import { createWorkspaceTools } from "../src/workspace-tools/index";
 
 const plainTheme: MarkdownTheme = {

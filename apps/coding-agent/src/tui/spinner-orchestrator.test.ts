@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createSpinnerOrchestrator,
   type SpinnerOrchestratorAdapter,
-} from "./tui-spinner-orchestrator";
+} from "./spinner-orchestrator";
 
 const createAdapter = (initialHasSpinner = true) => {
   let hasSpinner = initialHasSpinner;

@@ -1,7 +1,7 @@
 import type { AgentEvent, ModelUsage } from "@minpeter/pss-runtime";
 import { describe, expect, it, vi } from "vitest";
-import { agentEventStreamParts } from "./tui-agent-event-stream";
-import type { TuiStreamPart } from "./tui-stream-handlers";
+import { agentEventStreamParts } from "./agent-event-stream";
+import type { TuiStreamPart } from "./stream-handlers";
 
 const collect = async (
   events: AgentEvent[],
