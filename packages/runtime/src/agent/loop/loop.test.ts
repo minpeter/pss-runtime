@@ -5,6 +5,7 @@ import {
 } from "../../testing/mock-language-model-v4-test-utils";
 import {
   assistantMessage,
+  committedEvents,
   createScriptedModelOptions,
   eventTypes,
   toolCallPart,
@@ -49,7 +50,7 @@ describe("runAgentLoop", () => {
       })
     ).resolves.toBe("completed");
 
-    expect(events).toEqual([
+    expect(committedEvents(events)).toEqual([
       { type: "step-start" },
       expect.objectContaining({ type: "model-usage" }),
       { type: "assistant-output", text: "I should keep going." },

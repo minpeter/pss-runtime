@@ -6,6 +6,7 @@ import { definePlugin } from "../../plugins/api";
 import { hostWithThreads } from "../../testing/host-with-threads";
 import {
   assistantMessage,
+  committedEvents,
   createCallbackModel,
 } from "../../testing/test-fixtures";
 import { ThreadEventReplayUnsupportedError } from "../runtime/thread-event-replay";
@@ -114,11 +115,12 @@ describe("AgentThread durable event replay", () => {
       "user-input",
       "turn-start",
       "step-start",
+      "assistant-output-delta",
       "model-usage",
       "turn-error",
     ]);
     expect(replayed.map(({ event }) => event.type)).toEqual(
-      live.map((event) => event.type)
+      committedEvents(live).map((event) => event.type)
     );
     expect(liveUsage).toMatchObject({
       attemptId: expect.any(String),
@@ -165,11 +167,12 @@ describe("AgentThread durable event replay", () => {
       "user-input",
       "turn-start",
       "step-start",
+      "assistant-output-delta",
       "model-usage",
       "turn-error",
     ]);
     expect(replayed.map(({ event }) => event.type)).toEqual(
-      live.map((event) => event.type)
+      committedEvents(live).map((event) => event.type)
     );
     expect(liveUsage).toHaveLength(1);
     expect(replayedUsage).toEqual(liveUsage);

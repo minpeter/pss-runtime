@@ -14,7 +14,7 @@ export function wrapRuntimeModel(
   model: LanguageModel,
   threadKey: string
 ): Exclude<LanguageModel, string> {
-  return wrapLanguageModel({
+  const wrapped = wrapLanguageModel({
     middleware: {
       transformParams: async ({ params }) =>
         await transformProviderParams(state, threadKey, params),
@@ -31,6 +31,22 @@ export function wrapRuntimeModel(
     },
     model: model as Parameters<typeof wrapLanguageModel>[0]["model"],
   });
+  if (!hasDoStream(model)) {
+    Object.defineProperty(wrapped, "doStream", {
+      configurable: true,
+      value: undefined,
+      writable: true,
+    });
+  }
+  return wrapped;
+}
+
+function hasDoStream(model: LanguageModel): boolean {
+  return (
+    typeof model === "object" &&
+    model !== null &&
+    typeof (model as { readonly doStream?: unknown }).doStream === "function"
+  );
 }
 
 async function transformProviderParams(
