@@ -55,6 +55,67 @@ to rebuild an event transcript after a turn has committed. Each replayed record
 has a cursor, so callers can persist `record.cursor` and resume with
 `thread.events({ after: cursor })`.
 
+### Streaming deltas
+
+Between `step-start` and a step's committed events, `turn.events()` also emits
+five ephemeral delta kinds:
+
+```ts
+{ type: "assistant-output-delta", text }
+{ type: "assistant-reasoning-delta", text }
+{ type: "tool-call-input-start", toolCallId, toolName }
+{ type: "tool-call-input-delta", toolCallId, inputTextDelta }
+{ type: "tool-call-input-end", toolCallId }
+```
+
+Models with `doStream` stream natively. `doGenerate`-only models (which
+`isLanguageModelObject` also accepts) synthesize the same part sequence from
+the committed result: one delta per committed text or reasoning block, one
+start/delta/end triple per tool call, in committed order. Consumers see
+exactly one event shape regardless of model capability.
+
+Deltas are ephemeral. A recording-boundary guard keeps them out of durable
+storage, so they never appear in `thread.events()` replay or in event logs,
+and they bypass plugins entirely (no interception, no observation). The
+committed `assistant-output`, `assistant-reasoning`, and `tool-call` events
+remain the durable per-step record.
+
+Both "deltas then committed" and "just committed" are valid sequences, so a
+renderer must dedupe against the committed event. Render the committed text
+only when no deltas arrived in that step:
+
+```ts
+let deltaText = "";
+
+for await (const event of turn.events()) {
+  if (event.type === "step-start") {
+    deltaText = "";
+  }
+
+  if (event.type === "assistant-output-delta") {
+    deltaText += event.text; // render incrementally
+  }
+
+  if (event.type === "assistant-output" && deltaText.length === 0) {
+    render(event.text); // committed-only step
+  }
+}
+```
+
+On a mid-stream abort, a prefix of deltas can remain in the in-memory stream
+before `turn-abort`. Consumers must tolerate deltas without committed output.
+
+`isStreamAgentEvent` classifies the five kinds, and `streamAgentEventTypes`
+and the `StreamAgentEvent` type are exported alongside it from the package
+root. Delta kinds are their own class: not visible, lifecycle, tool, or
+telemetry events. Filter them when accumulating a transcript:
+
+```ts
+if (!isStreamAgentEvent(event)) {
+  transcript.push(event);
+}
+```
+
 `model` is the single public constructor key for model execution. Pass an AI SDK
 `LanguageModel` object and configure runtime-owned prompting through
 `instructions`, `tools`, and `toolChoice`:
