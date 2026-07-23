@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { boundedLcsMatches } from "./bounded-lcs";
 import { parseDiffSection, renderDiffGroup } from "./diff";
 import { markChangedTokens } from "./highlight";
 
@@ -6,6 +7,35 @@ const padding = (prefix: string): string[] =>
   Array.from({ length: 254 }, (_, index) => `${prefix}-${index}`);
 
 describe("bounded diff alignment", () => {
+  it.each([
+    {
+      emptySide: "right",
+      left: new Array<string>(65_537).fill("removed"),
+      right: [],
+    },
+    {
+      emptySide: "left",
+      left: [],
+      right: new Array<string>(65_537).fill("added"),
+    },
+  ])(
+    "avoids matrix allocation when $emptySide side is empty",
+    ({ left, right }) => {
+      // Given
+      const arrayFrom = vi.spyOn(Array, "from");
+      const callsBefore = arrayFrom.mock.calls.length;
+
+      // When
+      const matches = boundedLcsMatches(left, right);
+      const allocationCount = arrayFrom.mock.calls.length - callsBefore;
+      arrayFrom.mockRestore();
+
+      // Then
+      expect(matches).toEqual([]);
+      expect(allocationCount).toBe(0);
+    }
+  );
+
   it("falls back to edge matching for pathological token matrices", () => {
     const shared = Array.from({ length: 20 }, (_, index) => `shared-${index}`);
     const oldTokens = [

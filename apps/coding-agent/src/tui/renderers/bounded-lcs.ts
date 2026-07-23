@@ -77,8 +77,11 @@ export const boundedLcsMatches = (
   left: readonly string[],
   right: readonly string[]
 ): Array<readonly [number, number]> => {
-  const exceedsBudget =
-    right.length > 0 && left.length > Math.floor(MAX_LCS_CELLS / right.length);
+  if (left.length === 0 || right.length === 0) {
+    return [];
+  }
+
+  const exceedsBudget = left.length > Math.floor(MAX_LCS_CELLS / right.length);
   return exceedsBudget
     ? matchCommonEdges(left, right)
     : exactLcsMatches(left, right);

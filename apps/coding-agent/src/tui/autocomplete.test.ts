@@ -4,7 +4,7 @@ import {
   createAliasAwareAutocompleteProvider,
 } from "./autocomplete";
 
-describe("createTuiAutocompleteProvider", () => {
+describe("createAliasAwareAutocompleteProvider", () => {
   it("offers slash-command completions after leading whitespace", async () => {
     const provider = createAliasAwareAutocompleteProvider({
       commands: [
