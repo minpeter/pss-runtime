@@ -31,12 +31,14 @@ import type {
   PrepareModelStep,
   PrepareModelStepInput,
   PrepareModelStepResult,
+  StreamAgentEvent,
   ThreadCompactionInput,
   ThreadContextMessage,
   ThreadHandle,
 } from "../index";
 import {
   createAgent,
+  isStreamAgentEvent,
   ModelToolSelectionError,
   registerTool,
   threadStoreKey as runtimeThreadStoreKey,
@@ -88,6 +90,14 @@ describe("runtime public exports", () => {
     expect(runtime).not.toHaveProperty("runPluginsForEvent");
     expect(runtime).not.toHaveProperty("runPluginsForToolCall");
     expect(runtime).toHaveProperty("threadStoreKey", runtimeThreadStoreKey);
+    expect(runtime).toHaveProperty("isStreamAgentEvent", isStreamAgentEvent);
+    expectTypeOf<StreamAgentEvent["type"]>().toEqualTypeOf<
+      | "assistant-output-delta"
+      | "assistant-reasoning-delta"
+      | "tool-call-input-delta"
+      | "tool-call-input-end"
+      | "tool-call-input-start"
+    >();
     expect(runtime).not.toHaveProperty("createInMemoryHost");
     expect(runtime).not.toHaveProperty("createCloudflareHost");
     expect(runtime).not.toHaveProperty("createCloudflareStorageHost");
