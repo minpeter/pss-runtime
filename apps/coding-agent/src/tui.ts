@@ -1,135 +1,74 @@
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import {
-  Container,
-  Input,
-  Markdown,
-  matchesKey,
-  ProcessTerminal,
-  Text,
-  TUI,
-} from "@earendil-works/pi-tui";
+import type { AgentOptions } from "@minpeter/pss-runtime";
 import { createFileHost } from "@minpeter/pss-runtime/platform/file";
 import type { ToolSet } from "ai";
 import { createCodingAgent } from "./coding-agent";
-import { resolveCodingAgentThreadConfig } from "./thread-config";
-import { createTuiRunner, formatTuiHeader } from "./tui-runner";
 import {
-  assistantText,
-  dimText,
-  markdownDefaultTextStyle,
-  markdownTheme,
-} from "./tui-theme";
-import { safeText } from "./tui-tool-printer";
+  formatModelEnvSetupHelp,
+  isModelEnvValidationError,
+  readOpenAICompatibleModelEnv,
+} from "./env";
+import { resolveCodingAgentThreadConfig } from "./thread-config";
+import { type AgentTUIConfig, createAgentTUI } from "./tui-agent";
+import { createClearCommand } from "./tui-command-set";
+import { createToolRenderers } from "./tui-tool-renderers";
 import { planAutoUpdate, runAutoUpdate } from "./update/auto-update";
 import { UPDATE_CHECK_CACHE_FILENAME } from "./update/check";
 import { cliVersion } from "./update/cli-version";
 import { emitUpdateNotice } from "./update/notifier";
 
 export interface StartTuiOptions {
+  /** Overrides the language model (tests and scripted QA). */
+  readonly model?: AgentOptions["model"];
   /** Replaces the TUI's default optional OpenSearch tools. */
   readonly tools?: ToolSet;
 }
 
+const formatTokens = (n: number): string => {
+  if (n >= 1000) {
+    return `${(n / 1000).toFixed(1)}k`;
+  }
+  return String(n);
+};
+
+const resolveModelSubtitle = (): string | undefined => {
+  try {
+    return readOpenAICompatibleModelEnv({ runtimeEnv: process.env }).AI_MODEL;
+  } catch {
+    return;
+  }
+};
+
 export async function startTui(options: StartTuiOptions = {}): Promise<number> {
   const startupNotices: string[] = [];
   const threadConfig = resolveCodingAgentThreadConfig();
-  const agent = await createCodingAgent({
-    autoCompaction: threadConfig.autoCompaction,
-    host: createFileHost({ directory: threadConfig.directory }),
-    tools: options.tools,
-    webTools: {
-      onWebToolsDisabled: (message) => startupNotices.push(message),
-    },
-    workspace: process.cwd(),
-  });
-  const thread = agent.thread(threadConfig.key);
-
-  const terminal = new ProcessTerminal();
-  const tui = new TUI(terminal);
-
-  const chat = new Container();
-  const input = new Input();
-
-  tui.addChild(
-    new Text(
-      formatTuiHeader({
-        autoCompaction: threadConfig.autoCompaction,
-        threadKey: threadConfig.key,
-      }),
-      1,
-      0
-    )
-  );
-  tui.addChild(chat);
-  tui.addChild(input);
-  tui.setFocus(input);
-
-  let finish: () => void;
-  const done = new Promise<void>((resolveDone) => {
-    finish = resolveDone;
-  });
-
-  const appendLine = (text: string): void => {
-    chat.addChild(new Text(text, 1, 0));
-  };
-  const addLine = (text: string): void => {
-    appendLine(text);
-    tui.requestRender();
-  };
-
-  const addMarkdown = (text: string): void => {
-    chat.addChild(new Text(assistantText("assistant:"), 1, 0));
-    chat.addChild(
-      new Markdown(
-        safeText(text),
-        1,
-        0,
-        markdownTheme,
-        markdownDefaultTextStyle
-      )
-    );
-    tui.requestRender();
-  };
-
-  const runner = createTuiRunner({
-    addLine,
-    addMarkdown,
-    requestRender: () => tui.requestRender(),
-    thread,
-  });
-
-  input.onSubmit = (text) => {
-    input.setValue("");
-    runner.submit(text);
-  };
-
-  const removeInputListener = tui.addInputListener((data) => {
-    // Avoid input.onEscape because pi-tui maps both Escape and Ctrl-C to it.
-    if (matchesKey(data, "escape")) {
-      thread.interrupt();
-      return { consume: true };
+  let agent: Awaited<ReturnType<typeof createCodingAgent>>;
+  try {
+    agent = await createCodingAgent({
+      autoCompaction: threadConfig.autoCompaction,
+      host: createFileHost({ directory: threadConfig.directory }),
+      ...(options.model === undefined ? {} : { model: options.model }),
+      tools: options.tools,
+      webTools: {
+        onWebToolsDisabled: (message) => startupNotices.push(message),
+      },
+      workspace: process.cwd(),
+    });
+  } catch (error) {
+    if (isModelEnvValidationError(error)) {
+      process.stderr.write(formatModelEnvSetupHelp(error));
+      return 1;
     }
-
-    if (!matchesKey(data, "ctrl+c")) {
-      return;
-    }
-
-    removeInputListener();
-    thread.dispose();
-    runner.clearActiveRun();
-    tui.stop();
-    finish();
-    return { consume: true };
-  });
-
-  for (const notice of startupNotices) {
-    appendLine(dimText(notice));
+    throw error;
   }
+  let thread = agent.thread(threadConfig.key);
+
+  const noticeLines: string[] = [];
   const deferredRefreshes: (() => Promise<void>)[] = [];
   const updateNotice = await emitUpdateNotice({
-    write: (line) => appendLine(dimText(line)),
+    write: (line) => noticeLines.push(line),
     env: process.env,
     version: cliVersion,
     cachePath: join(homedir(), ".pss", UPDATE_CHECK_CACHE_FILENAME),
@@ -145,20 +84,72 @@ export async function startTui(options: StartTuiOptions = {}): Promise<number> {
           binPath: process.argv[1] ?? "",
         });
   if (autoUpdate !== undefined) {
-    appendLine(
-      dimText(
-        `auto-update enabled: pss ${autoUpdate.target} will be installed on exit`
-      )
+    noticeLines.push(
+      `auto-update enabled: pss ${autoUpdate.target} will be installed on exit`
     );
   }
 
-  tui.start();
-  tui.requestRender();
-  for (const refresh of deferredRefreshes) {
-    refresh();
-  }
+  const footer: { text?: string } = {};
+  const usageTotals = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
 
-  await done;
+  const resetUsageTotals = (): void => {
+    usageTotals.inputTokens = 0;
+    usageTotals.outputTokens = 0;
+    usageTotals.totalTokens = 0;
+    footer.text = undefined;
+  };
+
+  const modelId = resolveModelSubtitle();
+  const compactionText = threadConfig.autoCompaction
+    ? `compaction min=${threadConfig.autoCompaction.minMessages} retain=${threadConfig.autoCompaction.retainMessages}`
+    : "compaction off";
+
+  const tuiConfig: AgentTUIConfig = {
+    thread: {
+      interrupt: () => thread.interrupt(),
+      send: (input) => thread.send(input),
+    },
+    commands: [createClearCommand()],
+    header: {
+      title: "pss",
+      subtitle: `${modelId ?? "unknown model"}\n${process.cwd()} · thread ${threadConfig.key} · ${compactionText}`,
+    },
+    footer,
+    onModelUsage: (usage) => {
+      usageTotals.inputTokens += usage.inputTokens ?? 0;
+      usageTotals.outputTokens += usage.outputTokens ?? 0;
+      usageTotals.totalTokens +=
+        usage.totalTokens ??
+        (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
+      footer.text = `${formatTokens(usageTotals.totalTokens)} tokens (${formatTokens(usageTotals.inputTokens)} in / ${formatTokens(usageTotals.outputTokens)} out)`;
+    },
+    onSetup: () => {
+      for (const refresh of deferredRefreshes) {
+        refresh().catch(() => undefined);
+      }
+    },
+    onCommandAction: async (action) => {
+      if (action.type !== "new-session") {
+        return;
+      }
+
+      const previous = thread;
+      previous.interrupt();
+      await previous.delete().catch(() => undefined);
+      await previous.dispose().catch(() => undefined);
+      thread = agent.thread(threadConfig.key);
+      resetUsageTotals();
+    },
+    setupMessages: [...startupNotices, ...noticeLines],
+    toolRenderers: createToolRenderers(),
+  };
+
+  try {
+    await createAgentTUI(tuiConfig);
+  } finally {
+    thread.interrupt();
+    await thread.dispose().catch(() => undefined);
+  }
 
   if (autoUpdate !== undefined) {
     return runAutoUpdate(autoUpdate, {
