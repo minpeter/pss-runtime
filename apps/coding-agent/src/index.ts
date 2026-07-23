@@ -48,7 +48,7 @@ export {
   createCodingAgentTools,
   WEB_TOOLS_DISABLED_MESSAGE,
 } from "./tools";
-export { type StartTuiOptions, startTui } from "./tui";
+export { type StartTuiOptions, startTui } from "./tui/app";
 export {
   type CreateWorkspaceToolsOptions,
   createWorkspaceTools,

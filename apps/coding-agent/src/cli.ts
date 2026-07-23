@@ -5,7 +5,7 @@ import {
   formatThreadInspectionReport,
   inspectCodingAgentThread,
 } from "./thread-inspect";
-import { startTui } from "./tui";
+import { startTui } from "./tui/app";
 import { cliVersion } from "./update/cli-version";
 import { runUpdateCommand } from "./update/command";
 

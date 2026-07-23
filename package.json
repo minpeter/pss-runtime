@@ -15,7 +15,7 @@
   ],
   "scripts": {
     "dev": "pnpm --filter @minpeter/pss-example-basic start",
-    "dev:tui": "tsx --conditions=@minpeter/pss-source apps/coding-agent/src/tui.ts",
+    "dev:tui": "tsx --conditions=@minpeter/pss-source apps/coding-agent/src/tui/app.ts",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck && tsc -p tsconfig.json --noEmit",
     "test": "turbo run test && vitest run scripts/*.test.mjs",

@@ -21,7 +21,7 @@ export default defineConfig({
     "src/thread-config.ts",
     "src/thread-inspect.ts",
     "src/tools.ts",
-    "src/tui.ts",
+    "src/tui/app.ts",
   ],
   unbundle: true,
   root: "src",

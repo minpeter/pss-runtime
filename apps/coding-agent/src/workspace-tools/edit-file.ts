@@ -1,7 +1,12 @@
 import { readFile } from "node:fs/promises";
 import { type Tool, tool } from "ai";
 import { z } from "zod";
-import { computeFileHash, resolveLineAnchor } from "./hashline";
+import {
+  computeFileHash,
+  formatLineAnchor,
+  resolveLineAnchor,
+} from "./hashline";
+import { truncateToolOutput } from "./output";
 import { resolveWorkspacePath, workspaceRelativePath } from "./path-safety";
 import { atomicWrite } from "./write-file";
 
@@ -127,6 +132,53 @@ function applyEdits(
   return output;
 }
 
+const netLineChange = (edit: ResolvedEdit): number => {
+  const removedLineCount =
+    edit.op === "replace" ? edit.end - edit.index + 1 : 0;
+  return edit.lines.length - removedLineCount;
+};
+
+const finalStartIndex = (
+  edit: ResolvedEdit,
+  resolvedEdits: readonly ResolvedEdit[]
+): number =>
+  edit.index +
+  resolvedEdits
+    .filter(
+      (candidate) =>
+        candidate.index < edit.index ||
+        (candidate.index === edit.index && candidate.order < edit.order)
+    )
+    .reduce((shift, candidate) => shift + netLineChange(candidate), 0);
+
+const buildDiffSectionLines = (
+  resolvedEdits: readonly ResolvedEdit[],
+  sourceLines: readonly string[]
+): string[] => {
+  const diffLines: string[] = [];
+  for (const [editIndex, resolved] of resolvedEdits.entries()) {
+    diffLines.push(`@@ edit ${editIndex + 1}`);
+    if (resolved.op === "replace") {
+      for (
+        let lineIndex = resolved.index;
+        lineIndex <= resolved.end;
+        lineIndex += 1
+      ) {
+        const sourceLine = sourceLines[lineIndex] ?? "";
+        diffLines.push(
+          `-${formatLineAnchor(lineIndex + 1, sourceLine)}|${sourceLine}`
+        );
+      }
+    }
+    const addedStartIndex = finalStartIndex(resolved, resolvedEdits);
+    for (const [offset, line] of resolved.lines.entries()) {
+      const lineNumber = addedStartIndex + 1 + offset;
+      diffLines.push(`+${formatLineAnchor(lineNumber, line)}|${line}`);
+    }
+  }
+  return diffLines;
+};
+
 export function createEditFileTool(
   workspace: string
 ): Tool<z.infer<typeof inputSchema>, string> {
@@ -166,12 +218,19 @@ export function createEditFileTool(
       const outputLines = applyEdits(sourceLines, resolvedEdits);
       const output = `${outputLines.join(eol)}${trailingNewline && outputLines.length > 0 ? eol : ""}`;
       await atomicWrite(absolutePath, output, originalHash);
-      return [
-        "OK - edited file",
-        `path: ${workspaceRelativePath(resolved.root, absolutePath)}`,
-        `edits: ${edits.length}`,
-        `file_hash: ${computeFileHash(output)}`,
-      ].join("\n");
+
+      const diffLines = buildDiffSectionLines(resolvedEdits, sourceLines);
+
+      return truncateToolOutput(
+        [
+          "OK - edited file",
+          `path: ${workspaceRelativePath(resolved.root, absolutePath)}`,
+          `edits: ${edits.length}`,
+          `file_hash: ${computeFileHash(output)}`,
+          "diff:",
+          ...diffLines,
+        ].join("\n")
+      );
     },
   });
 }
