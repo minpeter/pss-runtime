@@ -182,10 +182,8 @@ async function* synthesizedParts(
         type: "text-delta",
       };
       textIndex += 1;
+      continue;
     }
-  }
-
-  for (const part of result.content) {
     if (part.type !== "tool-call") {
       continue;
     }

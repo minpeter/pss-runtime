@@ -277,7 +277,6 @@ describe("createModelStepStream", () => {
         type: "reasoning-delta",
       },
       { id: "text-0", text: "text one", type: "text-delta" },
-      { id: "text-1", text: "text two", type: "text-delta" },
       {
         id: "call-1",
         toolName: "lookup",
@@ -289,6 +288,7 @@ describe("createModelStepStream", () => {
         type: "tool-input-delta",
       },
       { id: "call-1", type: "tool-input-end" },
+      { id: "text-1", text: "text two", type: "text-delta" },
       {
         id: "call-2",
         toolName: "lookup",

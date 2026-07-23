@@ -142,6 +142,7 @@ export {
   isTelemetryAgentEvent,
   isToolAgentEvent,
   isVisibleAgentEvent,
+  streamAgentEventTypes,
 } from "./thread/protocol/events";
 export type { AgentTurn } from "./thread/protocol/turn";
 export { ThreadEventReplayUnsupportedError } from "./thread/runtime/thread-event-replay";

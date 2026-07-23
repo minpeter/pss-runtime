@@ -15,6 +15,7 @@ import {
   isStreamAgentEvent,
   isTelemetryAgentEvent,
   isVisibleAgentEvent,
+  streamAgentEventTypes,
 } from "../index";
 
 describe("runtime root event API exports", () => {
@@ -32,6 +33,10 @@ describe("runtime root event API exports", () => {
     );
     expect(runtime).toHaveProperty("isControlAgentEvent", isControlAgentEvent);
     expect(runtime).toHaveProperty("isStreamAgentEvent", isStreamAgentEvent);
+    expect(runtime).toHaveProperty(
+      "streamAgentEventTypes",
+      streamAgentEventTypes
+    );
     expect(runtime).not.toHaveProperty("isBeforeToolCallEvent");
   });
 

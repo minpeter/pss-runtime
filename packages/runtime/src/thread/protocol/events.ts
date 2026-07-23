@@ -183,7 +183,7 @@ const telemetryAgentEventTypes = {
   "runtime-input": true,
 } satisfies Partial<Record<AgentEvent["type"], true>>;
 
-const streamAgentEventTypes = {
+export const streamAgentEventTypes = {
   "assistant-output-delta": true,
   "assistant-reasoning-delta": true,
   "tool-call-input-delta": true,
