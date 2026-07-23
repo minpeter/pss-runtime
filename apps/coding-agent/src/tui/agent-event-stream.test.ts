@@ -18,31 +18,124 @@ const collect = async (
 };
 
 describe("agentEventStreamParts", () => {
-  it("brackets assistant text with text-start/text-delta/text-end", async () => {
+  it("streams assistant text deltas without replaying the committed text", async () => {
     const parts = await collect([
-      { type: "assistant-output", text: "hello world" },
+      { type: "step-start" },
+      { type: "assistant-output-delta", text: "Hello" },
+      { type: "assistant-output-delta", text: " world" },
+      { type: "assistant-output", text: "Hello world" },
+      { type: "step-end" },
     ]);
 
     expect(parts).toEqual([
+      { type: "start-step" },
       { type: "text-start" },
-      { type: "text-delta", text: "hello world" },
+      { type: "text-delta", text: "Hello" },
+      { type: "text-delta", text: " world" },
       { type: "text-end" },
+      { type: "finish-step", finishReason: undefined },
     ]);
   });
 
-  it("brackets reasoning with reasoning-start/delta/end", async () => {
+  it("falls back to one whole-text delta for committed-only output", async () => {
     const parts = await collect([
-      { type: "assistant-reasoning", text: "thinking" },
+      { type: "step-start" },
+      { type: "assistant-output", text: "Hi" },
+      { type: "step-end" },
     ]);
 
     expect(parts).toEqual([
+      { type: "start-step" },
+      { type: "text-start" },
+      { type: "text-delta", text: "Hi" },
+      { type: "text-end" },
+      { type: "finish-step", finishReason: undefined },
+    ]);
+  });
+
+  it("resets text-delta deduplication at each step", async () => {
+    const parts = await collect([
+      { type: "step-start" },
+      { type: "assistant-output-delta", text: "streamed" },
+      { type: "assistant-output", text: "streamed" },
+      { type: "step-end" },
+      { type: "step-start" },
+      { type: "assistant-output", text: "fallback" },
+      { type: "step-end" },
+    ]);
+
+    expect(parts.filter((part) => part.type === "text-delta")).toEqual([
+      { type: "text-delta", text: "streamed" },
+      { type: "text-delta", text: "fallback" },
+    ]);
+  });
+
+  it("streams reasoning deltas without replaying the committed reasoning", async () => {
+    const parts = await collect([
+      { type: "step-start" },
+      { type: "assistant-reasoning-delta", text: "Think" },
+      { type: "assistant-reasoning-delta", text: " more" },
+      { type: "assistant-reasoning", text: "Think more" },
+      { type: "step-end" },
+    ]);
+
+    expect(parts).toEqual([
+      { type: "start-step" },
+      { type: "reasoning-start" },
+      { type: "reasoning-delta", text: "Think" },
+      { type: "reasoning-delta", text: " more" },
+      { type: "reasoning-end" },
+      { type: "finish-step", finishReason: undefined },
+    ]);
+  });
+
+  it("falls back to one whole-text delta for committed-only reasoning", async () => {
+    const parts = await collect([
+      { type: "step-start" },
+      { type: "assistant-reasoning", text: "thinking" },
+      { type: "step-end" },
+    ]);
+
+    expect(parts).toEqual([
+      { type: "start-step" },
       { type: "reasoning-start" },
       { type: "reasoning-delta", text: "thinking" },
       { type: "reasoning-end" },
+      { type: "finish-step", finishReason: undefined },
     ]);
   });
 
-  it("maps tool calls and results to their stream parts", async () => {
+  it("maps streamed tool-call input with toolCallId preserved", async () => {
+    const parts = await collect([
+      {
+        type: "tool-call-input-start",
+        toolCallId: "call_stream",
+        toolName: "shell_execute",
+      },
+      {
+        type: "tool-call-input-delta",
+        inputTextDelta: '{"command":"ls"}',
+        toolCallId: "call_stream",
+      },
+      { type: "tool-call-input-end", toolCallId: "call_stream" },
+    ]);
+
+    expect(parts).toEqual([
+      {
+        type: "tool-input-start",
+        toolCallId: "call_stream",
+        toolName: "shell_execute",
+      },
+      {
+        type: "tool-input-delta",
+        inputTextDelta: '{"command":"ls"}',
+        toolCallId: "call_stream",
+      },
+      { type: "tool-input-end", toolCallId: "call_stream" },
+    ]);
+  });
+
+  it("maps committed-only tool calls and results to their stream parts", async () => {
     const parts = await collect([
       {
         type: "tool-call",

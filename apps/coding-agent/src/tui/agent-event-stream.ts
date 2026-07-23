@@ -45,18 +45,43 @@ const unwrapToolOutput = (output: unknown): unknown => {
   return output;
 };
 
+type AssistantContentKind = "reasoning" | "text";
+
+function* assistantDeltaParts(
+  kind: AssistantContentKind,
+  text: string,
+  sawDelta: boolean
+): Generator<TuiStreamPart> {
+  if (!sawDelta) {
+    yield { type: `${kind}-start` };
+  }
+  yield { type: `${kind}-delta`, text };
+}
+
+function* committedAssistantContentParts(
+  kind: AssistantContentKind,
+  text: string,
+  sawDelta: boolean
+): Generator<TuiStreamPart> {
+  if (!sawDelta) {
+    yield* assistantDeltaParts(kind, text, false);
+  }
+  yield { type: `${kind}-end` };
+}
+
 /**
- * Translates a pss-runtime `AgentEvent` stream (whole-step granularity) into
- * the finer-grained stream parts the TUI dispatch table renders. The runtime
- * emits complete texts per step, so text/reasoning arrive as a single delta
- * bracketed by start/end parts; tool calls arrive fully formed without
- * input-streaming parts.
+ * Translates a pss-runtime `AgentEvent` stream into the finer-grained stream
+ * parts the TUI dispatch table renders. Live text, reasoning, and tool-input
+ * deltas are forwarded incrementally. The committed per-step events provide
+ * closing boundaries and remain the fallback for providers without deltas.
  */
 export async function* agentEventStreamParts(
   events: AsyncIterable<AgentEvent>,
   options: AgentEventStreamOptions = {}
 ): AsyncGenerator<TuiStreamPart> {
   let lastFinishReason: string | undefined;
+  let sawReasoningDelta = false;
+  let sawTextDelta = false;
 
   for await (const event of events) {
     switch (event.type) {
@@ -64,17 +89,47 @@ export async function* agentEventStreamParts(
         yield { type: "start" };
         break;
       case "step-start":
+        sawReasoningDelta = false;
+        sawTextDelta = false;
         yield { type: "start-step" };
         break;
+      case "assistant-reasoning-delta":
+        yield* assistantDeltaParts("reasoning", event.text, sawReasoningDelta);
+        sawReasoningDelta = true;
+        break;
       case "assistant-reasoning":
-        yield { type: "reasoning-start" };
-        yield { type: "reasoning-delta", text: event.text };
-        yield { type: "reasoning-end" };
+        yield* committedAssistantContentParts(
+          "reasoning",
+          event.text,
+          sawReasoningDelta
+        );
+        break;
+      case "assistant-output-delta":
+        yield* assistantDeltaParts("text", event.text, sawTextDelta);
+        sawTextDelta = true;
         break;
       case "assistant-output":
-        yield { type: "text-start" };
-        yield { type: "text-delta", text: event.text };
-        yield { type: "text-end" };
+        yield* committedAssistantContentParts("text", event.text, sawTextDelta);
+        break;
+      case "tool-call-input-start":
+        yield {
+          type: "tool-input-start",
+          toolCallId: event.toolCallId,
+          toolName: event.toolName,
+        };
+        break;
+      case "tool-call-input-delta":
+        yield {
+          type: "tool-input-delta",
+          inputTextDelta: event.inputTextDelta,
+          toolCallId: event.toolCallId,
+        };
+        break;
+      case "tool-call-input-end":
+        yield {
+          type: "tool-input-end",
+          toolCallId: event.toolCallId,
+        };
         break;
       case "tool-call":
         yield {
