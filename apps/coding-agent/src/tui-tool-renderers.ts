@@ -16,6 +16,10 @@ const DIFF_REMOVE_FG = "\x1b[31m";
 const DIFF_ADD_FG = "\x1b[32m";
 const DIFF_INVERSE_ON = "\x1b[7m";
 const DIFF_INVERSE_OFF = "\x1b[27m";
+// faint line-region tints behind the touched token; the strong inverse
+// highlight marks only the intra-token characters that actually changed.
+const DIFF_REMOVE_FAINT_BG = "\x1b[48;2;61;38;40m";
+const DIFF_ADD_FAINT_BG = "\x1b[48;2;38;61;40m";
 
 // senpi dark-theme syntax palette (VS Code Dark+ hues), truecolor.
 const fgRgb = (r: number, g: number, b: number): string =>
@@ -315,19 +319,145 @@ const markChangedTokens = (
   return { newChanged, oldChanged };
 };
 
+interface IntraTokenPart {
+  changed: boolean;
+  text: string;
+}
+
+const toIntraParts = (
+  text: string,
+  prefixLen: number,
+  suffixLen: number
+): IntraTokenPart[] =>
+  [
+    { changed: false, text: text.slice(0, prefixLen) },
+    { changed: true, text: text.slice(prefixLen, text.length - suffixLen) },
+    { changed: false, text: text.slice(text.length - suffixLen) },
+  ].filter((part) => part.text.length > 0);
+
+const splitIntraToken = (
+  oldText: string,
+  newText: string
+): { newParts: IntraTokenPart[]; oldParts: IntraTokenPart[] } => {
+  let prefixLen = 0;
+  while (
+    prefixLen < oldText.length &&
+    prefixLen < newText.length &&
+    oldText[prefixLen] === newText[prefixLen]
+  ) {
+    prefixLen += 1;
+  }
+
+  let suffixLen = 0;
+  while (
+    suffixLen < oldText.length - prefixLen &&
+    suffixLen < newText.length - prefixLen &&
+    oldText[oldText.length - 1 - suffixLen] ===
+      newText[newText.length - 1 - suffixLen]
+  ) {
+    suffixLen += 1;
+  }
+
+  return {
+    newParts: toIntraParts(newText, prefixLen, suffixLen),
+    oldParts: toIntraParts(oldText, prefixLen, suffixLen),
+  };
+};
+
+const computeChangedRuns = (
+  changed: readonly boolean[]
+): Array<[number, number]> => {
+  const runs: Array<[number, number]> = [];
+  let start = -1;
+  for (let index = 0; index <= changed.length; index += 1) {
+    if (index < changed.length && changed[index]) {
+      if (start < 0) {
+        start = index;
+      }
+    } else if (start >= 0) {
+      runs.push([start, index - 1]);
+      start = -1;
+    }
+  }
+  return runs;
+};
+
+/**
+ * Pairs single-token changed runs between the old and new line so the
+ * renderer can refine them intra-token (faint region + strong changed
+ * characters) instead of highlighting the whole token.
+ */
+const pairRefinements = (
+  oldChanged: readonly boolean[],
+  newChanged: readonly boolean[]
+): { newPairs: Map<number, number>; oldPairs: Map<number, number> } => {
+  const oldRuns = computeChangedRuns(oldChanged);
+  const newRuns = computeChangedRuns(newChanged);
+  const oldPairs = new Map<number, number>();
+  const newPairs = new Map<number, number>();
+
+  const pairCount = Math.min(oldRuns.length, newRuns.length);
+  for (let pair = 0; pair < pairCount; pair += 1) {
+    const [oldStart, oldEnd] = oldRuns[pair];
+    const [newStart, newEnd] = newRuns[pair];
+    if (oldStart === oldEnd && newStart === newEnd) {
+      oldPairs.set(oldStart, newStart);
+      newPairs.set(newStart, oldStart);
+    }
+  }
+
+  return { newPairs, oldPairs };
+};
+
+const computeRefinedParts = (
+  tokens: readonly CodeToken[],
+  counterpartTokens: readonly CodeToken[],
+  pairs: ReadonlyMap<number, number>
+): Map<number, IntraTokenPart[]> => {
+  const refined = new Map<number, IntraTokenPart[]>();
+  for (const [tokenIndex, counterpartIndex] of pairs) {
+    const token = tokens[tokenIndex];
+    const counterpart = counterpartTokens[counterpartIndex];
+    if (!(token && counterpart)) {
+      continue;
+    }
+    const { oldParts } = splitIntraToken(token.text, counterpart.text);
+    refined.set(tokenIndex, oldParts);
+  }
+  return refined;
+};
+
 const renderDiffLine = (params: {
   changed: boolean[];
   kind: "add" | "remove";
   lineNo: number;
+  refinedParts: ReadonlyMap<number, IntraTokenPart[]>;
   tokens: CodeToken[];
 }): string => {
   const fg = params.kind === "remove" ? DIFF_REMOVE_FG : DIFF_ADD_FG;
+  const faintBg =
+    params.kind === "remove" ? DIFF_REMOVE_FAINT_BG : DIFF_ADD_FAINT_BG;
   const prefix = params.kind === "remove" ? "-" : "+";
-  const segments = params.tokens.map((token, index) =>
-    params.changed[index]
-      ? `${fg}${DIFF_INVERSE_ON}${token.text}${DIFF_INVERSE_OFF}${ANSI_RESET}`
-      : `${token.color}${token.text}${ANSI_RESET}`
-  );
+
+  const segments = params.tokens.flatMap((token, index) => {
+    if (!params.changed[index]) {
+      return [`${token.color}${token.text}${ANSI_RESET}`];
+    }
+
+    const parts = params.refinedParts.get(index);
+    if (parts === undefined) {
+      return [
+        `${fg}${DIFF_INVERSE_ON}${token.text}${DIFF_INVERSE_OFF}${ANSI_RESET}`,
+      ];
+    }
+
+    return parts.map((part) =>
+      part.changed
+        ? `${fg}${DIFF_INVERSE_ON}${part.text}${DIFF_INVERSE_OFF}${ANSI_RESET}`
+        : `${faintBg}${token.color}${part.text}${ANSI_RESET}`
+    );
+  });
+
   return `${fg}${prefix}${params.lineNo} ${ANSI_RESET}${segments.join("")}`;
 };
 
@@ -346,6 +476,9 @@ const renderDiffGroup = (lines: readonly DiffLine[]): string => {
       oldTokens.map((token) => token.text),
       newTokens.map((token) => token.text)
     );
+    const { newPairs, oldPairs } = pairRefinements(oldChanged, newChanged);
+    const oldRefined = computeRefinedParts(oldTokens, newTokens, oldPairs);
+    const newRefined = computeRefinedParts(newTokens, oldTokens, newPairs);
 
     if (oldLine) {
       rendered.push(
@@ -353,6 +486,7 @@ const renderDiffGroup = (lines: readonly DiffLine[]): string => {
           changed: oldChanged,
           kind: "remove",
           lineNo: oldLine.lineNo,
+          refinedParts: oldRefined,
           tokens: oldTokens,
         })
       );
@@ -363,6 +497,7 @@ const renderDiffGroup = (lines: readonly DiffLine[]): string => {
           changed: newChanged,
           kind: "add",
           lineNo: newLine.lineNo,
+          refinedParts: newRefined,
           tokens: newTokens,
         })
       );

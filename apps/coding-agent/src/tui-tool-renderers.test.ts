@@ -153,6 +153,35 @@ describe("createToolRenderers — workspace tools", () => {
     expect(text).not.toContain("@@");
   });
 
+  it("edit_file renders faint region background with strong highlight on the actual change", () => {
+    const view = createView(
+      "edit_file",
+      {
+        path: "package.json",
+        edits: [
+          {
+            op: "replace",
+            pos: "4#SW",
+            lines: '  "description": "Code at the speed of thought.",',
+          },
+        ],
+      },
+      'OK - edited file\npath: package.json\nedits: 1\nfile_hash: abcd1234\ndiff:\n@@ edit 1\n-4#SW|  "description": "Code at the speed of thought",\n+4#PV|  "description": "Code at the speed of thought.",'
+    );
+
+    const text = renderText(view);
+    // the touched string region gets a faint background tint
+    expect(text).toContain("\x1b[48;2;61;38;40m");
+    expect(text).toContain("\x1b[48;2;38;61;40m");
+    // faint region keeps syntax colors inside (string #CE9178)
+    expect(text).toContain("\x1b[48;2;61;38;40m\x1b[38;2;206;145;120m");
+    // the actually added character "." is strongly highlighted
+    expect(text).toContain("\x1b[32m\x1b[7m.\x1b[27m");
+    expect(text).not.toContain("@@");
+    expect(text).not.toContain("#SW");
+    expect(text).not.toContain("#PV");
+  });
+
   it("edit_file highlights only the edited lines in green", () => {
     const view = createView(
       "edit_file",
