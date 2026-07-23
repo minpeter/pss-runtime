@@ -168,7 +168,8 @@ describe("runAgentLoop", () => {
       })
     ).resolves.toBe("aborted");
 
-    expect(eventTypes(events)).toEqual(["step-start", "model-usage"]);
+    // abort wins over a resolve that races it: no usage or committed output is emitted once signal.aborted (unified streaming path, plan streaming-support criterion 3).
+    expect(eventTypes(events)).toEqual(["step-start"]);
     expect(history.modelSnapshot()).toEqual([userMessage]);
   });
 });
