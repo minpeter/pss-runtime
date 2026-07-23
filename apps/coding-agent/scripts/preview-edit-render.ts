@@ -160,6 +160,7 @@ const examples: Example[] = [
       "",
       "// greet returns a friendly message",
       "export function greet(name: string): string {",
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: fixture code contains template syntax
       "  return `hello ${name}`;",
       "}",
       "",

@@ -58,6 +58,7 @@ const anchorFor = (readOutput: string, lineNo: number): string => {
 };
 
 const FILE_HASH_PATTERN = /file_hash: ([0-9a-f]{8})/u;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matching rendered ANSI output requires the literal ESC character
 const ANSI_ESCAPE_PATTERN = /\x1b\[[0-9;]*m/gu;
 
 const fileHashOf = (readOutput: string): string => {

@@ -354,8 +354,7 @@ const splitIntraToken = (
   while (
     suffixLen < oldText.length - prefixLen &&
     suffixLen < newText.length - prefixLen &&
-    oldText[oldText.length - 1 - suffixLen] ===
-      newText[newText.length - 1 - suffixLen]
+    oldText.at(-1 - suffixLen) === newText.at(-1 - suffixLen)
   ) {
     suffixLen += 1;
   }
@@ -368,8 +367,8 @@ const splitIntraToken = (
 
 const computeChangedRuns = (
   changed: readonly boolean[]
-): Array<[number, number]> => {
-  const runs: Array<[number, number]> = [];
+): [number, number][] => {
+  const runs: [number, number][] = [];
   let start = -1;
   for (let index = 0; index <= changed.length; index += 1) {
     if (index < changed.length && changed[index]) {
@@ -476,7 +475,7 @@ const renderDiffLine = (params: {
 const matchIdenticalLines = (
   oldLines: readonly string[],
   newLines: readonly string[]
-): Array<[number, number]> => {
+): [number, number][] => {
   const rows = oldLines.length;
   const cols = newLines.length;
   const table: number[][] = Array.from({ length: rows + 1 }, () =>
@@ -491,7 +490,7 @@ const matchIdenticalLines = (
     }
   }
 
-  const pairs: Array<[number, number]> = [];
+  const pairs: [number, number][] = [];
   let i = 0;
   let j = 0;
   while (i < rows && j < cols) {

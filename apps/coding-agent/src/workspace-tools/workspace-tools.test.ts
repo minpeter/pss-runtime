@@ -20,6 +20,9 @@ import { resolveWorkspacePath } from "./path-safety";
 import { globPatternToRegExp } from "./walk";
 import { atomicWrite } from "./write-file";
 
+const addedSecondLinePattern = /\+2#[A-Z]+\|export const second = 3;/u;
+const addedThirdLinePattern = /\+3#[A-Z]+\|export const third = 3;/u;
+const freshAnchorPattern = /2#[A-Z]+/u;
 const directoryTruncationPattern = /truncated|showing 1000 of 1005/iu;
 const fileHashPattern = /file_hash: ([0-9a-f]{8})/u;
 const firstLineAnchorPattern = /1#[ZPMQVRWSNKTXJBYH]{2}(?=\|)/u;
@@ -138,15 +141,15 @@ describe("workspace coding tools", () => {
 
     expect(editOutput).toContain("diff:");
     expect(editOutput).toContain(`-${anchor}|export const second = 2;`);
-    expect(editOutput).toMatch(/\+2#[A-Z]+\|export const second = 3;/);
-    expect(editOutput).toMatch(/\+3#[A-Z]+\|export const third = 3;/);
+    expect(editOutput).toMatch(addedSecondLinePattern);
+    expect(editOutput).toMatch(addedThirdLinePattern);
 
     // the returned anchors must match what a fresh read would compute,
     // so the model can chain the next edit without re-reading
     const freshOutput = String(
       await read({ path: "src/example.ts" }, executionOptions)
     );
-    const freshAnchor = freshOutput.match(/2#[A-Z]+/)?.[0];
+    const freshAnchor = freshAnchorPattern.exec(freshOutput)?.[0];
     expect(freshAnchor).toBeDefined();
     expect(editOutput).toContain(`+${freshAnchor}|export const second = 3;`);
   });
