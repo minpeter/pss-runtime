@@ -8,6 +8,7 @@ import {
   isTelemetryAgentEvent,
   isToolAgentEvent,
   isVisibleAgentEvent,
+  streamAgentEventTypes,
 } from "./events";
 
 const threadImplementationImportPattern = /from "\.\/thread"/;
@@ -92,5 +93,15 @@ describe("thread event protocol boundary", () => {
     expect(events.filter(isToolAgentEvent)).toEqual([]);
     expect(events.filter(isTelemetryAgentEvent)).toEqual([]);
     expect(events.filter(isControlAgentEvent)).toEqual(events);
+  });
+
+  it("keeps the exported stream classifier table immutable", () => {
+    expect(Object.isFrozen(streamAgentEventTypes)).toBe(true);
+    expect(Reflect.set(streamAgentEventTypes, "assistant-output", true)).toBe(
+      false
+    );
+    expect(
+      isStreamAgentEvent({ text: "committed", type: "assistant-output" })
+    ).toBe(false);
   });
 });

@@ -183,13 +183,13 @@ const telemetryAgentEventTypes = {
   "runtime-input": true,
 } satisfies Partial<Record<AgentEvent["type"], true>>;
 
-export const streamAgentEventTypes = {
+export const streamAgentEventTypes = Object.freeze({
   "assistant-output-delta": true,
   "assistant-reasoning-delta": true,
   "tool-call-input-delta": true,
   "tool-call-input-end": true,
   "tool-call-input-start": true,
-} satisfies Partial<Record<AgentEvent["type"], true>>;
+} satisfies Partial<Record<AgentEvent["type"], true>>);
 
 export type VisibleAgentEvent = Extract<
   AgentEvent,
