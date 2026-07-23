@@ -1,3 +1,4 @@
+import { APICallError } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent, createAgent } from "../../agent/core/agent";
 import type { AgentHost, HostStoreTransaction } from "../../execution";
@@ -75,6 +76,7 @@ describe("AgentThread durable event replay", () => {
       "turn-error",
     ]);
     expect(replayed.at(-1)?.event).toEqual({
+      error: { category: "unknown", version: 1 },
       message: "model unavailable",
       type: "turn-error",
     });
@@ -178,6 +180,48 @@ describe("AgentThread durable event replay", () => {
     expect(replayedUsage).toEqual(liveUsage);
   });
 
+  it("keeps provider secrets out of live rollback failure events", async () => {
+    const providerError = new APICallError({
+      isRetryable: false,
+      message: "Bearer secret-token request-secret response-secret url-secret",
+      requestBodyValues: { apiKey: "request-secret" },
+      responseBody: '{"secret":"response-secret"}',
+      statusCode: 403,
+      url: "https://provider.example/v1/chat?token=url-secret",
+    });
+    const base = createInMemoryHost();
+    const agent = new Agent({
+      host: hostWithTurnErrorAppendFailure(base),
+      model: createCallbackModel(() => Promise.reject(providerError)),
+    });
+
+    const live = await collect(
+      await agent.thread("safe-rollback-failure").send("hello")
+    );
+    const turnError = live.at(-1);
+    const serialized = JSON.stringify(turnError);
+
+    expect(turnError).toEqual({
+      error: {
+        category: "permission",
+        observedRetryable: false,
+        status: 403,
+        version: 1,
+      },
+      message:
+        "The provider refused this request. History rollback persistence failed.",
+      type: "turn-error",
+    });
+    for (const secret of [
+      "secret-token",
+      "request-secret",
+      "response-secret",
+      "url-secret",
+    ]) {
+      expect(serialized).not.toContain(secret);
+    }
+  });
+
   it("throws a typed error when replay is unsupported by the host", () => {
     const base = hostWithThreads(new MemoryThreadStore());
     const agent = new Agent({
@@ -249,6 +293,46 @@ function hostWithOneUsageAppendFailure(
             shouldFail = false;
             onFailure();
             throw new Error("transient usage event append failure");
+          }
+          return await threadEvents.append(threadKey, event);
+        },
+        read: (threadKey, options) => threadEvents.read(threadKey, options),
+      },
+    };
+  }
+}
+
+function hostWithTurnErrorAppendFailure(base: AgentHost): AgentHost {
+  return {
+    ...base,
+    store: {
+      checkpoints: base.store.checkpoints,
+      events: base.store.events,
+      inputs: base.store.inputs,
+      notifications: base.store.notifications,
+      threadEvents: base.store.threadEvents,
+      threads: base.store.threads,
+      transaction: (fn) =>
+        base.store.transaction(async (tx) =>
+          fn(transactionWithTurnErrorAppendFailure(tx))
+        ),
+      turns: base.store.turns,
+    },
+  };
+
+  function transactionWithTurnErrorAppendFailure(
+    tx: HostStoreTransaction
+  ): HostStoreTransaction {
+    const threadEvents = tx.threadEvents;
+    if (!threadEvents) {
+      return tx;
+    }
+    return {
+      ...tx,
+      threadEvents: {
+        append: async (threadKey, event) => {
+          if (event.type === "turn-error") {
+            throw new Error("turn error append failure");
           }
           return await threadEvents.append(threadKey, event);
         },

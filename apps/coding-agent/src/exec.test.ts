@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type AgentEvent, isStreamAgentEvent } from "@minpeter/pss-runtime";
+import { APICallError } from "ai";
 import { convertArrayToReadableStream, MockLanguageModelV4 } from "ai/test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCodingAgentExec } from "./exec";
@@ -113,5 +114,71 @@ describe("runCodingAgentExec", () => {
     );
     expect(result.status).toBe("completed");
     expect(result.finalText).toBe("hello world");
+  });
+
+  it("writes structured provider failures without leaking diagnostics", async () => {
+    const captured = createCapturedOutput();
+    const providerError = new APICallError({
+      data: {
+        error: {
+          code: "account_denied",
+          type: "provider_permission_error",
+        },
+      },
+      isRetryable: false,
+      message:
+        "Access denied request-secret response-secret url-secret secret-token",
+      requestBodyValues: { apiKey: "request-secret" },
+      responseBody: '{"secret":"response-secret"}',
+      responseHeaders: {
+        authorization: "Bearer response-secret",
+        "x-request-id": "exec-request",
+      },
+      statusCode: 403,
+      url: "https://provider.example/v1/chat/completions?token=url-secret",
+    });
+    const model = new MockLanguageModelV4({
+      doStream: async () => Promise.reject(providerError),
+    });
+
+    const result = await runCodingAgentExec({
+      model,
+      prompt: "fail safely",
+      stdout: captured.output,
+      workspace,
+    });
+    const lines = captured.lines();
+    const turnError = lines.find(
+      (line) =>
+        line.type === "agent_event" &&
+        (line.event as AgentEvent).type === "turn-error"
+    );
+
+    expect(result.status).toBe("error");
+    expect(turnError).toEqual({
+      event: {
+        error: {
+          category: "permission",
+          code: "account_denied",
+          correlationIds: [{ source: "x-request-id", value: "exec-request" }],
+          observedRetryable: false,
+          providerType: "provider_permission_error",
+          status: 403,
+          version: 1,
+        },
+        message: "The provider refused this request.",
+        type: "turn-error",
+      },
+      type: "agent_event",
+    });
+    const serialized = JSON.stringify(lines);
+    for (const secret of [
+      "request-secret",
+      "response-secret",
+      "url-secret",
+      "secret-token",
+    ]) {
+      expect(serialized).not.toContain(secret);
+    }
   });
 });

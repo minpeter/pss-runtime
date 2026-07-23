@@ -101,6 +101,36 @@ export interface ToolCallInputEnd {
   type: "tool-call-input-end";
 }
 
+export type TurnErrorCategory =
+  | "authentication"
+  | "bad-request"
+  | "cancelled"
+  | "context-overflow"
+  | "network"
+  | "permission"
+  | "quota"
+  | "rate-limit"
+  | "stream"
+  | "timeout"
+  | "unknown"
+  | "upstream";
+
+export interface TurnErrorCorrelationId {
+  readonly source: string;
+  readonly value: string;
+}
+
+export interface TurnErrorMetadataV1 {
+  readonly category: TurnErrorCategory;
+  readonly code?: string;
+  readonly correlationIds?: readonly TurnErrorCorrelationId[];
+  readonly observedRetryable?: boolean;
+  readonly providerType?: string;
+  readonly retryAfterMs?: number;
+  readonly status?: number;
+  readonly version: 1;
+}
+
 export type AgentEvent =
   /** User input was accepted into the thread queue. */
   | UserText
@@ -113,7 +143,11 @@ export type AgentEvent =
   /** The active turn was interrupted before normal completion. */
   | { type: "turn-abort" }
   /** The active turn hit an unrecoverable runtime failure. */
-  | { type: "turn-error"; message: string }
+  | {
+      type: "turn-error";
+      message: string;
+      error?: TurnErrorMetadataV1;
+    }
   /** The active turn completed normally. */
   | { type: "turn-end" }
   /** One model/tool-loop iteration started within the active turn. */

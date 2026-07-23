@@ -315,10 +315,79 @@ describe("agentEventStreamParts", () => {
       { type: "abort", reason: "interrupted" },
     ]);
 
-    const errorParts = await collect([
-      { type: "turn-error", message: "model exploded" },
+    const legacyErrorParts = await collect([
+      {
+        type: "turn-error",
+        message: "User banned (request id: req-stream)",
+      },
     ]);
-    expect(errorParts).toEqual([{ type: "error", error: "model exploded" }]);
+    expect(legacyErrorParts).toEqual([
+      {
+        type: "error",
+        error: {
+          message: "User banned (request id: req-stream)",
+          title: "Request failed",
+        },
+      },
+    ]);
+
+    const structuredErrorParts = await collect([
+      {
+        error: {
+          category: "permission",
+          correlationIds: [{ source: "x-request-id", value: "req-structured" }],
+          observedRetryable: false,
+          status: 403,
+          version: 1,
+        },
+        message: "Account access denied",
+        type: "turn-error",
+      } as AgentEvent,
+    ]);
+    expect(structuredErrorParts).toEqual([
+      {
+        type: "error",
+        error: {
+          correlationIds: [{ source: "x-request-id", value: "req-structured" }],
+          hint: "Check your provider account or model access.",
+          message: "Account access denied",
+          title: "Request refused",
+        },
+      },
+    ]);
+
+    const unsafeMetadataParts = await collect([
+      {
+        error: {
+          category: "permission",
+          correlationIds: [
+            {
+              source: "x-request-id\u009b2J",
+              value: "request\u001b[2J",
+            },
+          ],
+          version: 1,
+        },
+        message: "Access denied",
+        type: "turn-error",
+      } as AgentEvent,
+    ]);
+    expect(unsafeMetadataParts).toEqual([
+      {
+        type: "error",
+        error: {
+          correlationIds: [
+            {
+              source: "x-request-id\\u009b2J",
+              value: "request^[[2J",
+            },
+          ],
+          hint: "Check your provider account or model access.",
+          message: "Access denied",
+          title: "Request refused",
+        },
+      },
+    ]);
   });
 
   it("skips user-input and runtime-input echoes", async () => {

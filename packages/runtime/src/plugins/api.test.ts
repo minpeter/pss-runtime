@@ -393,6 +393,7 @@ describe("factory plugin API", () => {
     const events = await collect(await agent.send("hello"));
 
     expect(events.at(-1)).toEqual({
+      error: { category: "unknown", version: 1 },
       message: 'prepareModelStep field "model" must be a data property.',
       type: "turn-error",
     });

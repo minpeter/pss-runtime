@@ -1,6 +1,6 @@
 import { jsonSchema, tool } from "ai";
 import { convertArrayToReadableStream } from "ai/test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createMockLanguageModelV4,
   createStreamingMockLanguageModelV4,
@@ -372,6 +372,27 @@ describe("createModelStepStream", () => {
 
     await expect(collectParts(source.parts)).rejects.toBe(fixtureError);
     await expect(source.finalize()).rejects.toBe(fixtureError);
+  });
+
+  it("preserves doStream failures without logging raw error objects", async () => {
+    const fixtureError = new Error("User banned (request id: req-stream)");
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const model = createStreamingMockLanguageModelV4(() =>
+      Promise.reject(fixtureError)
+    );
+    const source = createModelStepStream({ messages: [...prompt], model });
+
+    try {
+      const parts = await collectParts(source.parts);
+
+      expect(parts.at(-1)).toEqual({ error: fixtureError, type: "error" });
+      await expect(source.finalize()).rejects.toBe(fixtureError);
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 });
 

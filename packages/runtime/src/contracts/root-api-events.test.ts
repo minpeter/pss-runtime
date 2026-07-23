@@ -7,6 +7,7 @@ import type {
   PluginToolCallBeforeEvent,
   StreamAgentEvent,
   TelemetryAgentEvent,
+  TurnErrorMetadataV1,
   VisibleAgentEvent,
 } from "../index";
 import {
@@ -51,6 +52,17 @@ describe("runtime root event API exports", () => {
       type: "assistant-reasoning",
     } satisfies TelemetryAgentEvent;
     const control = lifecycle satisfies ControlAgentEvent;
+    const turnErrorMetadata = {
+      category: "permission",
+      observedRetryable: false,
+      status: 403,
+      version: 1,
+    } satisfies TurnErrorMetadataV1;
+    const turnError = {
+      error: turnErrorMetadata,
+      message: "Access denied",
+      type: "turn-error",
+    } satisfies AgentEvent;
     const events = [visible, lifecycle, telemetry, control] satisfies readonly [
       VisibleAgentEvent,
       LifecycleAgentEvent,
@@ -64,6 +76,7 @@ describe("runtime root event API exports", () => {
       "assistant-reasoning",
       "turn-start",
     ]);
+    expect(turnError.error).toEqual(turnErrorMetadata);
   });
 
   it("types ephemeral stream event exports from the package root", () => {

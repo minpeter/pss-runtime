@@ -132,12 +132,18 @@ export function createModelStepStream(
 function streamingModelStep(
   options: ModelStepStreamOptions
 ): ModelStepStreamHandle {
-  const result = streamText(options);
+  let streamFailure: { readonly error: unknown } | undefined;
+  const result = streamText({
+    ...options,
+    onError: ({ error }) => {
+      streamFailure ??= { error };
+    },
+  });
   let finalization: Promise<ModelStepStreamFinalResult> | undefined;
   return {
     parts: result.stream as AsyncIterable<ModelStepStreamPart>,
     finalize() {
-      finalization ??= finalizeStreamTextResult(result);
+      finalization ??= finalizeStreamingModelStep(result, () => streamFailure);
       return finalization;
     },
   };
@@ -221,6 +227,17 @@ async function finalizeStreamTextResult(
       result.response,
     ]);
   return { finalStep, finishReason, response, responseMessages, usage };
+}
+
+async function finalizeStreamingModelStep(
+  result: ReturnType<typeof streamText>,
+  getStreamFailure: () => { readonly error: unknown } | undefined
+): Promise<ModelStepStreamFinalResult> {
+  try {
+    return await finalizeStreamTextResult(result);
+  } catch (error) {
+    throw getStreamFailure()?.error ?? error;
+  }
 }
 
 function finalResultFromGenerateText(

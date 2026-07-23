@@ -1,4 +1,5 @@
 import type { AgentEvent, ModelUsage } from "@minpeter/pss-runtime";
+import { createTuiErrorPresentation } from "./error-presentation";
 import type { TuiStreamPart } from "./stream-handlers";
 
 /**
@@ -179,7 +180,10 @@ export async function* agentEventStreamParts(
         yield { type: "abort", reason: "interrupted" };
         break;
       case "turn-error":
-        yield { type: "error", error: event.message };
+        yield {
+          type: "error",
+          error: createTuiErrorPresentation(event.message, event.error),
+        };
         break;
       default:
         // user-input / runtime-input echoes are rendered by the TUI itself.

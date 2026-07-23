@@ -116,6 +116,47 @@ if (!isStreamAgentEvent(event)) {
 }
 ```
 
+### Structured turn errors
+
+Unrecoverable failures still emit the compatible
+`{ type: "turn-error", message }` event. New events can also include optional,
+versioned, provider-neutral metadata:
+
+```ts
+{
+  type: "turn-error",
+  message: "The provider refused this request.",
+  error: {
+    version: 1,
+    category: "permission",
+    status: 403,
+    providerType: "provider_error",
+    observedRetryable: false,
+    correlationIds: [
+      { source: "x-request-id", value: "request-123" },
+    ],
+  },
+}
+```
+
+`TurnErrorMetadataV1`, `TurnErrorCategory`, and `TurnErrorCorrelationId` are
+exported from the package root. Categories are stable runtime classifications:
+`authentication`, `permission`, `quota`, `rate-limit`, `bad-request`,
+`context-overflow`, `timeout`, `network`, `upstream`, `stream`, `cancelled`,
+and `unknown`.
+
+The metadata is additive and durable: it survives `thread.events()` replay and
+is visible to plugins. Older stored events without `error` remain valid.
+`message` is an application-owned safe summary for structured provider
+failures, not raw provider prose. The metadata whitelist can include status,
+bounded code/type values, retry-after, and labeled correlation IDs; it excludes
+request/response bodies, raw headers, URLs, stacks, credentials, and arbitrary
+causes.
+
+`observedRetryable` reports what the SDK or transport observed. It does not
+promise that PSS will retry. A future retry policy must communicate its actual
+decision separately.
+
 `model` is the single public constructor key for model execution. Pass an AI SDK
 `LanguageModel` object and configure runtime-owned prompting through
 `instructions`, `tools`, and `toolChoice`:

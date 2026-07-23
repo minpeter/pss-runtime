@@ -309,8 +309,8 @@ describe("generateModelStepResult stream events", () => {
           model,
           signal: new AbortController().signal,
         })
-      ).rejects.toMatchObject({ name: "AI_NoOutputGeneratedError" });
-      expect(consoleError).toHaveBeenCalledWith(fixtureError);
+      ).rejects.toBe(fixtureError);
+      expect(consoleError).not.toHaveBeenCalled();
     } finally {
       consoleError.mockRestore();
     }
