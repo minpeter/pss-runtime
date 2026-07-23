@@ -78,6 +78,29 @@ export interface ToolResult {
   type: "tool-result";
 }
 
+export interface AssistantOutputDelta {
+  text: string;
+  type: "assistant-output-delta";
+}
+export interface AssistantReasoningDelta {
+  text: string;
+  type: "assistant-reasoning-delta";
+}
+export interface ToolCallInputStart {
+  toolCallId: string;
+  toolName: string;
+  type: "tool-call-input-start";
+}
+export interface ToolCallInputDelta {
+  inputTextDelta: string;
+  toolCallId: string;
+  type: "tool-call-input-delta";
+}
+export interface ToolCallInputEnd {
+  toolCallId: string;
+  type: "tool-call-input-end";
+}
+
 export type AgentEvent =
   /** User input was accepted into the thread queue. */
   | UserText
@@ -106,7 +129,32 @@ export type AgentEvent =
   /** A tool call returned a result. */
   | ToolResult
   /** One model/tool-loop iteration finished within the active turn. */
-  | { type: "step-end" };
+  | { type: "step-end" }
+  /**
+   * Ephemeral assistant text delta; never persisted. The committed
+   * assistant-output event remains the durable record.
+   */
+  | AssistantOutputDelta
+  /**
+   * Ephemeral assistant reasoning delta; never persisted. Advisory only;
+   * assistant-reasoning remains the durable record.
+   */
+  | AssistantReasoningDelta
+  /**
+   * Ephemeral signal that tool-call input streaming started; never persisted.
+   * The committed tool-call event remains the durable record.
+   */
+  | ToolCallInputStart
+  /**
+   * Ephemeral tool-call input text delta; never persisted. Advisory only;
+   * the committed tool-call event remains the durable record.
+   */
+  | ToolCallInputDelta
+  /**
+   * Ephemeral signal that tool-call input streaming finished; never persisted.
+   * The committed tool-call event remains the durable record.
+   */
+  | ToolCallInputEnd;
 
 export type AgentEventListener = (event: AgentEvent) => void;
 
@@ -135,6 +183,14 @@ const telemetryAgentEventTypes = {
   "runtime-input": true,
 } satisfies Partial<Record<AgentEvent["type"], true>>;
 
+const streamAgentEventTypes = {
+  "assistant-output-delta": true,
+  "assistant-reasoning-delta": true,
+  "tool-call-input-delta": true,
+  "tool-call-input-end": true,
+  "tool-call-input-start": true,
+} satisfies Partial<Record<AgentEvent["type"], true>>;
+
 export type VisibleAgentEvent = Extract<
   AgentEvent,
   { type: keyof typeof visibleAgentEventTypes }
@@ -150,6 +206,10 @@ export type ToolAgentEvent = Extract<
 export type TelemetryAgentEvent = Extract<
   AgentEvent,
   { type: keyof typeof telemetryAgentEventTypes }
+>;
+export type StreamAgentEvent = Extract<
+  AgentEvent,
+  { type: keyof typeof streamAgentEventTypes }
 >;
 export type ControlAgentEvent = Exclude<AgentEvent, VisibleAgentEvent>;
 
@@ -173,6 +233,12 @@ export function isTelemetryAgentEvent(
   event: AgentEvent
 ): event is TelemetryAgentEvent {
   return event.type in telemetryAgentEventTypes;
+}
+
+export function isStreamAgentEvent(
+  event: AgentEvent
+): event is StreamAgentEvent {
+  return event.type in streamAgentEventTypes;
 }
 
 export function isControlAgentEvent(

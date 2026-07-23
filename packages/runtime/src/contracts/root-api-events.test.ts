@@ -5,12 +5,14 @@ import type {
   LifecycleAgentEvent,
   PluginRequestResultMap,
   PluginToolCallBeforeEvent,
+  StreamAgentEvent,
   TelemetryAgentEvent,
   VisibleAgentEvent,
 } from "../index";
 import {
   isControlAgentEvent,
   isLifecycleAgentEvent,
+  isStreamAgentEvent,
   isTelemetryAgentEvent,
   isVisibleAgentEvent,
 } from "../index";
@@ -29,6 +31,7 @@ describe("runtime root event API exports", () => {
       isTelemetryAgentEvent
     );
     expect(runtime).toHaveProperty("isControlAgentEvent", isControlAgentEvent);
+    expect(runtime).toHaveProperty("isStreamAgentEvent", isStreamAgentEvent);
     expect(runtime).not.toHaveProperty("isBeforeToolCallEvent");
   });
 
@@ -55,6 +58,28 @@ describe("runtime root event API exports", () => {
       "turn-start",
       "assistant-reasoning",
       "turn-start",
+    ]);
+  });
+
+  it("types ephemeral stream event exports from the package root", () => {
+    const outputDelta = {
+      text: "partial",
+      type: "assistant-output-delta",
+    } satisfies StreamAgentEvent;
+    const inputDelta = {
+      inputTextDelta: "{",
+      toolCallId: "tool-1",
+      type: "tool-call-input-delta",
+    } satisfies StreamAgentEvent;
+    const events = [outputDelta, inputDelta] satisfies readonly [
+      StreamAgentEvent,
+      StreamAgentEvent,
+    ];
+
+    expect(events.filter(isStreamAgentEvent)).toEqual(events);
+    expect(events.map((event) => event.type)).toEqual([
+      "assistant-output-delta",
+      "tool-call-input-delta",
     ]);
   });
 

@@ -4,6 +4,7 @@ import {
   type AgentEvent,
   isControlAgentEvent,
   isLifecycleAgentEvent,
+  isStreamAgentEvent,
   isTelemetryAgentEvent,
   isToolAgentEvent,
   isVisibleAgentEvent,
@@ -66,5 +67,30 @@ describe("thread event protocol boundary", () => {
       events[4],
     ]);
     expect(events.filter(isControlAgentEvent)).toEqual(events.slice(1));
+  });
+
+  it("classifies ephemeral stream events separately from durable events", () => {
+    const events = [
+      { text: "partial", type: "assistant-output-delta" },
+      { text: "thinking", type: "assistant-reasoning-delta" },
+      {
+        toolCallId: "tool-1",
+        toolName: "lookup",
+        type: "tool-call-input-start",
+      },
+      {
+        inputTextDelta: '{"path":',
+        toolCallId: "tool-1",
+        type: "tool-call-input-delta",
+      },
+      { toolCallId: "tool-1", type: "tool-call-input-end" },
+    ] satisfies readonly AgentEvent[];
+
+    expect(events.filter(isStreamAgentEvent)).toEqual(events);
+    expect(events.filter(isVisibleAgentEvent)).toEqual([]);
+    expect(events.filter(isLifecycleAgentEvent)).toEqual([]);
+    expect(events.filter(isToolAgentEvent)).toEqual([]);
+    expect(events.filter(isTelemetryAgentEvent)).toEqual([]);
+    expect(events.filter(isControlAgentEvent)).toEqual(events);
   });
 });
