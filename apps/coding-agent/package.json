@@ -68,7 +68,8 @@
     "build": "tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "lint": "ultracite check ."
+    "lint": "ultracite check .",
+    "preview:edit": "tsx --conditions=@minpeter/pss-source scripts/preview-edit-render.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "3.0.14",
