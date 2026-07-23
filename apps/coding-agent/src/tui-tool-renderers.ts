@@ -20,6 +20,8 @@ const DIFF_INVERSE_OFF = "\x1b[27m";
 // highlight marks only the intra-token characters that actually changed.
 const DIFF_REMOVE_FAINT_BG = "\x1b[48;2;61;38;40m";
 const DIFF_ADD_FAINT_BG = "\x1b[48;2;38;61;40m";
+// unchanged context rows (identical on both sides) get a dim line number.
+const DIFF_CONTEXT_DIM = "\x1b[2m";
 
 // senpi dark-theme syntax palette (VS Code Dark+ hues), truecolor.
 const fgRgb = (r: number, g: number, b: number): string =>
@@ -444,6 +446,12 @@ const renderDiffLine = (params: {
       return [`${token.color}${token.text}${ANSI_RESET}`];
     }
 
+    // Whitespace never takes the strong highlight; even when it changed it
+    // drops to the faint region tint, so only real characters glow.
+    if (token.text.trim().length === 0) {
+      return [`${faintBg}${token.color}${token.text}${ANSI_RESET}`];
+    }
+
     const parts = params.refinedParts.get(index);
     if (parts === undefined) {
       return [
@@ -461,51 +469,144 @@ const renderDiffLine = (params: {
   return `${fg}${prefix}${params.lineNo} ${ANSI_RESET}${segments.join("")}`;
 };
 
-const renderDiffGroup = (lines: readonly DiffLine[]): string => {
-  const removed = lines.filter((line) => line.kind === "remove");
-  const added = lines.filter((line) => line.kind === "add");
-  const rendered: string[] = [];
-  const rowCount = Math.max(removed.length, added.length);
-
-  for (let index = 0; index < rowCount; index += 1) {
-    const oldLine = removed[index];
-    const newLine = added[index];
-    const oldTokens = oldLine ? tokenizeCode(oldLine.text) : [];
-    const newTokens = newLine ? tokenizeCode(newLine.text) : [];
-    const { oldChanged, newChanged } = markChangedTokens(
-      oldTokens.map((token) => token.text),
-      newTokens.map((token) => token.text)
-    );
-    const { newPairs, oldPairs } = pairRefinements(oldChanged, newChanged);
-    const oldRefined = computeRefinedParts(oldTokens, newTokens, oldPairs);
-    const newRefined = computeRefinedParts(newTokens, oldTokens, newPairs);
-
-    if (oldLine) {
-      rendered.push(
-        renderDiffLine({
-          changed: oldChanged,
-          kind: "remove",
-          lineNo: oldLine.lineNo,
-          refinedParts: oldRefined,
-          tokens: oldTokens,
-        })
-      );
-    }
-    if (newLine) {
-      rendered.push(
-        renderDiffLine({
-          changed: newChanged,
-          kind: "add",
-          lineNo: newLine.lineNo,
-          refinedParts: newRefined,
-          tokens: newTokens,
-        })
-      );
+/**
+ * LCS over whole line texts; returns index pairs of lines that are
+ * identical on both sides of the diff, in order.
+ */
+const matchIdenticalLines = (
+  oldLines: readonly string[],
+  newLines: readonly string[]
+): Array<[number, number]> => {
+  const rows = oldLines.length;
+  const cols = newLines.length;
+  const table: number[][] = Array.from({ length: rows + 1 }, () =>
+    new Array<number>(cols + 1).fill(0)
+  );
+  for (let i = rows - 1; i >= 0; i -= 1) {
+    for (let j = cols - 1; j >= 0; j -= 1) {
+      table[i][j] =
+        oldLines[i] === newLines[j]
+          ? table[i + 1][j + 1] + 1
+          : Math.max(table[i + 1][j], table[i][j + 1]);
     }
   }
 
-  return rendered.join("\n");
+  const pairs: Array<[number, number]> = [];
+  let i = 0;
+  let j = 0;
+  while (i < rows && j < cols) {
+    if (oldLines[i] === newLines[j]) {
+      pairs.push([i, j]);
+      i += 1;
+      j += 1;
+    } else if (table[i + 1][j] >= table[i][j + 1]) {
+      i += 1;
+    } else {
+      j += 1;
+    }
+  }
+  return pairs;
 };
+
+const renderEditedSide = (
+  line: DiffLine,
+  kind: "add" | "remove",
+  counterpart: DiffLine | undefined
+): string => {
+  const tokens = tokenizeCode(line.text);
+  if (counterpart === undefined) {
+    return renderDiffLine({
+      changed: tokens.map(() => true),
+      kind,
+      lineNo: line.lineNo,
+      refinedParts: new Map(),
+      tokens,
+    });
+  }
+  const counterpartTokens = tokenizeCode(counterpart.text);
+  const { oldChanged, newChanged } = markChangedTokens(
+    tokens.map((token) => token.text),
+    counterpartTokens.map((token) => token.text)
+  );
+  const { oldPairs } = pairRefinements(oldChanged, newChanged);
+  const refinedParts = computeRefinedParts(tokens, counterpartTokens, oldPairs);
+  return renderDiffLine({
+    changed: oldChanged,
+    kind,
+    lineNo: line.lineNo,
+    refinedParts,
+    tokens,
+  });
+};
+
+const renderContextLine = (line: DiffLine): string =>
+  `${DIFF_CONTEXT_DIM} ${line.lineNo} ${ANSI_RESET}${tokenizeCode(line.text)
+    .map((token) => `${token.color}${token.text}${ANSI_RESET}`)
+    .join("")}`;
+
+const renderDiffGroup = (lines: readonly DiffLine[]): string => {
+  const removed = lines.filter((line) => line.kind === "remove");
+  const added = lines.filter((line) => line.kind === "add");
+
+  // Lines that are identical on both sides carry no edit; they collapse
+  // into a single dim context row no matter how far the edit shifted them.
+  const identical = matchIdenticalLines(
+    removed.map((line) => line.text),
+    added.map((line) => line.text)
+  );
+  const matchedOld = new Set(identical.map(([oldIndex]) => oldIndex));
+  const matchedNew = new Set(identical.map(([, newIndex]) => newIndex));
+
+  // Only genuinely edited lines get a counterpart for token-level refinement.
+  const unmatchedOld = removed.filter((_, index) => !matchedOld.has(index));
+  const unmatchedNew = added.filter((_, index) => !matchedNew.has(index));
+  const counterpartOf = new Map<DiffLine, DiffLine>();
+  for (const [index, oldLine] of unmatchedOld.entries()) {
+    const newLine = unmatchedNew[index];
+    if (newLine !== undefined) {
+      counterpartOf.set(oldLine, newLine);
+      counterpartOf.set(newLine, oldLine);
+    }
+  }
+
+  const events: Array<{ key: number; text: string }> = [];
+  for (const [, newIndex] of identical) {
+    const line = added[newIndex];
+    if (line !== undefined) {
+      events.push({ key: line.lineNo, text: renderContextLine(line) });
+    }
+  }
+  for (const [index, oldLine] of removed.entries()) {
+    if (matchedOld.has(index)) {
+      continue;
+    }
+    const counterpart = counterpartOf.get(oldLine);
+    const rows = [
+      renderEditedSide(oldLine, "remove", counterpart),
+      ...(counterpart === undefined
+        ? []
+        : [renderEditedSide(counterpart, "add", oldLine)]),
+    ];
+    events.push({ key: oldLine.lineNo, text: rows.join("\n") });
+  }
+  for (const [index, newLine] of added.entries()) {
+    if (matchedNew.has(index) || counterpartOf.has(newLine)) {
+      continue;
+    }
+    events.push({
+      key: newLine.lineNo,
+      text: renderEditedSide(newLine, "add", undefined),
+    });
+  }
+
+  return events
+    .sort((left, right) => left.key - right.key)
+    .map((event) => event.text)
+    .join("\n");
+};
+
+const groupStartLine = (group: readonly DiffLine[]): number =>
+  Math.min(...group.map((line) => line.lineNo));
 
 const summarizeEdits = (edits: EditOp[]): string =>
   edits.map(formatEditHunk).join("\n\n");
@@ -637,9 +738,13 @@ const renderEditFile = (
   const diffGroups =
     typeof output === "string" ? parseDiffSection(output) : undefined;
   if (diffGroups !== undefined) {
+    // Present hunks in file order regardless of the model's edits order.
+    const sortedGroups = [...diffGroups].sort(
+      (left, right) => groupStartLine(left) - groupStartLine(right)
+    );
     view.setPrettyBlock(
       `**edit** \`${path}\``,
-      diffGroups.map(renderDiffGroup).join("\n\n"),
+      sortedGroups.map(renderDiffGroup).join("\n\n"),
       { useBackground: false }
     );
     return;
