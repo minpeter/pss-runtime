@@ -12,10 +12,13 @@ import {
   type MockLanguageModelV4StreamResult,
   mockLanguageModelV4Empty,
 } from "../../testing/mock-language-model-v4-test-utils";
+import { createRuntimeInputState } from "../input/runtime-input";
 import { type AgentEvent, isStreamAgentEvent } from "../protocol/events";
 import { BufferedAgentTurn } from "../protocol/turn";
 import { ThreadEventDispatcher } from "../runtime/thread-event-dispatcher";
 import { recordDurableThreadEvent } from "../runtime/thread-event-log";
+import { emitTurnEvent } from "../runtime/turn-events";
+import { ThreadState } from "../state/thread-state";
 import { collect } from "./test-support";
 
 type MockStreamPart =
@@ -207,6 +210,55 @@ describe("thread stream events", () => {
     expect(observeAgentEvent).not.toHaveBeenCalled();
 
     captured.release();
+    await iterator.return?.();
+    await pluginRuntime.dispose();
+  });
+
+  it("routes stream events through the emitTurnEvent ephemeral bypass", async () => {
+    const host = createInMemoryHost();
+    const pluginRuntime = await PluginRuntime.create([], {
+      diagnostics: noopRuntimeDiagnostics,
+      factoryTimeoutMs: 10_000,
+      hookTimeoutMs: 10_000,
+    });
+    const dispatcher = new ThreadEventDispatcher({
+      history: () => [],
+      pluginRuntime,
+      signal: () => undefined,
+      threadKey: "stream-turn-event-bypass",
+    });
+    const emitRunEvent = vi.spyOn(dispatcher, "emitRunEvent");
+    const emitStreamEvent = vi.spyOn(dispatcher, "emitStreamEvent");
+    const run = new BufferedAgentTurn();
+    const iterator = run.events()[Symbol.asyncIterator]();
+    const recorded: AgentEvent[] = [];
+    const event = {
+      text: "live delta",
+      type: "assistant-output-delta",
+    } satisfies AgentEvent;
+
+    await emitTurnEvent({
+      attachmentStore: undefined,
+      awaitBoundaries: false,
+      durableEvents: [],
+      event,
+      events: dispatcher,
+      executionHost: undefined,
+      recordEvent: (recordedEvent) => recorded.push(recordedEvent),
+      run,
+      runtimeInput: createRuntimeInputState([]),
+      state: new ThreadState({
+        key: "stream-turn-event-bypass",
+        store: host.store.threads,
+      }),
+      threadKey: "stream-turn-event-bypass",
+    });
+
+    expect((await iterator.next()).value).toEqual(event);
+    expect(emitStreamEvent).toHaveBeenCalledWith(run, event);
+    expect(emitRunEvent).not.toHaveBeenCalled();
+    expect(recorded).toEqual([]);
+
     await iterator.return?.();
     await pluginRuntime.dispose();
   });
