@@ -147,6 +147,7 @@ describe("agentEventStreamParts", () => {
 
     expect(parts).toEqual([
       {
+        reason: "policy",
         type: "tool-output-denied",
         toolCallId: "call_1",
         toolName: "shell_execute",
@@ -175,6 +176,31 @@ describe("agentEventStreamParts", () => {
     expect(parts).toEqual([
       { type: "finish-step", finishReason: "stop" },
       { type: "finish", finishReason: "stop" },
+    ]);
+  });
+
+  it("does not inherit a finish reason from an earlier model attempt", async () => {
+    const parts = await collect([
+      {
+        attemptId: "a1",
+        finishReason: "tool-calls",
+        inputTokens: 10,
+        outputTokens: 5,
+        type: "model-usage",
+      },
+      {
+        attemptId: "a2",
+        inputTokens: 8,
+        outputTokens: 3,
+        type: "model-usage",
+      },
+      { type: "step-end" },
+      { type: "turn-end" },
+    ]);
+
+    expect(parts).toEqual([
+      { finishReason: undefined, type: "finish-step" },
+      { finishReason: "stop", type: "finish" },
     ]);
   });
 

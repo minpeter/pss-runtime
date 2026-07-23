@@ -6,8 +6,10 @@ import {
 } from "@earendil-works/pi-tui";
 
 import { colors } from "./colors";
+import { sanitizeTerminalText } from "./terminal-safety";
 
 const LEADING_NEWLINES = /^\n+/;
+const OUTER_NEWLINES = /^\n+|\n+$/g;
 
 const styleThinkingText = (text: string): string =>
   `${colors.dim}${colors.italic}${colors.gray}${text}${colors.reset}`;
@@ -39,17 +41,18 @@ export class AssistantStreamView extends Container {
     type: AssistantStreamSegment["type"],
     delta: string
   ): void {
-    if (delta.length === 0) {
+    const sanitized = sanitizeTerminalText(delta);
+    if (sanitized.length === 0) {
       return;
     }
 
     const lastSegment = this.segments.at(-1);
     if (lastSegment && lastSegment.type === type) {
-      lastSegment.content += delta;
+      lastSegment.content += sanitized;
     } else {
       this.segments.push({
         type,
-        content: delta,
+        content: sanitized,
       });
     }
 
@@ -64,7 +67,7 @@ export class AssistantStreamView extends Container {
         const normalizedContent =
           segment.type === "reasoning"
             ? segment.content.replace(LEADING_NEWLINES, "").trimEnd()
-            : segment.content.trim();
+            : segment.content.replace(OUTER_NEWLINES, "");
 
         return {
           ...segment,

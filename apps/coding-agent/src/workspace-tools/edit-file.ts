@@ -6,6 +6,7 @@ import {
   formatLineAnchor,
   resolveLineAnchor,
 } from "./hashline";
+import { truncateToolOutput } from "./output";
 import { resolveWorkspacePath, workspaceRelativePath } from "./path-safety";
 import { atomicWrite } from "./write-file";
 
@@ -131,6 +132,25 @@ function applyEdits(
   return output;
 }
 
+const netLineChange = (edit: ResolvedEdit): number => {
+  const removedLineCount =
+    edit.op === "replace" ? edit.end - edit.index + 1 : 0;
+  return edit.lines.length - removedLineCount;
+};
+
+const finalStartIndex = (
+  edit: ResolvedEdit,
+  resolvedEdits: readonly ResolvedEdit[]
+): number =>
+  edit.index +
+  resolvedEdits
+    .filter(
+      (candidate) =>
+        candidate.index < edit.index ||
+        (candidate.index === edit.index && candidate.order < edit.order)
+    )
+    .reduce((shift, candidate) => shift + netLineChange(candidate), 0);
+
 const buildDiffSectionLines = (
   resolvedEdits: readonly ResolvedEdit[],
   sourceLines: readonly string[]
@@ -150,8 +170,9 @@ const buildDiffSectionLines = (
         );
       }
     }
+    const addedStartIndex = finalStartIndex(resolved, resolvedEdits);
     for (const [offset, line] of resolved.lines.entries()) {
-      const lineNumber = resolved.index + 1 + offset;
+      const lineNumber = addedStartIndex + 1 + offset;
       diffLines.push(`+${formatLineAnchor(lineNumber, line)}|${line}`);
     }
   }
@@ -200,14 +221,16 @@ export function createEditFileTool(
 
       const diffLines = buildDiffSectionLines(resolvedEdits, sourceLines);
 
-      return [
-        "OK - edited file",
-        `path: ${workspaceRelativePath(resolved.root, absolutePath)}`,
-        `edits: ${edits.length}`,
-        `file_hash: ${computeFileHash(output)}`,
-        "diff:",
-        ...diffLines,
-      ].join("\n");
+      return truncateToolOutput(
+        [
+          "OK - edited file",
+          `path: ${workspaceRelativePath(resolved.root, absolutePath)}`,
+          `edits: ${edits.length}`,
+          `file_hash: ${computeFileHash(output)}`,
+          "diff:",
+          ...diffLines,
+        ].join("\n")
+      );
     },
   });
 }

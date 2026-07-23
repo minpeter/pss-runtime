@@ -5,6 +5,7 @@ import {
   Text,
 } from "@earendil-works/pi-tui";
 import type { AssistantStreamView } from "./stream-views";
+import { sanitizeTerminalText } from "./terminal-safety";
 import type { ToolCallView } from "./tool-call-view";
 
 /**
@@ -46,13 +47,13 @@ export interface ToolInputRenderState {
 
 const safeStringify = (value: unknown): string => {
   if (typeof value === "string") {
-    return value;
+    return sanitizeTerminalText(value);
   }
 
   try {
-    return JSON.stringify(value, null, 2);
+    return sanitizeTerminalText(JSON.stringify(value, null, 2));
   } catch {
-    return String(value);
+    return sanitizeTerminalText(String(value));
   }
 };
 
@@ -290,7 +291,9 @@ export const handleToolOutputDenied: StreamPartHandler = (part, state) => {
   firePendingEndIfTracked(state, toolCallId);
   state.resetAssistantView(true);
   const view = state.ensureToolView(toolCallId, toolName);
-  view.setOutputDenied();
+  view.setOutputDenied(
+    typeof part.reason === "string" ? part.reason : undefined
+  );
 };
 
 export const handleToolApprovalRequest: StreamPartHandler = (part, state) => {

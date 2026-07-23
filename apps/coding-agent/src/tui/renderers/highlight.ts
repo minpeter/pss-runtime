@@ -1,3 +1,5 @@
+import { sanitizeTerminalText } from "../terminal-safety";
+import { boundedLcsMatches } from "./bounded-lcs";
 import { normalizedLines, RESTORE_ON_GRAY_BG } from "./utils";
 
 // senpi dark-theme syntax palette (VS Code Dark+ hues), truecolor.
@@ -89,20 +91,9 @@ const classifyWordToken = (word: string): string => {
   return SYN_VARIABLE;
 };
 
-// Terminals interpret raw C0 controls embedded in file content (OSC title
-// hacks, cursor moves); render them as cat -v style ^X placeholders.
-// biome-ignore lint/suspicious/noControlCharactersInRegex: sanitizing terminal escape injection requires matching the C0 range
-const CONTROL_CHAR_PATTERN = /[\x00-\x08\x0b-\x1f\x7f]/g;
-
-const sanitizeControlChars = (text: string): string =>
-  text.replace(CONTROL_CHAR_PATTERN, (char) => {
-    const code = char.charCodeAt(0);
-    return code === 0x7f ? "^?" : `^${String.fromCharCode(code + 0x40)}`;
-  });
-
 export const tokenizeCode = (line: string): CodeToken[] => {
   const tokens: CodeToken[] = [];
-  const sanitized = sanitizeControlChars(line);
+  const sanitized = sanitizeTerminalText(line);
   CODE_TOKEN_PATTERN.lastIndex = 0;
   let match = CODE_TOKEN_PATTERN.exec(sanitized);
   while (match !== null) {
@@ -149,35 +140,11 @@ export const markChangedTokens = (
   oldTokens: readonly string[],
   newTokens: readonly string[]
 ): { newChanged: boolean[]; oldChanged: boolean[] } => {
-  const rows = oldTokens.length;
-  const cols = newTokens.length;
-  const table: number[][] = Array.from({ length: rows + 1 }, () =>
-    new Array<number>(cols + 1).fill(0)
-  );
-  for (let i = rows - 1; i >= 0; i -= 1) {
-    for (let j = cols - 1; j >= 0; j -= 1) {
-      table[i][j] =
-        oldTokens[i] === newTokens[j]
-          ? table[i + 1][j + 1] + 1
-          : Math.max(table[i + 1][j], table[i][j + 1]);
-    }
-  }
-
-  const oldChanged = new Array<boolean>(rows).fill(true);
-  const newChanged = new Array<boolean>(cols).fill(true);
-  let i = 0;
-  let j = 0;
-  while (i < rows && j < cols) {
-    if (oldTokens[i] === newTokens[j]) {
-      oldChanged[i] = false;
-      newChanged[j] = false;
-      i += 1;
-      j += 1;
-    } else if (table[i + 1][j] >= table[i][j + 1]) {
-      i += 1;
-    } else {
-      j += 1;
-    }
+  const oldChanged = new Array<boolean>(oldTokens.length).fill(true);
+  const newChanged = new Array<boolean>(newTokens.length).fill(true);
+  for (const [oldIndex, newIndex] of boundedLcsMatches(oldTokens, newTokens)) {
+    oldChanged[oldIndex] = false;
+    newChanged[newIndex] = false;
   }
 
   return { newChanged, oldChanged };

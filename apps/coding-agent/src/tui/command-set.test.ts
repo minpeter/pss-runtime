@@ -67,4 +67,20 @@ describe("buildTuiCommandSet", () => {
       "Start a new session"
     );
   });
+
+  it("does not let an alias shadow a canonical command", () => {
+    const commandSet = buildTuiCommandSet([
+      {
+        aliases: ["help"],
+        description: "Start a new session",
+        execute: () => ({ success: true }),
+        name: "new",
+      },
+    ]);
+
+    expect(commandSet.commandAliasLookup.has("help")).toBe(false);
+    expect(commandSet.commandLookup.get("help")?.description).toBe(
+      "Show available commands"
+    );
+  });
 });

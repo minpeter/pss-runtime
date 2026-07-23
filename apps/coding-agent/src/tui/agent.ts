@@ -25,6 +25,12 @@ import {
   type TuiCommandResult,
 } from "./command";
 import { buildTuiCommandSet } from "./command-set";
+import {
+  dispatchUserInput,
+  type InputPreprocessHooks,
+  type InputPreprocessResult,
+  type InputThread,
+} from "./input-routing";
 import { createSpinnerTicker, type SpinnerTicker } from "./pending-spinner";
 import { createSpinnerOrchestrator } from "./spinner-orchestrator";
 import {
@@ -39,6 +45,7 @@ import {
   type TuiStreamPart,
 } from "./stream-handlers";
 import { AssistantStreamView } from "./stream-views";
+import { sanitizeTerminalText } from "./terminal-safety";
 import { BaseToolCallView, type ToolRendererMap } from "./tool-call-view";
 
 const ANSI_RESET = "\x1b[0m";
@@ -89,32 +96,29 @@ interface FooterStatusEntry {
   state: "ready" | "running";
 }
 
-class FooterStatusBar extends Text {
-  private readonly ticker: SpinnerTicker;
+export class FooterStatusBar extends Text {
+  private ticker: SpinnerTicker | undefined;
   private currentFrame = "";
   private entries: FooterStatusEntry[] = [];
   private foregroundMessage: string | null = null;
   private rightText: string | undefined;
-  private readonly tui: TUI;
+  private readonly tui: Pick<TUI, "requestRender">;
 
-  constructor(tui: TUI) {
+  constructor(tui: Pick<TUI, "requestRender">) {
     super("", 1, 0);
     this.tui = tui;
-    this.ticker = createSpinnerTicker((frame) => {
-      this.currentFrame = frame;
-      this.invalidate();
-      this.tui.requestRender();
-    });
   }
 
   setEntries(entries: FooterStatusEntry[]): void {
     this.entries = [...entries];
+    this.syncSpinnerTicker();
     this.invalidate();
     this.tui.requestRender();
   }
 
   setForegroundMessage(message: string | null): void {
     this.foregroundMessage = message;
+    this.syncSpinnerTicker();
     this.invalidate();
     this.tui.requestRender();
   }
@@ -130,7 +134,8 @@ class FooterStatusBar extends Text {
   }
 
   stop(): void {
-    this.ticker.stop();
+    this.ticker?.stop();
+    this.ticker = undefined;
   }
 
   private resolveLeadingEntry(): FooterStatusEntry | undefined {
@@ -141,6 +146,10 @@ class FooterStatusBar extends Text {
   }
 
   render(width: number): string[] {
+    if (width <= 0) {
+      return [""];
+    }
+
     if (
       this.entries.length === 0 &&
       this.foregroundMessage === null &&
@@ -149,58 +158,110 @@ class FooterStatusBar extends Text {
       return [];
     }
 
-    const contentWidth = Math.max(1, width - 2);
+    const contentWidth = Math.max(0, width - 1);
     const lines: string[] = [];
-    const rightTextPlain = this.rightText ?? "";
-    const rightTextStyled = rightTextPlain
-      ? style(ANSI_DIM, rightTextPlain)
-      : "";
-
-    const renderLeftEntry = (
-      entry: FooterStatusEntry,
-      maxWidth: number
-    ): { plain: string; styled: string } => {
-      const prefix = entry.state === "running" ? this.currentFrame : "";
-      const prefixStyle =
-        entry.state === "running" ? style(ANSI_CYAN, prefix) : "";
-      const messageStylePrefix = this.resolveEntryStylePrefix(entry.level);
-      const reservedPrefixWidth = prefix ? visibleWidth(prefix) + 1 : 0;
-      const maxMessageWidth = Math.max(0, maxWidth - reservedPrefixWidth);
-      const message = truncatePlainToWidth(entry.message, maxMessageWidth);
-
-      return {
-        plain: prefix ? `${prefix}${message ? ` ${message}` : ""}` : message,
-        styled: prefix
-          ? `${prefixStyle}${message ? ` ${style(messageStylePrefix, message)}` : ""}`
-          : style(messageStylePrefix, message),
-      };
-    };
-
     const leadingEntry = this.resolveLeadingEntry();
-    if (leadingEntry || rightTextStyled) {
-      const maxLeftWidth = rightTextPlain
-        ? Math.max(0, contentWidth - visibleWidth(rightTextPlain) - 1)
-        : contentWidth;
-      const left = leadingEntry
-        ? renderLeftEntry(leadingEntry, maxLeftWidth)
-        : null;
-      const leftWidth = left ? visibleWidth(left.plain) : 0;
-      const gap = rightTextPlain
-        ? Math.max(1, contentWidth - leftWidth - visibleWidth(rightTextPlain))
-        : 0;
-      const line = `${" ".repeat(1)}${left?.styled ?? ""}${" ".repeat(gap)}${rightTextStyled}`;
-      lines.push(line + " ".repeat(Math.max(0, width - visibleWidth(line))));
+    const leadingLine = this.renderLeadingLine(
+      width,
+      contentWidth,
+      leadingEntry
+    );
+    if (leadingLine !== null) {
+      lines.push(leadingLine);
     }
 
     const remainingEntries =
       this.foregroundMessage === null ? this.entries.slice(1) : this.entries;
     for (const entry of remainingEntries) {
-      const left = renderLeftEntry(entry, contentWidth);
-      const line = `${" ".repeat(1)}${left.styled}`;
-      lines.push(line + " ".repeat(Math.max(0, width - visibleWidth(line))));
+      const left = this.renderLeftEntry(entry, contentWidth);
+      lines.push(this.padLine(` ${left.styled}`, width));
     }
 
     return lines;
+  }
+
+  private renderLeadingLine(
+    width: number,
+    contentWidth: number,
+    leadingEntry: FooterStatusEntry | undefined
+  ): string | null {
+    const rightTextLimit = leadingEntry
+      ? Math.max(0, Math.floor((contentWidth - 1) / 2))
+      : contentWidth;
+    const rightTextPlain = truncatePlainToWidth(
+      this.rightText ?? "",
+      rightTextLimit
+    );
+    if (!(leadingEntry || rightTextPlain)) {
+      return null;
+    }
+
+    const minimumGap = leadingEntry && rightTextPlain ? 1 : 0;
+    const maxLeftWidth = rightTextPlain
+      ? Math.max(0, contentWidth - visibleWidth(rightTextPlain) - minimumGap)
+      : contentWidth;
+    const left =
+      leadingEntry && maxLeftWidth > 0
+        ? this.renderLeftEntry(leadingEntry, maxLeftWidth)
+        : null;
+    const leftWidth = left ? visibleWidth(left.plain) : 0;
+    const gap = rightTextPlain
+      ? Math.max(
+          leftWidth > 0 ? 1 : 0,
+          contentWidth - leftWidth - visibleWidth(rightTextPlain)
+        )
+      : 0;
+    const rightTextStyled = rightTextPlain
+      ? style(ANSI_DIM, rightTextPlain)
+      : "";
+    return this.padLine(
+      ` ${left?.styled ?? ""}${" ".repeat(gap)}${rightTextStyled}`,
+      width
+    );
+  }
+
+  private renderLeftEntry(
+    entry: FooterStatusEntry,
+    maxWidth: number
+  ): { plain: string; styled: string } {
+    if (maxWidth <= 0) {
+      return { plain: "", styled: "" };
+    }
+
+    const prefix = entry.state === "running" ? this.currentFrame : "";
+    const prefixStyle =
+      entry.state === "running" ? style(ANSI_CYAN, prefix) : "";
+    const messageStylePrefix = this.resolveEntryStylePrefix(entry.level);
+    const reservedPrefixWidth = prefix ? visibleWidth(prefix) + 1 : 0;
+    const maxMessageWidth = Math.max(0, maxWidth - reservedPrefixWidth);
+    const message = truncatePlainToWidth(entry.message, maxMessageWidth);
+
+    return {
+      plain: prefix ? `${prefix}${message ? ` ${message}` : ""}` : message,
+      styled: prefix
+        ? `${prefixStyle}${message ? ` ${style(messageStylePrefix, message)}` : ""}`
+        : style(messageStylePrefix, message),
+    };
+  }
+
+  private padLine(line: string, width: number): string {
+    return line + " ".repeat(Math.max(0, width - visibleWidth(line)));
+  }
+
+  private syncSpinnerTicker(): void {
+    const shouldRun =
+      this.foregroundMessage !== null ||
+      this.entries.some((entry) => entry.state === "running");
+    if (shouldRun && this.ticker === undefined) {
+      this.ticker = createSpinnerTicker((frame) => {
+        this.currentFrame = frame;
+        this.invalidate();
+        this.tui.requestRender();
+      });
+    } else if (!shouldRun && this.ticker !== undefined) {
+      this.ticker.stop();
+      this.ticker = undefined;
+    }
   }
 
   private resolveEntryStylePrefix(
@@ -252,7 +313,7 @@ const addUserMessage = (
 ): void => {
   addChatComponent(
     chatContainer,
-    new Markdown(message, 1, 1, markdownTheme, {
+    new Markdown(sanitizeTerminalText(message), 1, 1, markdownTheme, {
       bgColor: (text: string) =>
         style(`${ANSI_BG_SOFT_LIGHT}${ANSI_BLACK}`, text),
     })
@@ -266,14 +327,14 @@ const addTranslatedMessage = (
 ): void => {
   chatContainer.addChild(new Spacer(1));
   chatContainer.addChild(
-    new Markdown(message, 1, 1, markdownTheme, {
+    new Markdown(sanitizeTerminalText(message), 1, 1, markdownTheme, {
       bgColor: (text: string) => style(ANSI_BG_GRAY, text),
     })
   );
 };
 
 const addSystemMessage = (chatContainer: Container, message: string): void => {
-  const cleaned = message.trimEnd();
+  const cleaned = sanitizeTerminalText(message).trimEnd();
   if (cleaned.length === 0) {
     return;
   }
@@ -412,21 +473,8 @@ const dispatchStreamPart = async (
   }
 };
 
-export type PreprocessResult =
-  | {
-      success: true;
-      message: string;
-      translatedDisplay?: string;
-    }
-  | {
-      success: false;
-      error: string;
-    };
-
-export interface PreprocessHooks {
-  clearStatus: () => void;
-  showStatus: (text: string) => void;
-}
+export type PreprocessResult = InputPreprocessResult;
+export type PreprocessHooks = InputPreprocessHooks;
 
 export interface CommandPreprocessHooks {
   addInputListener: (
@@ -446,9 +494,8 @@ export interface CommandPreprocessHooks {
  * The slice of a pss-runtime `ThreadHandle` the interactive session drives.
  * `send` starts a turn and `interrupt` cancels the active one.
  */
-export interface TuiThread {
+export interface TuiThread extends InputThread {
   interrupt(): void;
-  send(input: string): Promise<AgentTurn>;
 }
 
 export interface TurnUsage {
@@ -514,9 +561,14 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
   );
 
   const updateHeader = (): void => {
-    const headerTitle = config.header?.title ?? "Agent TUI";
-    const subtitle = config.header?.subtitle;
-    const footer = config.footer?.text?.trim();
+    const headerTitle = sanitizeTerminalText(
+      config.header?.title ?? "Agent TUI"
+    );
+    const subtitle =
+      config.header?.subtitle === undefined
+        ? undefined
+        : sanitizeTerminalText(config.header.subtitle);
+    const footer = sanitizeTerminalText(config.footer?.text ?? "").trim();
     title.setText(
       subtitle
         ? `${style(`${ANSI_BOLD}${ANSI_BRIGHT_CYAN}`, headerTitle)}\n${style(ANSI_DIM, subtitle)}`
@@ -552,7 +604,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
 
   let shouldExit = false;
   let activeTurnInterrupted = false;
-  let runActive = false;
+  let activeRun: AgentTurn | undefined;
   let inputResolver: null | ((value: string | null) => void) = null;
   let lastCtrlCPressAt = 0;
   let foregroundStatusMessage: string | null = null;
@@ -564,8 +616,9 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
   };
 
   const showLoader = (message: string): void => {
-    foregroundStatusMessage = message;
-    footerStatusBar.setForegroundMessage(message);
+    const sanitized = sanitizeTerminalText(message);
+    foregroundStatusMessage = sanitized;
+    footerStatusBar.setForegroundMessage(sanitized);
   };
 
   const clearPromptInput = (): void => {
@@ -575,7 +628,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
   };
 
   const cancelActiveTurn = (): boolean => {
-    if (!runActive) {
+    if (activeRun === undefined) {
       return false;
     }
 
@@ -631,7 +684,11 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
       handleCtrlCPress();
       return { consume: true };
     }
-    if (isEscapeInput(data) && !commandInputListenerActive && runActive) {
+    if (
+      isEscapeInput(data) &&
+      !commandInputListenerActive &&
+      activeRun !== undefined
+    ) {
       cancelActiveTurn();
       return { consume: true };
     }
@@ -644,21 +701,6 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
 
   process.on("SIGINT", onSigInt);
   process.stdout.on("resize", onTerminalResize);
-
-  editor.onSubmit = (text: string) => {
-    if (!inputResolver) {
-      return;
-    }
-
-    const trimmed = text.trim();
-    if (trimmed.length > 0) {
-      editor.addToHistory(trimmed);
-    }
-
-    const resolve = inputResolver;
-    inputResolver = null;
-    resolve(text);
-  };
 
   const waitForInput = (): Promise<string | null> =>
     new Promise<string | null>((resolve) => {
@@ -800,8 +842,10 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
   };
 
   const runSingleTurn = async (run: AgentTurn): Promise<void> => {
-    runActive = true;
+    activeRun = run;
     activeTurnInterrupted = false;
+    editor.disableSubmit = false;
+    tui.setFocus(editor);
 
     const turnUsage = {
       inputTokens: 0,
@@ -862,7 +906,9 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
         addAbnormalFinishReasonMessage(finishReason);
       }
     } finally {
-      runActive = false;
+      if (activeRun === run) {
+        activeRun = undefined;
+      }
       activeTurnInterrupted = false;
       clearStatus();
     }
@@ -970,41 +1016,64 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     return true;
   };
 
-  const processUserInputMessage = async (trimmed: string): Promise<void> => {
-    let contentForModel = trimmed;
+  const processUserInputMessage = async (
+    trimmed: string,
+    steeringRun?: AgentTurn
+  ): Promise<void> => {
+    addUserMessage(chatContainer, markdownTheme, trimmed);
+    tui.requestRender();
 
-    if (config.preprocessUserInput) {
-      addUserMessage(chatContainer, markdownTheme, trimmed);
-      tui.requestRender();
-
-      const result = await config.preprocessUserInput(trimmed, {
+    const result = await dispatchUserInput({
+      activeRun: steeringRun,
+      hooks: {
         showStatus: (text: string) => showLoader(text),
         clearStatus: () => clearStatus(),
-      });
-
-      if (result) {
-        if (result.success) {
-          contentForModel = result.message;
-
-          if (result.translatedDisplay) {
-            addTranslatedMessage(
-              chatContainer,
-              markdownTheme,
-              result.translatedDisplay
-            );
-          }
-        } else {
-          addSystemMessage(chatContainer, result.error);
+      },
+      input: trimmed,
+      onPrepared: (prepared) => {
+        if (prepared.translatedDisplay) {
+          addTranslatedMessage(
+            chatContainer,
+            markdownTheme,
+            prepared.translatedDisplay
+          );
         }
-      }
-    } else {
-      addUserMessage(chatContainer, markdownTheme, trimmed);
+        showLoader(steeringRun === undefined ? "Processing..." : "Steering...");
+        tui.requestRender();
+      },
+      preprocess: config.preprocessUserInput,
+      thread: config.thread,
+    });
+
+    if (result.type === "rejected") {
+      clearStatus();
+      addSystemMessage(chatContainer, result.error);
+      tui.requestRender();
+      return;
     }
 
+    if (!result.consumeRun) {
+      clearStatus();
+      return;
+    }
+
+    await runSingleTurn(result.run);
+  };
+
+  const processSteeringInput = async (
+    trimmed: string,
+    steeringRun: AgentTurn
+  ): Promise<void> => {
+    editor.disableSubmit = true;
+    editor.setText("");
     tui.requestRender();
-    showLoader("Processing...");
-    const run = await config.thread.send(contentForModel);
-    await runSingleTurn(run);
+    try {
+      await processUserInputMessage(trimmed, steeringRun);
+    } finally {
+      editor.disableSubmit = false;
+      tui.setFocus(editor);
+      tui.requestRender();
+    }
   };
 
   const processInput = async (input: string): Promise<boolean> => {
@@ -1027,6 +1096,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
       await processUserInputMessage(trimmed);
       return true;
     } catch (error) {
+      clearStatus();
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       addSystemMessage(chatContainer, `Error: ${errorMessage}`);
@@ -1037,6 +1107,35 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
       tui.setFocus(editor);
       tui.requestRender();
     }
+  };
+
+  editor.onSubmit = (text: string) => {
+    const trimmed = text.trim();
+    if (trimmed.length > 0) {
+      editor.addToHistory(trimmed);
+    }
+
+    const steeringRun = activeRun;
+    if (steeringRun !== undefined) {
+      if (trimmed.length > 0) {
+        processSteeringInput(trimmed, steeringRun).catch((error: unknown) => {
+          clearStatus();
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          addSystemMessage(chatContainer, `Error: ${errorMessage}`);
+          tui.requestRender();
+        });
+      }
+      return;
+    }
+
+    if (!inputResolver) {
+      return;
+    }
+
+    const resolve = inputResolver;
+    inputResolver = null;
+    resolve(text);
   };
 
   updateHeader();

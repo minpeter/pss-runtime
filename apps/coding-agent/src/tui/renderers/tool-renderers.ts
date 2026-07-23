@@ -216,10 +216,9 @@ const renderWebFetch = (
 
   const body = output
     .map((result, index) => {
-      const url =
-        stringField(result, "finalUrl") ?? urls[index] ?? "(unknown url)";
+      const url = stringField(result, "url") ?? urls[index] ?? "(unknown url)";
       const title = stringField(result, "title");
-      const text = stringField(result, "text") ?? "";
+      const text = stringField(result, "content") ?? "";
       const truncated = text.length > FETCH_TEXT_PREVIEW_LIMIT;
       const preview = truncated
         ? `${text.slice(0, FETCH_TEXT_PREVIEW_LIMIT)}\n… (truncated, ${text.length} chars total)`

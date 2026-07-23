@@ -1,3 +1,4 @@
+import { boundedLcsMatches } from "./bounded-lcs";
 import {
   type CodeToken,
   computeRefinedParts,
@@ -118,37 +119,7 @@ const renderDiffLine = (params: {
 const matchIdenticalLines = (
   oldLines: readonly string[],
   newLines: readonly string[]
-): [number, number][] => {
-  const rows = oldLines.length;
-  const cols = newLines.length;
-  const table: number[][] = Array.from({ length: rows + 1 }, () =>
-    new Array<number>(cols + 1).fill(0)
-  );
-  for (let i = rows - 1; i >= 0; i -= 1) {
-    for (let j = cols - 1; j >= 0; j -= 1) {
-      table[i][j] =
-        oldLines[i] === newLines[j]
-          ? table[i + 1][j + 1] + 1
-          : Math.max(table[i + 1][j], table[i][j + 1]);
-    }
-  }
-
-  const pairs: [number, number][] = [];
-  let i = 0;
-  let j = 0;
-  while (i < rows && j < cols) {
-    if (oldLines[i] === newLines[j]) {
-      pairs.push([i, j]);
-      i += 1;
-      j += 1;
-    } else if (table[i + 1][j] >= table[i][j + 1]) {
-      i += 1;
-    } else {
-      j += 1;
-    }
-  }
-  return pairs;
-};
+): Array<readonly [number, number]> => boundedLcsMatches(oldLines, newLines);
 
 const renderEditedSide = (
   line: DiffLine,
@@ -229,7 +200,10 @@ export const renderDiffGroup = (lines: readonly DiffLine[]): string => {
         ? []
         : [renderEditedSide(counterpart, "add", oldLine)]),
     ];
-    events.push({ key: oldLine.lineNo, text: rows.join("\n") });
+    events.push({
+      key: counterpart?.lineNo ?? oldLine.lineNo,
+      text: rows.join("\n"),
+    });
   }
   for (const [index, newLine] of added.entries()) {
     if (matchedNew.has(index) || counterpartOf.has(newLine)) {

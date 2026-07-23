@@ -12,6 +12,7 @@ import {
   type SpinnerTicker,
   stylePendingIndicator,
 } from "./pending-spinner";
+import { sanitizeTerminalText } from "./terminal-safety";
 
 const UNKNOWN_TOOL_NAME = "tool";
 const TRAILING_NEWLINES = /\n+$/;
@@ -34,7 +35,10 @@ const safeStringify = (value: unknown): string => {
 };
 
 const renderCodeBlock = (language: string, value: unknown): string => {
-  const text = safeStringify(value).replace(TRAILING_NEWLINES, "");
+  const text = sanitizeTerminalText(safeStringify(value)).replace(
+    TRAILING_NEWLINES,
+    ""
+  );
   const longestFenceRun = Array.from(
     text.matchAll(BACKTICK_FENCE_PATTERN)
   ).reduce((max, match) => Math.max(max, match[0].length), 2);
@@ -172,6 +176,7 @@ export class BaseToolCallView extends Container {
   private inputBuffer = "";
   private output: unknown;
   private outputDenied = false;
+  private outputDeniedReason: string | undefined;
   private parsedInput: unknown;
   private pendingIndicator: Text | null = null;
   private pendingTicker: SpinnerTicker | null = null;
@@ -192,8 +197,8 @@ export class BaseToolCallView extends Container {
     renderers?: ToolRendererMap
   ) {
     super();
-    this.callId = callId;
-    this.toolName = toolName;
+    this.callId = sanitizeTerminalText(callId);
+    this.toolName = sanitizeTerminalText(toolName);
     this.markdownTheme = markdownTheme;
     this.showRawToolIo = showRawToolIo ?? false;
     this.renderers = renderers;
@@ -234,18 +239,20 @@ export class BaseToolCallView extends Container {
     this.refresh();
   }
 
-  setOutputDenied(): void {
+  setOutputDenied(reason?: string): void {
     this.outputDenied = true;
+    this.outputDeniedReason =
+      reason === undefined ? undefined : sanitizeTerminalText(reason);
     this.refresh();
   }
 
   setToolName(toolName: string): void {
-    this.toolName = toolName;
+    this.toolName = sanitizeTerminalText(toolName);
     this.refresh();
   }
 
   setRenderedOverride(markdown: string): void {
-    this.renderedOverride = markdown;
+    this.renderedOverride = sanitizeTerminalText(markdown);
   }
 
   getError(): unknown {
@@ -264,8 +271,9 @@ export class BaseToolCallView extends Container {
     header: string,
     body: string,
     options?: {
-      isPending?: boolean;
+      allowAnsi?: boolean;
       isError?: boolean;
+      isPending?: boolean;
       useBackground?: boolean;
     }
   ): void {
@@ -285,8 +293,10 @@ export class BaseToolCallView extends Container {
     }
 
     this.readBody.setBackgroundEnabled(options?.useBackground ?? true);
-    this.readHeader.setText(header);
-    this.readBody.setText(body);
+    this.readHeader.setText(sanitizeTerminalText(header));
+    this.readBody.setText(
+      options?.allowAnsi ? body : sanitizeTerminalText(body)
+    );
   }
 
   private ensurePrettyBlockComponents(): void {
@@ -446,7 +456,11 @@ export class BaseToolCallView extends Container {
     }
 
     if (this.outputDenied) {
-      blocks.push("**Output** denied by model/policy");
+      blocks.push(
+        this.outputDeniedReason
+          ? `**Output** denied: ${this.outputDeniedReason}`
+          : "**Output** denied by model/policy"
+      );
     }
 
     this.content.setText(blocks.join("\n\n"));

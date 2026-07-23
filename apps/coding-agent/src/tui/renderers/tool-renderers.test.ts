@@ -106,6 +106,29 @@ describe("createToolRenderers — workspace tools", () => {
     expect(text).toContain(GRAY_BG);
   });
 
+  it("write_file pretty-renders an empty successful write", () => {
+    const view = createView(
+      "write_file",
+      { content: "", path: "empty.ts" },
+      "OK - wrote 0 bytes to empty.ts"
+    );
+
+    const text = renderText(view);
+    expect(text).toContain("write");
+    expect(text).toContain("empty.ts");
+    expect(text).not.toContain('"content"');
+  });
+
+  it("write_file preserves content lines that look like output headers", () => {
+    const view = createView(
+      "write_file",
+      { content: "==== keep me\nvalue", path: "headers.txt" },
+      "OK - wrote 22 bytes to headers.txt"
+    );
+
+    expect(renderText(view)).toContain("==== keep me");
+  });
+
   it("edit_file renders a senpi-style word diff from the output diff section", () => {
     const view = createView(
       "edit_file",
@@ -221,6 +244,50 @@ describe("createToolRenderers — workspace tools", () => {
     expect(text).not.toContain('"edits"');
   });
 
+  it("edit_file previews array-form edit lines before output arrives", () => {
+    const view = createView(
+      "edit_file",
+      {
+        edits: [
+          {
+            lines: ["const a = 1;", "const b = 2;"],
+            op: "replace",
+            pos: "1#AA",
+          },
+        ],
+        path: "src/example.ts",
+      },
+      undefined
+    );
+
+    const text = renderText(view);
+    expect(text).toContain("const a = 1;");
+    expect(text).toContain("const b = 2;");
+  });
+
+  it("edit_file sanitizes controls in the pre-result fallback preview", () => {
+    const view = createView(
+      "edit_file",
+      {
+        edits: [
+          {
+            lines: ["safe", "unsafe \u001b]52;c;cHduZWQ=\u0007\u009b31m"],
+            op: "replace",
+            pos: "1#AA",
+          },
+        ],
+        path: "src/example.ts",
+      },
+      undefined
+    );
+
+    const text = renderText(view);
+    expect(text).toContain("^[]52;c;cHduZWQ=^G\\u009b31m");
+    expect(text).not.toContain("\u001b]");
+    expect(text).not.toContain("\u0007");
+    expect(text).not.toContain("\u009b");
+  });
+
   it("delete_file renders a compact header-only block", () => {
     const view = createView(
       "delete_file",
@@ -288,6 +355,19 @@ describe("createToolRenderers — workspace tools", () => {
     expect(failText).toContain(ERROR_BG);
   });
 
+  it("shell_execute renders terminal controls as visible text", () => {
+    const view = createView(
+      "shell_execute",
+      { command: "printf unsafe" },
+      "OK - command finished\nexit_code: 0\nsignal: none\nstdout:\nhello \u001b]0;pwned\u0007\nstderr:\n"
+    );
+
+    const text = renderText(view);
+    expect(text).toContain("^[]0;pwned^G");
+    expect(text).not.toContain("\u001b]");
+    expect(text).not.toContain("\u0007");
+  });
+
   it("renders tool errors with the error background", () => {
     const view = createView(
       "read_file",
@@ -326,7 +406,12 @@ describe("createToolRenderers — web tools", () => {
   it("web_fetch renders per-page sections and caps long bodies", () => {
     const longText = `intro\n${"x".repeat(5000)}`;
     const view = createView("web_fetch", { urls: ["https://a.dev"] }, [
-      { finalUrl: "https://a.dev", title: "Page A", text: longText },
+      {
+        content: longText,
+        length: longText.length,
+        title: "Page A",
+        url: "https://a.dev",
+      },
     ]);
 
     const text = renderText(view);

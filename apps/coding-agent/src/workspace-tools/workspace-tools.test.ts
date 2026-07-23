@@ -154,6 +154,97 @@ describe("workspace coding tools", () => {
     expect(editOutput).toContain(`+${freshAnchor}|export const second = 3;`);
   });
 
+  it("reports added anchors at final positions after shifted edits", async () => {
+    const targetPath = join(workspace, "src", "shifted.ts");
+    await writeFile(targetPath, "one\ntwo\nthree\nfour\n", "utf8");
+    const tools = createWorkspaceTools({ workspace });
+    const read = executableTool(tools, "read_file");
+    const edit = executableTool(tools, "edit_file");
+    const initial = String(
+      await read({ path: "src/shifted.ts" }, executionOptions)
+    );
+    const anchorAt = (lineNumber: number): string | undefined =>
+      initial
+        .split("\n")
+        .find((line) => line.startsWith(`${lineNumber}#`))
+        ?.split("|")[0];
+    const firstAnchor = anchorAt(1);
+    const fourthAnchor = anchorAt(4);
+    expect(firstAnchor).toBeDefined();
+    expect(fourthAnchor).toBeDefined();
+    if (firstAnchor === undefined || fourthAnchor === undefined) {
+      throw new Error("Expected shifted-file hashline anchors.");
+    }
+
+    const editOutput = String(
+      await edit(
+        {
+          edits: [
+            {
+              lines: ["ONE", "INSERTED"],
+              op: "replace",
+              pos: firstAnchor,
+            },
+            {
+              lines: "FOUR",
+              op: "replace",
+              pos: fourthAnchor,
+            },
+          ],
+          path: "src/shifted.ts",
+        },
+        executionOptions
+      )
+    );
+    const freshOutput = String(
+      await read({ path: "src/shifted.ts" }, executionOptions)
+    );
+    const finalFourthLine = freshOutput
+      .split("\n")
+      .find((line) => line.endsWith("|FOUR"));
+
+    expect(finalFourthLine).toBeDefined();
+    expect(editOutput).toContain(`+${finalFourthLine}`);
+  });
+
+  it("truncates oversized edit_file result payloads", async () => {
+    const targetPath = join(workspace, "src", "large-edit.ts");
+    await writeFile(targetPath, "before\n", "utf8");
+    const tools = createWorkspaceTools({ workspace });
+    const read = executableTool(tools, "read_file");
+    const edit = executableTool(tools, "edit_file");
+    const initial = String(
+      await read({ path: "src/large-edit.ts" }, executionOptions)
+    );
+    const anchor = initial
+      .split("\n")
+      .find((line) => line.startsWith("1#"))
+      ?.split("|")[0];
+    expect(anchor).toBeDefined();
+    if (anchor === undefined) {
+      throw new Error("Expected large-edit hashline anchor.");
+    }
+
+    const output = String(
+      await edit(
+        {
+          edits: [
+            {
+              lines: "x".repeat(70_000),
+              op: "replace",
+              pos: anchor,
+            },
+          ],
+          path: "src/large-edit.ts",
+        },
+        executionOptions
+      )
+    );
+
+    expect(Buffer.byteLength(output, "utf8")).toBeLessThanOrEqual(64 * 1024);
+    expect(output).toContain("truncated");
+  });
+
   it("rejects stale anchors and stale file hashes", async () => {
     const tools = createWorkspaceTools({ workspace });
     const read = executableTool(tools, "read_file");

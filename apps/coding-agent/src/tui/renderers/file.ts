@@ -19,7 +19,7 @@ const stripHashlineAnchors = (text: string): string =>
 
 interface EditOp {
   end?: string;
-  lines: string;
+  lines: string | string[];
   op: "append" | "prepend" | "replace";
   pos?: string;
 }
@@ -29,9 +29,13 @@ const isEditOp = (value: unknown): value is EditOp => {
     return false;
   }
   const op = value.op;
+  const lines = value.lines;
+  const hasValidLines =
+    typeof lines === "string" ||
+    (Array.isArray(lines) &&
+      lines.every((line): line is string => typeof line === "string"));
   return (
-    (op === "replace" || op === "append" || op === "prepend") &&
-    typeof value.lines === "string"
+    (op === "replace" || op === "append" || op === "prepend") && hasValidLines
   );
 };
 
@@ -39,7 +43,11 @@ const editedLine = (line: string): string =>
   `${ANSI_GREEN}${line}${ANSI_RESET}`;
 
 const formatEditHunk = (edit: EditOp): string =>
-  normalizedLines(edit.lines).map(editedLine).join("\n");
+  normalizedLines(
+    Array.isArray(edit.lines) ? edit.lines.join("\n") : edit.lines
+  )
+    .map(editedLine)
+    .join("\n");
 
 const summarizeEdits = (edits: EditOp[]): string =>
   edits.map(formatEditHunk).join("\n\n");
@@ -123,7 +131,8 @@ export const renderReadFile = (
   // "OK - file", "path:", "file_hash:", "lines:" precede the hashline body.
   view.setPrettyBlock(
     header,
-    highlightCode(stripHashlineAnchors(lines.slice(4).join("\n")))
+    highlightCode(stripHashlineAnchors(lines.slice(4).join("\n"))),
+    { allowAnsi: true }
   );
 };
 
@@ -136,8 +145,8 @@ export const renderWriteFile = (
     return;
   }
   const path = stringField(input, "path");
-  const content = stringField(input, "content");
-  if (!(path && content !== undefined)) {
+  const content = input.content;
+  if (!(path && typeof content === "string")) {
     return;
   }
   if (renderToolError(view, "write")) {
@@ -146,8 +155,8 @@ export const renderWriteFile = (
 
   view.setPrettyBlock(
     `**write** \`${path}\``,
-    typeof output === "string" && output.startsWith("OK - wrote file")
-      ? buildDisplayContent({ content, stripHeaders: true })
+    typeof output === "string" && output.startsWith("OK - wrote")
+      ? buildDisplayContent({ content, stripHeaders: false })
       : ""
   );
 };
@@ -178,7 +187,7 @@ export const renderEditFile = (
     view.setPrettyBlock(
       `**edit** \`${path}\``,
       sortedGroups.map(renderDiffGroup).join("\n\n"),
-      { useBackground: false }
+      { allowAnsi: true, useBackground: false }
     );
     return;
   }
@@ -187,7 +196,10 @@ export const renderEditFile = (
   const edits = Array.isArray(editsValue) ? editsValue.filter(isEditOp) : [];
   const body = edits.length > 0 ? summarizeEdits(edits) : "";
 
-  view.setPrettyBlock(`**edit** \`${path}\``, body, { useBackground: false });
+  view.setPrettyBlock(`**edit** \`${path}\``, body, {
+    allowAnsi: true,
+    useBackground: false,
+  });
 };
 
 export const renderDeleteFile = (

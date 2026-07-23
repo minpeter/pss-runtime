@@ -108,6 +108,7 @@ export async function startTui(options: StartTuiOptions = {}): Promise<number> {
     thread: {
       interrupt: () => thread.interrupt(),
       send: (input) => thread.send(input),
+      steer: (input) => thread.steer(input),
     },
     commands: [createClearCommand()],
     header: {
@@ -135,8 +136,8 @@ export async function startTui(options: StartTuiOptions = {}): Promise<number> {
 
       const previous = thread;
       previous.interrupt();
-      await previous.delete().catch(() => undefined);
-      await previous.dispose().catch(() => undefined);
+      await previous.delete();
+      await previous.dispose();
       thread = agent.thread(threadConfig.key);
       resetUsageTotals();
     },

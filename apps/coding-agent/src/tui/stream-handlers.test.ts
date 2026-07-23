@@ -327,6 +327,25 @@ describe("stream-handlers", () => {
     expect(onToolPendingEnd).toHaveBeenCalledTimes(1);
   });
 
+  it("renders the reason when tool output is denied", () => {
+    const { chatContainer, state } = createState();
+    dispatchToolCall(state, "call_1");
+
+    handleToolOutputDenied(
+      {
+        reason: "blocked by workspace policy",
+        toolCallId: "call_1",
+        toolName: "shell_execute",
+        type: "tool-output-denied",
+      } as never,
+      state
+    );
+
+    expect(chatContainer.render(100).join("\n")).toContain(
+      "blocked by workspace policy"
+    );
+  });
+
   it("fires onToolPendingEnd even when showToolResults flag is disabled", () => {
     const onToolPendingEnd = vi.fn();
     const { state } = createState({

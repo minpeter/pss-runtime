@@ -1,3 +1,4 @@
+import { sanitizeTerminalText } from "../terminal-safety";
 import type { BaseToolCallView } from "../tool-call-view";
 
 export const ANSI_RESET = "\x1b[0m";
@@ -7,7 +8,7 @@ export const ANSI_RESET = "\x1b[0m";
 export const RESTORE_ON_GRAY_BG = "\x1b[39m\x1b[100m";
 
 export const normalizedLines = (text: string): string[] =>
-  text.replace(/\r\n/g, "\n").split("\n");
+  sanitizeTerminalText(text).split("\n");
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -32,12 +33,12 @@ export const numberField = (obj: unknown, key: string): number | undefined => {
 
 export const safeStringify = (value: unknown): string => {
   if (typeof value === "string") {
-    return value;
+    return sanitizeTerminalText(value);
   }
   try {
-    return JSON.stringify(value, null, 2);
+    return sanitizeTerminalText(JSON.stringify(value, null, 2));
   } catch {
-    return String(value);
+    return sanitizeTerminalText(String(value));
   }
 };
 

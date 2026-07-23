@@ -105,13 +105,20 @@ export const buildAliasToCanonicalNameMap = (
   commands: Iterable<TuiCommand>
 ): Map<string, string> => {
   const aliasToCanonicalName = new Map<string, string>();
+  const commandList = [...commands];
+  const canonicalNames = new Set(
+    commandList.map((command) => command.name.toLowerCase())
+  );
 
-  for (const command of commands) {
+  for (const command of commandList) {
     const canonicalName = command.name.toLowerCase();
 
     for (const alias of command.aliases ?? []) {
       const normalizedAlias = alias.toLowerCase();
-      if (normalizedAlias === canonicalName) {
+      if (
+        normalizedAlias === canonicalName ||
+        canonicalNames.has(normalizedAlias)
+      ) {
         continue;
       }
 
@@ -222,8 +229,9 @@ export const createAliasAwareAutocompleteProvider = (options?: {
     ): Promise<AutocompleteSuggestions | null> => {
       const currentLine = lines[cursorLine] ?? "";
       const textBeforeCursor = currentLine.slice(0, cursorCol);
+      const commandTextBeforeCursor = textBeforeCursor.trimStart();
 
-      if (!textBeforeCursor.startsWith("/")) {
+      if (!commandTextBeforeCursor.startsWith("/")) {
         return fallbackProvider.getSuggestions(
           lines,
           cursorLine,
@@ -232,8 +240,13 @@ export const createAliasAwareAutocompleteProvider = (options?: {
         );
       }
 
+      const leadingWhitespaceLength =
+        textBeforeCursor.length - commandTextBeforeCursor.length;
+      const commandLines = [...lines];
+      commandLines[cursorLine] = currentLine.slice(leadingWhitespaceLength);
+      const commandCursorCol = cursorCol - leadingWhitespaceLength;
       const aliasArgumentSuggestions = await getAliasArgumentSuggestions(
-        textBeforeCursor,
+        commandTextBeforeCursor,
         aliasToCanonicalName,
         commandSuggestionsByName
       );
@@ -242,17 +255,17 @@ export const createAliasAwareAutocompleteProvider = (options?: {
       }
 
       const defaultSuggestions = await fallbackProvider.getSuggestions(
-        lines,
+        commandLines,
         cursorLine,
-        cursorCol,
+        commandCursorCol,
         options
       );
 
-      if (textBeforeCursor.includes(" ")) {
+      if (commandTextBeforeCursor.includes(" ")) {
         return defaultSuggestions;
       }
 
-      const query = textBeforeCursor.slice(1).toLowerCase();
+      const query = commandTextBeforeCursor.slice(1).toLowerCase();
       if (query.length === 0) {
         return defaultSuggestions;
       }
@@ -269,7 +282,7 @@ export const createAliasAwareAutocompleteProvider = (options?: {
 
       return {
         items: mergeAutocompleteItems(aliasMatches, defaultSuggestions?.items),
-        prefix: textBeforeCursor,
+        prefix: commandTextBeforeCursor,
       };
     },
     applyCompletion: (lines, cursorLine, cursorCol, item, prefix) =>

@@ -94,6 +94,9 @@ export async function* agentEventStreamParts(
           };
         } else if (isExecutionDeniedToolOutput(event.output)) {
           yield {
+            ...(event.output.reason === undefined
+              ? {}
+              : { reason: event.output.reason }),
             type: "tool-output-denied",
             toolCallId: event.toolCallId,
             toolName: event.toolName,
@@ -108,9 +111,7 @@ export async function* agentEventStreamParts(
         }
         break;
       case "model-usage":
-        if (event.finishReason !== undefined) {
-          lastFinishReason = event.finishReason;
-        }
+        lastFinishReason = event.finishReason;
         options.onModelUsage?.(event);
         break;
       case "step-end":

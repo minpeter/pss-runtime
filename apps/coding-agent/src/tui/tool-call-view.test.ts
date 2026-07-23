@@ -1,5 +1,6 @@
 import type { MarkdownTheme } from "@earendil-works/pi-tui";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PENDING_SPINNER_FRAMES } from "./pending-spinner";
 import { BaseToolCallView } from "./tool-call-view";
 
 const markdownTheme: MarkdownTheme = {
@@ -19,7 +20,9 @@ const markdownTheme: MarkdownTheme = {
   underline: (t) => t,
 };
 
-const BRAILLE_SPINNER_GLYPHS = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/;
+const BRAILLE_SPINNER_GLYPHS = new RegExp(
+  `[${PENDING_SPINNER_FRAMES.join("")}]`
+);
 
 describe("BaseToolCallView rendering", () => {
   beforeEach(() => {
@@ -118,6 +121,25 @@ describe("BaseToolCallView rendering", () => {
     expect(bodyFirstIdx).toBeGreaterThan(0);
     const lineBeforeBody = lines[bodyFirstIdx - 1] ?? "";
     expect(lineBeforeBody.trim().length).toBe(0);
+
+    view.dispose();
+  });
+
+  it("sanitizes terminal controls at the default pretty-block boundary", () => {
+    const view = new BaseToolCallView(
+      "call_terminal_safety",
+      "custom_tool",
+      markdownTheme,
+      () => undefined
+    );
+    view.setPrettyBlock("**custom**", "hello \u001b]52;c;cHduZWQ=\u0007", {
+      useBackground: false,
+    });
+
+    const output = renderView(view);
+    expect(output).toContain("^[]52;c;cHduZWQ=^G");
+    expect(output).not.toContain("\u001b]");
+    expect(output).not.toContain("\u0007");
 
     view.dispose();
   });

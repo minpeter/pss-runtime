@@ -53,7 +53,10 @@ export function buildTuiCommandSet(
     const normalizedName = command.name.toLowerCase();
     for (const alias of command.aliases ?? []) {
       const normalizedAlias = alias.toLowerCase();
-      if (normalizedAlias !== normalizedName) {
+      if (
+        normalizedAlias !== normalizedName &&
+        !mergedCommands.has(normalizedAlias)
+      ) {
         commandAliasLookup.set(normalizedAlias, normalizedName);
       }
     }
