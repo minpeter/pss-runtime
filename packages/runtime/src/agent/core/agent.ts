@@ -1,4 +1,5 @@
 import type { AgentHost, NotificationRecord } from "../../execution/host/types";
+import type { ModelContextTokenEstimateInput } from "../../llm/context-gate";
 import { createInMemoryHost } from "../../platform/memory";
 import { noopRuntimeDiagnostics } from "../../plugins/diagnostics";
 import { PluginRuntime } from "../../plugins/plugin-runtime";
@@ -16,11 +17,11 @@ import {
   normalizeAgentInstrumentations,
 } from "./instrumentation";
 import {
-  type AgentAutoCompactionOptions,
   type AgentModelOptions,
   type AgentOptions,
   assertAgentOptions,
   type CreateAgentOptions,
+  type NormalizedAgentAutoCompactionOptions,
   normalizeAgentAutoCompactionOptions,
   normalizePluginTimeoutOptions,
 } from "./options";
@@ -43,6 +44,7 @@ export type {
   AgentAutoCompactionOptions,
   AgentOptions,
   CreateAgentOptions,
+  NormalizedAgentAutoCompactionOptions,
 } from "./options";
 export type {
   ThreadAddress,
@@ -63,7 +65,7 @@ export class Agent {
   readonly #instrumentations: readonly AgentInstrumentation[];
   readonly #pluginRuntime?: PluginRuntime;
   readonly #notificationOverlays?: AgentOptions["notificationOverlays"];
-  readonly #autoCompaction?: AgentAutoCompactionOptions;
+  readonly #autoCompaction: NormalizedAgentAutoCompactionOptions;
   readonly host: AgentHost;
   readonly namespace?: string;
   constructor(options: AgentConstructorOptions, pluginRuntime?: PluginRuntime) {
@@ -91,7 +93,7 @@ export class Agent {
         providedHost?.attachmentStore ??
         options.attachmentStore ??
         this.#host.attachmentStore,
-      contextGate: this.#autoCompaction?.contextGate,
+      contextGate: derivedContextGate(this.#autoCompaction),
       diagnostics: this.#host.diagnostics,
       instructions: options.instructions,
       model: options.model,
@@ -241,4 +243,25 @@ export async function createAgent(options: CreateAgentOptions): Promise<Agent> {
     await runtime.dispose();
     throw cause;
   }
+}
+
+function derivedContextGate(
+  autoCompaction: NormalizedAgentAutoCompactionOptions
+): AgentModelOptions["contextGate"] {
+  if (autoCompaction.contextGate !== undefined) {
+    return autoCompaction.contextGate;
+  }
+
+  const estimate = autoCompaction.estimateTokens;
+  return {
+    ...(estimate === undefined
+      ? {}
+      : {
+          estimateTokens: ({
+            messages,
+          }: ModelContextTokenEstimateInput): number => estimate(messages),
+        }),
+    maxInputTokens: autoCompaction.maxInputTokens,
+    onOverflow: "compact" as const,
+  };
 }

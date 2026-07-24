@@ -1,12 +1,18 @@
+import type { ModelMessage } from "ai";
 import type { ModelContextGateOptions } from "../../llm/context-gate";
 import type { ThreadContextMessage } from "../state/context";
 import type { ThreadCompactionInput } from "../state/thread-state";
 
+export type ThreadTokenEstimator = (
+  messages: readonly ModelMessage[]
+) => number;
+
 export interface ThreadAutoCompactionOptions {
-  readonly background?: boolean;
   readonly contextGate?: false | ModelContextGateOptions;
-  readonly minMessages: number;
-  readonly retainMessages: number;
+  readonly estimateTokens?: ThreadTokenEstimator;
+  readonly maxInputTokens: number;
+  readonly retainTokens: number;
+  readonly triggerTokens: number;
 }
 
 export type ThreadModelContextTransform = (

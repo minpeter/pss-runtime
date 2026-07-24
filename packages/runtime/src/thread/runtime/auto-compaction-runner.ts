@@ -1,4 +1,10 @@
+import type { ModelMessage } from "ai";
+import { estimateModelMessagesTokens } from "../../llm/context-gate";
 import type { ModelGenerationOptions } from "../../llm/model-step-types";
+import {
+  compactionContextForModel,
+  type ThreadContextMessage,
+} from "../state/context";
 import type { ThreadState } from "../state/thread-state";
 import { selectAutoCompactionRange } from "./auto-compaction-range";
 import {
@@ -27,7 +33,7 @@ export function scheduleThreadAutoCompaction({
   readonly state: ThreadState;
   readonly transformModelContext?: ThreadModelContextTransform;
 }): void {
-  if (!policy || policy.background === false) {
+  if (!policy) {
     return;
   }
 
@@ -63,14 +69,9 @@ async function compactThreadInBackground({
   readonly transformModelContext?: ThreadModelContextTransform;
 }): Promise<void> {
   try {
-    let compacted = await compactThreadOnce({
-      compact,
-      model,
-      policy,
-      state,
-      transformModelContext,
-    });
-    while (compacted) {
+    let compacted = false;
+    let recordCount = state.compactionSnapshot().length;
+    do {
       compacted = await compactThreadOnce({
         compact,
         model,
@@ -78,7 +79,12 @@ async function compactThreadInBackground({
         state,
         transformModelContext,
       });
-    }
+      const nextRecordCount = state.compactionSnapshot().length;
+      if (compacted && nextRecordCount === recordCount) {
+        break;
+      }
+      recordCount = nextRecordCount;
+    } while (compacted);
   } catch {
     return;
   }
@@ -129,15 +135,26 @@ async function compactThreadOnce({
     const range = selectAutoCompactionRange({
       compactions,
       history,
+      instructionsTokens: instructionTokens(model, policy),
       policy,
     });
     if (!range) {
       return false;
     }
 
+    const summaryHistory = summaryHistoryForRange({
+      compactions,
+      history,
+      range,
+    });
     const summary = await summarizeCompactionRange({
-      history: summaryHistoryForRange({ compactions, history, range }),
-      model,
+      estimateTokens: policy.estimateTokens,
+      history: summaryHistory,
+      model: summaryModelOptions(
+        model,
+        policy,
+        estimateSummaryInputTokens(summaryHistory, policy)
+      ),
       transformModelContext,
     });
     if (summary.length === 0) {
@@ -147,6 +164,7 @@ async function compactThreadOnce({
     const latestRange = selectAutoCompactionRange({
       compactions: state.compactionSnapshot(),
       history: state.modelSnapshot(),
+      instructionsTokens: instructionTokens(model, policy),
       policy,
     });
     if (!sameRange(range, latestRange)) {
@@ -171,4 +189,61 @@ function sameRange(
     left.startSeq === right.startSeq &&
     left.endSeqExclusive === right.endSeqExclusive
   );
+}
+
+function instructionTokens(
+  model: ModelGenerationOptions,
+  policy: ThreadAutoCompactionOptions
+): number {
+  if (!model.instructions) {
+    return 0;
+  }
+
+  const message: ModelMessage = {
+    content: model.instructions,
+    role: "system",
+  };
+  const estimate = policy.estimateTokens ?? estimateModelMessagesTokens;
+  return estimate([message]);
+}
+
+function summaryModelOptions(
+  model: ModelGenerationOptions,
+  policy: ThreadAutoCompactionOptions,
+  inputTokens: number
+): ModelGenerationOptions {
+  return {
+    ...model,
+    maxOutputTokens: selectSummaryOutputTokenLimit({
+      inputTokens,
+      retainTokens: policy.retainTokens,
+    }),
+    temperature: 0,
+  };
+}
+
+export function selectSummaryOutputTokenLimit({
+  inputTokens,
+  retainTokens,
+}: {
+  readonly inputTokens: number;
+  readonly retainTokens: number;
+}): number {
+  const policyCeiling = Math.min(
+    16_384,
+    Math.max(512, Math.floor(retainTokens / 2))
+  );
+  const inputCeiling = Math.max(256, Math.floor(inputTokens / 2));
+  return Math.min(policyCeiling, inputCeiling);
+}
+
+function estimateSummaryInputTokens(
+  history: readonly ThreadContextMessage[],
+  policy: ThreadAutoCompactionOptions
+): number {
+  const modelMessages = history.map((message) =>
+    message.role === "compaction" ? compactionContextForModel(message) : message
+  );
+  const estimate = policy.estimateTokens ?? estimateModelMessagesTokens;
+  return estimate(modelMessages);
 }
