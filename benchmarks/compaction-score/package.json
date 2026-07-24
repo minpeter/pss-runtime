@@ -1,0 +1,15 @@
+{
+  "name": "@minpeter/pss-benchmark-compaction-score",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "score": "tsx --conditions=@minpeter/pss-source run.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@minpeter/pss-coding-agent": "workspace:*",
+    "@minpeter/pss-runtime": "workspace:*",
+    "ai": "7.0.34"
+  }
+}
