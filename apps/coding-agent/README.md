@@ -45,6 +45,84 @@ the turn running indefinitely.
 Steered additions emit `runtime-input`: runtime/API-originated input mapped
 internally to the model's user role, separate from human `user-input` events.
 
+## Extensions
+
+Published coding-agent extensions are ESM modules with a default factory.
+The factory receives one API for tools, instructions, commands, TUI renderers,
+runtime hooks, activation cleanup, and durable thread migrations:
+
+```ts
+import {
+  type ExtensionAPI,
+} from "@minpeter/pss-coding-agent/extension";
+
+export default function workspacePolicy(pss: ExtensionAPI) {
+  pss.instructions.append("Keep all file operations in the workspace.");
+  pss.runtime.use({
+    beforeToolExecution(checkpoint) {
+      if (checkpoint.toolName === "delete_file") {
+        return {
+          output: "delete_file is disabled",
+          status: "blocked",
+        };
+      }
+    },
+  });
+  pss.lifecycle.onActivate(() => {
+    const watcher = startWorkspaceWatcher();
+    return () => watcher.close();
+  });
+  pss.storage.registerThreadMigration({
+    id: "sanitize-legacy-history",
+    version: 1,
+    migrate(snapshot) {
+      return {
+        ...snapshot,
+        history: snapshot.history.filter(isSafeMessage),
+      };
+    },
+  });
+}
+```
+
+Extensions configure sequentially, use stable IDs, and cannot register new
+contributions after the factory resolves. Activation callbacks run after agent
+creation; cleanups run in reverse order.
+
+Install an extension globally or for one project:
+
+```sh
+pss extension install npm:@acme/pss-git-tools@1.2.0
+pss extension install git+https://github.com/acme/pss-review.git
+pss extension install ./local-package
+pss extension install ./local-extension.mjs --id local-policy
+pss extension install ./local-extension.mjs --scope project --id local-policy
+```
+
+Manage installed extensions:
+
+```sh
+pss extension list
+pss extension disable @acme/pss-git-tools
+pss extension enable @acme/pss-git-tools
+pss extension update --all
+pss extension remove @acme/pss-git-tools
+```
+
+Global settings and packages live under `~/.pss`; project entries live under
+`<project>/.pss`. Global extensions load first, followed by trusted project
+extensions. Explicit project install or enable records project trust. Disabled
+or untrusted project extensions are never imported.
+
+Loose local modules must be runnable `.js` or `.mjs` files and require
+`--id`. npm, Git, and local packages use their `package.json` name as the
+default stable ID and must ship runnable ESM. Dependency lifecycle scripts are
+disabled during managed installation.
+
+Programmatic static-object extensions remain supported through
+`defineCodingAgentExtension()` and the `extensions` option on `startTui()` or
+`runCodingAgentExec()`.
+
 ## CLI
 
 ```sh

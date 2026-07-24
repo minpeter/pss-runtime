@@ -3,6 +3,8 @@ import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { AgentEvent, AgentOptions } from "@minpeter/pss-runtime";
 import { createCodingAgent } from "./coding-agent";
+import type { CodingAgentExtensionInput } from "./extensions";
+import { createCodingAgentExtensionHost } from "./extensions";
 import type { WebToolsAvailability } from "./tools";
 
 interface TokenUsageSummary {
@@ -36,6 +38,7 @@ export interface CodingAgentExecResult {
 }
 
 export interface RunCodingAgentExecOptions {
+  readonly extensions?: readonly CodingAgentExtensionInput[];
   readonly model: AgentOptions["model"];
   readonly prompt: string;
   readonly resultFile?: string;
@@ -98,6 +101,7 @@ function recordEvent(
 }
 
 export async function runCodingAgentExec({
+  extensions = [],
   model,
   prompt,
   resultFile,
@@ -122,11 +126,20 @@ export async function runCodingAgentExec({
     },
   };
   const absoluteWorkspace = resolve(workspace);
-  const agent = await createCodingAgent({
-    model,
-    webTools: { webToolsAvailability },
-    workspace: absoluteWorkspace,
-  });
+  const extensionHost = await createCodingAgentExtensionHost(extensions);
+  let agent: Awaited<ReturnType<typeof createCodingAgent>>;
+  try {
+    agent = await createCodingAgent({
+      extensionHost,
+      model,
+      webTools: { webToolsAvailability },
+      workspace: absoluteWorkspace,
+    });
+    await extensionHost.activate(agent, "exec");
+  } catch (error) {
+    await extensionHost.dispose();
+    throw error;
+  }
   const thread = agent.thread(`exec:${randomUUID()}`);
   let timeoutFired = false;
   const timeout = setTimeout(() => {
@@ -159,6 +172,7 @@ export async function runCodingAgentExec({
   } finally {
     clearTimeout(timeout);
     await agent.dispose();
+    await extensionHost.dispose();
   }
 
   const result: CodingAgentExecResult = {
