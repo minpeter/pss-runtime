@@ -18,31 +18,124 @@ const collect = async (
 };
 
 describe("agentEventStreamParts", () => {
-  it("brackets assistant text with text-start/text-delta/text-end", async () => {
+  it("streams assistant text deltas without replaying the committed text", async () => {
     const parts = await collect([
-      { type: "assistant-output", text: "hello world" },
+      { type: "step-start" },
+      { type: "assistant-output-delta", text: "Hello" },
+      { type: "assistant-output-delta", text: " world" },
+      { type: "assistant-output", text: "Hello world" },
+      { type: "step-end" },
     ]);
 
     expect(parts).toEqual([
+      { type: "start-step" },
       { type: "text-start" },
-      { type: "text-delta", text: "hello world" },
+      { type: "text-delta", text: "Hello" },
+      { type: "text-delta", text: " world" },
       { type: "text-end" },
+      { type: "finish-step", finishReason: undefined },
     ]);
   });
 
-  it("brackets reasoning with reasoning-start/delta/end", async () => {
+  it("falls back to one whole-text delta for committed-only output", async () => {
     const parts = await collect([
-      { type: "assistant-reasoning", text: "thinking" },
+      { type: "step-start" },
+      { type: "assistant-output", text: "Hi" },
+      { type: "step-end" },
     ]);
 
     expect(parts).toEqual([
+      { type: "start-step" },
+      { type: "text-start" },
+      { type: "text-delta", text: "Hi" },
+      { type: "text-end" },
+      { type: "finish-step", finishReason: undefined },
+    ]);
+  });
+
+  it("resets text-delta deduplication at each step", async () => {
+    const parts = await collect([
+      { type: "step-start" },
+      { type: "assistant-output-delta", text: "streamed" },
+      { type: "assistant-output", text: "streamed" },
+      { type: "step-end" },
+      { type: "step-start" },
+      { type: "assistant-output", text: "fallback" },
+      { type: "step-end" },
+    ]);
+
+    expect(parts.filter((part) => part.type === "text-delta")).toEqual([
+      { type: "text-delta", text: "streamed" },
+      { type: "text-delta", text: "fallback" },
+    ]);
+  });
+
+  it("streams reasoning deltas without replaying the committed reasoning", async () => {
+    const parts = await collect([
+      { type: "step-start" },
+      { type: "assistant-reasoning-delta", text: "Think" },
+      { type: "assistant-reasoning-delta", text: " more" },
+      { type: "assistant-reasoning", text: "Think more" },
+      { type: "step-end" },
+    ]);
+
+    expect(parts).toEqual([
+      { type: "start-step" },
+      { type: "reasoning-start" },
+      { type: "reasoning-delta", text: "Think" },
+      { type: "reasoning-delta", text: " more" },
+      { type: "reasoning-end" },
+      { type: "finish-step", finishReason: undefined },
+    ]);
+  });
+
+  it("falls back to one whole-text delta for committed-only reasoning", async () => {
+    const parts = await collect([
+      { type: "step-start" },
+      { type: "assistant-reasoning", text: "thinking" },
+      { type: "step-end" },
+    ]);
+
+    expect(parts).toEqual([
+      { type: "start-step" },
       { type: "reasoning-start" },
       { type: "reasoning-delta", text: "thinking" },
       { type: "reasoning-end" },
+      { type: "finish-step", finishReason: undefined },
     ]);
   });
 
-  it("maps tool calls and results to their stream parts", async () => {
+  it("maps streamed tool-call input with toolCallId preserved", async () => {
+    const parts = await collect([
+      {
+        type: "tool-call-input-start",
+        toolCallId: "call_stream",
+        toolName: "shell_execute",
+      },
+      {
+        type: "tool-call-input-delta",
+        inputTextDelta: '{"command":"ls"}',
+        toolCallId: "call_stream",
+      },
+      { type: "tool-call-input-end", toolCallId: "call_stream" },
+    ]);
+
+    expect(parts).toEqual([
+      {
+        type: "tool-input-start",
+        toolCallId: "call_stream",
+        toolName: "shell_execute",
+      },
+      {
+        type: "tool-input-delta",
+        inputTextDelta: '{"command":"ls"}',
+        toolCallId: "call_stream",
+      },
+      { type: "tool-input-end", toolCallId: "call_stream" },
+    ]);
+  });
+
+  it("maps committed-only tool calls and results to their stream parts", async () => {
     const parts = await collect([
       {
         type: "tool-call",
@@ -222,10 +315,79 @@ describe("agentEventStreamParts", () => {
       { type: "abort", reason: "interrupted" },
     ]);
 
-    const errorParts = await collect([
-      { type: "turn-error", message: "model exploded" },
+    const legacyErrorParts = await collect([
+      {
+        type: "turn-error",
+        message: "User banned (request id: req-stream)",
+      },
     ]);
-    expect(errorParts).toEqual([{ type: "error", error: "model exploded" }]);
+    expect(legacyErrorParts).toEqual([
+      {
+        type: "error",
+        error: {
+          message: "User banned (request id: req-stream)",
+          title: "Request failed",
+        },
+      },
+    ]);
+
+    const structuredErrorParts = await collect([
+      {
+        error: {
+          category: "permission",
+          correlationIds: [{ source: "x-request-id", value: "req-structured" }],
+          observedRetryable: false,
+          status: 403,
+          version: 1,
+        },
+        message: "Account access denied",
+        type: "turn-error",
+      } as AgentEvent,
+    ]);
+    expect(structuredErrorParts).toEqual([
+      {
+        type: "error",
+        error: {
+          correlationIds: [{ source: "x-request-id", value: "req-structured" }],
+          hint: "Check your provider account or model access.",
+          message: "Account access denied",
+          title: "Request refused",
+        },
+      },
+    ]);
+
+    const unsafeMetadataParts = await collect([
+      {
+        error: {
+          category: "permission",
+          correlationIds: [
+            {
+              source: "x-request-id\u009b2J",
+              value: "request\u001b[2J",
+            },
+          ],
+          version: 1,
+        },
+        message: "Access denied",
+        type: "turn-error",
+      } as AgentEvent,
+    ]);
+    expect(unsafeMetadataParts).toEqual([
+      {
+        type: "error",
+        error: {
+          correlationIds: [
+            {
+              source: "x-request-id\\u009b2J",
+              value: "request^[[2J",
+            },
+          ],
+          hint: "Check your provider account or model access.",
+          message: "Access denied",
+          title: "Request refused",
+        },
+      },
+    ]);
   });
 
   it("skips user-input and runtime-input echoes", async () => {

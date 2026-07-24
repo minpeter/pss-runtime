@@ -9,6 +9,7 @@ import {
 } from "../testing/mock-language-model-v4-test-utils";
 import {
   assistantMessage,
+  committedEvents,
   createCallbackModel,
   createDeferred,
   createScriptedModelOptions,
@@ -392,6 +393,7 @@ describe("factory plugin API", () => {
     const events = await collect(await agent.send("hello"));
 
     expect(events.at(-1)).toEqual({
+      error: { category: "unknown", version: 1 },
       message: 'prepareModelStep field "model" must be a data property.',
       type: "turn-error",
     });
@@ -1238,7 +1240,7 @@ describe("factory plugin API", () => {
     });
 
     const events = await collect(await agent.send("hello"));
-    const eventJson = JSON.stringify(events);
+    const eventJson = JSON.stringify(committedEvents(events));
     const storedJson = JSON.stringify(await host.store.threads.load("default"));
 
     expect(seen).toEqual([expect.stringContaining("intermediate")]);

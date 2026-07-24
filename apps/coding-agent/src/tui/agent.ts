@@ -25,6 +25,7 @@ import {
   type TuiCommandResult,
 } from "./command";
 import { buildTuiCommandSet } from "./command-set";
+import { createTuiErrorPresentation } from "./error-presentation";
 import {
   dispatchUserInput,
   type InputPreprocessHooks,
@@ -342,6 +343,22 @@ const addSystemMessage = (chatContainer: Container, message: string): void => {
   addChatComponent(chatContainer, new Text(style(ANSI_GRAY, cleaned), 1, 0));
 };
 
+const addErrorMessage = (chatContainer: Container, error: unknown): void => {
+  const presentation = createTuiErrorPresentation(error);
+  const lines = [
+    style(`${ANSI_BOLD}${ANSI_RED}`, `× ${presentation.title}`),
+    `  ${presentation.message}`,
+    ...(presentation.hint === undefined
+      ? []
+      : [style(ANSI_GRAY, `  ${presentation.hint}`)]),
+    ...(presentation.correlationIds ?? []).map(({ source, value }) =>
+      style(ANSI_GRAY, `  ${source}: ${value}`)
+    ),
+  ];
+
+  addChatComponent(chatContainer, new Text(lines.join("\n"), 1, 0));
+};
+
 const addNewSessionMessage = (chatContainer: Container): void => {
   addChatComponent(
     chatContainer,
@@ -449,10 +466,7 @@ const dispatchStreamPart = async (
   }
 
   if (part.type === "error") {
-    addSystemMessage(
-      chatContainer,
-      `Error: ${typeof part.error === "string" ? part.error : String(part.error)}`
-    );
+    addErrorMessage(chatContainer, part.error);
     return;
   }
 

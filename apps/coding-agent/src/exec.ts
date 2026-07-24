@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import type { AgentEvent, AgentOptions } from "@minpeter/pss-runtime";
+import {
+  type AgentEvent,
+  type AgentOptions,
+  isStreamAgentEvent,
+} from "@minpeter/pss-runtime";
 import { createCodingAgent } from "./coding-agent";
 import type { WebToolsAvailability } from "./tools";
 
@@ -149,7 +153,11 @@ export async function runCodingAgentExec({
       thread.interrupt();
     }
     for await (const event of turn.events()) {
-      events.push(event);
+      // Stream deltas stream to stdout but stay out of the accumulated
+      // result payload; only committed events are durable.
+      if (!isStreamAgentEvent(event)) {
+        events.push(event);
+      }
       writeJsonLine(stdout, { event, type: "agent_event" });
       recordEvent(state, modelIds, event);
     }
