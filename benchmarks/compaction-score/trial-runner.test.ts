@@ -4,12 +4,12 @@ import {
   estimateModelMessagesTokens,
 } from "@minpeter/pss-runtime";
 import { describe, expect, it } from "vitest";
+import { buildCompactionFixture } from "./fixture";
 import {
   createMockLanguageModelV4,
   type MockLanguageModelV4CallOptions,
   mockLanguageModelV4Text,
 } from "./mock-language-model";
-import { buildCompactionFixture } from "./fixture";
 import { classifySummaryFailure, runCompactionTrial } from "./trial-runner";
 
 const fixture = buildCompactionFixture("trial-runner-test");
