@@ -53,6 +53,7 @@ export function createCodingAgent({
     ...workspaceTools,
   } satisfies ToolSet;
   const instructionFragments = extensionHost?.instructionFragments ?? [];
+  const extensionInstrumentations = extensionHost?.instrumentations ?? [];
   const hookRegistrations = [
     ...(hooks ? [{ extensionId: "coding-agent", hooks }] : []),
     ...(extensionHost?.hooks
@@ -68,6 +69,7 @@ export function createCodingAgent({
         ? undefined
         : composeAgentHooks(hookRegistrations),
     instructions: [instructions, ...instructionFragments].join("\n\n"),
+    instrumentations: extensionInstrumentations,
     model,
     ...(extensionHost
       ? { threadMigrations: extensionHost.threadMigrations }

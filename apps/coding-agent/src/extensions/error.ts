@@ -2,6 +2,7 @@ export type CodingAgentExtensionPhase =
   | "activate"
   | "configure"
   | "dispose"
+  | "event"
   | "hook";
 
 export class CodingAgentExtensionError extends Error {

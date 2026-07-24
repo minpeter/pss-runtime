@@ -9,16 +9,17 @@ packages:
 ## Add the core hooks runtime and installable coding-agent extensions
 
 Replace the legacy runtime plugin pipeline with one typed `AgentHooks`
-boundary for model transforms, tool interception, event subscriptions, and
-thread lifecycle behavior. Stored thread snapshots can now run versioned,
-atomic migrations that persist exactly-once application metadata without
-exposing partial state after callback or commit failures.
+boundary for model transforms and tool interception. Stored thread snapshots
+can now run versioned, atomic migrations that persist exactly-once application
+metadata without exposing partial state after callback or commit failures.
 
 Coding-agent extensions can be authored as default-export factories receiving
 `ExtensionAPI`, while static programmatic extensions remain supported. The
 host composes instructions, tools, commands, UI contributions, lifecycle
 callbacks, runtime hooks, and durable thread migrations with source-attributed
-validation errors.
+validation errors. Concise `pss.use()`, `pss.on()`, and `pss.provide()` methods
+register control hooks, named event observers, and declarative tool
+contributions without restoring the legacy plugin runtime.
 
 Add `pss extension install`, `list`, `remove`, `update`, `enable`, and
 `disable` for npm, Git, local package, and loose ESM sources at global or

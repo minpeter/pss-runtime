@@ -1,6 +1,7 @@
 import type {
   Agent,
   AgentHooks,
+  AgentInstrumentation,
   ThreadStateMigration,
 } from "@minpeter/pss-runtime";
 import type { ToolSet } from "ai";
@@ -8,11 +9,16 @@ import type { TuiCommand } from "../tui/command";
 import type { ToolRendererMap } from "../tui/tool-call-view";
 import { composeAgentHooks, type RegisteredAgentHooks } from "./compose-hooks";
 import { CodingAgentExtensionError } from "./error";
+import {
+  createCodingAgentExtensionInstrumentation,
+  type RegisteredCodingAgentExtensionEvent,
+} from "./events";
 import { normalizeCodingAgentExtension } from "./factory";
 import {
   DEFAULT_EXTENSION_TIMEOUT_MS,
   validateExtensionHostOptions,
 } from "./host-validation";
+import { createCodingAgentExtensionRegistry } from "./registry";
 import type {
   CodingAgentExtension,
   CodingAgentExtensionActivationContext,
@@ -20,14 +26,12 @@ import type {
   CodingAgentExtensionHostOptions,
   CodingAgentExtensionInput,
   CodingAgentExtensionMode,
-  CodingAgentExtensionRegistry,
 } from "./types";
-
-const THREAD_MIGRATION_ID_PATTERN = /^[A-Za-z0-9@][A-Za-z0-9@/._:-]*$/;
 
 export class CodingAgentExtensionHost {
   readonly #commands: TuiCommand[] = [];
   readonly #controller = new AbortController();
+  readonly #eventRegistrations: RegisteredCodingAgentExtensionEvent[] = [];
   readonly #extensions: readonly CodingAgentExtension[];
   readonly #hookRegistrations: RegisteredAgentHooks[] = [];
   readonly #instructionFragments: string[] = [];
@@ -73,6 +77,17 @@ export class CodingAgentExtensionHost {
     return this.#hookRegistrations.length === 0
       ? undefined
       : composeAgentHooks(this.#hookRegistrations);
+  }
+
+  get instrumentations(): readonly AgentInstrumentation[] {
+    return this.#eventRegistrations.length === 0
+      ? []
+      : [
+          createCodingAgentExtensionInstrumentation(
+            this.#eventRegistrations,
+            this.#controller.signal
+          ),
+        ];
   }
 
   get instructionFragments(): readonly string[] {
@@ -135,6 +150,7 @@ export class CodingAgentExtensionHost {
       }
     }
     this.#cleanups = [];
+    this.#eventRegistrations.length = 0;
     if (failures.length > 0) {
       throw new AggregateError(
         failures,
@@ -153,7 +169,19 @@ export class CodingAgentExtensionHost {
           );
         }
       };
-      const registry = this.#registry(extension.id, assertOpen);
+      const registry = createCodingAgentExtensionRegistry({
+        assertOpen,
+        collections: {
+          commands: this.#commands,
+          events: this.#eventRegistrations,
+          hooks: this.#hookRegistrations,
+          instructions: this.#instructionFragments,
+          migrations: this.#threadMigrations,
+          renderers: this.#toolRenderers,
+          tools: this.#tools,
+        },
+        extensionId: extension.id,
+      });
       try {
         await this.#run(extension.id, "configure", () =>
           extension.configure(registry, {
@@ -164,85 +192,6 @@ export class CodingAgentExtensionHost {
         open = false;
       }
     }
-  }
-
-  #registry(
-    extensionId: string,
-    assertOpen: () => void
-  ): CodingAgentExtensionRegistry {
-    return {
-      commands: {
-        register: (command) => {
-          assertOpen();
-          if (this.#commands.some(({ name }) => name === command.name)) {
-            throw new Error(`Duplicate command "${command.name}"`);
-          }
-          this.#commands.push(command);
-        },
-      },
-      instructions: {
-        append: (fragment) => {
-          assertOpen();
-          if (fragment.trim().length === 0) {
-            throw new Error("Instruction fragment must not be empty");
-          }
-          this.#instructionFragments.push(fragment);
-        },
-      },
-      runtime: {
-        use: (hooks) => {
-          assertOpen();
-          this.#hookRegistrations.push({ extensionId, hooks });
-        },
-      },
-      storage: {
-        registerThreadMigration: (migration) => {
-          assertOpen();
-          if (migration.id.trim().length === 0) {
-            throw new Error("Thread migration id must not be empty");
-          }
-          const id = `${extensionId}/${migration.id}`;
-          if (!THREAD_MIGRATION_ID_PATTERN.test(id)) {
-            throw new TypeError(`Invalid thread migration id: ${id}`);
-          }
-          if (
-            !Number.isSafeInteger(migration.version) ||
-            migration.version < 1
-          ) {
-            throw new TypeError(
-              `Thread migration "${id}" version must be a positive integer`
-            );
-          }
-          if (typeof migration.migrate !== "function") {
-            throw new TypeError(
-              `Thread migration "${id}" migrate must be a function`
-            );
-          }
-          if (this.#threadMigrations.some((entry) => entry.id === id)) {
-            throw new Error(`Duplicate thread migration id: ${id}`);
-          }
-          this.#threadMigrations.push({ ...migration, id });
-        },
-      },
-      tools: {
-        register: (name, tool) => {
-          assertOpen();
-          if (Object.hasOwn(this.#tools, name)) {
-            throw new Error(`Duplicate tool "${name}"`);
-          }
-          this.#tools[name] = tool;
-        },
-      },
-      tui: {
-        registerToolRenderer: (toolName, renderer) => {
-          assertOpen();
-          if (Object.hasOwn(this.#toolRenderers, toolName)) {
-            throw new Error(`Duplicate tool renderer "${toolName}"`);
-          }
-          this.#toolRenderers[toolName] = renderer;
-        },
-      },
-    };
   }
 
   async #run<Result>(

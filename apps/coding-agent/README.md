@@ -58,7 +58,7 @@ import {
 
 export default function workspacePolicy(pss: ExtensionAPI) {
   pss.instructions.append("Keep all file operations in the workspace.");
-  pss.runtime.use({
+  pss.use({
     beforeToolExecution(checkpoint) {
       if (checkpoint.toolName === "delete_file") {
         return {
@@ -66,6 +66,18 @@ export default function workspacePolicy(pss: ExtensionAPI) {
           status: "blocked",
         };
       }
+    },
+  });
+  pss.on("turn-error", (event, context) => {
+    reportFailure({
+      error: event.error,
+      runId: context.runId,
+      threadKey: context.threadKey,
+    });
+  });
+  pss.provide({
+    tools: {
+      review_workspace: reviewWorkspaceTool,
     },
   });
   pss.lifecycle.onActivate(() => {
@@ -87,7 +99,12 @@ export default function workspacePolicy(pss: ExtensionAPI) {
 
 Extensions configure sequentially, use stable IDs, and cannot register new
 contributions after the factory resolves. Activation callbacks run after agent
-creation; cleanups run in reverse order.
+creation; cleanups run in reverse order. `pss.use()` composes control-flow
+hooks, `pss.on()` observes a named runtime event, and `pss.provide()` publishes
+declarative tool contributions. Event handlers run serially in extension and
+registration order. Naming a stream event such as `assistant-output-delta`
+explicitly opts into ephemeral deltas; handler failures are attributed to the
+owning extension and surfaced after the original events.
 
 Install an extension globally or for one project:
 
@@ -121,7 +138,8 @@ disabled during managed installation.
 
 Programmatic static-object extensions remain supported through
 `defineCodingAgentExtension()` and the `extensions` option on `startTui()` or
-`runCodingAgentExec()`.
+`runCodingAgentExec()`. Their existing `registry.runtime.use()` API remains an
+alias of top-level `registry.use()`.
 
 The TUI renders the runtime's streaming deltas as live tokens while a step
 runs. Dedupe against the committed events is built in: committed

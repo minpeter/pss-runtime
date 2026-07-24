@@ -1,8 +1,12 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { createAgent } from "@minpeter/pss-runtime";
+import { jsonSchema, tool } from "ai";
 import { describe, expect, it } from "vitest";
 import { createCodingAgentExtensionHost } from "./host";
-import type { CodingAgentExtensionModule } from "./types";
+import type {
+  CodingAgentExtensionApi,
+  CodingAgentExtensionModule,
+} from "./types";
 
 describe("default-export coding agent extensions", () => {
   it("configures and activates a default-export factory", async () => {
@@ -36,5 +40,163 @@ describe("default-export coding agent extensions", () => {
     // Then
     expect(host.instructionFragments).toEqual(["Factory instruction"]);
     expect(lifecycle).toEqual(["activate:exec", "dispose"]);
+  });
+
+  it("registers hooks through the top-level use alias", async () => {
+    let aliasesMatch = false;
+    const host = await createCodingAgentExtensionHost([
+      {
+        default(pss) {
+          aliasesMatch = pss.use === pss.runtime.use;
+          pss.use({
+            acceptInput(event) {
+              if (event.type !== "user-input" || !("text" in event)) {
+                return;
+              }
+              return {
+                action: "transform",
+                value: { ...event, text: `concise:${event.text}` },
+              };
+            },
+          });
+        },
+        id: "concise-hooks",
+      },
+    ]);
+
+    const decision = await host.hooks?.acceptInput?.(
+      { text: "hello", type: "user-input" },
+      {
+        history: [],
+        signal: new AbortController().signal,
+        threadKey: "default",
+      }
+    );
+
+    expect(aliasesMatch).toBe(true);
+    expect(decision).toEqual({
+      action: "transform",
+      value: { text: "concise:hello", type: "user-input" },
+    });
+  });
+
+  it("provides declarative tool contributions", async () => {
+    const providedTool = tool({
+      description: "Provided by an extension",
+      inputSchema: jsonSchema({ additionalProperties: false, type: "object" }),
+    });
+    const host = await createCodingAgentExtensionHost([
+      {
+        default(pss) {
+          pss.provide({
+            tools: {
+              provided_tool: providedTool,
+            },
+          });
+        },
+        id: "tool-provider",
+      },
+    ]);
+
+    expect(host.tools).toEqual({ provided_tool: providedTool });
+  });
+
+  it("rejects duplicate declarative tool contributions", async () => {
+    const duplicateTool = tool({
+      description: "Duplicate tool",
+      inputSchema: jsonSchema({ additionalProperties: false, type: "object" }),
+    });
+
+    await expect(
+      createCodingAgentExtensionHost([
+        {
+          default(pss) {
+            pss.provide({ tools: { duplicate_tool: duplicateTool } });
+            pss.provide({ tools: { duplicate_tool: duplicateTool } });
+          },
+          id: "duplicate-provider",
+        },
+      ])
+    ).rejects.toMatchObject({
+      cause: { message: 'Duplicate tool "duplicate_tool"' },
+    });
+  });
+
+  it("rejects prototype-mutating tool names", async () => {
+    const dangerousTool = tool({
+      description: "Dangerous tool",
+      inputSchema: jsonSchema({ additionalProperties: false, type: "object" }),
+    });
+
+    await expect(
+      createCodingAgentExtensionHost([
+        {
+          default(pss) {
+            pss.provide({
+              tools: { ["__proto__"]: dangerousTool },
+            });
+          },
+          id: "dangerous-provider",
+        },
+      ])
+    ).rejects.toMatchObject({
+      cause: { message: 'Unsafe tool name "__proto__"' },
+    });
+  });
+
+  it("rejects unsupported declarative contribution shapes", async () => {
+    await expect(
+      createCodingAgentExtensionHost([
+        {
+          default(pss) {
+            pss.provide({ hooks: {} } as never);
+          },
+          id: "invalid-provider",
+        },
+      ])
+    ).rejects.toMatchObject({
+      cause: { message: "Extension contribution must provide a tools object" },
+    });
+  });
+
+  it("rejects unknown event names from JavaScript extensions", async () => {
+    await expect(
+      createCodingAgentExtensionHost([
+        {
+          default(pss) {
+            pss.on("turn-eror" as never, () => undefined);
+          },
+          id: "invalid-event",
+        },
+      ])
+    ).rejects.toMatchObject({
+      cause: { message: 'Unknown extension event "turn-eror"' },
+    });
+  });
+
+  it("rejects retained concise registration methods after configure", async () => {
+    let lateOn: CodingAgentExtensionApi["on"] | undefined;
+    let lateProvide: CodingAgentExtensionApi["provide"] | undefined;
+    let lateUse: CodingAgentExtensionApi["use"] | undefined;
+    await createCodingAgentExtensionHost([
+      {
+        default(pss) {
+          lateOn = pss.on;
+          lateProvide = pss.provide;
+          lateUse = pss.use;
+        },
+        id: "late-registration",
+      },
+    ]);
+
+    expect(() => lateOn?.("turn-error", () => undefined)).toThrow(
+      'Coding agent extension "late-registration" registration is closed'
+    );
+    expect(() => lateProvide?.({ tools: {} })).toThrow(
+      'Coding agent extension "late-registration" registration is closed'
+    );
+    expect(() => lateUse?.({})).toThrow(
+      'Coding agent extension "late-registration" registration is closed'
+    );
   });
 });

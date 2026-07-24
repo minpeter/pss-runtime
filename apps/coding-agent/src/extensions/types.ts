@@ -1,6 +1,8 @@
 import type {
   Agent,
+  AgentEvent,
   AgentHooks,
+  AgentInstrumentationContext,
   ThreadStateMigration,
 } from "@minpeter/pss-runtime";
 import type { ToolSet } from "ai";
@@ -28,6 +30,22 @@ export type CodingAgentExtensionActivationHandler = (
   | Promise<CodingAgentExtensionCleanup | undefined>
   | undefined;
 
+export interface CodingAgentExtensionEventContext
+  extends AgentInstrumentationContext {
+  readonly signal: AbortSignal;
+  readonly stream: boolean;
+}
+
+export type CodingAgentExtensionEventHandler<Type extends AgentEvent["type"]> =
+  (
+    event: Extract<AgentEvent, { readonly type: Type }>,
+    context: CodingAgentExtensionEventContext
+  ) => Promise<void> | void;
+
+export interface CodingAgentExtensionContribution {
+  readonly tools: ToolSet;
+}
+
 export interface CodingAgentExtensionRegistry {
   readonly commands: {
     register(command: TuiCommand): void;
@@ -35,6 +53,11 @@ export interface CodingAgentExtensionRegistry {
   readonly instructions: {
     append(fragment: string): void;
   };
+  on<Type extends AgentEvent["type"]>(
+    type: Type,
+    handler: CodingAgentExtensionEventHandler<Type>
+  ): void;
+  provide(contribution: CodingAgentExtensionContribution): void;
   readonly runtime: {
     use(hooks: AgentHooks): void;
   };
@@ -50,6 +73,7 @@ export interface CodingAgentExtensionRegistry {
       renderer: ToolRendererMap[string]
     ): void;
   };
+  use(hooks: AgentHooks): void;
 }
 
 export interface CodingAgentExtensionApi extends CodingAgentExtensionRegistry {
