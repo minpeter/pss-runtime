@@ -1,0 +1,99 @@
+# Robust compaction-score results
+
+Date: 2026-07-24
+
+## Protocol
+
+- Three deterministic calls per trial: one summary, one batched full-context
+  evaluation, one batched compacted-context evaluation.
+- Three independent fixture seeds by two repetitions: six valid trials.
+- 24 hidden questions per trial, 144 paired observations total.
+- Full-context control must be perfect.
+- Exact-match scoring with trim/case/whitespace/trailing-period normalization.
+- Summary quality and compression are reported separately.
+
+The local coding-agent provider could not execute the matrix because it
+returned `User banned`. The runner correctly recorded this as
+`summary-provider-failure` and excluded it from quality statistics. To complete
+the prompt-quality experiment, the same exported fixtures, production summary
+contract, compaction wrapper, shared tail, and batched questions were evaluated
+by independent deep-worker model calls.
+
+## First structured-contract run
+
+| Metric | Result |
+|---|---:|
+| Valid trials | 6/6 |
+| Full-context control | 144/144 |
+| Compacted retention | 138/144 (95.83%) |
+| Wilson 95% CI | 91.21%-98.08% |
+| Trial mean / population SD | 95.83% / 3.40% |
+| Trial range | 91.67%-100% |
+| Mean summary/input ratio | 38.10% |
+| Summary-ratio SD | 1.38% |
+
+All six misses were paraphrases of the task blocker or next action. Project
+facts, exact identifiers, corrections, tool evidence, and task status were
+preserved.
+
+## Verbatim labeled-state iteration
+
+The contract was changed to copy source values labeled `Next action`,
+`Blocker`, `in-progress`, `blocked`, or `queued` verbatim and to emit no
+preamble.
+
+| Metric | Result |
+|---|---:|
+| Valid trials | 6/6 |
+| Full-context control | 144/144 |
+| Compacted retention | 144/144 (100%) |
+| Wilson 95% CI | 97.40%-100% |
+| Trial mean / population SD | 100% / 0% |
+| Trial range | 100%-100% |
+| Mean summary/input ratio | 34.09% |
+| Summary-ratio SD | 3.33% |
+| Summary-ratio range | 28.97%-38.39% |
+
+The targeted change removed all task-continuation misses while reducing the
+average summary ratio by four percentage points.
+
+## Threats to validity
+
+- Six trials establish a useful regression baseline, not universal model
+  superiority.
+- The final matrix used the independent worker model path because the
+  configured coding-agent provider was banned.
+- Exact synthetic facts cover continuity failure modes but do not replace
+  long-running production telemetry.
+- Provider/model changes require rerunning the matrix; scores are not portable
+  across models.
+
+## Expanded corner-case matrix
+
+The registry was expanded with one baseline, one two-hop lifecycle, and one
+boundary-noise fixture, each repeated twice. Summary generation and evaluation
+used different worker model roles to reduce producer/evaluator leakage.
+
+| Scenario | Result |
+|---|---:|
+| Baseline | 48/48 |
+| Lifecycle, two hops | 34/34 |
+| Boundary noise | 22/22 |
+| Aggregate | 104/104 |
+
+The expanded questions found no additional recall miss, but they exposed a
+compression failure that recall-only scoring had hidden:
+
+- lifecycle hop 1 summary/input ratio: `1.048-1.215`
+- lifecycle final hop ratio: `0.732-0.810`
+
+The first summary could therefore be larger than the source context. Production
+compaction now caps output adaptively to half the estimated summary input and
+rejects any result that is not smaller than its source. The benchmark records
+that rejection as `non-compressing-summary`, separate from provider failures.
+
+Two repeated lifecycle trials after the fix retained `17/17` each while reducing
+hop ratios to:
+
+- hop 1: `0.551-0.566`
+- hop 2: `0.490-0.540`

@@ -1195,7 +1195,12 @@ describe("factory plugin API", () => {
       });
     });
     const agent = await createAgent({
-      autoCompaction: { minMessages: 4, retainMessages: 2 },
+      autoCompaction: {
+        estimateTokens: (messages) => messages.length * 10,
+        maxInputTokens: 10_000,
+        retainTokens: 20,
+        triggerTokens: 40,
+      },
       model: createCallbackModel(() => {
         modelCalls += 1;
         return Promise.resolve([
