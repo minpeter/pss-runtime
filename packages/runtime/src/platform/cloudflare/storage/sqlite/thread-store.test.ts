@@ -111,6 +111,29 @@ describe("DurableObjectSqliteThreadStore", () => {
     });
   });
 
+  it("round-trips v3 migration metadata without reapplying migrations", async () => {
+    // Given
+    const { storage, store } = createStore();
+    const state = {
+      appliedMigrations: { "workspace/sanitize": 2 },
+      compactions: [],
+      history: [{ content: "sanitized", role: "user" }],
+      schemaVersion: 3,
+    } as const;
+
+    // When
+    await expect(
+      store.commit("migrated", { state }, { expectedVersion: null })
+    ).resolves.toEqual({ ok: true, version: "1" });
+
+    // Then
+    await expect(store.load("migrated")).resolves.toEqual({
+      state,
+      version: "1",
+    });
+    expect(readRows(storage, "migrated")).toEqual([]);
+  });
+
   it("keeps the previous durable rows when compaction payload validation rejects", async () => {
     const { storage, store } = createStore({ maxPayloadBytes: 120 });
     const initialHistory = [

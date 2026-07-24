@@ -81,33 +81,32 @@ Steering additions appear as `runtime-input` events: runtime/API-originated inpu
 mapped internally to the model's user role, separate from human `user-input`
 events.
 
-## Plugins
+## Runtime hooks and coding-agent extensions
 
-Plugins are async factories. Register typed lifecycle handlers with `on()` and
-capabilities such as tools with `provide()`:
+The runtime accepts one headless `AgentHooks` object. Application hosts own
+extension identity, ordering, lifecycle, tools, commands, and UI:
 
 ```ts
-import {
-  createAgent,
-  definePlugin,
-  registerTool,
-} from "@minpeter/pss-runtime";
+import { type AgentHooks, createAgent } from "@minpeter/pss-runtime";
 
-const appPlugin = definePlugin((pss) => {
-  pss.on("turn.end", (event) => {
-    console.log(event.type);
-  });
-  pss.provide(registerTool({ name: "weather", tool: weatherTool }));
-});
+const hooks: AgentHooks = {
+  beforeToolExecution(checkpoint) {
+    if (checkpoint.toolName === "delete_file") {
+      return {
+        output: "delete_file is disabled",
+        status: "blocked",
+      };
+    }
+  },
+};
 
-const agent = await createAgent({ model, plugins: [appPlugin] });
+const agent = await createAgent({ hooks, model, tools });
 ```
 
-Plugin factories initialize sequentially before `createAgent()` resolves.
-`Agent` remains available as a type, but agent creation must go through the async
-factory. Factory and hook failures fail closed. See
-[`packages/runtime/README.md`](packages/runtime/README.md#plugins) for lifecycle
-hooks, request decisions, thread-scoped state, and host integrations.
+`@minpeter/pss-coding-agent/extension` provides the higher-level extension host
+for runtime hooks, tools, instruction fragments, commands, and TUI renderers.
+See [`packages/runtime/README.md`](packages/runtime/README.md#host-hooks) for
+the atomic callback contract.
 
 The runtime `send` API also accepts JSON-serializable multimodal content parts
 for model providers that support them:

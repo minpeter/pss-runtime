@@ -74,23 +74,24 @@ export class DurableObjectSqliteThreadStore implements ThreadStore {
       this.#ensureSchema();
       const key = this.#rowKey(threadKey);
 
-      const prepared = isAgentThreadSnapshot(next.state)
-        ? {
-            kind: "snapshot" as const,
-            compactions: serializeThreadCompactions(
-              next.state.schemaVersion === 2 ? next.state.compactions : [],
-              this.#maxPayloadBytes
-            ),
-            state: next.state,
-          }
-        : {
-            kind: "opaque" as const,
-            stateBlob: stringifyJsonPayloadWithinBudget(
-              "thread-state",
-              next.state ?? null,
-              this.#maxPayloadBytes
-            ),
-          };
+      const prepared =
+        isAgentThreadSnapshot(next.state) && next.state.schemaVersion !== 3
+          ? {
+              kind: "snapshot" as const,
+              compactions: serializeThreadCompactions(
+                next.state.schemaVersion === 2 ? next.state.compactions : [],
+                this.#maxPayloadBytes
+              ),
+              state: next.state,
+            }
+          : {
+              kind: "opaque" as const,
+              stateBlob: stringifyJsonPayloadWithinBudget(
+                "thread-state",
+                next.state ?? null,
+                this.#maxPayloadBytes
+              ),
+            };
 
       return await this.#enqueueWrite(() =>
         this.#transaction(() => {

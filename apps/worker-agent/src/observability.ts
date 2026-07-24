@@ -1,9 +1,8 @@
 import {
   type AgentEvent,
-  definePlugin,
+  type AgentInstrumentation,
   isLifecycleAgentEvent,
   isToolAgentEvent,
-  type PluginDefinition,
 } from "@minpeter/pss-runtime";
 
 export interface TurnObservabilityEntry {
@@ -73,42 +72,32 @@ export function describeEvent(
   return;
 }
 
-export function createTurnObservabilityPlugin(
+export function createTurnObservabilityInstrumentation(
   options: TurnObservabilityOptions = {}
-): PluginDefinition {
+): AgentInstrumentation {
   const record = options.log ?? (() => undefined);
 
-  return definePlugin((pss) => {
-    for (const eventName of [
-      "step.start",
-      "step.end",
-      "turn.start",
-      "turn.abort",
-      "turn.end",
-      "turn.error",
-    ] as const) {
-      pss.on(eventName, (event) => {
-        // Only lifecycle/tool events are surfaced; user-authored text events are
-        // intentionally never logged so this hook cannot leak conversation content.
-        const entry = describeEvent(event, options.label);
-        if (entry) {
-          record(entry);
-        }
-      });
+  return {
+    wrapTurn(turn) {
+      return {
+        events() {
+          return observeEvents(turn.events(), options.label, record);
+        },
+      };
+    },
+  };
+}
+
+async function* observeEvents(
+  events: AsyncIterable<AgentEvent>,
+  label: string | undefined,
+  record: (entry: TurnObservabilityEntry) => void
+): AsyncIterable<AgentEvent> {
+  for await (const event of events) {
+    const entry = describeEvent(event, label);
+    if (entry) {
+      record(entry);
     }
-    pss.on("tool.call.before", (event) => {
-      record({
-        event: "tool-call",
-        label: options.label,
-        toolName: event.toolName,
-      });
-      return { action: "continue" };
-    });
-    pss.on("tool.execution.end", (event) => {
-      const entry = describeEvent(event, options.label);
-      if (entry) {
-        record(entry);
-      }
-    });
-  });
+    yield event;
+  }
 }

@@ -4,15 +4,15 @@ import {
   type AgentAutoCompactionOptions,
   type AgentEvent,
   type AgentHost,
+  type AgentInstrumentation,
   type AgentTurn,
   createAgent,
-  type PluginDefinition,
 } from "@minpeter/pss-runtime";
 import { openTelemetry } from "@minpeter/pss-runtime/otel";
 import { drainAgentTurn } from "@minpeter/pss-runtime/platform/cloudflare";
 
 import type { EnvironmentName } from "../env";
-import { createTurnObservabilityPlugin } from "../observability";
+import { createTurnObservabilityInstrumentation } from "../observability";
 import type { WorkerAgentSessionToolOptions } from "../session/session-tools";
 import { createSessionTools } from "../session/session-tools";
 import {
@@ -138,8 +138,9 @@ export async function createConfiguredAgent(
     name: "custom",
   });
 
-  const plugins: readonly PluginDefinition[] = [
-    createTurnObservabilityPlugin({
+  const instrumentations: readonly AgentInstrumentation[] = [
+    openTelemetry(),
+    createTurnObservabilityInstrumentation({
       label: env.ENVIRONMENT,
       ...(options.observability?.log ? { log: options.observability.log } : {}),
     }),
@@ -150,10 +151,9 @@ export async function createConfiguredAgent(
     autoCompaction: WORKER_AGENT_AUTO_COMPACTION,
     host,
     instructions: WORKER_AGENT_INSTRUCTIONS,
-    instrumentations: [openTelemetry()],
+    instrumentations,
     model: provider(env.AI_MODEL?.trim() || DEFAULT_MODEL),
     namespace: WORKER_AGENT_NAMESPACE,
-    plugins,
     ...(tools ? { tools } : {}),
   });
 }

@@ -1,5 +1,11 @@
-import { type AgentOptions, createAgent } from "@minpeter/pss-runtime";
+import {
+  type AgentHooks,
+  type AgentOptions,
+  createAgent,
+} from "@minpeter/pss-runtime";
 import type { ToolSet } from "ai";
+import { composeAgentHooks } from "./extensions/compose-hooks";
+import type { CodingAgentExtensionHost } from "./extensions/host";
 import { CODING_AGENT_INSTRUCTIONS } from "./instructions";
 import { createCodingLanguageModel } from "./model";
 import {
@@ -10,6 +16,8 @@ import { createWorkspaceTools } from "./workspace-tools";
 
 export interface CreateCodingAgentOptions {
   readonly autoCompaction?: AgentOptions["autoCompaction"];
+  readonly extensionHost?: CodingAgentExtensionHost;
+  readonly hooks?: AgentHooks;
   readonly host?: AgentOptions["host"];
   readonly instructions?: string;
   readonly model?: AgentOptions["model"];
@@ -26,23 +34,58 @@ export interface CreateCodingAgentOptions {
 
 export function createCodingAgent({
   autoCompaction,
+  extensionHost,
   host,
+  hooks,
   instructions = CODING_AGENT_INSTRUCTIONS,
   model = createCodingLanguageModel(),
   tools,
   webTools,
   workspace = process.cwd(),
 }: CreateCodingAgentOptions = {}) {
+  const selectedTools = tools ?? createCodingAgentTools(webTools);
+  const extensionTools = extensionHost?.tools ?? {};
+  const workspaceTools = createWorkspaceTools({ workspace });
+  assertNoToolCollisions(selectedTools, extensionTools, workspaceTools);
   const resolvedTools = {
-    ...(tools ?? createCodingAgentTools(webTools)),
-    ...createWorkspaceTools({ workspace }),
+    ...selectedTools,
+    ...extensionTools,
+    ...workspaceTools,
   } satisfies ToolSet;
+  const instructionFragments = extensionHost?.instructionFragments ?? [];
+  const extensionInstrumentations = extensionHost?.instrumentations ?? [];
+  const hookRegistrations = [
+    ...(hooks ? [{ extensionId: "coding-agent", hooks }] : []),
+    ...(extensionHost?.hooks
+      ? [{ extensionId: "coding-agent-extensions", hooks: extensionHost.hooks }]
+      : []),
+  ];
 
   return createAgent({
     ...(autoCompaction === undefined ? {} : { autoCompaction }),
     ...(host === undefined ? {} : { host }),
-    instructions,
+    hooks:
+      hookRegistrations.length === 0
+        ? undefined
+        : composeAgentHooks(hookRegistrations),
+    instructions: [instructions, ...instructionFragments].join("\n\n"),
+    instrumentations: extensionInstrumentations,
     model,
+    ...(extensionHost
+      ? { threadMigrations: extensionHost.threadMigrations }
+      : {}),
     tools: resolvedTools,
   });
+}
+
+function assertNoToolCollisions(...toolSets: readonly ToolSet[]): void {
+  const names = new Set<string>();
+  for (const tools of toolSets) {
+    for (const name of Object.keys(tools)) {
+      if (names.has(name)) {
+        throw new Error(`Duplicate coding agent tool "${name}"`);
+      }
+      names.add(name);
+    }
+  }
 }
