@@ -123,6 +123,18 @@ Programmatic static-object extensions remain supported through
 `defineCodingAgentExtension()` and the `extensions` option on `startTui()` or
 `runCodingAgentExec()`.
 
+The TUI renders the runtime's streaming deltas as live tokens while a step
+runs. Dedupe against the committed events is built in: committed
+`assistant-output` text renders only when a step produced no deltas.
+
+Provider failures use the runtime's structured `turn-error.error` metadata.
+The TUI maps stable categories to a concise title and action, shows only the
+safe summary, and renders bounded correlation IDs with their header source. It
+does not parse provider prose or print raw API errors, stacks, request bodies,
+response bodies, URLs, headers, or credentials. Legacy replay records without
+metadata remain readable as a generic `Request failed` message without
+speculative guidance.
+
 ## CLI
 
 ```sh
@@ -179,7 +191,12 @@ pss exec --workspace . --stdin --timeout-seconds 900 --result-file result.json
 ```
 
 `pss exec` streams JSONL events (`metadata`, `agent_event`, `result`) to stdout
-and exits 0 only when the task completes. Flags: `--workspace`; exactly one of
+and exits 0 only when the task completes. Streaming deltas
+(`assistant-output-delta`, `assistant-reasoning-delta`, `tool-call-input-*`)
+appear as `agent_event` lines alongside the committed events, but are excluded
+from the accumulated `result.events` payload, which stays committed-only.
+Structured `turn-error` metadata appears in both the live `agent_event` and
+committed result without raw provider diagnostics. Flags: `--workspace`; exactly one of
 `--prompt`, `--prompt-file`, or `--stdin`; plus `--model`, `--base-url`,
 `--timeout-seconds` (1-1200), `--web-tools`, and `--result-file`. A `.env` next
 to the working directory is loaded automatically.

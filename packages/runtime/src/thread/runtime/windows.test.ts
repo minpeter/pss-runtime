@@ -4,6 +4,7 @@ import { createAgent } from "../../agent/core/agent";
 import type { AgentHooks } from "../../agent/core/hooks";
 import {
   assistantMessage,
+  committedEvents,
   createCallbackModel,
   eventTypes,
   sentUserText,
@@ -155,6 +156,7 @@ describe("Agent thread runtime input windows", () => {
       "event:runtime-input",
       "hook:model-context",
       "llm:1",
+      "event:assistant-output-delta",
       "event:model-usage",
       "hook:model-step",
       "event:assistant-output",
@@ -164,6 +166,7 @@ describe("Agent thread runtime input windows", () => {
       "event:step-start",
       "hook:model-context",
       "llm:2",
+      "event:assistant-output-delta",
       "event:model-usage",
       "hook:model-step",
       "event:assistant-output",
@@ -214,7 +217,7 @@ describe("Agent thread runtime input windows", () => {
         userTextToModelMessage(userText("step runtime")),
       ],
     ]);
-    expect(events).toEqual([
+    expect(committedEvents(events)).toEqual([
       sentUserText("original"),
       { type: "turn-start" },
       steerRuntimeInput("turn runtime", "turn-start"),

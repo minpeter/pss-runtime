@@ -2,13 +2,16 @@ import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { createAgent } from "../../agent/core/agent";
 import type { AgentHooks } from "../../agent/core/hooks";
+import { createInMemoryHost } from "../../platform/memory";
 import {
   assistantMessage,
+  committedEvents,
   createCallbackModel,
   eventTypes,
   userText,
 } from "../../testing/test-fixtures";
 import { collect } from "../handle/test-support";
+import { isStreamAgentEvent } from "../protocol/events";
 import { userTextToModelMessage } from "../protocol/mapping";
 
 describe("Agent thread hooks", () => {
@@ -93,6 +96,33 @@ describe("Agent thread hooks", () => {
       "context:1",
       "step:assistant",
     ]);
+  });
+
+  it("commits and persists transformed model output after live deltas", async () => {
+    const host = createInMemoryHost();
+    const agent = await createAgent({
+      hooks: {
+        transformModelStep: () => ({
+          action: "transform",
+          value: [assistantMessage("sanitized")],
+        }),
+      },
+      host,
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("raw-protocol")])
+      ),
+    });
+
+    const events = await collect(await agent.send("hello"));
+    const streamJson = JSON.stringify(events.filter(isStreamAgentEvent));
+    const committedJson = JSON.stringify(committedEvents(events));
+    const storedJson = JSON.stringify(await host.store.threads.load("default"));
+
+    expect(streamJson).toContain("raw-protocol");
+    expect(committedJson).toContain("sanitized");
+    expect(committedJson).not.toContain("raw-protocol");
+    expect(storedJson).toContain("sanitized");
+    expect(storedJson).not.toContain("raw-protocol");
   });
 
   it("rolls back the active turn when a model-step hook fails", async () => {

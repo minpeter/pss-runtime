@@ -9,7 +9,11 @@ import type {
   HostAttachmentStore,
   RuntimeAttachmentReference,
 } from "../input/attachments";
-import type { AgentEvent, ModelUsage } from "../protocol/events";
+import type {
+  AgentEvent,
+  ModelUsage,
+  StreamAgentEvent,
+} from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
 import type { ThreadCompactionInput, ThreadState } from "../state/thread-state";
 import { interceptAgentEvent } from "./event-interception";
@@ -194,6 +198,10 @@ export class ThreadEventDispatcher {
   }
 
   emitProcessedEvent(run: BufferedAgentTurn, event: AgentEvent): void {
+    run.emit(event);
+  }
+
+  emitStreamEvent(run: BufferedAgentTurn, event: StreamAgentEvent): void {
     run.emit(event);
   }
 
