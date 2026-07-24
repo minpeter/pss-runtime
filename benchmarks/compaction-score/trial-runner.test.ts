@@ -8,7 +8,7 @@ import {
   createMockLanguageModelV4,
   type MockLanguageModelV4CallOptions,
   mockLanguageModelV4Text,
-} from "../../packages/runtime/src/testing/mock-language-model-v4-test-utils";
+} from "./mock-language-model";
 import { buildCompactionFixture } from "./fixture";
 import { classifySummaryFailure, runCompactionTrial } from "./trial-runner";
 
