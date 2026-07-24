@@ -1,10 +1,10 @@
 core:changelogs:
-  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Add workspace coding tools and the headless `pss exec` runner\n\nThe coding agent now ships a workspace tool set shared by the TUI and a new\nheadless runner: `read_file`, `glob_files`, `grep_files`, `edit_file`\n(hashline-anchored with stale-hash guards), `write_file`, `delete_file`, and\n`shell_execute`. The file tools are confined to the workspace — path and\nsymlink escapes are rejected — and writes are atomic with the target\npermissions applied from the outset. `shell_execute` is not a sandbox:\ncommands run with the user's permissions, but AI provider API keys are\nwithheld from the child environment.\n\n`pss exec` runs one headless coding task for CI, benchmarks, and scripts. It\nstreams JSONL events (`metadata`, `agent_event`, `result`) to stdout and\nexits 0 only when the task completes, with `--workspace`, exactly one of\n`--prompt`/`--prompt-file`/`--stdin`, plus `--model`, `--base-url`,\n`--timeout-seconds`, `--web-tools`, and `--result-file`. A `.env` next to the\nworking directory is loaded automatically.\n\nBoth surfaces share one production agent factory, `createCodingAgent`: the\nworkspace tools are always included and win name collisions, while a custom\n`tools` option replaces only the optional web tools.\n"
-    filename: 2026-07-23-workspace-coding-tools-exec.md
+  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Add hashline edit diffs to the coding-agent TUI\n\nThe coding agent now renders anchored `edit_file` results as sorted,\nsenpi-style word diffs with faint changed regions, stronger intra-token\nhighlights, and dim context rows for unchanged lines.\n\nThe TUI modules are organized by code flow under `src/tui/`, and read/diff\nrendering now displays terminal control characters as safe visible\nplaceholders instead of forwarding them to the terminal.\n"
+    filename: 2026-07-23-coding-agent-tui-hashline-diff.md
     v: 0.0.0
 core:packages:
   - changelogIds:
-      - 2026-07-23-workspace-coding-tools-exec.md
+      - 2026-07-23-coding-agent-tui-hashline-diff.md
     id: npm:@minpeter/pss-coding-agent
     updated: true
   - id: npm:@minpeter/pss-benchmark-nextjs
@@ -26,5 +26,5 @@ npm:packages:
   - id: npm:@minpeter/pss-example-evals
   - id: npm:@minpeter/pss-example-local-file-agent
   - id: npm:@minpeter/pss-example-plugin
-  - id: npm:@minpeter/pss-example-sync-subagent
   - id: npm:@minpeter/pss-runtime-edge-image-qa
+  - id: npm:@minpeter/pss-example-sync-subagent
