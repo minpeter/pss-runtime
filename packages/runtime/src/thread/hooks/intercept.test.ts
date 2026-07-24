@@ -1,7 +1,7 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { createAgent } from "../../agent/core/agent";
-import { definePlugin } from "../../plugins/api";
+import type { AgentHooks } from "../../agent/core/hooks";
 import {
   assistantMessage,
   createCallbackModel,
@@ -12,10 +12,10 @@ import {
 import { collect } from "../handle/test-support";
 import { userTextToModelMessage } from "../protocol/mapping";
 
-describe("thread plugin intercept integration", () => {
-  it("routes by meta.source=send in a plugin input.accept handler", async () => {
-    const tagPlugin = definePlugin((pss) => {
-      pss.on("input.accept", (event) => {
+describe("thread hook intercept integration", () => {
+  it("routes by meta.source=send in acceptInput", async () => {
+    const hooks: AgentHooks = {
+      acceptInput: (event) => {
         if (event.type !== "user-input" || event.meta?.source !== "send") {
           return;
         }
@@ -29,13 +29,13 @@ describe("thread plugin intercept integration", () => {
             text: `<user>\n${event.text}\n</user>`,
           },
         };
-      });
-    });
+      },
+    };
     const agent = await createAgent({
+      hooks,
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
       ),
-      plugins: [tagPlugin],
     });
 
     const events = await collect(await agent.send("hello"));
@@ -43,49 +43,44 @@ describe("thread plugin intercept integration", () => {
     expect(events[0]).toEqual(sentUserText("<user>\nhello\n</user>"));
   });
 
-  it("observes plugin notification events", async () => {
+  it("passes history and thread identity to input and turn hooks", async () => {
     const seen: string[] = [];
-    const observerPlugin = definePlugin((pss) => {
-      pss.on("turn.start", (event) => {
-        seen.push(event.type);
-      });
-      pss.on("turn.end", (event) => {
-        seen.push(event.type);
-      });
-      pss.on("input.accept", (event) => {
-        seen.push(event.type);
+    const hooks: AgentHooks = {
+      acceptInput: (event, { history, threadKey }) => {
+        seen.push(`${event.type}:${history.length}:${threadKey}`);
         return { action: "continue" };
-      });
-    });
+      },
+      beforeTurnStart: (event, { history, threadKey }) => {
+        seen.push(`${event.type}:${history.length}:${threadKey}`);
+        return { action: "continue" };
+      },
+    };
     const agent = await createAgent({
+      hooks,
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
       ),
-      plugins: [observerPlugin],
     });
 
     await collect(await agent.send("hello"));
 
-    expect(seen).toContain("user-input");
-    expect(seen).toContain("turn-end");
+    expect(seen).toEqual(["user-input:0:default", "turn-start:1:default"]);
   });
 
-  it("still surfaces plugin failures on turn-end as turn-error", async () => {
+  it("surfaces turn hook failures as turn-error", async () => {
     const agent = await createAgent({
-      plugins: [
-        definePlugin((pss) => {
-          pss.on("turn.end", () => {
-            throw new Error("turn-end plugin failed");
-          });
-        }),
-      ],
+      hooks: {
+        beforeTurnStart: () => {
+          throw new Error("turn-start hook failed");
+        },
+      },
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
       ),
     });
 
     const events = await collect(
-      await agent.thread("terminal-plugin").send("first")
+      await agent.thread("terminal-hook").send("first")
     );
 
     expect(eventTypes(events)).toContain("turn-error");
@@ -93,8 +88,8 @@ describe("thread plugin intercept integration", () => {
 
   it("matches emitted text to model history after transform", async () => {
     const seenHistory: ModelMessage[][] = [];
-    const tagPlugin = definePlugin((pss) => {
-      pss.on("input.accept", (event) => {
+    const hooks: AgentHooks = {
+      acceptInput: (event) => {
         if (
           event.type !== "user-input" ||
           !("text" in event) ||
@@ -106,14 +101,14 @@ describe("thread plugin intercept integration", () => {
           action: "transform",
           value: { ...event, text: `X:${event.text}` },
         };
-      });
-    });
+      },
+    };
     const agent = await createAgent({
+      hooks,
       model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
       }),
-      plugins: [tagPlugin],
     });
 
     await collect(await agent.send("hello"));

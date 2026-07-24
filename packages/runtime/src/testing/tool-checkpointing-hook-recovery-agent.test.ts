@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { AgentHooks } from "../agent/core/hooks";
 import { throwIfManualToolRecoveryRequired } from "../execution/resume/checkpoints";
 import { ToolExecutionNeedsRecoveryError } from "../llm/tool-execution-checkpoint";
-import { definePlugin } from "../plugins/api";
 import {
   checkpointedTool,
   createCheckpointSpyHost,
@@ -18,7 +18,7 @@ import { assistantMessage } from "./test-fixtures";
 
 const generateTextMock = getGenerateTextMock();
 
-describe("plugin-forced tool recovery through Agent", () => {
+describe("hook-forced tool recovery through Agent", () => {
   beforeEach(() => {
     vi.resetModules();
     generateTextMock.mockReset();
@@ -28,7 +28,7 @@ describe("plugin-forced tool recovery through Agent", () => {
     vi.restoreAllMocks();
   });
 
-  it("lets plugins stop tool execution after the before-tool checkpoint", async () => {
+  it("lets hooks stop tool execution after the before-tool checkpoint", async () => {
     const { createAgent } = await import("../agent/core/agent");
     const { checkpoints, host } = createCheckpointSpyHost();
     const signal = new AbortController().signal;
@@ -48,17 +48,17 @@ describe("plugin-forced tool recovery through Agent", () => {
       }
     );
 
-    const recoveryPlugin = definePlugin((pss) => {
-      pss.on("tool.call.before", (event) => {
+    const hooks: AgentHooks = {
+      beforeToolExecution: (event) => {
         interceptedToolNames.push(event.toolName);
-        return { action: "needs-recovery" };
-      });
-    });
+        return { status: "needs-recovery" };
+      },
+    };
 
     const agent = await createAgent({
       host,
       model: fakeModel,
-      plugins: [recoveryPlugin],
+      hooks,
       tools: {
         dangerous_tool: checkpointedTool("manual-recovery", () => {
           executions += 1;
@@ -86,7 +86,7 @@ describe("plugin-forced tool recovery through Agent", () => {
     });
   });
 
-  it("persists plugin-forced recovery so idempotent tools cannot replay on resume", async () => {
+  it("persists hook-forced recovery so idempotent tools cannot replay on resume", async () => {
     const { createAgent } = await import("../agent/core/agent");
     const { checkpoints, host } = createCheckpointSpyHost();
     const signal = new AbortController().signal;
@@ -105,14 +105,14 @@ describe("plugin-forced tool recovery through Agent", () => {
       }
     );
 
-    const recoveryPlugin = definePlugin((pss) => {
-      pss.on("tool.call.before", () => ({ action: "needs-recovery" }));
-    });
+    const hooks: AgentHooks = {
+      beforeToolExecution: () => ({ status: "needs-recovery" }),
+    };
 
     const agent = await createAgent({
       host,
       model: fakeModel,
-      plugins: [recoveryPlugin],
+      hooks,
       tools: {
         dangerous_tool: checkpointedTool("idempotent", () => {
           executions += 1;

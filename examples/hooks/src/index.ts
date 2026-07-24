@@ -1,5 +1,5 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { createAgent, definePlugin } from "@minpeter/pss-runtime";
+import { type AgentHooks, createAgent } from "@minpeter/pss-runtime";
 import { createEnv } from "@t3-oss/env-core";
 import { config as loadEnv } from "dotenv";
 import { z } from "zod";
@@ -19,22 +19,26 @@ const provider = createOpenAICompatible({
   apiKey: env.AI_API_KEY,
   baseURL: env.AI_BASE_URL,
 });
-const tracePlugin = definePlugin((pss) => {
-  pss.on("turn.end", (event) => {
-    console.log("");
-    console.log(`// plugin:${event.type} //`);
-    console.log("");
-  });
-});
+const hooks: AgentHooks = {
+  acceptInput(event) {
+    if (event.type !== "user-input" || !("text" in event)) {
+      return;
+    }
+    return {
+      action: "transform",
+      value: { ...event, text: `[host] ${event.text}` },
+    };
+  },
+};
 
 const agent = await createAgent({
   model: provider(env.AI_MODEL),
+  hooks,
   instructions: "Answer briefly.",
-  plugins: [tracePlugin],
 });
 
 const run = await agent.send(
-  "Summarize in one sentence: plugins can observe runtime events."
+  "Summarize in one sentence: hosts can intercept runtime boundaries."
 );
 
 for await (const event of run.events()) {

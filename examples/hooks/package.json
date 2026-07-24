@@ -1,5 +1,5 @@
 {
-  "name": "@minpeter/pss-example-plugin",
+  "name": "@minpeter/pss-example-hooks",
   "private": true,
   "type": "module",
   "scripts": {

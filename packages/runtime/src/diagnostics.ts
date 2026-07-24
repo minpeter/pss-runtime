@@ -21,16 +21,9 @@ export interface ModelToolCacheFingerprintMetadata {
 export interface RuntimeDiagnostic {
   readonly cause?: unknown;
   readonly code: string;
-  readonly event?: string;
   readonly level: RuntimeDiagnosticLevel;
   readonly metadata?: ModelToolCacheFingerprintMetadata;
-  readonly phase:
-    | "activation"
-    | "factory"
-    | "handler"
-    | "model-step"
-    | "registration";
-  readonly pluginIndex?: number;
+  readonly phase: "model-step";
   readonly threadKey?: string;
 }
 

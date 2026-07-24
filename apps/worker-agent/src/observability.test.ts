@@ -1,9 +1,9 @@
-import type { PluginAPI, PluginEventContext } from "@minpeter/pss-runtime";
+import type { AgentEvent } from "@minpeter/pss-runtime";
 import { describe, expect, it } from "vitest";
 
 import {
   createTurnEventCollector,
-  createTurnObservabilityPlugin,
+  createTurnObservabilityInstrumentation,
   describeEvent,
   type TurnObservabilityEntry,
 } from "./observability";
@@ -59,54 +59,40 @@ describe("createTurnEventCollector", () => {
   });
 });
 
-describe("createTurnObservabilityPlugin", () => {
-  it("logs described events through the provided sink and never intercepts", async () => {
+describe("createTurnObservabilityInstrumentation", () => {
+  it("logs described events without changing the stream", async () => {
     const entries: TurnObservabilityEntry[] = [];
-    const plugin = createTurnObservabilityPlugin({
+    const instrumentation = createTurnObservabilityInstrumentation({
       label: "dev",
       log: (entry) => entries.push(entry),
     });
-    const handlers = new Map<
-      string,
-      (event: unknown, context: PluginEventContext) => unknown
-    >();
-    await plugin(
-      {
-        on: (event, handler) => {
-          handlers.set(
-            event,
-            handler as (event: unknown, context: PluginEventContext) => unknown
-          );
-          return { unsubscribe: () => undefined };
-        },
-        provide: () => {
-          throw new Error("not used");
-        },
-      } as PluginAPI,
-      { signal: new AbortController().signal }
-    );
-    const context: PluginEventContext = {
-      history: [],
-      signal: new AbortController().signal,
-      thread: { key: "test" },
-    };
-
-    const toolResult = await handlers.get("tool.execution.end")?.(
+    const sourceEvents: AgentEvent[] = [
       {
         type: "tool-result",
         output: {},
         toolCallId: "1",
         toolName: "x",
       },
-      context
-    );
-    const userInput = await handlers.get("message.update")?.(
       { type: "assistant-output", text: "hi" },
-      context
+    ];
+    const wrapped = instrumentation.wrapTurn(
+      {
+        async *events() {
+          yield* sourceEvents;
+        },
+      },
+      {
+        operation: "send",
+        runId: "run-1",
+        threadKey: "test",
+      }
     );
+    const observed: AgentEvent[] = [];
+    for await (const event of wrapped.events()) {
+      observed.push(event);
+    }
 
-    expect(toolResult).toBeUndefined();
-    expect(userInput).toBeUndefined();
+    expect(observed).toEqual(sourceEvents);
     expect(entries).toEqual([
       { event: "tool-result", label: "dev", toolName: "x" },
     ]);

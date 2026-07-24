@@ -1,8 +1,8 @@
-import { definePlugin } from "@minpeter/pss-runtime";
+import type { AgentHooks } from "@minpeter/pss-runtime";
 
-export function createConversationTagPlugin() {
-  return definePlugin((pss) => {
-    pss.on("input.accept", (event) => {
+export function createConversationHooks(): AgentHooks {
+  return {
+    acceptInput(event) {
       if (
         event.type !== "user-input" ||
         !("text" in event) ||
@@ -18,6 +18,6 @@ export function createConversationTagPlugin() {
           text: `[user] ${event.text}`,
         },
       };
-    });
-  });
+    },
+  };
 }

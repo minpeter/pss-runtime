@@ -1,7 +1,7 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { createAgent } from "../../agent/core/agent";
-import { definePlugin } from "../../plugins/api";
+import type { AgentHooks } from "../../agent/core/hooks";
 import {
   assistantMessage,
   createCallbackModel,
@@ -13,8 +13,8 @@ import { userTextToModelMessage } from "../protocol/mapping";
 describe("thread.send intercept", () => {
   it("queues transformed user-input into model history", async () => {
     const seenHistory: ModelMessage[][] = [];
-    const tagPlugin = definePlugin((pss) => {
-      pss.on("input.accept", (event) => {
+    const hooks: AgentHooks = {
+      acceptInput: (event) => {
         if (
           event.type !== "user-input" ||
           !("text" in event) ||
@@ -23,17 +23,17 @@ describe("thread.send intercept", () => {
           return;
         }
         return {
-          action: "transform",
+          action: "transform" as const,
           value: { ...event, text: `TAG:${event.text}` },
         };
-      });
-    });
+      },
+    };
     const agent = await createAgent({
       model: createCallbackModel(({ history }) => {
         seenHistory.push([...history]);
         return Promise.resolve([assistantMessage("DONE")]);
       }),
-      plugins: [tagPlugin],
+      hooks,
     });
 
     await collect(await agent.send("hello"));
@@ -44,14 +44,14 @@ describe("thread.send intercept", () => {
   });
 
   it("skips turn-start when send input is handled", async () => {
-    const handledPlugin = definePlugin((pss) => {
-      pss.on("input.accept", () => ({ action: "handled" }));
-    });
+    const hooks: AgentHooks = {
+      acceptInput: () => ({ action: "handled" as const }),
+    };
     const agent = await createAgent({
       model: createCallbackModel(() =>
         Promise.resolve([assistantMessage("DONE")])
       ),
-      plugins: [handledPlugin],
+      hooks,
     });
 
     const events = await collect(await agent.send("hello"));

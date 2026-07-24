@@ -16,7 +16,6 @@ import type {
   ThreadExecutionRun,
   ThreadExecutionTerminalStatus,
 } from "./execution";
-import type { ThreadEventDispatcher } from "./thread-event-dispatcher";
 import {
   commitThreadStateAndEvents,
   type DurableThreadEventBuffer,
@@ -85,7 +84,6 @@ export async function recoverTurnProcessingError({
   error,
   executionHost,
   executionRun,
-  events,
   historySnapshot,
   recordEvent,
   run,
@@ -97,7 +95,6 @@ export async function recoverTurnProcessingError({
   readonly error: unknown;
   readonly executionHost?: AgentHost;
   readonly executionRun?: ThreadExecutionRun;
-  readonly events?: ThreadEventDispatcher;
   readonly historySnapshot: ModelMessage[];
   readonly recordEvent: (event: AgentEvent) => void;
   readonly run: BufferedAgentTurn;
@@ -110,7 +107,7 @@ export async function recoverTurnProcessingError({
   await emitTurnErrorAfterRecovery({
     error: turnError,
     historySnapshot,
-    observeEvent: events ? (event) => events.observeRunEvent(event) : undefined,
+    observeEvent: undefined,
     persistEvent: async (event) => {
       recordEvent(event);
       await commitThreadStateAndEvents({
