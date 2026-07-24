@@ -48,6 +48,13 @@ for await (const event of turn.events()) {
 `turn.events()` is synchronized and drives the turn. Consume it to let the
 runtime cross lifecycle boundaries such as `turn-start`, `step-start`, and
 `step-end`.
+
+`turn.events()` also emits ephemeral streaming deltas
+(`assistant-output-delta`, `assistant-reasoning-delta`, and three
+`tool-call-input-*` kinds) between `step-start` and a step's committed
+events. Deltas are never persisted and bypass plugins; the committed
+events remain the durable record. See the streaming deltas section of
+[`packages/runtime/README.md`](packages/runtime/README.md#streaming-deltas).
 Use `thread.send(input)` for a new user turn. If a turn is already active, the
 new turn is queued until the active turn finishes. Use `thread.steer(input)` when
 the input should steer the active turn; if no turn is active, it starts a normal

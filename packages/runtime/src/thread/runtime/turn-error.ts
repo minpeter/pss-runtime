@@ -21,6 +21,9 @@ import {
   commitThreadStateAndEvents,
   type DurableThreadEventBuffer,
 } from "./thread-event-log";
+import { normalizeTurnError } from "./turn-error-metadata";
+
+type TurnErrorEvent = Extract<AgentEvent, { type: "turn-error" }>;
 
 export async function emitTurnErrorAfterRecovery({
   error,
@@ -40,7 +43,7 @@ export async function emitTurnErrorAfterRecovery({
   readonly state: ThreadState;
 }): Promise<void> {
   if (error instanceof ThreadCommitConflictError) {
-    let event: AgentEvent = { type: "turn-error", message: error.message };
+    let event: TurnErrorEvent = { type: "turn-error", message: error.message };
     event = await observeTurnError(event, observeEvent);
     try {
       await persistEvent?.(event);
@@ -52,9 +55,13 @@ export async function emitTurnErrorAfterRecovery({
   }
 
   state.rollback(historySnapshot);
-  let event: AgentEvent = {
+  const normalizedError = normalizeTurnError(error);
+  let event: TurnErrorEvent = {
+    ...(normalizedError.error === undefined
+      ? {}
+      : { error: normalizedError.error }),
     type: "turn-error",
-    message: errorMessage(error),
+    message: normalizedError.message ?? errorMessage(error),
   };
   event = await observeTurnError(event, observeEvent);
   try {
@@ -63,14 +70,11 @@ export async function emitTurnErrorAfterRecovery({
     } else {
       await state.commit();
     }
-  } catch (rollbackError) {
-    const rollbackMessage =
-      rollbackError instanceof Error
-        ? rollbackError.message
-        : String(rollbackError);
+  } catch {
     run.emit({
+      ...(event.error === undefined ? {} : { error: event.error }),
       type: "turn-error",
-      message: `${errorMessage(error)}; history rollback persistence failed: ${rollbackMessage}`,
+      message: `${event.message} History rollback persistence failed.`,
     });
     closeRuntimeInput(runtimeInput, "turn-error");
     return;
@@ -127,9 +131,9 @@ export async function recoverTurnProcessingError({
 }
 
 async function observeTurnError(
-  event: AgentEvent,
+  event: TurnErrorEvent,
   observeEvent: ((event: AgentEvent) => Promise<void>) | undefined
-): Promise<AgentEvent> {
+): Promise<TurnErrorEvent> {
   if (!observeEvent) {
     return event;
   }

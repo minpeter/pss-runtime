@@ -4,6 +4,7 @@ import { createAgent } from "../../agent/core/agent";
 import { definePlugin } from "../../plugins/api";
 import {
   assistantMessage,
+  committedEvents,
   createCallbackModel,
   eventTypes,
   sentUserText,
@@ -167,6 +168,7 @@ describe("Agent thread runtime input windows", () => {
       "plugin:runtime-input",
       "event:runtime-input",
       "llm:1",
+      "event:assistant-output-delta",
       "plugin:model-usage",
       "event:model-usage",
       "plugin:assistant-output",
@@ -178,6 +180,7 @@ describe("Agent thread runtime input windows", () => {
       "plugin:step-start",
       "event:step-start",
       "llm:2",
+      "event:assistant-output-delta",
       "plugin:model-usage",
       "event:model-usage",
       "plugin:assistant-output",
@@ -231,7 +234,7 @@ describe("Agent thread runtime input windows", () => {
         userTextToModelMessage(userText("step runtime")),
       ],
     ]);
-    expect(events).toEqual([
+    expect(committedEvents(events)).toEqual([
       sentUserText("original"),
       { type: "turn-start" },
       steerRuntimeInput("turn runtime", "turn-start"),

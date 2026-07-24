@@ -5,14 +5,18 @@ import type {
   LifecycleAgentEvent,
   PluginRequestResultMap,
   PluginToolCallBeforeEvent,
+  StreamAgentEvent,
   TelemetryAgentEvent,
+  TurnErrorMetadataV1,
   VisibleAgentEvent,
 } from "../index";
 import {
   isControlAgentEvent,
   isLifecycleAgentEvent,
+  isStreamAgentEvent,
   isTelemetryAgentEvent,
   isVisibleAgentEvent,
+  streamAgentEventTypes,
 } from "../index";
 
 describe("runtime root event API exports", () => {
@@ -29,6 +33,11 @@ describe("runtime root event API exports", () => {
       isTelemetryAgentEvent
     );
     expect(runtime).toHaveProperty("isControlAgentEvent", isControlAgentEvent);
+    expect(runtime).toHaveProperty("isStreamAgentEvent", isStreamAgentEvent);
+    expect(runtime).toHaveProperty(
+      "streamAgentEventTypes",
+      streamAgentEventTypes
+    );
     expect(runtime).not.toHaveProperty("isBeforeToolCallEvent");
   });
 
@@ -43,6 +52,17 @@ describe("runtime root event API exports", () => {
       type: "assistant-reasoning",
     } satisfies TelemetryAgentEvent;
     const control = lifecycle satisfies ControlAgentEvent;
+    const turnErrorMetadata = {
+      category: "permission",
+      observedRetryable: false,
+      status: 403,
+      version: 1,
+    } satisfies TurnErrorMetadataV1;
+    const turnError = {
+      error: turnErrorMetadata,
+      message: "Access denied",
+      type: "turn-error",
+    } satisfies AgentEvent;
     const events = [visible, lifecycle, telemetry, control] satisfies readonly [
       VisibleAgentEvent,
       LifecycleAgentEvent,
@@ -55,6 +75,29 @@ describe("runtime root event API exports", () => {
       "turn-start",
       "assistant-reasoning",
       "turn-start",
+    ]);
+    expect(turnError.error).toEqual(turnErrorMetadata);
+  });
+
+  it("types ephemeral stream event exports from the package root", () => {
+    const outputDelta = {
+      text: "partial",
+      type: "assistant-output-delta",
+    } satisfies StreamAgentEvent;
+    const inputDelta = {
+      inputTextDelta: "{",
+      toolCallId: "tool-1",
+      type: "tool-call-input-delta",
+    } satisfies StreamAgentEvent;
+    const events = [outputDelta, inputDelta] satisfies readonly [
+      StreamAgentEvent,
+      StreamAgentEvent,
+    ];
+
+    expect(events.filter(isStreamAgentEvent)).toEqual(events);
+    expect(events.map((event) => event.type)).toEqual([
+      "assistant-output-delta",
+      "tool-call-input-delta",
     ]);
   });
 
