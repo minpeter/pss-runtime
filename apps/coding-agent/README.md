@@ -475,8 +475,10 @@ At a fixed terminal width, shrinking HOT output leaves synthetic blank rows at
 the transcript tail, above the composer, so the composer/footer does not jump
 upward. Completion freezes only actual rendered content, including genuine blank
 lines, Markdown spacing and graphic reserved rows. The next block starts after
-that content and its normal separator; new output consumes the shared trailing
-reserve before transcript height grows. Synthetic padding never becomes a
+that content and one blank separator row, including after header-only tool cards;
+this boundary is separate from spacing inside a tool body. Continued deltas in
+one block add no separator. New output consumes the shared trailing reserve
+before transcript height grows. Synthetic padding never becomes a
 permanent gap between COLD blocks or enters canonical messages/files. Width
 changes recompute the reservation without stale-width padding; transcript reset
 clears it. Streaming bodies remain capped, while full final-text expansion
