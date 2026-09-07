@@ -616,9 +616,6 @@ const createStreamViewFactories = (options: {
       // Committed reasoning can arrive after text deltas. Never seal that
       // newer text lease, or reopen a lease handed off to steering/tools.
       if (assistantLease?.active && assistantLease.view.contentKind === kind) {
-        if (kind === "text") {
-          assistantLease.view.completeText();
-        }
         resetAssistantView();
       }
     },

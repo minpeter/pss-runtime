@@ -946,7 +946,7 @@ describe.sequential("actual TUI transcript ownership", () => {
   });
 
   it.each([48, 100])(
-    "expands only completed text at width %i",
+    "shows full text live and seals identical rows at width %i",
     async (width) => {
       const app = await fixture();
       terminal.columns = width;
@@ -976,11 +976,11 @@ describe.sequential("actual TUI transcript ownership", () => {
         const cold = prefix();
         await app.emit({ type: "assistant-output-delta", text: answer });
         const active = chat().children.at(-1);
-        expect(rows(active, width)).toHaveLength(8);
-        expect(
-          stripTerminalSequences(rows(active, width).join("\n"))
-        ).not.toContain("HEADER_ID");
+        const live = rows(active, width);
+        expect(live.length).toBeGreaterThan(8);
+        expect(stripTerminalSequences(live.join("\n"))).toContain("HEADER_ID");
         await app.emit({ type: "assistant-output", text: answer });
+        expect(rows(chat().children.at(-1), width)).toEqual(live);
         unchanged(cold);
         const final = stripTerminalSequences(rows(chat(), width).join("\n"));
         for (const marker of [
@@ -1042,8 +1042,10 @@ describe.sequential("actual TUI transcript ownership", () => {
             : { type: "turn-error", message: "FAIL_ID" }
         );
         await app.finish();
-        expect(plain()).not.toContain("TEXT_00");
-        expect(plain()).toContain("TEXT_23");
+        for (const marker of lines) {
+          expect(plain().split(marker)).toHaveLength(2);
+        }
+        expect(rows().slice(0, streamed.length)).toEqual(streamed);
       } else if (mode === "steering") {
         await app.steer();
         const cold = prefix();
@@ -1051,7 +1053,7 @@ describe.sequential("actual TUI transcript ownership", () => {
         await app.emit({ type: "assistant-output-delta", text: continuation });
         await app.emit({ type: "assistant-output", text: text + continuation });
         unchanged(cold);
-        expect(plain()).not.toContain("TEXT_00");
+        expect(plain().split("TEXT_00")).toHaveLength(2);
         for (const marker of lines) {
           expect(plain().split(marker.replace("TEXT", "NEXT"))).toHaveLength(2);
         }
@@ -1060,7 +1062,7 @@ describe.sequential("actual TUI transcript ownership", () => {
         for (const marker of lines) {
           expect(plain().split(marker)).toHaveLength(2);
         }
-        if (mode === "short") {
+        if (mode !== "fallback") {
           expect(rows()).toEqual(streamed);
         }
         if (mode === "late-reasoning") {
@@ -1123,9 +1125,11 @@ describe.sequential("actual TUI transcript ownership", () => {
       await app.emit({ type: "assistant-output-delta", text: "SOURCE_ID" });
       release.resolve();
       await bounded(ready.promise);
-      expect(rows(chat().children.at(-1))).toHaveLength(8);
+      const live = rows(chat().children.at(-1));
+      expect(live).toHaveLength(20);
       await app.emit({ type: "assistant-output", text: "SOURCE_ID" });
       expect(plain().match(/CUSTOM_\d+/g)).toHaveLength(20);
+      expect(rows(chat().children.at(-1))).toEqual(live);
       expect(setText).toHaveBeenCalledTimes(1);
       expect(dispose).toHaveBeenCalledTimes(1);
       expect(context.signal.aborted).toBe(true);

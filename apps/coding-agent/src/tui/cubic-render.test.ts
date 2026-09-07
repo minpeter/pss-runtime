@@ -96,7 +96,6 @@ describe("Cubic render regressions", () => {
         assistantRenderer: () => custom,
       });
       view.appendText("BODY");
-      view.completeText();
       const hot = view.render(24);
       expect(hot[0]).toBe(header);
       render.mockClear();

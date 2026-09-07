@@ -282,7 +282,7 @@ describe.sequential("startTui final output", () => {
     expect(output.join("").split(hint)).toHaveLength(2);
   });
 
-  it("retains the streamed viewport tail and one composer border after narrow scrolling", async () => {
+  it("retains all streamed text and one composer border after narrow scrolling", async () => {
     const marker = "STREAM_SENTINEL";
     let hint = "";
     terminal.painted = (data) => {
@@ -332,9 +332,9 @@ describe.sequential("startTui final output", () => {
     );
     expect(await run).toBe(0);
     const rows = await expectFinalScreen(output.join(""), hint);
-    expect(rows.filter((row) => row?.includes(marker))).toHaveLength(4);
-    expect(rows.some((row) => row?.includes(`${marker}_35`))).toBe(true);
-    expect(rows.some((row) => row?.includes(`${marker}_1`))).toBe(false);
+    expect(
+      rows.flatMap((row) => row?.match(/STREAM_SENTINEL_\d+/g) ?? [])
+    ).toEqual(Array.from({ length: 35 }, (_, i) => `${marker}_${i + 1}`));
     expect(output.join("").split(hint)).toHaveLength(2);
   });
 
