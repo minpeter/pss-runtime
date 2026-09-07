@@ -26,4 +26,6 @@ or read from committed workflow files. Externally managed controls (branch
 protection, native secret scanning, hosted analytics, hosted alerting, and
 production deployment or health monitoring of the Worker) are deferred and
 external; they cannot be verified from repository files and are documented, not
-claimed, here.
+claimed, here. The authoritative list is
+[../deferred-controls.md](../deferred-controls.md), which maps each deferred
+control to its repo-local substitute.

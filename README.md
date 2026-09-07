@@ -64,22 +64,14 @@ local Worker validation procedures.
 
 Some readiness controls are external-only: they cannot be configured or
 verified from repository files or local commands, so this repository documents
-them as deferred rather than claiming them as active:
-
-- Branch protection enforcement on GitHub is deferred and external; the
-  repository ships advisory [CODEOWNERS](.github/CODEOWNERS) instead.
-- Native GitHub secret scanning is deferred and external; the repository-local
-  substitute is the deterministic secret-pattern scan collected by
-  `pnpm test`.
-- Hosted analytics and hosted error tracking such as Sentry are deferred and
-  external, and hosted alerting such as PagerDuty is likewise deferred; no
-  hosted backend is wired up here.
-- Progressive rollout and automated rollback are deferred and external;
-  releases follow the [release runbook](docs/runbooks/release-procedure.md)
-  only.
-- Production deployment and health monitoring of the Worker are deferred and
-  external; the local counterpart is the
-  [worker-health runbook](docs/runbooks/worker-health.md).
+them as deferred rather than claiming them as active. Branch protection
+enforcement and native secret scanning are deferred and external; hosted
+analytics, hosted error tracking, and hosted alerting are deferred and
+external; progressive rollout and automated rollback are deferred and
+external; and production deployment and health monitoring of the Worker are
+deferred and external. The authoritative deferred list, and the repo-local
+substitute for each control, lives in
+[docs/deferred-controls.md](docs/deferred-controls.md).
 
 ## Security
 
