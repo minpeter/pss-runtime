@@ -18,6 +18,7 @@ import type {
   TuiCommandResult,
 } from "./command";
 import { sessionPrimaryLabel } from "./session-option-format";
+import { sessionResumeSelector } from "./terminal-exit";
 
 /** Extension-UI select is capped at 100 options. */
 const MAX_PICKER_OPTIONS = 100;
@@ -75,8 +76,8 @@ function createNewCommand(context: SessionCommandContext): TuiCommand {
         const entry = await context.manager.createSession(name);
         await context.switchThread(entry, "new");
         return {
-          action: { clear: true, type: "session" },
-          message: `Started new session ${describeSession(entry)}.`,
+          action: { clear: true, reason: "new", type: "session" },
+          message: `Started new session ${sessionResumeSelector(entry.key)}.`,
           success: true,
         };
       }),
@@ -217,7 +218,6 @@ function createNameCommand(context: SessionCommandContext): TuiCommand {
         context.onRenamed(entry);
         return {
           action: { type: "refresh-header" },
-          message: `Session named ${JSON.stringify(name)}.`,
           success: true,
         };
       }),

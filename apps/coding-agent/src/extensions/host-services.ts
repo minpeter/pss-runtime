@@ -205,23 +205,60 @@ export class ExtensionHostServices {
     return Object.freeze({
       ...ui,
       confirm: async (
-        message: Parameters<CodingAgentExtensionUi["confirm"]>[0]
+        message: Parameters<CodingAgentExtensionUi["confirm"]>[0],
+        signal?: AbortSignal
       ) =>
         await this.#withInteractiveUi(extensionId, () =>
-          this.#raceUiRevocation(() => ui.confirm(message), false)
+          this.#raceUiRevocation(
+            () =>
+              ui.confirm(
+                message,
+                AbortSignal.any([
+                  this.#uiRevokedController.signal,
+                  ...(signal ? [signal] : []),
+                ])
+              ),
+            false
+          )
         ),
-      input: async (input: Parameters<CodingAgentExtensionUi["input"]>[0]) =>
+      input: async (
+        input: Parameters<CodingAgentExtensionUi["input"]>[0],
+        signal?: AbortSignal
+      ) =>
         await this.#withInteractiveUi(extensionId, () =>
-          this.#raceUiRevocation(() => ui.input(input), undefined)
+          this.#raceUiRevocation(
+            () =>
+              ui.input(
+                input,
+                AbortSignal.any([
+                  this.#uiRevokedController.signal,
+                  ...(signal ? [signal] : []),
+                ])
+              ),
+            undefined
+          )
         ),
       notify: (message: string) => {
         if (!this.#uiRevokedController.signal.aborted) {
           ui.notify(message);
         }
       },
-      select: async (input: Parameters<CodingAgentExtensionUi["select"]>[0]) =>
+      select: async (
+        input: Parameters<CodingAgentExtensionUi["select"]>[0],
+        signal?: AbortSignal
+      ) =>
         await this.#withInteractiveUi(extensionId, () =>
-          this.#raceUiRevocation(() => ui.select(input), undefined)
+          this.#raceUiRevocation(
+            () =>
+              ui.select(
+                input,
+                AbortSignal.any([
+                  this.#uiRevokedController.signal,
+                  ...(signal ? [signal] : []),
+                ])
+              ),
+            undefined
+          )
         ),
       status: (message: string) => {
         if (this.#uiRevokedController.signal.aborted) {
