@@ -43,9 +43,10 @@ done, or citing a substitute that does not exist fails the invariant suite.
   file.
 - Repo-local substitutes: the deterministic secret-pattern scan collected by
   `pnpm test` with triage steps in
-  `docs/runbooks/security-scan-failure-triage.md`, plus a dedicated gitleaks
-  workflow at `.github/workflows/gitleaks.yml` and a CodeQL static-analysis
-  workflow at `.github/workflows/codeql.yml` (pending: security milestone).
+  `docs/runbooks/security-scan-failure-triage.md`, plus the CodeQL
+  static-analysis workflow at `.github/workflows/codeql.yml` and a dedicated
+  gitleaks workflow at `.github/workflows/gitleaks.yml` (pending: security
+  milestone).
 
 ### 3. Product analytics
 

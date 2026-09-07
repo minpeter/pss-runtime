@@ -7,9 +7,8 @@ local or read from committed files; it never touches an external service.
 
 The repository has a deterministic secret-pattern scan that runs inside the
 `ci.yml` job `checks` (in the `Test` step, collected by `pnpm test`). A dedicated
-gitleaks secret-scan workflow and a CodeQL static-analysis workflow are planned
-for the security milestone and are deferred until then; do not assume they are
-configured yet.
+gitleaks secret-scan workflow remains planned and deferred until the security
+milestone adds it; do not assume it is configured yet.
 
 When a secret-pattern check fails:
 
@@ -26,12 +25,41 @@ When a secret-pattern check fails:
 
 ## Static-analysis findings
 
-For a static-analysis alert (for example from the planned CodeQL workflow):
+The `codeql.yml` workflow runs CodeQL over the JavaScript/TypeScript language
+on push to `main`, on pull requests, on a weekly schedule, and on manual
+dispatch.
+
+For a static-analysis alert:
 
 1. Read the rule id and the flagged file/line from the run summary.
 2. Reproduce the relevant local check (`pnpm lint`, `pnpm typecheck`) where the
    rule overlaps the repository's own static analysis.
 3. Fix the underlying code; do not suppress the rule to make the scan pass.
+
+### CodeQL upload-failure mode and recovery
+
+The `codeql.yml` job `analyze` holds only `contents: read` plus the minimal
+`security-events: write` scope, which the `Perform CodeQL analysis` step uses
+to upload SARIF results to code scanning.
+
+Failure mode (visible, never silent): when the upload fails — for example
+during a code-scanning outage — the step exits non-zero, the job fails, and
+the run is red on the pull request, commit, or scheduled run. The workflow
+carries no `continue-on-error` and never disables the upload, so a failed
+upload cannot pass as green.
+
+Recovery:
+
+1. Open the failed run and read the `Perform CodeQL analysis` step log to
+   confirm the failure is in the upload, not the analysis itself.
+2. Re-run the failed job from the run page; a transient code-scanning outage
+   usually clears on retry.
+3. If the failure persists, confirm the `analyze` job still declares
+   `security-events: write` and that no repository setting outside this
+   repository revoked the permission; hosted code-scanning availability is
+   external and cannot be verified from repository files.
+4. Never silence the failure with `continue-on-error` or by disabling the
+   upload; a muted security signal is worse than a red run.
 
 ## Analysis report hygiene
 
