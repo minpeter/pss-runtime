@@ -48,7 +48,6 @@ describe("COLD resize layout", () => {
       dispose: (view) => view.dispose(),
     });
     lease.view.appendText(source);
-    lease.view.completeText();
     owner.finish(lease);
     const original = owner.render(width);
     for (width of [100, 48, 120, 24]) {
@@ -171,7 +170,6 @@ describe("COLD resize layout", () => {
       assistantRenderer: renderer,
     });
     view.appendText(paragraph);
-    view.completeText();
     const snapshot = ColdSnapshot.capture(view, 24);
     view.dispose();
     expect(snapshot.render(120)).toEqual(
