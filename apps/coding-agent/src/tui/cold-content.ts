@@ -98,7 +98,12 @@ export const captureComponent = (
   if (component instanceof Spacer) {
     return { kind: "spacer", rows: component.render(width).length };
   }
-  if (component instanceof Container) {
+  // Only inherited Container layout is transparent. Custom render overrides
+  // without an explicit capture contract must keep their real rendered frame.
+  if (
+    component instanceof Container &&
+    component.render === Container.prototype.render
+  ) {
     return {
       kind: "group",
       children: component.children.map((child) =>

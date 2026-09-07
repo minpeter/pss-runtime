@@ -25,12 +25,13 @@ export class ColdSnapshot implements Component {
   }
 
   static capture(component: Component, width: number): ColdSnapshot {
-    const rows = [...component.render(width)];
+    const content = captureComponent(component, width);
+    const rows = renderColdContent(content, width);
     return new ColdSnapshot({
       kind: "selected",
       width,
       rows,
-      content: captureComponent(component, width),
+      content,
     });
   }
 

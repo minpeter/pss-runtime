@@ -6,7 +6,12 @@ import {
 } from "@earendil-works/pi-tui";
 import { parsePartialJson } from "ai";
 import { BodyViewport, renderBodyTail } from "./body-viewport";
-import { type ColdContent, captureStyle, selectTextTail } from "./cold-content";
+import {
+  type ColdContent,
+  captureStyle,
+  hasGraphics,
+  selectTextTail,
+} from "./cold-content";
 import {
   createSpinnerTicker,
   type SpinnerTicker,
@@ -159,6 +164,13 @@ class BackgroundBody {
     if (!this.text.trim()) {
       return { kind: "group", children: [] };
     }
+    if (hasGraphics([this.text])) {
+      return {
+        kind: "fixed",
+        rows: [...this.render(width)],
+        reason: "graphics",
+      };
+    }
     const content = selectTextTail(
       {
         kind: "text",
@@ -200,17 +212,18 @@ class BackgroundBody {
     const leftMargin = " ".repeat(padding);
     const rightMargin = " ".repeat(padding);
 
-    const renderedLines = renderBodyTail([normalizedText], contentWidth).map(
-      (line) => {
-        const lineWithMargins = `${leftMargin}${line}${rightMargin}`;
-        const visLen = visibleWidth(lineWithMargins);
-        const paddedLine = `${lineWithMargins}${" ".repeat(Math.max(0, width - visLen))}`;
+    const renderedLines = renderBodyTail(
+      normalizedText.split("\n"),
+      contentWidth
+    ).map((line) => {
+      const lineWithMargins = `${leftMargin}${line}${rightMargin}`;
+      const visLen = visibleWidth(lineWithMargins);
+      const paddedLine = `${lineWithMargins}${" ".repeat(Math.max(0, width - visLen))}`;
 
-        return this.backgroundEnabled
-          ? this.backgroundFn(paddedLine)
-          : paddedLine;
-      }
-    );
+      return this.backgroundEnabled
+        ? this.backgroundFn(paddedLine)
+        : paddedLine;
+    });
 
     const result = ["", ...renderedLines];
     this.cachedText = this.text;
