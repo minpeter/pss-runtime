@@ -84,6 +84,12 @@ jobs:
       - name: Check tegami entry sections
         run: pnpm check:tegami-notes
 
+      # Workspace shared-dependency drift gate. Deterministic; pinned to
+      # Node 24 like the audit/coverage steps so it runs exactly once.
+      - name: Check workspace version drift
+        if: matrix.node == '24'
+        run: pnpm check:workspace-drift --check
+
       - name: Lint
         run: pnpm lint
 
@@ -131,6 +137,13 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      # Bundle budget gate over the built dist/ artifacts; must run after
+      # the Build step (a missing artifact fails the gate). Deterministic;
+      # pinned to Node 24 so it runs exactly once.
+      - name: Check bundle size budget
+        if: matrix.node == '24'
+        run: pnpm check:bundle-size --check
 
       - name: Check runtime public API snapshot
         run: pnpm api:check
