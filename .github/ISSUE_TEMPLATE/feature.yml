@@ -1,6 +1,8 @@
 name: Feature request
 description: Propose a new capability or enhancement for the runtime or coding agent.
 title: "[Feature]: "
+labels:
+  - "type: feature"
 body:
   - type: markdown
     attributes:
