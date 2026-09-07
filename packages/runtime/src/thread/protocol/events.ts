@@ -117,9 +117,10 @@ export interface ContextUsageEvent extends ContextUsageSnapshot {
 /**
  * One physical provider call attempt inside a single runtime model step.
  *
- * The runtime retries failed streaming and non-streaming calls beneath
- * `streamText` and `generateText`, so a step's `attemptId` can cover several
- * provider requests. These events expose that otherwise invisible fan-out:
+ * On observed model paths, the runtime retries failed streaming and
+ * non-streaming calls beneath `streamText` and `generateText`, so a step's
+ * `attemptId` can cover several provider requests. These events expose that
+ * otherwise invisible fan-out:
  * `attempt` counts from 1 per physical call, while `attemptId` stays fixed for
  * the whole step. End-event duration covers only that provider call and
  * excludes retry backoff. Object models are observed directly. String model

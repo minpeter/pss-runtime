@@ -58,14 +58,20 @@ describe("retry boundaries after a provider response", () => {
           }),
         });
       });
-      await generateModelStepResult({
+      const result = generateModelStepResult({
         history,
         model,
         signal: new AbortController().signal,
         onStreamEvent: (event) => events.push(event),
-      }).catch((caught: unknown) => {
-        expect(caught).toBe(error);
       });
+      if (mode === "stream-error") {
+        await expect(result).rejects.toBe(error);
+      } else {
+        await expect(result).resolves.toMatchObject({
+          messages: expect.any(Array),
+          usage: expect.objectContaining({ type: "model-usage" }),
+        });
+      }
       expect(calls).toBe(1);
       expect(
         events.filter((event) => event.type === "model-retry")
