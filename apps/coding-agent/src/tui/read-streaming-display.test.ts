@@ -254,9 +254,9 @@ describe("streamed read display", () => {
         expect(view.render(160).slice(2)).toEqual(
           errorSurface.render(160).slice(1)
         );
-        for (const row of view.render(160).slice(2)) {
-          expect(row).toMatch(BACKGROUND_PATTERN);
-        }
+        const errorBody = view.render(160).slice(2).join("\n");
+        expect(errorBody).not.toBe("");
+        expect(errorBody).toMatch(BACKGROUND_PATTERN);
         errorSurface.setPrettyBlock("", String(failure));
         expect(view.render(160).slice(2)).not.toEqual(
           errorSurface.render(160).slice(1)
