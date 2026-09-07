@@ -1,3 +1,55 @@
+## @minpeter/pss-runtime@0.3.0-next.18 (next)
+
+### Harden thread and session lifecycle ownership
+
+Retain the authoritative thread handle when deletion fails, and remove the
+destructive behavior of the deprecated `new-session` extension action. Existing
+extensions remain source-compatible, but hosts now ignore that action; use the
+built-in `/new` or `/clear` command for guarded session replacement.
+
+### Surface provider call attempts as runtime events
+
+Emit an ephemeral `model-attempt` agent event for every physical provider call
+in a model step, including retries performed beneath both `streamText` and
+`generateText`. Each event carries the step's `attemptId`, a 1-based `attempt`
+counter, and a start/end phase. The end event reports the outcome and, when
+measurable, the duration of that provider call excluding retry backoff. Failed
+attempts also report a normalized provider error when it can be classified,
+including failures that the AI SDK subsequently retries. Hosts that already
+consume stream events receive these automatically; the committed `model-usage`
+event remains the durable successful-step record. Object models and string ids
+resolved by a configured `AI_SDK_DEFAULT_PROVIDER` are observed. String ids
+resolved through the SDK's implicit gateway emit no attempt events because its
+resolved model and individual retry failures are not exposed.
+
+Extensions can subscribe to the new event through
+`pss.on("model-attempt", ...)`, which previously threw for this event id, and
+headless coding-agent runs forward it on their live NDJSON stream. The event is
+live-only and never lands in durable history or headless result payloads.
+
+### Expose authoritative provider retry scheduling
+
+Add live-only `model-retry` scheduled/started/stopped events with delay, deadline,
+remaining retries, and cancellation or terminal decisions. Runtime-owned provider
+retries preserve the SDK baseline; extensions and NDJSON receive the events without persisting them.
+
+### Workspace source exports
+
+Place the opt-in `@minpeter/pss-source` workspace source condition before `types` in package exports.
+Default published consumers continue to resolve declarations and JavaScript from `dist`.
+
+### Correct provider retry lifecycle
+
+Classify a final non-retryable provider failure before retry exhaustion, and clean up pre-aborted model attempts through the normal finalization path.
+
+### Report rejected tool arguments without executing them
+
+Replace the SDK's source dump for tool calls rejected during input validation with a bounded `INVALID_TOOL_ARGUMENTS` result that states the tool was not executed and asks for smaller writes or edits, distinguishing malformed JSON from schema violations. In pretty mode the card keeps the streamed argument preview instead of the placeholder `{}` and is marked as not executed.
+
+### Preserve model stream failures
+
+Propagate recorded provider stream errors and missing finish events through the turn error path instead of persisting them as successful turns with only `finishReason: "error"`.
+
 ## @minpeter/pss-runtime@0.3.0-next.17 (next)
 
 ### Fail closed on missing checkpoints

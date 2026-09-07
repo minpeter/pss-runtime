@@ -1,41 +1,116 @@
 core:changelogs:
-  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n  npm:@minpeter/pss-extension-web:\n    type: patch\n---\n\n## Cancel in-flight web tool requests\n\nForward coding-agent abort signals to web search and page fetch clients so active network work can stop promptly.\n"
-    filename: 2026-09-03-web-abort-inflight.md
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Harden thread and session lifecycle ownership\n\nRetain the authoritative thread handle when deletion fails, and remove the\ndestructive behavior of the deprecated `new-session` extension action. Existing\nextensions remain source-compatible, but hosts now ignore that action; use the\nbuilt-in `/new` or `/clear` command for guarded session replacement.\n"
+    filename: 2026-09-04-harden-thread-session-lifecycle.md
     v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Re-verify workspace containment at mutation time\n\nWorkspace mutations re-canonicalize the nearest existing ancestor immediately\nbefore writing or deleting, so an intermediate directory swapped for an\nescaping symlink between resolution and mutation now fails closed instead of\nwriting or deleting outside the workspace.\n"
-    filename: 2026-09-03-workspace-symlink-swap.md
+  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Reliable session resume output on exit\n\nReuse the composer separator row for the current session's resume command after bounded turn finalization and runtime cleanup, without an extra rule or blank line. Keep shutdown failures above the final separator and command, including on narrow streaming exits.\n"
+    filename: 2026-09-05-coding-agent-final-resume-block.md
     v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n---\n\n## Fail closed on missing checkpoints\n\nCheckpoint adapters now surface checkpoint corruption when authoritative run metadata references a missing checkpoint, preventing resume from silently restarting at step one.\n"
-    filename: 2026-09-03-checkpoint-fail-closed.md
+  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Show provider retry waits in the TUI footer\n\nRender an active `model-retry` schedule in the existing one-row footer status as\na live countdown with the next attempt number and remaining retry budget. The\nwait clears on retry start, any stop reason, turn end, abort, error, and session\nswitches, and is never written to the transcript.\n"
+    filename: 2026-09-05-coding-agent-retry-wait-status.md
     v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n---\n\n## Keep restarted drain turns successful\n\nWait for a requested queue-drain restart before settling joined callers, so a\nqueued turn cannot receive a failure and then execute anyway.\n"
-    filename: 2026-09-03-drain-restart-race.md
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Surface provider call attempts as runtime events\n\nEmit an ephemeral `model-attempt` agent event for every physical provider call\nin a model step, including retries performed beneath both `streamText` and\n`generateText`. Each event carries the step's `attemptId`, a 1-based `attempt`\ncounter, and a start/end phase. The end event reports the outcome and, when\nmeasurable, the duration of that provider call excluding retry backoff. Failed\nattempts also report a normalized provider error when it can be classified,\nincluding failures that the AI SDK subsequently retries. Hosts that already\nconsume stream events receive these automatically; the committed `model-usage`\nevent remains the durable successful-step record. Object models and string ids\nresolved by a configured `AI_SDK_DEFAULT_PROVIDER` are observed. String ids\nresolved through the SDK's implicit gateway emit no attempt events because its\nresolved model and individual retry failures are not exposed.\n\nExtensions can subscribe to the new event through\n`pss.on(\"model-attempt\", ...)`, which previously threw for this event id, and\nheadless coding-agent runs forward it on their live NDJSON stream. The event is\nlive-only and never lands in durable history or headless result payloads.\n"
+    filename: 2026-09-05-runtime-model-attempt-events.md
     v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n---\n\n## Support web and edge runtime timers\n\nGuard detached compaction timer `unref` calls so numeric web timer handles do not crash summary startup or cleanup.\n"
-    filename: 2026-09-03-edge-timer-unref.md
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Expose authoritative provider retry scheduling\n\nAdd live-only `model-retry` scheduled/started/stopped events with delay, deadline,\nremaining retries, and cancellation or terminal decisions. Runtime-owned provider\nretries preserve the SDK baseline; extensions and NDJSON receive the events without persisting them.\n"
+    filename: 2026-09-05-runtime-model-retry-events.md
     v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n---\n\n## Let the TUI exit while selectors are pending\n\nCancel pending model and session selector waits when exit is requested so catalog loading or an open picker cannot keep the process alive.\n"
-    filename: 2026-09-03-tui-exit-hang.md
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Workspace source exports\n\nPlace the opt-in `@minpeter/pss-source` workspace source condition before `types` in package exports.\nDefault published consumers continue to resolve declarations and JavaScript from `dist`.\n"
+    filename: 2026-09-05-workspace-source-exports.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Freeze completed TUI output\n\nKeep the startup header and completed transcript immutable, with only the latest output block live. Interleaved tools and steering append continuations; extension prompts stay inline, and late renderer callbacks cannot rewrite history.\n"
+    filename: 2026-09-06-cold-hot-transcript-ownership.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Re-layout sealed transcript content on terminal resize\n\nKeep COLD content immutable while text, Markdown tables/code, selected body tails, and startup information re-layout at new widths. Custom views can supply renderer-free snapshots; opaque graphics retain their captured asset and fixed geometry without restarting producers.\n"
+    filename: 2026-09-06-cold-resize-layout.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Clarify edit_file anchor selection\n\nExplicitly disable strict tool generation for edit_file, correct its anchor examples, and explain that unused anchor keys must be omitted entirely. Conflicting anchors still fail without writing, with actionable guidance for retrying.\n"
+    filename: 2026-09-06-edit-file-anchor-omission.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Change\n\nAssistant text still follows its latest eight rendered rows while streaming. On its committed text completion boundary, the active block expands to its full rendered text before becoming an immutable snapshot. Complete tables, code, and verification paragraphs remain in terminal scrollback.\n\n## Boundaries\n\nReasoning and tool bodies remain bounded. Abort, errors, steering, and other handoffs preserve their current partial display rather than marking it complete. Continuations append separately and never reopen older snapshots. Late reasoning completion cannot seal a newer text block. Custom renderers retain their current output and are disposed once after capture.\n"
+    filename: 2026-09-06-final-answer-full-output.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Keep shrinking output cards from lifting the composer\n\nKeep the composer steady when HOT output shrinks by reserving blank rows at the transcript tail. Completed blocks contain only actual content, and subsequent output consumes the shared reserve. Width changes recompute it; canonical messages and files remain unchanged.\n"
+    filename: 2026-09-06-hot-shrink-padding.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Reuse shrinking output's reserved space at the transcript tail\n\nKeep synthetic shrink padding separate from immutable completed output. Following blocks and their normal separators consume the shared trailing reserve before transcript height grows, without removing genuine blank lines, Markdown spacing or graphics reserved rows. Width changes recompute the reserve and transcript resets clear it.\n"
+    filename: 2026-09-06-reusable-hot-padding.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Bounded streaming text bodies\n\nStreaming assistant text, reasoning, and tool text bodies follow the latest eight wrapped terminal rows. Completed assistant text expands fully before becoming immutable; full source content, headers, the composer, and atomic graphical output are preserved.\n"
+    filename: 2026-09-06-stream-inner-scroll.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Progressive tool arguments\n\nShow streamed arguments for every tool in the pretty TUI, including decoded multiline source before execution. Keep raw I/O and completed result/error rendering unchanged.\n"
+    filename: 2026-09-06-tool-input-preview.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Clarify write_file hash preconditions\n\nNew files omit `expected_file_hash`; guarded overwrites copy the exact eight-character lowercase hash from the latest successful `read_file` for the same existing path, without placeholders or null.\nReject malformed hashes (including uppercase, never normalized) as SDK invalid input; `00000000` remains syntactically valid, not a missing-file sentinel.\nDistinct `FILE_HASH_MISMATCH` and `FILE_HASH_TARGET_MISSING` execution errors explain how to proceed without weakening stale-overwrite checks.\n"
+    filename: 2026-09-06-write-file-hash-preconditions.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Preserve CLI startup and status ownership\n\nHonor the selected workspace and startup output stream, clear retry-only labels when no base status exists, and keep detached callbacks from observing expired busy owners.\n"
+    filename: 2026-09-07-cubic-cli-status-ownership.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Preserve transcript and prompt ownership across lifecycle changes\n\nStage session replay before replacing the transcript, finish hidden tool results,\nand stop consuming stale streams. Cancel mounted extension prompts when their\nhost revokes interactive access, restoring composer focus without disturbing replacements.\n"
+    filename: 2026-09-07-cubic-lifecycle-ownership.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Preserve tool graphics and sealed transcript presentation\n\nKeep multiline tool graphics and reserved rows intact, capture completed views and syntax highlighting once, and avoid reflowing ordinary box art as Markdown tables.\n"
+    filename: 2026-09-07-cubic-render-capture.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Report rejected tool arguments without executing them\n\nReplace the SDK's source dump for tool calls rejected during input validation with a bounded `INVALID_TOOL_ARGUMENTS` result that states the tool was not executed and asks for smaller writes or edits, distinguishing malformed JSON from schema violations. In pretty mode the card keeps the streamed argument preview instead of the placeholder `{}` and is marked as not executed.\n"
+    filename: 2026-09-07-invalid-tool-arguments.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Compact new-session notice\n\nShow only the short session selector after `/new` or `/clear`, without repeating the current model and directory.\n"
+    filename: 2026-09-07-new-session-notice.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Separate tool cards from following output\n\nKeep one blank terminal row between tool cards, including empty directory reads, and the following assistant or reasoning block without adding gaps between streamed deltas.\n"
+    filename: 2026-09-07-tool-block-spacing.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Show write paths during argument streaming\n\nShow `write <path>` as soon as a streamed write argument exposes a nonempty path, while preserving the live input preview. Render paths literally and safely in both streaming and completed write headers.\n"
+    filename: 2026-09-07-write-streaming-header.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n---\n\n## Correct provider retry lifecycle\n\nClassify a final non-retryable provider failure before retry exhaustion, and clean up pre-aborted model attempts through the normal finalization path.\n"
+    filename: 2026-09-07-cubic-runtime-retry.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n---\n\n## Preserve model stream failures\n\nPropagate recorded provider stream errors and missing finish events through the turn error path instead of persisting them as successful turns with only `finishReason: \"error\"`.\n"
+    filename: 2026-09-07-stream-error-propagation.md
     v: 0.0.0
 core:packages:
   - changelogIds:
-      - 2026-09-03-web-abort-inflight.md
-      - 2026-09-03-workspace-symlink-swap.md
+      - 2026-09-04-harden-thread-session-lifecycle.md
+      - 2026-09-05-coding-agent-final-resume-block.md
+      - 2026-09-05-coding-agent-retry-wait-status.md
+      - 2026-09-05-runtime-model-attempt-events.md
+      - 2026-09-05-runtime-model-retry-events.md
+      - 2026-09-05-workspace-source-exports.md
+      - 2026-09-06-cold-hot-transcript-ownership.md
+      - 2026-09-06-cold-resize-layout.md
+      - 2026-09-06-edit-file-anchor-omission.md
+      - 2026-09-06-final-answer-full-output.md
+      - 2026-09-06-hot-shrink-padding.md
+      - 2026-09-06-reusable-hot-padding.md
+      - 2026-09-06-stream-inner-scroll.md
+      - 2026-09-06-tool-input-preview.md
+      - 2026-09-06-write-file-hash-preconditions.md
+      - 2026-09-07-cubic-cli-status-ownership.md
+      - 2026-09-07-cubic-lifecycle-ownership.md
+      - 2026-09-07-cubic-render-capture.md
+      - 2026-09-07-invalid-tool-arguments.md
+      - 2026-09-07-new-session-notice.md
+      - 2026-09-07-tool-block-spacing.md
+      - 2026-09-07-write-streaming-header.md
     id: npm:@minpeter/pss-coding-agent
     updated: true
   - id: npm:@minpeter/pss-extension-latex
     updated: false
   - id: npm:@minpeter/pss-extension-mermaid
     updated: false
+  - id: npm:@minpeter/pss-extension-web
+    updated: false
   - changelogIds:
-      - 2026-09-03-web-abort-inflight.md
-    id: npm:@minpeter/pss-extension-web
-    updated: true
-  - changelogIds:
-      - 2026-09-03-checkpoint-fail-closed.md
-      - 2026-09-03-drain-restart-race.md
-      - 2026-09-03-edge-timer-unref.md
-      - 2026-09-03-tui-exit-hang.md
+      - 2026-09-04-harden-thread-session-lifecycle.md
+      - 2026-09-05-runtime-model-attempt-events.md
+      - 2026-09-05-runtime-model-retry-events.md
+      - 2026-09-05-workspace-source-exports.md
+      - 2026-09-07-cubic-runtime-retry.md
+      - 2026-09-07-invalid-tool-arguments.md
+      - 2026-09-07-stream-error-propagation.md
     id: npm:@minpeter/pss-runtime
     updated: true
 npm:packages:
