@@ -105,6 +105,21 @@ jobs:
           fi
           pnpm check:unused
 
+      # jscpd duplicate-code gate. Deterministic; pinned to Node 24 like the
+      # audit/coverage steps. If the jscpd binary is unavailable (or fails to
+      # execute) the step and the wrapper print a documented SKIP message and
+      # exit 0 — never a silent pass, never a workflow failure.
+      - name: Check duplicate code (jscpd)
+        if: matrix.node == '24'
+        shell: bash
+        run: |
+          if [[ ! -x node_modules/.bin/jscpd ]]; then
+            echo "::warning::check:duplicates skipped: the jscpd binary is unavailable; run pnpm install to enable this gate."
+            echo "### check:duplicates skipped: jscpd binary unavailable" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          pnpm check:duplicates
+
       - name: Test
         env:
           PSS_TASK_VALIDATOR_NETWORK_ISOLATED: "1"

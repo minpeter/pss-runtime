@@ -39,6 +39,8 @@
 # diffs only (named, path-scoped allowlist entries; never numeric counts).
 /knip.jsonc                  @minpeter
 /scripts/knip-baseline.json  @minpeter
+/.jscpd.json                  @minpeter
+/scripts/jscpd-baseline.json  @minpeter
 
 # Analysis report output (gitignored local artifacts, never committed).
 /report/                     @minpeter
