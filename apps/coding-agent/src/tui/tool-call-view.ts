@@ -13,6 +13,11 @@ import {
   stylePendingIndicator,
 } from "./pending-spinner";
 import {
+  formatReadHeader,
+  formatWriteHeader,
+  stringField,
+} from "./renderers/utils";
+import {
   SnapshotMarkdown as Markdown,
   SnapshotText as Text,
 } from "./snapshot-views";
@@ -477,6 +482,17 @@ export class BaseToolCallView extends Container {
     );
   }
 
+  private inputPreviewHeader(input: unknown): string {
+    const path = stringField(input, "path");
+    if (path && this.toolName === "write_file") {
+      return formatWriteHeader(path);
+    }
+    if (path && this.toolName === "read_file") {
+      return formatReadHeader(path, input);
+    }
+    return `**${this.toolName || UNKNOWN_TOOL_NAME}** input`;
+  }
+
   private refresh(): void {
     if (this.disposed) {
       return;
@@ -493,7 +509,7 @@ export class BaseToolCallView extends Container {
     // Keep this same preview across the complete-input/execution boundary.
     if (this.shouldRenderInputPreview()) {
       this.setPrettyBlock(
-        `**${this.toolName || UNKNOWN_TOOL_NAME}** input`,
+        this.inputPreviewHeader(bestInput),
         formatInputPreview(bestInput)
       );
       return;

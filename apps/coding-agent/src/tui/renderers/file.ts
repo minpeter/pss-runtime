@@ -2,9 +2,10 @@ import type { BaseToolCallView } from "../tool-call-view";
 import { groupStartLine, parseDiffSection, renderDiffGroup } from "./diff";
 import { highlightCode } from "./highlight";
 import {
+  formatReadHeader,
+  formatWriteHeader,
   isRecord,
   normalizedLines,
-  numberField,
   renderToolError,
   stringField,
 } from "./utils";
@@ -55,17 +56,6 @@ const formatEditHunk = (edit: EditOp): string =>
 const summarizeEdits = (edits: EditOp[]): string =>
   edits.map(formatEditHunk).join("\n\n");
 
-const getReadHeaderSuffix = (input: Record<string, unknown>): string => {
-  const parts: string[] = [];
-  if (numberField(input, "offset") !== undefined) {
-    parts.push(`offset: ${numberField(input, "offset")}`);
-  }
-  if (numberField(input, "limit") !== undefined) {
-    parts.push(`limit: ${numberField(input, "limit")}`);
-  }
-  return parts.length > 0 ? ` (${parts.join(", ")})` : "";
-};
-
 export const renderReadFile = (
   view: BaseToolCallView,
   input: unknown,
@@ -84,7 +74,7 @@ export const renderReadFile = (
 
   const outputText = typeof output === "string" ? output : undefined;
   const isDirectory = outputText?.startsWith("OK - directory") === true;
-  const header = `**read${isDirectory ? " dir" : ""}** \`${path}\`${getReadHeaderSuffix(input)}`;
+  const header = formatReadHeader(path, input, isDirectory);
 
   if (outputText === undefined) {
     view.setPrettyBlock(header, "");
@@ -125,7 +115,7 @@ export const renderWriteFile = (
   }
 
   view.setPrettyBlock(
-    `**write** \`${path}\``,
+    formatWriteHeader(path),
     typeof output === "string" && output.startsWith("OK - wrote")
       ? normalizedLines(content).join("\n")
       : ""
