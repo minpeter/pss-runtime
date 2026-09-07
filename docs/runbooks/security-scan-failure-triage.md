@@ -3,6 +3,26 @@
 Use this runbook when a security scan reports a finding. All triage here is
 local or read from committed files; it never touches an external service.
 
+## Workflow secret policy
+
+The security workflows — CodeQL, gitleaks, and ZAP — reference no authored
+repository or environment secrets: no `secrets.*` context appears anywhere in
+those workflow files, and they never set a provider or Telegram credential
+env var (`AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL`, `WORKER_AGENT_TUI_*`,
+`TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET_TOKEN`). None of the checks
+these workflows run needs a credential for this repository, so a missing
+credential can never silently pass or fail them.
+
+The auto-injected `github.token` context is not an authored secret reference
+and is explicitly permitted, but only as an env value consumed by a tool; it
+must never be printed, echoed, or logged from a `run:` step, and it never
+appears in step `with:` inputs either. Secret values exist only as env values
+consumed by tools, never in step output. The invariant test
+`scripts/security-workflow-secrets.test.mjs` enforces this policy over every
+workflow file, and the credential-gated suites in
+`extended-verification.yml` stay behind the visible `secret-gate` job
+instead of touching the security workflows.
+
 ## Secret detection
 
 The repository scans for committed secrets in two layers: a deterministic
