@@ -542,8 +542,13 @@
     "duplicates:packages/runtime/src/thread/state/thread-state-compaction-conflict-suffix.test.ts:75-91=packages/runtime/src/thread/state/thread-state-compaction.test.ts:15-31",
     "duplicates:packages/runtime/src/thread/state/thread-state-migrations.test.js:19-32=packages/runtime/src/thread/state/thread-state-migrations.test.js:202-215",
     "duplicates:packages/runtime/src/thread/state/thread-state-refresh.test.ts:177-185=packages/runtime/src/thread/state/thread-state-refresh.test.ts:97-105",
+    "duplicates:scripts/check-bundle-size.mjs:130-144=scripts/check-workspace-version-drift.mjs:110-124",
+    "duplicates:scripts/check-bundle-size.mjs:130-145=scripts/check-duplicates.mjs:204-219",
+    "duplicates:scripts/check-bundle-size.mjs:60-91=scripts/check-workspace-version-drift.mjs:52-83",
+    "duplicates:scripts/check-duplicates.mjs:173-186=scripts/check-workspace-version-drift.mjs:85-98",
     "duplicates:scripts/check-duplicates.mjs:174-195=scripts/check-unused.mjs:118-139",
     "duplicates:scripts/check-duplicates.mjs:195-221=scripts/check-unused.mjs:139-165",
+    "duplicates:scripts/check-duplicates.mjs:205-222=scripts/check-unused.mjs:149-166",
     "duplicates:scripts/check-duplicates.mjs:93-110=scripts/check-unused.mjs:67-84",
     "duplicates:scripts/check-duplicates.test.mjs:126-142=scripts/check-unused.test.mjs:111-127",
     "duplicates:scripts/check-duplicates.test.mjs:161-174=scripts/check-unused.test.mjs:146-159",
@@ -551,6 +556,7 @@
     "duplicates:scripts/dependabot-config.mjs:8-29=scripts/release-age-policy.mjs:10-31",
     "duplicates:scripts/governance-contributing.mjs:47-61=scripts/governance-security.mjs:63-77",
     "duplicates:scripts/jscpd-duplicates.test.mjs:58-77=scripts/knip-unused.test.mjs:54-73",
+    "duplicates:scripts/report-hygiene.mjs:186-191=scripts/test-timing.mjs:164-169",
     "duplicates:scripts/verify-release-artifacts-runtime-subagent.test.mjs:12-25=scripts/verify-release-artifacts/runtime-public-surface.mjs:249-262",
     "duplicates:scripts/verify-release-artifacts/runtime-public-surface.mjs:217-222=scripts/verify-release-artifacts/runtime-public-surface.mjs:241-246"
   ]
