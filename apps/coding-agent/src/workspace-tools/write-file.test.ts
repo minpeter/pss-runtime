@@ -137,6 +137,47 @@ describe("write_file hash preconditions", () => {
     });
   });
 
+  it("rejects truncated JSON before invoking write_file", async () => {
+    const definition = createWriteFileTool(workspace);
+    const execute = vi.fn(executeWrite(workspace));
+    const result = await generateText({
+      model: new MockLanguageModelV4({
+        doGenerate: {
+          content: [
+            {
+              type: "tool-call",
+              toolCallId: "truncated-write",
+              toolName: "write_file",
+              input: '{"path":"index.html","content":"partial\\\\"',
+            },
+          ],
+          finishReason: { raw: "length", unified: "length" },
+          usage: {
+            inputTokens: {
+              cacheRead: undefined,
+              cacheWrite: undefined,
+              noCache: 1,
+              total: 1,
+            },
+            outputTokens: { reasoning: undefined, text: 29_346, total: 29_346 },
+          },
+          warnings: [],
+        },
+      }),
+      prompt: "Run the fixture tool call.",
+      tools: { write_file: { ...definition, execute } },
+    });
+
+    expect(result.toolCalls[0]).toMatchObject({
+      input: {},
+      invalid: true,
+      error: { name: "AI_InvalidToolInputError" },
+    });
+    expect(execute).not.toHaveBeenCalled();
+    expectNoMutations();
+    expect(await original.readdir(workspace)).toEqual([]);
+  });
+
   it.each([
     ".invalid",
     ". . . . ",

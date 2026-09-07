@@ -70,6 +70,14 @@ const formatInputPreview = (value: unknown): string => {
     .join("\n");
 };
 
+const isInvalidArgumentsError = (
+  value: unknown
+): value is Record<string, unknown> =>
+  typeof value === "object" &&
+  value !== null &&
+  "code" in value &&
+  value.code === "INVALID_TOOL_ARGUMENTS";
+
 const isPlainEmptyObject = (value: unknown): boolean => {
   if (typeof value !== "object" || value === null) {
     return false;
@@ -493,6 +501,36 @@ export class BaseToolCallView extends Container {
     return `**${this.toolName || UNKNOWN_TOOL_NAME}** input`;
   }
 
+  private renderInvalidArguments(error: Record<string, unknown>): void {
+    // SDK's final {} is a placeholder, not the rejected arguments. Never feed
+    // a partially parsed value to a success/custom result renderer.
+    const safeInput = sanitizeTerminalText(this.inputBuffer);
+    const preview =
+      safeInput.length <= 300
+        ? safeInput.replaceAll("\n", "\\n")
+        : [
+            `End: ${safeInput.slice(-120).replaceAll("\n", "\\n")}`,
+            "… [preview truncated] …",
+            `Start: ${safeInput.slice(0, 120).replaceAll("\n", "\\n")}`,
+          ].join("\n");
+    const message =
+      typeof error.message === "string"
+        ? sanitizeTerminalText(error.message)
+        : "Tool arguments are invalid or incomplete.";
+    this.setPrettyBlock(
+      `**${this.toolName || UNKNOWN_TOOL_NAME}** - invalid arguments (not executed)`,
+      [
+        error.kind === "schema-validation"
+          ? "Input preview (schema validation failed):"
+          : "Input preview (invalid/incomplete JSON):",
+        preview || "No streamed argument preview available.",
+        "",
+        `INVALID_TOOL_ARGUMENTS: ${message}`,
+      ].join("\n"),
+      { isError: true }
+    );
+  }
+
   private refresh(): void {
     if (this.disposed) {
       return;
@@ -503,6 +541,10 @@ export class BaseToolCallView extends Container {
     }
 
     const bestInput = this.resolveBestInput();
+    if (isInvalidArgumentsError(this.error)) {
+      this.renderInvalidArguments(this.error);
+      return;
+    }
 
     // Own streamed arguments until a result/error arrives: result renderers may
     // intentionally claim an empty body, or require fields not yet received.
