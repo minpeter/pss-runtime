@@ -1,0 +1,60 @@
+name: gitleaks
+
+# gitleaks secret scan (VAL-SEC-029..032). Bounded triggers only: push to
+# main, pull requests, a weekly schedule, and manual dispatch. The workflow
+# and job hold contents: read and no other scope.
+#
+# Scan scope: FULL GIT HISTORY. The checkout fetches every commit
+# (fetch-depth: 0) and the scan step runs `gitleaks git` with no --log-opts
+# restriction, so every commit reachable from the checked-out ref is scanned
+# on every trigger, not just the event's commit range. Rationale: a secret
+# that was committed and later edited out of the working tree still leaks
+# until it is rotated, so a working-tree-only scan would report the
+# repository as clean while history still exposes the value. The same scope
+# and rationale, the failure mode, and finding triage are recorded in
+# docs/runbooks/security-scan-failure-triage.md.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly, Wednesday 04:17 UTC.
+    - cron: "17 4 * * 3"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Scan git history for secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      # Pinned release, checksum-verified before execution. The scan needs
+      # no credentials for this repository, so this workflow references no
+      # secrets.* value anywhere (VAL-SEC-033/057).
+      - name: Install gitleaks
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz" -o gitleaks.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+
+      # Any finding makes gitleaks exit non-zero, which fails this step, the
+      # job, and the run: no continue-on-error here or on the job, and no
+      # suppression beyond the committed .gitleaks.toml allowlist. Findings
+      # are printed redacted in the step log; triage follows
+      # docs/runbooks/security-scan-failure-triage.md.
+      - name: Scan full git history (gitleaks git)
+        run: ./gitleaks git --config .gitleaks.toml --redact --verbose .

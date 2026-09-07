@@ -3,21 +3,13 @@
 // files: workflow YAML parsing plus a runbook text scan. No network, no
 // ports, no writes, no clock.
 
-import { triggerSet } from "./flaky-ci.mjs";
 import { parseWorkflowDocs } from "./workflow-docs.mjs";
+import { boundedTriggerProblems } from "./workflow-triggers.mjs";
 
 export const CODEQL_WORKFLOW_FILE = "codeql.yml";
 export const CODEQL_WORKFLOW_PATH = `.github/workflows/${CODEQL_WORKFLOW_FILE}`;
 export const SECURITY_RUNBOOK_PATH =
   "docs/runbooks/security-scan-failure-triage.md";
-
-// Bounded trigger set for the CodeQL workflow (VAL-SEC-028).
-const ALLOWED_TRIGGERS = new Set([
-  "push",
-  "pull_request",
-  "schedule",
-  "workflow_dispatch",
-]);
 
 // Language identifiers that CodeQL accepts for the JavaScript/TypeScript
 // language (`javascript` and `typescript` are legacy aliases of the same
@@ -54,28 +46,7 @@ function languageList(initStep) {
 }
 
 function triggerProblems(path, doc) {
-  const triggers = triggerSet(doc?.on);
-  const problems = [];
-  if (triggers.length === 0) {
-    problems.push(`${path} declares no triggers`);
-    return problems;
-  }
-  for (const trigger of triggers) {
-    if (!ALLOWED_TRIGGERS.has(trigger)) {
-      problems.push(
-        `${path} triggers on "${trigger}", outside the bounded set {push, pull_request, schedule, workflow_dispatch}`
-      );
-    }
-  }
-  // A push trigger must be bounded to the main branch, never every branch.
-  const push = doc?.on?.push;
-  if (triggers.includes("push")) {
-    const branches = Array.isArray(push?.branches) ? push.branches : [];
-    if (!branches.includes("main")) {
-      problems.push(`${path} push trigger is not bounded to the main branch`);
-    }
-  }
-  return problems;
+  return boundedTriggerProblems(path, doc);
 }
 
 // Effective permissions of the analyze job: a job-level block replaces the

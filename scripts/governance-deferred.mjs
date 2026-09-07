@@ -71,13 +71,13 @@ export const REQUIRED_ITEMS = [
   },
 ];
 
-// Substitute artifacts committed by the later security/Worker-operations
-// milestone. A cited path may be absent only if it is listed here AND the
-// citing section marks it pending (VAL-GOV-055 ordering tolerance).
-export const PENDING_ARTIFACTS = [
-  ".github/workflows/gitleaks.yml",
-  ".github/workflows/codeql.yml",
-];
+// Substitute artifacts a later milestone has not committed yet. A cited path
+// may be absent only if it is listed here AND the citing section marks it
+// pending (VAL-GOV-055 ordering tolerance). Both security-milestone
+// substitute workflows (codeql.yml, gitleaks.yml) exist in the repository
+// now, so the list is empty; re-add an entry only while the cited artifact
+// is genuinely absent from the tree.
+export const PENDING_ARTIFACTS = [];
 
 const ITEM_HEADING = /^###\s+\d+\.\s+(.*\S)\s*$/;
 const H2_HEADING = /^##\s/;
