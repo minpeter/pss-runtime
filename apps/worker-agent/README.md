@@ -62,3 +62,47 @@ Accept: text/event-stream
 ```
 
 The stream replays committed events after `after` before waiting for newly committed events. Each `thread-event` frame has the serialized cursor as its SSE `id` and a `StoredThreadEvent` JSON object as `data`. `streamRemoteSessionEvents()` reconnects a dropped response with its last received cursor. SSE is an optimization only: clients must retain cursor-polling replay as the deployment-neutral fallback.
+
+## Coverage gate
+
+The Worker package owns its coverage gate, independent of the root core-only
+coverage config (`vitest.coverage.config.ts` covers only `packages/runtime`
+and `apps/coding-agent` and never references this package). Run it with:
+
+```bash
+pnpm --filter @minpeter/pss-worker-agent test:coverage
+```
+
+The gate is declared in `vitest.config.ts` under `coverage` and reports to the
+gitignored `coverage/worker/` directory. Its scope is explicit: it measures
+`src/**/*.ts` and excludes tests (`*.test.ts`, `*.test-support.ts`), the
+`src/testing/` test shims (`cloudflare:workers`, `agents`, and image-codecs
+stubs), and generated files (`*.d.ts`, `*.generated.ts`).
+
+Minimum thresholds (percent): statements 50, branches 45, functions 48,
+lines 50.
+
+**What the minimum covers.** The floor is calibrated a few points below the
+measured coverage of the existing suite so the gate is meaningful without
+being flaky. That suite exercises the additive Worker surface end to end
+without external services: the session contract and replay paths, the SSE
+event stream, tRPC auth and dispatch, Telegram delivery and fragment
+coalescing, attachment limits, and the OpenTelemetry metrics instrumentation
+in `src/observability.ts` and `src/agent/agent-otel.ts`. When milestone 4 adds
+the `/healthz` route and request/turn metrics handlers, those
+health/metrics/contract paths join the same include set and the floor is
+re-baselined upward, never removed.
+
+**Why not zero.** A zero or undeclared threshold passes even if the suite
+stops exercising the Worker surface at all, which would let the transport,
+privacy, and (once landed) health/metrics paths regress uncovered without any
+signal. A non-zero floor guarantees two things: new source files enter the
+measured include set instead of silently escaping it, and a deleted or
+neutered test file drops measured coverage below the floor and fails the run.
+The run exits 0 at or above the thresholds and non-zero below them, naming
+the uncovered files and ranges.
+
+The coverage run uses only the existing Node-environment test shims: it never
+starts Wrangler dev, never calls a real provider or Telegram, and opens no
+network port, so it also passes under
+`PSS_TASK_VALIDATOR_NETWORK_ISOLATED=1`.

@@ -24,6 +24,7 @@
     "preship:worker": "pnpm -F @minpeter/pss-runtime build",
     "ship:worker": "wrangler deploy --env=\"\"",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "tui": "tsx --conditions=@minpeter/pss-source src/tui/tui.ts",
     "pretypecheck": "pnpm -F @minpeter/pss-runtime build",
     "typecheck": "tsc -p tsconfig.json --noEmit"
