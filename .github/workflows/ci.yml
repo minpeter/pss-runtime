@@ -137,3 +137,20 @@ jobs:
 
       - name: Verify release artifacts
         run: pnpm verify:release
+
+      # Test-timing producer (VAL-SEC-024): runs the deterministic scripts
+      # invariant suite through the Vitest JSON reporter and normalizes it to
+      # report/test-timing.json (gitignored, never committed), uploaded below
+      # as a bounded artifact. Pinned to Node 24 like the other single-leg
+      # steps so the artifact is produced and uploaded exactly once.
+      - name: Produce test-timing report
+        if: matrix.node == '24'
+        run: pnpm test:timing
+
+      - name: Upload test-timing report
+        if: matrix.node == '24'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-timing
+          path: report/test-timing.json
+          retention-days: 7
