@@ -5,12 +5,55 @@ local or read from committed files; it never touches an external service.
 
 ## Secret detection
 
-The repository has a deterministic secret-pattern scan that runs inside the
-`ci.yml` job `checks` (in the `Test` step, collected by `pnpm test`). A dedicated
-gitleaks secret-scan workflow remains planned and deferred until the security
-milestone adds it; do not assume it is configured yet.
+The repository scans for committed secrets in two layers: a deterministic
+secret-pattern scan that runs inside the `ci.yml` job `checks` (in the `Test`
+step, collected by `pnpm test`), and the `gitleaks.yml` workflow, which runs
+the gitleaks binary over the repository checkout.
 
-When a secret-pattern check fails:
+### gitleaks history scan
+
+The `gitleaks.yml` workflow runs on push to `main`, on pull requests, on a
+weekly schedule, and on manual dispatch. Its job `scan` holds only
+`contents: read` and no other scope.
+
+Scan scope: full git history. The checkout step fetches every commit
+(`fetch-depth: 0`) and the step `Scan full git history (gitleaks git)` runs
+`gitleaks git` with no `--log-opts` restriction, so every commit reachable
+from the checked-out ref is scanned on every trigger, not just the event's
+commit range. Rationale: a secret that was committed and later edited out of
+the working tree still leaks until it is rotated, so a working-tree-only
+scan would report a clean tree while history still exposes the value. The
+workflow file records the same scope and rationale in its header comment.
+
+Output and failure mode: gitleaks prints each finding redacted in the step
+log and exits non-zero, which fails the step, the job, and the run. The scan
+step carries no `continue-on-error`, and the workflow never suppresses
+findings beyond the committed allowlist in `.gitleaks.toml`.
+
+Local availability: the gitleaks binary is not installed on the reference
+development host, and a local run is not required. When the binary is
+absent, local validation is the deterministic secret-pattern scan in
+`pnpm test` plus the static workflow/config invariants in
+`scripts/security-gitleaks.test.mjs`; the CI workflow run is the gitleaks
+execution path. Never claim a local gitleaks result without actually running
+the binary.
+
+Triage when the scan fails:
+
+1. Open the failed run and read the `Scan full git history (gitleaks git)`
+   step log; each finding names the rule, file, and commit with the secret
+   value redacted.
+2. True positive: treat the secret as compromised. Rotate it out of band in
+   the owning service — rotation never happens from this repository — then
+   follow [../../SECURITY.md](../../SECURITY.md) for private reporting if the
+   exposure came from a contributor report.
+3. False positive: add a specific, anchored path or a narrow placeholder
+   regex to the allowlist in `.gitleaks.toml`, matching the existing entries
+   for the example env files. Never add a catch-all path or regex; the
+   invariant test rejects broad suppressions.
+4. Re-run the workflow (or push the fix) and confirm the run goes green.
+
+When the deterministic secret-pattern check fails:
 
 1. Reproduce locally with `pnpm test` (or run the focused governance invariants
    with `TMPDIR="$PWD/.omo/tmp" ./node_modules/.bin/vitest run

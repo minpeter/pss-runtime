@@ -27,7 +27,6 @@ const gh = (inner) => `$${"{{"} ${inner} }}`;
 
 const ROLLBACK_SECTION = /### \d+\. Automated rollback[\s\S]*?(?=### \d+\.)/;
 const BRANCH_SECTION_HEADING = /branch-protection enforcement/i;
-const PENDING_NOTE = /\s*\(pending[^)]*\)/g;
 
 const doc = readDoc(DEFERRED_DOC);
 
@@ -82,10 +81,12 @@ describe("governance: deferred controls map to repo-local substitutes (VAL-GOV-0
     expect(substituteProblems(doc)).toEqual([]);
   });
 
-  it("tolerates only allowlisted pending artifacts, marked pending", () => {
-    for (const pending of PENDING_ARTIFACTS) {
-      expect(doc).toContain(pending);
-    }
+  it("has no pending substitute artifacts left; both security workflows exist and are cited", () => {
+    // The security milestone landed codeql.yml and gitleaks.yml, so the
+    // ordering-tolerance list is empty and the doc cites the real files.
+    expect(PENDING_ARTIFACTS).toEqual([]);
+    expect(doc).toContain(".github/workflows/codeql.yml");
+    expect(doc).toContain(".github/workflows/gitleaks.yml");
   });
 
   it("fails on an uncited substitute or a nonexistent artifact", () => {
@@ -104,12 +105,15 @@ describe("governance: deferred controls map to repo-local substitutes (VAL-GOV-0
     ).toBe(true);
   });
 
-  it("fails on a pending artifact without the pending marker", () => {
-    const pending = PENDING_ARTIFACTS[0];
-    const unmarked = doc.replaceAll(PENDING_NOTE, "");
-    expect(unmarked).toContain(pending);
+  it("fails on an absent cited artifact even when marked pending", () => {
+    // With the pending-allowlist empty, a nonexistent citation fails as
+    // "does not exist" no matter what marker the section carries.
+    const ghost = doc.replace(
+      "`.github/workflows/gitleaks.yml`",
+      "`.github/workflows/ghost-scan.yml` (pending: test fixture)"
+    );
     expect(
-      substituteProblems(unmarked).some((p) => p.includes("not marked pending"))
+      substituteProblems(ghost).some((p) => p.includes("does not exist"))
     ).toBe(true);
   });
 });

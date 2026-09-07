@@ -1,0 +1,27 @@
+title = "PSS Runtime gitleaks config"
+
+# Extend the built-in gitleaks rule set. Dropping useDefault would replace
+# the default rules with nothing, which is a suppression this config never
+# makes (VAL-SEC-031).
+[extend]
+useDefault = true
+
+# Explicit allowlist for known false positives (VAL-SEC-031). Every entry is
+# an anchored path naming a concrete file, or a narrow placeholder regex.
+# There is intentionally no catch-all path or regex: an unexpected finding
+# must fail the scan, never pass silently. Triage instructions live in
+# docs/runbooks/security-scan-failure-triage.md.
+[allowlist]
+description = "Committed placeholder example files and ellipsis placeholder values"
+paths = [
+  '''^\.env\.example$''',
+  '''^apps/worker-agent/\.dev\.vars\.example$''',
+  '''^examples/evals/\.env\.example$''',
+]
+regexes = [
+  # Ellipsis placeholders of the shape NAME=... used in the example env
+  # files and docs (e.g. AI_API_KEY=...); a real value never matches.
+  '''^[A-Z0-9_]+(API_KEY|TOKEN|SECRET)=\.\.\.$''',
+]
+# The regex above describes a whole assignment line, not the matched secret.
+regexTarget = "line"
