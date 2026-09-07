@@ -45,6 +45,42 @@ for await (const event of turn.events()) {
 `step-start`, and `step-end` until the consumer continues, so consume the
 events to let the turn progress.
 
+## Development
+
+Requires Node 24 and pnpm 11.9; run `pnpm install --frozen-lockfile` after
+cloning. The local quality gate runs entirely offline:
+
+- `pnpm lint` / `pnpm typecheck` — static analysis and project checks.
+- `pnpm test` — package tests plus the repository invariant suite.
+- `pnpm build` / `pnpm coverage` — full workspace build and the coverage gate.
+- `pnpm api:check` / `pnpm verify:edge` — runtime API snapshot check and the
+  Worker edge-bundle dry run.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the QA and evidence rules and the
+[operational runbooks](docs/runbooks/README.md) for CI triage, release, and
+local Worker validation procedures.
+
+## Operational boundaries
+
+Some readiness controls are external-only: they cannot be configured or
+verified from repository files or local commands, so this repository documents
+them as deferred rather than claiming them as active:
+
+- Branch protection enforcement on GitHub is deferred and external; the
+  repository ships advisory [CODEOWNERS](.github/CODEOWNERS) instead.
+- Native GitHub secret scanning is deferred and external; the repository-local
+  substitute is the deterministic secret-pattern scan collected by
+  `pnpm test`.
+- Hosted analytics and hosted error tracking such as Sentry are deferred and
+  external, and hosted alerting such as PagerDuty is likewise deferred; no
+  hosted backend is wired up here.
+- Progressive rollout and automated rollback are deferred and external;
+  releases follow the [release runbook](docs/runbooks/release-procedure.md)
+  only.
+- Production deployment and health monitoring of the Worker are deferred and
+  external; the local counterpart is the
+  [worker-health runbook](docs/runbooks/worker-health.md).
+
 ## Security
 
 Found a vulnerability? Follow the [security policy](SECURITY.md) to report it
