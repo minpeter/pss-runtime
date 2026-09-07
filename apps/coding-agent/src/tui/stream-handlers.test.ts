@@ -75,6 +75,45 @@ function createState(overrides: Partial<PiTuiStreamState> = {}): {
 }
 
 describe("stream-handlers", () => {
+  it("finishes hidden tool results without mounting a continuation or keeping its ticker", async () => {
+    vi.useFakeTimers();
+    const { state } = createState();
+    state.flags.showToolResults = false;
+    const view = state.ensureToolView("hidden", "fixture");
+    state.finishToolView = vi.fn(() => {
+      view.settle();
+      view.dispose();
+    });
+    const ensure = vi.spyOn(state, "ensureToolView");
+    try {
+      await STREAM_HANDLERS["tool-input-start"](
+        {
+          type: "tool-input-start",
+          toolCallId: "hidden",
+          toolName: "fixture",
+        },
+        state
+      );
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+      ensure.mockClear();
+      handleToolResult(
+        {
+          type: "tool-result",
+          toolCallId: "hidden",
+          toolName: "fixture",
+          output: "HIDDEN_RESULT",
+        },
+        state
+      );
+      expect(state.finishToolView).toHaveBeenCalledExactlyOnceWith("hidden");
+      expect(ensure).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      view.dispose();
+      vi.useRealTimers();
+    }
+  });
+
   it("renders tool approval requests instead of ignoring them", () => {
     const { chatContainer, state } = createState();
 

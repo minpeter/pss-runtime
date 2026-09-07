@@ -279,7 +279,9 @@ describe.sequential("new session notices through startTui", () => {
       const header = lines(surface().children[0]);
       const previousKey = config.currentSession?.().key;
       await command("/name PREVIOUS_SESSION");
-      const reset = vi.spyOn(TranscriptOwner.prototype, "reset");
+      const transcript = surface().children[1] as TranscriptOwner;
+      const previousEpoch = transcript.epoch;
+      const reset = vi.spyOn(transcript, "reset");
       const newCommand = config.commands?.find((item) => item.name === "new");
       if (!newCommand) {
         throw new Error("Missing new command");
@@ -295,6 +297,8 @@ describe.sequential("new session notices through startTui", () => {
       }
       expect(current.key).not.toBe(previousKey);
       expect(reset).toHaveBeenCalledExactlyOnceWith("session-navigation");
+      expect(surface().children[1]).toBe(transcript);
+      expect(transcript.epoch).toBe(previousEpoch + 1);
       const result = await execute.mock.results[0]?.value;
       if (!result?.message) {
         throw new Error("Missing new-session result");
@@ -326,6 +330,7 @@ describe.sequential("new session notices through startTui", () => {
       await command("/refresh-test");
       expect(lines()).toEqual(before);
       expect(reset).toHaveBeenCalledTimes(1);
+      expect(transcript.epoch).toBe(previousEpoch + 1);
     }
   );
 });

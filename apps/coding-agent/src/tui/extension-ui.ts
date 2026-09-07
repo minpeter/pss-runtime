@@ -71,31 +71,41 @@ interface UiOptions {
 
 export function createExtensionUi(options: UiOptions): CodingAgentExtensionUi {
   const ui: CodingAgentExtensionUi = {
-    confirm: async (message) =>
-      (await selectValue(options, {
-        label: message,
-        options: [
-          { label: "Confirm", value: "confirm" },
-          { label: "Cancel", value: "cancel" },
-        ],
-      })) === "confirm",
-    input: async ({ initialValue, label }) => {
+    confirm: async (message, signal) =>
+      (await selectValue(
+        options,
+        {
+          label: message,
+          options: [
+            { label: "Confirm", value: "confirm" },
+            { label: "Cancel", value: "cancel" },
+          ],
+        },
+        signal
+      )) === "confirm",
+    input: async ({ initialValue, label }, signal) => {
       if (options.signal.aborted) {
         return;
       }
       const input = new Input();
       input.setValue(initialValue ?? "");
-      return await prompt(options, requiredLabel(label), input, (settle) => {
-        input.onEscape = () => settle(undefined);
-        input.onSubmit = settle;
-      });
+      return await prompt(
+        options,
+        requiredLabel(label),
+        input,
+        (settle) => {
+          input.onEscape = () => settle(undefined);
+          input.onSubmit = settle;
+        },
+        signal
+      );
     },
     notify: (message) => {
       if (!options.signal.aborted) {
         options.showMessage(sanitizeTerminalText(message));
       }
     },
-    select: async (input) => await selectValue(options, input),
+    select: async (input, signal) => await selectValue(options, input, signal),
     status: (message) =>
       options.signal.aborted
         ? () => undefined
@@ -108,9 +118,14 @@ async function prompt(
   options: UiOptions,
   label: string,
   input: Component,
-  configure: (settle: (value: string | undefined) => void) => void
+  configure: (settle: (value: string | undefined) => void) => void,
+  requestSignal?: AbortSignal
 ): Promise<string | undefined> {
-  const signal = options.promptSignal?.() ?? options.signal;
+  const signal = AbortSignal.any([
+    options.signal,
+    ...(options.promptSignal ? [options.promptSignal()] : []),
+    ...(requestSignal ? [requestSignal] : []),
+  ]);
   if (signal.aborted) {
     return;
   }
@@ -140,7 +155,8 @@ async function prompt(
 
 async function selectValue(
   options: UiOptions,
-  input: Parameters<CodingAgentExtensionUi["select"]>[0]
+  input: Parameters<CodingAgentExtensionUi["select"]>[0],
+  signal?: AbortSignal
 ): Promise<string | undefined> {
   if (options.signal.aborted) {
     return;
@@ -173,10 +189,16 @@ async function selectValue(
     };
   });
   const list = new SelectList(items, 8, selectTheme);
-  return await prompt(options, label, list, (settle) => {
-    list.onCancel = () => settle(undefined);
-    list.onSelect = (selected) => settle(selected.value);
-  });
+  return await prompt(
+    options,
+    label,
+    list,
+    (settle) => {
+      list.onCancel = () => settle(undefined);
+      list.onSelect = (selected) => settle(selected.value);
+    },
+    signal
+  );
 }
 
 function requiredLabel(value: string): string {
