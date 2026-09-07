@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { LOCKFILE_TOKENS, REQUIRED_IGNORE_TOKENS } from "./knip-unused.mjs";
+import { reportTool } from "./report-paths.mjs";
 
 // Shared jscpd duplicate-code check helpers (VAL-SEC-002..007 for the jscpd
 // leg). Pure and static: no network, no ports, no writes, no clock. The
@@ -10,7 +11,10 @@ import { LOCKFILE_TOKENS, REQUIRED_IGNORE_TOKENS } from "./knip-unused.mjs";
 
 export const JSCPD_CONFIG_PATH = ".jscpd.json";
 export const JSCPD_BASELINE_PATH = "scripts/jscpd-baseline.json";
-export const JSCPD_REPORT_PATH = "report/jscpd-duplicates.json";
+// Report destination comes from the canonical registry
+// (scripts/report-paths.mjs, VAL-SEC-008); the entry cap is the shared
+// REPORT_ENTRY_CAP exported by scripts/knip-unused.mjs.
+export const JSCPD_REPORT_PATH = reportTool("jscpd").path;
 export const JSCPD_RAW_REPORT_NAME = "jscpd-report.json";
 
 // experimental/ and examples/ stay analyzed; their accepted duplicate

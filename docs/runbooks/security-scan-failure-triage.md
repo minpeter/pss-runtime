@@ -33,6 +33,33 @@ For a static-analysis alert (for example from the planned CodeQL workflow):
    rule overlaps the repository's own static analysis.
 3. Fix the underlying code; do not suppress the rule to make the scan pass.
 
+## Analysis report hygiene
+
+Every analysis tool (Knip, jscpd, workspace drift, bundle budget, test timing,
+flaky detection) writes its report to a gitignored path — under `report/` (or
+the `.omo/` / `.senpi/` agent workspaces) — and never to a tracked file. After
+any analysis run, `git status` must stay free of report files; if one appears,
+the `.gitignore` coverage regressed and must be restored before committing.
+
+Each tool caps its report at a documented maximum entry count, declared in the
+canonical registry `scripts/report-paths.mjs` and enforced by
+`scripts/report-hygiene.test.mjs`. A noisy run truncates at the cap and adds a
+`note` field naming it, so reports stay reviewable and bounded in size:
+
+| Tool | Report producer | Cap (entries) |
+| ---- | --------------- | ------------- |
+| Knip unused code | `check:unused:report` | 500 |
+| jscpd duplicates | `check:duplicates:report` | 500 |
+| Workspace drift | `check:workspace-drift` | 200 |
+| Bundle budget | `check:bundle-size` | 100 |
+| Test timing | `test:timing` | 10000 |
+| Flaky detection | scheduled workflow | 1000 |
+
+Gate-mode reports (Knip, jscpd, drift, bundle budget) are local-only: CI runs
+the gate, and the report is regenerated on demand. CI-only reports (test
+timing, flaky detection) are uploaded as workflow artifacts with an explicit,
+bounded `retention-days` and are never committed.
+
 ## Boundaries
 
 Native GitHub secret scanning and any hosted scanning or alerting service are

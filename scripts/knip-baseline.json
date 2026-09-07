@@ -38,6 +38,7 @@
     "devDependencies:package.json#@xterm/xterm",
     "devDependencies:package.json#dotenv",
     "devDependencies:package.json#eslint",
+    "devDependencies:package.json#jscpd",
     "devDependencies:package.json#react",
     "devDependencies:package.json#zod",
     "exports:apps/coding-agent/src/context/index.ts#createPromptTemplateCommand",
