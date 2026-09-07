@@ -243,6 +243,109 @@ describe("createModelStepStream", () => {
     });
   });
 
+  it.each([undefined, "provider-other"])(
+    "accepts an explicit other finish with raw reason %s",
+    async (raw) => {
+      const model = createStreamingMockLanguageModelV4([
+        {
+          stream: convertArrayToReadableStream([
+            { type: "stream-start", warnings: [] },
+            {
+              finishReason: { raw, unified: "other" },
+              type: "finish",
+              usage: streamUsageFixture,
+            },
+          ] satisfies MockStreamPart[]),
+        },
+      ]);
+      const source = createModelStepStream({ messages: [...prompt], model });
+
+      await expect(collectParts(source.parts)).resolves.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: "finish",
+            finishReason: "other",
+            rawFinishReason: raw,
+          }),
+        ])
+      );
+      await expect(source.finalize()).resolves.toMatchObject({
+        finishReason: "other",
+      });
+    }
+  );
+
+  it.each([false, true])(
+    "rejects missing provider finish even with SDK synthesized finish: %s",
+    async (partialOutput) => {
+      const chunks: MockStreamPart[] = [{ type: "stream-start", warnings: [] }];
+      if (partialOutput) {
+        chunks.push(
+          { id: "text", type: "text-start" },
+          { delta: "partial", id: "text", type: "text-delta" },
+          { id: "text", type: "text-end" }
+        );
+      }
+      const model = createStreamingMockLanguageModelV4([
+        { stream: convertArrayToReadableStream(chunks) },
+      ]);
+      const source = createModelStepStream({ messages: [...prompt], model });
+
+      const parts = await collectParts(source.parts);
+      expect(parts.some((part) => part.type === "finish")).toBe(partialOutput);
+      if (partialOutput) {
+        expect(parts.at(-1)).toMatchObject({
+          finishReason: "other",
+          type: "finish",
+        });
+      }
+      const finalization = source.finalize();
+      expect(source.finalize()).toBe(finalization);
+      await expect(finalization).rejects.toThrow(
+        "Model stream ended without a finish event."
+      );
+      expect(model.doStreamCalls).toHaveLength(1);
+    }
+  );
+
+  it.each([
+    { error: null, invalidText: false },
+    { error: undefined, invalidText: false },
+    { error: null, invalidText: true },
+    { error: undefined, invalidText: true },
+  ])(
+    "preserves original $error with SDK failure: $invalidText",
+    async ({ error, invalidText }) => {
+      const model = createStreamingMockLanguageModelV4([
+        {
+          stream: convertArrayToReadableStream([
+            { type: "stream-start", warnings: [] },
+            { error, type: "error" },
+            ...(invalidText
+              ? [
+                  {
+                    delta: "no start",
+                    id: "missing",
+                    type: "text-delta",
+                  } as const,
+                ]
+              : []),
+            {
+              finishReason: { raw: "stop", unified: "stop" },
+              type: "finish",
+              usage: streamUsageFixture,
+            },
+          ] satisfies MockStreamPart[]),
+        },
+      ]);
+      const source = createModelStepStream({ messages: [...prompt], model });
+
+      await collectParts(source.parts);
+      await expect(source.finalize()).rejects.toBe(error);
+      expect(model.doStreamCalls).toHaveLength(1);
+    }
+  );
+
   it("synthesizes committed-order parts for a doGenerate-only model and preserves final parity fields", async () => {
     const generateFixture = {
       content: generateContentFixture,

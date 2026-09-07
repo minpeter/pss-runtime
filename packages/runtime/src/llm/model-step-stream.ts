@@ -157,7 +157,6 @@ function streamingModelStep(
   options: ModelStepStreamOptions
 ): ModelStepStreamHandle {
   let streamFailure: { readonly error: unknown } | undefined;
-  let streamFinished = false;
   let finishedOrigin: ModelAttemptOriginSignal | undefined;
   let attemptOpen = false;
   const {
@@ -211,16 +210,12 @@ function streamingModelStep(
       result.stream as AsyncIterable<ModelStepStreamPart>,
       (error) => {
         streamFailure ??= { error };
-      },
-      () => {
-        streamFinished = true;
       }
     ),
     finalize() {
       finalization ??= finalizeStreamingModelStep(
         result,
         () => streamFailure,
-        () => streamFinished,
         () => {
           if (!attemptOpen) {
             return;
@@ -286,15 +281,11 @@ function generatedModelStep(
 
 async function* observeStreamFailures(
   parts: AsyncIterable<ModelStepStreamPart>,
-  onError: (error: unknown) => void,
-  onFinish: () => void
+  onError: (error: unknown) => void
 ): AsyncIterable<ModelStepStreamPart> {
   for await (const part of parts) {
     if (part.type === "error") {
       onError(part.error);
-    }
-    if (part.type === "finish") {
-      onFinish();
     }
     yield part;
   }
@@ -369,7 +360,6 @@ async function finalizeStreamTextResult(
 async function finalizeStreamingModelStep(
   result: ReturnType<typeof streamText>,
   getStreamFailure: () => { readonly error: unknown } | undefined,
-  streamHasFinished: () => boolean,
   settleUnfinishedAttempt: () => void
 ): Promise<ModelStepStreamFinalResult> {
   try {
@@ -378,12 +368,10 @@ async function finalizeStreamingModelStep(
     if (streamFailure !== undefined) {
       throw streamFailure.error;
     }
-    if (!streamHasFinished() || finalized.finishReason === "other") {
-      throw new Error("Model stream ended without a finish event.");
-    }
     return finalized;
   } catch (error) {
-    throw getStreamFailure()?.error ?? error;
+    const streamFailure = getStreamFailure();
+    throw streamFailure === undefined ? error : streamFailure.error;
   } finally {
     settleUnfinishedAttempt();
   }
@@ -471,6 +459,7 @@ function observeProviderStreamErrors(
   value: unknown,
   onError: (error: unknown) => void
 ): unknown {
+  let finished = false;
   const result = value as {
     readonly stream: ReadableStream<{
       readonly error?: unknown;
@@ -485,7 +474,17 @@ function observeProviderStreamErrors(
           if (part.type === "error") {
             onError(part.error);
           }
+          if (part.type === "finish") {
+            finished = true;
+          }
           controller.enqueue(part);
+        },
+        flush() {
+          // The SDK can synthesize a finish after partial output. Only a
+          // provider finish proves that the physical stream completed.
+          if (!finished) {
+            onError(new Error("Model stream ended without a finish event."));
+          }
         },
       })
     ),
