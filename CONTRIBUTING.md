@@ -98,6 +98,36 @@ violation that cannot be auto-fixed aborts the commit with the offending
 file and rule named, and no file outside the index is touched. Use
 `git commit --no-verify` to deliberately bypass the hook.
 
+## Fast local gates
+
+Fast gates give commit-time and pre-push feedback without running the heavy
+pipeline: they never run the full test suite, typecheck, build, coverage,
+API snapshot, stress profiles, the TUI, or the Worker. Each gate has a
+concrete wall-clock bound, measured on the loaded 24-CPU reference host:
+
+| Gate | Command | Bound (loaded reference host) |
+| --- | --- | --- |
+| Pre-commit hook | `git commit` (runs `pnpm exec lint-staged` via `.husky/pre-commit`) | ≤ 60 s |
+| All repository invariant checks | `vitest run scripts/*.test.mjs` | ≤ 120 s |
+| Any single invariant check | `vitest run scripts/<name>.test.mjs` | ≤ 30 s |
+
+Measure a gate with the timing wrapper, which kills the whole process group
+on timeout so no child survives: `node scripts/time-gate.mjs --bound 60
+--label pre-commit -- git commit -m "<message>"`. The wrapper exits
+non-zero when the gate fails or exceeds its bound and prints one stable
+`GATE <label>: elapsed=… bound=… result=…` line.
+
+The invariant checks (`scripts/workspace-config.test.mjs` and its siblings)
+are deterministic and offline: they read only committed files, perform no
+network I/O, open no ports, and write nothing outside their own stdout, so
+two consecutive runs on a clean tree produce identical results. The same
+checks run in CI (`pnpm test` on the Node 24/26 matrix under
+`PSS_TASK_VALIDATOR_NETWORK_ISOLATED=1`) with identical outcomes.
+
+Concurrency budget on the loaded reference host: at most one devcontainer
+build and two lightweight static/config validators run concurrently; no
+local-quality command binds, probes, or competes for the Worker port 8792.
+
 ## Naming conventions
 
 Each rule states its status: **enforced** rules run in `pnpm lint`
