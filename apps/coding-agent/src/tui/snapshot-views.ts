@@ -81,6 +81,7 @@ export class SnapshotMarkdown extends Markdown {
   captureCold(width: number): ColdContent {
     const { highlightCode, codeBlockIndent, ...styles } = this.#theme;
     const highlighted: Record<string, readonly string[]> = {};
+    let rows: string[];
     if (highlightCode) {
       // Highlight once synchronously while HOT. COLD only looks up copied runs.
       const capturingTheme = {
@@ -91,13 +92,15 @@ export class SnapshotMarkdown extends Markdown {
           return lines;
         },
       };
-      new Markdown(
+      rows = new Markdown(
         this.#source,
         this.#paddingX,
         this.#paddingY,
         capturingTheme,
         this.#style
       ).render(width);
+    } else {
+      rows = super.render(width);
     }
     const theme = {
       ...Object.fromEntries(
@@ -120,7 +123,7 @@ export class SnapshotMarkdown extends Markdown {
           bgColor: bgColor && captureStyle(bgColor),
         },
       },
-      super.render(width),
+      rows,
       width
     );
   }

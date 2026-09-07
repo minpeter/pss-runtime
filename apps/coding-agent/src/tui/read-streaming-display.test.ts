@@ -180,7 +180,8 @@ describe("streamed read display", () => {
       );
       expect(text(view)).toContain("child/");
       expect(text(view)).toContain("empty.txt");
-      expect(view.render(160).join("\n")).not.toContain("\x1b[100m");
+      const directoryRows = view.render(160);
+      expect(directoryRows).toEqual(directoryRows.map(stripTerminalSequences));
       const empty = { path: "listing/empty.txt" };
       view.setFinalInput(empty);
       const output = await tool.execute?.(empty, {
@@ -245,7 +246,15 @@ describe("streamed read display", () => {
       view.setFinalInput(input);
       view.setError(parts[1]?.error);
       expect(text(view)).toContain("ENOENT");
-      expect(view.render(160).join("\n")).toContain("\x1b[48;5;88m");
+      const errorSurface = createView();
+      try {
+        errorSurface.setPrettyBlock("", String(failure), { isError: true });
+        expect(view.render(160).slice(2)).toEqual(
+          errorSurface.render(160).slice(1)
+        );
+      } finally {
+        errorSurface.dispose();
+      }
     } finally {
       view.dispose();
       await rm(workspace, { recursive: true, force: true });

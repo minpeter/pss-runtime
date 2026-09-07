@@ -134,6 +134,44 @@ export const renderColdTable = (table: ColdTable, width: number): string[] => {
   );
 };
 
+const validTableGeometry = (lines: readonly string[]): boolean => {
+  const top = lines[0];
+  const segments = top.slice(1, -1).split("┬");
+  if (segments.some((segment) => segment.length < 3)) {
+    return false;
+  }
+  const rule = `├${segments.join("┼")}┤`;
+  if (lines.at(-1) !== `└${segments.join("┴")}┘`) {
+    return false;
+  }
+  const boundaries = [0];
+  let column = 0;
+  for (const segment of segments) {
+    column += segment.length + 1;
+    boundaries.push(column);
+  }
+  let hasSeparator = false;
+  let hasInterior = false;
+  for (const line of lines.slice(1, -1)) {
+    if (line === rule) {
+      if (!hasInterior) {
+        return false;
+      }
+      hasSeparator = true;
+      hasInterior = false;
+      continue;
+    }
+    if (
+      visibleWidth(line) !== top.length ||
+      boundaries.some((column) => sliceByColumn(line, column, 1) !== "│")
+    ) {
+      return false;
+    }
+    hasInterior = true;
+  }
+  return hasSeparator && hasInterior;
+};
+
 const ranges = (
   rows: readonly string[],
   paddingX = 0
@@ -152,7 +190,7 @@ const ranges = (
     const end = lines.findIndex(
       (line, i) => i > index && TABLE_BOTTOM.test(line)
     );
-    if (end < 0) {
+    if (end < 0 || !validTableGeometry(lines.slice(index, end + 1))) {
       continue;
     }
     if (index > start) {
