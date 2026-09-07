@@ -489,7 +489,7 @@ interface StreamViewFactories {
   finishToolView: (id: string) => void;
   getToolView: (id: string) => BaseToolCallView | undefined;
   pendingToolCallIds: Set<string>;
-  resetAssistantView: (suppressLeadingSpacer?: boolean) => void;
+  resetAssistantView: () => void;
   streamedToolCallIds: Set<string>;
   toolViews: Map<string, BaseToolCallView>;
 }
@@ -513,12 +513,8 @@ const createStreamViewFactories = (options: {
   const toolViews = new Map<string, BaseToolCallView>();
   let assistantLease: TranscriptLease<AssistantStreamView> | undefined;
   const toolLeases = new Map<string, TranscriptLease<BaseToolCallView>>();
-  let suppressAssistantLeadingSpacer = false;
 
-  const resetAssistantView = (suppressLeadingSpacer = false): void => {
-    if (suppressLeadingSpacer) {
-      suppressAssistantLeadingSpacer = true;
-    }
+  const resetAssistantView = (): void => {
     if (assistantLease) {
       options.chatContainer.finish(assistantLease);
       assistantLease = undefined;
@@ -559,14 +555,12 @@ const createStreamViewFactories = (options: {
           return view;
         },
         {
-          leadingSpacer: !suppressAssistantLeadingSpacer,
           dispose: (view) => {
             options.assistantViews.delete(view);
             view.dispose();
           },
         }
       );
-      suppressAssistantLeadingSpacer = false;
     }
 
     return assistantLease.view;

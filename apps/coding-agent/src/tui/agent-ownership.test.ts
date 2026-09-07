@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   type Component,
   type Container,
@@ -9,7 +12,9 @@ import {
 import type { AgentEvent, AgentTurn } from "@minpeter/pss-runtime";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CodingAgentExtensionUi } from "../extensions/types";
+import { createReadFileTool } from "../workspace-tools/read-file";
 import type { AssistantRendererContext } from "./assistant-renderer";
+import { createToolRenderers } from "./renderers/tool-renderers";
 import type { BaseToolCallView } from "./tool-call-view";
 import { ColdSnapshot, type TranscriptOwner } from "./transcript-owner";
 
@@ -464,6 +469,225 @@ describe.sequential("actual TUI transcript ownership", () => {
       for (const fn of callbacks) {
         fn();
       }
+      unchanged(cold);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it.each([48, 100])(
+    "separates an actual empty directory read from assistant deltas at width %i",
+    async (width) => {
+      terminal.columns = width;
+      const workspace = await mkdtemp(join(tmpdir(), "pss-spacing-"));
+      const app = await fixture({ toolRenderers: createToolRenderers() });
+      try {
+        await app.start();
+        const input = { path: ".", offset: 1, limit: 100 };
+        const tool = createReadFileTool(workspace);
+        const output = await tool.execute?.(input, {
+          toolCallId: "empty-directory",
+          messages: [],
+          context: undefined,
+        });
+        expect(typeof output).toBe("string");
+        await app.emit({
+          type: "tool-call",
+          toolCallId: "empty-directory",
+          toolName: "read_file",
+          input,
+        });
+        await app.emit({
+          type: "tool-result",
+          toolCallId: "empty-directory",
+          toolName: "read_file",
+          output: { type: "text", value: output },
+        });
+        const toolBlock = chat().children.at(-1);
+        expect(toolBlock?.render(width)).toHaveLength(1);
+        const cold = prefix();
+        await app.emit({ type: "assistant-output-delta", text: "AFTER" });
+        const rendered = rows(chat(), width).map(stripTerminalSequences);
+        const assistantRow = rendered.findIndex((row) => row.includes("AFTER"));
+        expect(rendered.slice(assistantRow - 2, assistantRow)).toEqual([
+          stripTerminalSequences(toolBlock?.render(width)[0] ?? ""),
+          "",
+        ]);
+        const count = chat().children.length;
+        await app.emit({ type: "assistant-output-delta", text: " CONTINUED" });
+        expect(chat().children).toHaveLength(count);
+        expect(rows(chat(), width).map(stripTerminalSequences)).toContainEqual(
+          expect.stringContaining("AFTER CONTINUED")
+        );
+        unchanged(cold);
+      } finally {
+        await app.close();
+        await rm(workspace, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it.each([
+    ["populated", { type: "text", value: "OK - directory\npath: .\nENTRY" }],
+    ["error", { type: "error-text", value: "READ_FAILURE" }],
+  ])(
+    "separates %s tools from the next assistant block",
+    async (_label, output) => {
+      const app = await fixture({ toolRenderers: createToolRenderers() });
+      try {
+        await app.start();
+        await app.emit({
+          type: "tool-call",
+          toolCallId: "read",
+          toolName: "read_file",
+          input: { path: "." },
+        });
+        await app.emit({
+          type: "tool-result",
+          toolCallId: "read",
+          toolName: "read_file",
+          output,
+        });
+        const content = rows(chat().children.at(-1));
+        const cold = prefix();
+        await app.emit({ type: "assistant-output-delta", text: "AFTER" });
+        const rendered = rows().map(stripTerminalSequences);
+        const index = rendered.findIndex((row) => row.includes("AFTER"));
+        expect(rendered.slice(index - 2, index)).toEqual([
+          stripTerminalSequences(content.at(-1) ?? ""),
+          "",
+        ]);
+        unchanged(cold);
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
+  it.each(["reasoning", "tool", "system", "user", "late"])(
+    "keeps one boundary row from a tool to %s without rewriting COLD",
+    async (next) => {
+      const app = await fixture({ toolRenderers: createToolRenderers() });
+      try {
+        await app.start();
+        await app.emit({
+          type: "tool-call",
+          toolCallId: "first",
+          toolName: "read_file",
+          input: { path: "." },
+        });
+        if (next !== "late") {
+          await app.emit({
+            type: "tool-result",
+            toolCallId: "first",
+            toolName: "read_file",
+            output: { type: "text", value: "OK - directory\npath: .\n" },
+          });
+        }
+        const before = chat().children.length;
+        const last = chat().children.at(-1);
+        if (next === "reasoning") {
+          await app.emit({
+            type: "assistant-reasoning-delta",
+            text: "THINKING",
+          });
+        } else if (next === "tool") {
+          await app.emit({
+            type: "tool-call",
+            toolCallId: "second",
+            toolName: "read_file",
+            input: { path: "second" },
+          });
+        } else if (next === "user") {
+          await app.steer();
+        } else if (next === "system") {
+          await app.emit({ type: "turn-error", error: "SYSTEM_FAILURE" });
+        } else {
+          await app.emit({
+            type: "assistant-output-delta",
+            text: "INTERLEAVED",
+          });
+        }
+        expect(chat().children[before]?.render(100)).toEqual([""]);
+        expect(chat().children[before + 1]?.render(100).length).toBeGreaterThan(
+          0
+        );
+        // The preceding block's content is unchanged; its immutable replacement
+        // may be new only when a pending tool is handed off.
+        expect(chat().children[before - 1]?.render(100)).toEqual(
+          last?.render(100)
+        );
+        const cold = prefix().slice(0, before);
+        if (next === "late") {
+          await app.emit({
+            type: "tool-result",
+            toolCallId: "first",
+            toolName: "read_file",
+            output: { type: "text", value: "OK - directory\npath: .\n" },
+          });
+          const continuation = chat().children.at(-1);
+          expect(
+            stripTerminalSequences(rows(continuation).join("\n"))
+          ).toContain("Continuation (first)");
+          const boundary = chat().children.length;
+          await app.emit({
+            type: "assistant-output-delta",
+            text: "AFTER_LATE",
+          });
+          expect(chat().children[boundary]?.render(100)).toEqual([""]);
+          expect(
+            chat().children[boundary + 1]?.render(100).length
+          ).toBeGreaterThan(0);
+        }
+        unchanged(cold);
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
+  it("consumes reserved tail for the tool boundary without trimming real body blanks", async () => {
+    const app = await fixture({
+      toolRenderers: {
+        fixture: (view, _input, output) =>
+          view.setPrettyBlock(
+            "HEADER",
+            output === undefined ? "LONG\n".repeat(12) : "BODY\n\n"
+          ),
+      },
+    });
+    try {
+      await app.start();
+      await app.emit({
+        type: "tool-call",
+        toolCallId: "shrink",
+        toolName: "fixture",
+        input: {},
+      });
+      const height = rows().length;
+      await app.emit({
+        type: "tool-result",
+        toolCallId: "shrink",
+        toolName: "fixture",
+        output: { type: "text", value: "done" },
+      });
+      const cold = prefix();
+      const toolRows = rows(chat().children.at(-1));
+      expect(
+        toolRows.slice(-2).map((row) => stripTerminalSequences(row).trim())
+      ).toEqual(["", ""]);
+      const before = chat().children.length;
+      await app.emit({ type: "assistant-output-delta", text: "NEXT" });
+      expect(chat().children[before]?.render(100)).toEqual([""]);
+      expect(chat().children[before + 1]?.render(100)).toHaveLength(1);
+      expect(rows()).toHaveLength(height);
+      const content = chat().children.flatMap((child) => child.render(100));
+      expect(rows().slice(0, content.length)).toEqual(content);
+      expect(
+        rows()
+          .slice(content.length)
+          .every((row) => row === "")
+      ).toBe(true);
       unchanged(cold);
     } finally {
       await app.close();
