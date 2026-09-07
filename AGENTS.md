@@ -60,6 +60,10 @@ Hotspots: `apps/coding-agent/src/tui/agent.ts` (1694 lines, largest in repo),
 
 ## CONVENTIONS
 
+- Naming conventions (packages, files, identifiers) are documented with
+  per-rule enforcement status in `CONTRIBUTING.md`; enforced rules run in
+  `pnpm lint` via `biome.jsonc`, and `scripts/naming-conventions.test.mjs`
+  keeps the docs and config coherent.
 - No `index.ts` in `thread/{handle,input,runtime}` or `platform/` - import concrete paths.
 - Runtime declarations forbid `export *`; public API is snapshot-tested (`pnpm api:check`).
 - Examples: `src/setup.ts` wiring + `src/index.ts` CLI loop; fixtures package-local, never shared.

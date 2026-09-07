@@ -23,3 +23,8 @@ packages/*/.turbo
 !.omo/plans/
 !.omo/plans/**
 .senpi/
+
+# Scratch lint-probe fixtures: gitignored so they are never committed, but
+# biome still lints them (vcs.useIgnoreFile is off in biome.jsonc), so a
+# planted out-of-convention identifier fails `pnpm lint`.
+*.scratch.ts
