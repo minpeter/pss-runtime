@@ -89,6 +89,11 @@ Issue and pull-request labels follow the canonical
 `priority`, and `area` label. Add or change labels there first; creating them
 on GitHub is an external step deferred to a repository maintainer.
 
+## Security
+
+Do not open a public issue or pull request for a suspected vulnerability.
+Follow the [security policy](SECURITY.md) to report it privately.
+
 ## Never
 
 - Suppress lint errors, type errors, or test failures.
