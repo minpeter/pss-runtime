@@ -4,6 +4,7 @@
 // network, no ports, no writes, no clock.
 
 import { parseWorkflowDocs } from "./workflow-docs.mjs";
+import { envKeys, walkStrings } from "./workflow-walkers.mjs";
 
 export const SECURITY_RUNBOOK_PATH =
   "docs/runbooks/security-scan-failure-triage.md";
@@ -41,53 +42,6 @@ export function isSecurityWorkflow({ path, doc }) {
       (typeof step?.uses === "string" && SECURITY_USES.test(step.uses)) ||
       (typeof step?.run === "string" && SECURITY_RUN.test(step.run))
   );
-}
-
-// Every {location, value} string scalar of a parsed workflow document; the
-// location is a dotted path such as "jobs.scan.steps[2].run".
-function walkStrings(node, location, out) {
-  if (typeof node === "string") {
-    out.push({ location, value: node });
-    return;
-  }
-  if (Array.isArray(node)) {
-    node.forEach((item, index) => {
-      walkStrings(item, `${location}[${index}]`, out);
-    });
-    return;
-  }
-  if (node !== null && typeof node === "object") {
-    for (const [key, value] of Object.entries(node)) {
-      walkStrings(value, location ? `${location}.${key}` : key, out);
-    }
-  }
-}
-
-// Every {location, key} of an env map at workflow, job, or step level.
-function envKeys(doc) {
-  const out = [];
-  const visit = (node, location) => {
-    if (Array.isArray(node)) {
-      node.forEach((item, index) => {
-        visit(item, `${location}[${index}]`);
-      });
-      return;
-    }
-    if (node === null || typeof node !== "object") {
-      return;
-    }
-    for (const [key, value] of Object.entries(node)) {
-      const child = location ? `${location}.${key}` : key;
-      if (key === "env" && value !== null && typeof value === "object") {
-        for (const envKey of Object.keys(value)) {
-          out.push({ location: child, key: envKey });
-        }
-      }
-      visit(value, child);
-    }
-  };
-  visit(doc, "");
-  return out;
 }
 
 function workflowSecretProblems(path, doc) {
