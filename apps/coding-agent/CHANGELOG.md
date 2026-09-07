@@ -1,3 +1,9 @@
+## @minpeter/pss-coding-agent@0.0.14-next.20 (next)
+
+### Keep streamed assistant text visible
+
+Render ordinary assistant text without the eight-row streaming tail so the content shown while generating matches the completed transcript. Keep the compact viewport for reasoning and tool bodies.
+
 ## @minpeter/pss-coding-agent@0.0.14-next.19 (next)
 
 ### Harden thread and session lifecycle ownership
