@@ -45,6 +45,11 @@ for await (const event of turn.events()) {
 `step-start`, and `step-end` until the consumer continues, so consume the
 events to let the turn progress.
 
+## Security
+
+Found a vulnerability? Follow the [security policy](SECURITY.md) to report it
+privately through GitHub's built-in private vulnerability reporting.
+
 ## License
 
 This project is licensed under the [Sustainable Use License](LICENSE.md).
