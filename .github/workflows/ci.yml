@@ -90,6 +90,21 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # Knip unused-code gate. Deterministic; pinned to Node 24 like the
+      # audit/coverage steps. If the knip binary is unavailable (or fails to
+      # execute) the step and the wrapper print a documented SKIP message and
+      # exit 0 — never a silent pass, never a workflow failure.
+      - name: Check unused files and exports (Knip)
+        if: matrix.node == '24'
+        shell: bash
+        run: |
+          if [[ ! -x node_modules/.bin/knip ]]; then
+            echo "::warning::check:unused skipped: the knip binary is unavailable; run pnpm install to enable this gate."
+            echo "### check:unused skipped: knip binary unavailable" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          pnpm check:unused
+
       - name: Test
         env:
           PSS_TASK_VALIDATOR_NETWORK_ISOLATED: "1"

@@ -35,6 +35,14 @@
 # Repository invariant tests and release verification.
 /scripts/               @minpeter
 
+# Analysis-signal tool config and signature baselines: reviewed signature
+# diffs only (named, path-scoped allowlist entries; never numeric counts).
+/knip.jsonc                  @minpeter
+/scripts/knip-baseline.json  @minpeter
+
+# Analysis report output (gitignored local artifacts, never committed).
+/report/                     @minpeter
+
 # QA harness scripts.
 /script/                @minpeter
 
