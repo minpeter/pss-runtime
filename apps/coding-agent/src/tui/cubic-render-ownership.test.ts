@@ -1,10 +1,10 @@
 import type { MarkdownTheme } from "@earendil-works/pi-tui";
 import { describe, expect, it, vi } from "vitest";
-import {
-  type AssistantRendererContext,
-  type AssistantTextView,
-  composeAssistantRenderers,
-} from "./assistant-renderer";
+import type {
+  CodingAgentExtensionFactory,
+  ExtensionCapability,
+} from "../extensions/index";
+import { composeAssistantRenderers } from "./assistant-renderer";
 
 const identity = (text: string) => text;
 const markdownTheme: MarkdownTheme = {
@@ -26,16 +26,23 @@ const markdownTheme: MarkdownTheme = {
 
 describe("delegated renderer ownership", () => {
   it("leaves cached delegates alive until their real Mermaid owner replaces or disposes them", async () => {
-    // Load real extension source only through Vitest, outside the declaration graph.
-    const { MermaidMarkdown } = await vi.importActual<{
-      MermaidMarkdown: new (
-        text: string,
-        paddingX: number,
-        paddingY: number,
-        theme: MarkdownTheme,
-        context: AssistantRendererContext
-      ) => AssistantTextView;
-    }>("../../../../extensions/mermaid/src/mermaid-markdown.ts");
+    // Vitest's source condition loads the public factory outside the declaration
+    // graph; its renderer capability avoids coupling to Mermaid's internal files.
+    const { createMermaidExtension } = await vi.importActual<{
+      createMermaidExtension: CodingAgentExtensionFactory;
+    }>("@minpeter/pss-extension-mermaid");
+    const capabilities: ExtensionCapability[] = [];
+    await createMermaidExtension({
+      on: () => undefined,
+      provide: (capability) => capabilities.push(capability),
+      use: () => undefined,
+    });
+    const mermaid = capabilities.find(
+      (capability) => capability.kind === "assistant-renderer"
+    );
+    if (mermaid?.kind !== "assistant-renderer") {
+      throw new Error("Missing Mermaid renderer capability");
+    }
     const disposed: string[] = [];
     const composed = composeAssistantRenderers([
       () => {
@@ -63,7 +70,7 @@ describe("delegated renderer ownership", () => {
           },
         };
       },
-      (context) => new MermaidMarkdown("", 0, 0, markdownTheme, context),
+      mermaid.renderer,
     ]);
     if (!composed) {
       throw new Error("Missing composed renderer");

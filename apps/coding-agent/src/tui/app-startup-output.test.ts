@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { startTui } from "./app";
+import { PENDING_SPINNER_INTERVAL_MS } from "./pending-spinner";
 
 // Observe the real pre-mount renderer without constructing a terminal session.
 // Extension initialization rejects after the startup status has acquired its row.
@@ -8,9 +9,13 @@ vi.mock("../extensions/defaults", () => ({
 }));
 const { failure } = vi.hoisted(() => ({ failure: new Error("fixture") }));
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
 
 it("clears the supplied startup stream when TUI initialization rejects", async () => {
+  vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
   const tty = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
   Object.defineProperty(process.stdout, "isTTY", {
     configurable: true,
@@ -21,6 +26,8 @@ it("clears the supplied startup stream when TUI initialization rejects", async (
   const options = { startupOutput, tools: {} };
   try {
     await expect(startTui(options)).rejects.toBe(failure);
+    expect(vi.getTimerCount()).toBe(0);
+    vi.advanceTimersByTime(PENDING_SPINNER_INTERVAL_MS);
     expect(processWrite).not.toHaveBeenCalled();
     expect(startupOutput.write).toHaveBeenCalledTimes(2);
     expect(startupOutput.write).toHaveBeenLastCalledWith("\r\x1b[2K");

@@ -153,8 +153,8 @@ calls), 2000/4000 ms exponential backoff, and explicit `isRetryable` on
 HTTP dates. If it is unparseable, the runtime tries `retry-after`; if it is
 parseable but nonfinite, negative, or outside the allowed range, the runtime
 uses exponential backoff directly. A valid `retry-after` is used only when
-`retry-after-ms` is absent or unparseable; otherwise the delay falls back to
-exponential backoff. Abort errors are never retried. SDK retries are disabled only on these
+`retry-after-ms` is absent or unparseable. Abort errors are never retried.
+SDK retries are disabled only on these
 observed paths. Retrying a provider call does not rerun tools or replay a
 returned stream. Implicit-gateway strings retain SDK-owned retries and emit
 neither attempt nor retry events. Internal automatic compaction requests remain
