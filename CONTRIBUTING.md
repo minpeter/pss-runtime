@@ -75,8 +75,12 @@ is not done.
 - Read `git log --oneline -20` before writing a message and match the observed
   convention. Default to Conventional Commits (`<type>(<scope>): <imperative>`).
 - Push to a feature branch and open a PR. Never push directly to `main`.
-- The PR body states what changed, how it was verified, and any deliberate
-  trade-off a reviewer would otherwise question.
+- Fill in the [pull request template](.github/PULL_REQUEST_TEMPLATE.md): the PR
+  body states what changed, how it was verified against the real surface (with
+  the evidence path under `.omo/evidence/`), and any deliberate trade-off a
+  reviewer would otherwise question.
+- Before merge, add a `.tegami/YYYY-MM-DD-<slug>.md` release-note entry for the
+  changed published package and run `pnpm check:tegami-notes`.
 
 ## Never
 
