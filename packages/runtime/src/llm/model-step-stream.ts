@@ -157,6 +157,7 @@ function streamingModelStep(
   options: ModelStepStreamOptions
 ): ModelStepStreamHandle {
   let streamFailure: { readonly error: unknown } | undefined;
+  let streamFinished = false;
   let finishedOrigin: ModelAttemptOriginSignal | undefined;
   let attemptOpen = false;
   const {
@@ -210,12 +211,16 @@ function streamingModelStep(
       result.stream as AsyncIterable<ModelStepStreamPart>,
       (error) => {
         streamFailure ??= { error };
+      },
+      () => {
+        streamFinished = true;
       }
     ),
     finalize() {
       finalization ??= finalizeStreamingModelStep(
         result,
         () => streamFailure,
+        () => streamFinished,
         () => {
           if (!attemptOpen) {
             return;
@@ -236,6 +241,7 @@ function streamingModelStep(
             return;
           }
           const error = new Error("Model stream ended without a finish event.");
+          streamFailure = { error };
           notifyAttemptEnd({ error, outcome: "failed" });
           observed.retry?.stopStream(error);
         }
@@ -280,11 +286,15 @@ function generatedModelStep(
 
 async function* observeStreamFailures(
   parts: AsyncIterable<ModelStepStreamPart>,
-  onError: (error: unknown) => void
+  onError: (error: unknown) => void,
+  onFinish: () => void
 ): AsyncIterable<ModelStepStreamPart> {
   for await (const part of parts) {
     if (part.type === "error") {
       onError(part.error);
+    }
+    if (part.type === "finish") {
+      onFinish();
     }
     yield part;
   }
@@ -359,10 +369,19 @@ async function finalizeStreamTextResult(
 async function finalizeStreamingModelStep(
   result: ReturnType<typeof streamText>,
   getStreamFailure: () => { readonly error: unknown } | undefined,
+  streamHasFinished: () => boolean,
   settleUnfinishedAttempt: () => void
 ): Promise<ModelStepStreamFinalResult> {
   try {
-    return await finalizeStreamTextResult(result);
+    const finalized = await finalizeStreamTextResult(result);
+    const streamFailure = getStreamFailure();
+    if (streamFailure !== undefined) {
+      throw streamFailure.error;
+    }
+    if (!streamHasFinished() || finalized.finishReason === "other") {
+      throw new Error("Model stream ended without a finish event.");
+    }
+    return finalized;
   } catch (error) {
     throw getStreamFailure()?.error ?? error;
   } finally {
