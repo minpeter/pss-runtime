@@ -14,6 +14,7 @@ AGENTS.md
 .artifacts
 packages/*/.turbo
 .wrangler
+.husky/_/
 
 # Agent workspace. QA evidence and session state are local artifacts: they are
 # mandatory to produce (see CONTRIBUTING.md) but never committed. Only plans
