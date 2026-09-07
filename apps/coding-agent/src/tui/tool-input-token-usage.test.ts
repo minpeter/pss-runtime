@@ -358,6 +358,9 @@ describe.sequential("streamed tool argument usage in the mounted footer", () => 
         await app;
         await agent.dispose();
       }
-    }
+    },
+    // Real mounted rendering of large arguments/results exceeds 5s on Node 24
+    // under CI contention. Keep event gates and their 3s bounds unchanged.
+    15_000
   );
 });
