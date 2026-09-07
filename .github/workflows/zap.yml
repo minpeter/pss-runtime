@@ -1,0 +1,59 @@
+name: OWASP ZAP Baseline
+
+# OWASP ZAP baseline scan (VAL-SEC-034..037). Manual dispatch ONLY: the
+# workflow never runs on push, pull_request, or a schedule, and it is a
+# distinct file that ci.yml never references, so ordinary PR checks never
+# invoke ZAP.
+#
+# The target is operator-supplied per run via the required target-url
+# input. The default is EMPTY - never a loopback address, never any host -
+# and an omitted or empty input skips the scan with a visible notice in the
+# step log and the run summary.
+#
+# When a target is supplied the job runs under a bounded timeout
+# (timeout-minutes: 20) and the spider is additionally bounded to 5 minutes
+# (-m 5). Scan scope: the baseline action feeds only the declared target to
+# zap-baseline.py -t, whose generated Automation Framework plan adds just
+# the target's host to the scan context, so the spider and the passive scan
+# stay constrained to the declared target's host. Issue writing is disabled
+# and the job holds contents: read with no other scope, so the scan cannot
+# write to the repository.
+on:
+  workflow_dispatch:
+    inputs:
+      target-url:
+        description: >-
+          Full URL (scheme plus host) of the deployed app to baseline-scan,
+          e.g. a staging deployment. Never a loopback or local address.
+        required: true
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    name: ZAP baseline scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Skip scan (no target declared)
+        if: ${{ inputs.target-url == '' }}
+        run: |
+          echo "::notice::OWASP ZAP baseline scan skipped - the required target-url input is empty; re-run the workflow with a target URL to scan."
+          echo "### ZAP baseline scan skipped - no target-url input was provided" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: ZAP baseline scan
+        if: ${{ inputs.target-url != '' }}
+        uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
+        with:
+          # Scope: only the operator-declared target URL is ever scanned.
+          target: ${{ inputs.target-url }}
+          # The job token is read-only, so issue writing stays disabled.
+          allow_issue_writing: false
+          # Spider bounded to 5 minutes; the generated plan scopes the
+          # spider and passive scan to the declared target's host only.
+          cmd_options: "-m 5"
