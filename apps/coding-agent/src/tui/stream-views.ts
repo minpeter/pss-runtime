@@ -52,7 +52,6 @@ export class AssistantStreamView extends Container {
   private readonly assistantRenderer: AssistantRenderer | undefined;
   private readonly controller = new AbortController();
   private disposed = false;
-  private textComplete = false;
   private readonly foregroundColor: string | undefined;
   private readonly markdownTheme: MarkdownTheme;
   private readonly notify: (message: string) => void;
@@ -95,9 +94,6 @@ export class AssistantStreamView extends Container {
   }
 
   override render(width: number): string[] {
-    if (!this.textComplete) {
-      return renderBodyTail(super.render(width), width);
-    }
     return this.children.flatMap((child) => {
       const lines = child.render(width);
       const reasoning = this.segments.some(
@@ -113,21 +109,13 @@ export class AssistantStreamView extends Container {
       const reasoning = this.segments.some(
         (segment) => segment.view === child && segment.type === "reasoning"
       );
-      return this.textComplete && reasoning
-        ? selectColdTail(content, width)
-        : content;
+      return reasoning ? selectColdTail(content, width) : content;
     });
-    const content: ColdContent = { kind: "group", children };
-    return this.textComplete ? content : selectColdTail(content, width);
+    return { kind: "group", children };
   }
 
   get contentKind(): "reasoning" | "text" | undefined {
     return this.segments.at(-1)?.type;
-  }
-
-  /** Expand text before sealing, without restarting an async renderer. */
-  completeText(): void {
-    this.textComplete = true;
   }
 
   appendReasoning(delta: string): void {

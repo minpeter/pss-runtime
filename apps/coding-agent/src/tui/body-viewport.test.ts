@@ -5,6 +5,7 @@ import {
   visibleWidth,
 } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
+import { captureComponent, renderColdContent } from "./cold-content";
 import { AssistantStreamView } from "./stream-views";
 import { BaseToolCallView } from "./tool-call-view";
 
@@ -54,19 +55,30 @@ describe("auto-following body rows", () => {
     const view = new AssistantStreamView(theme);
     view.appendReasoning(source(count));
     const rows = plain(view.render(100));
-    expect(rows.length).toBeLessThanOrEqual(8);
+    expect(rows).toHaveLength(8);
+    expect(plain(renderColdContent(view.captureCold(100), 100))).toEqual(rows);
     expect(rows.join("\n")).toContain(`ROW_${String(count).padStart(2, "0")}`);
     expect(rows.join("\n")).not.toContain("ROW_01");
     view.dispose();
   });
 
-  it("follows text after reasoning without accumulating segment budgets", () => {
+  it("tails only reasoning before uncapped text", () => {
     const view = new AssistantStreamView(theme);
     view.appendReasoning(source(30));
     view.appendText(source(30).replaceAll("ROW", "TEXT"));
-    expect(view.render(48)).toHaveLength(8);
-    expect(plain(view.render(48)).join("\n")).toContain("TEXT_30");
-    expect(plain(view.render(48)).join("\n")).not.toContain("ROW_");
+    const live = view.render(48);
+    expect(live).toHaveLength(39);
+    expect(
+      plain(live)
+        .join("\n")
+        .match(/TEXT_\d+/g)
+    ).toHaveLength(30);
+    expect(
+      plain(live)
+        .join("\n")
+        .match(/ROW_\d+/g)
+    ).toHaveLength(8);
+    expect(renderColdContent(view.captureCold(48), 48)).toEqual(live);
     expect(view).toMatchObject({
       segments: [
         { content: source(30) },
@@ -115,6 +127,9 @@ describe("auto-following body rows", () => {
       view.setOutput(source(30));
       expect(view.render(48).length).toBeLessThanOrEqual(24);
       expect(plain(view.render(48)).join("\n")).toContain("ROW_30");
+      expect(renderColdContent(captureComponent(view, 48), 48)).toEqual(
+        view.render(48)
+      );
       view.setError(source(30).replaceAll("ROW", "ERR"));
       expect(view.render(48).length).toBeLessThanOrEqual(36);
       expect(plain(view.render(48)).join("\n")).toContain("ERR_30");

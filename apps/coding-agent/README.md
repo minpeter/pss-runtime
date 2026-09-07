@@ -429,16 +429,16 @@ error rendering; it does not mean the tool has run or a file has been written.
 `showRawToolIo` keeps the JSON input/output view. Shell output still appears
 only when its result arrives, not as live stdout.
 
-Text bodies auto-follow their latest eight terminal rows, including wrapped
-lines, while streaming. On text completion, the current assistant block expands
-its full rendered text before freezing, including all table/code/prose rows.
-Long final answers remain available in terminal scrollback, not necessarily all
-on screen at once. Completed reasoning and interrupted partial text retain their
-displayed tail; later answer text cannot evict completed reasoning. Each
+Ordinary assistant text renders in full from its first streamed delta and freezes
+without a completion-time expansion. Long answers remain available in terminal
+scrollback, not necessarily all on screen at once. Interrupted partial text also
+retains all displayed content. Reasoning bodies auto-follow their latest eight
+terminal rows, including wrapped lines, and retain that displayed tail when
+sealed; later answer text cannot evict completed reasoning. Each
 pretty tool body and each raw Input/Output/Error body has its own window. Tool headers and raw section labels sit outside the
 budget. Earlier content remains stored but is not all visible at once; no new
 scrolling keys or mouse bindings are provided. The composer is unchanged.
-Text-only custom renderers use the same streaming bound and final-text expansion
+Text-only custom assistant renderers also render without the eight-row cap
 (a Markdown override is one body). Image-bearing renderer output, including Kitty/iTerm2 graphics and
 reserved image rows, remains intact and is exempt from the text-row cap.
 
@@ -483,7 +483,7 @@ one block add no separator. New output consumes the shared trailing reserve
 before transcript height grows. Synthetic padding never becomes a
 permanent gap between COLD blocks or enters canonical messages/files. Width
 changes recompute the reservation without stale-width padding; transcript reset
-clears it. Streaming bodies remain capped, while full final-text expansion
+clears it. Reasoning and tool bodies remain capped, while growing assistant text
 consumes or grows the reservation without rewriting older COLD blocks. Clearing
 multiline composer input is separate and unchanged.
 
