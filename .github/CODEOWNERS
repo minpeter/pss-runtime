@@ -1,0 +1,42 @@
+# CODEOWNERS — advisory review-routing map for the pss-runtime workspace.
+#
+# Ownership here is advisory only; it suggests reviewers per area and is not an
+# enforcement mechanism. Any enforced-approval control is an external, deferred
+# concern (see docs/runbooks) — this file never configures it. Governance docs
+# should link .github/CODEOWNERS instead of restating owners.
+
+# Repository-wide fallback owner.
+*                       @minpeter
+
+# Governance, CI workflows, and repository metadata.
+/.github/               @minpeter
+
+# Published runtime package.
+/packages/runtime/      @minpeter
+
+# Coding-agent CLI/TUI application.
+/apps/coding-agent/     @minpeter
+
+# Worker-agent Cloudflare Worker application.
+/apps/worker-agent/     @minpeter
+
+# Built-in bundled extensions.
+/extensions/            @minpeter
+
+# Runtime demo packages.
+/examples/              @minpeter
+
+# Live-provider benchmarks and experiments.
+/experimental/          @minpeter
+
+# Documentation, ADRs, RFCs, and runbooks.
+/docs/                  @minpeter
+
+# Repository invariant tests and release verification.
+/scripts/               @minpeter
+
+# QA harness scripts.
+/script/                @minpeter
+
+# Static assets.
+/assets/                @minpeter
