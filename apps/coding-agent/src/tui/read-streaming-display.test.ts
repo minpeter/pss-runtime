@@ -23,6 +23,8 @@ import type { TuiStreamPart } from "./stream-handlers";
 import { BaseToolCallView } from "./tool-call-view";
 
 const HASHLINE_ANCHOR_PATTERN = /\d+#[A-Z]+\|/;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: assert an ANSI background without pinning its palette color
+const BACKGROUND_PATTERN = /\x1b\[(?:4[0-8]|10[0-7])(?:;[\d;]+)?m/;
 const identity = (text: string): string => text;
 const theme: MarkdownTheme = {
   heading: identity,
@@ -250,6 +252,13 @@ describe("streamed read display", () => {
       try {
         errorSurface.setPrettyBlock("", String(failure), { isError: true });
         expect(view.render(160).slice(2)).toEqual(
+          errorSurface.render(160).slice(1)
+        );
+        for (const row of view.render(160).slice(2)) {
+          expect(row).toMatch(BACKGROUND_PATTERN);
+        }
+        errorSurface.setPrettyBlock("", String(failure));
+        expect(view.render(160).slice(2)).not.toEqual(
           errorSurface.render(160).slice(1)
         );
       } finally {
