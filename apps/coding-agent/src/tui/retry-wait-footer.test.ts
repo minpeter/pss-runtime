@@ -105,9 +105,9 @@ const createFooterHarness = () => {
     },
     chatContainer,
     dispatch,
-    footerText: () =>
+    footerText: (width = 80) =>
       footer
-        .render(80)
+        .render(width)
         .map((line) => line.replace(ANSI_PATTERN, "").trimEnd())
         .join("\n"),
     retryStatus,
@@ -317,17 +317,17 @@ describe("retry wait in the TUI footer", () => {
   it("truncates the countdown inside a narrow terminal instead of overflowing", async () => {
     vi.useFakeTimers();
     const h = createFooterHarness();
-    const footer = new FooterStatusBar({ requestRender: vi.fn() });
     h.showWorking();
     await h.dispatch([scheduled]);
-    footer.setForegroundMessage("Retrying in 4s · attempt 2 · 2 retries left");
-
+    const full = h.footerText();
     for (const width of [12, 24, 40]) {
-      const [line = ""] = footer.render(width);
-      expect(line.replace(ANSI_PATTERN, "").length).toBeLessThanOrEqual(width);
+      const line = h.footerText(width);
+      expect(line).toMatch(SPINNER_FRAME_PATTERN);
+      expect(line.length).toBeLessThanOrEqual(width);
+      // Truncation must retain the actual pipeline output, not a separate label.
+      expect(line.slice(0, -1)).toBe(full.slice(0, line.length - 1));
     }
 
-    footer.stop();
     h.stop();
     vi.useRealTimers();
   });

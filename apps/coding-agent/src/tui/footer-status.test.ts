@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { FooterStatusBar } from "./agent";
+import { PENDING_SPINNER_INTERVAL_MS } from "./pending-spinner";
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: test helper strips ANSI emitted by the footer
 const ANSI_PATTERN = /\x1b\[[0-9;]*m/g;
@@ -62,11 +63,12 @@ describe("FooterStatusBar", () => {
     (width) => {
       vi.useFakeTimers();
       const footer = new FooterStatusBar({ requestRender: vi.fn() });
+      let remainingTimers = 0;
       try {
         footer.setForegroundMessage("A long operation label");
         footer.setRightText("Custom footer status ".repeat(30));
         const before = footer.render(width)[0]?.replace(ANSI_PATTERN, "") ?? "";
-        vi.advanceTimersByTime(80);
+        vi.advanceTimersByTime(PENDING_SPINNER_INTERVAL_MS);
         footer.setForegroundMessage("Another label");
         const after = footer.render(width)[0]?.replace(ANSI_PATTERN, "") ?? "";
         expect(before).toMatch(SPINNER_PATTERN);
@@ -78,9 +80,10 @@ describe("FooterStatusBar", () => {
         expect(after.length).toBeLessThanOrEqual(width);
       } finally {
         footer.stop();
-        expect(vi.getTimerCount()).toBe(0);
+        remainingTimers = vi.getTimerCount();
         vi.useRealTimers();
       }
+      expect(remainingTimers).toBe(0);
     }
   );
 

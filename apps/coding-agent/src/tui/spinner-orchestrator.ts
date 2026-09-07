@@ -23,7 +23,6 @@ export const createSpinnerOrchestrator = (
   let reasoningActive = false;
   let reasoningRevivedSpinner = false;
   let retryWaiting = false;
-  let retryRevivedSpinner = false;
   let toolPendingCount = 0;
   let toolRevivedSpinner = false;
 
@@ -43,7 +42,6 @@ export const createSpinnerOrchestrator = (
         return;
       }
       adapter.showLoader(message);
-      retryRevivedSpinner = true;
     },
     onRetryWaitEnd: () => {
       if (!retryWaiting) {
@@ -52,17 +50,14 @@ export const createSpinnerOrchestrator = (
       retryWaiting = false;
       if (reasoningActive) {
         adapter.setMessage("Thinking...");
-        retryRevivedSpinner = false;
         return;
       }
       if (toolPendingCount > 0) {
         adapter.setMessage("Executing...");
-        retryRevivedSpinner = false;
         return;
       }
-      if (retryRevivedSpinner && !baseLoaderMessage) {
+      if (!baseLoaderMessage) {
         adapter.clearStatus();
-        retryRevivedSpinner = false;
         return;
       }
       restoreBase();
