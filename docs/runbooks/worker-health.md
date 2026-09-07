@@ -21,9 +21,14 @@ Telegram relay are not validation steps and are never invoked here.
 
 With the local Worker running on `127.0.0.1:8792`, use `curl`:
 
-- Health: `curl -s http://127.0.0.1:8792/healthz` — expect a bounded JSON body
-  reporting environment, version, and default-binding status, and no secrets,
-  prompts, message text, or tokens.
+- Health: a dedicated `/healthz` route is planned (pending milestone 4) and is
+  not yet implemented in `apps/worker-agent/src/index.ts`, which today serves
+  only `/session/events` and `/trpc/*`. The current health surface is
+  port-listening readiness only: confirm the Worker is up with
+  `ss -tln | grep 8792`. When milestone 4 lands `/healthz`,
+  `curl -s http://127.0.0.1:8792/healthz` will be expected to return a bounded
+  JSON body reporting environment, version, and default-binding status, and no
+  secrets, prompts, message text, or tokens.
 - tRPC replay: send a replay-only request to `http://127.0.0.1:8792/trpc` with a
   scripted fixture; a real model turn is never submitted.
 - SSE replay: read `http://127.0.0.1:8792/session/events` to confirm the replay
@@ -47,5 +52,7 @@ how a deployment would register a tracer provider later.
 Production health checks and hosted uptime monitoring of the Worker are deferred
 and external: they cannot be verified from repository files or local commands,
 so this runbook makes no claim about a live deployment. The local counterparts
-that ARE provided and validated here are the `/healthz` route and the Worker's
-own metrics spans.
+that ARE provided and validated here are port-listening readiness on
+`127.0.0.1:8792` (`ss -tln | grep 8792`) and the Worker's own metrics spans; the
+`/healthz` route is planned (pending milestone 4) and is not validated here
+because it does not exist yet.
