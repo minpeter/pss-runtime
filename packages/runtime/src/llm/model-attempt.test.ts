@@ -586,12 +586,14 @@ describe("model-attempt stream events", () => {
       },
     ]);
 
-    await generateModelStepResult({
-      history: prompt,
-      model,
-      onStreamEvent: (event) => events.push(event),
-      signal: new AbortController().signal,
-    });
+    await expect(
+      generateModelStepResult({
+        history: prompt,
+        model,
+        onStreamEvent: (event) => events.push(event),
+        signal: new AbortController().signal,
+      })
+    ).rejects.toBe(fixtureError);
 
     expect(attemptEvents(events)).toEqual([
       expect.objectContaining({ attempt: 1, phase: "start" }),
@@ -621,12 +623,14 @@ describe("model-attempt stream events", () => {
       },
     ]);
 
-    await generateModelStepResult({
-      history: prompt,
-      model,
-      onStreamEvent: (event) => events.push(event),
-      signal: new AbortController().signal,
-    });
+    await expect(
+      generateModelStepResult({
+        history: prompt,
+        model,
+        onStreamEvent: (event) => events.push(event),
+        signal: new AbortController().signal,
+      })
+    ).rejects.toThrow("Model stream ended without a finish event.");
 
     expect(attemptEvents(events)).toEqual([
       expect.objectContaining({ attempt: 1, phase: "start" }),
