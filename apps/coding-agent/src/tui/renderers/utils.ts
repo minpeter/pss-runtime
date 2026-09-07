@@ -25,6 +25,19 @@ export const stringField = (obj: unknown, key: string): string | undefined => {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 };
 
+const formatFileHeader = (operation: string, path: string): string => {
+  const safePath = sanitizeTerminalText(path, path.length);
+  const longestRun = Array.from(safePath.matchAll(/`+/g)).reduce(
+    (longest, match) => Math.max(longest, match[0].length),
+    0
+  );
+  const fence = "`".repeat(longestRun + 1);
+  return `**${operation}** ${fence} ${safePath} ${fence}`;
+};
+
+export const formatWriteHeader = (path: string): string =>
+  formatFileHeader("write", path);
+
 export const numberField = (obj: unknown, key: string): number | undefined => {
   if (!isRecord(obj)) {
     return;
@@ -33,6 +46,22 @@ export const numberField = (obj: unknown, key: string): number | undefined => {
   return typeof value === "number" && Number.isFinite(value)
     ? value
     : undefined;
+};
+
+export const formatReadHeader = (
+  path: string,
+  input: unknown,
+  isDirectory = false
+): string => {
+  const parts: string[] = [];
+  for (const key of ["offset", "limit"]) {
+    const value = numberField(input, key);
+    if (value !== undefined) {
+      parts.push(`${key}: ${value}`);
+    }
+  }
+  const suffix = parts.length > 0 ? ` (${parts.join(", ")})` : "";
+  return `${formatFileHeader(isDirectory ? "read dir" : "read", path)}${suffix}`;
 };
 
 export const safeStringify = (value: unknown): string => {

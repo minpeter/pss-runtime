@@ -421,7 +421,9 @@ runs. Dedupe against the committed events is built in: committed
 
 In pretty mode, every tool's streamed arguments use a shared input preview,
 including extension tools with custom result renderers. String values are
-shown decoded, so multiline source is readable before execution. The preview
+shown decoded, so multiline source is readable before execution. For
+`write_file`, the header changes to `write <path>` as soon as a nonempty path
+arrives, including partial paths, while the content continues streaming. The preview
 remains while execution is pending and is replaced by the normal result or
 error rendering; it does not mean the tool has run or a file has been written.
 `showRawToolIo` keeps the JSON input/output view. Shell output still appears
