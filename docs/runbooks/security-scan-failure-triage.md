@@ -23,6 +23,18 @@ workflow file, and the credential-gated suites in
 `extended-verification.yml` stay behind the visible `secret-gate` job
 instead of touching the security workflows.
 
+## Action pinning policy
+
+Every external `uses:` reference in every workflow under `.github/workflows/`
+is pinned to a full 40-hex commit SHA with a trailing version comment on the
+same line (`actions/checkout@3d3c42e5... # v7`), so a retagged or hijacked
+release tag can never change what a workflow runs. The single exemption is
+local composite actions (`uses: ./...`): they are repository content reviewed
+in the same change that ships them, so SHA pinning does not apply. The
+invariant test `scripts/security-action-pinning.test.mjs` scans every
+workflow file and fails naming the file, step, and reference for any
+unpinned external reference.
+
 ## Secret detection
 
 The repository scans for committed secrets in two layers: a deterministic
@@ -123,6 +135,45 @@ Recovery:
    external and cannot be verified from repository files.
 4. Never silence the failure with `continue-on-error` or by disabling the
    upload; a muted security signal is worse than a red run.
+
+## Dynamic baseline scan (OWASP ZAP)
+
+The `zap.yml` workflow runs an OWASP ZAP baseline scan through the job
+`baseline`. Trigger: manual `workflow_dispatch` only — never push, pull
+request, or schedule — with a required `target-url` input whose default is
+EMPTY (never loopback, never any host). Dispatching with an empty input runs
+the `Skip scan (no target declared)` step, which posts a visible skip notice
+to the step log and the run summary and exits green without scanning.
+
+Expected output when a target is supplied: the `zap.yml` step
+`ZAP baseline scan` runs the SHA-pinned baseline action under
+`timeout-minutes: 20` with the spider bounded to five minutes, constrained to
+the declared target's host. Findings print in the step log and the action
+writes its report files as workflow artifacts; issue writing is disabled and
+the job holds `contents: read` with no write scope, so the scan cannot
+modify the repository. A baseline finding warns in the log; the run stays
+green unless the action itself errors, so a green run with findings still
+requires reading the step log.
+
+Triage when the scan reports findings:
+
+1. Open the run and read the `ZAP baseline scan` step log; each finding
+   names the risk level, the URL on the scanned target, and the evidence.
+2. True positive: fix the application at the flagged URL; do not tune the
+   scan to make the finding disappear.
+3. False positive: record the rationale in the pull request that ships the
+   fix or the suppression decision; the repository carries no ZAP rule
+   suppressions by default.
+4. Re-run the workflow from the dispatch page with the same `target-url` and
+   confirm the finding clears.
+
+When the tool is unavailable: the scan target is always an operator-supplied
+deployment and the hosted baseline action is an external service; neither is
+verified or guaranteed from repository files. If the action or the target
+host is unreachable, the step fails visibly (no `continue-on-error`), so a
+muted scan can never pass as green. Because the workflow is manual-only, its
+absence never blocks the fast `ci.yml` gate; ordinary pull request checks
+never invoke ZAP.
 
 ## Analysis report hygiene
 
