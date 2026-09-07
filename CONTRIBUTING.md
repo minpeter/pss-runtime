@@ -82,6 +82,13 @@ is not done.
 - Before merge, add a `.tegami/YYYY-MM-DD-<slug>.md` release-note entry for the
   changed published package and run `pnpm check:tegami-notes`.
 
+## Labels
+
+Issue and pull-request labels follow the canonical
+[label taxonomy](docs/label-taxonomy.md), which defines every `type`,
+`priority`, and `area` label. Add or change labels there first; creating them
+on GitHub is an external step deferred to a repository maintainer.
+
 ## Never
 
 - Suppress lint errors, type errors, or test failures.

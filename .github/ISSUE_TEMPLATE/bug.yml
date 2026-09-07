@@ -1,6 +1,8 @@
 name: Bug report
 description: Report a reproducible defect in the runtime, coding agent, or worker agent.
 title: "[Bug]: "
+labels:
+  - "type: bug"
 body:
   - type: markdown
     attributes:
