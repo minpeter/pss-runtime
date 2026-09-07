@@ -98,6 +98,17 @@ Env knobs: `PSS_THREAD_DIR`, `PSS_THREAD_KEY`, `PSS_MODEL_CONTEXT_WINDOW`,
 - Deeper guidance lives in child AGENTS.md files (`packages/runtime`, `apps/coding-agent`,
   `examples`, `experimental`, `scripts`, and their subtrees) - read the child, not just this file.
 
+# Agent Skills
+
+Reusable, offline operational guidance for agents lives under `.factory/skills/`.
+Each skill is a directory holding a `SKILL.md` with kebab-case frontmatter. The
+documented set below must equal the actual skill directories:
+
+- `.factory/skills/repo-guardian/SKILL.md` — run the local quality gate and
+  governance invariants before handing off a change.
+- `.factory/skills/edge-contract-check/SKILL.md` — verify the Worker edge bundle
+  and the runtime public API contract locally.
+
 # Pull Requests
 
 - Before merging a pull request, add a Tegami entry with a concise 1–3 line summary of the change.
