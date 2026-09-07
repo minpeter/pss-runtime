@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -5,6 +6,21 @@ import { join } from "node:path";
 // tests. All fixtures live under the gitignored .omo/tmp tree (never
 // os.tmpdir(): this host's /tmp is over quota) and every created directory
 // is removed by scope.cleanup() from the test file's afterEach hook.
+
+// Shared read-only git probes for report-path invariants: ignore coverage
+// (check-ignore) and tracked state (ls-files). Read-only query processes;
+// nothing here writes.
+export function gitCheckIgnored(path) {
+  return spawnSync("git", ["check-ignore", "-q", "--", path]).status === 0;
+}
+
+export function gitTracked(path) {
+  return (
+    spawnSync("git", ["ls-files", "--error-unmatch", "--", path], {
+      stdio: "ignore",
+    }).status === 0
+  );
+}
 
 export const FIXTURE_BASE = ".omo/tmp";
 

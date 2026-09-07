@@ -21,7 +21,10 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { MAX_ARTIFACT_RETENTION_DAYS } from "./report-hygiene.mjs";
+import {
+  MAX_ARTIFACT_RETENTION_DAYS,
+  uploadPathCovers,
+} from "./report-hygiene.mjs";
 import { reportTool } from "./report-paths.mjs";
 import { parseWorkflowDocs } from "./workflow-docs.mjs";
 
@@ -118,24 +121,6 @@ export function timingArtifactProblems(value) {
 
 const PRODUCER_RUN = /(^|\s)(pnpm\s+(run\s+)?)?test:timing(\s|$)/;
 const UPLOAD_ARTIFACT = /^actions\/upload-artifact[@/]/;
-const GLOB_CHARS = /[*?[{]/;
-const LEADING_DOT_SLASH = /^\.\//;
-const TRAILING_SLASHES = /\/+$/;
-
-// An upload path token covers the artifact on an exact match, a directory
-// prefix, or a glob whose static prefix contains it.
-function pathCovered(token, path) {
-  const cleaned = token
-    .replace(LEADING_DOT_SLASH, "")
-    .replace(TRAILING_SLASHES, "");
-  if (cleaned === path) {
-    return true;
-  }
-  if (GLOB_CHARS.test(cleaned)) {
-    return path.startsWith(cleaned.split(GLOB_CHARS)[0]);
-  }
-  return path.startsWith(`${cleaned}/`);
-}
 
 function boundedRetention(step) {
   const retention = step?.with?.["retention-days"];
@@ -161,7 +146,7 @@ function isBoundedUploadStep(step, tool, label, problems) {
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line !== "");
-  if (!tokens.some((token) => pathCovered(token, tool.path))) {
+  if (!tokens.some((token) => uploadPathCovers(token, tool.path))) {
     return false;
   }
   if (boundedRetention(step)) {

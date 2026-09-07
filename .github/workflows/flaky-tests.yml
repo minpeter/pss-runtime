@@ -1,0 +1,59 @@
+name: Flaky test detection
+
+# Scheduled/manual-only flaky detection (VAL-SEC-025). This workflow is
+# deliberately absent from the pull_request/push fast-CI triggers: it re-runs
+# the deterministic scripts invariant suite a bounded, explicit number of
+# times with Vitest retries disabled (--retry=0) and classifies each test as
+# passed, flaky (passes and fails across runs), or failed (fails every run).
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly, Monday 02:13 UTC.
+    - cron: "13 2 * * 1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  flaky-detection:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Several scripts/*.test.mjs invariants read built dist artifacts, so
+      # the repeated suite runs against a real build.
+      - name: Build
+        run: pnpm build
+
+      # Explicit numeric repeat count and a bounded per-run timeout; the job
+      # timeout-minutes above bounds the whole job.
+      - name: Run bounded repeated invariant suite
+        env:
+          PSS_TASK_VALIDATOR_NETWORK_ISOLATED: "1"
+        run: pnpm test:flaky -- --runs 5 --timeout 300
+
+      - name: Upload flaky-test report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flaky-tests
+          path: report/flaky-tests.json
+          retention-days: 7
