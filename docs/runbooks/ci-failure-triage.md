@@ -12,7 +12,8 @@ running the same script:
 
 - `pnpm install` — install from the frozen lockfile (`ci.yml` step
   `Install dependencies`).
-- `pnpm audit` — dependency advisory scan.
+- `pnpm audit` — dependency advisory scan (node 24 only: the `ci.yml` step is
+  gated behind `if: matrix.node == '24'`).
 - `pnpm boundaries` — package import-boundary check (`ci.yml` step
   `Check package boundaries`).
 - `pnpm check:compatibility` — Pi compatibility manifest validation.
@@ -21,7 +22,8 @@ running the same script:
 - `pnpm typecheck` — TypeScript project checks (`ci.yml` step `Typecheck`).
 - `pnpm test` — Turbo tests plus `vitest run scripts/*.test.mjs` (`ci.yml`
   step `Test`, run with `PSS_TASK_VALIDATOR_NETWORK_ISOLATED=1`).
-- `pnpm coverage` — core package coverage gate.
+- `pnpm coverage` — core package coverage gate (node 24 only: the `ci.yml`
+  step is gated behind `if: matrix.node == '24'`).
 - `pnpm build` — full workspace build (`ci.yml` step `Build`).
 - `pnpm api:check` — runtime public API snapshot check.
 - `pnpm verify:release` — release-artifact verification.
@@ -42,6 +44,10 @@ running the same script:
 
 - The gate runs on the Node `24` and `26` matrix; a failure on only one Node
   version usually points at a version-specific API or type difference.
+- The `Audit dependencies` and `Check core package coverage` steps run only on
+  the Node `24` matrix leg (`if: matrix.node == '24'`); a red `26` run can
+  never be caused by those two steps, and an advisory or coverage regression
+  surfaces on the `24` leg only.
 - The `Test` step runs under `PSS_TASK_VALIDATOR_NETWORK_ISOLATED=1`, so a test
   that reaches the network locally but is skipped in isolation is a bug in the
   test, not in CI.

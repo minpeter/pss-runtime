@@ -72,8 +72,10 @@ done, or citing a substitute that does not exist fails the invariant suite.
 - Cannot be verified from repository files or local commands: hosted alerting
   (PagerDuty, OpsGenie) would require an external paging service, outside
   repository files.
-- Repo-local substitute: the local `/healthz` probe flow and the Worker's own
-  metrics spans documented in `docs/runbooks/worker-health.md`.
+- Repo-local substitute: the local port-listening readiness check on
+  `127.0.0.1:8792` and the Worker's own metrics spans documented in
+  `docs/runbooks/worker-health.md`; the `/healthz` probe is pending the
+  Worker-operations milestone (milestone 4) and does not exist yet.
 
 ### 6. Progressive rollout
 
@@ -126,5 +128,6 @@ done, or citing a substitute that does not exist fails the invariant suite.
   deployment and health monitoring of the Worker happen on hosted Cloudflare
   infrastructure, never in this repository.
 - Repo-local substitute: the local validation flow on `127.0.0.1:8792` in
-  `docs/runbooks/worker-health.md`, built on the `/healthz` health surface
-  and the Worker's own metrics spans.
+  `docs/runbooks/worker-health.md`, built on port-listening readiness today
+  and the Worker's own metrics spans; the `/healthz` health surface is
+  pending milestone 4 and is not implemented yet.
