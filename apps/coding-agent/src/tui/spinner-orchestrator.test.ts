@@ -243,6 +243,16 @@ describe("createSpinnerOrchestrator", () => {
   });
 
   describe("retry wait", () => {
+    it.each([undefined, null, ""])(
+      "clears an existing retry label without a base (%s)",
+      (base) => {
+        const h = createAdapter(true);
+        const orch = createSpinnerOrchestrator(h.adapter, base);
+        orch.onRetryWaitMessage("retry-status");
+        orch.onRetryWaitEnd();
+        expect(h.state()).toEqual({ hasSpinner: false, currentMessage: null });
+      }
+    );
     it("outranks the streaming label while the wait is active", () => {
       const h = createAdapter(true);
       const orch = createSpinnerOrchestrator(h.adapter, "Working...");

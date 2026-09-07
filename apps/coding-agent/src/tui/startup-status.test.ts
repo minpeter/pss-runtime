@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runCodingAgentCli } from "../cli";
+import { PENDING_SPINNER_INTERVAL_MS } from "./pending-spinner";
 import { showStartupStatus } from "./startup-status";
 
 const SPINNER_PATTERN = /[\u2800-\u28ff]/u;
@@ -41,7 +42,7 @@ describe("pre-mount startup status", () => {
     try {
       await loading;
       const before = String(write.mock.calls.at(-1)?.[0]);
-      vi.advanceTimersByTime(80);
+      vi.advanceTimersByTime(PENDING_SPINNER_INTERVAL_MS);
       const after = String(write.mock.calls.at(-1)?.[0]);
       expect(before.match(SPINNER_PATTERN)?.[0]).toBeDefined();
       expect(after.match(SPINNER_PATTERN)?.[0]).toBeDefined();
@@ -51,13 +52,13 @@ describe("pre-mount startup status", () => {
     } finally {
       release();
       await run;
-      expect(vi.getTimerCount()).toBe(0);
       if (tty) {
         Object.defineProperty(process.stdout, "isTTY", tty);
       } else {
         Reflect.deleteProperty(process.stdout, "isTTY");
       }
     }
+    expect(vi.getTimerCount()).toBe(0);
   });
   it.each([1, 2, 80])(
     "animates at %i columns and clears exactly once before mount",
@@ -77,7 +78,7 @@ describe("pre-mount startup status", () => {
       try {
         const stop = showStartupStatus();
         const before = String(write.mock.calls.at(-1)?.[0]);
-        vi.advanceTimersByTime(80);
+        vi.advanceTimersByTime(PENDING_SPINNER_INTERVAL_MS);
         const after = String(write.mock.calls.at(-1)?.[0]);
         expect(before.match(SPINNER_PATTERN)?.[0]).toBeDefined();
         expect(after.match(SPINNER_PATTERN)?.[0]).toBeDefined();
@@ -90,7 +91,7 @@ describe("pre-mount startup status", () => {
         stop();
         const writes = write.mock.calls.length;
         stop();
-        vi.advanceTimersByTime(80);
+        vi.advanceTimersByTime(PENDING_SPINNER_INTERVAL_MS);
         expect(write.mock.calls).toHaveLength(writes);
         expect(vi.getTimerCount()).toBe(0);
       } finally {

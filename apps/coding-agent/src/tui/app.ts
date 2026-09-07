@@ -67,7 +67,7 @@ import {
 import { createToolRenderers } from "./renderers/tool-renderers";
 import { createSessionCommands } from "./session-commands";
 import { shouldReplayOnStartup } from "./session-startup-replay";
-import { showStartupStatus } from "./startup-status";
+import { type StartupStatusOutput, showStartupStatus } from "./startup-status";
 import { formatSessionResumeHint } from "./terminal-exit";
 import { contextUsageFooter } from "./usage-footer";
 
@@ -82,6 +82,8 @@ export interface StartTuiOptions {
   readonly sessionKey?: string;
   /** Display name recorded for the startup session (`--name`). */
   readonly sessionName?: string;
+  /** Pre-mount status output only; pi-tui owns the interactive terminal. */
+  readonly startupOutput?: StartupStatusOutput;
   /** Replaces the TUI's default optional OpenSearch tools. */
   readonly tools?: ToolSet;
 }
@@ -184,7 +186,7 @@ export async function startTui(
   options: StartTuiOptions = {},
   dependencies: StartTuiDependencies = { createTui: createAgentTUI }
 ): Promise<number> {
-  const stopStatus = showStartupStatus();
+  const stopStatus = showStartupStatus(options.startupOutput);
   let currentSessionKey: (() => string) | undefined;
   try {
     return await startTuiSession(

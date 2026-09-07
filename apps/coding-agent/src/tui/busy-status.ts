@@ -65,7 +65,8 @@ export class BusyStatus {
   }
 
   getMessage(): string | undefined {
-    return this.context.getStore()?.at(-1)?.message;
+    const entry = this.context.getStore()?.at(-1);
+    return entry && this.entries.has(entry) ? entry.message : undefined;
   }
 
   /** Suspend only the calling operation chain, never independent background work. */

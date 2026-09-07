@@ -1,9 +1,16 @@
 import { createSpinnerTicker, stylePendingIndicator } from "./pending-spinner";
 
+export interface StartupStatusOutput {
+  readonly columns?: number;
+  readonly isTTY?: boolean;
+  write(text: string): unknown;
+}
+
 export async function withStartupStatus<T>(
-  operation: () => Promise<T>
+  operation: () => Promise<T>,
+  stdout: StartupStatusOutput = process.stdout
 ): Promise<T> {
-  const stop = showStartupStatus();
+  const stop = showStartupStatus(stdout);
   try {
     return await operation();
   } finally {
@@ -12,14 +19,16 @@ export async function withStartupStatus<T>(
 }
 
 /** Minimal pre-mount status; relinquishes the line before pi-tui owns stdout. */
-export function showStartupStatus(): () => void {
-  if (!process.stdout.isTTY) {
+export function showStartupStatus(
+  stdout: StartupStatusOutput = process.stdout
+): () => void {
+  if (!stdout.isTTY) {
     return () => undefined;
   }
   const ticker = createSpinnerTicker((frame) => {
-    const width = Math.max(1, process.stdout.columns ?? 80);
+    const width = Math.max(1, stdout.columns ?? 80);
     const label = "Starting...".slice(0, Math.max(0, width - 2));
-    process.stdout.write(
+    stdout.write(
       `\r\x1b[2K${label ? stylePendingIndicator(frame, label) : frame}`
     );
   });
@@ -30,6 +39,6 @@ export function showStartupStatus(): () => void {
     }
     stopped = true;
     ticker.stop();
-    process.stdout.write("\r\x1b[2K");
+    stdout.write("\r\x1b[2K");
   };
 }
