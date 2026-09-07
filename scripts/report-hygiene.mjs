@@ -111,6 +111,7 @@ const YAML_FILE = /\.ya?ml$/;
 const NON_DIR_TAIL = /[^/]*$/;
 const LEADING_DOT_SLASH = /^\.\//;
 const LEADING_SLASH = /^\//;
+const TRAILING_SLASHES = /\/+$/;
 const FORCE_ADD_REPORT =
   /git\s+add\s+(?:-[a-zA-Z]*f|--force)\b[^\n|]*\b(?:report|\.omo|\.senpi)\b/;
 
@@ -210,6 +211,24 @@ export function workflowArtifactProblems(workflows, tools = REPORT_TOOLS) {
 
 // Glob-bearing upload paths still need gitignore coverage; the probe reduces
 // them to a static prefix for `git check-ignore`.
+
+// True when an upload `with.path` token covers path: exact match, directory
+// prefix, or a glob whose static prefix contains it. Shared by the
+// report-hygiene CI checks and the analysis-tool producer wiring invariants
+// (test-timing, flaky detection).
+export function uploadPathCovers(token, path) {
+  const cleaned = token
+    .replace(LEADING_DOT_SLASH, "")
+    .replace(TRAILING_SLASHES, "");
+  if (cleaned === path) {
+    return true;
+  }
+  if (GLOB_CHARS.test(cleaned)) {
+    return path.startsWith(cleaned.split(GLOB_CHARS)[0]);
+  }
+  return path.startsWith(`${cleaned}/`);
+}
+
 function stepProbes(step) {
   if (typeof step?.uses !== "string" || !UPLOAD_ARTIFACT.test(step.uses)) {
     return [];

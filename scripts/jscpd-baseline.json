@@ -556,7 +556,7 @@
     "duplicates:scripts/dependabot-config.mjs:8-29=scripts/release-age-policy.mjs:10-31",
     "duplicates:scripts/governance-contributing.mjs:47-61=scripts/governance-security.mjs:63-77",
     "duplicates:scripts/jscpd-duplicates.test.mjs:58-77=scripts/knip-unused.test.mjs:54-73",
-    "duplicates:scripts/report-hygiene.mjs:186-191=scripts/test-timing.mjs:164-169",
+    "duplicates:scripts/report-hygiene.mjs:186-191=scripts/test-timing.mjs:166-171",
     "duplicates:scripts/verify-release-artifacts-runtime-subagent.test.mjs:12-25=scripts/verify-release-artifacts/runtime-public-surface.mjs:249-262",
     "duplicates:scripts/verify-release-artifacts/runtime-public-surface.mjs:217-222=scripts/verify-release-artifacts/runtime-public-surface.mjs:241-246"
   ]

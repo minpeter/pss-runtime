@@ -1,8 +1,8 @@
-import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { readWorkflows } from "./report-hygiene.mjs";
 import { reportTool } from "./report-paths.mjs";
+import { gitCheckIgnored, gitTracked } from "./test-fixtures.mjs";
 import {
   normalizeTiming,
   timingArtifactProblems,
@@ -20,18 +20,6 @@ const ROOT_PACKAGE = "package.json";
 
 function rootScripts() {
   return JSON.parse(readFileSync(ROOT_PACKAGE, "utf8")).scripts ?? {};
-}
-
-function gitCheckIgnored(path) {
-  return spawnSync("git", ["check-ignore", "-q", "--", path]).status === 0;
-}
-
-function gitTracked(path) {
-  return (
-    spawnSync("git", ["ls-files", "--error-unmatch", "--", path], {
-      stdio: "ignore",
-    }).status === 0
-  );
 }
 
 function vitestFixture(durations) {
