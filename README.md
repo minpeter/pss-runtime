@@ -56,6 +56,11 @@ cloning. The local quality gate runs entirely offline:
 - `pnpm api:check` / `pnpm verify:edge` — runtime API snapshot check and the
   Worker edge-bundle dry run.
 
+The public API snapshot (`pnpm api:check`) is the runtime API contract. The
+repository intentionally carries no TypeDoc dependency or script: the
+installed TypeScript 7 toolchain is outside TypeDoc's supported range, so the
+snapshot — not generated documentation — remains the contract of record.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the QA and evidence rules and the
 [operational runbooks](docs/runbooks/README.md) for CI triage, release, and
 local Worker validation procedures.
