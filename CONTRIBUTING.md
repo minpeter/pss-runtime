@@ -82,6 +82,22 @@ is not done.
 - Before merge, add a `.tegami/YYYY-MM-DD-<slug>.md` release-note entry for the
   changed published package and run `pnpm check:tegami-notes`.
 
+## Pre-commit hook
+
+A Husky + lint-staged pre-commit hook (`.husky/pre-commit`, config in
+`.lintstagedrc.json`) lints and formats only the files in the git index at
+commit time. Untracked files and unstaged working-tree content are never
+passed to the linter, rewritten, or re-staged. The `prepare` script in
+`package.json` wires the hook up during `pnpm install`, so a fresh checkout
+reproduces the behavior with no host-specific setup.
+
+Auto-fix mode: fix-on-write. Staged files with fixable violations are
+rewritten by `ultracite fix` and re-staged by lint-staged, after which the
+commit proceeds; re-running the hook on the same content is a no-op. A
+violation that cannot be auto-fixed aborts the commit with the offending
+file and rule named, and no file outside the index is touched. Use
+`git commit --no-verify` to deliberately bypass the hook.
+
 ## Labels
 
 Issue and pull-request labels follow the canonical
