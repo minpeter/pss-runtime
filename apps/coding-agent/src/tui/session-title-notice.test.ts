@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -52,9 +52,13 @@ vi.mock("@earendil-works/pi-tui", async (importOriginal) => {
   };
 });
 
+import { sessionGuard } from "../extensions/capabilities";
+import type { CodingAgentExtensionInput } from "../extensions/types";
+import { readSessionIndex, sessionIndexPath } from "../sessions/session-index";
 import { type AgentTUIConfig, createAgentTUI } from "./agent";
 import { startTui } from "./app";
 import { TuiSessionMachine } from "./session-state";
+import { TranscriptOwner } from "./transcript-owner";
 
 function gate() {
   let resolve!: () => void;
@@ -139,7 +143,10 @@ let directory: string;
 let config: AgentTUIConfig;
 let run: Promise<number> | undefined;
 let generate: ReturnType<typeof vi.fn>;
-async function fixture(failTitle = false) {
+async function fixture(
+  failTitle = false,
+  extensions: readonly CodingAgentExtensionInput[] = []
+) {
   const doGenerate = vi.fn(() => {
     if (failTitle) {
       return Promise.reject(new Error("TITLE_PROVIDER_ERROR"));
@@ -172,7 +179,7 @@ async function fixture(failTitle = false) {
   });
   const ready = idle();
   run = startTui(
-    { cwd: directory, model, tools: {} },
+    { cwd: directory, extensions, model, tools: {} },
     {
       createTui(value) {
         config = value;
@@ -204,6 +211,123 @@ afterEach(async () => {
     vi.unstubAllEnvs();
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+describe.sequential("new session notices through startTui", () => {
+  it("does not reset, switch, or announce success when a guard refuses creation", async () => {
+    await fixture(false, [
+      {
+        id: "new-guard",
+        default: (pss) => {
+          pss.provide(
+            sessionGuard({
+              beforeSwitch: () => ({
+                cancel: true,
+                reason: "REFUSAL_SENTINEL",
+              }),
+            })
+          );
+        },
+      },
+    ]);
+    const current = config.currentSession?.();
+    const before = await readSessionIndex(
+      sessionIndexPath(join(directory, "threads"))
+    );
+    const reset = vi.spyOn(TranscriptOwner.prototype, "reset");
+    await command("/new");
+    expect(lines()).toHaveLength(1);
+    expect(lines()[0]).toContain("REFUSAL_SENTINEL");
+    expect(config.currentSession?.()).toEqual(current);
+    expect(reset).not.toHaveBeenCalled();
+    expect(
+      await readSessionIndex(sessionIndexPath(join(directory, "threads")))
+    ).toEqual(before);
+  });
+  it("retains the current session and transcript when durable creation fails", async () => {
+    await fixture();
+    await command("/name RETAINED_SESSION");
+    const before = lines();
+    const current = config.currentSession?.();
+    const reset = vi.spyOn(TranscriptOwner.prototype, "reset");
+    const newCommand = config.commands?.find((item) => item.name === "new");
+    if (!newCommand) {
+      throw new Error("Missing new command");
+    }
+    const execute = vi.spyOn(newCommand, "execute");
+    const path = sessionIndexPath(join(directory, "threads"));
+    await rename(path, `${path}.saved`);
+    await mkdir(path);
+    try {
+      await command("/clear");
+      const result = await execute.mock.results[0]?.value;
+      expect(result?.success).toBe(false);
+      expect(result?.action).toBeUndefined();
+      expect(lines().join(" ")).toBe([...before, result?.message].join(" "));
+      expect(config.currentSession?.()).toEqual(current);
+      expect(reset).not.toHaveBeenCalled();
+    } finally {
+      await rm(path, { recursive: true });
+      await rename(`${path}.saved`, path);
+    }
+  });
+
+  it.each(["/new", "/clear", "/new NAMED_SESSION"])(
+    "%s resets once, switches durably, and synchronizes status without extra rows",
+    async (input) => {
+      await fixture();
+      const header = lines(surface().children[0]);
+      const previousKey = config.currentSession?.().key;
+      await command("/name PREVIOUS_SESSION");
+      const reset = vi.spyOn(TranscriptOwner.prototype, "reset");
+      const newCommand = config.commands?.find((item) => item.name === "new");
+      if (!newCommand) {
+        throw new Error("Missing new command");
+      }
+      const execute = vi.spyOn(newCommand, "execute");
+      if (config.footer) {
+        config.footer.text = "FOOTER_SENTINEL";
+      }
+      await command(input);
+      const current = config.currentSession?.();
+      if (!current) {
+        throw new Error("Missing current session");
+      }
+      expect(current.key).not.toBe(previousKey);
+      expect(reset).toHaveBeenCalledExactlyOnceWith("session-navigation");
+      const result = await execute.mock.results[0]?.value;
+      if (!result?.message) {
+        throw new Error("Missing new-session result");
+      }
+      expect(result.action).toEqual({
+        clear: true,
+        reason: "new",
+        type: "session",
+      });
+      // Compare shipped copy to command output; assert the selector as data.
+      expect(lines()).toEqual([result.message]);
+      expect(result.message.split(" ").at(-1)).toBe(
+        `${current.key.split("#").at(-1)}.`
+      );
+      expect(lines(surface().children[0])).toEqual(header);
+      expect(lines(surface().children.at(-1))).not.toContain("FOOTER_SENTINEL");
+      const index = await readSessionIndex(
+        sessionIndexPath(join(directory, "threads"))
+      );
+      expect(index.active[directory]).toBe(current.key);
+      expect(
+        index.sessions.find((entry) => entry.key === current.key)?.name
+      ).toBe(input.includes("NAMED_SESSION") ? "NAMED_SESSION" : undefined);
+      const before = lines();
+      config.preprocessCommand = (_input, hooks) => {
+        hooks.updateHeader();
+        return Promise.resolve(null);
+      };
+      await command("/refresh-test");
+      expect(lines()).toEqual(before);
+      expect(reset).toHaveBeenCalledTimes(1);
+    }
+  );
 });
 
 describe.sequential("session title notices through startTui", () => {
@@ -241,8 +365,8 @@ describe.sequential("session title notices through startTui", () => {
     await command("/name");
     expect(lines()).toHaveLength(2);
     await command("/new SESSION_NEXT");
-    expect(lines().join("\n")).toContain(directory);
-    expect(lines().join("\n")).toContain("SESSION_NEXT");
+    expect(config.currentSession?.().name).toBe("SESSION_NEXT");
+    expect(lines()).toHaveLength(1);
     expect(lines(surface().children[0])).toEqual(header);
   });
 

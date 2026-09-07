@@ -860,7 +860,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
 
   let currentSubtitle = config.header?.subtitle;
   let currentSession = config.currentSession?.();
-  const refreshCurrentStatus = (reason?: "model-change"): void => {
+  const refreshCurrentStatus = (reason?: "model-change" | "new"): void => {
     const nextSession = config.currentSession?.();
     const sessionChanged = nextSession?.key !== currentSession?.key;
     const titleChanged =
@@ -873,7 +873,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
       showSystemMessage(`Session title updated to "${name}".`);
     } else if (
       (sessionChanged || config.header?.subtitle !== currentSubtitle) &&
-      reason !== "model-change"
+      reason === undefined
     ) {
       const subtitle = sanitizeTerminalText(config.header?.subtitle ?? "");
       if (subtitle) {
@@ -1675,7 +1675,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     }
 
     if (commandResult.action.type === "session") {
-      await handleSessionAction(commandResult, commandResult.action.clear);
+      await handleSessionAction(commandResult, commandResult.action);
       return;
     }
 
@@ -1693,9 +1693,9 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
 
   const handleSessionAction = async (
     commandResult: TuiCommandResult,
-    clear: boolean
+    action: Extract<TuiCommandAction, { type: "session" }>
   ): Promise<void> => {
-    if (clear) {
+    if (action.clear) {
       clearStatus();
       try {
         await renderSessionHistory();
@@ -1707,7 +1707,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
         return;
       }
     }
-    refreshCurrentStatus();
+    refreshCurrentStatus(action.reason);
     if (commandResult.message) {
       showSystemMessage(commandResult.message);
     }

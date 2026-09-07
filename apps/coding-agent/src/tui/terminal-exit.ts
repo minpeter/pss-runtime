@@ -3,7 +3,7 @@ import type { TuiMainScreenRenderState } from "@earendil-works/pi-tui";
 export const formatSessionResumeHint = (sessionKey: string): string =>
   `To resume this session: pss --session ${sessionResumeSelector(sessionKey)}`;
 
-const sessionResumeSelector = (sessionKey: string): string => {
+export const sessionResumeSelector = (sessionKey: string): string => {
   const separator = sessionKey.lastIndexOf("#");
   return separator >= 0 ? sessionKey.slice(separator + 1) : sessionKey;
 };
