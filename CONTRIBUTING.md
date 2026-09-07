@@ -98,6 +98,38 @@ violation that cannot be auto-fixed aborts the commit with the offending
 file and rule named, and no file outside the index is touched. Use
 `git commit --no-verify` to deliberately bypass the hook.
 
+## Naming conventions
+
+Each rule states its status: **enforced** rules run in `pnpm lint`
+(ultracite/biome, configured in `biome.jsonc`); **advisory** rules are tree
+conventions no lint rule can check. The invariant in
+`scripts/naming-conventions.test.mjs` keeps this table and the toolchain
+coherent: a rule documented as enforced but absent from the config, or a
+configured naming rule missing from this table, fails `pnpm test` naming the
+rule.
+
+| Subject | Convention | Status | Tooling rule |
+| --- | --- | --- | --- |
+| Package names | `@minpeter/pss-*` scope, kebab-case segments | Advisory | — |
+| Source file names | kebab-case, ASCII only | Enforced | style/useFilenamingConvention |
+| Variables and parameters | camelCase | Enforced | style/useNamingConvention |
+| Constants | camelCase, PascalCase, or CONSTANT_CASE at any scope | Enforced | style/useNamingConvention |
+| Functions | camelCase; PascalCase for component-like factories | Enforced | style/useNamingConvention |
+| Types, interfaces, classes, enums, type parameters | PascalCase | Enforced | style/useNamingConvention |
+| Enum members | PascalCase | Enforced | style/useNamingConvention |
+| Class members | camelCase; static readonly constants may be CONSTANT_CASE | Enforced | style/useNamingConvention |
+| Object literal and type member names | camelCase for internal shapes; mirror external contracts (env keys, JSON payloads, protocol markers) | Advisory | — |
+
+- Acronyms keep consecutive capitals (`TMPDIR`, `SSEStream`): the naming rule
+  runs with `strictCase: false`.
+- Leading/trailing `_` or `$` markers (e.g. `_exhaustive`, `$pss`) are allowed
+  where they denote protocol or placeholder roles.
+- Biome lints tracked and untracked files alike (`vcs.useIgnoreFile: false`
+  with explicit generated-output excludes in `biome.jsonc`), so a scratch
+  fixture named `*.scratch.ts` anywhere in the tree is linted but never
+  committed: `pnpm lint` fails on a planted out-of-convention identifier,
+  naming the file and the rule id, and passes again once it is removed.
+
 ## Labels
 
 Issue and pull-request labels follow the canonical
