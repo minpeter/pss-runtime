@@ -13,18 +13,21 @@ pnpm 11.9 workspaces + Turbo monorepo, Node >=24, strict TS ESM; tsdown builds, 
 
 ```
 pss-runtime/
-├── packages/runtime/       # published @minpeter/pss-runtime 0.3.0-next.13; mega-barrel, 14 area dirs
+├── packages/runtime/       # published @minpeter/pss-runtime 0.3.0-next.13; mega-barrel, 13 area dirs
 ├── apps/coding-agent/      # published @minpeter/pss-coding-agent 0.0.14-next.17; CLI/TUI + extension host
 ├── apps/worker-agent/      # private Cloudflare Worker + Telegram bot front; never published
 ├── extensions/{latex,mermaid,web}/  # publishable AND bundled into coding-agent dist
 ├── examples/               # six private runtime demos; in workspace, structural drift fails root tests
 ├── experimental/           # private live-provider benchmarks; cost money, PSS_BENCH_MODEL picks model
 ├── scripts/                # repo-invariant tests + release verification, run OUTSIDE Turbo
-└── docs/                   # ADR 0001 (pi baseline), RFCs 0002-0004, compatibility manifests
+├── script/                 # singular: QA harnesses (web-terminal visual QA)
+├── assets/                 # images referenced by docs and READMEs
+└── docs/                   # ADR 0001 (pi baseline), RFCs 0002-0004, compatibility manifests, runbooks
 ```
 
-`packages/extension-api` NO LONGER EXISTS - merged into coding-agent, shipped as
-`@minpeter/pss-coding-agent/extension` (+`/legacy`). Extensions import that subpath.
+The old packages/extension-api package NO LONGER EXISTS - merged into coding-agent,
+shipped as `@minpeter/pss-coding-agent/extension` (+`/legacy`). Extensions import
+that subpath.
 
 ## WHERE TO LOOK
 
@@ -65,9 +68,9 @@ Hotspots: `apps/coding-agent/src/tui/agent.ts` (1694 lines, largest in repo),
 
 ## ANTI-PATTERNS (THIS PROJECT)
 
-- NEVER add NPM_TOKEN: releases use GitHub OIDC + npm Trusted Publishing.
+- NEVER add npm access tokens or any credential to the repo: releases use GitHub OIDC + npm Trusted Publishing.
 - NEVER raise the 250 pure-LOC script ceiling (`scripts/file-size.test.mjs`); split modules.
-- NEVER write `new Agent({`, `agent.session(`, or `~/.pss/sessions` in docs - asserted by `scripts/runtime-docs.test.mjs`.
+- NEVER document the removed legacy API surface (direct Agent construction, agent session accessors) or the legacy ~/.pss sessions directory in docs - asserted by `scripts/runtime-docs.test.mjs`.
 - NEVER remove Telegram fragment coalescing (worker-agent).
 - Attachment `MAX_IMAGE_*` ceilings are security limits, not defaults to relax.
 
@@ -91,8 +94,9 @@ Env knobs: `PSS_THREAD_DIR`, `PSS_THREAD_KEY`, `PSS_MODEL_CONTEXT_WINDOW`,
 
 ## NOTES
 
-- `experimental/nextjs-bench/results/` is ~35k committed generated files - always
-  exclude from search: `rg --glob '!experimental/nextjs-bench/results/**'`.
+- nextjs-bench result campaigns are generated output kept at the repository-level
+  .artifacts/nextjs-bench/ path (outside workspace boundaries, moved there by
+  `pnpm boundaries`) - never commit them and keep them out of searches.
 - `experimental/` and `examples/` are in the workspace: a broken private package
   there fails `pnpm test` and CI. Benchmarks call live providers and cost money.
 - Deeper guidance lives in child AGENTS.md files (`packages/runtime`, `apps/coding-agent`,
