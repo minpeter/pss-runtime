@@ -16,6 +16,10 @@ packages/*/.turbo
 .wrangler
 .husky/_/
 
+# Analysis reports (Knip/jscpd/drift/bundle budgets) are local artifacts:
+# produced on demand, never committed.
+report/
+
 # Agent workspace. QA evidence and session state are local artifacts: they are
 # mandatory to produce (see CONTRIBUTING.md) but never committed. Only plans
 # are shared so reviewers can read the intended approach.
