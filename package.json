@@ -16,6 +16,7 @@
     "audit": "corepack pnpm audit --audit-level moderate",
     "boundaries": "node scripts/prepare-boundaries.mjs && turbo boundaries",
     "build": "turbo run build",
+    "check:bundle-size": "node scripts/check-bundle-size.mjs",
     "check:compatibility": "node scripts/validate-pi-compatibility-manifest.mjs",
     "check:duplicates": "node scripts/check-duplicates.mjs",
     "check:duplicates:report": "node scripts/check-duplicates.mjs --report",
