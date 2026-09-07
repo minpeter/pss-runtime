@@ -1,37 +1,25 @@
 import { spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { REPORT_ENTRY_CAP } from "./knip-unused.mjs";
+import {
+  createFixtureScope,
+  writeBaselineFixture,
+  writeJsonFixture,
+} from "./test-fixtures.mjs";
 
 // Wrapper behavior tests for scripts/check-duplicates.mjs (VAL-SEC-002/004/009
 // jscpd leg): deterministic, offline, parallel-safe; all fixtures live under
-// the gitignored .omo/tmp tree.
+// the gitignored .omo/tmp tree (scripts/test-fixtures.mjs).
 
 const WRAPPER = "scripts/check-duplicates.mjs";
 const DEFAULT_BIN = "node_modules/.bin/jscpd";
-const FIXTURE_BASE = ".omo/tmp";
-const tempDirs = [];
+const scope = createFixtureScope("check-duplicates-");
 
-afterEach(() => {
-  for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { force: true, recursive: true });
-  }
-});
+afterEach(scope.cleanup);
 
-function fixtureDir() {
-  mkdirSync(FIXTURE_BASE, { recursive: true });
-  const dir = mkdtempSync(join(FIXTURE_BASE, "check-duplicates-"));
-  tempDirs.push(dir);
-  return dir;
-}
+const fixtureDir = scope.dir;
 
 function duplicate(aName, aStart, aEnd, bName, bStart, bEnd) {
   return {
@@ -45,15 +33,11 @@ function duplicate(aName, aStart, aEnd, bName, bStart, bEnd) {
 }
 
 function reportFixture(dir, duplicates) {
-  const path = join(dir, "jscpd-report.json");
-  writeFileSync(path, JSON.stringify({ duplicates }));
-  return path;
+  return writeJsonFixture(dir, "jscpd-report.json", { duplicates });
 }
 
 function baselineFixture(dir, signatures) {
-  const path = join(dir, "baseline.json");
-  writeFileSync(path, JSON.stringify({ version: 1, signatures }));
-  return path;
+  return writeBaselineFixture(dir, signatures);
 }
 
 function run(args) {

@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { parse as parseYaml } from "yaml";
+import { parseWorkflowDocs } from "./workflow-docs.mjs";
 
 // Preservation invariants for the pre-mission install/build workflows and
 // ignore rules (VAL-LOCAL-027, VAL-LOCAL-028). Every decision here is static
@@ -151,14 +151,7 @@ function jobNeeds(job) {
 
 function collectInvocations(workflows, problems) {
   const invocations = [];
-  for (const { path, source } of workflows) {
-    let doc;
-    try {
-      doc = parseYaml(source);
-    } catch (error) {
-      problems.push(`${path} parse error: ${error.message}`);
-      continue;
-    }
+  for (const { path, doc } of parseWorkflowDocs(workflows, problems)) {
     for (const [jobName, job] of Object.entries(doc?.jobs ?? {})) {
       const runText = jobRunText(job);
       for (const script of CREDENTIALED_SCRIPTS) {

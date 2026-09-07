@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { parse as parseYaml } from "yaml";
 import { normalizePattern, parseCodeowners } from "./governance-codeowners.mjs";
 import { parseJsonc } from "./jsonc.mjs";
+import { reportTool } from "./report-paths.mjs";
 
 // Shared Knip unused-code check helpers (VAL-SEC-001..006). Pure and static:
 // no network, no ports, no writes, no clock. The executable wrapper lives in
@@ -9,13 +10,15 @@ import { parseJsonc } from "./jsonc.mjs";
 
 export const KNIP_CONFIG_PATH = "knip.jsonc";
 export const KNIP_BASELINE_PATH = "scripts/knip-baseline.json";
-export const KNIP_REPORT_PATH = "report/knip-unused.json";
+// Report destination and entry cap come from the canonical registry
+// (scripts/report-paths.mjs, VAL-SEC-008/009): a noisy run truncates at this
+// many signature entries and notes the truncation, so a report can never
+// exhaust CI storage.
+export const KNIP_REPORT_PATH = reportTool("knip").path;
 export const WORKSPACE_MANIFEST_PATH = "pnpm-workspace.yaml";
 export const CODEOWNERS_PATH = ".github/CODEOWNERS";
 
-// REPORT mode cap: a noisy run truncates at this many signature entries and
-// notes the truncation, so a report can never exhaust CI storage.
-export const REPORT_ENTRY_CAP = 500;
+export const REPORT_ENTRY_CAP = reportTool("knip").cap;
 
 // Generated and third-party paths that must stay out of analysis (VAL-SEC-003).
 export const REQUIRED_IGNORE_TOKENS = [
