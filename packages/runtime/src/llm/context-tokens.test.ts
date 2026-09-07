@@ -103,6 +103,34 @@ describe("ContextTokenMeter", () => {
     });
   });
 
+  it("counts streamed tool arguments as generated output until usage is reported", () => {
+    const meter = new ContextTokenMeter(new ContextTokenCalibrationRegistry());
+    meter.begin({
+      attemptId: "tool-stream",
+      fixedFingerprint: "fixed",
+      measurement: measurement(10),
+    });
+
+    const before = meter.snapshot().currentRequest.output.tokens;
+    meter.outputDelta("tool-stream", '{"path":"src/世界.ts",');
+    const during = meter.snapshot().currentRequest.output;
+    expect(during.tokens).toBeGreaterThan(before);
+    expect(during.basis).toBe("heuristic");
+
+    meter.report("tool-stream", {
+      attemptId: "tool-stream",
+      inputTokens: 12,
+      outputTokens: 4,
+      totalTokens: 16,
+      type: "model-usage",
+    });
+    expect(meter.snapshot().currentRequest.output).toEqual({
+      basis: "reported",
+      marginTokens: 0,
+      tokens: 4,
+    });
+  });
+
   it("derives a missing reported side from total usage", () => {
     const meter = new ContextTokenMeter(new ContextTokenCalibrationRegistry());
     meter.begin({
