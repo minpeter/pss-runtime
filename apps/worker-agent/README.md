@@ -63,6 +63,24 @@ Accept: text/event-stream
 
 The stream replays committed events after `after` before waiting for newly committed events. Each `thread-event` frame has the serialized cursor as its SSE `id` and a `StoredThreadEvent` JSON object as `data`. `streamRemoteSessionEvents()` reconnects a dropped response with its last received cursor. SSE is an optimization only: clients must retain cursor-polling replay as the deployment-neutral fallback.
 
+## Health probe
+
+Unauthenticated liveness probe, dispatched before tRPC/SSE/Telegram:
+
+```text
+GET /healthz        # also /healthz/ (trailing slash)
+```
+
+Returns 200 `application/json` with a bounded (<1 KiB), deterministic body:
+`environment` (the `ENVIRONMENT` binding), `version` (the
+`CF_VERSION_METADATA.id` when bound, otherwise `null`), and `agentDo` (a
+boolean reflecting `AGENT_DO` binding presence only — no Durable Object
+fetch or wake-up). Non-GET methods return 405. A missing or invalid
+baseline binding returns 503 with an opaque `{"error":"unavailable"}`
+body; detail stays in structured worker logs. The probe performs no model,
+Telegram, or Durable Object calls. Any sub-path (`/healthz/foo`) is not
+health and falls through to the catch-all dispatch.
+
 ## Coverage gate
 
 The Worker package owns its coverage gate, independent of the root core-only
@@ -88,14 +106,14 @@ being flaky. That suite exercises the additive Worker surface end to end
 without external services: the session contract and replay paths, the SSE
 event stream, tRPC auth and dispatch, Telegram delivery and fragment
 coalescing, attachment limits, and the OpenTelemetry metrics instrumentation
-in `src/observability.ts` and `src/agent/agent-otel.ts`. When milestone 4 adds
-the `/healthz` route and request/turn metrics handlers, those
-health/metrics/contract paths join the same include set and the floor is
-re-baselined upward, never removed.
+in `src/observability.ts` and `src/agent/agent-otel.ts`, and the `/healthz`
+route in `src/health/`. When milestone 4 adds the request/turn metrics
+handlers, those metrics/contract paths join the same include set and the
+floor is re-baselined upward, never removed.
 
 **Why not zero.** A zero or undeclared threshold passes even if the suite
 stops exercising the Worker surface at all, which would let the transport,
-privacy, and (once landed) health/metrics paths regress uncovered without any
+privacy, health, and (once landed) metrics paths regress uncovered without any
 signal. A non-zero floor guarantees two things: new source files enter the
 measured include set instead of silently escaping it, and a deleted or
 neutered test file drops measured coverage below the floor and fails the run.
