@@ -44,7 +44,7 @@ export function createModelRetry({
       throw error;
     }
     errors.push(error);
-    if (errors.length === 3) {
+    if (errors.length === 3 && isRetryable(error)) {
       stop("exhausted");
       throw new RetryError({
         errors,

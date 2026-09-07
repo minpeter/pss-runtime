@@ -407,7 +407,6 @@ function modelWithAttemptObserver({
     return { options: { model } };
   }
   const retry = createModelRetry({ attemptId, abortSignal, onRetry });
-  retry.checkAbort();
   const origin = {
     modelId: configuredModelId(resolvedModel),
     provider: configuredProvider(resolvedModel),

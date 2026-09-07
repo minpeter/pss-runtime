@@ -410,6 +410,55 @@ describe("authoritative model retry lifecycle", () => {
     ).toMatchObject({ error: { category: "authentication", status: 401 } });
   });
 
+  it("classifies a final nonretryable failure after two retries", async () => {
+    let calls = 0;
+    const finalError = failure(401);
+    const model = createMockLanguageModelV4(() => {
+      calls += 1;
+      throw calls === 3 ? finalError : failure();
+    });
+    const events: StreamAgentEvent[] = [];
+    const pending = expect(
+      generateModelStepResult({
+        history,
+        model,
+        signal,
+        onStreamEvent: (event) => events.push(event),
+      })
+    ).rejects.toMatchObject({
+      lastError: finalError,
+      reason: "errorNotRetryable",
+    });
+    await vi.runAllTimersAsync();
+    await pending;
+    expect(calls).toBe(3);
+    expect(retries(events).at(-1)).toMatchObject({
+      attempt: 3,
+      phase: "stopped",
+      reason: "non-retryable",
+    });
+  });
+
+  it("cleans up a pre-aborted attempt before provider execution", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const events: StreamAgentEvent[] = [];
+    const model = createMockLanguageModelV4(() => {
+      throw new Error("provider should not be called");
+    });
+    await expect(
+      generateModelStepResult({
+        history,
+        model,
+        signal: controller.signal,
+        onStreamEvent: (event) => events.push(event),
+      })
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(retries(events)).toMatchObject([
+      { attempt: 0, phase: "stopped", reason: "cancelled" },
+    ]);
+  });
+
   it("isolates concurrent waits on a shared model", async () => {
     const calls = new Map<string, number>();
     const model = createMockLanguageModelV4(({ prompt }) => {
