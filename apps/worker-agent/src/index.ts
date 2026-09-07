@@ -2,6 +2,7 @@ import { installCloudflareImageCodecs } from "@minpeter/pss-runtime/platform/dur
 import { defineWorkerFetch } from "evlog/workers";
 
 import type { Env } from "./env";
+import { handleHealthRequest, isHealthPathname } from "./health/health";
 import { handleWorkerRpcRequest } from "./rpc/worker-rpc";
 import { handleSessionEventsRequest } from "./session/session-events-server";
 import { handleTelegramWebhook } from "./telegram/telegram";
@@ -36,6 +37,9 @@ export default defineWorkerFetch<Env>(async (request, env, ctx, log) => {
   try {
     let response: Response;
     switch (handler) {
+      case "health":
+        response = handleHealthRequest(request, env, log);
+        break;
       case "session-events":
         response = await handleSessionEventsRequest(request, env);
         break;
@@ -66,7 +70,10 @@ export default defineWorkerFetch<Env>(async (request, env, ctx, log) => {
 
 function selectRequestHandler(
   pathname: string
-): "session-events" | "telegram-webhook" | "tui-rpc" {
+): "health" | "session-events" | "telegram-webhook" | "tui-rpc" {
+  if (isHealthPathname(pathname)) {
+    return "health";
+  }
   if (pathname === SESSION_EVENTS_PATHNAME) {
     return "session-events";
   }
