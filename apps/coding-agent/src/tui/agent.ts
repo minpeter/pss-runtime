@@ -1094,8 +1094,19 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     stream: AsyncIterable<TuiStreamPart>,
     flags: PiTuiRenderFlags,
     onFirstVisiblePart?: () => void,
-    loaderMessage?: string
+    loaderMessage?: string,
+    transcript = chatContainer
   ): Promise<{ finishReason: string | undefined }> => {
+    const replaying = transcript !== chatContainer;
+    const views = replaying ? new Set<AssistantStreamView>() : assistantViews;
+    const notifications = replaying
+      ? createAssistantRendererNotifications((message) => {
+          addChatComponent(
+            transcript,
+            new Text(sanitizeTerminalText(message), 1, 0)
+          );
+        })
+      : assistantRendererNotifications;
     const {
       activeToolInputs,
       streamedToolCallIds,
@@ -1111,17 +1122,17 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     } = createStreamViewFactories({
       assistantRenderer: config.assistantRenderer,
       assistantRendererSignal: config.assistantRendererSignal,
-      assistantViews,
-      chatContainer,
+      assistantViews: views,
+      chatContainer: transcript,
       flags,
       foregroundColor: config.theme?.foregroundColor,
       markdownTheme,
-      notifyAssistantRenderer: assistantRendererNotifications.notify,
-      notifyAssistantRendererOnce: assistantRendererNotifications.notifyOnce,
+      notifyAssistantRenderer: notifications.notify,
+      notifyAssistantRendererOnce: notifications.notifyOnce,
       requestRender: () => tui.requestRender(),
       toolRenderers: config.toolRenderers,
     });
-    const epoch = chatContainer.epoch;
+    const epoch = transcript.epoch;
     const tracker: StreamPartTracker = {
       finishReason: undefined,
       firstVisiblePartSeen: false,
@@ -1161,7 +1172,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
       getToolView,
       finishToolView,
       finishOutput: finish,
-      chatContainer,
+      chatContainer: transcript,
       onReasoningStart: orchestrator.onReasoningStart,
       onReasoningEnd: orchestrator.onReasoningEnd,
       // Runtime tool-call/result events are committed after execution. They
@@ -1172,11 +1183,11 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
 
     try {
       for await (const part of stream) {
-        if (epoch !== chatContainer.epoch || session.closed) {
-          continue;
+        if (epoch !== transcript.epoch || session.closed) {
+          break;
         }
         await dispatchStreamPart(part, {
-          chatContainer,
+          chatContainer: transcript,
           flags,
           onFirstVisiblePart,
           state,
@@ -1189,9 +1200,17 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
       // ticking or a stale wait banner behind for the next step or thread.
       retryStatus.clear();
       retryStatus.stop();
-      finish();
-      for (const view of toolViews.values()) {
-        view.dispose();
+      try {
+        finish();
+      } finally {
+        for (const view of toolViews.values()) {
+          view.dispose();
+        }
+        if (replaying) {
+          for (const view of views) {
+            view.dispose();
+          }
+        }
       }
     }
 
@@ -1210,6 +1229,8 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
       const parts =
         replay ??
         sessionHistoryReplayParts(await selectorConfig.loadCurrentHistory());
+      // Render and seal the replacement off-screen before revoking the old epoch.
+      const staged = new TranscriptOwner(() => terminal.columns);
       let streamParts: TuiStreamPart[] = [];
       const flushStreamParts = async (): Promise<void> => {
         if (streamParts.length === 0) {
@@ -1229,7 +1250,10 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
             showToolResults: true,
             showSources: false,
             showFiles: false,
-          }
+          },
+          undefined,
+          undefined,
+          staged
         );
       };
       for (const part of parts) {
@@ -1239,12 +1263,17 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
         }
         await flushStreamParts();
         if (part.type === "clear") {
-          clearChat(resetReason);
+          staged.reset(resetReason);
         } else {
-          addUserMessage(chatContainer, markdownTheme, part.text);
+          addUserMessage(staged, markdownTheme, part.text);
         }
       }
       await flushStreamParts();
+      staged.finish();
+      clearChat(resetReason);
+      for (const component of staged.children) {
+        chatContainer.addChild(component);
+      }
     });
 
   const accumulateUsage = (

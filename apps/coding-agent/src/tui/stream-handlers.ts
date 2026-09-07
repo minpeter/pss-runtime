@@ -285,6 +285,7 @@ export const handleToolResult: StreamPartHandler = (part, state) => {
   firePendingEndIfTracked(state, toolCallId);
 
   if (!state.flags.showToolResults) {
+    state.finishToolView?.(toolCallId);
     return;
   }
 

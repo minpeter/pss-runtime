@@ -11,6 +11,8 @@ import {
 } from "@earendil-works/pi-tui";
 import type { AgentEvent, AgentTurn } from "@minpeter/pss-runtime";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ExtensionHostEventBus } from "../extensions/event-bus";
+import { ExtensionHostServices } from "../extensions/host-services";
 import type { CodingAgentExtensionUi } from "../extensions/types";
 import { createReadFileTool } from "../workspace-tools/read-file";
 import type { AssistantRendererContext } from "./assistant-renderer";
@@ -148,23 +150,32 @@ function stream() {
   let next = gate<
     { event: AgentEvent; consumed: ReturnType<typeof gate<void>> } | undefined
   >();
+  const returned = vi.fn();
   const run = {
     runId: "local-run",
     events: () =>
       (async function* () {
-        for (;;) {
-          const slot = await next.promise;
-          next = gate();
-          if (!slot) {
-            return;
+        try {
+          for (;;) {
+            const slot = await next.promise;
+            next = gate();
+            if (!slot) {
+              return;
+            }
+            try {
+              yield slot.event;
+            } finally {
+              slot.consumed.resolve();
+            }
           }
-          yield slot.event;
-          slot.consumed.resolve();
+        } finally {
+          returned();
         }
       })(),
   } as AgentTurn;
   return {
     run,
+    returned,
     end: () => next.resolve(undefined),
     emit: async (event: Record<string, unknown>) => {
       const consumed = gate();
@@ -217,7 +228,7 @@ async function fixture(extra: Partial<AgentTUIConfig> = {}) {
       active = false;
     },
     async close() {
-      if (active) {
+      if (active && !source.returned.mock.calls.length) {
         const ready = idle();
         source.end();
         await ready;
@@ -238,6 +249,160 @@ afterEach(() => {
 });
 
 describe.sequential("actual TUI transcript ownership", () => {
+  it.each(["input", "select", "confirm"] as const)(
+    "unmounts revoked host %s without cancelling a replacement prompt",
+    async (kind) => {
+      const controller = new AbortController();
+      const services = new ExtensionHostServices(
+        {},
+        new ExtensionHostEventBus({
+          signal: controller.signal,
+          timeoutMs: 2000,
+        })
+      );
+      let replacement!: CodingAgentExtensionUi;
+      const app = await fixture({
+        onExtensionUiReady: (create) => {
+          services.bindUi(create(), "tui");
+          replacement = create();
+        },
+      });
+      try {
+        const ui = services.getServices("fixture", {
+          mode: "tui",
+          providers: new Map(),
+          signal: controller.signal,
+        }).ui;
+        const composer = surface().children.at(-1) as Container;
+        const editor = composer.children[0];
+        const prompts = {
+          input: () => ui.input({ label: "OLD_PROMPT" }),
+          confirm: () => ui.confirm("OLD_PROMPT"),
+          select: () =>
+            ui.select({
+              label: "OLD_PROMPT",
+              options: [{ label: "VALUE", value: "value" }],
+            }),
+        };
+        const request = new AbortController();
+        const cancelled = ui.input({ label: "REQUEST_PROMPT" }, request.signal);
+        request.abort();
+        await expect(cancelled).resolves.toBeUndefined();
+        expect(composer.children[0] === editor).toBe(true);
+        const pending = prompts[kind]();
+        expect(composer.children[0]).not.toBe(editor);
+        const next = replacement.input({ label: "NEW_PROMPT" });
+        const replacementView = composer.children[0];
+        services.revokeInteractiveUi();
+        await expect(pending).resolves.toBe(
+          kind === "confirm" ? false : undefined
+        );
+        expect(composer.children[0]).toBe(replacementView);
+        send("\x1b");
+        await expect(next).resolves.toBeUndefined();
+        expect(composer.children[0] === editor).toBe(true);
+        send("FOCUS_RESTORED");
+        expect(stripTerminalSequences(rows(composer).join("\n"))).toContain(
+          "FOCUS_RESTORED"
+        );
+      } finally {
+        controller.abort();
+        await services.dispose();
+        await app.close();
+      }
+    }
+  );
+
+  it("appends a fresh renderer notice after intervening assistant deltas", async () => {
+    const contexts: AssistantRendererContext[] = [];
+    const app = await fixture({
+      assistantRenderer: (ctx) => {
+        contexts.push(ctx);
+        return new Markdown("", 1, 0, ctx.markdownTheme);
+      },
+    });
+    try {
+      await app.start();
+      await app.emit({ type: "assistant-output-delta", text: "BEFORE_NOTICE" });
+      contexts.at(-1)?.notify("NOTICE_ID");
+      const first = rows();
+      await app.emit({ type: "assistant-output-delta", text: "AFTER_NOTICE" });
+      contexts.at(-1)?.notify("NOTICE_ID");
+      expect(rows().slice(0, first.length)).toEqual(first);
+      expect(plain().split("NOTICE_ID")).toHaveLength(3);
+      expect(plain().indexOf("AFTER_NOTICE")).toBeGreaterThan(
+        plain().indexOf("NOTICE_ID")
+      );
+      expect(rows().join("\n")).not.toContain("\x1b[47m\x1b[30m");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it.each(["setText", "render"] as const)(
+    "retains the old transcript when replay %s fails after a valid prefix",
+    async (failure) => {
+      const disposed = vi.fn();
+      const app = await fixture({
+        assistantRenderer: (ctx) => {
+          const view = new Markdown("", 1, 0, ctx.markdownTheme);
+          let source = "";
+          return {
+            setText: (text) => {
+              source = text;
+              if (failure === "setText" && text === "BAD_REPLAY") {
+                throw new Error("REPLAY_FAILURE");
+              }
+              view.setText(text);
+            },
+            invalidate: () => view.invalidate(),
+            render: (width) => {
+              if (failure === "render" && source === "BAD_REPLAY") {
+                throw new Error("REPLAY_FAILURE");
+              }
+              return view.render(width);
+            },
+            dispose: disposed,
+          };
+        },
+        commands: [
+          {
+            name: "replace",
+            description: "fixture",
+            execute: () => ({
+              success: true,
+              action: { type: "session", clear: true },
+            }),
+          },
+        ],
+        sessionSelector: {
+          currentSessionKey: () => "new-session",
+          listSessions: async () => [],
+          switchSession: async () => undefined,
+          loadCurrentHistory: async () => [
+            { role: "user", content: "REPLAY_PREFIX" },
+            { role: "assistant", content: "BAD_REPLAY" },
+          ],
+        },
+      });
+      try {
+        await app.start();
+        await app.emit({ type: "assistant-output", text: "OLD_ANSWER" });
+        await app.finish();
+        const before = prefix();
+        const epoch = (chat() as TranscriptOwner).epoch;
+        await app.command("/replace");
+        unchanged(before);
+        expect((chat() as TranscriptOwner).epoch).toBe(epoch);
+        expect(plain()).toContain("REPLAY_FAILURE");
+        expect(plain()).not.toContain("REPLAY_PREFIX");
+        expect(disposed).toHaveBeenCalledTimes(2);
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
   it.each(["direct", "picker"] as const)(
     "appends only one model notice through %s and retains session notices and COLD header",
     async (method) => {
@@ -1314,13 +1479,17 @@ describe.sequential("actual TUI transcript ownership", () => {
       );
       expect((chat() as TranscriptOwner).epoch).toBe(epoch + 1);
       const afterReset = rows();
+      const endTurn = TuiSessionMachine.prototype.endTurn;
+      const ended = gate();
+      vi.spyOn(TuiSessionMachine.prototype, "endTurn").mockImplementationOnce(
+        function (this: TuiSessionMachine, run) {
+          endTurn.call(this, run);
+          ended.resolve();
+        }
+      );
       await app.emit({ type: "assistant-output-delta", text: "STALE_DELTA" });
-      await app.emit({
-        type: "tool-call",
-        toolCallId: "reused",
-        toolName: "fixture",
-        input: { stale: true },
-      });
+      expect(app.returned).toHaveBeenCalledTimes(1);
+      await bounded(ended.promise);
       expect(rows()).toEqual(afterReset);
       const prompt = ui.input({ label: "OLD_EPOCH_PROMPT" });
       ui.status("OLD_EPOCH_STATUS");

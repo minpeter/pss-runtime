@@ -443,7 +443,9 @@ Text-only custom renderers use the same streaming bound and final-text expansion
 reserved image rows, remains intact and is exempt from the text-row cap.
 
 The startup header and transcript prefix have immutable content, not immutable
-terminal wrapping. Only the latest output block remains HOT; submitting input,
+terminal wrapping. HOT is the live output block still receiving updates; COLD
+blocks are detached snapshots with frozen content. Only the latest output block
+remains HOT; submitting input,
 a notice, or another stream/tool block seals the previous block before appending.
 Late tool results and interleaved tool input use new continuation cards identified
 by call ID; canonical arguments and persisted messages remain complete. Completed
