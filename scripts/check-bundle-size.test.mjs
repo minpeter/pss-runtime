@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import {
+  existsSync,
   mkdirSync,
   readFileSync,
   statSync,
@@ -14,12 +15,22 @@ import { createFixtureScope, writeJsonFixture } from "./test-fixtures.mjs";
 // Wrapper behavior tests for scripts/check-bundle-size.mjs
 // (VAL-SEC-015..019): deterministic, offline, parallel-safe; all fixtures
 // live under the gitignored .omo/tmp tree (scripts/test-fixtures.mjs). The
-// real-repository cases assume `pnpm build` ran first — the canonical gate
-// (pnpm test) always builds before collecting scripts/*.test.mjs.
+// real-repository case assumes `pnpm build` ran first — the canonical gate
+// (pnpm test) always builds before collecting scripts/*.test.mjs. On a fresh
+// checkout with no dist/ it skips explicitly (documented skip, never a
+// silent pass): the fixture-based cases below cover the gate semantics on
+// any tree, and the standalone invariant gate (`vitest run
+// scripts/*.test.mjs`) must stay green on an unbuilt checkout per
+// CONTRIBUTING's fast-local-gates contract (VAL-CROSS-001).
 
 const WRAPPER = "scripts/check-bundle-size.mjs";
 const WILDCARD_PATTERN = /[*?[{]/;
 const scope = createFixtureScope("check-bundle-size-");
+
+// True only when the working tree carries a real build.
+const REAL_BUILD_PRESENT =
+  existsSync("packages/runtime/dist/index.js") &&
+  existsSync("apps/coding-agent/dist/cli.js");
 
 afterEach(scope.cleanup);
 
@@ -85,19 +96,22 @@ describe("check:bundle-size wrapper", () => {
     }
   });
 
-  it("GATE passes on the real repository build and measures real dist sizes (VAL-SEC-016)", () => {
-    const result = run(["--check"]);
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain("check:bundle-size OK");
-    const dir = fixtureDir();
-    const out = join(dir, "report.json");
-    const report = run(["--report", "--out", out]);
-    expect(report.status, report.stderr).toBe(0);
-    const rows = JSON.parse(readFileSync(out, "utf8")).artifacts;
-    const row = rows.find((r) => r.path === "packages/runtime/dist/index.js");
-    expect(row.measured).toBe(statSync(row.path).size);
-    expect(row.measured).toBeGreaterThan(0);
-  });
+  it.skipIf(!REAL_BUILD_PRESENT)(
+    "GATE passes on the real repository build and measures real dist sizes (VAL-SEC-016)",
+    () => {
+      const result = run(["--check"]);
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).toContain("check:bundle-size OK");
+      const dir = fixtureDir();
+      const out = join(dir, "report.json");
+      const report = run(["--report", "--out", out]);
+      expect(report.status, report.stderr).toBe(0);
+      const rows = JSON.parse(readFileSync(out, "utf8")).artifacts;
+      const row = rows.find((r) => r.path === "packages/runtime/dist/index.js");
+      expect(row.measured).toBe(statSync(row.path).size);
+      expect(row.measured).toBeGreaterThan(0);
+    }
+  );
 
   it("truncating a dist file changes the measured value (VAL-SEC-016)", () => {
     const dir = fixtureDir();
