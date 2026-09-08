@@ -92,6 +92,13 @@ async function translateServerErrors<T>(operation: () => Promise<T>) {
         message: error.message,
       });
     }
-    throw error;
+    // Unknown failures must not leak internal messages (zod issues, syntax
+    // errors, stub internals) into the client envelope: tRPC would otherwise
+    // copy `cause.message` onto the INTERNAL_SERVER_ERROR shape.
+    throw new TRPCError({
+      cause: error,
+      code: "INTERNAL_SERVER_ERROR",
+      message: "internal error",
+    });
   }
 }

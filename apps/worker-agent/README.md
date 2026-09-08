@@ -46,7 +46,7 @@ The route is intentionally retained for compatibility alongside the `session` tr
 
 Authenticated clients can use the generalized tRPC procedures at `/trpc`:
 
-- `session.submitTurn` accepts `{ channel, text, sessionScopeKey?, idempotencyKey? }` and returns immediately after durable admission with `{ accepted: true, runId, threadKey }`.
+- `session.submitTurn` accepts `{ channel, text, sessionScopeKey?, idempotencyKey? }` and returns immediately after durable admission with `{ accepted: true, runId, threadKey, eventCursor? }`. `eventCursor` is optional and present only when the durable admission returns one; do not poll it — clients rely on durable replay cursors through `session.replayEvents` (below). Repeating a submission with the same `idempotencyKey` is collapsed into the original admission: the response replays the same `runId`/`threadKey` instead of failing.
 - `session.replayEvents` accepts `{ channel, after?, limit?, sessionScopeKey? }` and returns committed runtime thread events plus the last `nextCursor` in the page.
 
 Cursor polling through `session.replayEvents` is the baseline reconnect mechanism. Store the latest event cursor, pass it as `after`, and repeat; replay is exclusive of that cursor, so reconnect does not duplicate the last processed event. Replay reads `ThreadHandle.events({ after, limit })` from the runtime's canonical durable thread event history, not a projected `ThreadStore` snapshot.
