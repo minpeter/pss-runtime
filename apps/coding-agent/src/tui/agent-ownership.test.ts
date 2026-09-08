@@ -5,6 +5,7 @@ import { clearTimeout, setTimeout } from "node:timers";
 import {
   type Component,
   type Container,
+  CURSOR_MARKER,
   Markdown,
   stripTerminalSequences,
   type Terminal,
@@ -68,6 +69,7 @@ vi.mock("@earendil-works/pi-tui", async (importOriginal) => {
 });
 
 import { type AgentTUIConfig, createAgentTUI } from "./agent";
+import { composerHeightBudget } from "./composer-height";
 import { createModelCommand } from "./model-command";
 import { ModelSelectorComponent } from "./model-selector";
 import { NOTICE_PULSE_MS } from "./repeated-notice";
@@ -255,6 +257,96 @@ afterEach(() => {
 });
 
 describe.sequential("actual TUI transcript ownership", () => {
+  it.each(["model", "session"] as const)(
+    "enforces the complete %s cap through actual resize dispatch",
+    async (kind) => {
+      const ids = Array.from({ length: 100 }, (_, i) => `item-${i}-한국어`);
+      const switchModel = vi.fn();
+      const switchSession = vi.fn();
+      const app = await fixture({
+        commands: [
+          {
+            name: "picker",
+            description: "fixture",
+            execute: () => ({
+              success: true,
+              action: {
+                type: kind === "model" ? "select-model" : "select-session",
+              },
+            }),
+          },
+        ],
+        modelSelector: {
+          currentModelId: () => ids[0],
+          listModelIds: async () => ids,
+          switchModel,
+        },
+        sessionSelector: {
+          currentSessionKey: () => ids[0],
+          listSessions: async () =>
+            ids.map((key) => ({
+              key,
+              name: key,
+              cwd: "/tmp",
+              createdAt: "",
+              updatedAt: "",
+            })),
+          loadCurrentHistory: async () => [],
+          switchSession,
+        },
+      });
+      const composer = surface().children.at(-1) as Container;
+      try {
+        await onRender(
+          () =>
+            composer.children[0] instanceof
+            (kind === "model"
+              ? ModelSelectorComponent
+              : SessionSelectorComponent),
+          () => send("/picker\r")
+        );
+        terminal.send("\x1b[A");
+        for (const height of [60, 7, 8, 11, 12, 16, 17, 24, 40, 60]) {
+          for (const width of [1, 2, 3, 24, 48, 80, 120]) {
+            terminal.columns = width;
+            Object.assign(surface().terminal, { rows: height });
+            for (let repeat = 0; repeat < 2; repeat++) {
+              process.stdout.emit("resize");
+              const rendered = composer.render(width);
+              expect(rendered.length).toBeLessThanOrEqual(
+                composerHeightBudget(height)
+              );
+              expect(
+                rendered.every((line) => visibleWidth(line) <= width)
+              ).toBe(true);
+              expect(
+                rendered.some((line) => line.includes(CURSOR_MARKER))
+              ).toBe(true);
+              expect(
+                rendered.some((line) =>
+                  stripTerminalSequences(line).trimStart().startsWith("→")
+                )
+              ).toBe(true);
+              if (width >= 24) {
+                expect(rendered.find((line) => line.includes("→"))).toContain(
+                  "item-99"
+                );
+              }
+            }
+          }
+        }
+        const ready = idle();
+        terminal.send("\r");
+        await ready;
+        expect(
+          kind === "model" ? switchModel : switchSession
+        ).toHaveBeenCalledExactlyOnceWith(ids[99]);
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
   it.each(["input", "select", "confirm"] as const)(
     "unmounts revoked host %s without cancelling a replacement prompt",
     async (kind) => {

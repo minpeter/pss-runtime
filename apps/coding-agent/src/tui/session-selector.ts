@@ -2,13 +2,12 @@ import {
   Container,
   fuzzyFilter,
   getKeybindings,
-  Input,
   Spacer,
-  Text,
   truncateToWidth,
 } from "@earendil-works/pi-tui";
 import type { SessionIndexEntry } from "../sessions/session-index";
-import { composerContentBudget } from "./composer-height";
+import { ComposerInput } from "./bounded-input";
+import { composerHeightBudget } from "./composer-height";
 import {
   SessionSelectorRow,
   SessionSelectorRule,
@@ -52,7 +51,7 @@ export class SessionSelectorComponent extends Container {
   #maxVisibleSessions: number;
   readonly #onCancel: () => void;
   readonly #onSelect: (sessionKey: string) => void;
-  readonly #searchInput = new Input();
+  readonly #searchInput = new ComposerInput();
   #selectedIndex = 0;
   readonly #sessions: readonly SessionIndexEntry[];
   #settled = false;
@@ -92,24 +91,25 @@ export class SessionSelectorComponent extends Container {
   }
 
   setLayout(maxVisibleSessions: number, compact: boolean): void {
-    const next = clampVisibleSessions(maxVisibleSessions);
-    if (next === this.#maxVisibleSessions && compact === this.#compact) {
+    // Title, search and scroll info reserve three rows; standard decoration
+    // reserves six more. Always retain at least one selected-item row.
+    const nextCompact = compact || this.#rowBudget < 10;
+    const next = Math.min(
+      clampVisibleSessions(maxVisibleSessions),
+      this.#rowBudget - (nextCompact ? 3 : 9)
+    );
+    if (next === this.#maxVisibleSessions && nextCompact === this.#compact) {
       return;
     }
     this.#maxVisibleSessions = next;
-    this.#compact = compact;
+    this.#compact = nextCompact;
     this.#rebuildLayout();
     this.#updateList();
   }
 
   setComposerHeight(terminalRows: number): void {
-    this.#rowBudget = composerContentBudget(terminalRows);
-    this.setLayout(Math.max(1, this.#rowBudget - 4), this.#rowBudget < 10);
-  }
-
-  override render(width: number): string[] {
-    // Input's prompt/cursor and informational Text can exceed tiny terminals.
-    return super.render(width).map((line) => truncateToWidth(line, width));
+    this.#rowBudget = composerHeightBudget(terminalRows) - 1;
+    this.setLayout(this.#rowBudget, this.#rowBudget < 10);
   }
 
   handleInput(data: string): void {
@@ -200,9 +200,14 @@ export class SessionSelectorComponent extends Container {
   #updateList(): void {
     this.#listContainer.clear();
     if (this.#filtered.length === 0) {
-      this.#listContainer.addChild(
-        new Text(style(ANSI_DIM, "  No matching sessions"), 1, 0)
-      );
+      this.#listContainer.addChild({
+        invalidate() {
+          return;
+        },
+        render: (width) => [
+          truncateToWidth(style(ANSI_DIM, "  No matching sessions"), width, ""),
+        ],
+      });
       return;
     }
     const start = Math.max(
@@ -232,16 +237,21 @@ export class SessionSelectorComponent extends Container {
       }
     }
     if (start > 0 || end < this.#filtered.length) {
-      this.#listContainer.addChild(
-        new Text(
-          style(
-            ANSI_DIM,
-            `  (${this.#selectedIndex + 1}/${this.#filtered.length})`
+      this.#listContainer.addChild({
+        invalidate() {
+          return;
+        },
+        render: (width) => [
+          truncateToWidth(
+            style(
+              ANSI_DIM,
+              `  (${this.#selectedIndex + 1}/${this.#filtered.length})`
+            ),
+            width,
+            ""
           ),
-          1,
-          0
-        )
-      );
+        ],
+      });
     }
   }
 }
