@@ -8,6 +8,7 @@ import {
   truncateToWidth,
 } from "@earendil-works/pi-tui";
 import type { SessionIndexEntry } from "../sessions/session-index";
+import { composerContentBudget } from "./composer-height";
 import {
   SessionSelectorRow,
   SessionSelectorRule,
@@ -56,6 +57,7 @@ export class SessionSelectorComponent extends Container {
   readonly #sessions: readonly SessionIndexEntry[];
   #settled = false;
   #focused = false;
+  #rowBudget = Number.POSITIVE_INFINITY;
 
   get focused(): boolean {
     return this.#focused;
@@ -98,6 +100,11 @@ export class SessionSelectorComponent extends Container {
     this.#compact = compact;
     this.#rebuildLayout();
     this.#updateList();
+  }
+
+  setComposerHeight(terminalRows: number): void {
+    this.#rowBudget = composerContentBudget(terminalRows);
+    this.setLayout(Math.max(1, this.#rowBudget - 4), this.#rowBudget < 10);
   }
 
   override render(width: number): string[] {

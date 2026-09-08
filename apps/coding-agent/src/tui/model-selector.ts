@@ -9,6 +9,7 @@ import {
   truncateToWidth,
   visibleWidth,
 } from "@earendil-works/pi-tui";
+import { composerContentBudget } from "./composer-height";
 import { sanitizeTerminalText } from "./terminal-safety";
 
 const ANSI_RESET = "\x1b[0m";
@@ -110,6 +111,7 @@ export class ModelSelectorComponent extends Container {
   #maxVisibleModels: number;
   #selectedIndex = 0;
   #settled = false;
+  #rowBudget = Number.POSITIVE_INFINITY;
 
   // Focusable: propagate to the search input so the cursor renders there.
   #focused = false;
@@ -164,6 +166,11 @@ export class ModelSelectorComponent extends Container {
 
   setMaxVisibleModels(maxVisibleModels: number): void {
     this.setLayout(maxVisibleModels, this.#compact);
+  }
+
+  setComposerHeight(terminalRows: number): void {
+    this.#rowBudget = composerContentBudget(terminalRows);
+    this.setMaxVisibleModels(Math.max(1, this.#rowBudget - 4));
   }
 
   handleInput(data: string): void {

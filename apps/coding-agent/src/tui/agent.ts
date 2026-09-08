@@ -1614,6 +1614,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
         onCancel: () => settle(undefined),
         onSelect: (modelId) => settle(modelId),
       });
+      selector.setComposerHeight(tui.terminal.rows);
       activeModelSelector = selector;
       composerLayer.setContent(selector);
       tui.setFocus(composerLayer);
@@ -1716,6 +1717,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
         onSelect: (sessionKey) => settle(sessionKey),
         sessions,
       });
+      selector.setComposerHeight(tui.terminal.rows);
       activeSessionSelector = selector;
       composerLayer.setContent(selector);
       tui.setFocus(composerLayer);
