@@ -6,8 +6,8 @@ import { CREDENTIAL_PATTERNS } from "./governance-invariants.mjs";
 // Full tracked-tree credential scan (VAL-CROSS-015): every git-tracked file
 // is checked for credential-shaped literals (the shared CREDENTIAL_PATTERNS
 // from the governance scan), and the only tolerated hits are the pinned
-// allowlist below — scanner definitions that reference token NAMES and the
-// governance negative-fixture test. The allowlist is exact on both sides:
+// allowlist below — scanner definitions and name-only negative fixtures that
+// reference token NAMES. The allowlist is exact on both sides:
 // a hit outside it fails, and an entry that stops being tracked or stops
 // producing its pinned kind also fails, so the list cannot rot silently.
 // Git access is a read-only `git ls-files` query; nothing here writes, binds
@@ -28,17 +28,6 @@ export const SCAN_ALLOWLIST = {
   "scripts/first-run-setup.test.mjs": ["npm access token reference"],
   // AGENTS.md forbidden-token manifest entry.
   "scripts/governance-agents.mjs": ["npm access token reference"],
-  // VAL-GOV-062 negative fixtures: synthetic lines for each credential kind
-  // (the raw-export fixture line is indented, so the ^-anchored pattern does
-  // not fire on it in this file).
-  "scripts/governance-invariants.test.mjs": [
-    "chat-platform bot token",
-    "GitHub token",
-    "JWT blob",
-    "npm access token reference",
-    "provider API key",
-    "Telegram bot token value",
-  ],
   // PR-template unsafe-instruction regex references the token name.
   "scripts/governance-pr-template.mjs": ["npm access token reference"],
   // PR-template negative fixture line (name only, ellipsis value).
