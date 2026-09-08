@@ -59,6 +59,28 @@ describe("example env placeholders (VAL-SEC-041)", () => {
     const problems = exampleEnvProblems("fixture/.env.example", "not a kv\n");
     expect(problems.some((p) => p.includes("KEY=value"))).toBe(true);
   });
+
+  it("accepts the documented pss_local_..._placeholder webhook sentinel", () => {
+    const problems = exampleEnvProblems(
+      "fixture/.dev.vars.example",
+      "TELEGRAM_WEBHOOK_SECRET_TOKEN=pss_local_webhook_secret_placeholder\n"
+    );
+    expect(problems).toEqual([]);
+  });
+
+  it("still rejects a real-looking value that merely resembles the sentinel", () => {
+    // An uppercase/digit-bearing token is not the documented placeholder and
+    // must still fail, even when it shares the pss_local_ prefix. Built at
+    // runtime so no credential-shaped literal ever sits in source.
+    const realLooking = ["pss_local", "Webhook", "Secret9"].join("_");
+    const problems = exampleEnvProblems(
+      "fixture/.dev.vars.example",
+      `TELEGRAM_WEBHOOK_SECRET_TOKEN=${realLooking}\n`
+    );
+    expect(
+      problems.some((p) => p.includes("TELEGRAM_WEBHOOK_SECRET_TOKEN"))
+    ).toBe(true);
+  });
 });
 
 describe("loopback-only local validation (VAL-SEC-042)", () => {

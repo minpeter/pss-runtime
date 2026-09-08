@@ -267,4 +267,29 @@ describe("telegram webhook ingress dry-run (real adapter, recorded fetch)", () =
     ).toEqual([]);
     expect(agentDo.calls).toBe(0);
   });
+
+  it("rejects a scripted update with an incorrect secret before any reply or egress", async () => {
+    const calls: RecordedCall[] = [];
+    vi.stubGlobal("fetch", recordTelegramApi(calls));
+    const agentDo = createAgentDoProbe();
+    const tasks: Promise<unknown>[] = [];
+
+    const response = await handleTelegramWebhook(
+      webhookRequest(
+        scriptedUpdate("unauthorized probe"),
+        `wrong-${WEBHOOK_SECRET}`
+      ),
+      createDryRunEnv(agentDo.namespace),
+      createExecutionContext(tasks)
+    );
+
+    expect(response.status).toBe(401);
+    await flushIngress(tasks);
+    // The secret check is fully local: no Telegram sendMessage and no
+    // Durable Object interaction happen for a mismatched secret.
+    expect(
+      calls.filter((call) => telegramMethodOf(call.url) === SEND_MESSAGE_METHOD)
+    ).toEqual([]);
+    expect(agentDo.calls).toBe(0);
+  });
 });

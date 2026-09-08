@@ -117,6 +117,17 @@ health and falls through to the catch-all dispatch.
   --port <port> --log <file>` for custom paths), and every Bot API call
   (`getMe`, `sendMessage`) is recorded locally instead of leaving the
   machine. Never set it in production.
+- The webhook secret check is fully local and egress-free. A POST to the
+  webhook catch-all with a missing or incorrect
+  `x-telegram-bot-api-secret-token` returns 401 `Invalid secret token` from
+  the adapter before any Telegram API call, Durable Object hop, or provider
+  request — no real `setWebhook`/`sendMessage`/`getUpdates` ever fires. Local
+  verification uses only the documented placeholder
+  `TELEGRAM_WEBHOOK_SECRET_TOKEN` value from `.dev.vars.example` (a non-secret
+  dummy, never a real credential, never logged); the negative case needs at
+  most that placeholder and no real `.dev.vars` secret. A valid placeholder
+  secret plus `TELEGRAM_INGRESS_DRY_RUN=1` yields the `Layer 1 only` dry-run
+  summary reply with no agent delivery.
 - Durable event history has no TTL or expiry, and the transport exposes no
   delete/clear/expire route. The evlog worker logger is initialized with
   `redact: true`, so configured secret values are never written to logs.
