@@ -39,6 +39,7 @@ export function summarizeImageOmits(
   omits: readonly {
     readonly limit: string;
     readonly mediaType: string;
+    /** User-supplied names are accepted but NEVER emitted (can be secret-bearing). */
     readonly filename?: string;
   }[]
 ): {
@@ -47,7 +48,6 @@ export function summarizeImageOmits(
     readonly omits: readonly {
       readonly limit: string;
       readonly mediaType: string;
-      readonly filename?: string;
     }[];
   };
 } {
@@ -60,7 +60,6 @@ export function summarizeImageOmits(
       omits: omits.map((omit) => ({
         limit: omit.limit,
         mediaType: omit.mediaType,
-        ...(omit.filename === undefined ? {} : { filename: omit.filename }),
       })),
     },
   };
