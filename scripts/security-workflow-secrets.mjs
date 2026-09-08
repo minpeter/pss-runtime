@@ -21,8 +21,8 @@ const SECURITY_RUN = /\b(?:gitleaks|zaproxy|zap-baseline)\b/;
 // `github.token` context is not an authored secret reference: it is
 // permitted only inside an env value consumed by a tool and must never be
 // printed or logged (never echoed from a run step).
-const SECRETS_REF = /\bsecrets\./;
-const GITHUB_TOKEN = /\bgithub\.token\b/;
+const SECRETS_REF = /\bsecrets\./i;
+const GITHUB_TOKEN = /\bgithub\.token\b/i;
 const ENV_LOCATION = /(?:^|\.)env(?:\.|\[|$)/;
 
 // Provider/Telegram credential env vars a security workflow must never set.

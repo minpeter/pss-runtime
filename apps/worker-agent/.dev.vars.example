@@ -15,6 +15,11 @@ TELEGRAM_BOT_USERNAME=your_bot
 # call), so placeholder probes perform zero setWebhook/sendMessage/getUpdates
 # egress.
 TELEGRAM_WEBHOOK_SECRET_TOKEN=pss_local_webhook_secret_placeholder
+# Bearer token for the /trpc and /session/events TUI routes. The value below
+# is the DOCUMENTED placeholder for local auth probes ONLY — a non-secret
+# dummy, never a real credential; local probes copy exactly this placeholder
+# into an untracked .dev.vars and pass it as --tui-token.
+WORKER_AGENT_TUI_TOKEN=pss_local_tui_token_placeholder
 LOCAL_WEBHOOK_URL=http://127.0.0.1:8792/
 WORKER_PUBLIC_URL=https://pss-worker-agent.<account>.workers.dev
 # Layer 1 only (optional): reassembly + Telegram summary, no agent.

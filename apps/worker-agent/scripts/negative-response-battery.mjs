@@ -47,6 +47,7 @@ const SENTINELS = {
   channelId: "leak-sentinel-channel-id",
   cursor: "leak-sentinel-cursor",
   extraKey: "leak-sentinel-extra-key",
+  pathProbe: "leak-sentinel-long-path",
   text: "leak-sentinel-message-text",
   wrongSecret: "leak-sentinel-wrong-webhook-secret",
 };
@@ -137,6 +138,16 @@ const PROBES = [
     "trpc-unknown-procedure",
     404,
     [...bearer, `${base}/trpc/session.doesNotExist?input=%7B%7D`],
+  ],
+  // A 2000+ character attacker-controlled procedure path: the NOT_FOUND
+  // envelope must stay bounded (fixed literal, no path echo).
+  [
+    "trpc-long-path-not-found",
+    404,
+    [
+      ...bearer,
+      `${base}/trpc/session.${"a".repeat(1000)}${SENTINELS.pathProbe}${"b".repeat(1000)}?input=%7B%7D`,
+    ],
   ],
   [
     "trpc-query-post",

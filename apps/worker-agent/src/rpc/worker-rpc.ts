@@ -29,6 +29,14 @@ interface WorkerRpcContext {
 
 const trpc = initTRPC.context<WorkerRpcContext>().create({
   errorFormatter({ error, shape }) {
+    // An unknown procedure echoes the attacker-controlled URL path verbatim
+    // (both in the message and in data.path), so an unauthenticated 404 body
+    // grows without bound (a 2000-char path yields a 4000+ byte envelope).
+    // Replace it with a fixed literal message and strip data.path.
+    if (error.code === "NOT_FOUND") {
+      const { path: _path, ...data } = shape.data;
+      return { ...shape, data, message: "not found" };
+    }
     // Schema-validation failures carry the raw zod issue dump as the
     // message; the dump echoes request-body key names (unrecognized_keys)
     // and grows with attacker-controlled input, so the envelope would be

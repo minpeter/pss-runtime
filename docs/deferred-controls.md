@@ -72,10 +72,9 @@ done, or citing a substitute that does not exist fails the invariant suite.
 - Cannot be verified from repository files or local commands: hosted alerting
   (PagerDuty, OpsGenie) would require an external paging service, outside
   repository files.
-- Repo-local substitute: the local port-listening readiness check on
-  `127.0.0.1:8792` and the Worker's own metrics spans documented in
-  `docs/runbooks/worker-health.md`; the `/healthz` probe is pending the
-  Worker-operations milestone (milestone 4) and does not exist yet.
+- Repo-local substitute: the Worker's shipped `/healthz` route (bounded,
+  secret-free health JSON on `127.0.0.1:8792`) and its metrics spans, both
+  documented in `docs/runbooks/worker-health.md`.
 
 ### 6. Progressive rollout
 
