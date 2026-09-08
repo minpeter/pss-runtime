@@ -2,7 +2,8 @@ import { installCloudflareImageCodecs } from "@minpeter/pss-runtime/platform/dur
 import { defineWorkerFetch } from "evlog/workers";
 
 import type { Env } from "./env";
-import { handleHealthRequest, isHealthPathname } from "./health/health";
+import { handleHealthRequest } from "./health/health";
+import { selectRequestHandler } from "./route-dispatch";
 import { handleWorkerRpcRequest } from "./rpc/worker-rpc";
 import { handleSessionEventsRequest } from "./session/session-events-server";
 import { handleTelegramWebhook } from "./telegram/telegram";
@@ -14,9 +15,6 @@ installCloudflareImageCodecs();
 // biome-ignore lint/performance/noBarrelFile: Wrangler requires Durable Object classes to be exported from the worker entrypoint.
 export { AgentDurableObject } from "./agent/agent-do";
 export type { Env } from "./env";
-
-const SESSION_EVENTS_PATHNAME = "/session/events";
-const TUI_RPC_PATHNAME = "/trpc";
 
 export default defineWorkerFetch<Env>(async (request, env, ctx, log) => {
   ensureWorkerLogger({
@@ -67,24 +65,6 @@ export default defineWorkerFetch<Env>(async (request, env, ctx, log) => {
     throw error;
   }
 });
-
-function selectRequestHandler(
-  pathname: string
-): "health" | "session-events" | "telegram-webhook" | "tui-rpc" {
-  if (isHealthPathname(pathname)) {
-    return "health";
-  }
-  if (pathname === SESSION_EVENTS_PATHNAME) {
-    return "session-events";
-  }
-  if (
-    pathname === TUI_RPC_PATHNAME ||
-    pathname.startsWith(`${TUI_RPC_PATHNAME}/`)
-  ) {
-    return "tui-rpc";
-  }
-  return "telegram-webhook";
-}
 
 function assertNever(value: never): never {
   throw new Error(`Unexpected worker request handler: ${String(value)}`);
