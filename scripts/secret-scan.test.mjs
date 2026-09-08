@@ -18,6 +18,7 @@ import {
 
 const FAKE_PROVIDER_KEY = ["sk", "Fixture0".repeat(4)].join("-");
 const FAKE_EXPORT = `export FIXTURE_API_KEY=${"q".repeat(16)}`;
+const FAKE_NPM_TOKEN_NAME = ["NPM", "TOKEN"].join("_");
 
 describe("tracked-tree secret scan (VAL-CROSS-015)", () => {
   it("finds no credential-shaped content outside the pinned allowlist", () => {
@@ -52,11 +53,11 @@ describe("tracked-tree secret scan (VAL-CROSS-015)", () => {
   });
 
   it("allows the exact pinned kind inside an allowlisted file", () => {
-    const path = "scripts/governance-invariants.test.mjs";
+    const path = "scripts/docs-contract.mjs";
     const kinds = SCAN_ALLOWLIST[path];
-    expect(kinds).toContain("provider API key");
+    expect(kinds).toContain("npm access token reference");
     const files = [path];
-    const reader = () => `token: ${FAKE_PROVIDER_KEY}\n`;
+    const reader = () => `token name: ${FAKE_NPM_TOKEN_NAME}\n`;
     const hits = treeCredentialHits(files, reader);
     expect(unexpectedHitProblems(hits, SCAN_ALLOWLIST)).toEqual([]);
   });
