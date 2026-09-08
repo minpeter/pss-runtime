@@ -17,12 +17,13 @@ not carry explicit deferral wording.
 ## How to read an entry
 
 Each entry names the external-only control, its status, why local
-verification is impossible, and the repository-local substitute that IS
-provided and validated here. Cited artifacts are repository-root-relative
-paths in backticks. A citation marked pending belongs to the later
-security/Worker-operations milestone; every other cited artifact exists in
+verification is impossible, the repository-local substitute that IS provided
+and validated here, and a follow-up boundary that points back to this
+document as the single deferred list. Cited artifacts are
+repository-root-relative paths in backticks. Every cited artifact exists in
 the repository today, and removing a required item, flipping a marker to
-done, or citing a substitute that does not exist fails the invariant suite.
+done, dropping a follow-up boundary, or citing a substitute that does not
+exist fails the invariant suite.
 
 ## The deferred controls
 
@@ -34,6 +35,10 @@ done, or citing a substitute that does not exist fails the invariant suite.
   mission never touches.
 - Repo-local substitute: advisory ownership via `.github/CODEOWNERS`, which
   records ownership without any enforcement claim.
+- Follow-up boundary: completing this item takes a GitHub repository-settings
+  change that stays deferred and external; track it in
+  `docs/deferred-controls.md`, the single deferred list, never from a
+  repository-local check.
 
 ### 2. Native GitHub secret-scanning settings
 
@@ -46,6 +51,11 @@ done, or citing a substitute that does not exist fails the invariant suite.
   `docs/runbooks/security-scan-failure-triage.md`, plus the CodeQL
   static-analysis workflow at `.github/workflows/codeql.yml` and the gitleaks
   full-history workflow at `.github/workflows/gitleaks.yml`.
+- Follow-up boundary: the native scanning toggles are a GitHub settings
+  action, and the committed CodeQL and gitleaks workflows stay pending until
+  the next push activates them in CI — no CI run is observable from the local
+  tree, so both stay external and deferred until then; track completion in
+  `docs/deferred-controls.md`, the single deferred list.
 
 ### 3. Product analytics
 
@@ -55,6 +65,9 @@ done, or citing a substitute that does not exist fails the invariant suite.
   require an external service account.
 - Repo-local substitute: the runtime and Worker OpenTelemetry instrumentation
   contract documented in `docs/worker-agent.md`.
+- Follow-up boundary: wiring a hosted analytics backend takes an external
+  service account this repository never configures; the item stays deferred
+  and is tracked in `docs/deferred-controls.md`, the single deferred list.
 
 ### 4. Hosted error tracking
 
@@ -65,6 +78,9 @@ done, or citing a substitute that does not exist fails the invariant suite.
 - Repo-local substitute: documented runtime instrumentation, via
   `openTelemetry()` in `packages/runtime/README.md` and the Worker wiring in
   `docs/worker-agent.md`.
+- Follow-up boundary: connecting a hosted error-tracking service takes an
+  external account and stays deferred; track it in
+  `docs/deferred-controls.md`, the single deferred list.
 
 ### 5. Hosted alerting
 
@@ -75,6 +91,9 @@ done, or citing a substitute that does not exist fails the invariant suite.
 - Repo-local substitute: the Worker's shipped `/healthz` route (bounded,
   secret-free health JSON on `127.0.0.1:8792`) and its metrics spans, both
   documented in `docs/runbooks/worker-health.md`.
+- Follow-up boundary: wiring a hosted paging service is an external action
+  that stays deferred; track it in `docs/deferred-controls.md`, the single
+  deferred list.
 
 ### 6. Progressive rollout
 
@@ -85,6 +104,9 @@ done, or citing a substitute that does not exist fails the invariant suite.
 - Repo-local substitute: the single-path release procedure in
   `docs/runbooks/release-procedure.md`, driven by
   `.github/workflows/release.yml`.
+- Follow-up boundary: traffic-shift controls on a hosted deployment platform
+  are external and stay deferred; track the item in
+  `docs/deferred-controls.md`, the single deferred list.
 
 ### 7. Automated rollback
 
@@ -94,6 +116,9 @@ done, or citing a substitute that does not exist fails the invariant suite.
   contains.
 - Repo-local substitute: the repository-local release path documented in
   `docs/runbooks/release-procedure.md`.
+- Follow-up boundary: hosted rollback triggers and deployment state stay
+  external and deferred; track the item in `docs/deferred-controls.md`, the
+  single deferred list.
 
 ### 8. Remote GitHub label creation
 
@@ -102,6 +127,9 @@ done, or citing a substitute that does not exist fails the invariant suite.
   on GitHub is an external settings action this mission never performs.
 - Repo-local substitute: the canonical label definitions in
   `docs/label-taxonomy.md`.
+- Follow-up boundary: mirroring the labels on GitHub is an external settings
+  action that stays deferred; track it in `docs/deferred-controls.md`, the
+  single deferred list.
 
 ### 9. CODEOWNERS enforcement
 
@@ -110,6 +138,9 @@ done, or citing a substitute that does not exist fails the invariant suite.
   owners through required reviewers lives in GitHub branch settings, outside
   the repository.
 - Repo-local substitute: the advisory `.github/CODEOWNERS` ownership map.
+- Follow-up boundary: requiring owner review is a GitHub branch-settings
+  action that stays deferred and external; track it in
+  `docs/deferred-controls.md`, the single deferred list.
 
 ### 10. Dependabot run activation
 
@@ -119,6 +150,9 @@ done, or citing a substitute that does not exist fails the invariant suite.
   cannot prove a run.
 - Repo-local substitute: the committed, grouped update configuration
   `.github/dependabot.yml`.
+- Follow-up boundary: turning on dependabot runs is a GitHub settings action
+  that stays deferred and external; track it in
+  `docs/deferred-controls.md`, the single deferred list.
 
 ### 11. Production deployment and health monitoring of the Worker
 
@@ -127,6 +161,8 @@ done, or citing a substitute that does not exist fails the invariant suite.
   deployment and health monitoring of the Worker happen on hosted Cloudflare
   infrastructure, never in this repository.
 - Repo-local substitute: the local validation flow on `127.0.0.1:8792` in
-  `docs/runbooks/worker-health.md`, built on port-listening readiness today
-  and the Worker's own metrics spans; the `/healthz` health surface is
-  pending milestone 4 and is not implemented yet.
+  `docs/runbooks/worker-health.md`, built on the shipped `/healthz` route and
+  the Worker's own metrics spans.
+- Follow-up boundary: deploying and monitoring the production Worker stays
+  deferred and external on hosted Cloudflare infrastructure; track the item
+  in `docs/deferred-controls.md`, the single deferred list.

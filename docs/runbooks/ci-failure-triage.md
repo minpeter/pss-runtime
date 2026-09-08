@@ -52,4 +52,6 @@ running the same script:
   that reaches the network locally but is skipped in isolation is a bug in the
   test, not in CI.
 - Branch-protection enforcement of this gate is deferred and external; it
-  cannot be verified from repository files.
+  cannot be verified from repository files. The follow-up boundary lives in
+  the single deferred list,
+  [../deferred-controls.md](../deferred-controls.md).
