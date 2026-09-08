@@ -26,6 +26,20 @@ Scope the QA to what you touched:
 Never use `tmux capture-pane` for terminal color, layout, or CJK evidence: it
 degrades truecolor and wide-glyph width. Use the xterm.js harness instead.
 
+The documented TUI fixture drives the coding-agent's assistant renderer
+preview through the harness, proving the documented state stays reachable
+without any new service:
+`node script/qa/web-terminal-visual-qa.mjs --title "assistant renderer preview" --command "pnpm -C apps/coding-agent preview:assistant" --input "" --evidence-dir .omo/evidence/tui-visual-qa`.
+
+The documented state is the assistant renderer preview (`preview:assistant`):
+a composed assistant message carrying an inline LaTeX formula image and a
+Mermaid diagram, rendered once per theme. The harness needs no credential,
+model provider, or network access, and it opens no listening port that
+outlives the run — its page server binds an ephemeral loopback port and is
+closed before exit, which the `teardown.json` receipt in the evidence
+directory records. Pair the run with a before/after `ss -tln` diff when
+port evidence is needed.
+
 ## Evidence: record it under `.omo/evidence/` or it did not happen
 
 Write every QA artifact to `.omo/evidence/<YYYYMMDD>-<short-slug>/`, one folder
