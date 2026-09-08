@@ -1,0 +1,456 @@
+{
+  "version": 1,
+  "description": "Observed Worker route behavior records pinned by apps/worker-agent/src/api-contract-observations.test.ts (via: unit) and by live wrangler-dev probes on 127.0.0.1:8792 (via: live). env: token = WORKER_AGENT_TUI_TOKEN configured (development and production behave identically); dev-open = development without the token binding; broken-bindings = a baseline binding is missing/invalid; any = behavior independent of the TUI token configuration.",
+  "records": [
+    {
+      "id": "health-get",
+      "env": "any",
+      "method": "GET",
+      "path": "/healthz",
+      "auth": "none",
+      "status": 200,
+      "via": ["unit", "live"],
+      "note": "Bounded health JSON."
+    },
+    {
+      "id": "health-get-trailing-slash",
+      "env": "any",
+      "method": "GET",
+      "path": "/healthz/",
+      "auth": "none",
+      "status": 200,
+      "via": ["unit", "live"],
+      "note": "Trailing-slash alias of /healthz."
+    },
+    {
+      "id": "health-post",
+      "env": "any",
+      "method": "POST",
+      "path": "/healthz",
+      "auth": "none",
+      "status": 405,
+      "via": ["unit", "live"],
+      "note": "Non-GET rejected with Allow: GET."
+    },
+    {
+      "id": "health-unavailable",
+      "env": "broken-bindings",
+      "method": "GET",
+      "path": "/healthz",
+      "auth": "none",
+      "status": 503,
+      "via": ["unit"],
+      "note": "Opaque unavailable body when a baseline binding is missing/invalid; not live-reproducible without breaking the local bindings."
+    },
+    {
+      "id": "sse-get-authorized",
+      "env": "token",
+      "method": "GET",
+      "path": "/session/events",
+      "auth": "bearer-valid",
+      "status": 200,
+      "via": ["unit", "live"],
+      "note": "Valid channel query; text/event-stream stream."
+    },
+    {
+      "id": "sse-get-unauthorized",
+      "env": "token",
+      "method": "GET",
+      "path": "/session/events",
+      "auth": "bearer-missing",
+      "status": 401,
+      "via": ["unit", "live"],
+      "note": "Plain-text unauthorized."
+    },
+    {
+      "id": "sse-get-dev-open",
+      "env": "dev-open",
+      "method": "GET",
+      "path": "/session/events",
+      "auth": "none",
+      "status": 200,
+      "via": ["unit", "live"],
+      "note": "Development exception: open when no token is configured."
+    },
+    {
+      "id": "sse-post",
+      "env": "token",
+      "method": "POST",
+      "path": "/session/events",
+      "auth": "none",
+      "status": 405,
+      "via": ["unit", "live"],
+      "note": "Method check precedes auth."
+    },
+    {
+      "id": "sse-missing-channel",
+      "env": "token",
+      "method": "GET",
+      "path": "/session/events",
+      "auth": "bearer-valid",
+      "status": 400,
+      "via": ["unit", "live"],
+      "note": "channel required."
+    },
+    {
+      "id": "sse-invalid-channel",
+      "env": "token",
+      "method": "GET",
+      "path": "/session/events",
+      "auth": "bearer-valid",
+      "status": 400,
+      "via": ["unit"],
+      "note": "Unparseable channel: invalid session event stream."
+    },
+    {
+      "id": "sse-do-unavailable",
+      "env": "token",
+      "method": "GET",
+      "path": "/session/events",
+      "auth": "bearer-valid",
+      "status": 502,
+      "via": ["unit"],
+      "note": "Unreachable Durable Object; not live-reproducible without breaking the local binding."
+    },
+    {
+      "id": "replay-events-get-authorized",
+      "env": "token",
+      "method": "GET",
+      "path": "/trpc/session.replayEvents",
+      "auth": "bearer-valid",
+      "status": 200,
+      "via": ["unit", "live"],
+      "note": "Valid input query parameter."
+    },
+    {
+      "id": "replay-events-get-unauthorized",
+      "env": "token",
+      "method": "GET",
+      "path": "/trpc/session.replayEvents",
+      "auth": "bearer-missing",
+      "status": 401,
+      "via": ["unit", "live"],
+      "note": "UNAUTHORIZED envelope before validation/dispatch."
+    },
+    {
+      "id": "replay-events-get-dev-open",
+      "env": "dev-open",
+      "method": "GET",
+      "path": "/trpc/session.replayEvents",
+      "auth": "none",
+      "status": 200,
+      "via": ["unit", "live"],
+      "note": "Development exception."
+    },
+    {
+      "id": "replay-events-invalid-input",
+      "env": "token",
+      "method": "GET",
+      "path": "/trpc/session.replayEvents",
+      "auth": "bearer-valid",
+      "status": 400,
+      "via": ["unit", "live"],
+      "note": "BAD_REQUEST envelope for limit: 0."
+    },
+    {
+      "id": "replay-events-do-unavailable",
+      "env": "token",
+      "method": "GET",
+      "path": "/trpc/session.replayEvents",
+      "auth": "bearer-valid",
+      "status": 502,
+      "via": ["unit"],
+      "note": "BAD_GATEWAY envelope; not live-reproducible locally."
+    },
+    {
+      "id": "replay-events-post",
+      "env": "token",
+      "method": "POST",
+      "path": "/trpc/session.replayEvents",
+      "auth": "bearer-valid",
+      "status": 405,
+      "via": ["unit", "live"],
+      "note": "Queries are GET-only: METHOD_NOT_SUPPORTED."
+    },
+    {
+      "id": "submit-turn-post-authorized",
+      "env": "token",
+      "method": "POST",
+      "path": "/trpc/session.submitTurn",
+      "auth": "bearer-valid",
+      "status": 200,
+      "via": ["unit", "live"],
+      "note": "Admission receipt."
+    },
+    {
+      "id": "submit-turn-post-unauthorized",
+      "env": "token",
+      "method": "POST",
+      "path": "/trpc/session.submitTurn",
+      "auth": "bearer-missing",
+      "status": 401,
+      "via": ["unit", "live"],
+      "note": "UNAUTHORIZED envelope."
+    },
+    {
+      "id": "submit-turn-post-dev-open",
+      "env": "dev-open",
+      "method": "POST",
+      "path": "/trpc/session.submitTurn",
+      "auth": "none",
+      "status": 200,
+      "via": ["unit", "live"],
+      "note": "Development exception."
+    },
+    {
+      "id": "submit-turn-invalid-input",
+      "env": "token",
+      "method": "POST",
+      "path": "/trpc/session.submitTurn",
+      "auth": "bearer-valid",
+      "status": 400,
+      "via": ["unit", "live"],
+      "note": "BAD_REQUEST envelope for malformed input."
+    },
+    {
+      "id": "submit-turn-get",
+      "env": "token",
+      "method": "GET",
+      "path": "/trpc/session.submitTurn",
+      "auth": "bearer-valid",
+      "status": 405,
+      "via": ["unit", "live"],
+      "note": "Mutations are POST-only: METHOD_NOT_SUPPORTED."
+    },
+    {
+      "id": "submit-turn-do-unavailable",
+      "env": "token",
+      "method": "POST",
+      "path": "/trpc/session.submitTurn",
+      "auth": "bearer-valid",
+      "status": 502,
+      "via": ["unit"],
+      "note": "BAD_GATEWAY envelope; not live-reproducible locally."
+    },
+    {
+      "id": "submit-turn-non-json-post",
+      "env": "token",
+      "method": "POST",
+      "path": "/trpc/session.submitTurn",
+      "auth": "bearer-valid",
+      "status": 415,
+      "via": ["unit"],
+      "note": "Non-JSON content type rejected before procedure resolution."
+    },
+    {
+      "id": "tui-turn-post-authorized",
+      "env": "token",
+      "method": "POST",
+      "path": "/trpc/tui.turn",
+      "auth": "bearer-valid",
+      "status": 200,
+      "via": ["unit"],
+      "note": "Delivery result with a reachable Durable Object."
+    },
+    {
+      "id": "tui-turn-post-unauthorized",
+      "env": "token",
+      "method": "POST",
+      "path": "/trpc/tui.turn",
+      "auth": "bearer-missing",
+      "status": 401,
+      "via": ["unit", "live"],
+      "note": "UNAUTHORIZED envelope."
+    },
+    {
+      "id": "tui-turn-invalid-input",
+      "env": "token",
+      "method": "POST",
+      "path": "/trpc/tui.turn",
+      "auth": "bearer-valid",
+      "status": 400,
+      "via": ["unit"],
+      "note": "BAD_REQUEST envelope for malformed input."
+    },
+    {
+      "id": "tui-turn-get",
+      "env": "token",
+      "method": "GET",
+      "path": "/trpc/tui.turn",
+      "auth": "bearer-valid",
+      "status": 405,
+      "via": ["unit", "live"],
+      "note": "Mutations are POST-only: METHOD_NOT_SUPPORTED."
+    },
+    {
+      "id": "tui-turn-model-failure",
+      "env": "token",
+      "method": "POST",
+      "path": "/trpc/tui.turn",
+      "auth": "bearer-valid",
+      "status": 500,
+      "via": ["live"],
+      "note": "Closed-loopback model endpoint fails the turn: generic INTERNAL_SERVER_ERROR envelope; not unit-reproducible with a mocked Durable Object."
+    },
+    {
+      "id": "tui-turn-dev-open-model-failure",
+      "env": "dev-open",
+      "method": "POST",
+      "path": "/trpc/tui.turn",
+      "auth": "none",
+      "status": 500,
+      "via": ["live"],
+      "note": "Development exception lets the request through; the failed model call answers 500."
+    },
+    {
+      "id": "tui-turn-post-dev-open",
+      "env": "dev-open",
+      "method": "POST",
+      "path": "/trpc/tui.turn",
+      "auth": "none",
+      "status": 200,
+      "via": ["unit"],
+      "note": "Development exception with a reachable Durable Object: delivery result."
+    },
+    {
+      "id": "tui-turn-do-unavailable",
+      "env": "token",
+      "method": "POST",
+      "path": "/trpc/tui.turn",
+      "auth": "bearer-valid",
+      "status": 502,
+      "via": ["unit"],
+      "note": "BAD_GATEWAY envelope when the Durable Object fetch resolves empty; not live-reproducible locally."
+    },
+    {
+      "id": "tui-turn-do-rejected",
+      "env": "token",
+      "method": "POST",
+      "path": "/trpc/tui.turn",
+      "auth": "bearer-valid",
+      "status": 500,
+      "via": ["unit"],
+      "note": "A REJECTED Durable Object fetch escapes tui-server's upstream mapping and surfaces as the generic INTERNAL_SERVER_ERROR envelope (unlike the session routes, which map rejections to 502)."
+    },
+    {
+      "id": "tui-turn-non-json-post",
+      "env": "token",
+      "method": "POST",
+      "path": "/trpc/tui.turn",
+      "auth": "bearer-valid",
+      "status": 415,
+      "via": ["unit"],
+      "note": "Non-JSON content type rejected before procedure resolution."
+    },
+    {
+      "id": "trpc-unknown-get",
+      "env": "any",
+      "method": "GET",
+      "path": "/trpc/does-not-exist",
+      "auth": "none",
+      "status": 404,
+      "via": ["unit", "live"],
+      "note": "NOT_FOUND envelope before auth."
+    },
+    {
+      "id": "trpc-unknown-get-authorized",
+      "env": "token",
+      "method": "GET",
+      "path": "/trpc/does-not-exist",
+      "auth": "bearer-valid",
+      "status": 404,
+      "via": ["unit"],
+      "note": "A valid bearer token does not change the NOT_FOUND outcome."
+    },
+    {
+      "id": "trpc-unknown-post",
+      "env": "any",
+      "method": "POST",
+      "path": "/trpc/does-not-exist",
+      "auth": "none",
+      "status": 404,
+      "via": ["unit", "live"],
+      "note": "Mutation-style call with a JSON body."
+    },
+    {
+      "id": "trpc-root-get",
+      "env": "any",
+      "method": "GET",
+      "path": "/trpc",
+      "auth": "none",
+      "status": 404,
+      "via": ["unit", "live"],
+      "note": "Bare endpoint names no procedure."
+    },
+    {
+      "id": "webhook-root-missing-secret",
+      "env": "any",
+      "method": "GET",
+      "path": "/",
+      "auth": "telegram-secret-missing",
+      "status": 401,
+      "via": ["unit", "live"],
+      "note": "Invalid secret token."
+    },
+    {
+      "id": "webhook-telegram-missing-secret",
+      "env": "any",
+      "method": "POST",
+      "path": "/telegram",
+      "auth": "telegram-secret-missing",
+      "status": 401,
+      "via": ["unit", "live"],
+      "note": "Invalid secret token."
+    },
+    {
+      "id": "webhook-healthz-subpath-missing-secret",
+      "env": "any",
+      "method": "GET",
+      "path": "/healthz/foo",
+      "auth": "telegram-secret-missing",
+      "status": 401,
+      "via": ["unit", "live"],
+      "note": "A healthz sub-path is not health; catch-all 401."
+    },
+    {
+      "id": "webhook-telegram-invalid-secret",
+      "env": "any",
+      "method": "POST",
+      "path": "/telegram",
+      "auth": "telegram-secret-invalid",
+      "status": 401,
+      "via": ["unit"],
+      "note": "Wrong secret token value. Unit-only: re-probing live would force a real api.telegram.org getMe call during adapter init, which the mission boundaries forbid."
+    },
+    {
+      "id": "webhook-telegram-valid-secret-get",
+      "env": "any",
+      "method": "GET",
+      "path": "/telegram",
+      "auth": "telegram-secret-valid",
+      "status": 400,
+      "via": ["unit"],
+      "note": "Valid secret but no JSON body: Invalid JSON. Unit-only: re-probing live would force a real api.telegram.org getMe call during adapter init, which the mission boundaries forbid."
+    },
+    {
+      "id": "webhook-telegram-valid-secret-post",
+      "env": "any",
+      "method": "POST",
+      "path": "/telegram",
+      "auth": "telegram-secret-valid",
+      "status": 200,
+      "via": ["unit"],
+      "note": "Valid secret and parseable JSON update: OK. Unit-only: re-probing live would force a real api.telegram.org getMe call during adapter init, which the mission boundaries forbid."
+    },
+    {
+      "id": "webhook-telegram-valid-secret-invalid-json",
+      "env": "any",
+      "method": "POST",
+      "path": "/telegram",
+      "auth": "telegram-secret-valid",
+      "status": 400,
+      "via": ["unit"],
+      "note": "Valid secret but unparseable JSON body: Invalid JSON. Unit-only: re-probing live would force a real api.telegram.org getMe call during adapter init, which the mission boundaries forbid."
+    }
+  ]
+}

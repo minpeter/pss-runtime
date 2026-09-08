@@ -22,6 +22,7 @@
     "check:duplicates:report": "node scripts/check-duplicates.mjs --report",
     "check:tegami-notes": "node scripts/check-tegami-notes.mjs",
     "check:unused": "node scripts/check-unused.mjs",
+    "check:worker-api-contract": "node scripts/check-worker-api-contract.mjs --check",
     "check:unused:report": "node scripts/check-unused.mjs --report",
     "check:workspace-drift": "node scripts/check-workspace-version-drift.mjs",
     "coverage": "pnpm --filter @minpeter/pss-coding-agent build && vitest run --config vitest.coverage.config.ts --coverage",
