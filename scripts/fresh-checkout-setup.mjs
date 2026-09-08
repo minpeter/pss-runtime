@@ -7,7 +7,6 @@
 // on any credential prompt, production endpoint, or undocumented
 // prerequisite. Scratch state is removed afterwards unless --keep is given.
 
-import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -19,11 +18,10 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+import { earlyExit, makeStep, run } from "./checkout-harness.mjs";
 import { firstRunProblems, transcriptProblems } from "./first-run-setup.mjs";
 
 const DEFAULT_OUT = join(".omo", "evidence", "first-run-setup");
-const MAX_BUFFER = 64 * 1024 * 1024;
-const TEN_MINUTES_MS = 10 * 60 * 1000;
 
 const USAGE = `Usage: node scripts/fresh-checkout-setup.mjs [--out <dir>] [--keep]
 
@@ -60,37 +58,8 @@ function parseArgs(argv) {
   return args;
 }
 
-function run(label, command, commandArgs, options, outDir) {
-  const result = spawnSync(command, commandArgs, {
-    encoding: "utf8",
-    maxBuffer: MAX_BUFFER,
-    timeout: TEN_MINUTES_MS,
-    ...options,
-  });
-  const transcript = [
-    `$ ${command} ${commandArgs.join(" ")}`,
-    `exit=${result.status}${result.error ? ` error=${result.error.message}` : ""}`,
-    result.stdout,
-    result.stderr,
-  ].join("\n");
-  writeFileSync(join(outDir, `${label}.log`), transcript);
-  return result;
-}
-
 const NODE_VERSION_OK = /^v24\./;
 const PNPM_VERSION = "11.9.0";
-
-function makeStep(problems) {
-  return (label, ok, detail = "") => {
-    console.log(
-      `${ok ? "OK  " : "FAIL"} ${label}${detail ? ` — ${detail}` : ""}`
-    );
-    if (!ok) {
-      problems.push(`${label}: ${detail || "failed"}`);
-    }
-    return ok;
-  };
-}
 
 // Documented toolchain preflight: the harness itself must run on the Node 24
 // / pnpm 11.9.0 setup the docs advertise.
@@ -125,13 +94,9 @@ function transcriptScan(outDir, problems) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (args.error) {
-    console.error(`${args.error}\n\n${USAGE}`);
-    return 2;
-  }
-  if (args.help) {
-    console.log(USAGE);
-    return 0;
+  const early = earlyExit(args, USAGE);
+  if (early !== null) {
+    return early;
   }
   mkdirSync(args.out, { recursive: true });
   const problems = [];

@@ -136,12 +136,23 @@ concrete wall-clock bound, measured on the loaded 24-CPU reference host:
 | Pre-commit hook | `git commit` (runs `pnpm exec lint-staged` via `.husky/pre-commit`) | ≤ 60 s |
 | All repository invariant checks | `vitest run scripts/*.test.mjs` | ≤ 120 s |
 | Any single invariant check | `vitest run scripts/<name>.test.mjs` | ≤ 30 s |
+| Two-checkout reproducibility (per clean checkout, serial) | `pnpm check:two-checkout-repro` | ≤ 600 s |
 
 Measure a gate with the timing wrapper, which kills the whole process group
 on timeout so no child survives: `node scripts/time-gate.mjs --bound 60
 --label pre-commit -- git commit -m "<message>"`. The wrapper exits
 non-zero when the gate fails or exceeds its bound and prints one stable
 `GATE <label>: elapsed=… bound=… result=…` line.
+The two-checkout reproducibility gate proves clean-tree reproducibility: it
+clones HEAD into two clean temporary checkouts — one at a time, never
+concurrently — reinstalls each from the lockfile with `pnpm install
+--frozen-lockfile`, and runs the invariant checks, the command-discovery
+check, and `pnpm lint` in each. Each checkout run must finish within the
+per-checkout bound above, the deterministic outputs of the two runs (suite
+list, pass counts, step exit codes, discovery problems, checkout
+cleanliness) must agree, and the original tree must still be clean
+afterwards; both elapsed times are printed as stable `REPRO run=N:
+elapsed=… bound=… result=…` lines.
 
 The invariant checks (`scripts/workspace-config.test.mjs` and its siblings)
 are deterministic and offline: they read only committed files, perform no
