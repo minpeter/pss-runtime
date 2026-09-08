@@ -138,9 +138,9 @@ components:
     TrpcInternalError:
       description: >-
         tRPC error envelope with `data.code: INTERNAL_SERVER_ERROR` and a
-        generic `internal error` message; internal detail (including a failed
-        model call or a rejected Durable Object fetch on `tui.turn`) never
-        leaks into the envelope.
+        generic `internal error` message; internal detail (for example a
+        schema-invalid Durable Object payload or an unexpected dispatch
+        failure) never leaks into the envelope.
       content:
         application/json:
           schema:

@@ -288,9 +288,9 @@
       "method": "POST",
       "path": "/trpc/tui.turn",
       "auth": "bearer-valid",
-      "status": 500,
+      "status": 502,
       "via": ["live"],
-      "note": "Closed-loopback model endpoint fails the turn: generic INTERNAL_SERVER_ERROR envelope; not unit-reproducible with a mocked Durable Object."
+      "note": "Closed-loopback model endpoint fails the turn inside the Durable Object, which answers non-OK: bounded BAD_GATEWAY envelope."
     },
     {
       "id": "tui-turn-dev-open-model-failure",
@@ -298,9 +298,9 @@
       "method": "POST",
       "path": "/trpc/tui.turn",
       "auth": "none",
-      "status": 500,
+      "status": 502,
       "via": ["live"],
-      "note": "Development exception lets the request through; the failed model call answers 500."
+      "note": "Development exception lets the request through; the failed model call surfaces as the DO's non-OK answer, mapped to the bounded BAD_GATEWAY envelope."
     },
     {
       "id": "tui-turn-post-dev-open",
@@ -328,9 +328,29 @@
       "method": "POST",
       "path": "/trpc/tui.turn",
       "auth": "bearer-valid",
+      "status": 502,
+      "via": ["unit"],
+      "note": "A REJECTED Durable Object fetch is an unreachable object: bounded BAD_GATEWAY envelope, matching the session routes."
+    },
+    {
+      "id": "tui-turn-do-non-ok",
+      "env": "token",
+      "method": "POST",
+      "path": "/trpc/tui.turn",
+      "auth": "bearer-valid",
+      "status": 502,
+      "via": ["unit"],
+      "note": "A non-OK Durable Object answer maps to the bounded BAD_GATEWAY envelope without echoing the upstream status or body."
+    },
+    {
+      "id": "tui-turn-do-invalid-payload",
+      "env": "token",
+      "method": "POST",
+      "path": "/trpc/tui.turn",
+      "auth": "bearer-valid",
       "status": 500,
       "via": ["unit"],
-      "note": "A REJECTED Durable Object fetch escapes tui-server's upstream mapping and surfaces as the generic INTERNAL_SERVER_ERROR envelope (unlike the session routes, which map rejections to 502)."
+      "note": "A schema-invalid Durable Object payload surfaces as the generic INTERNAL_SERVER_ERROR envelope without zod or payload detail."
     },
     {
       "id": "tui-turn-non-json-post",
