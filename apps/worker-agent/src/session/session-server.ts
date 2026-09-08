@@ -75,7 +75,7 @@ function normalizeReplayEventsRequest(
 function normalizeChannel(channel: SubmitTurnRequest["channel"]) {
   const id = channel.id.trim();
   if (!id) {
-    throw new WorkerServerBadRequestError("text and channel required");
+    throw new WorkerServerBadRequestError("channel id required");
   }
   return { id, kind: channel.kind };
 }
