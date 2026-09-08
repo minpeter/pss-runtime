@@ -183,13 +183,13 @@ without external services: the session contract and replay paths, the SSE
 event stream, tRPC auth and dispatch, Telegram delivery and fragment
 coalescing, attachment limits, and the OpenTelemetry metrics instrumentation
 in `src/observability.ts` and `src/agent/agent-otel.ts`, and the `/healthz`
-route in `src/health/`. When milestone 4 adds the request/turn metrics
-handlers, those metrics/contract paths join the same include set and the
-floor is re-baselined upward, never removed.
+route in `src/health/`. The request/turn metrics handlers are part of that
+same measured include set; future additions raise the floor by re-baselining
+upward, never by removing it.
 
 **Why not zero.** A zero or undeclared threshold passes even if the suite
 stops exercising the Worker surface at all, which would let the transport,
-privacy, health, and (once landed) metrics paths regress uncovered without any
+privacy, health, and metrics paths regress uncovered without any
 signal. A non-zero floor guarantees two things: new source files enter the
 measured include set instead of silently escaping it, and a deleted or
 neutered test file drops measured coverage below the floor and fails the run.
