@@ -1,5 +1,6 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
+import { ZodError } from "zod";
 
 import type { Env } from "../env";
 import {
@@ -26,7 +27,25 @@ interface WorkerRpcContext {
   readonly request: Request;
 }
 
-const trpc = initTRPC.context<WorkerRpcContext>().create({ isDev: false });
+const trpc = initTRPC.context<WorkerRpcContext>().create({
+  errorFormatter({ error, shape }) {
+    // Schema-validation failures carry the raw zod issue dump as the
+    // message; the dump echoes request-body key names (unrecognized_keys)
+    // and grows with attacker-controlled input, so the envelope would be
+    // neither bounded nor echo-free. Replace it with a fixed bounded
+    // message. Procedural TRPCErrors already carry fixed literal messages
+    // and pass through unchanged.
+    if (error.cause instanceof ZodError) {
+      return {
+        ...shape,
+        message:
+          error.code === "BAD_REQUEST" ? "invalid request" : "internal error",
+      };
+    }
+    return shape;
+  },
+  isDev: false,
+});
 
 const authorizedProcedure = trpc.procedure.use(({ ctx, next }) => {
   if (!isAuthorizedWorkerRequest(ctx.request, ctx.env)) {

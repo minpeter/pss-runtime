@@ -122,7 +122,9 @@ components:
       description: >-
         tRPC error envelope with `data.code: BAD_REQUEST` and
         `data.httpStatus: 400` for schema-invalid input or a rejected
-        admission.
+        admission. Schema-validation failures answer with the fixed bounded
+        message `invalid request`; the raw validation issue dump (which
+        could echo request-body key names) never leaves the worker.
       content:
         application/json:
           schema:
