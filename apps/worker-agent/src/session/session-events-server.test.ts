@@ -67,9 +67,58 @@ describe("session SSE worker route", () => {
     expect(url.searchParams.get("after")).toBe("4");
     expect(url.searchParams.get("sessionScopeKey")).toBe("tui:user");
   });
+
+  it("streams without a header when development has no token configured", async () => {
+    const response = await handleSessionEventsRequest(
+      new Request("https://worker.example/session/events?channel=tui%3Alocal"),
+      createEnv({
+        ENVIRONMENT: "development",
+        WORKER_AGENT_TUI_TOKEN: undefined,
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(durableObjectMock.requests).toHaveLength(1);
+  });
+
+  it("requires the exact bearer token in development when a token is configured", async () => {
+    const env = createEnv({ ENVIRONMENT: "development" });
+
+    const missing = await handleSessionEventsRequest(
+      new Request("https://worker.example/session/events?channel=tui%3Alocal"),
+      env
+    );
+    expect(missing.status).toBe(401);
+
+    const wrongScheme = await handleSessionEventsRequest(
+      new Request("https://worker.example/session/events?channel=tui%3Alocal", {
+        headers: { authorization: "Token secret" },
+      }),
+      env
+    );
+    expect(wrongScheme.status).toBe(401);
+
+    const doubleSpace = await handleSessionEventsRequest(
+      new Request("https://worker.example/session/events?channel=tui%3Alocal", {
+        headers: { authorization: "Bearer  secret" },
+      }),
+      env
+    );
+    expect(doubleSpace.status).toBe(401);
+
+    const accepted = await handleSessionEventsRequest(
+      new Request("https://worker.example/session/events?channel=tui%3Alocal", {
+        headers: { authorization: "Bearer secret" },
+      }),
+      env
+    );
+    expect(accepted.status).toBe(200);
+
+    expect(durableObjectMock.requests).toHaveLength(1);
+  });
 });
 
-function createEnv(): Env {
+function createEnv(overrides: Partial<Env> = {}): Env {
   return {
     AGENT_DO: {
       get: () => {
@@ -85,5 +134,6 @@ function createEnv(): Env {
     TELEGRAM_BOT_TOKEN: "test-token",
     TELEGRAM_WEBHOOK_SECRET_TOKEN: "secret",
     WORKER_AGENT_TUI_TOKEN: "secret",
+    ...overrides,
   };
 }

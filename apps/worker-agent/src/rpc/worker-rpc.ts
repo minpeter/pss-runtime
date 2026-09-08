@@ -39,7 +39,7 @@ const authorizedProcedure = trpc.procedure.use(({ ctx, next }) => {
   return next();
 });
 
-const workerAgentRouter = trpc.router({
+export const workerAgentRouter = trpc.router({
   session: trpc.router({
     replayEvents: authorizedProcedure
       .input(ReplayEventsRequestSchema)
