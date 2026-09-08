@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "prebuild": "pnpm -F @minpeter/pss-runtime build",
-    "build": "wrangler deploy --dry-run --env=\"\"",
+    "build": "WRANGLER_HIDE_BANNER=true WRANGLER_SEND_METRICS=false wrangler deploy --dry-run --env=\"\"",
     "predev": "pnpm -F @minpeter/pss-runtime build",
     "dev": "run-p dev:worker dev:relay",
     "dev:ingress": "run-p dev:worker:ingress dev:relay",

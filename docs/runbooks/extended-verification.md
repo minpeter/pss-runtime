@@ -37,7 +37,10 @@ pass without running.
 ## Local reproduction
 
 - You can reproduce the edge bundling locally with `pnpm verify:edge` (a
-  dry-run build; it does not deploy).
+  dry-run build; it does not deploy). The command needs no credentials and
+  observes zero network egress: the worker package `build` script disables
+  the wrangler banner (its npm-registry update check) and wrangler metrics,
+  so repeated runs produce identical output on any machine.
 - You can run the heavy storage profile locally with
   `pnpm stress:runtime-storage:heavy`.
 - The live-provider and deployed-Worker suites are deferred and external for
