@@ -20,6 +20,7 @@ export const REQUIRED_MANIFEST = [
   "docs/runbooks/release-procedure.md",
   "docs/runbooks/security-scan-failure-triage.md",
   "docs/runbooks/worker-health.md",
+  "docs/runbooks/worker-privacy-retention.md",
   ".factory/skills/edge-contract-check/SKILL.md",
   ".factory/skills/repo-guardian/SKILL.md",
 ];
