@@ -79,6 +79,26 @@ observed-but-omitted behavior:
 pnpm check:worker-api-contract
 ```
 
+## Negative-response battery
+
+Every non-2xx response on the public surface is bounded and leak-free:
+either a fixed literal body (`unauthorized`, `channel required`, `invalid
+session event stream`, `method not allowed`, `agent durable object
+unavailable`, the adapter's `Invalid secret token`), the bounded health
+error JSON, or a bounded tRPC error envelope. Schema-validation failures
+answer with the fixed message `invalid request` — the raw validation issue
+dump (which could echo request-body key names) never leaves the worker.
+`src/content-leakage.test.ts` drives the full battery in-process with
+sentinel-laden probes and proves no body echoes request content, configured
+secret values, or stack markers, and that bodies are byte-identical across
+different placeholder secret sets. With the dev Worker running, the same
+battery runs live over curl with a file capture plus audit:
+
+```bash
+pnpm probe:negative-battery -- --out ../../.omo/evidence/negative-battery \
+  --tui-token <placeholder> [--webhook-secret <placeholder>]
+```
+
 ## Health probe
 
 Unauthenticated liveness probe, dispatched before tRPC/SSE/Telegram:

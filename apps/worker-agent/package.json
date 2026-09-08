@@ -19,6 +19,7 @@
     "eval:scripted": "PSS_WORKER_AGENT_EVAL_REAL=0 tsx --conditions=@minpeter/pss-source src/evals/run.ts",
     "eval:scripted:json": "PSS_WORKER_AGENT_EVAL_REAL=0 tsx --conditions=@minpeter/pss-source src/evals/run.ts --json",
     "lint": "ultracite check .",
+    "probe:negative-battery": "node scripts/negative-response-battery.mjs",
     "ship": "run-s ship:secrets ship:worker ship:webhook",
     "ship:secrets": "wrangler secret bulk .dev.vars --env=\"\"",
     "ship:webhook": "tsx scripts/telegram.ts webhook",
