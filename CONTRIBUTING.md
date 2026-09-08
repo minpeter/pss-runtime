@@ -82,6 +82,18 @@ you started and verify it: `kill` the pid and confirm `kill -0` fails, close
 browser contexts, remove the `mktemp` paths. Leftover QA state means the change
 is not done.
 
+Automated validation follows the same contract with an auditable trail. A
+validator kills only the PIDs it recorded at startup, never a process chosen
+by name and never a pre-existing listener, and confirms the post-run state
+instead of assuming it: a listener inventory (`ss -tlnp`) before and after
+the run, every bounded command wrapped in `node scripts/time-gate.mjs` so a
+timeout kills the whole process group, and the observe-only post-run check
+`node scripts/check-validation-cleanup.mjs check --baseline <snapshot>`, which
+never terminates anything and fails when the inventory shows a leaked
+validator process, a leftover listener on a validation port, or an unignored
+temporary file. Captured evidence stays under the gitignored `.omo/evidence/`
+tree, and generated report output is removed again before linting.
+
 ## Commits and PRs
 
 - One atomic commit per verified increment; each commit builds and tests green on
@@ -141,6 +153,10 @@ checks run in CI (`pnpm test` on the Node 24/26 matrix under
 Concurrency budget on the loaded reference host: at most one devcontainer
 build and two lightweight static/config validators run concurrently; no
 local-quality command binds, probes, or competes for the Worker port 8792.
+The cross-area validation plan adds three limits on top: at most two
+Worker/HTTP validators (one dev worker plus its probe battery each), at most
+one TUI validator (the visual-QA harness), and serial two-checkout
+reproducibility runs, one checkout at a time.
 
 ## Naming conventions
 
