@@ -23,7 +23,13 @@ const SSE_CHANNEL_QUERY = "channel=tui%3Alocal";
 const REPLAY_INPUT = JSON.stringify({ channel: VALID_CHANNEL });
 const SUBMIT_BODY = { channel: VALID_CHANNEL, text: "hello" };
 
-type DoMode = "fail" | "rpc" | "sse" | "undefined";
+type DoMode =
+  | "fail"
+  | "invalid-payload"
+  | "non-ok"
+  | "rpc"
+  | "sse"
+  | "undefined";
 
 const durableObjectMock = vi.hoisted((): { mode: DoMode } => ({ mode: "rpc" }));
 
@@ -34,6 +40,14 @@ vi.mock("@minpeter/pss-runtime/platform/durable-object/cloudflare", () => ({
     }
     if (durableObjectMock.mode === "undefined") {
       return Promise.resolve(undefined);
+    }
+    if (durableObjectMock.mode === "non-ok") {
+      return Promise.resolve(
+        new Response("upstream exploded", { status: 503 })
+      );
+    }
+    if (durableObjectMock.mode === "invalid-payload") {
+      return Promise.resolve(Response.json({ delivered: "maybe" }));
     }
     const pathname = new URL(options.request.url).pathname;
     if (pathname === "/session/events") {
@@ -112,6 +126,11 @@ const PROBE_REQUESTS: Record<string, ProbeRequest> = {
   "trpc-unknown-get-authorized": {},
   "trpc-unknown-post": jsonPost({ json: {} }),
   "tui-turn-do-rejected": { doMode: "fail", ...jsonPost(SUBMIT_BODY) },
+  "tui-turn-do-non-ok": { doMode: "non-ok", ...jsonPost(SUBMIT_BODY) },
+  "tui-turn-do-invalid-payload": {
+    doMode: "invalid-payload",
+    ...jsonPost(SUBMIT_BODY),
+  },
   "tui-turn-do-unavailable": { doMode: "undefined", ...jsonPost(SUBMIT_BODY) },
   "tui-turn-get": {},
   "tui-turn-invalid-input": jsonPost({ channel: VALID_CHANNEL }),

@@ -40,7 +40,7 @@ The compatibility RPC differs from the implemented generalized transport:
 | `SubmitTurnResponse.threadKey` | Implicit (`default` inside the channel DO) | Runtime naming remains `threadKey`; transport naming remains `session`. |
 | `SubmitTurnResponse.eventCursor` | Not present | Clients use durable replay cursors through `session.replayEvents`. |
 
-The route is intentionally retained for compatibility alongside the `session` transport. Telegram continues to use its webhook delivery path.
+The route is intentionally retained for compatibility alongside the `session` transport. Telegram continues to use its webhook delivery path. When the channel Durable Object is unreachable, rejects the fetch, or answers non-OK, `tui.turn` answers 502 `agent durable object unavailable`; any other unexpected failure answers a generic 500 `internal error` envelope. Neither shape echoes request content or internal detail.
 
 ## Session submit and replay
 
