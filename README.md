@@ -15,6 +15,11 @@ under the `pss` prefix, short for Plugsuits.
   model loop, core hooks, storage, and instrumentation.
 - [`@minpeter/pss-coding-agent`](apps/coding-agent/README.md): model wiring,
   workspace coding tools, the `pss` TUI, and the `pss exec` headless runner.
+- `apps/worker-agent` (private, never published): the Cloudflare Worker
+  transport and chat bot front, with an unauthenticated `/healthz` probe and
+  bounded wide-event metrics — see
+  [docs/worker-agent.md](docs/worker-agent.md) and its
+  [README](apps/worker-agent/README.md).
 
 ## Use
 
@@ -55,6 +60,16 @@ cloning. The local quality gate runs entirely offline:
 - `pnpm build` / `pnpm coverage` — full workspace build and the coverage gate.
 - `pnpm api:check` / `pnpm verify:edge` — runtime API snapshot check and the
   Worker edge-bundle dry run.
+- `pnpm check:unused` / `pnpm check:duplicates` — Knip unused-code and jscpd
+  duplicate-code gates against reviewed baselines.
+- `pnpm check:workspace-drift` / `pnpm check:bundle-size` — workspace
+  dependency-version drift and built bundle-size budgets.
+- `pnpm check:compatibility` / `pnpm repo:packages` — the Pi compatibility
+  manifest and package-boundary/release checks.
+- `pnpm check:worker-api-contract` — the Worker OpenAPI contract against the
+  committed observed-behavior records. The Worker package also owns an
+  independent coverage gate
+  (`pnpm --filter @minpeter/pss-worker-agent test:coverage`).
 
 The coding-agent CLI is validated from built output, never a source shim:
 run `pnpm build` first, then probe `node apps/coding-agent/bin/pss.js --help`, which
