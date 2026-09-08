@@ -65,6 +65,20 @@ The stream replays committed events after `after` before waiting for newly commi
 
 The route answers 200 with `content-type: text/event-stream; charset=utf-8`, `cache-control: no-cache, no-transform`, and `connection: keep-alive` (the app sets all three; workerd strips the hop-by-hop `connection` header on the wire, where HTTP/1.1 keep-alive is the default). Failures short-circuit in a fixed precedence with no Durable Object fetch: non-GET → 405 `method not allowed`; failed bearer auth → 401 `unauthorized`; missing `channel` → 400 `channel required`; unparseable `channel` or malformed `after` (only `^(0|[1-9]\d*)$` safe integers) → 400 `invalid session event stream`. Without `after` the stream replays from the beginning; reconnecting with `after=<last id>` never redelivers that event. A trimmed non-empty `sessionScopeKey` query parameter is forwarded to the Durable Object; a blank one is omitted. When the channel Durable Object is unreachable the route answers 502 `agent durable object unavailable` before any SSE frame is sent.
 
+## OpenAPI contract
+
+The public HTTP surface (health probe, tRPC procedures, SSE stream, and the
+Telegram webhook catch-all, each with its auth rule) is documented as an
+OpenAPI 3 contract in `docs/worker-api-contract.openapi.yaml`. The committed
+observed-behavior records in `docs/worker-api-contract.observations.json` are
+pinned to real route behavior by `src/api-contract-observations.test.ts`, and
+the contract gate fails on any documented-but-unreproduced or
+observed-but-omitted behavior:
+
+```bash
+pnpm check:worker-api-contract
+```
+
 ## Health probe
 
 Unauthenticated liveness probe, dispatched before tRPC/SSE/Telegram:
