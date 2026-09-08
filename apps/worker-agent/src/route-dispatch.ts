@@ -1,7 +1,7 @@
 import { isHealthPathname } from "./health/health";
 
-export const SESSION_EVENTS_PATHNAME = "/session/events";
-export const TUI_RPC_PATHNAME = "/trpc";
+const SESSION_EVENTS_PATHNAME = "/session/events";
+const TUI_RPC_PATHNAME = "/trpc";
 
 /** Fetch-handler routes, named after the wide-event `handler` log field. */
 export type WorkerRequestHandler =

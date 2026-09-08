@@ -1,6 +1,6 @@
 import type { Env } from "../env";
 
-export const HEALTH_PATHNAME = "/healthz";
+const HEALTH_PATHNAME = "/healthz";
 
 const JSON_CONTENT_TYPE = "application/json";
 const ALLOW_GET = "GET";
