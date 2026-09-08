@@ -20,6 +20,7 @@
     "check:compatibility": "node scripts/validate-pi-compatibility-manifest.mjs",
     "check:duplicates": "node scripts/check-duplicates.mjs",
     "check:duplicates:report": "node scripts/check-duplicates.mjs --report",
+    "check:first-run": "node scripts/fresh-checkout-setup.mjs",
     "check:tegami-notes": "node scripts/check-tegami-notes.mjs",
     "check:unused": "node scripts/check-unused.mjs",
     "check:worker-api-contract": "node scripts/check-worker-api-contract.mjs --check",
