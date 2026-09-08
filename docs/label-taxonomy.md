@@ -8,6 +8,7 @@ name below is unique.
 
 > Creating these labels on GitHub is an external action, out of scope for this mission, and deferred to a repository maintainer.
 > This document defines labels only; it never claims any label is created, enabled, active, or deployed remotely (that stays external and deferred).
+> The follow-up boundary for the remote step lives in the single deferred list, [deferred-controls.md](deferred-controls.md).
 
 Each entry lists the label `name`, a hex `color` (`#RGB` or `#RRGGBB`), and its
 purpose. A tool or contributor picks labels from this list; the taxonomy does

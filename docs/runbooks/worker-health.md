@@ -81,4 +81,5 @@ and external: they cannot be verified from repository files or local commands,
 so this runbook makes no claim about a live deployment. The local counterparts
 that ARE provided and validated here are the `/healthz` route and the lifecycle
 evidence procedure above on `127.0.0.1:8792`, plus the Worker's own metrics
-spans.
+spans. The follow-up boundary for the deferred items lives in the single
+deferred list, [../deferred-controls.md](../deferred-controls.md).

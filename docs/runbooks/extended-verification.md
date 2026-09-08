@@ -45,4 +45,6 @@ pass without running.
   `pnpm stress:runtime-storage:heavy`.
 - The live-provider and deployed-Worker suites are deferred and external for
   local runs: they require credentials that are not present on a clean checkout
-  and are exercised only by the credential-gated CI jobs that own them.
+  and are exercised only by the credential-gated CI jobs that own them. The
+  single deferred list, [../deferred-controls.md](../deferred-controls.md),
+  owns the follow-up boundaries for externally managed controls.

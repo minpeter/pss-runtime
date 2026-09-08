@@ -39,4 +39,6 @@ be added.
 - Do not merge the automated "Version Packages" pull request unless a release
   was explicitly requested — merging it publishes to the npm registry.
 - Progressive rollout and automated rollback are deferred and external; they
-  are not part of this repository-local procedure.
+  are not part of this repository-local procedure. Their follow-up boundaries
+  live in the single deferred list,
+  [../deferred-controls.md](../deferred-controls.md).

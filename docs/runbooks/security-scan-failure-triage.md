@@ -207,4 +207,8 @@ bounded `retention-days` and are never committed.
 Native GitHub secret scanning and any hosted scanning or alerting service are
 deferred and external: they cannot be configured or verified from repository
 files. The repository-local substitutes are the deterministic secret-pattern
-scan and the security workflows added in the security milestone.
+scan and the security workflows added in the security milestone; the committed
+CodeQL and gitleaks workflows activate in CI on the next push that carries
+them, so no CI result is observable from the local tree. The follow-up
+boundaries for these deferred items live in the single deferred list,
+[../deferred-controls.md](../deferred-controls.md).
