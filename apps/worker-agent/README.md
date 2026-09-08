@@ -97,6 +97,29 @@ body; detail stays in structured worker logs. The probe performs no model,
 Telegram, or Durable Object calls. Any sub-path (`/healthz/foo`) is not
 health and falls through to the catch-all dispatch.
 
+## Privacy, retention, and masking
+
+- The transport persists only channel/session metadata plus durable thread
+  events, all in Worker-owned Durable Object SQLite storage; there is no
+  external database or retention service.
+- Observability never contains message text: wide events, metrics, and spans
+  carry counts, ids, tool names, and token usage only. Attachments are logged
+  as `count`, `mediaTypes`, and `payloadBytes`; user-supplied filenames are
+  never emitted.
+- The Telegram ingress dry-run batch summary logs a bounded text preview,
+  never the full message: text of at most 80 characters is logged in full;
+  longer text is truncated to the first 77 characters, trimmed of trailing
+  whitespace, and suffixed with `...`, so the preview is always at most 80
+  characters. The full length appears only as the `textChars` count.
+- Durable event history has no TTL or expiry, and the transport exposes no
+  delete/clear/expire route. The evlog worker logger is initialized with
+  `redact: true`, so configured secret values are never written to logs.
+
+See
+[docs/runbooks/worker-privacy-retention.md](../../docs/runbooks/worker-privacy-retention.md)
+for the full privacy/retention runbook, including the local verification
+procedures.
+
 ## Coverage gate
 
 The Worker package owns its coverage gate, independent of the root core-only

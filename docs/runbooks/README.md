@@ -16,6 +16,9 @@ publish, deploy, or call an external production service.
 - [Worker health and operational checks](worker-health.md) — run the local
   Worker on `127.0.0.1:8792` and probe its health surface with scripted
   fixtures.
+- [Worker privacy, retention, and masking](worker-privacy-retention.md) —
+  what the Worker transport collects and persists, the exact dry-run preview
+  masking boundary, and the retention guarantees it does and does not make.
 - [Security-scan failure triage](security-scan-failure-triage.md) — respond to
   a failed secret or static-analysis scan without touching external services.
 
