@@ -367,7 +367,17 @@ describe.sequential("common system notices", () => {
       execute: () => model.execute({ args: [requested] }),
     };
     const ready = idleGate();
-    const run = createAgentTUI({ thread: thread(), commands: [command] });
+    const run = createAgentTUI({
+      thread: thread(),
+      commands: [command],
+      replayHistoryOnStartup: true,
+      sessionSelector: {
+        currentSessionKey: () => "replay",
+        listSessions: async () => [],
+        loadCurrentHistory: async () => [{ role: "user", content: "REPLAY" }],
+        switchSession: async () => undefined,
+      },
+    });
     const matching = () => rows().filter((row) => row.includes("MODEL_"));
     try {
       await ready;

@@ -15,12 +15,14 @@ import {
   renderColdTable,
   selectMarkdownTables,
 } from "./cold-table";
+import { type ColdStartupHeader, renderStartupHeader } from "./startup-header";
 
 const HARD_BREAK = /\r\n|\r|\n/;
 
 /** Renderer-free values. A snapshot must describe the presentation, not new input. */
 export type ColdContent =
   | ColdTable
+  | ColdStartupHeader
   | { readonly kind: "group"; readonly children: readonly ColdContent[] }
   | { readonly kind: "spacer"; readonly rows: number }
   | {
@@ -166,6 +168,8 @@ export const renderColdContent = (
       return Array.from({ length: content.rows }, () => "");
     case "table":
       return renderColdTable(content, width);
+    case "startup-header":
+      return renderStartupHeader(content, width);
     case "fixed":
       return content.reason === "graphics"
         ? [...content.rows]
