@@ -1,7 +1,6 @@
 import {
   type Component,
   Container,
-  Editor,
   type EditorTheme,
   getKeybindings,
   isFocusable,
@@ -35,7 +34,8 @@ import {
   type TuiCommandResult,
 } from "./command";
 import { buildTuiCommandSet, resolveTuiCommand } from "./command-set";
-import { composerContentBudget, composerHeightBudget } from "./composer-height";
+import { ComposerEditor } from "./composer-editor";
+import { composerHeightBudget } from "./composer-height";
 import { ctrlCPressDecision } from "./ctrl-c";
 import { createTuiErrorPresentation } from "./error-presentation";
 import { createExtensionUi } from "./extension-ui";
@@ -975,7 +975,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     tui.requestRender();
   };
 
-  const editor = new Editor(tui, editorTheme, {
+  const editor = new ComposerEditor(tui, editorTheme, {
     paddingX: 1,
     autocompleteMaxVisible: Math.max(
       3,
@@ -2049,7 +2049,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
             ]),
           promptHost: {
             contentRows: () =>
-              Math.max(1, composerContentBudget(tui.terminal.rows)),
+              Math.max(1, composerHeightBudget(tui.terminal.rows) - 1),
             mount: (component) => {
               const unmount = composerLayer.mountPrompt(component);
               tui.setFocus(composerLayer);
