@@ -111,6 +111,12 @@ health and falls through to the catch-all dispatch.
   longer text is truncated to the first 77 characters, trimmed of trailing
   whitespace, and suffixed with `...`, so the preview is always at most 80
   characters. The full length appears only as the `textChars` count.
+- Local dry-run verification never needs real Telegram egress: set
+  `TELEGRAM_API_BASE_URL` (documented in `.dev.vars.example`) to a loopback
+  recorder (`pnpm dev:recorder`, or `node scripts/loopback-recorder.mjs
+  --port <port> --log <file>` for custom paths), and every Bot API call
+  (`getMe`, `sendMessage`) is recorded locally instead of leaving the
+  machine. Never set it in production.
 - Durable event history has no TTL or expiry, and the transport exposes no
   delete/clear/expire route. The evlog worker logger is initialized with
   `redact: true`, so configured secret values are never written to logs.

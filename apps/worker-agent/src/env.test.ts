@@ -4,6 +4,7 @@ import {
   assertWebhookSecretToken,
   durableObjectName,
   isTelegramIngressDryRun,
+  readTelegramApiBaseUrl,
   readWebhookSecretToken,
   WorkerAgentConfigError,
 } from "./env";
@@ -30,6 +31,18 @@ describe("worker-agent env helpers", () => {
 
   it("rejects missing webhook secrets", () => {
     expect(() => readWebhookSecretToken({})).toThrow(WorkerAgentConfigError);
+  });
+
+  it("reads the Telegram API base override trimmed, undefined when blank", () => {
+    expect(readTelegramApiBaseUrl({})).toBeUndefined();
+    expect(
+      readTelegramApiBaseUrl({ TELEGRAM_API_BASE_URL: "   " })
+    ).toBeUndefined();
+    expect(
+      readTelegramApiBaseUrl({
+        TELEGRAM_API_BASE_URL: "  http://127.0.0.1:8793  ",
+      })
+    ).toBe("http://127.0.0.1:8793");
   });
 
   it("rejects bot-token-shaped webhook secrets", () => {

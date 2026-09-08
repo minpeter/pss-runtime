@@ -3,7 +3,11 @@ import { createTelegramAdapter } from "@chat-adapter/telegram";
 import { Chat, type Message, type MessageContext, type Thread } from "chat";
 
 import type { Env } from "../env";
-import { isTelegramIngressDryRun, readWebhookSecretToken } from "../env";
+import {
+  isTelegramIngressDryRun,
+  readTelegramApiBaseUrl,
+  readWebhookSecretToken,
+} from "../env";
 import { TELEGRAM_INGRESS_LAYER } from "../message-path-layers";
 import { logError, logInfo, newCorrelationId } from "../worker-log";
 import { replyToThread, requestAgentDelivery } from "./telegram-delivery";
@@ -39,6 +43,7 @@ function createBot(env: Env, config: BotConfig): Chat {
         mode: "webhook",
         secretToken: config.secretToken,
         userName: config.userName,
+        ...(config.apiBaseUrl ? { apiBaseUrl: config.apiBaseUrl } : {}),
       }),
     },
     state: createMemoryState(),
@@ -174,6 +179,7 @@ export function handleTelegramWebhook(
 function readBotConfig(env: Env): BotConfig {
   return {
     agentNamespace: env.AGENT_DO,
+    apiBaseUrl: readTelegramApiBaseUrl(env),
     botToken: env.TELEGRAM_BOT_TOKEN,
     environment: env.ENVIRONMENT,
     secretToken: readWebhookSecretToken(env),
@@ -184,6 +190,7 @@ function readBotConfig(env: Env): BotConfig {
 function isSameBotConfig(left: BotConfig, right: BotConfig): boolean {
   return (
     left.agentNamespace === right.agentNamespace &&
+    left.apiBaseUrl === right.apiBaseUrl &&
     left.botToken === right.botToken &&
     left.environment === right.environment &&
     left.secretToken === right.secretToken &&

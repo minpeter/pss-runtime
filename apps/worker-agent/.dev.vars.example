@@ -12,3 +12,6 @@ WORKER_PUBLIC_URL=https://pss-worker-agent.<account>.workers.dev
 # Layer 1 only (optional): reassembly + Telegram summary, no agent.
 # Prefer: pnpm dev:ingress
 # TELEGRAM_INGRESS_DRY_RUN=1
+# Local validation only: point all Telegram Bot API calls (getMe, sendMessage)
+# at a loopback recorder instead of api.telegram.org. Never set in production.
+# TELEGRAM_API_BASE_URL=http://127.0.0.1:8793
