@@ -9,7 +9,7 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
-
+import { renderBoundedText } from "./bounded-text";
 import {
   type ColdTable,
   renderColdTable,
@@ -175,6 +175,13 @@ export const renderColdContent = (
         ? [...content.rows]
         : renderColdContent(content.content, width);
     case "text":
+      if (width <= 3) {
+        return renderBoundedText(
+          content.text,
+          { width, paddingX: content.paddingX, paddingY: content.paddingY },
+          content.background && styleFunction(content.background)
+        );
+      }
       return new Text(
         content.text,
         content.paddingX,

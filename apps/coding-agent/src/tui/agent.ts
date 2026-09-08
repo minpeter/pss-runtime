@@ -54,7 +54,10 @@ import {
   type SessionHistoryReplayPart,
   sessionHistoryReplayParts,
 } from "./session-history-replay";
-import { SessionSelectorComponent } from "./session-selector";
+import {
+  SessionSelectorComponent,
+  sessionSelectorLayout,
+} from "./session-selector";
 import { TuiSessionMachine } from "./session-state";
 import {
   SnapshotMarkdown as Markdown,
@@ -1006,6 +1009,16 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     };
   };
 
+  const getSessionSelectorLayout = () =>
+    sessionSelectorLayout(
+      terminal.rows,
+      headerContainer.render(terminal.columns).length +
+        chatContainer.render(terminal.columns).length +
+        overlayContainer.render(terminal.columns).length +
+        footerStatusBar.render(terminal.columns).length +
+        1
+    );
+
   const onTerminalResize = (): void => {
     const selector = activeModelSelector;
     if (selector !== undefined) {
@@ -1014,8 +1027,8 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     }
     const sessionSelector = activeSessionSelector;
     if (sessionSelector !== undefined) {
-      const layout = getModelSelectorLayout();
-      sessionSelector.setLayout(layout.maxVisibleModels, layout.compact);
+      const layout = getSessionSelectorLayout();
+      sessionSelector.setLayout(layout.maxVisibleSessions, layout.compact);
     }
     tui.requestRender(true);
   };
@@ -1608,12 +1621,12 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
       extensionUiController.signal.addEventListener("abort", abort, {
         once: true,
       });
-      const layout = getModelSelectorLayout();
+      const layout = getSessionSelectorLayout();
       selector = new SessionSelectorComponent({
         compact: layout.compact,
         currentSessionKey: selectorConfig.currentSessionKey(),
         ...(initialQuery === undefined ? {} : { initialQuery }),
-        maxVisibleSessions: layout.maxVisibleModels,
+        maxVisibleSessions: layout.maxVisibleSessions,
         onCancel: () => settle(undefined),
         onSelect: (sessionKey) => settle(sessionKey),
         sessions,

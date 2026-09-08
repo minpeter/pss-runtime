@@ -5,6 +5,7 @@ import {
   Input,
   Spacer,
   Text,
+  truncateToWidth,
 } from "@earendil-works/pi-tui";
 import type { SessionIndexEntry } from "../sessions/session-index";
 import {
@@ -21,10 +22,16 @@ const style = (prefix: string, text: string): string =>
   `${prefix}${text}${ANSI_RESET}`;
 
 const clampVisibleSessions = (value: number | undefined): number =>
-  Math.max(
-    1,
-    Math.min(MAX_VISIBLE_SESSIONS, Math.floor(value ?? MAX_VISIBLE_SESSIONS))
-  );
+  Math.max(1, Math.floor(value ?? MAX_VISIBLE_SESSIONS));
+
+export const sessionSelectorLayout = (rows: number, occupiedRows: number) => {
+  const available = rows - occupiedRows;
+  const compact = available < 12;
+  return {
+    compact,
+    maxVisibleSessions: Math.max(1, available - (compact ? 3 : 9)),
+  };
+};
 
 export interface SessionSelectorOptions {
   readonly compact?: boolean;
@@ -91,6 +98,11 @@ export class SessionSelectorComponent extends Container {
     this.#compact = compact;
     this.#rebuildLayout();
     this.#updateList();
+  }
+
+  override render(width: number): string[] {
+    // Input's prompt/cursor and informational Text can exceed tiny terminals.
+    return super.render(width).map((line) => truncateToWidth(line, width));
   }
 
   handleInput(data: string): void {
@@ -204,7 +216,10 @@ export class SessionSelectorComponent extends Container {
           new SessionSelectorRow(
             entry,
             entry.key === this.#currentSessionKey,
-            index === this.#selectedIndex
+            index === this.#selectedIndex,
+            this.#filtered.some(
+              (session) => session.key === this.#currentSessionKey
+            )
           )
         );
       }
