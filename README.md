@@ -56,6 +56,15 @@ cloning. The local quality gate runs entirely offline:
 - `pnpm api:check` / `pnpm verify:edge` — runtime API snapshot check and the
   Worker edge-bundle dry run.
 
+The coding-agent CLI is validated from built output, never a source shim:
+run `pnpm build` first, then probe `node apps/coding-agent/bin/pss.js --help`, which
+exits 0 and lists the command entrypoints (`pss exec --help` prints the
+exec usage). The documented error probes are closed-loop: an invalid
+`pss exec` invocation exits 1 with the static stderr line `Invalid pss exec option.`,
+and a misconfigured model environment exits 1 with bounded setup help. Both
+paths terminate immediately with no provider credential, no model call, and
+no listening port.
+
 The public API snapshot (`pnpm api:check`) is the runtime API contract. The
 repository intentionally carries no TypeDoc dependency or script: the
 installed TypeScript 7 toolchain is outside TypeDoc's supported range, so the
