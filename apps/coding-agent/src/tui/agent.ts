@@ -35,6 +35,7 @@ import {
   type TuiCommandResult,
 } from "./command";
 import { buildTuiCommandSet, resolveTuiCommand } from "./command-set";
+import { composerContentBudget, composerHeightBudget } from "./composer-height";
 import { ctrlCPressDecision } from "./ctrl-c";
 import { createTuiErrorPresentation } from "./error-presentation";
 import { createExtensionUi } from "./extension-ui";
@@ -976,7 +977,10 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
 
   const editor = new Editor(tui, editorTheme, {
     paddingX: 1,
-    autocompleteMaxVisible: 8,
+    autocompleteMaxVisible: Math.max(
+      3,
+      composerHeightBudget(tui.terminal.rows) - 3
+    ),
   });
   let autocompleteProvider = createAliasAwareAutocompleteProvider({
     commands: commandSet.commands,
@@ -1108,6 +1112,9 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     );
 
   const onTerminalResize = (): void => {
+    editor.setAutocompleteMaxVisible(
+      Math.max(3, composerHeightBudget(tui.terminal.rows) - 3)
+    );
     const selector = activeModelSelector;
     if (selector !== undefined) {
       const layout = getModelSelectorLayout();
@@ -2041,6 +2048,8 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
               ...(hostSignal ? [hostSignal] : []),
             ]),
           promptHost: {
+            contentRows: () =>
+              Math.max(1, composerContentBudget(tui.terminal.rows)),
             mount: (component) => {
               const unmount = composerLayer.mountPrompt(component);
               tui.setFocus(composerLayer);

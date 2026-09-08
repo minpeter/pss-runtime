@@ -22,6 +22,7 @@ const selectTheme = {
 
 /** Prompts share the HOT composer slot, never a screen overlay. */
 export interface ExtensionPromptHost {
+  contentRows: () => number;
   mount(component: Component): () => void;
 }
 
@@ -188,7 +189,11 @@ async function selectValue(
       value: option.value,
     };
   });
-  const list = new SelectList(items, 8, selectTheme);
+  const list = new SelectList(
+    items,
+    Math.max(1, options.promptHost.contentRows() - 1),
+    selectTheme
+  );
   return await prompt(
     options,
     label,
