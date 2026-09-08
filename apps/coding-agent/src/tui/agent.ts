@@ -1117,13 +1117,11 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     );
     const selector = activeModelSelector;
     if (selector !== undefined) {
-      const layout = getModelSelectorLayout();
-      selector.setLayout(layout.maxVisibleModels, layout.compact);
+      selector.setComposerHeight(tui.terminal.rows);
     }
     const sessionSelector = activeSessionSelector;
     if (sessionSelector !== undefined) {
-      const layout = getSessionSelectorLayout();
-      sessionSelector.setLayout(layout.maxVisibleSessions, layout.compact);
+      sessionSelector.setComposerHeight(tui.terminal.rows);
     }
     tui.requestRender(true);
   };

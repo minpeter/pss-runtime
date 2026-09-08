@@ -3,13 +3,12 @@ import {
   Container,
   fuzzyFilter,
   getKeybindings,
-  Input,
   Spacer,
-  Text,
   truncateToWidth,
   visibleWidth,
 } from "@earendil-works/pi-tui";
-import { composerContentBudget } from "./composer-height";
+import { ComposerInput } from "./bounded-input";
+import { composerHeightBudget } from "./composer-height";
 import { sanitizeTerminalText } from "./terminal-safety";
 
 const ANSI_RESET = "\x1b[0m";
@@ -49,6 +48,10 @@ class ModelRow implements Component {
   }
 
   render(width: number): string[] {
+    if (width <= 5) {
+      const current = this.#current ? "✓" : "";
+      return [style(ANSI_CYAN, this.#selected ? "→" : current)];
+    }
     const prefix = this.#selected ? "→ " : "  ";
     const suffix = this.#current ? " ✓" : "";
     // Account for Text's former left padding and truncate the provider label
@@ -105,8 +108,8 @@ export class ModelSelectorComponent extends Container {
   readonly #listContainer = new Container();
   readonly #onCancel: () => void;
   readonly #onSelect: (modelId: string) => void;
-  readonly #searchInput = new Input();
-  readonly #title: Text;
+  readonly #searchInput = new ComposerInput();
+  readonly #title: Component;
   #compact: boolean;
   #maxVisibleModels: number;
   #selectedIndex = 0;
@@ -138,11 +141,13 @@ export class ModelSelectorComponent extends Container {
       ...options.modelIds.filter((id) => id !== options.currentModelId),
     ];
     this.#filtered = this.#models;
-    this.#title = new Text(
-      `${style(ANSI_BOLD, "Select a model")} ${style(ANSI_DIM, `— current: ${sanitizeTerminalText(options.currentModelId)} · type to search · enter to select · esc to cancel`)}`,
-      1,
-      0
-    );
+    const title = `${style(ANSI_BOLD, "Select a model")} ${style(ANSI_DIM, `— current: ${sanitizeTerminalText(options.currentModelId)} · type to search · enter to select · esc to cancel`)}`;
+    this.#title = {
+      invalidate() {
+        return;
+      },
+      render: (width) => [truncateToWidth(title, width, "")],
+    };
     // Input#setValue preserves its old cursor (zero on a fresh Input), so
     // replay the initial query through normal insertion to place it at end.
     this.#searchInput.handleInput(options.initialQuery ?? "");
@@ -154,12 +159,18 @@ export class ModelSelectorComponent extends Container {
 
   /** Recalculate the selector layout after a terminal-height change. */
   setLayout(maxVisibleModels: number, compact: boolean): void {
-    const next = clampVisibleModels(maxVisibleModels);
-    if (next === this.#maxVisibleModels && compact === this.#compact) {
+    // Title, search and scroll info reserve three rows; standard decoration
+    // reserves six more. Always retain at least one selected-item row.
+    const nextCompact = compact || this.#rowBudget < 10;
+    const next = Math.min(
+      clampVisibleModels(maxVisibleModels),
+      this.#rowBudget - (nextCompact ? 3 : 9)
+    );
+    if (next === this.#maxVisibleModels && nextCompact === this.#compact) {
       return;
     }
     this.#maxVisibleModels = next;
-    this.#compact = compact;
+    this.#compact = nextCompact;
     this.#rebuildLayout();
     this.#updateList();
   }
@@ -169,8 +180,8 @@ export class ModelSelectorComponent extends Container {
   }
 
   setComposerHeight(terminalRows: number): void {
-    this.#rowBudget = composerContentBudget(terminalRows);
-    this.setMaxVisibleModels(Math.max(1, this.#rowBudget - 4));
+    this.#rowBudget = composerHeightBudget(terminalRows) - 1;
+    this.setLayout(MAX_VISIBLE_MODELS, this.#rowBudget < 10);
   }
 
   handleInput(data: string): void {
@@ -261,9 +272,14 @@ export class ModelSelectorComponent extends Container {
   #updateList(): void {
     this.#listContainer.clear();
     if (this.#filtered.length === 0) {
-      this.#listContainer.addChild(
-        new Text(style(ANSI_DIM, "  No matching models"), 1, 0)
-      );
+      this.#listContainer.addChild({
+        invalidate() {
+          return;
+        },
+        render: (width) => [
+          truncateToWidth(style(ANSI_DIM, "  No matching models"), width, ""),
+        ],
+      });
       return;
     }
 
@@ -291,16 +307,21 @@ export class ModelSelectorComponent extends Container {
     }
 
     if (start > 0 || end < this.#filtered.length) {
-      this.#listContainer.addChild(
-        new Text(
-          style(
-            ANSI_DIM,
-            `  (${this.#selectedIndex + 1}/${this.#filtered.length})`
+      this.#listContainer.addChild({
+        invalidate() {
+          return;
+        },
+        render: (width) => [
+          truncateToWidth(
+            style(
+              ANSI_DIM,
+              `  (${this.#selectedIndex + 1}/${this.#filtered.length})`
+            ),
+            width,
+            ""
           ),
-          1,
-          0
-        )
-      );
+        ],
+      });
     }
   }
 }

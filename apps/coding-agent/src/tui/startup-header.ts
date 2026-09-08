@@ -3,6 +3,7 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
+import { renderBoundedText } from "./bounded-text";
 
 const ANSI_RESET = "\x1b[0m";
 const ANSI_DIM = "\x1b[2m";
@@ -20,13 +21,26 @@ export const renderStartupHeader = (
   content: ColdStartupHeader,
   width: number
 ): string[] => {
-  const available = Math.max(1, width - 2);
+  if (width <= 3) {
+    // Drop padding before wrapping: CJK needs two cells, and a one-cell
+    // terminal uses the same lossless-source fallback as other bounded text.
+    const lines = content.title.map(
+      (title, index) => `${title}  ${content.subtitle[index] ?? ""}`
+    );
+    lines.push(...content.subtitle.slice(content.title.length));
+    return renderBoundedText(lines.join("\n"), {
+      width,
+      paddingX: 0,
+      paddingY: 0,
+    });
+  }
+  const available = width - 2;
   return content.title
     .flatMap((title, index) => {
       const subtitle = content.subtitle[index] ?? "";
       const prefix = `${title}  `;
       const remaining = available - visibleWidth(prefix);
-      if (remaining < 1) {
+      if (remaining < 2) {
         return wrapTextWithAnsi(`${prefix}${subtitle}`, available);
       }
       const [first = "", ...rest] = wrapTextWithAnsi(subtitle, remaining);
