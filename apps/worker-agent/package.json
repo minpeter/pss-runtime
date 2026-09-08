@@ -8,6 +8,7 @@
     "predev": "pnpm -F @minpeter/pss-runtime build",
     "dev": "run-p dev:worker dev:relay",
     "dev:ingress": "run-p dev:worker:ingress dev:relay",
+    "dev:recorder": "node scripts/loopback-recorder.mjs --port 8793 --log ../../.omo/evidence/egress-recorder.jsonl",
     "dev:relay": "tsx scripts/telegram.ts relay",
     "dev:worker": "wrangler dev -e dev",
     "dev:worker:ingress": "wrangler dev -e dev --var TELEGRAM_INGRESS_DRY_RUN:1",
