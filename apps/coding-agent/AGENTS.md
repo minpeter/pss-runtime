@@ -8,9 +8,12 @@ import.
 
 ## Invariants
 
-- After CLI router changes, run the built `bin/pss.js` (for example
-  `node apps/coding-agent/bin/pss.js --help`); source-only checks miss
-  packaging drift.
+- After CLI router changes, run the built `bin/pss.js` after `pnpm build`
+  (for example `node apps/coding-agent/bin/pss.js --help` from the repo
+  root); source-only checks miss packaging drift. The closed-loop error
+  probes (`pss exec` with invalid options or a misconfigured model
+  environment) exit 1 with a bounded static error and never touch the
+  network, a credential, or a port — see the README error contract.
 - TUI changes require the web-terminal visual QA harness at
   `script/qa/web-terminal-visual-qa.mjs`; captured evidence stays out of git.
 - Every workspace tool goes through `resolveWorkspacePath` and `atomicWrite`;

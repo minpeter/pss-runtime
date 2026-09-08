@@ -556,6 +556,37 @@ diagnostics. Flags: `--workspace`; exactly one of
 `--timeout-seconds` (1-1200), `--web-tools`, and `--result-file`. A `.env` next
 to the working directory is loaded automatically.
 
+The command entrypoints are `pss exec`, `pss extension`, `pss
+inspect-thread`, `pss rpc`, `pss update`, and `pss help`; `pss --help`
+(also `pss help`/`-h`) prints them and exits 0, and `pss exec --help`
+prints the exec usage and exits 0.
+
+### Error contract and built-CLI validation
+
+An unknown command prints the usage and exits 1. Invalid `pss exec`
+options — an unknown flag, a missing value, an out-of-range
+`--timeout-seconds` (1-1200), or anything other than exactly one prompt
+source — exit 1 with the static, bounded stderr line `Invalid pss exec option.`; the
+offending input is never reflected back, and `pss exec --help` prints the
+corrective usage. A misconfigured model environment (for example
+`AI_BASE_URL` set without `AI_API_KEY`) exits 1 with bounded setup help
+that names the exact variables to set. A completed `pss exec` task exits 0;
+a failed or timed-out task exits 1 after the bounded `result` event.
+
+Repository validation always probes the built output, never a source shim:
+run `pnpm build` first, then `node apps/coding-agent/bin/pss.js --help`
+from the repository root. The `bin/pss.js` entry behind the `pss` and
+`pss-coding-agent` binaries imports only `dist/` modules, and the build
+output stays gitignored and untracked; the bundle-budget check (`pnpm
+check:bundle-size --check`) covers the `dist/cli.js` and `dist/env.js`
+modules the entry loads. The help and error probes above are closed-loop:
+they need no provider credential, call no live model, start no service, and
+open no listening port — the invalid-option and model-env paths exit before
+any network I/O, so they terminate immediately under a short timeout
+harness such as `node scripts/time-gate.mjs --bound 30 --label
+cli-exec-invalid -- node apps/coding-agent/bin/pss.js exec
+--definitely-invalid-option value`.
+
 Both the TUI and `pss exec` share the same workspace tools through
 `createCodingAgent`: `read_file`, `glob_files`, `grep_files`, `edit_file`
 (hashline-anchored), `write_file`, `delete_file`, and `shell_execute`. The file
