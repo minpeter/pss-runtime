@@ -7,6 +7,8 @@ import {
 } from "./session-events";
 import { streamRemoteSessionEvents } from "./session-remote";
 
+const SSE_FRAME_ID_PATTERN = /^id: (0|[1-9]\d*)$/u;
+
 const firstEvent = {
   cursor: { offset: 0 },
   event: { type: "turn-start" },
@@ -24,6 +26,87 @@ const thirdEvent = {
 } satisfies StoredThreadEvent;
 
 describe("session SSE event stream", () => {
+  it("answers with the documented SSE headers", () => {
+    const live = createSessionEventLiveSignal();
+    const response = createSessionEventStreamResponse({
+      live,
+      replay: () => Promise.resolve({ events: [] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe(
+      "text/event-stream; charset=utf-8"
+    );
+    expect(response.headers.get("cache-control")).toBe(
+      "no-cache, no-transform"
+    );
+    expect(response.headers.get("connection")).toBe("keep-alive");
+  });
+
+  it("encodes frames as id/event/data carrying only cursor, event, threadKey", async () => {
+    const committed: StoredThreadEvent[] = [firstEvent, secondEvent];
+    const live = createSessionEventLiveSignal();
+    const response = createSessionEventStreamResponse({
+      after: { offset: 0 },
+      live,
+      replay: (after) =>
+        Promise.resolve(replayAfterCursor(committed, after?.offset)),
+    });
+    if (!response.body) {
+      throw new Error("expected SSE response body");
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (!buffer.includes("\n\n")) {
+      const result = await withTimeout(reader.read());
+      if (result.done) {
+        throw new Error("SSE stream ended before the first frame");
+      }
+      buffer += decoder.decode(result.value, { stream: true });
+    }
+    await reader.cancel();
+
+    const frame = buffer.split("\n\n")[0];
+    expect(frame).toBe(
+      `id: 1\nevent: thread-event\ndata: ${JSON.stringify(secondEvent)}`
+    );
+    const lines = frame?.split("\n") ?? [];
+    expect(lines[0]).toMatch(SSE_FRAME_ID_PATTERN);
+    expect(lines[1]).toBe("event: thread-event");
+    const data = lines[2]?.slice("data: ".length);
+    expect(Object.keys(JSON.parse(data ?? "{}") as object).sort()).toEqual([
+      "cursor",
+      "event",
+      "threadKey",
+    ]);
+  });
+
+  it("stops the pump on cancellation without a busy-loop", async () => {
+    let replayCalls = 0;
+    const live = createSessionEventLiveSignal();
+    const response = createSessionEventStreamResponse({
+      live,
+      replay: () => {
+        replayCalls += 1;
+        return Promise.resolve({ events: [] });
+      },
+    });
+    if (!response.body) {
+      throw new Error("expected SSE response body");
+    }
+    const reader = response.body.getReader();
+    // Allow the pump to reach its idle wait.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    await reader.cancel();
+    live.publish();
+    live.publish();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(replayCalls).toBe(1);
+  });
+
   it("replays committed events before streaming a newly committed event", async () => {
     const committed: StoredThreadEvent[] = [firstEvent, secondEvent];
     const live = createSessionEventLiveSignal();

@@ -63,6 +63,8 @@ Accept: text/event-stream
 
 The stream replays committed events after `after` before waiting for newly committed events. Each `thread-event` frame has the serialized cursor as its SSE `id` and a `StoredThreadEvent` JSON object as `data`. `streamRemoteSessionEvents()` reconnects a dropped response with its last received cursor. SSE is an optimization only: clients must retain cursor-polling replay as the deployment-neutral fallback.
 
+The route answers 200 with `content-type: text/event-stream; charset=utf-8`, `cache-control: no-cache, no-transform`, and `connection: keep-alive` (the app sets all three; workerd strips the hop-by-hop `connection` header on the wire, where HTTP/1.1 keep-alive is the default). Failures short-circuit in a fixed precedence with no Durable Object fetch: non-GET → 405 `method not allowed`; failed bearer auth → 401 `unauthorized`; missing `channel` → 400 `channel required`; unparseable `channel` or malformed `after` (only `^(0|[1-9]\d*)$` safe integers) → 400 `invalid session event stream`. Without `after` the stream replays from the beginning; reconnecting with `after=<last id>` never redelivers that event. A trimmed non-empty `sessionScopeKey` query parameter is forwarded to the Durable Object; a blank one is omitted. When the channel Durable Object is unreachable the route answers 502 `agent durable object unavailable` before any SSE frame is sent.
+
 ## Health probe
 
 Unauthenticated liveness probe, dispatched before tRPC/SSE/Telegram:
