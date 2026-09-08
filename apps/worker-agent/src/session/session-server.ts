@@ -111,9 +111,9 @@ async function requestSessionDurableObject<T>({
     throw new WorkerServerUpstreamError("agent durable object unavailable");
   }
   if (!response.ok) {
-    throw new WorkerServerUpstreamError(
-      `agent durable object session request failed: ${response.status}`
-    );
+    // Fixed literal: the upstream status code is internal detail and must
+    // not surface in the client envelope (matches the SSE route and README).
+    throw new WorkerServerUpstreamError("agent durable object unavailable");
   }
   return parse(await response.json());
 }

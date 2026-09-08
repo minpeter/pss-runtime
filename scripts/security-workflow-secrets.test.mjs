@@ -102,6 +102,16 @@ describe("security-workflow secrets: no authored secrets (VAL-SEC-033)", () => {
     ).toBe(true);
   });
 
+  it("fails on case-variant Secrets.*/GITHUB.TOKEN references", () => {
+    const problems = problemsOf(
+      securityWorkflow({
+        extraSteps: `      - run: echo "token=${ghExpr("Secrets.SCAN_TOKEN")} ${ghExpr("github.Token")}"\n`,
+      })
+    );
+    expect(problems.some((p) => p.includes("secrets.*"))).toBe(true);
+    expect(problems.some((p) => p.includes("github.token"))).toBe(true);
+  });
+
   it("ignores secrets in non-security workflows", () => {
     const problems = problemsOf(nonSecurityWorkflow(), securityWorkflow());
     expect(problems).toEqual([]);

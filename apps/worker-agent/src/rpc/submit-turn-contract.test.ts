@@ -268,9 +268,10 @@ describe("session procedure upstream failure mapping", () => {
     });
 
     const body = await expectErrorEnvelope(response, 502, "BAD_GATEWAY");
-    expect(body).toContain("503");
+    expect(body).toContain("agent durable object unavailable");
     expectBoundedErrorBody(body);
     expect(body).not.toContain("upstream exploded");
+    expect(body).not.toContain("503");
   });
 
   it("maps a rejected Durable Object fetch to a bounded BAD_GATEWAY", async () => {

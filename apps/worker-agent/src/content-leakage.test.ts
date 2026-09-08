@@ -23,6 +23,7 @@ const SENTINELS = {
   channelId: "leak-sentinel-channel-id",
   cursor: "leak-sentinel-cursor",
   extraKey: "leak-sentinel-extra-key",
+  pathProbe: "leak-sentinel-long-path",
   stub: "leak-sentinel-stub-internal",
   text: "leak-sentinel-message-text",
   wrongSecret: "leak-sentinel-wrong-webhook-secret",
@@ -287,6 +288,14 @@ async function runNegativeBattery(
     "trpc-unknown-procedure",
     probe("/trpc/session.doesNotExist?input=%7B%7D", { headers: bearer })
   );
+  // A 2000+ character attacker-controlled procedure path must still answer
+  // with the fixed bounded NOT_FOUND envelope: no path echo in the message
+  // and no data.path field.
+  const longPath = `session.${"a".repeat(1000)}${SENTINELS.pathProbe}${"b".repeat(1000)}`;
+  await record(
+    "trpc-long-path-not-found",
+    probe(`/trpc/${longPath}?input=%7B%7D`, { headers: bearer })
+  );
   await record(
     "trpc-query-post",
     probe("/trpc/session.replayEvents", {
@@ -354,6 +363,7 @@ const EXPECTED_STATUSES: Record<string, number> = {
   "telegram-wrong-secret": 401,
   "trpc-bad-input": 400,
   "trpc-inflated-input": 400,
+  "trpc-long-path-not-found": 404,
   "trpc-query-post": 405,
   "trpc-submit-do-unreachable": 502,
   "trpc-unknown-procedure": 404,
@@ -466,6 +476,21 @@ describe("content leakage battery (VAL-WORKER-045)", () => {
     );
     for (const result of results) {
       auditBody(result, SECRETS_ALPHA, SECRETS_ALPHA.tuiToken);
+    }
+    // NOT_FOUND envelopes carry the fixed literal message and no data.path,
+    // so the attacker-controlled URL path is never echoed back.
+    for (const name of ["trpc-unknown-procedure", "trpc-long-path-not-found"]) {
+      const result = results.find((entry) => entry.name === name);
+      if (!result) {
+        throw new Error(`missing battery result ${name}`);
+      }
+      const envelope = (
+        JSON.parse(result.body) as {
+          error: { data?: Record<string, unknown>; message?: unknown };
+        }
+      ).error;
+      expect(envelope.message, `${name} message`).toBe("not found");
+      expect(envelope.data, `${name} data.path`).not.toHaveProperty("path");
     }
     // The only outbound traffic is Telegram adapter initialization against
     // the loopback base; the negative battery triggers no other egress.
