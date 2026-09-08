@@ -22,6 +22,12 @@ const SENSITIVE_KEY =
 // Allowed placeholder shapes for sensitive keys: empty, an ellipsis, or a
 // bracketed placeholder such as <account>.
 const PLACEHOLDER_VALUE = /^(?:\.\.\.|<[^>]*>)?$/;
+// A documented local-verification placeholder: the `pss_local_..._placeholder`
+// sentinel (lowercase words and underscores only — no digits, uppercase, or
+// base64url run — so it can never collide with a real token). This is the
+// non-secret dummy that local webhook-secret probes copy from
+// `.dev.vars.example`; it is explicitly not a credential.
+const DOCUMENTED_PLACEHOLDER_VALUE = /^pss_local_[a-z_]*placeholder$/;
 // High-entropy token shapes: long unbroken base64url-ish runs carrying both
 // letters and digits, and the Telegram bot-token shape. Dotted versions,
 // URLs, and model slugs never match.
@@ -56,7 +62,13 @@ export function exampleEnvProblems(path, source) {
       return;
     }
     const [, key, value] = match;
-    if (SENSITIVE_KEY.test(key) && !PLACEHOLDER_VALUE.test(value)) {
+    if (
+      SENSITIVE_KEY.test(key) &&
+      !(
+        PLACEHOLDER_VALUE.test(value) ||
+        DOCUMENTED_PLACEHOLDER_VALUE.test(value)
+      )
+    ) {
       problems.push(
         `${label} gives sensitive key ${key} a non-placeholder value; example files carry placeholders only`
       );

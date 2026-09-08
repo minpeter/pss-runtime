@@ -5,8 +5,16 @@ AI_MODEL=minimax/MiniMax-M3
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_BOT_USERNAME=your_bot
 # Separate from TELEGRAM_BOT_TOKEN. Allowed: A-Z a-z 0-9 _ -
-# Generate: openssl rand -hex 32
-TELEGRAM_WEBHOOK_SECRET_TOKEN=...
+# Generate a real one for deployment: openssl rand -hex 32
+# The value below is the DOCUMENTED placeholder for local webhook-secret
+# verification ONLY — it is a non-secret dummy, never a real credential, and
+# it must never appear in logs or evidence. Local webhook probes
+# (missing/incorrect/valid x-telegram-bot-api-secret-token) copy exactly this
+# placeholder into an untracked .dev.vars; no real secret is ever configured.
+# The 401 secret check is fully local (it happens before any Telegram API
+# call), so placeholder probes perform zero setWebhook/sendMessage/getUpdates
+# egress.
+TELEGRAM_WEBHOOK_SECRET_TOKEN=pss_local_webhook_secret_placeholder
 LOCAL_WEBHOOK_URL=http://127.0.0.1:8792/
 WORKER_PUBLIC_URL=https://pss-worker-agent.<account>.workers.dev
 # Layer 1 only (optional): reassembly + Telegram summary, no agent.
