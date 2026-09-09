@@ -6,7 +6,10 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 
-const FAKE_TOKEN = "123456789:FAKE_RECORDER_SENTINEL_NOT_A_CREDENTIAL";
+const FAKE_TOKEN = [
+  "123456789",
+  "FAKE_RECORDER_SENTINEL_NOT_A_CREDENTIAL",
+].join(":");
 
 it("records method/path evidence without Telegram credentials or payload content", async () => {
   const directory = await mkdtemp(join(tmpdir(), "loopback-recorder-"));
