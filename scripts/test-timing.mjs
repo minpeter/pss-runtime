@@ -227,7 +227,9 @@ function main() {
   const result = spawnSync(process.execPath, [VITEST_CLI, ...vitestArgs()], {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
-    env: { ...process.env, TMPDIR: TMP_DIR },
+    // Keep fixture placement identical to ordinary `pnpm test`: moving the
+    // OS temp directory into the checkout leaks ancestor AGENTS.md context
+    // and exposes copied test repositories to concurrent Vitest discovery.
   });
   let vitestJson;
   try {
@@ -251,6 +253,21 @@ function main() {
     `test:timing: ${report.entries.length} test durations -> ${args.out}`
   );
   if (result.status !== 0) {
+    const failed = normalizeTiming(
+      vitestJson,
+      Number.POSITIVE_INFINITY
+    ).entries.filter((entry) => entry.status === "failed");
+    // Emit bounded identifiers only, never captured output or assertion
+    // payloads (which may contain credentials). JSON escapes control chars.
+    console.error(
+      `test:timing failures: ${JSON.stringify({
+        total: failed.length,
+        tests: failed.slice(0, 10).map(({ file, name }) => ({
+          file: file.slice(0, 200),
+          name: name.slice(0, 200),
+        })),
+      })}`
+    );
     console.error(
       "test:timing: the Vitest run failed; the artifact was written for triage"
     );
