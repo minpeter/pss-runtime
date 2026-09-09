@@ -27,6 +27,16 @@ regexTarget = "line"
 id = "generic-api-key"
 
 [[rules.allowlists]]
+description = "Static redacted API-key assertion in security regression test"
+condition = "AND"
+commits = ["b2ee67c95be1193e0cb0792b80b75f906111ad42"]
+paths = ['''^scripts/security\-gitleaks\-history\.test\.mjs$''']
+regexTarget = "secret"
+regexes = [
+  '''^AI_API_KEY=REDACTED$''',
+]
+
+[[rules.allowlists]]
 description = "Synthetic campaign output-redaction sentinel"
 condition = "AND"
 commits = ["2710b291e3454d64648ca79696b61f385325be81"]
