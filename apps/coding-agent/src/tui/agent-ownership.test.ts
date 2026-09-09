@@ -328,6 +328,47 @@ describe.sequential("actual TUI transcript ownership", () => {
     }
   });
 
+  it.each(["none", "setup notice"] as const)(
+    "keeps exactly one raw boundary row between startup (%s) and the first block",
+    async (below) => {
+      const app = await fixture({
+        header: { title: "LOGO", subtitle: "MODEL_A\n/CWD" },
+        setupMessages: below === "none" ? [] : ["SETUP_NOTICE"],
+      });
+      const startup = () => surface().children[0] as Container;
+      try {
+        const before = rows(startup());
+        await app.start();
+        const header = rows(startup());
+        expect(header).toEqual(before);
+        const lastText =
+          header.length -
+          1 -
+          [...header]
+            .reverse()
+            .findIndex((row) => stripTerminalSequences(row).trim() !== "");
+        expect(stripTerminalSequences(header[lastText] ?? "")).toContain(
+          below === "none" ? "Enter to submit" : "SETUP_NOTICE"
+        );
+        const transcript = rows(chat());
+        const first = transcript.findIndex((row) => row.includes("USER"));
+        expect(first).toBeGreaterThanOrEqual(0);
+        // The user card's painted padding is intentional; exactly one neutral
+        // (unpainted) row separates startup's last text from the card.
+        const between = [
+          ...header.slice(lastText + 1),
+          ...transcript.slice(0, first),
+        ];
+        expect(between.filter((row) => row === "")).toHaveLength(1);
+        expect(
+          between.every((row) => stripTerminalSequences(row).trim() === "")
+        ).toBe(true);
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
   it.each(["initial", "completed"] as const)(
     "shows the empty-input notice when %s with no continuation",
     async (state) => {
