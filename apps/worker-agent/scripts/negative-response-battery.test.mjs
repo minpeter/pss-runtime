@@ -2,16 +2,33 @@ import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
+  rmSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { delimiter, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { createFixtureScope } from "../../../scripts/test-fixtures.mjs";
 
-const scope = createFixtureScope("negative-battery-");
+const FIXTURE_BASE = ".omo/tmp";
+const scope = (() => {
+  const dirs = [];
+  return {
+    dir() {
+      mkdirSync(FIXTURE_BASE, { recursive: true });
+      const dir = mkdtempSync(join(FIXTURE_BASE, "negative-battery-"));
+      dirs.push(dir);
+      return dir;
+    },
+    cleanup() {
+      for (const dir of dirs.splice(0)) {
+        rmSync(dir, { force: true, recursive: true });
+      }
+    },
+  };
+})();
 const battery = fileURLToPath(
   new URL("./negative-response-battery.mjs", import.meta.url)
 );
