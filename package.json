@@ -30,7 +30,7 @@
     "check:workspace-drift": "node scripts/check-workspace-version-drift.mjs",
     "coverage": "pnpm --filter @minpeter/pss-coding-agent build && vitest run --config vitest.coverage.config.ts --coverage",
     "dev": "pnpm --filter @minpeter/pss-example-basic start",
-    "dev:tui": "tsx --conditions=@minpeter/pss-source apps/coding-agent/src/tui/app.ts",
+    "dev:tui": "tsx --conditions=@minpeter/pss-source scripts/dev-tui.mjs",
     "eval:edge-remote": "pnpm --filter @minpeter/pss-worker-agent eval:remote",
     "eval:provider": "pnpm --filter @minpeter/pss-example-evals eval",
     "format": "ultracite fix .",
@@ -54,7 +54,7 @@
     "verify:release": "node scripts/verify-release-artifacts.mjs && pnpm verify:package-apis"
   },
   "devDependencies": {
-    "@ai-sdk/openai-compatible": "3.0.20",
+    "@ai-sdk/openai-compatible": "3.0.23",
     "@babel/core": "8.0.1",
     "@babel/parser": "8.0.4",
     "@biomejs/biome": "2.5.5",
@@ -65,7 +65,7 @@
     "@modelcontextprotocol/server": "2.0.0",
     "@t3-oss/env-core": "^0.13.11",
     "@types/node": "^26.1.2",
-    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/coverage-v8": "^4.1.11",
     "@xterm/xterm": "6.0.0",
     "ajv": "8.20.0",
     "dotenv": "^17.4.2",
@@ -81,7 +81,7 @@
     "turbo": "^2.10.8",
     "typescript": "^7.0.2",
     "ultracite": "7.10.6",
-    "vitest": "^4.1.10",
+    "vitest": "^4.1.11",
     "yaml": "2.9.0",
     "zod": "^4.4.3"
   },

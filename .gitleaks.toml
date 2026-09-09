@@ -25,3 +25,122 @@ regexes = [
 ]
 # The regex above describes a whole assignment line, not the matched secret.
 regexTarget = "line"
+
+# Historical exceptions are rule-specific AND matches of commit, path, and
+# exact reviewed non-secret value. See docs/security-scan-history-triage.md.
+
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Synthetic campaign output-redaction sentinel"
+condition = "AND"
+commits = ["2710b291e3454d64648ca79696b61f385325be81"]
+paths = ['''^benchmarks/compaction\-score/campaign\-aggregation\.test\.ts$''']
+regexTarget = "secret"
+regexes = [
+  '''^G012_CAMPAIGN_SECRET_SENTINEL$''',
+]
+
+[[rules.allowlists]]
+description = "SHA-256 of randomUUID benchmark run markers, not authentication"
+condition = "AND"
+commits = ["31f060535e89a03cf6e2b5367c6c791171cd4d5f"]
+paths = ['''^examples/evals/evidence/cache\-telemetry/2026\-07\-17\-route\-aware\-confirmation\.json$''']
+regexTarget = "secret"
+regexes = [
+  '''^1922851b144028c5f0862b3a8856788b6710f768de4defa77d4c36e9a953807a$''',
+  '''^4ca4480fc750dfa272e850ce88a50c71fe1b6a59f3c9dbbefe6efb6ea7103b70$''',
+  '''^6060bc53d2a68511e1a3507c34e1b8d1bf58a05af12c7b40a0f85e92977bd876$''',
+  '''^dd61f0b0474c6235580d7a33d3ac19566cd531aa72bcbb6ccc77b81c61fc3493$''',
+  '''^92374f0279ec594fdcceead7585861abefa497e5c437c05a40c5ab099266626c$''',
+  '''^7fddd612d6b642f280ff58c59c754d71afa3a9ea95b676a252a75f8f9461acbe$''',
+  '''^b291c2043de681632ed6d358f0fe6998ac717ee6a73acc0bccc21ae81c82a98c$''',
+  '''^6e1387b45f6844213c523c06b1029c9a35400092e81443f9cd562803d6abd38a$''',
+]
+
+[[rules.allowlists]]
+description = "SHA-256 of randomUUID benchmark run markers, not authentication"
+condition = "AND"
+commits = ["b23537f865cedf2dd3ba45b3a521ab8d591fdbe3"]
+paths = ['''^examples/evals/evidence/cache\-telemetry/2026\-07\-17\-route\-aware\-confirmation\.json$''']
+regexTarget = "secret"
+regexes = [
+  '''^8696122b90981faccd28842db8a51968924089a75ee7cf7bcbe04ed54fbe6b13$''',
+  '''^6f392bf4366a376294be5294cdbfc66bb8031f86762706fa7a59001ef9985bcf$''',
+  '''^416eba20a54d65eb20c14963a37b50695b936786f8a9ba9bef981d357df3b39d$''',
+  '''^02a1d17cd4e1d174f13aa92c5c81da18428f87cf8ced14054a64a1408270298c$''',
+  '''^7380df8707c8884449fcd5c8b5fe4fef940edae630b379ff9cfad40454f20965$''',
+  '''^09794fa938f85e40b1c66d13424cf7bc8b4cf77f2969c71812e5e0fc2c811033$''',
+  '''^3b89a921df7a4b9ff39d71ba07a8d646723b2450a35991b97cca4e237ff0aec1$''',
+  '''^6d8fbadf04127dfea9f0174870cba8bad9cbb5bb97034336103c95558c94e3c6$''',
+]
+
+[[rules.allowlists]]
+description = "Source SHA-256 provenance; recomputed against fe3568ac source blobs"
+condition = "AND"
+commits = ["b50ae48395c6b20f021d7061d7428dacde8bcae0"]
+paths = ['''^experimental/cache\-stable\-tools/latest\-freerouter\.json$''']
+regexTarget = "secret"
+regexes = [
+  '''^c63f8d2d1e3409dbc9869904cc6c07e27d6c1759692491b73d7b616b8e9f91f1$''',
+  '''^6a587af0b7ee3838c809aa1bad67ce2d569ca9039d551d52c0e6d93ed580e1b3$''',
+  '''^f2eb01a228886e0b959befcdac01b4447bd271d6437cf6601277e6b55decbd23$''',
+  '''^ffe634630d7e0cc1eebc4c7ad8941e681ec3405d64e82075acb4853e0ba80db6$''',
+  '''^4d94655e9bfda2f7659e26262df9c67b12946041d0db100007420e803fd7b1a0$''',
+  '''^996d345dc5927e1f652b1b1eb70d9be7cb9e80f0aa00602b24c53bbc978b321e$''',
+  '''^89720d8a6a5ef5c1a6343c07d66f00b7d672a0c0b6a91c2f93064c47df90478c$''',
+  '''^8a7d7dd8211ff77e79e390e3465248b7f0c02c0f8b0c077d80edd485845a1933$''',
+  '''^64deae46450de4cae767c4479263f9f04b30149901f5dda9eff623a423952501$''',
+]
+
+[[rules.allowlists]]
+description = "Synthetic inert cache-isolation canary for request-artifact hash assertions"
+condition = "AND"
+commits = ["c74d8ca6c5605d2a5bf1a8dbed00393abf56d6c8"]
+paths = ['''^scripts/cache\-stable\-tools\-independent\-verifier\.adversarial\.mjs$''']
+regexTarget = "secret"
+regexes = [
+  '''^0123456789abcdef01234567$''',
+]
+
+[[rules.allowlists]]
+description = "Source SHA-256 provenance; recomputed against fe3568ac source blobs"
+condition = "AND"
+commits = ["fe3568ac002ea600786fdcaad975f630e689fee7"]
+paths = ['''^benchmarks/cache\-stable\-tools/latest\-freerouter\.json$''']
+regexTarget = "secret"
+regexes = [
+  '''^c63f8d2d1e3409dbc9869904cc6c07e27d6c1759692491b73d7b616b8e9f91f1$''',
+  '''^6a587af0b7ee3838c809aa1bad67ce2d569ca9039d551d52c0e6d93ed580e1b3$''',
+  '''^f2eb01a228886e0b959befcdac01b4447bd271d6437cf6601277e6b55decbd23$''',
+  '''^ffe634630d7e0cc1eebc4c7ad8941e681ec3405d64e82075acb4853e0ba80db6$''',
+  '''^4d94655e9bfda2f7659e26262df9c67b12946041d0db100007420e803fd7b1a0$''',
+  '''^996d345dc5927e1f652b1b1eb70d9be7cb9e80f0aa00602b24c53bbc978b321e$''',
+  '''^89720d8a6a5ef5c1a6343c07d66f00b7d672a0c0b6a91c2f93064c47df90478c$''',
+  '''^8a7d7dd8211ff77e79e390e3465248b7f0c02c0f8b0c077d80edd485845a1933$''',
+  '''^64deae46450de4cae767c4479263f9f04b30149901f5dda9eff623a423952501$''',
+]
+
+[[rules]]
+id = "cloudflare-api-key"
+
+[[rules.allowlists]]
+description = "Exported function name in public surface verification, not a credential"
+condition = "AND"
+commits = ["89121b9a0c6ab28141bf6f68b68d8d50859d800f"]
+paths = ['''^scripts/verify\-release\-artifacts/runtime\-public\-surface\.mjs$''']
+regexTarget = "secret"
+regexes = [
+  '''^ackScheduledCloudflareAgentsThreadPrompt$''',
+]
+
+[[rules.allowlists]]
+description = "Exported function name in public surface verification, not a credential"
+condition = "AND"
+commits = ["e3263bb3fdf5441536dc44ae13454682c78daf65"]
+paths = ['''^scripts/verify\-release\-artifacts/runtime\-public\-surface\.mjs$''']
+regexTarget = "secret"
+regexes = [
+  '''^isCloudflareAgentsRecoveryContextTrusted$''',
+]

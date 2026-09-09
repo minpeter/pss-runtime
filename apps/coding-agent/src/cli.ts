@@ -33,6 +33,10 @@ import {
 } from "./thread-inspect";
 import { startTui } from "./tui/app";
 import { boundedReloadOperation } from "./tui/reload";
+import {
+  type StartupStatusOutput,
+  withStartupStatus,
+} from "./tui/startup-status";
 import { cliVersion } from "./update/cli-version";
 import { runUpdateCommand } from "./update/command";
 
@@ -55,7 +59,7 @@ interface RunCodingAgentCliOptions {
       readonly sessionName?: string;
     }
   ) => Promise<number>;
-  readonly stdout?: { write(text: string): void };
+  readonly stdout?: StartupStatusOutput;
   readonly update?: (args: readonly string[]) => Promise<number>;
 }
 
@@ -159,7 +163,7 @@ async function runTuiCommand({
       readonly sessionName?: string;
     }
   ) => Promise<number>;
-  readonly stdout: { write(text: string): void };
+  readonly stdout: StartupStatusOutput;
 }): Promise<number> {
   let extensionPaths: readonly string[];
   let selection: {
@@ -174,24 +178,27 @@ async function runTuiCommand({
   }
   let cliTargets: Awaited<ReturnType<typeof resolveCliExtensionTargets>>;
   try {
-    cliTargets = await resolveCliExtensionTargets({
-      cwd,
-      paths: extensionPaths,
-    });
+    cliTargets = await withStartupStatus(
+      () => resolveCliExtensionTargets({ cwd, paths: extensionPaths }),
+      stdout
+    );
   } catch (error) {
     stdout.write(`${errorMessage(error)}\n`);
     return 1;
   }
   const excludeIds = new Set(cliTargets.map((target) => target.id));
-  const configured =
-    (await loadExtensions?.()) ??
-    (start
-      ? { extensions: [], notices: [] }
-      : await loadConfiguredCodingAgentExtensions({
-          cwd,
-          ...(excludeIds.size === 0 ? {} : { excludeIds }),
-          home,
-        }));
+  const configured = await withStartupStatus(
+    async () =>
+      (await loadExtensions?.()) ??
+      (start
+        ? { extensions: [], notices: [] }
+        : await loadConfiguredCodingAgentExtensions({
+            cwd,
+            ...(excludeIds.size === 0 ? {} : { excludeIds }),
+            home,
+          })),
+    stdout
+  );
   for (const notice of configured.notices) {
     stdout.write(`${notice}\n`);
   }
@@ -200,7 +207,10 @@ async function runTuiCommand({
     try {
       extensions = mergeCliExtensions(
         configured.extensions,
-        await importCliExtensions({ targets: cliTargets })
+        await withStartupStatus(
+          () => importCliExtensions({ targets: cliTargets }),
+          stdout
+        )
       );
     } catch (error) {
       stdout.write(`${errorMessage(error)}\n`);
@@ -216,8 +226,10 @@ async function runTuiCommand({
     return await start(extensions, selection);
   }
   return await startTui({
+    cwd,
     extensions,
     reloadExtensions,
+    startupOutput: stdout,
     ...selection,
   });
 }
