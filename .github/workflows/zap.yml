@@ -46,6 +46,50 @@ jobs:
           echo "::notice::OWASP ZAP baseline scan skipped - the required target-url input is empty; re-run the workflow with a target URL to scan."
           echo "### ZAP baseline scan skipped - no target-url input was provided" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Validate public scan target
+        id: validate-target
+        if: ${{ inputs.target-url != '' }}
+        timeout-minutes: 1
+        shell: bash
+        env:
+          TARGET_URL: ${{ inputs.target-url }}
+        run: |
+          timeout 20s python3 - <<'PY'
+          import ipaddress
+          import os
+          import socket
+          import sys
+          from urllib.parse import urlsplit
+
+          try:
+              target = os.environ["TARGET_URL"]
+              if any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in target) or "\\" in target:
+                  raise ValueError("URL contains whitespace, control characters, or backslashes")
+              url = urlsplit(target)
+              if url.scheme not in ("http", "https") or not url.hostname:
+                  raise ValueError("target must be an HTTP or HTTPS URL with a host")
+              if url.username is not None or url.password is not None:
+                  raise ValueError("URL credentials are not allowed")
+              host = url.hostname.rstrip(".").lower()
+              if not host or "%" in host or host == "localhost" or host.endswith((".localhost", ".local", ".internal")):
+                  raise ValueError("local or scoped hosts are not allowed")
+              port = url.port if url.port is not None else (443 if url.scheme == "https" else 80)
+              if port == 0:
+                  raise ValueError("port must be between 1 and 65535")
+              addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+              if not addresses:
+                  raise ValueError("host has no resolved addresses")
+              for address in addresses:
+                  ip = ipaddress.ip_address(address[4][0])
+                  if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+                      ip = ip.ipv4_mapped
+                  if not ip.is_global or ip.is_multicast:
+                      raise ValueError("target must resolve only to public unicast addresses")
+          except (ValueError, OSError) as error:
+              print(f"::error::Invalid ZAP target: {error}", file=sys.stderr)
+              sys.exit(1)
+          PY
+
       - name: ZAP baseline scan
         if: ${{ inputs.target-url != '' }}
         uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0

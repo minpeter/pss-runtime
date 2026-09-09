@@ -178,43 +178,6 @@ function sectionProblems(sections) {
   return problems;
 }
 
-// Every allowlist path is anchored and names a concrete file; the example
-// env placeholder files must be covered explicitly.
-function pathProblems(paths) {
-  const problems = [];
-  for (const path of paths) {
-    if (CATCH_ALL.test(path)) {
-      problems.push(`allowlist path "${path}" is a catch-all suppression`);
-      continue;
-    }
-    if (!(path.startsWith("^") && path.endsWith("$"))) {
-      problems.push(`allowlist path "${path}" is not anchored with ^ and $`);
-    }
-    if (path.includes("*")) {
-      problems.push(
-        `allowlist path "${path}" uses a glob; name a concrete file`
-      );
-    }
-    // Anchors were checked above; strip them positionally, not by regex.
-    const tail = path.slice(1, -1).split("/").pop();
-    if (!tail.includes("\\.")) {
-      problems.push(
-        `allowlist path "${path}" does not name a concrete file (final segment lacks a literal dot)`
-      );
-    }
-  }
-  const normalized = paths.map((path) => path.replace(/\\/g, ""));
-  if (!normalized.some((path) => path.includes(".dev.vars.example"))) {
-    problems.push(
-      "allowlist has no path covering the .dev.vars.example placeholders"
-    );
-  }
-  if (!normalized.some((path) => path.includes(".env.example"))) {
-    problems.push("allowlist has no path covering .env.example placeholders");
-  }
-  return problems;
-}
-
 function regexProblems(regexes) {
   return regexes.flatMap((regex) => {
     if (CATCH_ALL.test(regex)) {
@@ -247,17 +210,16 @@ export function gitleaksConfigProblems(source) {
     return problems;
   }
   const { paths, regexes } = globals[0].fields;
-  if (!strings(paths) || paths.length === 0) {
-    problems.push("allowlist declares no paths");
-  } else {
-    problems.push(...pathProblems(paths));
+  if (paths !== undefined) {
+    problems.push("global allowlist must not suppress whole files");
   }
-  if (regexes !== undefined) {
-    problems.push(
-      ...(strings(regexes)
-        ? regexProblems(regexes)
-        : ["invalid allowlist regexes"])
-    );
+  if (!strings(regexes) || regexes.length !== 1) {
+    problems.push("allowlist must declare exactly one placeholder regex");
+  } else {
+    problems.push(...regexProblems(regexes));
+  }
+  if (globals[0].fields.regexTarget !== "line") {
+    problems.push("global placeholder regex must target complete lines");
   }
   return problems;
 }
