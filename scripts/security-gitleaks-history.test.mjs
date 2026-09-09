@@ -59,7 +59,8 @@ describe("global Gitleaks placeholder exclusions", () => {
     const pattern = prefix.match(PLACEHOLDER_LITERAL)[1];
     const regex = new RegExp(pattern);
     expect(regex.test("AI_API_KEY=...")).toBe(true);
-    expect(regex.test("AI_API_KEY=" . ("0123456789abcdef" x 2))).toBe(false);
+    const credential = `AI_API_KEY=${"0123456789abcdef".repeat(2)}`;
+    expect(regex.test(credential)).toBe(false);
     expect(regex.test("AI_API_KEY=... trailing-secret")).toBe(false);
     expect(regex.test("prefix AI_API_KEY=...")).toBe(false);
   });
