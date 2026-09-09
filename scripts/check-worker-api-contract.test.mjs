@@ -1,51 +1,33 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import {
-  CONTRACT_DOC_PATH,
-  matchDocumentedPath,
-  OBSERVATIONS_PATH,
-  parseContractDocument,
-  parseObservations,
-} from "./worker-api-contract.mjs";
+import { parseContractDocument } from "./worker-api-contract.mjs";
 import {
   authMatrixProblems,
   diffContract,
   diffLiveRecords,
 } from "./worker-api-contract-diff.mjs";
-
-const CLI = "scripts/check-worker-api-contract.mjs";
-const TMP_DIR = ".omo/tmp/worker-api-contract";
-
-const OPENAPI_MAJOR_PATTERN = /^3\./u;
-const OPENAPI_VERSION_ERROR = /OpenAPI 3/u;
-const INFO_ERROR = /info/u;
-const HEALTH_503_UNREPRODUCED =
-  /documented-but-unreproduced: GET \/healthz status 503/u;
-const BOGUS_PROBE_OMITTED = /observed-but-omitted: bogus-probe/u;
-const UNREPRODUCED_PROBLEM = /documented-but-unreproduced/u;
-const HEALTH_SECURITY_PROBLEM = /\/healthz.*must not declare/iu;
-const DEV_EXCEPTION_PROBLEM = /development exception/iu;
-const SSE_BEARER_PROBE_PROBLEM =
-  /\/session\/events lacks an observed token\/bearer-missing probe/u;
-const CATCH_ALL_SCHEME_PROBLEM = /catch-all must declare only/iu;
-const HEALTH_POST_NOT_EXERCISED = /health-post was not exercised/u;
-const HEALTH_GET_201_PROBLEM = /health-get answered 201/u;
-const UNCOMMITTED_LIVE_PROBLEM = /uncommitted-live-probe/u;
-const HEALTHZ_SECURITY_MUTATION =
-  /( {6}summary: Unauthenticated liveness probe[\s\S]*?) {6}security: \[\]/u;
-
-function docText() {
-  return readFileSync(CONTRACT_DOC_PATH, "utf8");
-}
-
-function committed() {
-  return parseObservations(readFileSync(OBSERVATIONS_PATH, "utf8"));
-}
-
-function paths() {
-  return parseContractDocument(docText()).paths;
-}
+import {
+  BOGUS_PROBE_OMITTED,
+  CATCH_ALL_SCHEME_PROBLEM,
+  CLI,
+  committed,
+  DEV_EXCEPTION_PROBLEM,
+  docText,
+  HEALTH_503_UNREPRODUCED,
+  HEALTH_GET_201_PROBLEM,
+  HEALTH_POST_NOT_EXERCISED,
+  HEALTH_SECURITY_PROBLEM,
+  HEALTHZ_SECURITY_MUTATION,
+  INFO_ERROR,
+  OPENAPI_MAJOR_PATTERN,
+  OPENAPI_VERSION_ERROR,
+  paths,
+  SSE_BEARER_PROBE_PROBLEM,
+  TMP_DIR,
+  UNCOMMITTED_LIVE_PROBLEM,
+  UNREPRODUCED_PROBLEM,
+} from "./worker-api-contract-test-helpers.mjs";
 
 describe("worker api contract: the committed document parses (VAL-WORKER-029)", () => {
   it("is valid YAML with an OpenAPI 3 version, info, and the expected paths", () => {
@@ -176,28 +158,6 @@ describe("worker api contract: doc matches committed observations (VAL-WORKER-02
     });
     expect(run.status).toBe(1);
     expect(run.stderr).toMatch(UNREPRODUCED_PROBLEM);
-  });
-});
-
-describe("worker api contract: path matching", () => {
-  it("matches concrete paths, aliases, the procedure template, and the catch-all", () => {
-    const entries = paths();
-    expect(matchDocumentedPath(entries, "/healthz")?.docPath).toBe("/healthz");
-    expect(matchDocumentedPath(entries, "/healthz/")?.docPath).toBe("/healthz");
-    expect(
-      matchDocumentedPath(entries, "/trpc/session.replayEvents")?.docPath
-    ).toBe("/trpc/session.replayEvents");
-    expect(matchDocumentedPath(entries, "/trpc/does-not-exist")?.docPath).toBe(
-      "/trpc/{procedure}"
-    );
-    expect(matchDocumentedPath(entries, "/trpc")?.docPath).toBe("/trpc");
-    expect(matchDocumentedPath(entries, "/")?.docPath).toBe("/{webhookPath}");
-    expect(matchDocumentedPath(entries, "/healthz/foo")?.docPath).toBe(
-      "/{webhookPath}"
-    );
-    expect(
-      matchDocumentedPath(entries, "/session/events/replay")?.docPath
-    ).toBe("/{webhookPath}");
   });
 });
 

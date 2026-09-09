@@ -45,21 +45,21 @@ describe("tracked-tree secret scan (VAL-CROSS-015)", () => {
   });
 
   it("flags a new credential kind inside an allowlisted file", () => {
-    const [allowlistedPath] = Object.keys(SCAN_ALLOWLIST);
-    const files = [allowlistedPath];
+    const path = "fixture.mjs";
+    const allowlist = { [path]: ["npm access token reference"] };
+    const files = [path];
     const reader = () => `${FAKE_EXPORT}\n`;
     const hits = treeCredentialHits(files, reader);
-    expect(unexpectedHitProblems(hits, SCAN_ALLOWLIST)).toHaveLength(1);
+    expect(unexpectedHitProblems(hits, allowlist)).toHaveLength(1);
   });
 
   it("allows the exact pinned kind inside an allowlisted file", () => {
-    const path = "scripts/docs-contract.mjs";
-    const kinds = SCAN_ALLOWLIST[path];
-    expect(kinds).toContain("npm access token reference");
+    const path = "fixture.mjs";
+    const allowlist = { [path]: ["npm access token reference"] };
     const files = [path];
-    const reader = () => `token name: ${FAKE_NPM_TOKEN_NAME}\n`;
+    const reader = () => `token name: ${FAKE_NPM_TOKEN_NAME}=present\n`;
     const hits = treeCredentialHits(files, reader);
-    expect(unexpectedHitProblems(hits, SCAN_ALLOWLIST)).toEqual([]);
+    expect(unexpectedHitProblems(hits, allowlist)).toEqual([]);
   });
 
   it("skips binary content via the NUL guard", () => {
