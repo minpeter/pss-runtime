@@ -45,12 +45,14 @@ function collectFile(file, keys, files, problems, run) {
   if (
     typeof file?.name !== "string" ||
     !Array.isArray(file.assertionResults) ||
-    file.assertionResults.length === 0
+    (file.assertionResults.length === 0 && file.status !== "passed")
   ) {
     problems.push(`run ${run} has a file without assertions or a name`);
     return 0;
   }
   files.add(resolve(file.name));
+  // Track file identity even when describe.todo produces no assertions.
+  keys.set(JSON.stringify([file.name]), 1);
   if (file.status === "failed") {
     problems.push(`run ${run} has a failed file: ${file.name}`);
   }

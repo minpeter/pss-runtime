@@ -13,12 +13,21 @@ import { describe, expect, it } from "vitest";
 const producer = resolve("scripts/flaky-tests.mjs");
 const dependencies = resolve("node_modules");
 
-function runFixture({ reports, status = 0, source, runs = 1 }) {
+function runFixture({
+  reports,
+  status = 0,
+  source,
+  extraSources = {},
+  runs = 1,
+}) {
   mkdirSync(".omo/tmp", { recursive: true });
   const cwd = mkdtempSync(resolve(".omo/tmp/flaky-cli-"));
   try {
     mkdirSync(`${cwd}/scripts`);
     writeFileSync(`${cwd}/scripts/fixture.test.mjs`, source ?? "");
+    for (const [name, content] of Object.entries(extraSources)) {
+      writeFileSync(`${cwd}/scripts/${name}.test.mjs`, content);
+    }
     if (source) {
       symlinkSync(dependencies, `${cwd}/node_modules`, "dir");
     } else {
@@ -84,12 +93,57 @@ describe("flaky CLI report integrity", () => {
   it.each([
     {},
     { testResults: [] },
+    { testResults: [{ status: "passed", assertionResults: [] }] },
+    { testResults: [{ name: "scripts/fixture.test.mjs", status: "passed" }] },
     {
       testResults: [{ name: "scripts/fixture.test.mjs", assertionResults: [] }],
     },
   ])("rejects empty or incomplete child reports: %j", (value) => {
-    expect(runFixture({ reports: [value], status: 1 }).status).toBe(1);
+    expect(runFixture({ reports: [value] }).status).toBe(1);
   });
+
+  it.each([undefined, "failed", "unknown", "skipped", "pending", "todo"])(
+    "rejects empty assertions without an explicitly passed file: %s",
+    (status) => {
+      const value = report([]);
+      value.testResults[0].status = status;
+      expect(runFixture({ reports: [value] }).status).toBe(1);
+    }
+  );
+
+  it("preserves failure checks for explicitly passed empty files", () => {
+    for (const value of [
+      { ...report([]), success: false },
+      { ...report([]), numRuntimeErrorTestSuites: 1 },
+      { ...report([]), numTotalTests: 1 },
+    ]) {
+      expect(runFixture({ reports: [value] }).status).toBe(1);
+    }
+    expect(runFixture({ reports: [report([])], status: 1 }).status).toBe(1);
+    expect(
+      runFixture({ reports: [report([])], extraSources: { omitted: "" } })
+        .status
+    ).toBe(1);
+    expect(
+      runFixture({ reports: [report(), report([])], runs: 2 }).status
+    ).toBe(1);
+  });
+
+  it.each(["added", "removed", "renamed"])(
+    "rejects %s empty-file identities across runs",
+    (change) => {
+      const extra = (name) => ({ ...report([]).testResults[0], name });
+      const first = report([]);
+      const second = report([]);
+      if (change !== "added") {
+        first.testResults.push(extra("scripts/other.test.mjs"));
+      }
+      if (change !== "removed") {
+        second.testResults.push(extra("scripts/new.test.mjs"));
+      }
+      expect(runFixture({ reports: [first, second], runs: 2 }).status).toBe(1);
+    }
+  );
 
   it("rejects nonzero child status even when every reported assertion passes", () => {
     const result = runFixture({ reports: [report()], status: 1 });
@@ -162,8 +216,33 @@ describe("flaky CLI report integrity", () => {
   });
 
   it("rejects a real Vitest collection/import failure", () => {
-    const result = runFixture({ source: 'import "./missing-module.mjs";' });
+    const result = runFixture({
+      source: 'import "./missing-module.mjs";',
+      extraSources: {
+        passing: 'import { it } from "vitest"; it("passes", () => {});',
+      },
+    });
     expect(result.status).toBe(1);
+  }, 30_000);
+
+  it("accepts a real empty describe.todo file alongside a passing file across runs", () => {
+    const result = runFixture({
+      source:
+        'import { describe } from "vitest"; describe.todo("deferred feature");',
+      extraSources: {
+        passing: 'import { it } from "vitest"; it("passes", () => {});',
+      },
+      runs: 2,
+    });
+    expect(result.status).toBe(0);
+    expect(result.report.incomplete).toBe(false);
+    expect(result.report.totalEntries).toBe(1);
+    expect(result.report.summary.passed).toBe(1);
+    expect(result.report.entries[0]).toMatchObject({
+      file: "scripts/passing.test.mjs",
+      runs: 2,
+      status: "passed",
+    });
   }, 30_000);
 
   it("accepts real passing, skipped, and todo Vitest tests without counting skips as passes", () => {
