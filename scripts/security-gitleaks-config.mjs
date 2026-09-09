@@ -5,7 +5,7 @@ const CATCH_ALL = /^\^?\s*\.\s*[*+]\s*\$?$/;
 // Only the reviewed ellipsis assignment may suppress findings globally.
 // A literal word in an arbitrary regex does not bound what it can match.
 const PLACEHOLDER_REGEX = String.raw`^[A-Z0-9_]+(API_KEY|TOKEN|SECRET)=\.\.\.$`;
-const EXACT_VALUE = /^\^[A-Za-z0-9_]+\$$/;
+const EXACT_VALUE = /^\^[A-Za-z0-9_./=\\-]+\$$/;
 const EXACT_PATH = /^\^(?:[A-Za-z0-9_/-]|\\[.-])+\$$/;
 const FULL_COMMIT = /^[a-f0-9]{40}$/;
 const TOKEN =
