@@ -5,6 +5,7 @@ import {
   buildFlakyReport,
   classifyOutcomes,
   flakyArtifactProblems,
+  flakyRunProblems,
   vitestRunArgs,
 } from "./flaky-tests.mjs";
 import { reportTool } from "./report-paths.mjs";
@@ -59,6 +60,28 @@ describe("flaky detection: script wiring (VAL-SEC-025)", () => {
 });
 
 describe("flaky detection: classification (VAL-SEC-026)", () => {
+  it("rejects empty, incomplete, and unknown run reports but preserves skips", () => {
+    expect(flakyRunProblems([{}])).not.toEqual([]);
+    expect(flakyRunProblems([runReport([["x", "passed"]]), {}])).not.toEqual(
+      []
+    );
+    expect(flakyRunProblems([runReport([["x", "unknown"]])])).not.toEqual([]);
+    expect(flakyRunProblems([runReport([["x", "skipped"]])])).toEqual([]);
+    expect(classifyOutcomes(["skipped", "skipped"])).toBe("skipped");
+  });
+
+  it("rejects missing test entries while preserving mixed-run flaky classification", () => {
+    expect(
+      flakyRunProblems([
+        runReport([
+          ["stable", "passed"],
+          ["flake", "passed"],
+        ]),
+        runReport([["stable", "passed"]]),
+      ])
+    ).not.toEqual([]);
+    expect(classifyOutcomes(["passed", "failed"])).toBe("flaky");
+  });
   it("reports an always-fail fixture as failed, never flaky", () => {
     const entries = aggregateRunReports([
       runReport([["broken", "failed"]]),

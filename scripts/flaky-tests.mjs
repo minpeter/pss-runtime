@@ -8,7 +8,8 @@
 // built-in retry disabled (--retry=0) so a single failing run is reported
 // failed, never auto-masked. Per-test outcomes are aggregated across runs: a
 // test that both passes and fails is "flaky", a test that fails every run is
-// "failed", everything else is "passed". The classification report goes to
+// "failed"; skips/todos and incomplete observations are reported separately.
+// The classification report goes to
 // the registered report/flaky-tests.json path (gitignored, never committed;
 // CI uploads it as a bounded artifact — see .github/workflows/flaky-tests.yml)
 // and the producer exits non-zero when any test classifies flaky or failed,
@@ -18,10 +19,33 @@
 //   node scripts/flaky-tests.mjs [--runs <n>] [--timeout <s>] [--out <path>]
 
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import {
+  aggregateRunReports as aggregate,
+  classifyOutcomes as classify,
+  ENTRY_STATUSES,
+  flakyRunProblems as runProblems,
+} from "./flaky-tests-results.mjs";
 import { reportTool } from "./report-paths.mjs";
+
+export function aggregateRunReports(reports) {
+  return aggregate(reports);
+}
+export function classifyOutcomes(outcomes) {
+  return classify(outcomes);
+}
+export function flakyRunProblems(reports, files) {
+  return runProblems(reports, files);
+}
 
 export const FLAKY_TOOL = reportTool("flaky");
 export const DEFAULT_RUNS = 5;
@@ -34,7 +58,6 @@ const TMP_DIR = resolve(".omo/tmp");
 const SCRIPTS_DIR = "scripts";
 const TEST_FILE = /\.test\.mjs$/;
 const SUITE_LABEL = "scripts/*.test.mjs";
-const ENTRY_STATUSES = new Set(["passed", "flaky", "failed"]);
 
 // The repeated suite: the deterministic scripts/*.test.mjs invariants. Files
 // are enumerated explicitly: a literal glob passed without a shell is a
@@ -61,56 +84,14 @@ export function vitestRunArgs(outputFile) {
   ];
 }
 
-// Classification (VAL-SEC-026): both a pass and a fail across runs means
-// flaky; failures with no pass mean failed; otherwise passed.
-export function classifyOutcomes(outcomes) {
-  const failures = outcomes.filter((outcome) => outcome === "failed").length;
-  const passes = outcomes.filter((outcome) => outcome === "passed").length;
-  if (failures > 0 && passes > 0) {
-    return "flaky";
-  }
-  return failures > 0 ? "failed" : "passed";
-}
-
-// Aggregate per-run Vitest JSON reports into one entry per test. File paths
-// are relativized against the working directory so the report never bakes
-// in an absolute host path.
-export function aggregateRunReports(reports) {
-  const cwd = process.cwd();
-  const outcomes = new Map();
-  for (const report of reports) {
-    for (const file of report?.testResults ?? []) {
-      const name = String(file?.name ?? "unknown");
-      const relative = name.startsWith(`${cwd}/`)
-        ? name.slice(cwd.length + 1)
-        : name;
-      for (const assertion of file?.assertionResults ?? []) {
-        const title = String(assertion?.fullName ?? assertion?.title ?? "?");
-        const key = `${relative} ${title}`;
-        if (!outcomes.has(key)) {
-          outcomes.set(key, { file: relative, name: title, results: [] });
-        }
-        outcomes.get(key).results.push(String(assertion?.status ?? "unknown"));
-      }
-    }
-  }
-  return [...outcomes.values()]
-    .map((entry) => ({
-      file: entry.file,
-      name: entry.name,
-      status: classifyOutcomes(entry.results),
-      runs: entry.results.length,
-      failures: entry.results.filter((result) => result === "failed").length,
-    }))
-    .sort((a, b) => `${a.file} ${a.name}`.localeCompare(`${b.file} ${b.name}`));
-}
-
 export function buildFlakyReport(
   entries,
   { runs, timeoutSeconds, cap = FLAKY_TOOL.cap }
 ) {
   const truncated = entries.length > cap;
-  const summary = { passed: 0, flaky: 0, failed: 0 };
+  const summary = Object.fromEntries(
+    [...ENTRY_STATUSES].map((status) => [status, 0])
+  );
   for (const entry of entries) {
     summary[entry.status] = (summary[entry.status] ?? 0) + 1;
   }
@@ -153,7 +134,7 @@ export function flakyArtifactProblems(value) {
     }
     if (!ENTRY_STATUSES.has(entry?.status)) {
       problems.push(
-        `entries[${index}] has an invalid status (expected passed|flaky|failed)`
+        `entries[${index}] has an invalid status (expected passed|flaky|failed|skipped|todo|incomplete)`
       );
     }
   });
@@ -212,9 +193,10 @@ function parseArgs(argv) {
 
 function executeRuns(args) {
   const reports = [];
+  const tmp = mkdtempSync(resolve(TMP_DIR, "flaky-"));
   let incomplete = false;
   for (let run = 1; run <= args.runs; run += 1) {
-    const out = resolve(TMP_DIR, `flaky-run-${run}.vitest.json`);
+    const out = resolve(tmp, `flaky-run-${run}.vitest.json`);
     const result = spawnSync(
       process.execPath,
       [VITEST_CLI, ...vitestRunArgs(out)],
@@ -230,18 +212,32 @@ function executeRuns(args) {
         `test:flaky: run ${run}/${args.runs} hit the bounded ${args.timeout}s timeout or failed to spawn: ${result.error.message}`
       );
       incomplete = true;
+      reports.push(null);
       continue;
     }
     try {
-      reports.push(JSON.parse(readFileSync(out, "utf8")));
+      const report = JSON.parse(readFileSync(out, "utf8"));
+      reports.push(report);
+      if (result.status !== 0) {
+        console.error(
+          `test:flaky: run ${run}/${args.runs} exited with status ${result.status}`
+        );
+        incomplete = true;
+      }
     } catch (error) {
       console.error(
         `test:flaky: run ${run}/${args.runs} produced no parseable report: ${error.message}`
       );
       incomplete = true;
+      reports.push(null);
     }
   }
-  return { reports, incomplete };
+  rmSync(tmp, { recursive: true, force: true });
+  const problems = flakyRunProblems(reports, suiteFiles());
+  for (const problem of problems) {
+    console.error(`test:flaky: ${problem}`);
+  }
+  return { reports, incomplete: incomplete || problems.length > 0 };
 }
 
 function main() {
@@ -260,24 +256,25 @@ function main() {
     runs: args.runs,
     timeoutSeconds: args.timeout,
   });
+  report.incomplete = incomplete || report.summary.incomplete > 0;
   mkdirSync(dirname(args.out), { recursive: true });
   writeFileSync(args.out, `${JSON.stringify(report, null, 2)}\n`);
-  const { passed, flaky, failed } = report.summary;
+  const { passed, flaky, failed, skipped, todo } = report.summary;
   console.log(
-    `test:flaky: ${args.runs} runs -> ${passed} passed, ${flaky} flaky, ${failed} failed -> ${args.out}`
+    `test:flaky: ${args.runs} runs -> ${passed} passed, ${flaky} flaky, ${failed} failed, ${skipped} skipped, ${todo} todo -> ${args.out}`
   );
   for (const entry of report.entries) {
-    if (entry.status !== "passed") {
+    if (["flaky", "failed", "incomplete"].includes(entry.status)) {
       console.error(
         `test:flaky: ${entry.status}: ${entry.file} > ${entry.name} (${entry.failures}/${entry.runs} runs failed)`
       );
     }
   }
-  if (reports.length === 0) {
+  if (reports.every((value) => value === null)) {
     console.error("test:flaky: no completed runs; refusing to report");
     return 1;
   }
-  return flaky > 0 || failed > 0 || incomplete ? 1 : 0;
+  return flaky > 0 || failed > 0 || report.incomplete ? 1 : 0;
 }
 
 if (
