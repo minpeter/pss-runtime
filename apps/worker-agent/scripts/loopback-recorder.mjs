@@ -16,7 +16,9 @@ import { appendFileSync, mkdirSync } from "node:fs";
 import { createServer } from "node:http";
 import { dirname, resolve } from "node:path";
 
-const BODY_PREVIEW_MAX = 200;
+const BODY_READ_MAX = 400;
+const QUERY_OR_FRAGMENT = /[?#]/;
+const TELEGRAM_TOKEN_PATH = /\/bot[^/]+/g;
 
 function parseArgs(argv) {
   const args = { log: undefined, port: undefined };
@@ -37,20 +39,22 @@ function parseArgs(argv) {
   return { logPath: resolve(args.log), port };
 }
 
-async function readBodyPreview(request) {
-  const chunks = [];
+async function readBody(request) {
   let size = 0;
   for await (const chunk of request) {
-    chunks.push(chunk);
     size += chunk.length;
-    if (size > BODY_PREVIEW_MAX * 2) {
+    if (size > BODY_READ_MAX) {
       break;
     }
   }
-  const text = Buffer.concat(chunks).toString("utf8");
-  return text.length <= BODY_PREVIEW_MAX
-    ? text
-    : `${text.slice(0, BODY_PREVIEW_MAX)}...`;
+}
+
+function evidencePath(url) {
+  // Telegram credentials are path segments, including /file/bot<token>/...
+  // Query strings and payloads can also contain secrets; neither is evidence.
+  return url
+    .split(QUERY_OR_FRAGMENT, 1)[0]
+    .replace(TELEGRAM_TOKEN_PATH, "/bot[REDACTED]");
 }
 
 const CANNED_OK = JSON.stringify({
@@ -71,15 +75,14 @@ function main() {
   mkdirSync(dirname(logPath), { recursive: true });
 
   const server = createServer((request, response) => {
-    readBodyPreview(request)
-      .then((bodyPreview) => {
+    readBody(request)
+      .then(() => {
         appendFileSync(
           logPath,
           `${JSON.stringify({
-            bodyPreview,
             method: request.method,
             ts: new Date().toISOString(),
-            url: request.url,
+            url: evidencePath(request.url),
           })}\n`
         );
         response.writeHead(200, { "content-type": "application/json" });
