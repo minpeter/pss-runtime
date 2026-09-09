@@ -54,11 +54,15 @@ function runbookFiles() {
 // (not the OS tmpdir) so it stays inside the gitignored workspace.
 const FIXTURE_BASE = ".omo/tmp";
 
-function withFixture(text) {
+function fixtureDir() {
   mkdirSync(FIXTURE_BASE, { recursive: true });
   const dir = mkdtempSync(join(FIXTURE_BASE, "gov-codeowners-"));
   tempDirs.push(dir);
-  const file = join(dir, "fixture.md");
+  return dir;
+}
+
+function withFixture(text) {
+  const file = join(fixtureDir(), "fixture.md");
   writeFileSync(file, `${text}\n`);
   return file;
 }
@@ -107,10 +111,45 @@ describe("governance: CODEOWNERS", () => {
     }
   });
 
-  it("flags a new top-level area that has no pattern (VAL-GOV-003)", () => {
+  it("ignores generated directories added between Test and test:timing (VAL-GOV-003)", () => {
+    const root = fixtureDir();
+    for (const dir of [".github", "packages/runtime", "scripts"]) {
+      mkdirSync(join(root, dir), { recursive: true });
+    }
+    const before = topLevelSourceDirs(root).sort();
+    expect(before).toEqual([".github", "packages", "scripts"]);
+    for (const file of [
+      "coverage/core/coverage-summary.json",
+      "dist/index.js",
+      "report/test-timing.json",
+      "node_modules/example/index.js",
+      ".omo/tmp/raw.json",
+    ]) {
+      const path = join(root, file);
+      mkdirSync(join(path, ".."), { recursive: true });
+      writeFileSync(path, "{}");
+    }
+    expect(topLevelSourceDirs(root).sort()).toEqual(before);
+  });
+
+  it("flags new top-level source areas even beside generated directories (VAL-GOV-003)", () => {
+    const root = fixtureDir();
+    const unowned = [
+      "brand-new-area",
+      "coverage-tools",
+      "distribution",
+      "reports",
+    ];
+    for (const dir of ["coverage/core", "report", ...unowned]) {
+      mkdirSync(join(root, dir), { recursive: true });
+    }
+    const dirs = topLevelSourceDirs(root);
     const { entries } = parseCodeowners(readCodeowners());
-    expect(coversTopLevelDir(entries, "brand-new-area")).toBe(false);
-    expect(coversArea(entries, "brand-new-area")).toBe(false);
+    for (const dir of unowned) {
+      expect(dirs).toContain(dir);
+      expect(coversTopLevelDir(entries, dir)).toBe(false);
+      expect(coversArea(entries, dir)).toBe(false);
+    }
   });
 
   it("contains no duplicate pattern blocks (VAL-GOV-004)", () => {
