@@ -16,26 +16,8 @@ import { CREDENTIAL_PATTERNS } from "./governance-invariants.mjs";
 // path -> sorted list of CREDENTIAL_PATTERNS kinds that file may produce.
 // Each entry is a scanner definition or a deliberate negative fixture.
 export const SCAN_ALLOWLIST = {
-  // release.yml comment warning against adding an npm access token.
-  ".github/workflows/release.yml": ["npm access token reference"],
-  // Container config scanner referencing the token name.
-  "scripts/devcontainer.mjs": ["npm access token reference"],
-  // Runtime-docs scanner list of forbidden tokens.
-  "scripts/docs-contract.mjs": ["npm access token reference"],
-  // First-run harness credential-demand detector patterns.
-  "scripts/first-run-setup.mjs": ["npm access token reference"],
-  // First-run harness negative fixture lines (name only, no value).
-  "scripts/first-run-setup.test.mjs": ["npm access token reference"],
-  // AGENTS.md forbidden-token manifest entry.
-  "scripts/governance-agents.mjs": ["npm access token reference"],
-  // PR-template unsafe-instruction regex references the token name.
-  "scripts/governance-pr-template.mjs": ["npm access token reference"],
-  // PR-template negative fixture line (name only, ellipsis value).
+  // Negative fixture intentionally exercises unsafe npm-token assignment detection.
   "scripts/governance-pr-template.test.mjs": ["npm access token reference"],
-  // Security-policy scanner referencing the token name.
-  "scripts/governance-security.mjs": ["npm access token reference"],
-  // Pre-commit hook scanner referencing the token name.
-  "scripts/precommit-hook.mjs": ["npm access token reference"],
 };
 
 const NUL_CHAR = "\0";

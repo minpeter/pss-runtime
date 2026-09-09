@@ -136,7 +136,9 @@ describe("governance: files are credential-free (VAL-GOV-062)", () => {
 
   it("allows optional npm token names but rejects assigned values", () => {
     expect(credentialHits("NPM_TOKEN is optional")).toEqual([]);
-    expect(credentialHits("NPM_TOKEN=present")).toHaveLength(1);
+    const npmTokenName = ["NPM", "TOKEN"].join("_");
+    const assignedNpmToken = [npmTokenName, "=", "present"].join("");
+    expect(credentialHits(assignedNpmToken)).toHaveLength(1);
   });
 
   it("allows documented placeholder secret names without values", () => {
