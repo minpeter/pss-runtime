@@ -1,6 +1,12 @@
-import type { MarkdownTheme } from "@earendil-works/pi-tui";
+import {
+  Markdown,
+  type MarkdownTheme,
+  visibleWidth,
+} from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
+import { renderColdContent } from "./cold-content";
 import { AssistantStreamView } from "./stream-views";
+import { TranscriptOwner } from "./transcript-owner";
 
 const markdownTheme: MarkdownTheme = {
   heading: (text) => text,
@@ -111,6 +117,75 @@ describe("AssistantStreamView terminal safety", () => {
     expect(output.match(/\^\[\]0;pwned\^G/g)).toHaveLength(2);
     expect(output).not.toContain("\u001b]");
     expect(output).not.toContain("\u0007");
+  });
+
+  it.each([48, 100])(
+    "streams full text from its first delta at width %i",
+    (width) => {
+      const view = new AssistantStreamView(markdownTheme);
+      let text = "";
+      for (const count of [20, 30, 300]) {
+        const delta = Array.from(
+          { length: count },
+          (_, i) => `ROW_${count}_${i} ${"word ".repeat(20)}`
+        ).join("\n");
+        text += `${text ? "\n" : ""}${delta}`;
+        view.appendText(`${count === 20 ? "" : "\n"}${delta}`);
+        const live = view.render(width);
+        expect(live).toEqual(
+          new Markdown(text, 1, 0, markdownTheme).render(width)
+        );
+        expect(live.every((row) => visibleWidth(row) <= width)).toBe(true);
+        expect(renderColdContent(view.captureCold(width), width)).toEqual(live);
+      }
+      view.dispose();
+    }
+  );
+
+  it("preserves hundreds of text rows and height through sealing and resize", () => {
+    let width = 100;
+    const owner = new TranscriptOwner(() => width);
+    const lease = owner.acquire(() => new AssistantStreamView(markdownTheme), {
+      leadingSpacer: false,
+      dispose: (view) => view.dispose(),
+    });
+    const text = Array.from(
+      { length: 400 },
+      (_, i) => `ROW_${i} ${"word ".repeat(20)}`
+    ).join("\n");
+    lease.view.appendText(text);
+    for (width of [100, 48, 100]) {
+      expect(owner.render(width)).toEqual(
+        new Markdown(text, 1, 0, markdownTheme).render(width)
+      );
+    }
+    const live = owner.render(width);
+    owner.finish(lease);
+    expect(owner.render(width)).toEqual(live);
+    for (width of [48, 100]) {
+      expect(owner.render(width)).toEqual(
+        new Markdown(text, 1, 0, markdownTheme).render(width)
+      );
+    }
+  });
+
+  it("keeps text uncapped and reasoning bounded in a mixed view", () => {
+    const view = new AssistantStreamView(markdownTheme);
+    const source = (prefix: string) =>
+      Array.from(
+        { length: 20 },
+        (_, i) => `${prefix}_${String(i).padStart(2, "0")}`
+      ).join("\n");
+    view.appendReasoning(source("THINK"));
+    view.appendText(source("TEXT"));
+    const live = view.render(48);
+    expect(live).toHaveLength(29);
+    expect(renderColdContent(view.captureCold(48), 48)).toEqual(live);
+    expect(view.render(48)).toEqual(live);
+    const output = live.join("\n");
+    expect(output.match(/THINK_\d+/g)).toHaveLength(8);
+    expect(output.match(/TEXT_\d+/g)).toHaveLength(20);
+    view.dispose();
   });
 
   it("preserves leading indentation for Markdown code blocks", () => {

@@ -32,20 +32,26 @@ export interface CodingAgentExtensionLogger {
 }
 
 export interface CodingAgentExtensionUi {
-  confirm(message: string): Promise<boolean>;
-  input(options: {
-    readonly initialValue?: string;
-    readonly label: string;
-  }): Promise<string | undefined>;
-  notify(message: string): void;
-  select(options: {
-    readonly label: string;
-    readonly options: readonly {
-      readonly description?: string;
+  confirm(message: string, signal?: AbortSignal): Promise<boolean>;
+  input(
+    options: {
+      readonly initialValue?: string;
       readonly label: string;
-      readonly value: string;
-    }[];
-  }): Promise<string | undefined>;
+    },
+    signal?: AbortSignal
+  ): Promise<string | undefined>;
+  notify(message: string): void;
+  select(
+    options: {
+      readonly label: string;
+      readonly options: readonly {
+        readonly description?: string;
+        readonly label: string;
+        readonly value: string;
+      }[];
+    },
+    signal?: AbortSignal
+  ): Promise<string | undefined>;
   status(message: string): () => void;
 }
 

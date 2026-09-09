@@ -1,38 +1,179 @@
-// Committed gitleaks config allowlist invariants (VAL-SEC-031), imported by
-// scripts/security-gitleaks.mjs (workflow scope checks) and
-// scripts/security-gitleaks.test.mjs. Static TOML-lite scan of the committed
-// config: no network, no ports, no writes, no clock. Split from
-// security-gitleaks.mjs to stay under the 250 pure-LOC ceiling.
-
+// Bounded, full-consumption parser for the committed Gitleaks TOML subset.
+// Unsupported syntax fails closed; description text is never parsed as fields.
 export const GITLEAKS_CONFIG_PATH = ".gitleaks.toml";
-
-const ALLOWLIST_HEADER = /^\[allowlist\]\s*$/m;
-const NEXT_SECTION = /^\[/m;
-const TRIPLE_QUOTED = /'''([\s\S]*?)'''/g;
-const ARRAY_FOR = (key) => new RegExp(`${key}\\s*=\\s*\\[([\\s\\S]*?)\\]`);
 const CATCH_ALL = /^\^?\s*\.\s*[*+]\s*\$?$/;
 const SPECIFIC_LITERAL = /[A-Za-z]{4,}/;
-const EXTENDS_DEFAULT = /\[extend\][\s\S]*?useDefault\s*=\s*true/;
-const ALLOWLIST_BLOCKS = /^\[allowlist\]\s*$/gm;
+const EXACT_VALUE = /^\^[A-Za-z0-9_]+\$$/;
+const EXACT_PATH = /^\^(?:[A-Za-z0-9_/-]|\\[.-])+\$$/;
+const FULL_COMMIT = /^[a-f0-9]{40}$/;
+const TOKEN =
+  /\s+|#[^\r\n]*|\[\[rules\.allowlists\]\]|\[\[rules\]\]|\[extend\]|\[allowlist\]|'''[^']*'''|"[^"\\\r\n]*"|[A-Za-z][A-Za-z0-9]*|[=[\],]/y;
+const SPACE = /^\s/;
+const FIELD_NAMES = {
+  root: ["title"],
+  "[extend]": ["useDefault"],
+  "[allowlist]": ["description", "paths", "regexes", "regexTarget"],
+  "[[rules]]": ["id"],
+  "[[rules.allowlists]]": [
+    "description",
+    "condition",
+    "commits",
+    "paths",
+    "regexTarget",
+    "regexes",
+  ],
+};
 
-// Body of the single [allowlist] block: from its header line to the next
-// TOML section header (or end of file).
-function allowlistBlock(source) {
-  const start = source.search(ALLOWLIST_HEADER);
-  if (start === -1) {
-    return null;
+function tokenize(source) {
+  const tokens = [];
+  let cursor = 0;
+  while (cursor < source.length) {
+    TOKEN.lastIndex = cursor;
+    const match = TOKEN.exec(source);
+    if (!match) {
+      throw new Error("unsupported TOML syntax");
+    }
+    const token = match[0];
+    cursor = TOKEN.lastIndex;
+    if (!(SPACE.test(token) || token.startsWith("#"))) {
+      tokens.push(token);
+    }
   }
-  const rest = source.slice(start);
-  const next = rest.slice(1).search(NEXT_SECTION);
-  return next === -1 ? rest : rest.slice(0, next + 1);
+  return tokens;
 }
 
-function arrayEntries(block, key) {
-  const match = block.match(ARRAY_FOR(key));
-  if (!match) {
-    return null;
+function scalar(token) {
+  if (token?.startsWith("'''")) {
+    return token.slice(3, -3);
   }
-  return [...match[1].matchAll(TRIPLE_QUOTED)].map((m) => m[1]);
+  if (token?.startsWith('"')) {
+    return token.slice(1, -1);
+  }
+  if (token === "true" || token === "false") {
+    return token === "true";
+  }
+  throw new Error("unsupported TOML value");
+}
+
+function parseConfig(source) {
+  const tokens = tokenize(source);
+  const sections = [{ name: "root", fields: {} }];
+  let current = sections[0];
+  let index = 0;
+  function value() {
+    const token = tokens[index++];
+    if (token !== "[") {
+      return scalar(token);
+    }
+    const values = [];
+    while (tokens[index] !== "]") {
+      values.push(scalar(tokens[index++]));
+      if (tokens[index] !== ",") {
+        break;
+      }
+      index++;
+    }
+    if (tokens[index++] !== "]") {
+      throw new Error("unterminated or unsupported TOML array");
+    }
+    return values;
+  }
+  while (index < tokens.length) {
+    const key = tokens[index++];
+    if (Object.hasOwn(FIELD_NAMES, key) && key !== "root") {
+      current = { name: key, fields: {} };
+      sections.push(current);
+      continue;
+    }
+    if (
+      !FIELD_NAMES[current.name].includes(key) ||
+      Object.hasOwn(current.fields, key)
+    ) {
+      throw new Error("unexpected or duplicate TOML field or section");
+    }
+    if (tokens[index++] !== "=") {
+      throw new Error("expected TOML assignment");
+    }
+    current.fields[key] = value();
+  }
+  return sections;
+}
+
+function strings(value) {
+  return (
+    Array.isArray(value) && value.every((entry) => typeof entry === "string")
+  );
+}
+
+function historicalProblems(fields) {
+  const problems = [];
+  if (
+    Object.keys(fields).length !== FIELD_NAMES["[[rules.allowlists]]"].length ||
+    typeof fields.description !== "string"
+  ) {
+    problems.push("historical allowlist requires all supported fields");
+  }
+  if (fields.condition !== "AND" || fields.regexTarget !== "secret") {
+    problems.push(
+      "historical allowlist requires AND and extracted-value matching"
+    );
+  }
+  if (
+    !strings(fields.commits) ||
+    fields.commits.length !== 1 ||
+    !FULL_COMMIT.test(fields.commits[0])
+  ) {
+    problems.push("historical allowlist requires one full commit SHA");
+  }
+  if (
+    !strings(fields.paths) ||
+    fields.paths.length !== 1 ||
+    !EXACT_PATH.test(fields.paths[0])
+  ) {
+    problems.push("historical allowlist requires one exact anchored path");
+  }
+  if (
+    !strings(fields.regexes) ||
+    fields.regexes.length === 0 ||
+    fields.regexes.some((entry) => !EXACT_VALUE.test(entry))
+  ) {
+    problems.push(
+      "historical allowlist requires exact anchored literal values"
+    );
+  }
+  return problems;
+}
+
+function sectionProblems(sections) {
+  const problems = [];
+  let rule;
+  let allowlists = 0;
+  for (const section of sections) {
+    if (section.name === "[[rules]]") {
+      if (rule && allowlists === 0) {
+        problems.push("historical rule has no reviewed allowlist");
+      }
+      rule = section.fields.id;
+      allowlists = 0;
+      if (!["generic-api-key", "cloudflare-api-key"].includes(rule)) {
+        problems.push(
+          "historical rule must only extend an approved default rule id"
+        );
+      }
+    } else if (section.name === "[[rules.allowlists]]") {
+      if (!rule) {
+        problems.push("historical allowlist requires a preceding rule");
+      }
+      allowlists++;
+      problems.push(...historicalProblems(section.fields));
+    } else if (rule) {
+      problems.push("unexpected section after historical rules");
+    }
+  }
+  if (rule && allowlists === 0) {
+    problems.push("historical rule has no reviewed allowlist");
+  }
+  return problems;
 }
 
 // Every allowlist path is anchored and names a concrete file; the example
@@ -86,35 +227,35 @@ function regexProblems(regexes) {
   });
 }
 
-// The committed gitleaks config: extends the default rule set (dropping it
-// would suppress the whole rule base), declares exactly one allowlist, and
-// every allowlist entry is an anchored concrete path or a narrow regex.
 export function gitleaksConfigProblems(source) {
-  const problems = [];
-  if (!EXTENDS_DEFAULT.test(source)) {
-    problems.push(
-      `${GITLEAKS_CONFIG_PATH} does not extend the default gitleaks rules (useDefault = true)`
-    );
+  let sections;
+  try {
+    sections = parseConfig(source);
+  } catch (error) {
+    return [`${GITLEAKS_CONFIG_PATH}: ${error.message}`];
   }
-  const blocks = source.match(ALLOWLIST_BLOCKS) ?? [];
-  if (blocks.length !== 1) {
-    problems.push(
-      `${GITLEAKS_CONFIG_PATH} must declare exactly one [allowlist] block, found ${blocks.length}`
-    );
+  const problems = sectionProblems(sections);
+  const extensions = sections.filter(({ name }) => name === "[extend]");
+  if (extensions.length !== 1 || extensions[0].fields.useDefault !== true) {
+    problems.push("config must extend default rules with useDefault = true");
+  }
+  const globals = sections.filter(({ name }) => name === "[allowlist]");
+  if (globals.length !== 1) {
+    problems.push("config must declare exactly one [allowlist] block");
     return problems;
   }
-  const block = allowlistBlock(source) ?? "";
-  const paths = arrayEntries(block, "paths");
-  if (!paths || paths.length === 0) {
-    problems.push(
-      `${GITLEAKS_CONFIG_PATH} allowlist declares no paths; known false positives must be listed explicitly`
-    );
+  const { paths, regexes } = globals[0].fields;
+  if (!strings(paths) || paths.length === 0) {
+    problems.push("allowlist declares no paths");
   } else {
     problems.push(...pathProblems(paths));
   }
-  const regexes = arrayEntries(block, "regexes");
-  if (regexes) {
-    problems.push(...regexProblems(regexes));
+  if (regexes !== undefined) {
+    problems.push(
+      ...(strings(regexes)
+        ? regexProblems(regexes)
+        : ["invalid allowlist regexes"])
+    );
   }
   return problems;
 }

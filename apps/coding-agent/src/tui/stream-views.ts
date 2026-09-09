@@ -1,14 +1,16 @@
-import {
-  Container,
-  Markdown,
-  type MarkdownTheme,
-  Spacer,
-} from "@earendil-works/pi-tui";
+import { Container, type MarkdownTheme, Spacer } from "@earendil-works/pi-tui";
 
 import type {
   AssistantRenderer,
   AssistantTextView,
 } from "./assistant-renderer";
+import { renderBodyTail } from "./body-viewport";
+import {
+  type ColdContent,
+  captureComponent,
+  selectColdTail,
+} from "./cold-content";
+import { SnapshotMarkdown as Markdown } from "./snapshot-views";
 import { sanitizeTerminalText } from "./terminal-safety";
 
 const ANSI_RESET = "\x1b[0m";
@@ -89,6 +91,31 @@ export class AssistantStreamView extends Container {
       }
     };
     this.refresh();
+  }
+
+  override render(width: number): string[] {
+    return this.children.flatMap((child) => {
+      const lines = child.render(width);
+      const reasoning = this.segments.some(
+        (segment) => segment.view === child && segment.type === "reasoning"
+      );
+      return reasoning ? renderBodyTail(lines, width) : lines;
+    });
+  }
+
+  captureCold(width: number): ColdContent {
+    const children = this.children.map((child) => {
+      const content = captureComponent(child, width);
+      const reasoning = this.segments.some(
+        (segment) => segment.view === child && segment.type === "reasoning"
+      );
+      return reasoning ? selectColdTail(content, width) : content;
+    });
+    return { kind: "group", children };
+  }
+
+  get contentKind(): "reasoning" | "text" | undefined {
+    return this.segments.at(-1)?.type;
   }
 
   appendReasoning(delta: string): void {

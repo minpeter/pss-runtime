@@ -1,0 +1,110 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import { gitleaksConfigProblems } from "./security-gitleaks-config.mjs";
+
+const config = readFileSync(".gitleaks.toml", "utf8");
+const firstRule = config.indexOf("[[rules]]");
+const prefix = config.slice(0, firstRule);
+const history = config.slice(firstRule);
+const FIRST_PATHS = /^paths = \[[^\n]+\]$/m;
+const FIRST_VALUES = /^regexes = \[[\s\S]*?\]/m;
+const WRONG_PATH = "paths = ['''^unapproved/file\\.txt$''']";
+const WRONG_VALUE = "regexes = ['''^UNAPPROVED_VALUE$''']";
+
+function mutateHistory(before, after) {
+  const mutated = history.replace(before, () => after);
+  expect(mutated).not.toBe(history);
+  return prefix + mutated;
+}
+
+describe("historical Gitleaks exclusions", () => {
+  it("accepts the reviewed commit/path/value conjunctions", () => {
+    expect(gitleaksConfigProblems(config)).toEqual([]);
+  });
+
+  it.each([
+    ["condition", 'condition = "AND"', 'condition = "OR"'],
+    [
+      "commit",
+      'commits = ["2710b291e3454d64648ca79696b61f385325be81"]',
+      "commits = []",
+    ],
+    ["path", FIRST_PATHS, "paths = ['''^.*$''']"],
+    ["value", FIRST_VALUES, "regexes = ['''^.*$''']"],
+    ["target", 'regexTarget = "secret"', 'regexTarget = "line"'],
+    [
+      "rule override",
+      'id = "generic-api-key"',
+      'id = "generic-api-key"\nregex = "never-match"',
+    ],
+    [
+      "extra field",
+      'condition = "AND"',
+      'condition = "AND"\nstopwords = ["token"]',
+    ],
+    [
+      "indented extra field",
+      'condition = "AND"',
+      'condition = "AND"\n  stopwords = ["token"]',
+    ],
+    [
+      "quoted extra field",
+      'condition = "AND"',
+      'condition = "AND"\n"stopwords" = ["token"]',
+    ],
+  ])("rejects a widened %s gate in valid TOML", (_label, before, after) => {
+    expect(
+      gitleaksConfigProblems(mutateHistory(before, after)).length
+    ).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ["paths", FIRST_PATHS, WRONG_PATH],
+    ["regexes", FIRST_VALUES, WRONG_VALUE],
+  ])("rejects unparsed mixed-quote %s entries", (_label, before, exact) => {
+    const mixed = `${exact.slice(0, -1)}, ".*"]`;
+    expect(
+      gitleaksConfigProblems(mutateHistory(before, mixed)).length
+    ).toBeGreaterThan(0);
+  });
+});
+
+const DESCRIPTION = /^description = "[^"\n]*"$/m;
+
+describe("complete Gitleaks configuration parsing", () => {
+  it.each([
+    [
+      "paths",
+      FIRST_PATHS,
+      "paths = ['''^]",
+      "paths = ['''^unapproved/file$''']",
+    ],
+    ["regexes", FIRST_VALUES, "regexes = ['''^]", WRONG_VALUE],
+  ])("does not read %s from description text", (_key, target, broad, decoy) => {
+    const actual = `${broad.slice(0, -1)}''']`;
+    const mutated = history
+      .replace(DESCRIPTION, () => `description = "${decoy}"`)
+      .replace(target, () => actual);
+    expect(gitleaksConfigProblems(prefix + mutated).length).toBeGreaterThan(0);
+  });
+
+  it("rejects spaced rule headers hiding OR allowlists", () => {
+    const mutated = config
+      .replaceAll("[[rules]]", "[[ rules ]]")
+      .replaceAll('condition = "AND"', 'condition = "OR"');
+    expect(gitleaksConfigProblems(mutated).length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    "[[rules]",
+    "[[ rules ]]",
+    "[[rules.allowlists]",
+    "[unknown]",
+    "trailing garbage",
+    '"paths" = [".*"]',
+  ])("rejects unconsumed suffix %s", (suffix) => {
+    expect(
+      gitleaksConfigProblems(`${config}\n${suffix}\n`).length
+    ).toBeGreaterThan(0);
+  });
+});

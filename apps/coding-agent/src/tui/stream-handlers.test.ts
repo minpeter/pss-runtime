@@ -75,6 +75,45 @@ function createState(overrides: Partial<PiTuiStreamState> = {}): {
 }
 
 describe("stream-handlers", () => {
+  it("finishes hidden tool results without mounting a continuation or keeping its ticker", async () => {
+    vi.useFakeTimers();
+    const { state } = createState();
+    state.flags.showToolResults = false;
+    const view = state.ensureToolView("hidden", "fixture");
+    state.finishToolView = vi.fn(() => {
+      view.settle();
+      view.dispose();
+    });
+    const ensure = vi.spyOn(state, "ensureToolView");
+    try {
+      await STREAM_HANDLERS["tool-input-start"](
+        {
+          type: "tool-input-start",
+          toolCallId: "hidden",
+          toolName: "fixture",
+        },
+        state
+      );
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+      ensure.mockClear();
+      handleToolResult(
+        {
+          type: "tool-result",
+          toolCallId: "hidden",
+          toolName: "fixture",
+          output: "HIDDEN_RESULT",
+        },
+        state
+      );
+      expect(state.finishToolView).toHaveBeenCalledExactlyOnceWith("hidden");
+      expect(ensure).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      view.dispose();
+      vi.useRealTimers();
+    }
+  });
+
   it("renders tool approval requests instead of ignoring them", () => {
     const { chatContainer, state } = createState();
 
@@ -93,6 +132,78 @@ describe("stream-handlers", () => {
     expect(output).toContain("Approval");
     expect(output).toContain("Command modifies the working tree.");
     expect(output).toContain("waiting for user or policy decision");
+  });
+
+  it("routes a scheduled retry to the wait hook without adding a transcript row", () => {
+    const onRetryWait = vi.fn();
+    const onRetryClear = vi.fn();
+    const { chatContainer, state } = createState({
+      onRetryClear,
+      onRetryWait,
+    });
+
+    STREAM_HANDLERS["retry-wait"]?.(
+      {
+        attempt: 1,
+        attemptId: "step-1",
+        delayMs: 4000,
+        phase: "scheduled",
+        remainingRetries: 2,
+        retryAt: 1_700_000_004_000,
+        type: "retry-wait",
+      } as never,
+      state
+    );
+
+    expect(onRetryWait).toHaveBeenCalledWith({
+      attempt: 1,
+      delayMs: 4000,
+      remainingRetries: 2,
+      retryAt: 1_700_000_004_000,
+    });
+    expect(onRetryClear).not.toHaveBeenCalled();
+    expect(chatContainer.render(120).join("\n").trim()).toBe("");
+  });
+
+  it.each(["started", "stopped"])(
+    "clears the retry wait on a %s retry phase",
+    (phase) => {
+      const onRetryWait = vi.fn();
+      const onRetryClear = vi.fn();
+      const { chatContainer, state } = createState({
+        onRetryClear,
+        onRetryWait,
+      });
+
+      STREAM_HANDLERS["retry-wait"]?.(
+        {
+          attempt: 1,
+          attemptId: "step-1",
+          phase,
+          remainingRetries: phase === "started" ? 1 : 0,
+          type: "retry-wait",
+        } as never,
+        state
+      );
+
+      expect(onRetryClear).toHaveBeenCalledTimes(1);
+      expect(onRetryWait).not.toHaveBeenCalled();
+      expect(chatContainer.render(120).join("\n").trim()).toBe("");
+    }
+  );
+
+  it("keeps retry waits out of the first-visible-part gate", () => {
+    expect(
+      isVisibleStreamPart({ type: "retry-wait" } as never, {
+        showFiles: false,
+        showFinishReason: false,
+        showRawToolIo: false,
+        showReasoning: true,
+        showSources: false,
+        showSteps: false,
+        showToolResults: true,
+      })
+    ).toBe(false);
   });
 
   it("treats tool approval requests as visible stream parts", () => {

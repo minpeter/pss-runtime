@@ -1,3 +1,132 @@
+## @minpeter/pss-coding-agent@0.0.14-next.20 (next)
+
+### Keep streamed assistant text visible
+
+Render ordinary assistant text without the eight-row streaming tail so the content shown while generating matches the completed transcript. Keep the compact viewport for reasoning and tool bodies.
+
+## @minpeter/pss-coding-agent@0.0.14-next.19 (next)
+
+### Harden thread and session lifecycle ownership
+
+Retain the authoritative thread handle when deletion fails, and remove the
+destructive behavior of the deprecated `new-session` extension action. Existing
+extensions remain source-compatible, but hosts now ignore that action; use the
+built-in `/new` or `/clear` command for guarded session replacement.
+
+### Reliable session resume output on exit
+
+Reuse the composer separator row for the current session's resume command after bounded turn finalization and runtime cleanup, without an extra rule or blank line. Keep shutdown failures above the final separator and command, including on narrow streaming exits.
+
+### Show provider retry waits in the TUI footer
+
+Render an active `model-retry` schedule in the existing one-row footer status as
+a live countdown with the next attempt number and remaining retry budget. The
+wait clears on retry start, any stop reason, turn end, abort, error, and session
+switches, and is never written to the transcript.
+
+### Surface provider call attempts as runtime events
+
+Emit an ephemeral `model-attempt` agent event for every physical provider call
+in a model step, including retries performed beneath both `streamText` and
+`generateText`. Each event carries the step's `attemptId`, a 1-based `attempt`
+counter, and a start/end phase. The end event reports the outcome and, when
+measurable, the duration of that provider call excluding retry backoff. Failed
+attempts also report a normalized provider error when it can be classified,
+including failures that the AI SDK subsequently retries. Hosts that already
+consume stream events receive these automatically; the committed `model-usage`
+event remains the durable successful-step record. Object models and string ids
+resolved by a configured `AI_SDK_DEFAULT_PROVIDER` are observed. String ids
+resolved through the SDK's implicit gateway emit no attempt events because its
+resolved model and individual retry failures are not exposed.
+
+Extensions can subscribe to the new event through
+`pss.on("model-attempt", ...)`, which previously threw for this event id, and
+headless coding-agent runs forward it on their live NDJSON stream. The event is
+live-only and never lands in durable history or headless result payloads.
+
+### Expose authoritative provider retry scheduling
+
+Add live-only `model-retry` scheduled/started/stopped events with delay, deadline,
+remaining retries, and cancellation or terminal decisions. Runtime-owned provider
+retries preserve the SDK baseline; extensions and NDJSON receive the events without persisting them.
+
+### Workspace source exports
+
+Place the opt-in `@minpeter/pss-source` workspace source condition before `types` in package exports.
+Default published consumers continue to resolve declarations and JavaScript from `dist`.
+
+### Freeze completed TUI output
+
+Keep the startup header and completed transcript immutable, with only the latest output block live. Interleaved tools and steering append continuations; extension prompts stay inline, and late renderer callbacks cannot rewrite history.
+
+### Re-layout sealed transcript content on terminal resize
+
+Keep COLD content immutable while text, Markdown tables/code, selected body tails, and startup information re-layout at new widths. Custom views can supply renderer-free snapshots; opaque graphics retain their captured asset and fixed geometry without restarting producers.
+
+### Clarify edit_file anchor selection
+
+Explicitly disable strict tool generation for edit_file, correct its anchor examples, and explain that unused anchor keys must be omitted entirely. Conflicting anchors still fail without writing, with actionable guidance for retrying.
+
+### Change
+
+Assistant text still follows its latest eight rendered rows while streaming. On its committed text completion boundary, the active block expands to its full rendered text before becoming an immutable snapshot. Complete tables, code, and verification paragraphs remain in terminal scrollback.
+
+### Boundaries
+
+Reasoning and tool bodies remain bounded. Abort, errors, steering, and other handoffs preserve their current partial display rather than marking it complete. Continuations append separately and never reopen older snapshots. Late reasoning completion cannot seal a newer text block. Custom renderers retain their current output and are disposed once after capture.
+
+### Keep shrinking output cards from lifting the composer
+
+Keep the composer steady when HOT output shrinks by reserving blank rows at the transcript tail. Completed blocks contain only actual content, and subsequent output consumes the shared reserve. Width changes recompute it; canonical messages and files remain unchanged.
+
+### Reuse shrinking output's reserved space at the transcript tail
+
+Keep synthetic shrink padding separate from immutable completed output. Following blocks and their normal separators consume the shared trailing reserve before transcript height grows, without removing genuine blank lines, Markdown spacing or graphics reserved rows. Width changes recompute the reserve and transcript resets clear it.
+
+### Bounded streaming text bodies
+
+Streaming assistant text, reasoning, and tool text bodies follow the latest eight wrapped terminal rows. Completed assistant text expands fully before becoming immutable; full source content, headers, the composer, and atomic graphical output are preserved.
+
+### Progressive tool arguments
+
+Show streamed arguments for every tool in the pretty TUI, including decoded multiline source before execution. Keep raw I/O and completed result/error rendering unchanged.
+
+### Clarify write_file hash preconditions
+
+New files omit `expected_file_hash`; guarded overwrites copy the exact eight-character lowercase hash from the latest successful `read_file` for the same existing path, without placeholders or null.
+Reject malformed hashes (including uppercase, never normalized) as SDK invalid input; `00000000` remains syntactically valid, not a missing-file sentinel.
+Distinct `FILE_HASH_MISMATCH` and `FILE_HASH_TARGET_MISSING` execution errors explain how to proceed without weakening stale-overwrite checks.
+
+### Preserve CLI startup and status ownership
+
+Honor the selected workspace and startup output stream, clear retry-only labels when no base status exists, and keep detached callbacks from observing expired busy owners.
+
+### Preserve transcript and prompt ownership across lifecycle changes
+
+Stage session replay before replacing the transcript, finish hidden tool results,
+and stop consuming stale streams. Cancel mounted extension prompts when their
+host revokes interactive access, restoring composer focus without disturbing replacements.
+
+### Preserve tool graphics and sealed transcript presentation
+
+Keep multiline tool graphics and reserved rows intact, capture completed views and syntax highlighting once, and avoid reflowing ordinary box art as Markdown tables.
+
+### Report rejected tool arguments without executing them
+
+Replace the SDK's source dump for tool calls rejected during input validation with a bounded `INVALID_TOOL_ARGUMENTS` result that states the tool was not executed and asks for smaller writes or edits, distinguishing malformed JSON from schema violations. In pretty mode the card keeps the streamed argument preview instead of the placeholder `{}` and is marked as not executed.
+
+### Compact new-session notice
+
+Show only the short session selector after `/new` or `/clear`, without repeating the current model and directory.
+
+### Separate tool cards from following output
+
+Keep one blank terminal row between tool cards, including empty directory reads, and the following assistant or reasoning block without adding gaps between streamed deltas.
+
+### Show write paths during argument streaming
+
+Show `write <path>` as soon as a streamed write argument exposes a nonempty path, while preserving the live input preview. Render paths literally and safely in both streaming and completed write headers.
+
 ## @minpeter/pss-coding-agent@0.0.14-next.18 (next)
 
 ### Cancel in-flight web tool requests

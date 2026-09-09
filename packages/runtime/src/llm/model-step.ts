@@ -9,6 +9,7 @@ import {
   enforceContextGate,
   materializeModelPromptTools,
 } from "./context-gate";
+import { normalizeInvalidToolResults } from "./invalid-tool-input";
 import { createModelAttemptTracker } from "./model-attempt";
 import { ModelToolSelectionError } from "./model-step-error";
 import { resolveModelStepOptions } from "./model-step-preparation";
@@ -137,6 +138,8 @@ export async function generateModelStepResult({
   assertNoUnsupportedToolApproval(prepared.tools);
   const attemptTracker = createModelAttemptTracker({ attemptId });
   const handle = createModelStepStream({
+    attemptId,
+    onRetry: onStreamEvent,
     activeTools: prepared.activeTools,
     abortSignal: signal,
     instructions: prompt.instructions,
@@ -223,9 +226,11 @@ export async function generateModelStepResult({
     );
     return {
       ...(usageSnapshot ? { contextUsage: usageSnapshot } : {}),
-      messages: responseMessages.map((message) =>
-        rewriteMessageToolCallIds(message, toolCallIds)
-      ),
+      messages: normalizeInvalidToolResults({
+        responseMessages,
+        finishReason,
+        finalStep,
+      }).map((message) => rewriteMessageToolCallIds(message, toolCallIds)),
       usage: normalizedUsage,
     };
   } catch (error) {
