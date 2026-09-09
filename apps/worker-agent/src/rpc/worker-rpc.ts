@@ -108,6 +108,10 @@ export function handleWorkerRpcRequest(
     endpoint: WORKER_RPC_ENDPOINT,
     req: request,
     router: workerAgentRouter,
+    // This endpoint must not fan out attacker-controlled batch responses. A
+    // single request remains fully supported; callers needing multiple calls
+    // can issue separate requests.
+    allowBatching: false,
   });
 }
 

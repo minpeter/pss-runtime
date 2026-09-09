@@ -10,12 +10,37 @@ const FIRST_PATHS = /^paths = \[[^\n]+\]$/m;
 const FIRST_VALUES = /^regexes = \[[\s\S]*?\]/m;
 const WRONG_PATH = "paths = ['''^unapproved/file\\.txt$''']";
 const WRONG_VALUE = "regexes = ['''^UNAPPROVED_VALUE$''']";
+const PLACEHOLDER = String.raw`^[A-Z0-9_]+(API_KEY|TOKEN|SECRET)=\.\.\.$`;
 
 function mutateHistory(before, after) {
   const mutated = history.replace(before, () => after);
   expect(mutated).not.toBe(history);
   return prefix + mutated;
 }
+
+describe("global Gitleaks placeholder exclusions", () => {
+  it("accepts the shipped placeholder pattern", () => {
+    expect(prefix).toContain(`'''${PLACEHOLDER}'''`);
+    expect(gitleaksConfigProblems(config)).toEqual([]);
+  });
+
+  it.each([".*SECRET.*", "^[A-Z]+SECRET[A-Z]+$", "^.*TOKEN.*$"])(
+    "rejects broad global regex %s in valid TOML",
+    (pattern) => {
+      // Replace the literal, not the array: character classes contain ].
+      // A callback preserves $ followed by TOML's literal-string quotes.
+      const mutated = prefix.replace(
+        `'''${PLACEHOLDER}'''`,
+        () => `'''${pattern}'''`
+      );
+      expect(mutated).not.toBe(prefix);
+      expect(mutated).toContain(`'''${pattern}'''`);
+      expect(gitleaksConfigProblems(mutated + history).length).toBeGreaterThan(
+        0
+      );
+    }
+  );
+});
 
 describe("historical Gitleaks exclusions", () => {
   it("accepts the reviewed commit/path/value conjunctions", () => {
