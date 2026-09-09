@@ -11,6 +11,8 @@ const FIRST_VALUES = /^regexes = \[[\s\S]*?\]/m;
 const WRONG_PATH = "paths = ['''^unapproved/file\\.txt$''']";
 const WRONG_VALUE = "regexes = ['''^UNAPPROVED_VALUE$''']";
 const PLACEHOLDER = String.raw`^[A-Z0-9_]+(API_KEY|TOKEN|SECRET)=\.\.\.$`;
+const REGEXES_ARRAY = /^regexes = \[[\s\S]*?^\]/m;
+const PLACEHOLDER_LITERAL = /'''([^']+)'''/;
 
 function mutateHistory(before, after) {
   const mutated = history.replace(before, () => after);
@@ -22,6 +24,44 @@ describe("global Gitleaks placeholder exclusions", () => {
   it("accepts the shipped placeholder pattern", () => {
     expect(prefix).toContain(`'''${PLACEHOLDER}'''`);
     expect(gitleaksConfigProblems(config)).toEqual([]);
+  });
+
+  it.each([
+    String.raw`^\.env\.example$`,
+    String.raw`^apps/worker-agent/\.dev\.vars\.example$`,
+    String.raw`^examples/evals/\.env\.example$`,
+    ".*",
+  ])("rejects whole-file suppression %s in valid TOML", (path) => {
+    const mutated = prefix.replace(
+      "[allowlist]",
+      () => `[allowlist]\npaths = ['''${path}''']`
+    );
+    expect(gitleaksConfigProblems(mutated + history)).not.toEqual([]);
+  });
+
+  it.each(['regexTarget = "secret"', 'regexTarget = "match"', ""])(
+    "rejects a non-line placeholder target %s in valid TOML",
+    (target) => {
+      const mutated = prefix.replace('regexTarget = "line"', target);
+      expect(gitleaksConfigProblems(mutated + history)).not.toEqual([]);
+    }
+  );
+
+  it.each(["regexes = []", ""])(
+    "rejects missing placeholder regexes %s in valid TOML",
+    (replacement) => {
+      const mutated = prefix.replace(REGEXES_ARRAY, replacement);
+      expect(gitleaksConfigProblems(mutated + history)).not.toEqual([]);
+    }
+  );
+
+  it("accepts only placeholder lines, not credential values or suffixes", () => {
+    const pattern = prefix.match(PLACEHOLDER_LITERAL)[1];
+    const regex = new RegExp(pattern);
+    expect(regex.test("AI_API_KEY=...")).toBe(true);
+    expect(regex.test("AI_API_KEY=" . ("0123456789abcdef" x 2))).toBe(false);
+    expect(regex.test("AI_API_KEY=... trailing-secret")).toBe(false);
+    expect(regex.test("prefix AI_API_KEY=...")).toBe(false);
   });
 
   it.each([".*SECRET.*", "^[A-Z]+SECRET[A-Z]+$", "^.*TOKEN.*$"])(

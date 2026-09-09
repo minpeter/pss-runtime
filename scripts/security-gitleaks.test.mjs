@@ -11,15 +11,12 @@ import {
   gitleaksConfigProblems,
 } from "./security-gitleaks-config.mjs";
 
-const EMPTY_PATHS_ARRAY = /paths = \[[\s\S]*?\]/;
-
 // gitleaks invariants (VAL-SEC-029..032): a workflow under .github/workflows
 // parses and runs gitleaks in the declared full-history scope (checkout with
 // fetch-depth: 0 plus `gitleaks git` against the committed config) on a
 // bounded trigger set with read-only permissions; findings fail the run (no
 // continue-on-error); the committed .gitleaks.toml extends the default rules
-// with a specific allowlist (anchored paths incl. the example env files, no
-// catch-alls); the security-scan runbook documents the same scope, the
+// with a line-scoped placeholder allowlist (no whole-file suppressions); the security-scan runbook documents the same scope, the
 // triggers, the failure mode, triage, and the absent-local-binary behavior.
 
 function gitleaksWorkflow({
@@ -154,13 +151,10 @@ const VALID_CONFIG = `title = "fixture"
 useDefault = true
 
 [allowlist]
-paths = [
-  '''^\\.env\\.example$''',
-  '''^apps/worker-agent/\\.dev\\.vars\\.example$''',
-]
 regexes = [
   '''^[A-Z0-9_]+(API_KEY|TOKEN|SECRET)=\\.\\.\\.$''',
 ]
+regexTarget = "line"
 `;
 
 describe("gitleaks: committed config allowlist (VAL-SEC-031)", () => {
@@ -170,8 +164,18 @@ describe("gitleaks: committed config allowlist (VAL-SEC-031)", () => {
     ).toEqual([]);
   });
 
-  it("accepts a specific allowlist", () => {
+  it("accepts a specific line-scoped placeholder allowlist", () => {
     expect(gitleaksConfigProblems(VALID_CONFIG)).toEqual([]);
+  });
+
+  it("fails on a whole-file example path exemption", () => {
+    const mutated = VALID_CONFIG.replace(
+      "[allowlist]",
+      () => "[allowlist]\npaths = ['''^examples/\\.env\\.example$''']"
+    );
+    expect(
+      gitleaksConfigProblems(mutated).some((p) => p.includes("whole files"))
+    ).toBe(true);
   });
 
   it("fails when the config drops the default rule set", () => {
@@ -181,34 +185,18 @@ describe("gitleaks: committed config allowlist (VAL-SEC-031)", () => {
     expect(problems.some((p) => p.includes("useDefault"))).toBe(true);
   });
 
-  it("fails on a catch-all path suppression", () => {
-    const problems = gitleaksConfigProblems(
-      VALID_CONFIG.replace(
-        "  '''^\\.env\\.example$''',\n",
-        // Function form: the replacement contains `$`, which String.replace
-        // would otherwise interpret as a special pattern ($', $&, ...).
-        () => "  '''^\\.env\\.example$''',\n  '''^.*$''',\n"
-      )
-    );
-    expect(problems.some((p) => p.includes("catch-all"))).toBe(true);
-  });
-
-  it("fails on an unanchored path", () => {
-    const problems = gitleaksConfigProblems(
-      VALID_CONFIG.replace("'''^\\.env\\.example$'''", "'''\\.env\\.example'''")
-    );
-    expect(problems.some((p) => p.includes("anchored"))).toBe(true);
-  });
-
-  it("fails when no path covers the example env files", () => {
-    const problems = gitleaksConfigProblems(
-      VALID_CONFIG.replace(
-        "  '''^apps/worker-agent/\\.dev\\.vars\\.example$''',\n",
-        ""
-      )
-    );
-    expect(problems.some((p) => p.includes(".dev.vars.example"))).toBe(true);
-  });
+  it.each(["^.*$", String.raw`\.env\.example`, String.raw`^\.env\.example$`])(
+    "fails on a whole-file path suppression %s",
+    (path) => {
+      const problems = gitleaksConfigProblems(
+        VALID_CONFIG.replace(
+          "[allowlist]",
+          () => `[allowlist]\npaths = ['''${path}''']`
+        )
+      );
+      expect(problems.length).toBeGreaterThan(0);
+    }
+  );
 
   it("fails on a catch-all regex suppression", () => {
     const problems = gitleaksConfigProblems(
@@ -222,9 +210,12 @@ describe("gitleaks: committed config allowlist (VAL-SEC-031)", () => {
 
   it("fails when the allowlist is empty", () => {
     const problems = gitleaksConfigProblems(
-      VALID_CONFIG.replace(EMPTY_PATHS_ARRAY, "paths = []")
+      VALID_CONFIG.replace(
+        "'''^[A-Z0-9_]+(API_KEY|TOKEN|SECRET)=\\.\\.\\.$''',",
+        ""
+      )
     );
-    expect(problems.some((p) => p.includes("no paths"))).toBe(true);
+    expect(problems.length).toBeGreaterThan(0);
   });
 });
 

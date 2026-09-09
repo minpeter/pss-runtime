@@ -139,8 +139,8 @@ function skipStepProblems(path, jobName, steps) {
   return [];
 }
 
-// No step may hardcode an http(s) host or a loopback address: the only URL
-// ever scanned is the operator-supplied input expression.
+// No step may hardcode an http(s) host. The validation script may name
+// loopback hosts to reject them; other step fields may not target them.
 function hardcodedHostProblems(path, jobName, steps) {
   const problems = [];
   for (const [index, step] of steps.entries()) {
@@ -151,7 +151,11 @@ function hardcodedHostProblems(path, jobName, steps) {
         `${label} hardcodes an http(s) host; the scan scope stays the declared target-url input`
       );
     }
-    if (LOOPBACK.test(text)) {
+    const targetFields = JSON.stringify({
+      ...step,
+      run: step.id === "validate-target" ? undefined : step.run,
+    });
+    if (LOOPBACK.test(targetFields)) {
       problems.push(
         `${label} references a loopback address; ZAP never targets loopback/localhost by default`
       );
