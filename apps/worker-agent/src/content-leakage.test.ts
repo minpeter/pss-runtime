@@ -15,7 +15,6 @@ import worker from "./index";
  */
 
 const ORIGIN = "https://worker.test";
-const LOOPBACK_TELEGRAM_BASE = "http://127.0.0.1:8793";
 const MAX_ERROR_BODY_BYTES = 512;
 
 const SENTINELS = {
@@ -135,7 +134,6 @@ function createEnv(secrets: SecretSet): Env {
     AI_API_KEY: secrets.aiApiKey,
     AI_BASE_URL: "http://127.0.0.1:9/unreachable",
     ENVIRONMENT: "production",
-    TELEGRAM_API_BASE_URL: LOOPBACK_TELEGRAM_BASE,
     TELEGRAM_BOT_TOKEN: secrets.botToken,
     TELEGRAM_WEBHOOK_SECRET_TOKEN: secrets.webhookSecret,
     WORKER_AGENT_TUI_TOKEN: secrets.tuiToken,
@@ -492,11 +490,8 @@ describe("content leakage battery (VAL-WORKER-045)", () => {
       expect(envelope.message, `${name} message`).toBe("not found");
       expect(envelope.data, `${name} data.path`).not.toHaveProperty("path");
     }
-    // The only outbound traffic is Telegram adapter initialization against
-    // the loopback base; the negative battery triggers no other egress.
-    for (const call of outbound) {
-      expect(call.url.startsWith(`${LOOPBACK_TELEGRAM_BASE}/bot`)).toBe(true);
-    }
+    // Unauthorized webhooks must not initialize the adapter or cause egress.
+    expect(outbound).toEqual([]);
   });
 
   it("no error body varies with the configured secret values", async () => {

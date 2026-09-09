@@ -50,11 +50,39 @@ export function isTelegramIngressDryRun(env: {
   return value === "1" || value === "true" || value === "yes";
 }
 
-/** Trimmed Telegram Bot API base override, or undefined when unset/blank. */
+/** Development-only credential-free HTTP(S) loopback override. */
 export function readTelegramApiBaseUrl(env: {
+  readonly ENVIRONMENT: EnvironmentName;
   readonly TELEGRAM_API_BASE_URL?: string;
 }): string | undefined {
-  return env.TELEGRAM_API_BASE_URL?.trim() || undefined;
+  const value = env.TELEGRAM_API_BASE_URL?.trim();
+  if (!value) {
+    return;
+  }
+  if (env.ENVIRONMENT !== "development") {
+    throw new WorkerAgentConfigError(
+      "TELEGRAM_API_BASE_URL is only allowed in development."
+    );
+  }
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new WorkerAgentConfigError(
+      "TELEGRAM_API_BASE_URL must be a credential-free HTTP(S) loopback URL."
+    );
+  }
+  if (
+    !(url.protocol === "http:" || url.protocol === "https:") ||
+    url.username ||
+    url.password ||
+    !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)
+  ) {
+    throw new WorkerAgentConfigError(
+      "TELEGRAM_API_BASE_URL must be a credential-free HTTP(S) loopback URL."
+    );
+  }
+  return value;
 }
 
 export function durableObjectName(channelId: string): string {
