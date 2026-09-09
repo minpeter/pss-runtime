@@ -227,7 +227,9 @@ async function runNegativeBattery(
   await record(
     "sse-bad-channel",
     probe(
-      `/session/events?channel=${encodeURIComponent(`web:${SENTINELS.channelId}`)}`,
+      `/session/events?channel=${encodeURIComponent(
+        `web:${SENTINELS.channelId}`
+      )}`,
       { headers: bearer }
     )
   );
@@ -255,7 +257,9 @@ async function runNegativeBattery(
   );
   await record(
     "trpc-bad-input",
-    probe(`/trpc/session.replayEvents?input=${badInput}`, { headers: bearer })
+    probe(`/trpc/session.replayEvents?input=${badInput}`, {
+      headers: bearer,
+    })
   );
   // Attacker-controlled unrecognized keys must not inflate the envelope:
   // fifty extra keys answer with the same fixed bounded message.
@@ -289,7 +293,9 @@ async function runNegativeBattery(
   // A 2000+ character attacker-controlled procedure path must still answer
   // with the fixed bounded NOT_FOUND envelope: no path echo in the message
   // and no data.path field.
-  const longPath = `session.${"a".repeat(1000)}${SENTINELS.pathProbe}${"b".repeat(1000)}`;
+  const longPath = `session.${"a".repeat(1000)}${SENTINELS.pathProbe}${"b".repeat(
+    1000
+  )}`;
   await record(
     "trpc-long-path-not-found",
     probe(`/trpc/${longPath}?input=%7B%7D`, { headers: bearer })
@@ -301,6 +307,33 @@ async function runNegativeBattery(
       headers: { ...bearer, "content-type": "application/json" },
       method: "POST",
     })
+  );
+  await record(
+    "trpc-unsupported-media-type",
+    probe("/trpc/session.submitTurn", {
+      body: SENTINELS.text,
+      headers: {
+        "content-type": `text/${SENTINELS.pathProbe}${"x".repeat(6000)}`,
+      },
+      method: "POST",
+    })
+  );
+  await record(
+    "trpc-malformed-json",
+    probe("/trpc/session.submitTurn", {
+      body: SENTINELS.text,
+      headers: { ...bearer, "content-type": "application/json" },
+      method: "POST",
+    })
+  );
+  await record(
+    "trpc-malformed-replay-input",
+    probe(
+      `/trpc/session.replayEvents?input=${encodeURIComponent(SENTINELS.text)}`,
+      {
+        headers: bearer,
+      }
+    )
   );
 
   durableObjectMock.respond = rejectWithSentinel;
@@ -363,6 +396,9 @@ const EXPECTED_STATUSES: Record<string, number> = {
   "trpc-inflated-input": 400,
   "trpc-long-path-not-found": 404,
   "trpc-query-post": 405,
+  "trpc-unsupported-media-type": 415,
+  "trpc-malformed-json": 400,
+  "trpc-malformed-replay-input": 400,
   "trpc-submit-do-unreachable": 502,
   "trpc-unknown-procedure": 404,
   "trpc-wrong-bearer": 401,
@@ -484,7 +520,10 @@ describe("content leakage battery (VAL-WORKER-045)", () => {
       }
       const envelope = (
         JSON.parse(result.body) as {
-          error: { data?: Record<string, unknown>; message?: unknown };
+          error: {
+            data?: Record<string, unknown>;
+            message?: unknown;
+          };
         }
       ).error;
       expect(envelope.message, `${name} message`).toBe("not found");

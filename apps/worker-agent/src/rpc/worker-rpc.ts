@@ -50,6 +50,14 @@ const trpc = initTRPC.context<WorkerRpcContext>().create({
           error.code === "BAD_REQUEST" ? "invalid request" : "internal error",
       };
     }
+    // Transport errors can echo request headers or parser details. Keep
+    // malformed requests bounded without changing internal error responses.
+    if (
+      error.code === "UNSUPPORTED_MEDIA_TYPE" ||
+      (error.code === "BAD_REQUEST" && error.cause instanceof SyntaxError)
+    ) {
+      return { ...shape, message: "invalid request" };
+    }
     return shape;
   },
   isDev: false,
