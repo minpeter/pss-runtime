@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
+import { jsonSchema, tool } from "ai";
 import { describe, expect, it, vi } from "vitest";
-import { createNoopTool } from "../../testing/llm-test-utils";
 import {
   createMockLanguageModelV4,
   mockLanguageModelV4Text,
@@ -13,6 +13,22 @@ import {
   createAgent,
 } from "./agent";
 import { threadStoreKey } from "./thread-entry";
+
+const createNoopTool = () =>
+  tool({
+    description: "No-op test tool.",
+    execute: () => ({}),
+    inputSchema: jsonSchema({
+      type: "object",
+      properties: {},
+      additionalProperties: false,
+    }),
+    outputSchema: jsonSchema({
+      type: "object",
+      properties: {},
+      additionalProperties: false,
+    }),
+  });
 
 const fakeModel = createMockLanguageModelV4([mockLanguageModelV4Text("DONE")]);
 const functionModel = () => Promise.resolve([]);
@@ -108,11 +124,12 @@ describe("Agent", () => {
         return turn;
       },
     };
+    const generate = vi.fn(() =>
+      Promise.resolve(mockLanguageModelV4Text("DONE"))
+    );
     const agent = new Agent({
       instrumentations: [instrumentation],
-      model: createMockLanguageModelV4(() =>
-        Promise.resolve(mockLanguageModelV4Text("DONE"))
-      ),
+      model: createMockLanguageModelV4(generate),
       namespace: "support",
     });
     const thread = agent.thread("customer-1");
@@ -121,6 +138,7 @@ describe("Agent", () => {
     await collectRun(await thread.followUp("follow up"));
     await collectRun(await thread.steer("one more thing"));
 
+    expect(generate).toHaveBeenCalledTimes(3);
     expect(contexts).toEqual([
       {
         namespace: "support",

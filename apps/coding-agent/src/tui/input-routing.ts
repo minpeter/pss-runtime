@@ -1,4 +1,4 @@
-import type { AgentTurn } from "@minpeter/pss-runtime";
+import type { AgentTurn, ThreadHandle } from "@minpeter/pss-runtime";
 
 export type InputPreprocessResult =
   | {
@@ -17,6 +17,7 @@ export interface InputPreprocessHooks {
 }
 
 export interface InputThread {
+  continue?: ThreadHandle["continue"];
   send(input: string): Promise<AgentTurn>;
   steer(input: string): Promise<AgentTurn>;
 }

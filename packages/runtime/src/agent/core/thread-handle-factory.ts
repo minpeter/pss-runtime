@@ -123,6 +123,16 @@ export function createThreadPublicHandle({
 
   const publicHandle: ThreadHandle = {
     compact: thread.compact.bind(thread),
+    continue: async (options) => {
+      const turn = await thread.continue(options);
+      return turn === undefined
+        ? undefined
+        : instrumentTurn(turn, {
+            namespace,
+            operation: "resume",
+            threadKey: key,
+          });
+    },
     delete: deleteThread,
     dispose: disposeThread,
     events: (options) => thread.events(options),

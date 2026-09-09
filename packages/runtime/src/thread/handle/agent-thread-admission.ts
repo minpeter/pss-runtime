@@ -31,6 +31,11 @@ export async function queueAgentThreadInput(
       await recoverAgentThreadDurableInputClaims(context);
       assertAgentThreadOpen(context);
 
+      // Unresolved effects/storage recovery cannot be bypassed by changing
+      // the input route from Enter to send/follow-up.
+      const recovery = context.state.continuationCheckpoint()?.recover;
+      recovery?.();
+
       // Skip awaiting turn boundaries when the drain loop is running without
       // an active turn: the boundary events would never be acknowledged.
       const idleDrainLoop =

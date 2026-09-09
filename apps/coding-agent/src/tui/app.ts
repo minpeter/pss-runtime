@@ -521,6 +521,7 @@ async function startTuiSession(
       ...assistantRendererRuntime(extensionHost),
       ...foregroundThemeConfig(),
       thread: {
+        continue: (options) => thread.continue(options),
         interrupt: () => thread.interrupt(),
         send: (input) => thread.send(input),
         steer: (input) => thread.steer(input),
