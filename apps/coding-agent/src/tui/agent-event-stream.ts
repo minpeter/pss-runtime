@@ -5,6 +5,7 @@ import type {
 } from "@minpeter/pss-runtime";
 import { createTuiErrorPresentation } from "./error-presentation";
 import type { TuiStreamPart } from "./stream-handlers";
+import { toolResultStreamPart } from "./tool-result-stream-part";
 
 /**
  * Options accepted by the agent-event to stream-part adapter.
@@ -13,42 +14,6 @@ export interface AgentEventStreamOptions {
   onContextUsage?: (snapshot: ContextUsageSnapshot) => void;
   onModelUsage?: (usage: ModelUsage) => void;
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-/**
- * AI SDK tool outputs use `{ type: "error-text" | "error-json", value }` for
- * failed executions. Those are rendered through the error path so they show
- * up with the error block styling instead of as normal output.
- */
-const isErrorToolOutput = (
-  output: unknown
-): output is { type: "error-json" | "error-text"; value: unknown } =>
-  isRecord(output) &&
-  (output.type === "error-text" || output.type === "error-json");
-
-const isExecutionDeniedToolOutput = (
-  output: unknown
-): output is { type: "execution-denied"; reason?: string } =>
-  isRecord(output) && output.type === "execution-denied";
-
-/**
- * ai v7 wraps tool results in typed output envelopes
- * (`{ type: "text" | "json", value }`). The TUI renderers — like the
- * plugsuits ones they are ported from — expect the semantic raw value, so
- * unwrap the envelope here at the event boundary.
- */
-const unwrapToolOutput = (output: unknown): unknown => {
-  if (
-    isRecord(output) &&
-    (output.type === "text" || output.type === "json") &&
-    "value" in output
-  ) {
-    return output.value;
-  }
-  return output;
-};
 
 type AssistantContentKind = "reasoning" | "text";
 
@@ -148,30 +113,7 @@ export async function* agentEventStreamParts(
         };
         break;
       case "tool-result":
-        if (isErrorToolOutput(event.output)) {
-          yield {
-            type: "tool-error",
-            error: event.output.value,
-            toolCallId: event.toolCallId,
-            toolName: event.toolName,
-          };
-        } else if (isExecutionDeniedToolOutput(event.output)) {
-          yield {
-            ...(event.output.reason === undefined
-              ? {}
-              : { reason: event.output.reason }),
-            type: "tool-output-denied",
-            toolCallId: event.toolCallId,
-            toolName: event.toolName,
-          };
-        } else {
-          yield {
-            type: "tool-result",
-            output: unwrapToolOutput(event.output),
-            toolCallId: event.toolCallId,
-            toolName: event.toolName,
-          };
-        }
+        yield toolResultStreamPart(event);
         break;
       case "model-retry":
         // Live-only retry state. Forwarded as a stream part so the TUI's one

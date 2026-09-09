@@ -462,9 +462,9 @@ export const isVisibleStreamPart = (
 ): boolean => {
   switch (part.type) {
     case "abort":
+    case "text-start":
     case "text-end":
     case "reasoning-start":
-    case "reasoning-delta":
     case "reasoning-end":
     case "start":
     case "tool-input-end":
@@ -472,8 +472,6 @@ export const isVisibleStreamPart = (
     // transcript or count as the turn's first visible part.
     case "retry-wait":
       return false;
-    case "text-start":
-      return true;
     case "tool-result":
       return flags.showToolResults;
     case "start-step":
@@ -485,6 +483,14 @@ export const isVisibleStreamPart = (
       return flags.showFiles;
     case "finish":
       return flags.showFinishReason;
+    case "text-delta":
+      return typeof part.text === "string" && part.text.trim().length > 0;
+    case "reasoning-delta":
+      return (
+        flags.showReasoning &&
+        typeof part.text === "string" &&
+        part.text.trim().length > 0
+      );
     default:
       return true;
   }

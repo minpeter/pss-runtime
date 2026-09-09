@@ -13,10 +13,12 @@ import {
   visibleWidth,
 } from "@earendil-works/pi-tui";
 import type { AgentEvent, AgentTurn } from "@minpeter/pss-runtime";
+import { createInMemoryHost } from "@minpeter/pss-runtime/platform/memory";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ExtensionHostEventBus } from "../extensions/event-bus";
 import { ExtensionHostServices } from "../extensions/host-services";
 import type { CodingAgentExtensionUi } from "../extensions/types";
+import { createSessionManager } from "../sessions/session-manager";
 import { createReadFileTool } from "../workspace-tools/read-file";
 import type { AssistantRendererContext } from "./assistant-renderer";
 import { createToolRenderers } from "./renderers/tool-renderers";
@@ -68,12 +70,18 @@ vi.mock("@earendil-works/pi-tui", async (importOriginal) => {
   };
 });
 
-import { type AgentTUIConfig, createAgentTUI } from "./agent";
+import {
+  type AgentTUIConfig,
+  createAgentTUI,
+  type FooterStatusBar,
+} from "./agent";
 import { ComposerEditor } from "./composer-editor";
 import { composerHeightBudget } from "./composer-height";
 import { createModelCommand } from "./model-command";
 import { ModelSelectorComponent } from "./model-selector";
 import { NOTICE_PULSE_MS } from "./repeated-notice";
+import { retryWaitMessage } from "./retry-status";
+import { createSessionCommands } from "./session-commands";
 import { SessionSelectorComponent } from "./session-selector";
 import { TuiSessionMachine } from "./session-state";
 
@@ -894,6 +902,76 @@ describe.sequential("actual TUI transcript ownership", () => {
     }
   );
 
+  it.each(["factory", "setText", "both"] as const)(
+    "preserves the current assistant text when %s synchronously notifies",
+    async (phase) => {
+      const contexts: AssistantRendererContext[] = [];
+      const disposed = vi.fn();
+      const app = await fixture({
+        assistantRenderer: (ctx) => {
+          contexts.push(ctx);
+          const view = new Markdown("", 1, 0, ctx.markdownTheme);
+          if (phase !== "setText") {
+            ctx.notify("FACTORY_NOTICE");
+          }
+          return {
+            invalidate: () => view.invalidate(),
+            render: (width) => view.render(width),
+            dispose: disposed,
+            setText: (text) => {
+              if (phase !== "factory") {
+                ctx.notifyOnce("set-text", "SET_TEXT_NOTICE");
+                ctx.notifyOnce("set-text", "SET_TEXT_NOTICE");
+              }
+              view.setText(text);
+            },
+          };
+        },
+      });
+      try {
+        await app.start();
+        await app.emit({
+          type: "assistant-output-delta",
+          text: "CURRENT_TEXT",
+        });
+        const output = plain();
+        expect(output.split("CURRENT_TEXT")).toHaveLength(2);
+        for (const notice of [
+          ...(phase === "setText" ? [] : ["FACTORY_NOTICE"]),
+          ...(phase === "factory" ? [] : ["SET_TEXT_NOTICE"]),
+        ]) {
+          expect(output.split(notice)).toHaveLength(2);
+          expect(output.indexOf(notice)).toBeGreaterThan(
+            output.indexOf("CURRENT_TEXT")
+          );
+        }
+        expect(contexts[0]?.signal.aborted).toBe(true);
+        if (phase === "both") {
+          expect(output.indexOf("SET_TEXT_NOTICE")).toBeGreaterThan(
+            output.indexOf("FACTORY_NOTICE")
+          );
+        }
+        expect(disposed).toHaveBeenCalledTimes(1);
+        expect(
+          chat().children.filter((child) => !(child instanceof ColdSnapshot))
+        ).toHaveLength(1);
+        const cold = prefix().slice(0, -1);
+        contexts[0]?.notify("STALE_NOTICE");
+        await app.emit({ type: "assistant-output-delta", text: "LATER_TEXT" });
+        unchanged(cold);
+        expect(plain().split("CURRENT_TEXT")).toHaveLength(2);
+        expect(plain().split("LATER_TEXT")).toHaveLength(2);
+        expect(plain()).not.toContain("STALE_NOTICE");
+        await app.finish();
+        expect(contexts).toHaveLength(2);
+        expect(contexts.every((ctx) => ctx.signal.aborted)).toBe(true);
+        expect(disposed).toHaveBeenCalledTimes(2);
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
   it("appends a fresh renderer notice after intervening assistant deltas", async () => {
     const contexts: AssistantRendererContext[] = [];
     const app = await fixture({
@@ -978,6 +1056,90 @@ describe.sequential("actual TUI transcript ownership", () => {
         expect(plain()).toContain("REPLAY_FAILURE");
         expect(plain()).not.toContain("REPLAY_PREFIX");
         expect(disposed).toHaveBeenCalledTimes(2);
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
+  it.each(["updateHeader", "refresh-header"] as const)(
+    "routes generic %s model-only refreshes to startup before COLD and a HOT notice after COLD",
+    async (method) => {
+      vi.useFakeTimers();
+      let current = "MODEL_A";
+      const header = {
+        title: "LOGO_SENTINEL",
+        subtitle: `${current}\n/CWD_SENTINEL\nSESSION_SENTINEL`,
+      };
+      const models = {
+        currentModelId: () => current,
+        listModelIds: async () => ["MODEL_A", "MODEL_B", "MODEL_C", "MODEL_D"],
+        switchModel: (id: string) => {
+          current = id;
+          header.subtitle = `${id}\n/CWD_SENTINEL\nSESSION_SENTINEL`;
+        },
+      };
+      const app = await fixture({
+        header,
+        modelSelector: models,
+        preprocessCommand: (input, hooks) => {
+          if (method !== "updateHeader") {
+            return Promise.resolve(input);
+          }
+          models.switchModel(input.split(" ")[1]);
+          hooks.updateHeader();
+          return Promise.resolve(null);
+        },
+        commands: [
+          {
+            name: "refresh",
+            description: "fixture",
+            execute: ({ args }) => {
+              models.switchModel(args[0]);
+              return { success: true, action: { type: "refresh-header" } };
+            },
+          },
+        ],
+      });
+      try {
+        await app.command("/refresh MODEL_B");
+        expect(chat().children).toHaveLength(0);
+        expect(
+          stripTerminalSequences(rows(surface().children[0]).join("\n"))
+        ).toContain("MODEL_B");
+        await app.start();
+        await app.finish();
+        const cold = prefix();
+        const startup = rows(surface().children[0]);
+        expect((surface().children[0] as Container).children[0]).toBeInstanceOf(
+          ColdSnapshot
+        );
+        const shippedCommand = createModelCommand({
+          ...models,
+          currentModelId: () => "MODEL_A",
+          switchModel: () => undefined,
+        });
+        let notice: Component | undefined;
+        for (const id of ["MODEL_C", "MODEL_D"]) {
+          await app.command(`/refresh ${id}`);
+          const expected = await shippedCommand.execute({ args: [id] });
+          const hot = chat().children.filter(
+            (child) => !(child instanceof ColdSnapshot)
+          );
+          expect(hot).toHaveLength(1);
+          expect(stripTerminalSequences(rows(hot[0]).join("\n")).trim()).toBe(
+            expected.message
+          );
+          if (notice) {
+            expect(hot[0]).toBe(notice);
+          }
+          notice = hot[0];
+          unchanged(cold);
+          expect(rows(surface().children[0])).toEqual(startup);
+          const before = rows();
+          await app.command(`/refresh ${id}`);
+          expect(rows()).toEqual(before);
+        }
       } finally {
         await app.close();
       }
@@ -1338,6 +1500,76 @@ describe.sequential("actual TUI transcript ownership", () => {
     expect(render).not.toHaveBeenCalled();
   });
 
+  describe.each(["startup", "command"] as const)("blank %s replay", (route) => {
+    it.each([
+      { name: "empty assistant", content: "" },
+      { name: "whitespace assistant", content: " \t\n " },
+      {
+        name: "empty text part",
+        content: [{ type: "text" as const, text: "" }],
+      },
+      {
+        name: "whitespace text part",
+        content: [{ type: "text" as const, text: " \t\n " }],
+      },
+      {
+        name: "empty reasoning",
+        content: [{ type: "reasoning" as const, text: "" }],
+      },
+      {
+        name: "whitespace reasoning",
+        content: [{ type: "reasoning" as const, text: " \t\n " }],
+      },
+    ])("keeps startup HOT for $name", async ({ content }) => {
+      let current = "MODEL_A";
+      const models = {
+        currentModelId: () => current,
+        listModelIds: async () => ["MODEL_A", "MODEL_B"],
+        switchModel: (id: string) => {
+          current = id;
+        },
+      };
+      const app = await fixture({
+        header: { title: "LOGO_SENTINEL", subtitle: "MODEL_A\n/CWD" },
+        modelSelector: models,
+        replayHistoryOnStartup: route === "startup",
+        commands: [
+          createModelCommand(models),
+          {
+            name: "replay",
+            description: "fixture",
+            execute: () => ({
+              success: true,
+              action: { type: "session", clear: true },
+            }),
+          },
+        ],
+        sessionSelector: {
+          currentSessionKey: () => "fixture",
+          listSessions: async () => [],
+          switchSession: async () => undefined,
+          loadCurrentHistory: async () => [{ role: "assistant", content }],
+        },
+      });
+      try {
+        if (route === "command") {
+          await app.command("/replay");
+        }
+        const header = surface().children[0] as Container;
+        expect(header.children[0]).not.toBeInstanceOf(ColdSnapshot);
+        expect(chat().children).toHaveLength(0);
+        await app.command("/model MODEL_B");
+        expect(rows(header).join("\n")).toContain("MODEL_B");
+        expect(chat().children).toHaveLength(0);
+        await app.start();
+        expect(header.children[0]).toBeInstanceOf(ColdSnapshot);
+        await app.finish();
+      } finally {
+        await app.close();
+      }
+    });
+  });
+
   it.each(["empty", "assistant", "tool"] as const)(
     "freezes startup only when %s replay appends actual content",
     async (kind) => {
@@ -1409,6 +1641,110 @@ describe.sequential("actual TUI transcript ownership", () => {
           expect(rows(header)).toEqual(before);
           expect(plain()).toContain("MODEL_C");
         }
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
+  it.each(["disabled", "empty", "nonempty"] as const)(
+    "preserves activation and setup notices in HOT startup across %s replay",
+    async (replay) => {
+      vi.useFakeTimers();
+      let current = "MODEL_A";
+      let ui!: CodingAgentExtensionUi;
+      const startup = () => surface().children[0] as Container;
+      const activationFrames: string[][] = [];
+      const activationFrozen: boolean[] = [];
+      const models = {
+        currentModelId: () => current,
+        listModelIds: async () => ["MODEL_A", "MODEL_B", "MODEL_C"],
+        switchModel: (id: string) => {
+          current = id;
+        },
+      };
+      const loadCurrentHistory = vi.fn(() => {
+        ui.notify("REPLAY_LOADING_SENTINEL");
+        activationFrames.push(rows(startup()));
+        activationFrozen.push(startup().children[0] instanceof ColdSnapshot);
+        return Promise.resolve(
+          replay === "nonempty"
+            ? [{ role: "user" as const, content: "REPLAY_USER_SENTINEL" }]
+            : []
+        );
+      });
+      const app = await fixture({
+        header: { title: "LOGO_SENTINEL", subtitle: "MODEL_A\n/CWD_SENTINEL" },
+        commands: [createModelCommand(models)],
+        modelSelector: models,
+        onExtensionUiReady: (createUi) => {
+          ui = createUi();
+          ui.notify("ACTIVATION_SENTINEL");
+          activationFrames.push(rows(startup()));
+          activationFrozen.push(startup().children[0] instanceof ColdSnapshot);
+        },
+        onSetup: () => {
+          ui.notify("SETUP_CALLBACK_SENTINEL");
+          activationFrames.push(rows(startup()));
+          activationFrozen.push(startup().children[0] instanceof ColdSnapshot);
+        },
+        setupMessages: ["SETUP_MESSAGE_SENTINEL"],
+        replayHistoryOnStartup: replay !== "disabled",
+        sessionSelector: {
+          currentSessionKey: () => "fixture",
+          listSessions: async () => [],
+          loadCurrentHistory,
+          switchSession: async () => undefined,
+        },
+      });
+      try {
+        expect(activationFrames[0].join("\n")).toContain("ACTIVATION_SENTINEL");
+        expect(activationFrames[1].join("\n")).toContain(
+          "SETUP_MESSAGE_SENTINEL"
+        );
+        expect(activationFrames[1].join("\n")).toContain(
+          "SETUP_CALLBACK_SENTINEL"
+        );
+        expect(activationFrozen).not.toContain(true);
+        expect(loadCurrentHistory).toHaveBeenCalledTimes(
+          replay === "disabled" ? 0 : 1
+        );
+        const initial = rows(startup());
+        for (const sentinel of [
+          "ACTIVATION_SENTINEL",
+          "SETUP_MESSAGE_SENTINEL",
+          "SETUP_CALLBACK_SENTINEL",
+          ...(replay === "disabled" ? [] : ["REPLAY_LOADING_SENTINEL"]),
+        ]) {
+          expect(initial.join("\n").split(sentinel)).toHaveLength(2);
+          expect(plain()).not.toContain(sentinel);
+        }
+        expect(startup().children[0] instanceof ColdSnapshot).toBe(
+          replay === "nonempty"
+        );
+        await app.command("/model MODEL_B");
+        vi.advanceTimersByTime(NOTICE_PULSE_MS);
+        if (replay === "nonempty") {
+          expect(rows(startup())).toEqual(initial);
+          expect(plain()).toContain("REPLAY_USER_SENTINEL");
+          expect(plain()).toContain("MODEL_B");
+        } else {
+          expect(chat().children).toHaveLength(0);
+          const hot = initial.map((line) => line.replace("MODEL_A", "MODEL_B"));
+          expect(rows(startup())).toEqual(hot);
+          await app.start();
+          expect(startup().children[0]).toBeInstanceOf(ColdSnapshot);
+          expect(rows(startup())).toEqual(hot);
+          await app.finish();
+        }
+        const frozen = startup().children[0];
+        const frozenRows = rows(startup());
+        await app.command("/model MODEL_C");
+        ui.notify("POST_STARTUP_SENTINEL");
+        expect(startup().children[0]).toBe(frozen);
+        expect(rows(startup())).toEqual(frozenRows);
+        expect(plain()).toContain("MODEL_C");
+        expect(plain()).toContain("POST_STARTUP_SENTINEL");
       } finally {
         await app.close();
       }
@@ -1539,6 +1875,224 @@ describe.sequential("actual TUI transcript ownership", () => {
       await app.close();
     }
   });
+
+  it.each(["direct", "picker", "new", "clear", "fork"] as const)(
+    "retains navigation lifecycle notices after replacement via %s",
+    async (method) => {
+      const directory = await mkdtemp(join(tmpdir(), "navigation-notices-"));
+      const manager = createSessionManager({
+        cwd: "/workspace",
+        directory,
+        threads: createInMemoryHost().store.threads,
+      });
+      let current = await manager.createSession("OLD_SESSION_ID");
+      const target = await manager.createSession("TARGET_SESSION_ID");
+      let ui!: CodingAgentExtensionUi;
+      const loading = gate();
+      const release = gate();
+      const switchThread = (entry: typeof current) => {
+        current = entry;
+        ui.notify("SWITCH_NOTICE_ID");
+        return Promise.resolve();
+      };
+      const app = await fixture({
+        commands: createSessionCommands({
+          currentSession: () => current,
+          ensureApproved: async () => undefined,
+          manager,
+          onRenamed: (entry) => {
+            current = entry;
+          },
+          switchThread,
+        }),
+        currentSession: () => current,
+        onExtensionUiReady: (createUi) => {
+          ui = createUi();
+        },
+        sessionSelector: {
+          currentSessionKey: () => current.key,
+          listSessions: async () => [target],
+          switchSession: async (key) =>
+            switchThread(await manager.switchToSession(key)),
+          loadCurrentHistory: async () => {
+            ui.notify("LOAD_NOTICE_ID");
+            loading.resolve();
+            await release.promise;
+            return method === "new" || method === "clear"
+              ? []
+              : [
+                  { role: "user", content: "REPLAY_USER_ID" },
+                  { role: "assistant", content: "REPLAY_ANSWER_ID" },
+                ];
+          },
+        },
+      });
+      try {
+        await app.start();
+        await app.emit({
+          type: "assistant-output-delta",
+          text: "OLD_ANSWER_ID",
+        });
+        await app.finish();
+        const before = prefix();
+        const beforeRows = rows();
+        const owner = chat() as TranscriptOwner;
+        const epoch = owner.epoch;
+        const oldSignal = owner.signal;
+        oldSignal.addEventListener(
+          "abort",
+          () => ui.notify("RESET_NOTICE_ID"),
+          { once: true }
+        );
+        let completed: Promise<void>;
+        if (method === "picker") {
+          await onRender(
+            () =>
+              (surface().children.at(-1) as Container).children[0] instanceof
+              SessionSelectorComponent,
+            () => send("/resume\r")
+          );
+          ui.notify("PICKER_NOTICE_ID");
+          expect(plain()).toContain("PICKER_NOTICE_ID");
+          completed = idle();
+          send("\r");
+        } else {
+          completed = app.command(
+            method === "direct"
+              ? "/resume TARGET_SESSION_ID"
+              : `/${method} NEXT_SESSION_ID`
+          );
+        }
+        await bounded(loading.promise);
+        const duringLoad = plain();
+        release.resolve();
+        await completed;
+        const output = plain();
+        expect(output).toContain("SWITCH_NOTICE_ID");
+        expect(output).toContain("LOAD_NOTICE_ID");
+        expect(output).toContain("RESET_NOTICE_ID");
+        expect(duringLoad).not.toContain("SWITCH_NOTICE_ID");
+        expect(duringLoad).not.toContain("LOAD_NOTICE_ID");
+        expect(owner.epoch).toBe(epoch + 1);
+        expect(oldSignal.aborted).toBe(true);
+        for (const { component, lines } of before) {
+          expect(rows(component)).toEqual(lines);
+          expect(chat().children).not.toContain(component);
+        }
+        expect(beforeRows.join("\n")).toContain("OLD_ANSWER_ID");
+        expect(output).not.toContain("OLD_ANSWER_ID");
+        expect(output).not.toContain("PICKER_NOTICE_ID");
+        const historyEnd =
+          method === "new" || method === "clear"
+            ? -1
+            : output.indexOf("REPLAY_ANSWER_ID");
+        expect(output.indexOf("SWITCH_NOTICE_ID")).toBeGreaterThan(historyEnd);
+        if (method === "direct" || method === "picker") {
+          expect(output.indexOf("SWITCH_NOTICE_ID")).toBeGreaterThan(
+            output.indexOf("TARGET_SESSION_ID")
+          );
+        }
+        expect(output.indexOf("LOAD_NOTICE_ID")).toBeGreaterThan(
+          output.indexOf("SWITCH_NOTICE_ID")
+        );
+        expect(output.indexOf("RESET_NOTICE_ID")).toBeGreaterThan(
+          output.indexOf("LOAD_NOTICE_ID")
+        );
+        ui.notify("AFTER_NAVIGATION_ID");
+        expect(plain()).toContain("AFTER_NAVIGATION_ID");
+      } finally {
+        release.resolve();
+        await app.close();
+        await rm(directory, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it.each(["switch", "load", "success"] as const)(
+    "keeps startup HOT until navigation settles with %s and releases its notice buffer",
+    async (result) => {
+      let ui!: CodingAgentExtensionUi;
+      const reached = gate();
+      const release = gate();
+      const app = await fixture({
+        onExtensionUiReady: (createUi) => {
+          ui = createUi();
+        },
+        commands: [
+          {
+            name: "navigate",
+            description: "fixture",
+            execute: async (input) => {
+              input.onSessionNavigation?.();
+              ui.notify("NAVIGATION_NOTICE_ID");
+              reached.resolve();
+              await release.promise;
+              if (result === "switch") {
+                throw new Error("SWITCH_FAILURE_ID");
+              }
+              return {
+                success: true,
+                action: { type: "session", clear: true },
+              };
+            },
+          },
+          {
+            name: "ordinary",
+            description: "fixture",
+            execute: () => {
+              ui.notify("ORDINARY_NOTICE_ID");
+              expect(plain()).toContain("ORDINARY_NOTICE_ID");
+              return { success: true };
+            },
+          },
+        ],
+        sessionSelector: {
+          currentSessionKey: () => "target",
+          listSessions: async () => [],
+          switchSession: async () => undefined,
+          loadCurrentHistory: () => {
+            ui.notify("LOAD_NOTICE_ID");
+            return result === "load"
+              ? Promise.reject(new Error("LOAD_FAILURE_ID"))
+              : Promise.resolve([{ role: "assistant", content: "REPLAY_ID" }]);
+          },
+        },
+      });
+      try {
+        const header = surface().children[0] as Container;
+        const owner = chat() as TranscriptOwner;
+        const epoch = owner.epoch;
+        const command = app.command("/navigate");
+        await bounded(reached.promise);
+        const frozenDuringNavigation =
+          header.children[0] instanceof ColdSnapshot;
+        const beforeInstall = rows();
+        const epochBeforeInstall = owner.epoch;
+        release.resolve();
+        await command;
+        expect(frozenDuringNavigation).toBe(false);
+        expect(beforeInstall).toEqual([]);
+        expect(epochBeforeInstall).toBe(epoch);
+        expect(owner.epoch).toBe(epoch + (result === "success" ? 1 : 0));
+        expect(plain().split("NAVIGATION_NOTICE_ID")).toHaveLength(2);
+        if (result === "success") {
+          expect(plain().indexOf("NAVIGATION_NOTICE_ID")).toBeGreaterThan(
+            plain().indexOf("REPLAY_ID")
+          );
+        } else {
+          expect(plain()).toContain(
+            result === "switch" ? "SWITCH_FAILURE_ID" : "LOAD_FAILURE_ID"
+          );
+        }
+        await app.command("/ordinary");
+        ui.notify("AFTER_FAILURE_ID");
+        expect(plain()).toContain("AFTER_FAILURE_ID");
+      } finally {
+        release.resolve();
+        await app.close();
+      }
+    }
+  );
 
   it.each(["direct", "picker"] as const)(
     "appends one COLD background block after replay through actual %s resume navigation",
@@ -2576,6 +3130,108 @@ describe.sequential("actual TUI transcript ownership", () => {
       }
     }
   );
+
+  it.each(["direct", "command"] as const)(
+    "clears the retry countdown immediately on %s active-turn reset",
+    async (reset) => {
+      let ui!: CodingAgentExtensionUi;
+      const app = await fixture({
+        onExtensionUiReady: (create) => {
+          ui = create();
+        },
+        commands: [
+          {
+            name: "new",
+            description: "fixture",
+            allowDuringActiveTurn: true,
+            execute: () => ({
+              success: true,
+              message: "RETRY_RESET_DONE",
+              action: { type: "session", clear: true },
+            }),
+          },
+        ],
+        sessionSelector: {
+          currentSessionKey: () => "new",
+          listSessions: async () => [],
+          switchSession: async () => undefined,
+          loadCurrentHistory: async () => [],
+        },
+      });
+      try {
+        await app.start();
+        const composer = surface().children[3] as Container;
+        const footer = composer.children[1] as FooterStatusBar;
+        const baseMessage = footer.getForegroundMessage();
+        const intervals = vi.spyOn(globalThis, "setInterval");
+        const clearInterval = vi.spyOn(globalThis, "clearInterval");
+        vi.spyOn(Date, "now").mockReturnValue(10_000);
+        const scheduled = {
+          type: "model-retry",
+          phase: "scheduled",
+          attempt: 1,
+          attemptId: "old-step",
+          delayMs: 4000,
+          remainingRetries: 2,
+          retryAt: 14_000,
+        };
+        await app.emit(scheduled);
+        expect(footer.getForegroundMessage()).toBe(
+          retryWaitMessage({ ...scheduled, remainingMs: 4000 })
+        );
+        const tickerIndex = intervals.mock.calls.findIndex(
+          ([, delay]) => delay === 1000
+        );
+        expect(tickerIndex).toBeGreaterThanOrEqual(0);
+        const ticker = intervals.mock.results[tickerIndex].value;
+
+        if (reset === "direct") {
+          (chat() as TranscriptOwner).reset("session-navigation");
+        } else {
+          await onRender(
+            () => plain().includes("RETRY_RESET_DONE"),
+            () => send("/new\r")
+          );
+        }
+        // The source is still blocked: cleanup cannot depend on another event.
+        expect(app.returned).not.toHaveBeenCalled();
+        expect(clearInterval).toHaveBeenCalledWith(ticker);
+        expect(footer.getForegroundMessage()).toBe(baseMessage);
+
+        const clear = ui.status("NEW_EPOCH_STATUS");
+        vi.advanceTimersByTime(5000);
+        expect(footer.getForegroundMessage()).toBe("NEW_EPOCH_STATUS");
+        clear();
+        expect(footer.getForegroundMessage()).toBe(baseMessage);
+
+        ui.status("NEW_EPOCH_STATUS");
+        const ready = idle();
+        await app.emit(scheduled);
+        await ready;
+        expect(app.returned).toHaveBeenCalledTimes(1);
+        expect(footer.getForegroundMessage()).toBe("NEW_EPOCH_STATUS");
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
+  it("does not clear an unrelated foreground label on a reset without retry", async () => {
+    const app = await fixture();
+    try {
+      await app.start();
+      await app.emit({ type: "assistant-reasoning-delta", text: "REASONING" });
+      const composer = surface().children[3] as Container;
+      const footer = composer.children[1] as FooterStatusBar;
+      const message = footer.getForegroundMessage();
+      const publish = vi.spyOn(footer, "setForegroundMessage");
+      (chat() as TranscriptOwner).reset("session-navigation");
+      expect(publish).not.toHaveBeenCalled();
+      expect(footer.getForegroundMessage()).toBe(message);
+    } finally {
+      await app.close();
+    }
+  });
 
   it("ignores an old stream after an explicit active-turn reset and cancels old prompts/status", async () => {
     let ui!: CodingAgentExtensionUi;

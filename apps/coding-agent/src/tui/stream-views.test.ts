@@ -4,6 +4,7 @@ import {
   visibleWidth,
 } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
+import type { AssistantRendererContext } from "./assistant-renderer";
 import { renderColdContent } from "./cold-content";
 import { AssistantStreamView } from "./stream-views";
 import { TranscriptOwner } from "./transcript-owner";
@@ -26,6 +27,43 @@ const markdownTheme: MarkdownTheme = {
 };
 
 describe("AssistantStreamView terminal safety", () => {
+  it("publishes notifications after mounting each update but before append returns", () => {
+    const observed: { message: string; rows: string[] }[] = [];
+    let context!: AssistantRendererContext;
+    let text = "";
+    const view = new AssistantStreamView(markdownTheme, {
+      assistantRenderer: (ctx) => {
+        context = ctx;
+        ctx.notify("FACTORY");
+        return {
+          invalidate: () => undefined,
+          render: () => [text],
+          setText: (value) => {
+            ctx.notify("SET_TEXT");
+            text = value;
+          },
+        };
+      },
+      notify: (message) => observed.push({ message, rows: view.render(80) }),
+    });
+    view.appendText("FIRST");
+    expect(observed).toEqual([
+      { message: "FACTORY", rows: ["FIRST"] },
+      { message: "SET_TEXT", rows: ["FIRST"] },
+    ]);
+    view.appendText("_SECOND");
+    expect(observed.at(-1)).toEqual({
+      message: "SET_TEXT",
+      rows: ["FIRST_SECOND"],
+    });
+    context.notify("OUTSIDE_UPDATE");
+    expect(observed.at(-1)).toEqual({
+      message: "OUTSIDE_UPDATE",
+      rows: ["FIRST_SECOND"],
+    });
+    view.dispose();
+  });
+
   it("uses an extension-provided assistant text renderer", () => {
     let renderedText = "";
     const view = new AssistantStreamView(markdownTheme, {

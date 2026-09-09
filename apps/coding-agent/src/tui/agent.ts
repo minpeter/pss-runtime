@@ -580,16 +580,9 @@ const createStreamViewFactories = (options: {
           const view = new AssistantStreamView(options.markdownTheme, {
             assistantRenderer: options.assistantRenderer,
             foregroundColor: options.foregroundColor,
-            notify: (message) => {
-              if (permission.active) {
-                options.notifyAssistantRenderer(message);
-              }
-            },
-            notifyOnce: (key, message) => {
-              if (permission.active) {
-                options.notifyAssistantRendererOnce(key, message);
-              }
-            },
+            isActive: () => permission.active,
+            notify: options.notifyAssistantRenderer,
+            notifyOnce: options.notifyAssistantRendererOnce,
             requestRender: () => {
               if (permission.active) {
                 options.requestRender();
@@ -875,9 +868,38 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     pulseStyle: (message) => style(`${ANSI_BG_WHITE}${ANSI_BLACK}`, message),
     requestRender: () => tui.requestRender(),
   });
+  let initializing = true;
+  let navigationNotices: { text: string; key?: "model-change" }[] | undefined;
+  const beginSessionNavigation = (): void => {
+    navigationNotices ??= [];
+  };
+  const flushNavigationNotices = (): void => {
+    const pending = navigationNotices;
+    navigationNotices = undefined;
+    for (const { text, key } of pending ?? []) {
+      repeatedNotice.show(text, key);
+    }
+  };
   const showSystemMessage = (message: string, key?: "model-change"): void => {
     // Sanitize before either style is applied, including repeated custom notices.
-    repeatedNotice.show(sanitizeTerminalText(message).trimEnd(), key);
+    const text = sanitizeTerminalText(message).trimEnd();
+    if (initializing && !startupHeaderFrozen) {
+      // Activation/setup notices belong to startup, not the transcript that
+      // initial replay replaces. Keep them visible and HOT with the header
+      // until replay (or later output) actually appends a different block.
+      if (text) {
+        headerContainer.addChild(new Text(style(ANSI_GRAY, text), 1, 0));
+        tui.requestRender();
+      }
+      return;
+    }
+    if (navigationNotices === undefined) {
+      repeatedNotice.show(text, key);
+    } else {
+      // Do not acquire a lease in the outgoing epoch. Replay/reset may emit
+      // notices too; drain only after replacement history and resume content.
+      navigationNotices.push({ text, key });
+    }
   };
   const clearChat = (reason: "initial-replay" | "session-navigation"): void => {
     repeatedNotice.reset();
@@ -967,6 +989,32 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
 
   let currentSubtitle = config.header?.subtitle;
   let currentSession = config.currentSession?.();
+  const isModelOnlyHeaderChange = (
+    nextSubtitle: string | undefined,
+    previousSubtitle: string | undefined,
+    sessionChanged: boolean
+  ): boolean => {
+    const previousLines = (previousSubtitle ?? "").split("\n");
+    const nextLines = (nextSubtitle ?? "").split("\n");
+    return (
+      !sessionChanged &&
+      nextSubtitle !== previousSubtitle &&
+      previousLines.slice(1).join("\n") === nextLines.slice(1).join("\n") &&
+      config.modelSelector?.currentModelId() === nextLines[0]
+    );
+  };
+  const showHeaderChange = (modelOnly: boolean): void => {
+    if (modelOnly) {
+      showModelChange(
+        `Model changed to ${config.modelSelector?.currentModelId()}.`
+      );
+      return;
+    }
+    const subtitle = sanitizeTerminalText(config.header?.subtitle ?? "");
+    if (subtitle) {
+      showSystemMessage(`Current session/model:\n${subtitle}`);
+    }
+  };
   const refreshCurrentStatus = (
     reason?: "model-change" | "new" | "resume"
   ): void => {
@@ -974,6 +1022,11 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     const sessionChanged = nextSession?.key !== currentSession?.key;
     const titleChanged =
       !sessionChanged && nextSession?.name !== currentSession?.name;
+    const modelOnlyHeaderChange = isModelOnlyHeaderChange(
+      config.header?.subtitle,
+      currentSubtitle,
+      sessionChanged
+    );
     if (titleChanged && nextSession?.name !== undefined) {
       const name = sanitizeTerminalText(
         nextSession.name,
@@ -984,10 +1037,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
       (sessionChanged || config.header?.subtitle !== currentSubtitle) &&
       reason === undefined
     ) {
-      const subtitle = sanitizeTerminalText(config.header?.subtitle ?? "");
-      if (subtitle) {
-        showSystemMessage(`Current session/model:\n${subtitle}`);
-      }
+      showHeaderChange(modelOnlyHeaderChange);
     }
     currentSubtitle = config.header?.subtitle;
     currentSession = nextSession === undefined ? undefined : { ...nextSession };
@@ -1342,6 +1392,14 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
         tui.requestRender();
       },
     });
+    const retrySignal = AbortSignal.any([
+      transcript.signal,
+      extensionUiController.signal,
+    ]);
+    // Reset can run inside another command's busy context while this stream
+    // awaits an event. Clear the countdown in its own turn's context now.
+    const clearRetry = AsyncLocalStorage.bind(retryStatus.clear);
+    retrySignal.addEventListener("abort", clearRetry, { once: true });
 
     const state: PiTuiStreamState = {
       flags,
@@ -1381,6 +1439,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     } finally {
       // Turn end, abort, and error all land here: never leave a countdown
       // ticking or a stale wait banner behind for the next step or thread.
+      retrySignal.removeEventListener("abort", clearRetry);
       retryStatus.clear();
       retryStatus.stop();
       try {
@@ -1534,9 +1593,9 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
       if (turnEpoch !== chatContainer.epoch || session.closed) {
         return;
       }
-      // A terminal error already explains the interruption. Do not append a
-      // second notice or treat an aborted stream as completed generation.
-      if (aborted && sawError) {
+      // A terminal error already explains the failure. Do not append a
+      // second notice or treat a failed stream as completed generation.
+      if (sawError) {
         return;
       }
       if (session.wasInterrupted(run)) {
@@ -1600,7 +1659,10 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     }
 
     return await busy.run("Working...", () =>
-      command.execute({ args: parsed.args })
+      command.execute({
+        args: parsed.args,
+        onSessionNavigation: beginSessionNavigation,
+      })
     );
   };
 
@@ -1838,6 +1900,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
       return;
     }
     try {
+      beginSessionNavigation();
       await busy.run("Switching session...", async () => {
         await renderSessionHistory(
           await resumeSessionReplayParts(selectorConfig, selection)
@@ -1930,6 +1993,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     action: Extract<TuiCommandAction, { type: "session" }>
   ): Promise<void> => {
     if (action.clear) {
+      beginSessionNavigation();
       clearStatus();
       try {
         await renderSessionHistory();
@@ -1984,8 +2048,14 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
         return true;
       }
 
-      const commandResult = await executeLocalCommand(commandInput);
-      await handleCommandResult(commandResult);
+      try {
+        const commandResult = await executeLocalCommand(commandInput);
+        await handleCommandResult(commandResult);
+      } finally {
+        // Failed navigation keeps the old transcript, but its notices must
+        // still be delivered and the next command must not inherit a buffer.
+        flushNavigationNotices();
+      }
       return true;
     });
 
@@ -2228,6 +2298,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     if (config.replayHistoryOnStartup === true) {
       await renderSessionHistory(undefined, "initial-replay");
     }
+    initializing = false;
     refreshCurrentStatus();
 
     while (!session.closed) {

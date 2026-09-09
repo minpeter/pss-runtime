@@ -42,6 +42,7 @@ interface AssistantStreamSegment {
 interface AssistantStreamViewOptions {
   readonly assistantRenderer?: AssistantRenderer;
   readonly foregroundColor?: string;
+  readonly isActive?: () => boolean;
   readonly notify?: (message: string) => void;
   readonly notifyOnce?: (key: string, message: string) => void;
   readonly requestRender?: () => void;
@@ -56,6 +57,7 @@ export class AssistantStreamView extends Container {
   private readonly markdownTheme: MarkdownTheme;
   private readonly notify: (message: string) => void;
   private readonly notifyOnce: (key: string, message: string) => void;
+  private pendingNotifications: (() => void)[] | undefined;
   private readonly requestRender: () => void;
   private readonly segments: AssistantStreamSegment[] = [];
   private readonly signal: AbortSignal;
@@ -75,15 +77,21 @@ export class AssistantStreamView extends Container {
     const notify = options.notify ?? ignoreNotification;
     const notifyOnce = options.notifyOnce ?? ignoreNotificationOnce;
     const requestRender = options.requestRender ?? ignoreRenderRequest;
-    this.notify = (message) => {
-      if (!this.signal.aborted) {
-        notify(message);
+    const publish = (notification: () => void): void => {
+      if (this.signal.aborted || options.isActive?.() === false) {
+        return;
+      }
+      if (this.pendingNotifications) {
+        this.pendingNotifications.push(notification);
+      } else {
+        notification();
       }
     };
+    this.notify = (message) => {
+      publish(() => notify(message));
+    };
     this.notifyOnce = (key, message) => {
-      if (!this.signal.aborted) {
-        notifyOnce(key, message);
-      }
+      publish(() => notifyOnce(key, message));
     };
     this.requestRender = () => {
       if (!this.signal.aborted) {
@@ -127,6 +135,26 @@ export class AssistantStreamView extends Container {
   }
 
   private appendSegment(
+    type: AssistantStreamSegment["type"],
+    delta: string
+  ): void {
+    const notifications: (() => void)[] = [];
+    this.pendingNotifications = notifications;
+    try {
+      this.updateSegment(type, delta);
+    } finally {
+      this.pendingNotifications = undefined;
+    }
+    // A synchronous notice can seal/dispose this lease. Publish only after the
+    // segment and its current text are mounted, still before append returns.
+    // Admission was checked at the call site: handoff by the first notice must
+    // not discard other notices already accepted during this same update.
+    for (const notification of notifications) {
+      notification();
+    }
+  }
+
+  private updateSegment(
     type: AssistantStreamSegment["type"],
     delta: string
   ): void {
