@@ -113,12 +113,17 @@ export function coversTopLevelDir(entries, dir) {
   });
 }
 
+// These gitignored dependency/build/report outputs are not source areas.
+// Keep this explicit rather than listing only tracked paths: a new, untracked
+// source directory must still require ownership before it is committed.
+const GENERATED_DIRS = new Set(["node_modules", "dist", "coverage", "report"]);
+
 export function topLevelSourceDirs(root = ".") {
   return readdirSync(root, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .filter((name) => name === ".github" || !name.startsWith("."))
-    .filter((name) => name !== "node_modules");
+    .filter((name) => !GENERATED_DIRS.has(name));
 }
 
 export function findEnforcementClaims(files) {
