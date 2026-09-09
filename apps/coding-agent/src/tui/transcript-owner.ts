@@ -72,10 +72,13 @@ export class TranscriptOwner extends Container {
   #reservationWidth: number | undefined;
   #height = 0;
   readonly #width: () => number;
+  readonly #beforeAppend: (() => void) | undefined;
 
-  constructor(width: () => number) {
+  /** Hand off any preceding live region at the output append boundary. */
+  constructor(width: () => number, beforeAppend?: () => void) {
     super();
     this.#width = width;
+    this.#beforeAppend = beforeAppend;
   }
   get epoch(): number {
     return this.#epoch;
@@ -101,6 +104,7 @@ export class TranscriptOwner extends Container {
 
   /** One-shot appends are immediately COLD. No caller can bypass handoff. */
   override addChild(component: Component): void {
+    this.#beforeAppend?.();
     this.finish();
     super.addChild(ColdSnapshot.capture(component, this.#width()));
   }
@@ -116,6 +120,7 @@ export class TranscriptOwner extends Container {
       settle?: (view: T) => void;
     } = {}
   ): TranscriptLease<T> {
+    this.#beforeAppend?.();
     this.finish();
     const controller = new AbortController();
     const epoch = this.#epoch;

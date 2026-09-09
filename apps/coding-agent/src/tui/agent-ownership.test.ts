@@ -69,6 +69,7 @@ vi.mock("@earendil-works/pi-tui", async (importOriginal) => {
 });
 
 import { type AgentTUIConfig, createAgentTUI } from "./agent";
+import { ComposerEditor } from "./composer-editor";
 import { composerHeightBudget } from "./composer-height";
 import { createModelCommand } from "./model-command";
 import { ModelSelectorComponent } from "./model-selector";
@@ -197,6 +198,7 @@ async function fixture(extra: Partial<AgentTUIConfig> = {}) {
   const started = gate();
   const steered = gate();
   const ready = idle();
+  const interrupt = vi.fn(source.end);
   const run = createAgentTUI({
     ...extra,
     thread: {
@@ -208,13 +210,14 @@ async function fixture(extra: Partial<AgentTUIConfig> = {}) {
         steered.resolve();
         return Promise.resolve(source.run);
       },
-      interrupt: source.end,
+      interrupt,
     },
   });
   await ready;
   let active = false;
   return {
     ...source,
+    interrupt,
     async start() {
       active = true;
       send("USER\r");
@@ -256,7 +259,487 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+const CONTINUATION_BG = "\x1b[100m";
+const continuationBlocks = () =>
+  chat().children.filter((component) =>
+    stripTerminalSequences(rows(component).join("\n")).includes("Continuing")
+  );
+
 describe.sequential("actual TUI transcript ownership", () => {
+  it("keeps startup HOT until the first content block, including model feedback", async () => {
+    vi.useFakeTimers();
+    let current = "MODEL_A";
+    const models = {
+      currentModelId: () => current,
+      listModelIds: async () => ["MODEL_A", "MODEL_B", "MODEL_C"],
+      switchModel: (id: string) => {
+        current = id;
+      },
+    };
+    const app = await fixture({
+      header: { title: "LOGO_SENTINEL", subtitle: "MODEL_A\n/CWD_SENTINEL" },
+      commands: [createModelCommand(models)],
+      modelSelector: models,
+    });
+    const startup = () => surface().children[0] as Container;
+    try {
+      expect(
+        startup().children.some((child) => child instanceof ColdSnapshot)
+      ).toBe(false);
+      expect(chat().children).toHaveLength(0);
+      const initial = rows(startup());
+      await app.command("/model MODEL_B");
+      expect(
+        startup().children.some((child) => child instanceof ColdSnapshot)
+      ).toBe(false);
+      expect(chat().children).toHaveLength(0);
+      expect(rows(startup())).toHaveLength(initial.length);
+      vi.advanceTimersByTime(NOTICE_PULSE_MS);
+      const hot = rows(startup());
+      expect(hot).toEqual(
+        initial.map((line) => line.replace("MODEL_A", "MODEL_B"))
+      );
+      expect(hot.join("\n")).toContain("MODEL_B");
+      await app.start();
+      expect(startup().children).toHaveLength(1);
+      expect(startup().children[0]).toBeInstanceOf(ColdSnapshot);
+      expect(rows(startup())).toEqual(hot);
+      const frozen = startup().children[0];
+      await app.finish();
+      const cold = prefix();
+      await app.command("/model MODEL_C");
+      expect(startup().children[0]).toBe(frozen);
+      expect(rows(startup())).toEqual(hot);
+      unchanged(cold);
+      expect(plain()).toContain("MODEL_C");
+      expect(plain()).not.toContain("MODEL_B");
+      expect(chat().children.at(-1)).not.toBeInstanceOf(ColdSnapshot);
+      expect(plain().split("MODEL_C")).toHaveLength(2);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it.each(["initial", "completed"] as const)(
+    "shows the empty-input notice when %s with no continuation",
+    async (state) => {
+      const users: string[] = [];
+      const complete = (): AgentTurn => ({
+        async *events() {
+          yield await Promise.resolve({
+            type: "assistant-output-delta" as const,
+            text: "COMPLETED_ANSWER",
+          });
+        },
+      });
+      const resume = vi.fn(async () => undefined);
+      const ready = idle();
+      const run = createAgentTUI({
+        thread: {
+          send: (text) => {
+            users.push(text);
+            return Promise.resolve(complete());
+          },
+          steer: async () => complete(),
+          continue: resume,
+          interrupt: () => undefined,
+        },
+      });
+      try {
+        await ready;
+        if (state === "completed") {
+          const settled = idle();
+          send("ORIGINAL_USER\r");
+          await settled;
+          expect(plain()).toContain("COMPLETED_ANSWER");
+        }
+        const before = prefix();
+        const settled = idle();
+        send("\r");
+        await settled;
+        expect(plain()).toContain("Please enter a message.");
+        expect(resume).toHaveBeenCalledOnce();
+        expect(continuationBlocks()).toHaveLength(0);
+        expect(users).toEqual(state === "completed" ? ["ORIGINAL_USER"] : []);
+        unchanged(before);
+      } finally {
+        process.emit("SIGINT", "SIGINT");
+        process.emit("SIGINT", "SIGINT");
+        await bounded(run);
+      }
+    }
+  );
+
+  it("ignores busy empty Enter during accepted continuation without a notice", async () => {
+    const source = stream();
+    const admitted = gate<AgentTurn | undefined>();
+    const requested = gate();
+    const resume = vi.fn(() => {
+      requested.resolve();
+      return admitted.promise;
+    });
+    const ready = idle();
+    const run = createAgentTUI({
+      thread: {
+        send: vi.fn(),
+        steer: vi.fn(),
+        continue: resume,
+        interrupt: source.end,
+      },
+    });
+    try {
+      await ready;
+      send("\r");
+      await bounded(requested.promise);
+      send("\r\r");
+      expect(plain()).toBe("");
+      await onRender(
+        () => continuationBlocks().length === 1,
+        () => admitted.resolve(source.run)
+      );
+      expect((surface().children[0] as Container).children[0]).toBeInstanceOf(
+        ColdSnapshot
+      );
+      await source.emit({
+        type: "assistant-output-delta",
+        text: "LIVE_ANSWER",
+      });
+      const before = rows();
+      send("\r\r");
+      expect(rows()).toEqual(before);
+      expect(plain()).not.toContain("Please enter a message.");
+      expect(resume).toHaveBeenCalledOnce();
+      expect(continuationBlocks()).toHaveLength(1);
+      const settled = idle();
+      source.end();
+      await settled;
+      expect(plain()).not.toContain("Please enter a message.");
+    } finally {
+      admitted.resolve(source.run);
+      source.end();
+      process.emit("SIGINT", "SIGINT");
+      process.emit("SIGINT", "SIGINT");
+      await bounded(run);
+    }
+  });
+
+  it("renders one padded COLD continuation card and none for idle empty Enter", async () => {
+    let checkpoint = false;
+    const users: string[] = [];
+    const turn = (): AgentTurn => ({
+      async *events() {
+        checkpoint = true;
+        yield await Promise.resolve({
+          type: "turn-error" as const,
+          message: "fixture provider failure",
+        });
+      },
+    });
+    const ready = idle();
+    const run = createAgentTUI({
+      thread: {
+        send: (text) => {
+          users.push(String(text));
+          return Promise.resolve(turn());
+        },
+        steer: async () => turn(),
+        continue: async () => (checkpoint ? turn() : undefined),
+        interrupt: () => undefined,
+      },
+    });
+    await ready;
+    try {
+      let settled = idle();
+      send("\r");
+      await settled;
+      expect(continuationBlocks()).toHaveLength(0);
+      expect(plain()).toContain("Please enter a message.");
+
+      settled = idle();
+      send("hi\r");
+      await settled;
+      expect(continuationBlocks()).toHaveLength(0);
+
+      settled = idle();
+      send("\r");
+      await settled;
+      const blocks = continuationBlocks();
+      expect(blocks).toHaveLength(1);
+      const block = blocks[0];
+      expect(block).toBeInstanceOf(ColdSnapshot);
+      const index = chat().children.indexOf(block);
+      expect(
+        stripTerminalSequences(rows(chat().children[index - 1]).join("\n"))
+      ).toBe("");
+      for (const width of [24, 48, 100]) {
+        const rendered = rows(block, width);
+        expect(rendered.length).toBe(width >= 48 ? 3 : 4);
+        expect(rendered.every((line) => visibleWidth(line) === width)).toBe(
+          true
+        );
+        expect(rendered.every((line) => line.includes(CONTINUATION_BG))).toBe(
+          true
+        );
+        for (const line of rendered) {
+          for (const span of line.split("\x1b[0m").slice(1)) {
+            expect(span === "" || span.startsWith(CONTINUATION_BG)).toBe(true);
+          }
+        }
+        const text = rendered.map((line) => stripTerminalSequences(line));
+        expect(text[0].trim()).toBe("");
+        expect(text.at(-1)?.trim()).toBe("");
+        expect(text[1]).toContain("Continuing");
+        expect(text.join("\n")).not.toMatch(BLOCK_BORDER);
+      }
+      expect(rows(block).join("\n")).toContain("\x1b[97m\x1b[1m");
+      expect(users).toEqual(["hi"]);
+    } finally {
+      process.emit("SIGINT", "SIGINT");
+      process.emit("SIGINT", "SIGINT");
+      await bounded(run);
+    }
+  });
+
+  it.each(["success", "failure"] as const)(
+    "keeps exactly one continuation card per accepted continue on %s",
+    async (outcome) => {
+      let checkpoint = false;
+      let continues = 0;
+      const failure = (): AgentTurn => ({
+        async *events() {
+          checkpoint = true;
+          yield await Promise.resolve({
+            type: "turn-error" as const,
+            message: "fixture provider failure",
+          });
+        },
+      });
+      const continued = (): AgentTurn => ({
+        async *events() {
+          checkpoint = outcome === "failure";
+          yield await Promise.resolve(
+            outcome === "failure"
+              ? { type: "turn-error" as const, message: "still failing" }
+              : {
+                  type: "assistant-output-delta" as const,
+                  text: "CONTINUED_ANSWER",
+                }
+          );
+        },
+      });
+      const ready = idle();
+      const run = createAgentTUI({
+        thread: {
+          send: () => Promise.resolve(failure()),
+          steer: () => Promise.resolve(failure()),
+          continue: () => {
+            if (!checkpoint) {
+              return Promise.resolve(undefined);
+            }
+            continues += 1;
+            return Promise.resolve(continued());
+          },
+          interrupt: () => undefined,
+        },
+      });
+      await ready;
+      try {
+        let settled = idle();
+        send("hi\r");
+        await settled;
+
+        settled = idle();
+        send("\r");
+        await settled;
+        expect(continues).toBe(1);
+        expect(continuationBlocks()).toHaveLength(1);
+        expect(plain()).not.toContain("Please enter a message.");
+
+        settled = idle();
+        send("\r");
+        await settled;
+        expect(continues).toBe(outcome === "failure" ? 2 : 1);
+        expect(continuationBlocks()).toHaveLength(
+          outcome === "failure" ? 2 : 1
+        );
+        if (outcome === "success") {
+          expect(plain()).toContain("CONTINUED_ANSWER");
+          expect(plain()).toContain("Please enter a message.");
+        } else {
+          expect(plain()).not.toContain("Please enter a message.");
+        }
+      } finally {
+        process.emit("SIGINT", "SIGINT");
+        process.emit("SIGINT", "SIGINT");
+        await bounded(run);
+      }
+    }
+  );
+
+  it.each([false, true])(
+    "preserves idle failed continuation with Escape (already continued: %s)",
+    async (continued) => {
+      let checkpoint = false;
+      let requests = 0;
+      const users: string[] = [];
+      const failedRun = (): AgentTurn => ({
+        async *events() {
+          requests += 1;
+          checkpoint = true;
+          yield await Promise.resolve({
+            type: "turn-error" as const,
+            message: "fixture provider failure",
+          });
+        },
+      });
+      const ready = idle();
+      const run = createAgentTUI({
+        thread: {
+          send: (text) => {
+            users.push(String(text));
+            return Promise.resolve(failedRun());
+          },
+          steer: async () => failedRun(),
+          continue: async () => (checkpoint ? failedRun() : undefined),
+          interrupt: () => {
+            checkpoint = false;
+          },
+        },
+      });
+      await ready;
+      try {
+        let settled = idle();
+        send("hi\r");
+        await settled;
+        if (continued) {
+          settled = idle();
+          send("\r");
+          await settled;
+        }
+        expect(checkpoint).toBe(true);
+        terminal.send("\x1b");
+        terminal.send("\x1b");
+        expect(checkpoint).toBe(true);
+        settled = idle();
+        send("\r");
+        await settled;
+        expect(requests).toBe(continued ? 3 : 2);
+        expect(users).toEqual(["hi"]);
+      } finally {
+        process.emit("SIGINT", "SIGINT");
+        process.emit("SIGINT", "SIGINT");
+        await bounded(run);
+      }
+    }
+  );
+
+  it("lets autocomplete own Escape and keeps subsequent idle Escape harmless", async () => {
+    const app = await fixture();
+    const composer = surface().children.at(-1) as Container;
+    const editor = composer.children[0] as ComposerEditor;
+    editor.setAutocompleteProvider({
+      getSuggestions: async () => ({
+        prefix: "/",
+        items: [{ value: "item", label: "item" }],
+      }),
+      applyCompletion: () => ({ lines: ["item"], cursorLine: 0, cursorCol: 4 }),
+    });
+    try {
+      await onRender(
+        () => editor.isShowingAutocomplete(),
+        () => terminal.send("/")
+      );
+      terminal.send("\x1b");
+      expect(editor.isShowingAutocomplete()).toBe(false);
+      expect(editor.getText()).toBe("/");
+      expect(app.interrupt).not.toHaveBeenCalled();
+      terminal.send("\x1b");
+      expect(app.interrupt).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it.each(["model", "session"] as const)(
+    "leaves focused %s picker Escape to the picker",
+    async (kind) => {
+      const selected = vi.fn();
+      const app = await fixture({
+        commands: [
+          {
+            name: "picker",
+            description: "fixture",
+            execute: () => ({
+              success: true,
+              action: {
+                type: kind === "model" ? "select-model" : "select-session",
+              },
+            }),
+          },
+        ],
+        modelSelector: {
+          currentModelId: () => "one",
+          listModelIds: async () => ["one", "two"],
+          switchModel: selected,
+        },
+        sessionSelector: {
+          currentSessionKey: () => "one",
+          listSessions: async () => [
+            {
+              key: "one",
+              name: "one",
+              cwd: "/tmp",
+              createdAt: "",
+              updatedAt: "",
+            },
+          ],
+          loadCurrentHistory: async () => [],
+          switchSession: selected,
+        },
+      });
+      try {
+        const composer = surface().children.at(-1) as Container;
+        await onRender(
+          () =>
+            composer.children[0] instanceof
+            (kind === "model"
+              ? ModelSelectorComponent
+              : SessionSelectorComponent),
+          () => send("/picker\r")
+        );
+        const ready = idle();
+        terminal.send("\x1b");
+        await ready;
+        expect(composer.children[0]).toBeInstanceOf(ComposerEditor);
+        expect(selected).not.toHaveBeenCalled();
+        expect(app.interrupt).not.toHaveBeenCalled();
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
+  it("leaves extension prompt Escape and literal arrow parsing intact", async () => {
+    let ui!: CodingAgentExtensionUi;
+    const app = await fixture({
+      onExtensionUiReady: (create) => {
+        ui = create();
+      },
+    });
+    try {
+      const prompt = ui.input({ label: "fixture" });
+      terminal.send("\x1b");
+      await expect(bounded(prompt)).resolves.toBeUndefined();
+      expect(app.interrupt).not.toHaveBeenCalled();
+      terminal.send("\x1b[D");
+      terminal.send("\x1b[27;1:3u");
+      terminal.send("\x1b[27;1:2u");
+      expect(app.interrupt).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
   it.each(["model", "session"] as const)(
     "enforces the complete %s cap through actual resize dispatch",
     async (kind) => {
@@ -502,7 +985,7 @@ describe.sequential("actual TUI transcript ownership", () => {
   );
 
   it.each(["direct", "picker"] as const)(
-    "updates the initial model through %s without a notice and retains session notices",
+    "updates the initial HOT model through %s without a notice and retains session notices",
     async (method) => {
       let current = "MODEL_A";
       const cwd = "/CWD_SENTINEL";
@@ -553,13 +1036,10 @@ describe.sequential("actual TUI transcript ownership", () => {
         expect(
           stripTerminalSequences(rows(surface().children[0]).join("\n"))
         ).toContain("MODEL_B");
-        const notice = plain()
-          .split("\n")
-          .filter((line) => line.trim());
-        expect(notice).toHaveLength(0);
-        expect(rows(surface().children[0]).join("\n")).toContain("MODEL_B");
-        expect(plain()).not.toContain("Model changed to MODEL_B");
-        expect(plain()).not.toContain(cwd);
+        expect(chat().children).toHaveLength(0);
+        expect(
+          stripTerminalSequences(rows(surface().children[0]).join("\n"))
+        ).toContain(cwd);
         expect(
           stripTerminalSequences(rows(surface().children.at(-1)).join("\n"))
         ).toContain("FOOTER_B");
@@ -745,7 +1225,7 @@ describe.sequential("actual TUI transcript ownership", () => {
         expect(models.switchModel).not.toHaveBeenCalled();
         expect(headerRows()).toEqual(initial);
         await choose("MODEL_B");
-        expect(plain().trim()).toBe("");
+        expect(chat().children).toHaveLength(0);
         const settled = initial.map((line) =>
           line.replace("MODEL_A", "MODEL_B")
         );
@@ -844,6 +1324,7 @@ describe.sequential("actual TUI transcript ownership", () => {
       expect(rows(surface().children[0]).join("\n")).toContain(
         "\x1b[47m\x1b[30mMODEL_B"
       );
+      expect(chat().children).toHaveLength(0);
       expect(vi.getTimerCount()).toBe(1);
     } finally {
       await app.close();
@@ -856,6 +1337,83 @@ describe.sequential("actual TUI transcript ownership", () => {
     expect(rows(surface().children[0])).toEqual(final);
     expect(render).not.toHaveBeenCalled();
   });
+
+  it.each(["empty", "assistant", "tool"] as const)(
+    "freezes startup only when %s replay appends actual content",
+    async (kind) => {
+      let current = "MODEL_A";
+      const models = {
+        currentModelId: () => current,
+        listModelIds: async () => ["MODEL_A", "MODEL_B", "MODEL_C"],
+        switchModel: (id: string) => {
+          current = id;
+        },
+      };
+      const app = await fixture({
+        header: { title: "LOGO_SENTINEL", subtitle: "MODEL_A\n/CWD_SENTINEL" },
+        modelSelector: models,
+        commands: [
+          createModelCommand(models),
+          {
+            name: "replay",
+            description: "fixture",
+            execute: () => ({
+              success: true,
+              action: { type: "session", clear: true },
+            }),
+          },
+        ],
+        sessionSelector: {
+          currentSessionKey: () => "fixture",
+          listSessions: async () => [],
+          switchSession: async () => undefined,
+          loadCurrentHistory: () => {
+            if (kind === "empty") {
+              return Promise.resolve([]);
+            }
+            return Promise.resolve([
+              {
+                role: "assistant",
+                content:
+                  kind === "assistant"
+                    ? "ANSWER_SENTINEL"
+                    : [
+                        {
+                          type: "tool-call",
+                          toolCallId: "TOOL_SENTINEL",
+                          toolName: "fixture",
+                          input: {},
+                        },
+                      ],
+              },
+            ]);
+          },
+        },
+      });
+      try {
+        await app.command("/model MODEL_B");
+        await app.command("/replay");
+        const header = surface().children[0] as Container;
+        expect(header.children[0] instanceof ColdSnapshot).toBe(
+          kind !== "empty"
+        );
+        const before = rows(header);
+        if (kind !== "empty") {
+          expect(before.join("\n")).toContain("MODEL_B");
+        }
+        await app.command("/model MODEL_C");
+        if (kind === "empty") {
+          expect(chat().children).toHaveLength(0);
+          expect(rows(header).join("\n")).toContain("MODEL_C");
+        } else {
+          expect(rows(header)).toEqual(before);
+          expect(plain()).toContain("MODEL_C");
+        }
+      } finally {
+        await app.close();
+      }
+    }
+  );
 
   it("freezes the startup model after actual startup history replay before any send", async () => {
     const header = { title: "LOGO_SENTINEL", subtitle: "MODEL_A\n/CWD" };
@@ -1190,11 +1748,16 @@ describe.sequential("actual TUI transcript ownership", () => {
       }
       return original(fn, ms, ...args);
     }) as typeof setTimeout);
-    const app = await fixture();
+    let ui!: CodingAgentExtensionUi;
+    const app = await fixture({
+      onExtensionUiReady: (createUi) => {
+        ui = createUi();
+      },
+    });
     try {
-      await app.command("");
+      ui.notify("NOTICE_ID");
       const normal = rows();
-      await app.command("");
+      ui.notify("NOTICE_ID");
       expect(rows()).not.toEqual(normal);
       await app.start();
       const cold = prefix();

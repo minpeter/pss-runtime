@@ -3,6 +3,7 @@ import type {
   ModelStepOutput,
   ModelStepResult,
 } from "../../llm/model-step-types";
+import { takeStoppedModelStep } from "../../llm/stopped-model-step";
 import type { RuntimeToolExecutionContext } from "../../llm/tool-execution-types";
 import type {
   AgentEvent,
@@ -48,7 +49,11 @@ export async function readModelOutput({
       toolExecution,
     });
   } catch (error) {
-    if (signal.aborted) {
+    const stopped = takeStoppedModelStep(error);
+    if (stopped) {
+      for (const message of stopped.messages) {
+        history.appendModelMessage(message);
+      }
       return "aborted";
     }
 
@@ -119,12 +124,12 @@ async function appendStepOutput({
     }
   };
 
+  // Publish the validated step before asynchronous boundaries: cancellation
+  // must not split a tool call from its corresponding result.
   for (const message of output) {
-    if (signal.aborted) {
-      return "aborted";
-    }
-
     history.appendModelMessage(message);
+  }
+  for (const message of output) {
     const events = modelMessageToAgentEvents(message);
     const hasToolResult = events.some((event) => event.type === "tool-result");
 

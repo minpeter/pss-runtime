@@ -20,11 +20,14 @@ import {
   commitThreadStateAndEvents,
   createDurableThreadEventRecorder,
 } from "./thread-event-log";
+import { QueuedInputRecoveryError } from "./turn-error";
+import { normalizeTurnError } from "./turn-error-metadata";
 import { emitTurnEvent } from "./turn-events";
 import { createTurnModelTransforms } from "./turn-model-transforms";
 import type { ProcessQueuedInputOptions } from "./turn-processor-options";
 import { closeTurnWithDurableTerminalEvent } from "./turn-terminal";
-import { isTurnTransitionConflictError } from "./turn-transition-conflict-predicate";
+
+export type QueuedInputOutcome = "processed" | "blocked";
 
 export async function processQueuedInput({
   activate,
@@ -36,7 +39,7 @@ export async function processQueuedInput({
   release,
   threadKey,
   state,
-}: ProcessQueuedInputOptions): Promise<void> {
+}: ProcessQueuedInputOptions): Promise<QueuedInputOutcome> {
   const activeAbort = new AbortController();
   const {
     durableInputClaim,
@@ -57,6 +60,7 @@ export async function processQueuedInput({
   const historySnapshot = state.modelSnapshot();
   const meterCheckpoint = model.contextTokenMeter?.checkpoint();
   let executionRun: ThreadExecutionRun | undefined;
+  let executionStarted = false;
   let pendingDurableInputClaim = durableInputClaim;
   const { buffer: durableEvents, record: recordEvent } =
     createDurableThreadEventRecorder();
@@ -78,12 +82,19 @@ export async function processQueuedInput({
       state,
       turnId,
     });
-    for (const event of item.initialEvents) {
-      const processed = await events.emitRunEvent(run, event);
-      if (processed !== "handled") {
-        recordEvent(processed);
-      }
+    executionStarted = true;
+    if (
+      !(await activateContinuation(
+        item,
+        state,
+        executionRun,
+        activeAbort.signal
+      ))
+    ) {
+      return "processed";
     }
+    resolveQueuedInputRecovery(item, state);
+    await emitInitialEvents(item, events, recordEvent);
     const committedPreUser = await commitPreUserRuntimeInputs(
       events,
       state,
@@ -218,10 +229,17 @@ export async function processQueuedInput({
         transformModelContext,
       });
     }
+    return "processed";
   } catch (error) {
-    if (isTurnTransitionConflictError(error) && !executionRun) {
-      throw error;
+    if (!executionStarted) {
+      // Start never acquired execution authority. Do not persist history or
+      // terminalize a record that may already belong to another worker.
+      emitStartFailure(item, error);
+      return "blocked";
     }
+    const blocked =
+      pendingDurableInputClaim !== undefined ||
+      error instanceof QueuedInputRecoveryError;
     pendingDurableInputClaim = await recoverQueuedInputFailure({
       durableEvents,
       error,
@@ -236,6 +254,7 @@ export async function processQueuedInput({
       state,
       threadKey,
     });
+    return blocked ? "blocked" : "processed";
   } finally {
     await releasePendingDurableThreadInputClaim({
       executionHost: execution.executionHost,
@@ -246,5 +265,75 @@ export async function processQueuedInput({
       },
       record: pendingDurableInputClaim,
     });
+  }
+}
+
+async function activateContinuation(
+  item: ProcessQueuedInputOptions["item"],
+  state: ProcessQueuedInputOptions["state"],
+  executionRun: ThreadExecutionRun | undefined,
+  signal: AbortSignal
+): Promise<boolean> {
+  if (item.continuation && !signal.aborted) {
+    await state.refresh();
+  }
+  if (
+    signal.aborted ||
+    (item.continuation && !state.applyContinuationCheckpoint(item.continuation))
+  ) {
+    await executionRun?.complete("cancelled");
+    item.run.emit({ type: "turn-abort" });
+    return false;
+  }
+  return true;
+}
+
+function emitStartFailure(
+  item: ProcessQueuedInputOptions["item"],
+  error: unknown
+): void {
+  const normalized = normalizeTurnError(error);
+  item.run.emit({
+    type: "turn-error",
+    message: normalized.message ?? "Turn could not start.",
+    ...(normalized.error === undefined ? {} : { error: normalized.error }),
+  });
+}
+
+function resolveQueuedInputRecovery(
+  item: ProcessQueuedInputOptions["item"],
+  state: ProcessQueuedInputOptions["state"]
+): void {
+  if (item.continuation) {
+    return;
+  }
+  const checkpoint = state.continuationCheckpoint();
+  if (checkpoint?.recover) {
+    // Recovery is deliberately evaluated at execution time, after the run has
+    // authority. A throwing recovery closure fences every canonical route,
+    // while a resolved closure supplies the repaired history before input is
+    // appended or runtime notification inputs are emitted.
+    try {
+      state.rollback(checkpoint.recover());
+      state.clearContinuationCheckpoint();
+    } catch (error) {
+      throw new QueuedInputRecoveryError(error, checkpoint);
+    }
+  }
+  if (item.input || item.durableInputClaim) {
+    state.clearContinuationCheckpoint();
+  }
+}
+
+async function emitInitialEvents(
+  item: ProcessQueuedInputOptions["item"],
+  events: ProcessQueuedInputOptions["events"],
+  recordEvent: (event: import("../protocol/events").AgentEvent) => void
+): Promise<void> {
+  for (const event of item.initialEvents) {
+    const processed = await events.emitRunEvent(item.run, event);
+    if (processed !== "handled") {
+      recordEvent(processed);
+    }
   }
 }

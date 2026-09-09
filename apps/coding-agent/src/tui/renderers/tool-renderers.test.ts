@@ -1,4 +1,7 @@
-import type { MarkdownTheme } from "@earendil-works/pi-tui";
+import {
+  type MarkdownTheme,
+  stripTerminalSequences,
+} from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
 import { BaseToolCallView } from "../tool-call-view";
 import { createToolRenderers } from "./tool-renderers";
@@ -51,6 +54,10 @@ const createView = (
 
 const renderText = (view: BaseToolCallView): string =>
   view.render(120).join("\n");
+
+/** Streamed source is syntax-highlighted, so assert on the visible glyphs. */
+const renderPlainText = (view: BaseToolCallView): string =>
+  view.render(120).map(stripTerminalSequences).join("\n");
 
 describe("createToolRenderers — workspace tools", () => {
   it("read_file renders a bold header and a syntax-highlighted body without anchors", () => {
@@ -459,10 +466,10 @@ describe("progressive tool arguments", () => {
       } else {
         await view.appendInputChunk(full.slice(0, full.indexOf("LATER")));
       }
-      expect(renderText(view)).toContain('EARLY "quote"');
-      expect(renderText(view)).not.toContain("\\n");
+      expect(renderPlainText(view)).toContain('EARLY "quote"');
+      expect(renderPlainText(view)).not.toContain("\\n");
       await view.appendInputChunk(full.slice(full.indexOf("LATER")));
-      const lines = view.render(120);
+      const lines = view.render(120).map(stripTerminalSequences);
       expect(lines.some((line) => line.includes("LATER 한글 café 😀"))).toBe(
         true
       );

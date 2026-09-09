@@ -7,25 +7,15 @@ import {
 } from "./file";
 import { formatGrepMatches } from "./grep-format";
 import {
+  formatGlobHeader,
+  formatGrepHeader,
+  formatShellHeader,
   isRecord,
   normalizedLines,
   renderToolError,
   stringField,
   strippedLines,
 } from "./utils";
-
-const MAX_SINGLE_LINE = 200;
-
-const toSingleLine = (value: string): string =>
-  value.replace(/\s+/g, " ").trim();
-
-const truncateMiddle = (text: string, maxLength: number): string => {
-  if (text.length <= maxLength) {
-    return text;
-  }
-  const half = Math.max(1, Math.floor((maxLength - 3) / 2));
-  return `${text.slice(0, half)}...${text.slice(text.length - half)}`;
-};
 
 const renderGlobFiles = (
   view: BaseToolCallView,
@@ -43,8 +33,7 @@ const renderGlobFiles = (
     return;
   }
 
-  const path = stringField(input, "path");
-  const header = `**glob** \`${pattern}\`${path ? ` (path: ${path})` : ""}`;
+  const header = formatGlobHeader(pattern, input);
 
   if (typeof output !== "string" || output.length === 0) {
     view.setPrettyBlock(header, "");
@@ -73,18 +62,7 @@ const renderGrepFiles = (
     return;
   }
 
-  const context: string[] = [];
-  const path = stringField(input, "path");
-  if (path) {
-    context.push(`path: ${path}`);
-  }
-  const include = stringField(input, "include");
-  if (include) {
-    context.push(`include: ${include}`);
-  }
-  const header = `**grep** \`${pattern}\`${
-    context.length > 0 ? ` (${context.join(", ")})` : ""
-  }`;
+  const header = formatGrepHeader(pattern, input);
 
   if (typeof output !== "string" || output.length === 0) {
     view.setPrettyBlock(header, "");
@@ -114,10 +92,8 @@ const renderShellExecute = (
     return;
   }
 
-  const displayCommand = truncateMiddle(toSingleLine(command), MAX_SINGLE_LINE);
-
   if (typeof output !== "string" || output.length === 0) {
-    view.setPrettyBlock(`**bash** \`${displayCommand}\``, "");
+    view.setPrettyBlock(formatShellHeader(command), "");
     return;
   }
 
@@ -136,7 +112,7 @@ const renderShellExecute = (
   const body = lines.slice(4).join("\n");
 
   view.setPrettyBlock(
-    `**bash** \`${displayCommand}\`${headerSuffix}`,
+    `${formatShellHeader(command)}${headerSuffix}`,
     body.trim() ? body : "(No output)",
     { isError: isErrorOutput }
   );

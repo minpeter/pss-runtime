@@ -3,10 +3,10 @@ import type { Text } from "@earendil-works/pi-tui";
 /**
  * Reuse-and-pulse behaviour for immediately repeated TUI system notices.
  *
- * A user who presses Enter on an empty composer twice gets no new information
- * from a second identical row, only a taller transcript. Instead the already
- * visible row is briefly re-rendered inverted and then restored, which reads as
- * "yes, still the same notice" without growing the transcript.
+ * Repeated system notices briefly invert the already visible row and then
+ * restore it, acknowledging the repeat without growing the transcript. Empty
+ * composer Enter resumes eligible stopped work; when no continuation is
+ * accepted, its empty-input notice uses the same repeat-and-pulse behavior.
  *
  * MATCHING SCOPE — deliberately narrow:
  *

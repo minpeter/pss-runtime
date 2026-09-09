@@ -10,6 +10,31 @@ const text = (owner: Container, width = 80) =>
   stripTerminalSequences(owner.render(width).join("\n"));
 
 describe("single transcript owner", () => {
+  it.each(["one-shot", "lease"] as const)(
+    "hands off the preceding live region only when appending a %s block",
+    (kind) => {
+      const handoff = vi.fn(() => {
+        expect(owner.children).toHaveLength(0);
+      });
+      const owner = new TranscriptOwner(() => 80, handoff);
+      owner.render(80);
+      owner.finish();
+      owner.reset("initial-replay");
+      expect(handoff).not.toHaveBeenCalled();
+      const view = new Text("CONTENT_SENTINEL", 0, 0);
+      if (kind === "one-shot") {
+        owner.addChild(view);
+      } else {
+        owner.acquire(() => {
+          expect(handoff).toHaveBeenCalledOnce();
+          return view;
+        });
+      }
+      expect(handoff).toHaveBeenCalledOnce();
+      expect(text(owner)).toContain("CONTENT_SENTINEL");
+    }
+  );
+
   it("settles, snapshots, revokes, detaches and disposes before unrelated append", () => {
     const owner = new TranscriptOwner(() => 80);
     const order: string[] = [];

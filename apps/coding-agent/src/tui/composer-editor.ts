@@ -1,4 +1,5 @@
 import {
+  type AutocompleteProvider,
   CURSOR_MARKER,
   Editor,
   stripTerminalSequences,
@@ -13,6 +14,29 @@ import { composerHeightBudget } from "./composer-height";
 const BORDER = "\x00composer-border\x00";
 
 export class ComposerEditor extends Editor {
+  private completionProvider?: AutocompleteProvider;
+
+  override setAutocompleteProvider(provider: AutocompleteProvider): void {
+    this.completionProvider = provider;
+    super.setAutocompleteProvider(provider);
+  }
+
+  override handleInput(data: string): void {
+    const before = this.getText();
+    super.handleInput(data);
+    // pi-tui's kill/undo paths leave the old menu mounted; character deletion
+    // refreshes it asynchronously. Revoke both the menu and pending requests
+    // at the edit boundary, before another key can accept a stale completion.
+    // An unchanged blank buffer (notably explicit Tab completion) keeps its menu.
+    if (
+      this.completionProvider &&
+      this.getText() !== before &&
+      this.getText().trim().length === 0
+    ) {
+      super.setAutocompleteProvider(this.completionProvider);
+    }
+  }
+
   override render(width: number): string[] {
     const borderColor = this.borderColor;
     const focused = this.focused;
