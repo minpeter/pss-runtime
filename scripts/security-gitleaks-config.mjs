@@ -2,7 +2,9 @@
 // Unsupported syntax fails closed; description text is never parsed as fields.
 export const GITLEAKS_CONFIG_PATH = ".gitleaks.toml";
 const CATCH_ALL = /^\^?\s*\.\s*[*+]\s*\$?$/;
-const SPECIFIC_LITERAL = /[A-Za-z]{4,}/;
+// Only the reviewed ellipsis assignment may suppress findings globally.
+// A literal word in an arbitrary regex does not bound what it can match.
+const PLACEHOLDER_REGEX = String.raw`^[A-Z0-9_]+(API_KEY|TOKEN|SECRET)=\.\.\.$`;
 const EXACT_VALUE = /^\^[A-Za-z0-9_]+\$$/;
 const EXACT_PATH = /^\^(?:[A-Za-z0-9_/-]|\\[.-])+\$$/;
 const FULL_COMMIT = /^[a-f0-9]{40}$/;
@@ -218,9 +220,9 @@ function regexProblems(regexes) {
     if (CATCH_ALL.test(regex)) {
       return [`allowlist regex "${regex}" is a catch-all suppression`];
     }
-    if (!SPECIFIC_LITERAL.test(regex)) {
+    if (regex !== PLACEHOLDER_REGEX) {
       return [
-        `allowlist regex "${regex}" carries no specific literal; broad suppressions are not allowed`,
+        `allowlist regex "${regex}" is not the reviewed placeholder pattern; broad suppressions are not allowed`,
       ];
     }
     return [];

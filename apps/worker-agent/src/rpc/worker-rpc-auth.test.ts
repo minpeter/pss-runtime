@@ -133,6 +133,54 @@ describe("worker tRPC auth contract", () => {
     });
   });
 
+  describe("batching", () => {
+    it.each([1, 8, 256])(
+      "bounds unauthenticated unknown-procedure batch responses at %d calls",
+      async (count) => {
+        const paths = Array.from(
+          { length: count },
+          (_, index) => `unknown-${index}`
+        );
+        const input = Object.fromEntries(
+          paths.map((_, index) => [index, { json: {} }])
+        );
+        const response = await handleWorkerRpcRequest(
+          new Request(
+            `${WORKER_URL}/trpc/${paths.join(",")}?batch=1&input=${encodeURIComponent(
+              JSON.stringify(input)
+            )}`
+          ),
+          createEnv()
+        );
+
+        expect(response.status).toBe(400);
+        expect(Buffer.byteLength(await response.text())).toBeLessThanOrEqual(
+          512
+        );
+      }
+    );
+
+    it("still accepts a valid single request", async () => {
+      const response = await handleWorkerRpcRequest(
+        new Request(`${WORKER_URL}/trpc/tui.turn`, {
+          body: JSON.stringify(VALID_INPUTS.tuiTurn),
+          headers: {
+            authorization: `Bearer ${AUTH_TOKEN}`,
+            "content-type": "application/json",
+          },
+          method: "POST",
+        }),
+        {
+          ...createEnv(),
+          ENVIRONMENT: "production",
+          WORKER_AGENT_TUI_TOKEN: AUTH_TOKEN,
+        }
+      );
+
+      expect(response.status).toBe(200);
+    });
+  });
+
   describe("production with a configured token", () => {
     beforeEach(() => {
       envOverrides = {
