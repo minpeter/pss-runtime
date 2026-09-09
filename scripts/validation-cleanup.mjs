@@ -18,6 +18,7 @@ export const VALIDATOR_PROCESS_MARKERS = [
   "wrangler",
   "workerd",
   "dev:recorder",
+  "loopback-recorder",
   "web-terminal-visual-qa",
   "preview-assistant-render",
 ];

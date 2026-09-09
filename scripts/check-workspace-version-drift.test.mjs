@@ -76,7 +76,7 @@ describe("check:workspace-drift wrapper", () => {
   it("is wired to the root check:workspace-drift script (VAL-SEC-010)", () => {
     const manifest = JSON.parse(readFileSync("package.json", "utf8"));
     expect(manifest.scripts["check:workspace-drift"]).toBe(
-      "node scripts/check-workspace-version-drift.mjs"
+      "node scripts/check-workspace-version-drift.mjs --check"
     );
   });
 
@@ -92,6 +92,19 @@ describe("check:workspace-drift wrapper", () => {
     expect(result.stderr).toContain("2.0.0");
     expect(result.stderr).toContain("apps/a");
     expect(result.stderr).toContain("apps/b");
+  });
+
+  it("detects optional dependency drift across manifest fields", () => {
+    const dir = fixtureDir();
+    writeWorkspace(dir, {
+      "apps/a": { name: "a", dependencies: { zod: "4.0.0" } },
+      "apps/b": { name: "b", optionalDependencies: { zod: "3.0.0" } },
+    });
+    const result = check(dir, writeBaselineFixture(dir, []));
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "MISMATCH zod: 3.0.0 [apps/b] vs 4.0.0 [apps/a]"
+    );
   });
 
   it("GATE exits 0 with no mismatch lines on a consistent fixture (VAL-SEC-012)", () => {

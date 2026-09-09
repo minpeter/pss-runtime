@@ -66,9 +66,31 @@ if (!(args.out && args["tui-token"])) {
   console.error("missing required --out and --tui-token arguments");
   process.exit(2);
 }
+// Validate before writing evidence or passing a token to curl. Accept only
+// the documented local Worker origin, never credentials or URL suffixes.
+let base;
+try {
+  const url = new URL(args.base);
+  if (
+    url.protocol !== "http:" ||
+    url.hostname !== "127.0.0.1" ||
+    url.port !== "8792" ||
+    url.username ||
+    url.password ||
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error("invalid local Worker origin");
+  }
+  base = url.origin;
+} catch {
+  console.error(
+    "--base must be http://127.0.0.1:8792 with no credentials, path, query, or fragment"
+  );
+  process.exit(2);
+}
 mkdirSync(args.out, { recursive: true });
-
-const base = args.base;
 const bearer = ["-H", `Authorization: Bearer ${args["tui-token"]}`];
 const wrongBearer = ["-H", `Authorization: Bearer ${SENTINELS.bearer}`];
 const json = ["-H", "content-type: application/json"];
@@ -265,7 +287,10 @@ for (const [name, expected, curlArgs] of PROBES) {
   const run = spawnSync(
     "curl",
     [
+      "--disable",
       "-sS",
+      "--noproxy",
+      "*",
       "--max-time",
       "10",
       "-o",

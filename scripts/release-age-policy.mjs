@@ -150,6 +150,12 @@ export function resolveExcludes(entries, lockIndex) {
     const pinnedHits = parsed.versions.filter((version) =>
       matches.some((match) => match.version === version)
     );
+    if (parsed.versions.length > 0 && pinnedHits.length === 0) {
+      problems.push(
+        `minimumReleaseAgeExclude entry "${entry}" resolves to no pinned version in pnpm-lock.yaml`
+      );
+      continue;
+    }
     resolutions.push({ entry, matches, pinnedHits });
   }
   return { problems, resolutions };

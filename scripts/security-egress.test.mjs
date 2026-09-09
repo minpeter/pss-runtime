@@ -134,6 +134,16 @@ describe("no external egress: workflow rules (VAL-SEC-040)", () => {
     expect(problems.some((p) => p.includes("api.telegram.org"))).toBe(true);
   });
 
+  it("fails on a scheme-less external host", () => {
+    const problems = problemsOf([
+      [
+        ".github/workflows/ci.yml",
+        ciLikeWorkflow("      - run: curl //status.example.com/health\\n"),
+      ],
+    ]);
+    expect(problems.some((p) => p.includes("status.example.com"))).toBe(true);
+  });
+
   it("fails on an unknown non-loopback host and on a non-loopback bind", () => {
     const problems = problemsOf([
       [

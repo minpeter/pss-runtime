@@ -76,7 +76,7 @@ describe("check:bundle-size wrapper", () => {
   it("is wired to the root check:bundle-size script (VAL-SEC-015)", () => {
     const manifest = JSON.parse(readFileSync("package.json", "utf8"));
     expect(manifest.scripts["check:bundle-size"]).toBe(
-      "node scripts/check-bundle-size.mjs"
+      "node scripts/check-bundle-size.mjs --check"
     );
   });
 
@@ -196,7 +196,9 @@ describe("check:bundle-size wrapper", () => {
     const config = JSON.parse(readFileSync(BUNDLE_BASELINE_PATH, "utf8"));
     expect(baselineProblems(config)).toEqual([]);
     const paths = Object.keys(config.artifacts);
-    expect(paths.length).toBeGreaterThan(0);
+    expect(paths).toContain("packages/runtime/dist/evals/cli.js");
+    expect(paths).toContain("packages/runtime/dist/");
+    expect(paths).toContain("apps/coding-agent/dist/");
     expect(paths.some((p) => p.startsWith("packages/runtime/dist/"))).toBe(
       true
     );

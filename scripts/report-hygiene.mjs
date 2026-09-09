@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, posix } from "node:path";
 import { REPORT_ROOTS, REPORT_TOOLS, ROOT_PROBES } from "./report-paths.mjs";
 import { parseWorkflowDocs } from "./workflow-docs.mjs";
 
@@ -167,8 +167,8 @@ function unregisteredArtifactProblems(label, tokens, tools) {
     if (cleaned === null) {
       continue;
     }
-    const covered = artifactPaths.some(
-      (path) => cleaned.startsWith(path) || path.startsWith(cleaned)
+    const covered = artifactPaths.some((path) =>
+      uploadPathCovers(cleaned, path)
     );
     if (!covered) {
       problems.push(
@@ -213,7 +213,7 @@ export function workflowArtifactProblems(workflows, tools = REPORT_TOOLS) {
 // them to a static prefix for `git check-ignore`.
 
 // True when an upload `with.path` token covers path: exact match, directory
-// prefix, or a glob whose static prefix contains it. Shared by the
+// prefix, or a matching glob. Shared by the
 // report-hygiene CI checks and the analysis-tool producer wiring invariants
 // (test-timing, flaky detection).
 export function uploadPathCovers(token, path) {
@@ -224,7 +224,7 @@ export function uploadPathCovers(token, path) {
     return true;
   }
   if (GLOB_CHARS.test(cleaned)) {
-    return path.startsWith(cleaned.split(GLOB_CHARS)[0]);
+    return posix.matchesGlob(path, cleaned);
   }
   return path.startsWith(`${cleaned}/`);
 }

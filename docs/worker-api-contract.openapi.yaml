@@ -66,6 +66,8 @@ components:
       properties:
         id:
           type: string
+          minLength: 1
+          pattern: ".*\\S.*"
         kind:
           type: string
           enum: [tui, telegram]
@@ -90,6 +92,7 @@ components:
                   type: string
                   enum:
                     [
+                      BAD_GATEWAY,
                       BAD_REQUEST,
                       INTERNAL_SERVER_ERROR,
                       METHOD_NOT_SUPPORTED,
@@ -232,12 +235,14 @@ paths:
           description: Serialized channel address, e.g. `tui%3Alocal`.
           schema:
             type: string
+            minLength: 1
         - name: after
           in: query
           required: false
           description: Serialized thread event cursor (exclusive).
           schema:
             type: string
+            minLength: 1
             pattern: "^(0|[1-9]\\d*)$"
         - name: sessionScopeKey
           in: query
@@ -356,6 +361,8 @@ paths:
                   $ref: "#/components/schemas/ChannelAddress"
                 text:
                   type: string
+                  minLength: 1
+                  pattern: ".*\\S.*"
                 sessionScopeKey:
                   type: string
                 idempotencyKey:
@@ -405,6 +412,8 @@ paths:
                   $ref: "#/components/schemas/ChannelAddress"
                 text:
                   type: string
+                  minLength: 1
+                  pattern: ".*\\S.*"
                 sessionScopeKey:
                   type: string
               additionalProperties: false

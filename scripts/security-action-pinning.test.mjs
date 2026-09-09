@@ -59,6 +59,14 @@ describe("pinning: shipped workflows are fully SHA-pinned (VAL-SEC-038)", () => 
 });
 
 describe("pinning: unpinned references fail naming file, step, and reference", () => {
+  it("flags a flow-style action reference", () => {
+    const source =
+      "name: fixture\non: push\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps: [{ uses: actions/checkout@v4 }]\n";
+    const problems = problemsOf("fixture.yml", source);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("actions/checkout@v4");
+  });
+
   it("flags a tag-pinned checkout in a ci-style workflow", () => {
     const problems = problemsOf(
       ".github/workflows/ci.yml",

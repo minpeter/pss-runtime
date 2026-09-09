@@ -53,6 +53,21 @@ describe("codeql: workflow shape (VAL-SEC-027)", () => {
     expect(problems.some((p) => p.includes("codeql-action"))).toBe(true);
   });
 
+  it("fails when init and analyze are in different jobs", () => {
+    const source =
+      codeqlWorkflow()
+        .replace(
+          "      - uses: actions/checkout@abc123 # v7\n",
+          "      - uses: github/codeql-action/analyze@abc123 # v3\n"
+        )
+        .replace("      - uses: github/codeql-action/init@abc123 # v3\n", "") +
+      "  init:\n    steps:\n      - uses: github/codeql-action/init@abc123 # v3\n        with:\n          languages: javascript-typescript\n";
+    const problems = problemsOf(source);
+    expect(
+      problems.some((p) => p.includes("both CodeQL init and analyze"))
+    ).toBe(true);
+  });
+
   it("fails when the analyze step is missing", () => {
     const problems = problemsOf(
       codeqlWorkflow({ analyzeUses: "" }).replace("      - uses: \n", "")

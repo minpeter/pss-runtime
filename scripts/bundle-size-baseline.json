@@ -2,6 +2,7 @@
   "version": 1,
   "tolerancePercent": 5,
   "artifacts": {
+    "apps/coding-agent/dist/": 1826466,
     "apps/coding-agent/dist/cli.js": 9895,
     "apps/coding-agent/dist/env.js": 4560,
     "apps/coding-agent/dist/extensions/index.js": 786,
@@ -15,7 +16,9 @@
     "apps/coding-agent/dist/tools.js": 359,
     "apps/coding-agent/dist/tui/app.js": 23632,
     "apps/coding-agent/dist/workspace-tools/index.js": 896,
+    "packages/runtime/dist/": 2672032,
     "packages/runtime/dist/channel/index.js": 315,
+    "packages/runtime/dist/evals/cli.js": 4082,
     "packages/runtime/dist/evals/index.js": 743,
     "packages/runtime/dist/execution/index.js": 941,
     "packages/runtime/dist/fsm/index.js": 1913,

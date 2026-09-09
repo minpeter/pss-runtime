@@ -64,6 +64,17 @@ describe("gitleaks: explicit full-history scan scope (VAL-SEC-029)", () => {
     expect(problems.some((p) => p.includes("parse error"))).toBe(true);
   });
 
+  it("fails when only another job has a full-history checkout", () => {
+    const source = `${gitleaksWorkflow()}  other:\n    steps:\n      - uses: actions/checkout@abc123 # v7\n        with:\n          fetch-depth: 0\n`;
+    const problems = problemsOf(
+      source.replace(
+        "      - uses: actions/checkout@abc123 # v7\n        with:\n",
+        "      - uses: actions/checkout@abc123 # v7\n"
+      )
+    );
+    expect(problems.some((p) => p.includes("fetch-depth: 0"))).toBe(true);
+  });
+
   it("fails when the checkout is shallow (no fetch-depth: 0)", () => {
     const problems = problemsOf(gitleaksWorkflow({ fetchDepth: "" }));
     expect(problems.some((p) => p.includes("fetch-depth: 0"))).toBe(true);

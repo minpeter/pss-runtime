@@ -79,8 +79,10 @@ function permissionProblems(path, doc, scan) {
 function scopeProblems(path, entries, scan) {
   const problems = [];
   const checkout = entries.find(
-    ({ step }) =>
-      typeof step?.uses === "string" && step.uses.startsWith(CHECKOUT_ACTION)
+    ({ jobName, step }) =>
+      jobName === scan.jobName &&
+      typeof step?.uses === "string" &&
+      step.uses.startsWith(CHECKOUT_ACTION)
   );
   if (checkout?.step?.with?.["fetch-depth"] !== 0) {
     problems.push(

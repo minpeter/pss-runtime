@@ -126,6 +126,11 @@ function workflowProblems(path, doc) {
     problems.push(`${path} has no github/codeql-action/analyze step`);
     return problems;
   }
+  if (!init || init.jobName !== analyze.jobName) {
+    problems.push(
+      `${path} job "${analyze.jobName}" must contain both CodeQL init and analyze steps`
+    );
+  }
   problems.push(...permissionProblems(path, doc, analyze));
   problems.push(...visibleFailureProblems(path, analyze));
   return problems;

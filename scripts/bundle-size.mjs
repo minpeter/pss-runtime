@@ -1,4 +1,4 @@
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 // Shared bundle-budget helpers (VAL-SEC-015..019). Pure and static: no
@@ -10,9 +10,10 @@ import { join } from "node:path";
 // reviewed dist/ artifact of the two published packages — packages/runtime
 // and apps/coding-agent — to an explicit numeric byte ceiling recorded from
 // a reference build. The set covers every published `exports` entry of both
-// manifests plus the CLI entry (apps/coding-agent/dist/cli.js, loaded by
-// bin/pss.js). No baseline is implicit, wildcarded, or a runtime-computed
-// percentage: each entry is a concrete repo-relative path and an integer.
+// manifests plus both CLI entries. Trailing-slash paths budget every byte
+// under each published dist/ tree, including unbundled modules, declarations,
+// maps, and copied workers/assets. No baseline is implicit or wildcarded:
+// each entry is a concrete repo-relative path and an integer.
 //
 // Tolerance: a measured size fails the gate only when it exceeds
 // ceil(baseline * (1 + tolerancePercent / 100)). The tolerance (5%) absorbs
@@ -94,19 +95,37 @@ export function allowedBytes(baseline, tolerancePercent) {
   return Math.ceil(baseline * (1 + tolerancePercent / 100));
 }
 
-// Measure every declared artifact under root. A missing or non-file
-// artifact is never reported as zero bytes: it lands in `missing` with the
-// expected path so the caller can fail the run.
+function directoryBytes(path) {
+  let bytes = 0;
+  for (const name of readdirSync(path).sort()) {
+    const child = join(path, name);
+    const stat = statSync(child);
+    bytes += stat.isDirectory() ? directoryBytes(child) : stat.size;
+  }
+  return bytes;
+}
+
+// Trailing-slash entries aggregate whole dist trees so new emitted files
+// cannot escape measurement. Missing or empty trees fail, as do missing
+// explicitly declared entrypoints.
 export function measureArtifacts(root, paths) {
   const measured = new Map();
   const missing = [];
   for (const path of paths) {
     const full = join(root, path);
-    if (!(existsSync(full) && statSync(full).isFile())) {
+    const stat = existsSync(full) ? statSync(full) : null;
+    if (path.endsWith("/") && stat?.isDirectory()) {
+      const bytes = directoryBytes(full);
+      if (bytes > 0) {
+        measured.set(path, bytes);
+      } else {
+        missing.push(path);
+      }
+    } else if (!path.endsWith("/") && stat?.isFile()) {
+      measured.set(path, stat.size);
+    } else {
       missing.push(path);
-      continue;
     }
-    measured.set(path, statSync(full).size);
   }
   return { measured, missing };
 }

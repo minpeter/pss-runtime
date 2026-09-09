@@ -27,13 +27,15 @@ export function boundedTriggerProblems(path, doc) {
     }
   }
   // A push trigger must be bounded to the main branch, never every branch.
-  if (triggers.includes("push")) {
-    const branches = Array.isArray(doc?.on?.push?.branches)
-      ? doc.on.push.branches
-      : [];
-    if (!branches.includes("main")) {
-      problems.push(`${path} push trigger is not bounded to the main branch`);
-    }
+  if (
+    triggers.includes("push") &&
+    (!Array.isArray(doc?.on?.push?.branches) ||
+      doc.on.push.branches.length !== 1 ||
+      doc.on.push.branches[0] !== "main")
+  ) {
+    problems.push(
+      `${path} push trigger is not bounded exactly to the main branch`
+    );
   }
   return problems;
 }

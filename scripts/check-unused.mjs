@@ -134,14 +134,18 @@ function writeJson(path, value) {
 
 function writeReport(args, signatures, diff, baselineCount) {
   const capped = signatures.slice(0, REPORT_ENTRY_CAP);
-  const truncated = signatures.length > REPORT_ENTRY_CAP;
+  const truncated = [signatures, diff.newSignatures, diff.staleSignatures].some(
+    (entries) => entries.length > REPORT_ENTRY_CAP
+  );
   writeJson(args.out, {
     tool: "knip",
     baseline: args.baseline,
     totalSignatures: signatures.length,
     baselineSignatures: baselineCount,
-    newSignatures: diff.newSignatures,
-    staleSignatures: diff.staleSignatures,
+    totalNewSignatures: diff.newSignatures.length,
+    totalStaleSignatures: diff.staleSignatures.length,
+    newSignatures: diff.newSignatures.slice(0, REPORT_ENTRY_CAP),
+    staleSignatures: diff.staleSignatures.slice(0, REPORT_ENTRY_CAP),
     signatures: capped,
     truncated,
     ...(truncated && {

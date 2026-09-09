@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { parse } from "yaml";
 
 // Invariants for the Worker coverage gate (VAL-SEC-020..023): the Worker
 // package owns a coverage configuration with explicit scope and thresholds,
@@ -140,6 +141,16 @@ describe("worker coverage scope and thresholds (VAL-SEC-021)", () => {
 });
 
 describe("worker coverage isolation (VAL-SEC-023)", () => {
+  it("runs the Worker coverage gate once in CI, without ignoring failures", () => {
+    const workflow = parse(readRepoFile(".github/workflows/ci.yml"));
+    const steps = workflow.jobs.checks.steps.filter(
+      (step) =>
+        step.run === "pnpm --filter @minpeter/pss-worker-agent test:coverage"
+    );
+    expect(steps).toHaveLength(1);
+    expect(steps[0].if).toBe("matrix.node == '24'");
+    expect(steps[0]["continue-on-error"]).not.toBe(true);
+  });
   it("declares a test:coverage script that enables coverage", () => {
     const packageJson = JSON.parse(readRepoFile(WORKER_PACKAGE_PATH));
     const script = packageJson.scripts["test:coverage"];
