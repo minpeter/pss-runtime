@@ -125,7 +125,13 @@ describe("telegram ingress dry-run preview (live coalescer path)", () => {
     hoisted.logInfo.mockClear();
     hoisted.logError.mockClear();
     await handleTelegramWebhook(
-      new Request("https://worker.test/", { method: "POST" }),
+      new Request("https://worker.test/", {
+        headers: {
+          "x-telegram-bot-api-secret-token":
+            DRY_RUN_ENV.TELEGRAM_WEBHOOK_SECRET_TOKEN,
+        },
+        method: "POST",
+      }),
       DRY_RUN_ENV,
       createExecutionContext()
     );

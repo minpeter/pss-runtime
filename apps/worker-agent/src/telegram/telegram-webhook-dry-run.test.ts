@@ -84,7 +84,7 @@ function recordTelegramApi(calls: RecordedCall[]) {
   );
 }
 
-/** AGENT_DO binding that fails the test on any Durable Object interaction. */
+/** A fresh namespace also forces a cold bot cache for every test. */
 function createAgentDoProbe(): {
   readonly calls: number;
   readonly namespace: DurableObjectNamespace;
@@ -98,6 +98,10 @@ function createAgentDoProbe(): {
       get() {
         probe.calls += 1;
         throw new Error("AGENT_DO get() must not run in ingress dry-run");
+      },
+      getByName() {
+        probe.calls += 1;
+        throw new Error("AGENT_DO getByName() must not run in ingress dry-run");
       },
       idFromName(name: string) {
         probe.calls += 1;
@@ -199,7 +203,10 @@ describe("telegram webhook ingress dry-run (real adapter, recorded fetch)", () =
 
     const response = await handleTelegramWebhook(
       webhookRequest(scriptedUpdate(text), WEBHOOK_SECRET),
-      createDryRunEnv(agentDo.namespace),
+      {
+        ...createDryRunEnv(agentDo.namespace),
+        TELEGRAM_WEBHOOK_SECRET_TOKEN: ` ${WEBHOOK_SECRET} `,
+      },
       createExecutionContext(tasks)
     );
     expect(response.status).toBeLessThan(300);
@@ -248,48 +255,64 @@ describe("telegram webhook ingress dry-run (real adapter, recorded fetch)", () =
     });
   });
 
-  it("rejects a scripted update with a missing secret before any reply", async () => {
-    const calls: RecordedCall[] = [];
-    vi.stubGlobal("fetch", recordTelegramApi(calls));
-    const agentDo = createAgentDoProbe();
-    const tasks: Promise<unknown>[] = [];
+  it.each([undefined, TELEGRAM_SENTINEL_BASE])(
+    "rejects a missing secret before any egress with API base %s",
+    async (apiBaseUrl) => {
+      const calls: RecordedCall[] = [];
+      vi.stubGlobal("fetch", recordTelegramApi(calls));
+      const agentDo = createAgentDoProbe();
+      const tasks: Promise<unknown>[] = [];
 
-    const response = await handleTelegramWebhook(
-      webhookRequest(scriptedUpdate("unauthorized probe")),
-      createDryRunEnv(agentDo.namespace),
-      createExecutionContext(tasks)
-    );
+      const response = await handleTelegramWebhook(
+        webhookRequest(scriptedUpdate("unauthorized probe")),
+        {
+          ...createDryRunEnv(agentDo.namespace),
+          TELEGRAM_API_BASE_URL: apiBaseUrl,
+        },
+        createExecutionContext(tasks)
+      );
 
-    expect(response.status).toBe(401);
-    await flushIngress(tasks);
-    expect(
-      calls.filter((call) => telegramMethodOf(call.url) === SEND_MESSAGE_METHOD)
-    ).toEqual([]);
-    expect(agentDo.calls).toBe(0);
-  });
+      expect(response.status).toBe(401);
+      expect(response.headers.get("content-type")).toBe(
+        "text/plain;charset=UTF-8"
+      );
+      expect(await response.text()).toBe("Invalid secret token");
+      await flushIngress(tasks);
+      expect(calls).toEqual([]);
+      expect(tasks).toEqual([]);
+      expect(agentDo.calls).toBe(0);
+    }
+  );
 
-  it("rejects a scripted update with an incorrect secret before any reply or egress", async () => {
-    const calls: RecordedCall[] = [];
-    vi.stubGlobal("fetch", recordTelegramApi(calls));
-    const agentDo = createAgentDoProbe();
-    const tasks: Promise<unknown>[] = [];
+  it.each([undefined, TELEGRAM_SENTINEL_BASE])(
+    "rejects an incorrect secret before any egress with API base %s",
+    async (apiBaseUrl) => {
+      const calls: RecordedCall[] = [];
+      vi.stubGlobal("fetch", recordTelegramApi(calls));
+      const agentDo = createAgentDoProbe();
+      const tasks: Promise<unknown>[] = [];
 
-    const response = await handleTelegramWebhook(
-      webhookRequest(
-        scriptedUpdate("unauthorized probe"),
-        `wrong-${WEBHOOK_SECRET}`
-      ),
-      createDryRunEnv(agentDo.namespace),
-      createExecutionContext(tasks)
-    );
+      const response = await handleTelegramWebhook(
+        webhookRequest(
+          scriptedUpdate("unauthorized probe"),
+          "x".repeat(WEBHOOK_SECRET.length)
+        ),
+        {
+          ...createDryRunEnv(agentDo.namespace),
+          TELEGRAM_API_BASE_URL: apiBaseUrl,
+        },
+        createExecutionContext(tasks)
+      );
 
-    expect(response.status).toBe(401);
-    await flushIngress(tasks);
-    // The secret check is fully local: no Telegram sendMessage and no
-    // Durable Object interaction happen for a mismatched secret.
-    expect(
-      calls.filter((call) => telegramMethodOf(call.url) === SEND_MESSAGE_METHOD)
-    ).toEqual([]);
-    expect(agentDo.calls).toBe(0);
-  });
+      expect(response.status).toBe(401);
+      expect(response.headers.get("content-type")).toBe(
+        "text/plain;charset=UTF-8"
+      );
+      expect(await response.text()).toBe("Invalid secret token");
+      await flushIngress(tasks);
+      expect(calls).toEqual([]);
+      expect(tasks).toEqual([]);
+      expect(agentDo.calls).toBe(0);
+    }
+  );
 });
