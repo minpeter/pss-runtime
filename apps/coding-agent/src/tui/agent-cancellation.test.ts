@@ -45,6 +45,7 @@ vi.mock("@earendil-works/pi-tui", async (original) => {
 });
 
 import { createAgentTUI, FooterStatusBar } from "./agent";
+import { BusyStatus } from "./busy-status";
 import { ComposerEditor } from "./composer-editor";
 import { TuiSessionMachine } from "./session-state";
 import { ColdSnapshot, TranscriptOwner } from "./transcript-owner";
@@ -123,17 +124,21 @@ afterEach(() => vi.restoreAllMocks());
 
 describe.sequential("TUI cancellation terminal ownership", () => {
   it.each([
-    { continuation: true, local: false, error: false },
-    { continuation: false, local: false, error: false },
-    { continuation: true, local: true, error: false },
-    { continuation: false, local: true, error: false },
-    { continuation: true, local: false, error: true },
-    { continuation: false, local: false, error: true },
-    { continuation: true, local: true, error: true },
-    { continuation: false, local: true, error: true },
+    { continuation: true, local: false, error: false, abort: true },
+    { continuation: false, local: false, error: false, abort: true },
+    { continuation: true, local: true, error: false, abort: true },
+    { continuation: false, local: true, error: false, abort: true },
+    { continuation: true, local: false, error: true, abort: true },
+    { continuation: false, local: false, error: true, abort: true },
+    { continuation: true, local: true, error: true, abort: true },
+    { continuation: false, local: true, error: true, abort: true },
+    { continuation: true, local: false, error: true, abort: false },
+    { continuation: false, local: false, error: true, abort: false },
+    { continuation: true, local: true, error: true, abort: false },
+    { continuation: false, local: true, error: true, abort: false },
   ])(
-    "settles $continuation continuation / $local local / $error error",
-    async ({ continuation, local, error }) => {
+    "settles $continuation continuation / $local local / $error error / $abort abort",
+    async ({ continuation, local, error, abort }) => {
       const channel = new BufferedAgentTurn();
       const subscribed = gate();
       const run: AgentTurn = {
@@ -164,13 +169,16 @@ describe.sequential("TUI cancellation terminal ownership", () => {
           true
         );
         expect(footer.getForegroundMessage()).not.toBeNull();
+        const finalization = vi.spyOn(BusyStatus.prototype, "run");
         const settled = idle();
         if (local) {
           send("\x1b");
           expect(api.interrupt).toHaveBeenCalledTimes(1);
         }
         // Real runtime event channel: abort can precede a storage/settlement error.
-        await bounded(channel.emitBoundary({ type: "turn-abort" }));
+        if (abort) {
+          await bounded(channel.emitBoundary({ type: "turn-abort" }));
+        }
         expect(blocks(transcript)).toHaveLength(1);
         if (error) {
           await bounded(
@@ -184,6 +192,7 @@ describe.sequential("TUI cancellation terminal ownership", () => {
         await bounded(settled);
         expect(blocks(transcript)).toHaveLength(2);
         expect(completed).not.toHaveBeenCalled();
+        expect(finalization).not.toHaveBeenCalled();
         expect(footer.getForegroundMessage()).toBeNull();
         expect(editor.disableSubmit).toBe(false);
         expect(editor.getText()).toBe("");

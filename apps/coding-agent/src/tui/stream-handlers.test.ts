@@ -574,9 +574,28 @@ describe("isVisibleStreamPart — reasoning parts must never trigger first-visib
     ).toBe(false);
   });
 
-  it("text-start is always visible (triggers spinner clear)", () => {
+  it("text-start is invisible until a nonempty delta arrives", () => {
     expect(
       isVisibleStreamPart({ type: "text-start" } as never, FLAGS_ALL_OFF)
+    ).toBe(false);
+  });
+
+  it.each([
+    ["text-delta", ""],
+    ["text-delta", "   \n"],
+    ["reasoning-delta", "\t"],
+  ] as const)("does not treat empty %s as visible", (type, text) => {
+    expect(isVisibleStreamPart({ type, text } as never, FLAGS_ALL_ON)).toBe(
+      false
+    );
+  });
+
+  it("treats nonempty assistant text as visible", () => {
+    expect(
+      isVisibleStreamPart(
+        { text: "answer", type: "text-delta" } as never,
+        FLAGS_ALL_OFF
+      )
     ).toBe(true);
   });
 });
