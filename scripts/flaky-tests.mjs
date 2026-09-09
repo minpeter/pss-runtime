@@ -204,7 +204,6 @@ function executeRuns(args) {
         encoding: "utf8",
         maxBuffer: 64 * 1024 * 1024,
         timeout: args.timeout * 1000,
-        env: { ...process.env, TMPDIR: TMP_DIR },
       }
     );
     if (result.error) {
