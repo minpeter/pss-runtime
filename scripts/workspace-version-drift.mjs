@@ -45,6 +45,7 @@ const DEPENDENCY_FIELDS = [
   "dependencies",
   "devDependencies",
   "peerDependencies",
+  "optionalDependencies",
 ];
 
 // Workspace members come from the pnpm-workspace.yaml globs plus the root

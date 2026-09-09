@@ -63,7 +63,12 @@ cloning. The local quality gate runs entirely offline:
 - `pnpm check:unused` / `pnpm check:duplicates` — Knip unused-code and jscpd
   duplicate-code gates against reviewed baselines.
 - `pnpm check:workspace-drift` / `pnpm check:bundle-size` — workspace
-  dependency-version drift and built bundle-size budgets.
+  dependency-version drift (including optional dependencies) and built
+  bundle-size budgets for entrypoints and complete published `dist/` trees.
+  Both commands run their gates by default; build before checking bundle size.
+- Add a dated `.tegami/YYYY-MM-DD-slug.md` entry before merging each PR,
+  following the [release-note format](AGENTS.md#tegami-entries), and validate
+  it with `pnpm check:tegami-notes`.
 - `pnpm check:compatibility` / `pnpm repo:packages` — the Pi compatibility
   manifest and package-boundary/release checks.
 - `pnpm check:worker-api-contract` — the Worker OpenAPI contract against the

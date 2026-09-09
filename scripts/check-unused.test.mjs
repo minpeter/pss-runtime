@@ -118,8 +118,34 @@ describe("check:unused wrapper", () => {
     const report = JSON.parse(readFileSync(out, "utf8"));
     expect(report.totalSignatures).toBe(REPORT_ENTRY_CAP + 25);
     expect(report.signatures).toHaveLength(REPORT_ENTRY_CAP);
+    expect(report.newSignatures).toHaveLength(REPORT_ENTRY_CAP);
+    expect(report.totalNewSignatures).toBe(REPORT_ENTRY_CAP + 25);
     expect(report.truncated).toBe(true);
     expect(report.note).toContain(String(REPORT_ENTRY_CAP));
+  });
+
+  it("caps stale-only overflow and keeps the uncapped total", () => {
+    const dir = fixtureDir();
+    const stale = Array.from(
+      { length: REPORT_ENTRY_CAP + 25 },
+      (_, i) => `exports:src/old${i}.ts#removed`
+    ).sort();
+    const out = join(dir, "stale.json");
+    const result = run([
+      "--report",
+      "--input",
+      reportFixture(dir, []),
+      "--baseline",
+      baselineFixture(dir, stale),
+      "--out",
+      out,
+    ]);
+    expect(result.status, result.stderr).toBe(0);
+    const report = JSON.parse(readFileSync(out, "utf8"));
+    expect(report.signatures).toEqual([]);
+    expect(report.staleSignatures).toEqual(stale.slice(0, REPORT_ENTRY_CAP));
+    expect(report.totalStaleSignatures).toBe(stale.length);
+    expect(report.truncated).toBe(true);
   });
 
   it("emits an explicit SKIP message and exits 0 when the binary is absent (VAL-SEC-004)", () => {

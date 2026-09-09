@@ -6,8 +6,7 @@
 // a reviewed reference build, plus a documented tolerance (5% by default).
 //
 // Modes:
-//   (no args) / --help  print usage and exit 0 — the root
-//                       check:bundle-size script is the usage surface
+//   (no args) / --help  print usage and exit 0 (root script supplies --check)
 //   --check             GATE: exit non-zero when a measured artifact exceeds
 //                       its baseline by more than the tolerance, or when any
 //                       declared artifact is missing (dist not built)
@@ -46,8 +45,9 @@ Options:
   --baseline <path>    baseline file (default: ${BUNDLE_BASELINE_PATH})
   --out <path>         report output (default: ${BUNDLE_REPORT.path})
 
-Baselines are explicit numeric byte ceilings per artifact path (no wildcards,
-no runtime-computed percentages). A measured size fails only when it exceeds
+Baselines are explicit numeric byte ceilings per artifact path (no wildcards).
+Trailing-slash paths aggregate every file under a published dist tree.
+A measured size fails only when it exceeds
 ceil(baseline * (1 + tolerancePercent / 100)); the tolerance is documented in
 scripts/bundle-size.mjs. Refresh baselines from a reviewed reference build.`;
 

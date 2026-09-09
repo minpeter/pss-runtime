@@ -134,6 +134,11 @@ describe("governance: files are credential-free (VAL-GOV-062)", () => {
     expect(hits).toHaveLength(8);
   });
 
+  it("allows optional npm token names but rejects assigned values", () => {
+    expect(credentialHits("NPM_TOKEN is optional")).toEqual([]);
+    expect(credentialHits("NPM_TOKEN=present")).toHaveLength(1);
+  });
+
   it("allows documented placeholder secret names without values", () => {
     const placeholders = [
       "Set the TELEGRAM_BOT_TOKEN secret in the repository settings.",

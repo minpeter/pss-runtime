@@ -22,7 +22,7 @@ const CREDENTIAL_SECRET =
 // The credential-gated eval suites; they run only behind secret-gate, never
 // in the fast gate (no local exit-0 claim applies to them).
 const GATED_EVAL_RUN = /\beval:(?:provider|edge-remote)\b/;
-const URL_TOKEN = /https?:\/\/[^\s"'`)\]}<>]+/g;
+const URL_TOKEN = /(?:https?:)?\/\/[^\s"'`)\]}<>]+/g;
 const IPV4_LOOPBACK = /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
 
 // Non-loopback hosts any workflow may reference by default: tool and action
@@ -54,7 +54,8 @@ function urlProblems(path, location, value, gated) {
   for (const match of value.matchAll(URL_TOKEN)) {
     let host;
     try {
-      host = new URL(match[0]).hostname;
+      host = new URL(match[0].startsWith("//") ? `https:${match[0]}` : match[0])
+        .hostname;
     } catch {
       problems.push(`${path} ${location} has an unparseable URL ${match[0]}`);
       continue;

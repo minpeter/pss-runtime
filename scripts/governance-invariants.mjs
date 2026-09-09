@@ -40,7 +40,10 @@ export const SCAN_DIRS = [
 // agent-context files (VAL-GOV-062). Documented placeholder secret NAMES
 // (for example a bot-token variable name with no value) stay allowed.
 export const CREDENTIAL_PATTERNS = [
-  ["npm access token reference", /\bNPM_TOKEN\b/],
+  [
+    "npm access token reference",
+    /\bNPM_TOKEN\b\s*[:=]\s*(?:[^\s#]+|["'][^"']+["'])/,
+  ],
   ["provider API key", /\bsk-[A-Za-z0-9]{16,}/],
   [
     "GitHub token",

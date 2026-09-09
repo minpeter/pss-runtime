@@ -54,7 +54,19 @@ export function formatResult(label, elapsedSeconds, bound, result) {
   return `GATE ${label}: elapsed=${elapsedSeconds.toFixed(1)}s bound=${bound}s result=${result}`;
 }
 
-async function runGate({ bound, label, command, args }) {
+export async function runGate(
+  { bound, label, command, args },
+  platform = process.platform
+) {
+  // Windows has no POSIX process groups. Reject before spawning rather than
+  // promise a bounded tree kill that a negative PID cannot provide there.
+  if (platform === "win32") {
+    process.stderr.write(
+      "time-gate: Windows process-tree termination is unsupported\n"
+    );
+    process.exitCode = 2;
+    return;
+  }
   const started = performance.now();
   const child = spawn(command, args, {
     detached: true,
@@ -68,7 +80,10 @@ async function runGate({ bound, label, command, args }) {
     // survive the wrapper.
     try {
       process.kill(-child.pid, "SIGKILL");
-    } catch {
+    } catch (error) {
+      if (error.code !== "ESRCH") {
+        throw error;
+      }
       // The group already exited on its own.
     }
   }, bound * 1000);

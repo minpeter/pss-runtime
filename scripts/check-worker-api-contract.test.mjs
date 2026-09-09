@@ -74,6 +74,53 @@ describe("worker api contract: the committed document parses (VAL-WORKER-029)", 
   });
 });
 
+describe("worker api contract: schema constraints match Worker validators", () => {
+  it("declares nonblank channel IDs, turn text, and canonical SSE cursors", () => {
+    const raw = parseContractDocument(docText()).raw;
+    const schemas = raw.components.schemas;
+    expect(schemas.ChannelAddress.properties.id).toMatchObject({
+      minLength: 1,
+      pattern: ".*\\S.*",
+    });
+    expect(
+      raw.paths["/session/events"].get.parameters.find(
+        (parameter) => parameter.name === "channel"
+      ).schema.minLength
+    ).toBe(1);
+    expect(
+      raw.paths["/session/events"].get.parameters.find(
+        (parameter) => parameter.name === "after"
+      ).schema
+    ).toMatchObject({
+      minLength: 1,
+      pattern: "^(0|[1-9]\\d*)$",
+    });
+    expect(
+      raw.paths["/trpc/session.submitTurn"].post.requestBody.content[
+        "application/json"
+      ].schema.properties.text
+    ).toMatchObject({
+      minLength: 1,
+      pattern: ".*\\S.*",
+    });
+    expect(
+      raw.paths["/trpc/tui.turn"].post.requestBody.content["application/json"]
+        .schema.properties.text
+    ).toMatchObject({
+      minLength: 1,
+      pattern: ".*\\S.*",
+    });
+  });
+
+  it("includes BAD_GATEWAY in the documented tRPC error code enum", () => {
+    const raw = parseContractDocument(docText()).raw;
+    expect(
+      raw.components.schemas.TrpcErrorEnvelope.properties.error.properties.data
+        .properties.code.enum
+    ).toContain("BAD_GATEWAY");
+  });
+});
+
 describe("worker api contract: doc matches committed observations (VAL-WORKER-029)", () => {
   it("reports zero mismatches for the committed pair", () => {
     expect(diffContract(paths(), committed())).toEqual([]);

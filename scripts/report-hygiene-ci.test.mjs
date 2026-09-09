@@ -6,6 +6,7 @@ import {
   artifactProbePaths,
   readWorkflows,
   uncoveredPathProblems,
+  uploadPathCovers,
   workflowArtifactProblems,
 } from "./report-hygiene.mjs";
 import { reportTool } from "./report-paths.mjs";
@@ -95,6 +96,42 @@ jobs:
         "          name: timing\n          path: report/test-timing.json\n          retention-days: 7\n"
       )
     ).toEqual([]);
+  });
+
+  it.each([
+    ["report/*.json", "report/test-timing.json", true],
+    ["report/*.txt", "report/test-timing.json", false],
+    ["report/*-other.json", "report/test-timing.json", false],
+    ["report/*.json", "report/nested/test-timing.json", false],
+    ["report/**/*.json", "report/nested/test-timing.json", true],
+    ["report/{test-timing,flaky-tests}.json", "report/test-timing.json", true],
+    ["report/test-timin[gh].json", "report/test-timing.json", true],
+    ["./report/", "report/test-timing.json", true],
+    ["report/test-timing.json", "report/test-timing.json.bak", false],
+    ["!report/*.json", "report/test-timing.json", false],
+  ])("matches upload token %s against %s as %s", (token, path, expected) => {
+    expect(uploadPathCovers(token, path)).toBe(expected);
+  });
+
+  it.each(["report/test-*.json", "report/{test-timing,flaky-tests}.json"])(
+    "accepts registered artifact glob %s",
+    (path) => {
+      expect(
+        artifactProblems(
+          `          path: ${path}\n          retention-days: 7\n`
+        )
+      ).toEqual([]);
+    }
+  );
+
+  it.each([
+    "report/*.txt",
+    "report/*-other.json",
+    "report/test-timing.json.bak",
+  ])("rejects unmatched artifact token %s", (path) => {
+    expect(
+      artifactProblems(`          path: ${path}\n          retention-days: 7\n`)
+    ).toHaveLength(1);
   });
 
   it("reduces glob upload paths to gitignored static prefixes", () => {

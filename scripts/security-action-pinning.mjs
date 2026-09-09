@@ -20,7 +20,7 @@ import { parseWorkflowDocs } from "./workflow-docs.mjs";
 // One `uses:` occurrence per source line: optional list dash, the reference
 // (no whitespace or comment opener), and an optional trailing comment.
 const USES_LINE =
-  /^\s*(?:-\s*)?uses:\s*(?<ref>[^\s#]+)(?:\s+#\s*(?<comment>[^\n]*?))?\s*$/gm;
+  /(?:^\s*(?:-\s*)?uses:|[,{]\s*uses:)\s*(?<ref>[^\s,#}]+)(?:\s+#\s*(?<comment>[^\n,}]*?))?(?=\s*(?:[,}]|$))/gm;
 
 // External-action pin shape: `<owner>/<repo>[@<path>]@<40-hex-sha>`.
 const PINNED_REF = /^[^@\s]+@[0-9a-f]{40}$/;

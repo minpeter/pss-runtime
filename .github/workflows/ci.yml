@@ -135,6 +135,10 @@ jobs:
         if: matrix.node == '24'
         run: pnpm coverage
 
+      - name: Check Worker coverage
+        if: matrix.node == '24'
+        run: pnpm --filter @minpeter/pss-worker-agent test:coverage
+
       - name: Build
         run: pnpm build
 

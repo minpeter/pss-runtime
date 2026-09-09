@@ -18,7 +18,14 @@
 // propagates the failure exit code.
 
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -34,7 +41,6 @@ export const TIMING_TOOL = reportTool("test-timing");
 // reporter output, kept under the gitignored agent workspace.
 const VITEST_CLI = "node_modules/vitest/vitest.mjs";
 const TMP_DIR = resolve(".omo/tmp");
-const RAW_REPORT = resolve(TMP_DIR, "test-timing.vitest.json");
 
 // The timed suite: the deterministic scripts/*.test.mjs invariants. They are
 // offline and fast, so the producer is safe for the fast CI gate. The files
@@ -51,12 +57,12 @@ function suiteFiles() {
     .map((file) => `${SCRIPTS_DIR}/${file}`);
 }
 
-function vitestArgs() {
+function vitestArgs(rawReport) {
   return [
     "run",
     ...suiteFiles(),
     "--reporter=json",
-    `--outputFile=${RAW_REPORT}`,
+    `--outputFile=${rawReport}`,
   ];
 }
 
@@ -224,19 +230,33 @@ function main() {
     return 0;
   }
   mkdirSync(TMP_DIR, { recursive: true });
-  const result = spawnSync(process.execPath, [VITEST_CLI, ...vitestArgs()], {
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-    // Keep fixture placement identical to ordinary `pnpm test`: moving the
-    // OS temp directory into the checkout leaks ancestor AGENTS.md context
-    // and exposes copied test repositories to concurrent Vitest discovery.
-  });
+  const rawDir = mkdtempSync(resolve(TMP_DIR, "test-timing-"));
+  const rawReport = resolve(rawDir, "vitest.json");
+  try {
+    return produceTiming(args, rawReport);
+  } finally {
+    rmSync(rawDir, { recursive: true, force: true });
+  }
+}
+
+function produceTiming(args, rawReport) {
+  const result = spawnSync(
+    process.execPath,
+    [VITEST_CLI, ...vitestArgs(rawReport)],
+    {
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+      // Keep fixture placement identical to ordinary `pnpm test`: moving the
+      // OS temp directory into the checkout leaks ancestor AGENTS.md context
+      // and exposes copied test repositories to concurrent Vitest discovery.
+    }
+  );
   let vitestJson;
   try {
-    vitestJson = JSON.parse(readFileSync(RAW_REPORT, "utf8"));
+    vitestJson = JSON.parse(readFileSync(rawReport, "utf8"));
   } catch (error) {
     console.error(
-      `test:timing error: cannot parse the Vitest JSON report at ${RAW_REPORT}: ${error.message}`
+      `test:timing error: cannot parse the Vitest JSON report at ${rawReport}: ${error.message}`
     );
     return 1;
   }

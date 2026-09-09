@@ -9,10 +9,7 @@ import {
   validateMinimumReleaseAge,
 } from "./release-age-policy.mjs";
 
-// Byte-for-byte snapshot of pnpm-workspace.yaml: the packages globs,
-// autoInstallPeers: false, the overrides block, the allowBuilds block with
-// every entry, the minimumReleaseAge policy, and the exclude list. Mutating
-// any of these (including a single allowBuilds entry) fails the test.
+// Preserve parsed policy values, not YAML formatting or comment wording.
 const EXPECTED_WORKSPACE_SOURCE = `packages:
   - "apps/*"
   - "packages/*"
@@ -48,11 +45,9 @@ minimumReleaseAgeExclude:
   - '@typescript/*'
   - rolldown-plugin-dts
   - '@ai-sdk/gateway@4.0.22 || 4.0.40'
-  - '@ai-sdk/openai-compatible@3.0.11'
   - ai@7.0.30 || 7.0.51
   - '@ai-sdk/provider-utils@5.0.20 || 5.0.22'
   - '@ai-sdk/provider@4.0.5'
-  - '@ai-sdk/anthropic@4.0.32'
   - '@ai-sdk/openai@4.0.31'
 `;
 
@@ -62,11 +57,9 @@ const EXPECTED_EXCLUDES = [
   "@typescript/*",
   "rolldown-plugin-dts",
   "@ai-sdk/gateway@4.0.22 || 4.0.40",
-  "@ai-sdk/openai-compatible@3.0.11",
   "ai@7.0.30 || 7.0.51",
   "@ai-sdk/provider-utils@5.0.20 || 5.0.22",
   "@ai-sdk/provider@4.0.5",
-  "@ai-sdk/anthropic@4.0.32",
   "@ai-sdk/openai@4.0.31",
 ];
 
@@ -76,8 +69,10 @@ const workspaceSource = readFileSync("pnpm-workspace.yaml", "utf8");
 const lockfileSource = readFileSync("pnpm-lock.yaml", "utf8");
 
 describe("minimum release age policy", () => {
-  it("preserves every existing top-level setting byte-for-byte", () => {
-    expect(workspaceSource).toBe(EXPECTED_WORKSPACE_SOURCE);
+  it("preserves every declared top-level policy value", () => {
+    expect(parseWorkspaceConfig(workspaceSource)).toEqual(
+      parseWorkspaceConfig(EXPECTED_WORKSPACE_SOURCE)
+    );
   });
 
   it("declares an explicit, positive minimumReleaseAge in minutes", () => {
@@ -135,8 +130,11 @@ describe("minimum release age policy", () => {
       lockIndex
     );
     expect(problems).toEqual([]);
-    for (const { entry, matches } of resolutions) {
+    for (const { entry, matches, pinnedHits } of resolutions) {
       expect(matches.length, entry).toBeGreaterThan(0);
+      if (parseExcludeEntry(entry).versions.length > 0) {
+        expect(pinnedHits.length, entry).toBeGreaterThan(0);
+      }
     }
   });
 
@@ -148,6 +146,23 @@ describe("minimum release age policy", () => {
     expect(problems[0]).toContain("definitely-not-a-dependency@1.0.0");
     const staleGlob = resolveExcludes(["@no-such-scope/*"], lockIndex);
     expect(staleGlob.problems[0]).toContain("@no-such-scope/*");
+  });
+
+  it("rejects pins after their versions leave a still-resolved package", () => {
+    const index = new Map([["@scope/pkg", new Set(["2.0.0"])]]);
+    for (const entry of ["@scope/pkg@1.0.0", "@scope/pkg@1.0.0 || 1.1.0"]) {
+      const result = resolveExcludes([entry], index);
+      expect(result.problems).toHaveLength(1);
+      expect(result.problems[0]).toContain(entry);
+      expect(result.resolutions).toEqual([]);
+    }
+    for (const entry of [
+      "@scope/pkg",
+      "@scope/*",
+      "@scope/pkg@1.0.0 || 2.0.0",
+    ]) {
+      expect(resolveExcludes([entry], index).problems).toEqual([]);
+    }
   });
 
   it("parses ||-ranged exclusions into name plus version alternatives", () => {

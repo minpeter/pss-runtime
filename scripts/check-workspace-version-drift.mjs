@@ -5,8 +5,7 @@
 // scripts/workspace-version-drift.mjs.
 //
 // Modes:
-//   (no args) / --help  print usage and exit 0 — the root
-//                       check:workspace-drift script is the usage surface
+//   (no args) / --help  print usage and exit 0 (root script supplies --check)
 //   --check             GATE: exit non-zero on an un-baselined divergence or
 //                       a stale baseline entry; baselined divergences exit 0
 //   --report            REPORT: write a bounded JSON report and exit 0

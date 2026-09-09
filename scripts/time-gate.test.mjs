@@ -1,6 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import { afterEach, describe, expect, it } from "vitest";
+import { createFixtureScope } from "./test-fixtures.mjs";
 import { formatResult, parseArgs } from "./time-gate.mjs";
 
 // Behavioral contract for the timing wrapper (VAL-LOCAL-024). Unlike the six
@@ -9,7 +12,8 @@ import { formatResult, parseArgs } from "./time-gate.mjs";
 // are removed afterwards.
 
 const WRAPPER = "scripts/time-gate.mjs";
-const SCRATCH_DIR = ".omo/tmp/time-gate-test";
+const scope = createFixtureScope("time-gate-");
+afterEach(scope.cleanup);
 const OK_LINE = /^GATE quick: elapsed=\d+\.\ds bound=20s result=ok$/;
 
 function runGate(wrapperArgs) {
@@ -69,6 +73,26 @@ describe("time-gate argument parsing", () => {
 });
 
 describe("time-gate execution", () => {
+  it("rejects Windows before spawning an unkillable process tree", () => {
+    const output = resolve(scope.dir(), "spawned");
+    const module = pathToFileURL(resolve(WRAPPER)).href;
+    const run = spawnSync(
+      process.execPath,
+      [
+        "--input-type=module",
+        "-e",
+        `
+      import { runGate } from ${JSON.stringify(module)};
+      await runGate({ bound: 1, label: "windows", command: process.execPath,
+        args: ["-e", ${JSON.stringify(`require('node:fs').writeFileSync(${JSON.stringify(output)}, 'spawned')`)}]
+      }, "win32");
+    `,
+      ],
+      { encoding: "utf8", timeout: 10_000 }
+    );
+    expect(run.status).toBe(2);
+    expect(existsSync(output)).toBe(false);
+  });
   it("reports ok for a gate that exits 0 within its bound", () => {
     const run = runGate([
       "--bound",
@@ -102,9 +126,7 @@ describe("time-gate execution", () => {
   it("kills the whole process group on timeout, leaving no survivors", {
     timeout: 30_000,
   }, () => {
-    mkdirSync(SCRATCH_DIR, { recursive: true });
-    const pidFile = `${SCRATCH_DIR}/grandchild.pid`;
-    rmSync(pidFile, { force: true });
+    const pidFile = resolve(scope.dir(), "grandchild.pid");
     // The gate spawns a grandchild that records its pid and sleeps; both
     // stay in the wrapper child's process group, so the group kill must
     // reap the grandchild too.
@@ -126,20 +148,16 @@ describe("time-gate execution", () => {
       "-e",
       gate,
     ]);
+    expect(run.status).toBe(1);
+    expect(run.stdout.trim()).toContain("result=timeout");
+    expect(existsSync(pidFile)).toBe(true);
+    const grandchildPid = Number(readFileSync(pidFile, "utf8").trim());
+    let alive = true;
     try {
-      expect(run.status).toBe(1);
-      expect(run.stdout.trim()).toContain("result=timeout");
-      expect(existsSync(pidFile)).toBe(true);
-      const grandchildPid = Number(readFileSync(pidFile, "utf8").trim());
-      let alive = true;
-      try {
-        process.kill(grandchildPid, 0);
-      } catch {
-        alive = false;
-      }
-      expect(alive, `grandchild pid ${grandchildPid} survived`).toBe(false);
-    } finally {
-      rmSync(SCRATCH_DIR, { recursive: true, force: true });
+      process.kill(grandchildPid, 0);
+    } catch {
+      alive = false;
     }
+    expect(alive, `grandchild pid ${grandchildPid} survived`).toBe(false);
   });
 });

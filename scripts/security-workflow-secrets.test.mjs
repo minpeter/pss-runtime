@@ -82,6 +82,15 @@ describe("security-workflow secrets: no authored secrets (VAL-SEC-033)", () => {
     expect(problems.some((p) => p.includes("no security workflow"))).toBe(true);
   });
 
+  it("fails on bracket notation secrets references", () => {
+    const problems = problemsOf(
+      securityWorkflow({
+        extraSteps: `      - run: echo "token=${ghExpr("secrets['SCAN_TOKEN']")}"\n`,
+      })
+    );
+    expect(problems.some((p) => p.includes("secrets.*"))).toBe(true);
+  });
+
   it("fails on a secrets.* reference in an env value", () => {
     const problems = problemsOf(
       securityWorkflow({

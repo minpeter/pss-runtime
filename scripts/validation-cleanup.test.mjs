@@ -76,9 +76,30 @@ describe("validatorProcesses", () => {
     ]);
   });
 
+  it.each([
+    "node scripts/loopback-recorder.mjs --port 8793",
+    "node /repo/apps/worker-agent/scripts/loopback-recorder.mjs --port 49152",
+  ])(
+    "detects direct recorder command %s without relying on a fixed port",
+    (command) => {
+      const processes = validatorProcesses(`404 ${command}`);
+      expect(processes).toEqual([{ pid: 404, command }]);
+      const result = inventoryProblems(BASELINE, {
+        processes,
+        listeners: [
+          { address: "127.0.0.1", port: 49_152, processName: "node", pid: 404 },
+        ],
+      });
+      expect(result.problems).toHaveLength(2);
+      expect(result.foreignChurn).toEqual([]);
+    }
+  );
+
   it("ignores marker names embedded in longer tokens", () => {
     expect(
-      validatorProcesses("  900 bash -c exec pss-fake-wrangler sleep 60")
+      validatorProcesses(
+        "  900 bash -c exec pss-fake-wrangler sleep 60\n 901 node fake-loopback-recorder.mjs"
+      )
     ).toEqual([]);
   });
 });
