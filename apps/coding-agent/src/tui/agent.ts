@@ -837,9 +837,13 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
   const headerContainer = new Container();
   // Startup remains HOT until a different output block actually takes over,
   // including notices, continuation cards, tools and staged history replay.
+  // Startup ends in its own boundary row until a startup notice lands below
+  // it; the first transcript block must not add a second one.
+  let startupEndsWithBoundary = true;
   const chatContainer = new TranscriptOwner(
     () => terminal.columns,
-    () => freezeStartupHeader()
+    () => freezeStartupHeader(),
+    () => startupEndsWithBoundary
   );
   const overlayContainer = new Container();
   const footerStatusBar = new FooterStatusBar(tui);
@@ -889,6 +893,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
       // until replay (or later output) actually appends a different block.
       if (text) {
         headerContainer.addChild(new Text(style(ANSI_GRAY, text), 1, 0));
+        startupEndsWithBoundary = false;
         tui.requestRender();
       }
       return;
@@ -1476,7 +1481,11 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
         replay ??
         sessionHistoryReplayParts(await selectorConfig.loadCurrentHistory());
       // Render and seal the replacement off-screen before revoking the old epoch.
-      const staged = new TranscriptOwner(() => terminal.columns);
+      const staged = new TranscriptOwner(
+        () => terminal.columns,
+        undefined,
+        () => startupEndsWithBoundary
+      );
       let streamParts: TuiStreamPart[] = [];
       const flushStreamParts = async (): Promise<void> => {
         if (streamParts.length === 0) {
