@@ -88,6 +88,10 @@ class TestSpan {
   ) {
     return this;
   }
+
+  recordException(_exception: unknown) {
+    return;
+  }
 }
 
 const testTracing: Tracing = {
@@ -100,6 +104,9 @@ const testTracing: Tracing = {
   },
   startSpan(_name) {
     return new TestSpan();
+  },
+  getActiveSpan() {
+    return;
   },
 };
 

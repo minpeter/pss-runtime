@@ -50,11 +50,6 @@ minimumReleaseAgeExclude:
   - typescript
   - '@typescript/*'
   - rolldown-plugin-dts
-  - '@ai-sdk/gateway@4.0.22 || 4.0.40'
-  - ai@7.0.30 || 7.0.51
-  - '@ai-sdk/provider-utils@5.0.20 || 5.0.22'
-  - '@ai-sdk/provider@4.0.5'
-  - '@ai-sdk/openai@4.0.31'
 `;
 
 const EXPECTED_EXCLUDES = [
@@ -62,11 +57,6 @@ const EXPECTED_EXCLUDES = [
   "typescript",
   "@typescript/*",
   "rolldown-plugin-dts",
-  "@ai-sdk/gateway@4.0.22 || 4.0.40",
-  "ai@7.0.30 || 7.0.51",
-  "@ai-sdk/provider-utils@5.0.20 || 5.0.22",
-  "@ai-sdk/provider@4.0.5",
-  "@ai-sdk/openai@4.0.31",
 ];
 
 const PACKAGE_MANAGER_PIN_PATTERN = /^pnpm@11\.9\.0\+sha512\.[0-9a-f]+$/;
