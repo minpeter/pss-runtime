@@ -24,7 +24,7 @@ importers:
     devDependencies:
       '@ai-sdk/openai-compatible':
         specifier: 3.0.23
-        version: 3.0.23(zod@4.4.3)
+        version: 3.0.23(zod@4.5.4)
       '@babel/core':
         specifier: 8.0.1
         version: 8.0.1
@@ -51,7 +51,7 @@ importers:
         version: 2.0.0
       '@t3-oss/env-core':
         specifier: ^0.13.11
-        version: 0.13.11(typescript@7.0.2)(zod@4.4.3)
+        version: 0.13.11(typescript@7.0.2)(zod@4.5.4)
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
@@ -110,20 +110,20 @@ importers:
         specifier: 2.9.0
         version: 2.9.0
       zod:
-        specifier: ^4.4.3
-        version: 4.4.3
+        specifier: ^4.5.4
+        version: 4.5.4
 
   apps/coding-agent:
     dependencies:
       '@ai-sdk/anthropic':
         specifier: 4.0.36
-        version: 4.0.36(zod@4.4.3)
+        version: 4.0.36(zod@4.5.4)
       '@ai-sdk/openai':
         specifier: 4.0.31
-        version: 4.0.31(zod@4.4.3)
+        version: 4.0.31(zod@4.5.4)
       '@ai-sdk/openai-compatible':
         specifier: 3.0.23
-        version: 3.0.23(zod@4.4.3)
+        version: 3.0.23(zod@4.5.4)
       '@earendil-works/pi-tui':
         specifier: ^0.84.1
         version: 0.84.3
@@ -165,10 +165,10 @@ importers:
         version: 2.6.2
       '@t3-oss/env-core':
         specifier: ^0.13.11
-        version: 0.13.11(typescript@7.0.2)(zod@4.4.3)
+        version: 0.13.11(typescript@7.0.2)(zod@4.5.4)
       ai:
         specifier: 7.0.51
-        version: 7.0.51(zod@4.4.3)
+        version: 7.0.51(zod@4.5.4)
       beautiful-mermaid:
         specifier: 1.1.3
         version: 1.1.3
@@ -182,8 +182,8 @@ importers:
         specifier: 4.1.3
         version: 4.1.3
       zod:
-        specifier: ^4.4.3
-        version: 4.4.3
+        specifier: ^4.5.4
+        version: 4.5.4
     devDependencies:
       '@minpeter/pss-extension-latex':
         specifier: workspace:^
@@ -208,13 +208,13 @@ importers:
     dependencies:
       '@ai-sdk/openai-compatible':
         specifier: 3.0.23
-        version: 3.0.23(zod@4.4.3)
+        version: 3.0.23(zod@4.5.4)
       '@chat-adapter/state-memory':
         specifier: 4.37.0
-        version: 4.37.0(ai@7.0.51(zod@4.4.3))(zod@4.4.3)
+        version: 4.37.0(ai@7.0.51(zod@4.5.4))(zod@4.5.4)
       '@chat-adapter/telegram':
         specifier: 4.37.0
-        version: 4.37.0(ai@7.0.51(zod@4.4.3))(zod@4.4.3)
+        version: 4.37.0(ai@7.0.51(zod@4.5.4))(zod@4.5.4)
       '@minpeter/pss-runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -229,16 +229,16 @@ importers:
         version: 11.18.0(typescript@7.0.2)
       agents:
         specifier: 0.20.1
-        version: 0.20.1(@babel/core@8.0.1)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260808.1)(@modelcontextprotocol/client@2.0.0-beta.5)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(@modelcontextprotocol/server@2.0.0)(ai@7.0.51(zod@4.4.3))(chat@4.37.0(ai@7.0.51(zod@4.4.3))(zod@4.4.3))(react@19.2.8)(rolldown@1.2.0)(vite@8.1.0(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))(zod@4.4.3)
+        version: 0.20.1(@babel/core@8.0.1)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260808.1)(@modelcontextprotocol/client@2.0.0-beta.5)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.5.4))(@modelcontextprotocol/server@2.0.0)(ai@7.0.51(zod@4.5.4))(chat@4.37.0(ai@7.0.51(zod@4.5.4))(zod@4.5.4))(react@19.2.8)(rolldown@1.2.0)(vite@8.1.0(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))(zod@4.5.4)
       chat:
         specifier: 4.37.0
-        version: 4.37.0(ai@7.0.51(zod@4.4.3))(zod@4.4.3)
+        version: 4.37.0(ai@7.0.51(zod@4.5.4))(zod@4.5.4)
       evlog:
         specifier: ^2.22.4
-        version: 2.22.4(ai@7.0.51(zod@4.4.3))(express@5.2.1)(hono@4.13.7)(react@19.2.8)(vite@8.1.0(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
+        version: 2.22.4(ai@7.0.51(zod@4.5.4))(express@5.2.1)(hono@4.13.7)(react@19.2.8)(vite@8.1.0(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
       zod:
-        specifier: ^4.4.3
-        version: 4.4.3
+        specifier: ^4.5.4
+        version: 4.5.4
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^5.20260808.1
@@ -266,22 +266,22 @@ importers:
     dependencies:
       '@ai-sdk/openai-compatible':
         specifier: 3.0.23
-        version: 3.0.23(zod@4.4.3)
+        version: 3.0.23(zod@4.5.4)
       '@minpeter/pss-runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
       '@t3-oss/env-core':
         specifier: ^0.13.11
-        version: 0.13.11(typescript@7.0.2)(zod@4.4.3)
+        version: 0.13.11(typescript@7.0.2)(zod@4.5.4)
       ai:
         specifier: 7.0.51
-        version: 7.0.51(zod@4.4.3)
+        version: 7.0.51(zod@4.5.4)
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
       zod:
-        specifier: ^4.4.3
-        version: 4.4.3
+        specifier: ^4.5.4
+        version: 4.5.4
     devDependencies:
       tsx:
         specifier: ^4.23.12
@@ -297,19 +297,19 @@ importers:
     dependencies:
       '@ai-sdk/openai-compatible':
         specifier: 3.0.23
-        version: 3.0.23(zod@4.4.3)
+        version: 3.0.23(zod@4.5.4)
       '@minpeter/pss-runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
       '@t3-oss/env-core':
         specifier: ^0.13.11
-        version: 0.13.11(typescript@7.0.2)(zod@4.4.3)
+        version: 0.13.11(typescript@7.0.2)(zod@4.5.4)
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
       zod:
-        specifier: ^4.4.3
-        version: 4.4.3
+        specifier: ^4.5.4
+        version: 4.5.4
     devDependencies:
       tsx:
         specifier: ^4.23.12
@@ -322,22 +322,22 @@ importers:
     dependencies:
       '@ai-sdk/openai-compatible':
         specifier: 3.0.23
-        version: 3.0.23(zod@4.4.3)
+        version: 3.0.23(zod@4.5.4)
       '@minpeter/pss-runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
       '@t3-oss/env-core':
         specifier: ^0.13.11
-        version: 0.13.11(typescript@7.0.2)(zod@4.4.3)
+        version: 0.13.11(typescript@7.0.2)(zod@4.5.4)
       ai:
         specifier: 7.0.51
-        version: 7.0.51(zod@4.4.3)
+        version: 7.0.51(zod@4.5.4)
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
       zod:
-        specifier: ^4.4.3
-        version: 4.4.3
+        specifier: ^4.5.4
+        version: 4.5.4
     devDependencies:
       tsx:
         specifier: ^4.23.12
@@ -350,19 +350,19 @@ importers:
     dependencies:
       '@ai-sdk/openai-compatible':
         specifier: 3.0.23
-        version: 3.0.23(zod@4.4.3)
+        version: 3.0.23(zod@4.5.4)
       '@minpeter/pss-runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
       '@t3-oss/env-core':
         specifier: ^0.13.11
-        version: 0.13.11(typescript@7.0.2)(zod@4.4.3)
+        version: 0.13.11(typescript@7.0.2)(zod@4.5.4)
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
       zod:
-        specifier: ^4.4.3
-        version: 4.4.3
+        specifier: ^4.5.4
+        version: 4.5.4
     devDependencies:
       tsx:
         specifier: ^4.23.12
@@ -375,19 +375,19 @@ importers:
     dependencies:
       '@ai-sdk/openai-compatible':
         specifier: 3.0.23
-        version: 3.0.23(zod@4.4.3)
+        version: 3.0.23(zod@4.5.4)
       '@minpeter/pss-runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
       '@t3-oss/env-core':
         specifier: ^0.13.11
-        version: 0.13.11(typescript@7.0.2)(zod@4.4.3)
+        version: 0.13.11(typescript@7.0.2)(zod@4.5.4)
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
       zod:
-        specifier: ^4.4.3
-        version: 4.4.3
+        specifier: ^4.5.4
+        version: 4.5.4
     devDependencies:
       tsx:
         specifier: ^4.23.12
@@ -400,22 +400,22 @@ importers:
     dependencies:
       '@ai-sdk/openai-compatible':
         specifier: 3.0.23
-        version: 3.0.23(zod@4.4.3)
+        version: 3.0.23(zod@4.5.4)
       '@minpeter/pss-runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
       '@t3-oss/env-core':
         specifier: ^0.13.11
-        version: 0.13.11(typescript@7.0.2)(zod@4.4.3)
+        version: 0.13.11(typescript@7.0.2)(zod@4.5.4)
       ai:
         specifier: 7.0.51
-        version: 7.0.51(zod@4.4.3)
+        version: 7.0.51(zod@4.5.4)
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
       zod:
-        specifier: ^4.4.3
-        version: 4.4.3
+        specifier: ^4.5.4
+        version: 4.5.4
     devDependencies:
       tsx:
         specifier: ^4.23.12
@@ -432,8 +432,8 @@ importers:
         specifier: workspace:^
         version: link:../../packages/runtime
       zod:
-        specifier: ^4.4.3
-        version: 4.4.3
+        specifier: ^4.5.4
+        version: 4.5.4
     devDependencies:
       tsx:
         specifier: ^4.23.12
@@ -455,7 +455,7 @@ importers:
         version: link:../../packages/runtime
       ai:
         specifier: 7.0.51
-        version: 7.0.51(zod@4.4.3)
+        version: 7.0.51(zod@4.5.4)
     devDependencies:
       typescript:
         specifier: ^7.0.2
@@ -480,7 +480,7 @@ importers:
     dependencies:
       '@ai-sdk/openai-compatible':
         specifier: 3.0.23
-        version: 3.0.23(zod@4.4.3)
+        version: 3.0.23(zod@4.5.4)
       '@minpeter/pss-coding-agent':
         specifier: workspace:*
         version: link:../../apps/coding-agent
@@ -492,13 +492,13 @@ importers:
         version: 17.2.11
       ai:
         specifier: 7.0.51
-        version: 7.0.51(zod@4.4.3)
+        version: 7.0.51(zod@4.5.4)
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
       zod:
-        specifier: ^4.4.3
-        version: 4.4.3
+        specifier: ^4.5.4
+        version: 4.5.4
     devDependencies:
       tsx:
         specifier: ^4.23.12
@@ -622,10 +622,10 @@ importers:
         version: 0.1.3
       ai:
         specifier: 7.0.51
-        version: 7.0.51(zod@4.4.3)
+        version: 7.0.51(zod@4.5.4)
       zod:
-        specifier: ^4.4.3
-        version: 4.4.3
+        specifier: ^4.5.4
+        version: 4.5.4
     devDependencies:
       tsdown:
         specifier: ^0.22.14
@@ -653,7 +653,7 @@ importers:
         version: 1.9.1
       ai:
         specifier: 7.0.51
-        version: 7.0.51(zod@4.4.3)
+        version: 7.0.51(zod@4.5.4)
       fast-png:
         specifier: ^8.0.0
         version: 8.0.0
@@ -669,7 +669,7 @@ importers:
     devDependencies:
       agents:
         specifier: 0.20.1
-        version: 0.20.1(@babel/core@8.0.1)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260825.1)(@modelcontextprotocol/client@2.0.0-beta.5)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.5.4))(@modelcontextprotocol/server@2.0.0)(ai@7.0.51(zod@4.4.3))(chat@4.37.0(ai@7.0.51(zod@4.4.3))(zod@4.5.4))(react@19.2.8)(rolldown@1.2.0)(vite@8.1.0(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))(zod@4.4.3)
+        version: 0.20.1(@babel/core@8.0.1)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260825.1)(@modelcontextprotocol/client@2.0.0-beta.5)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.5.4))(@modelcontextprotocol/server@2.0.0)(ai@7.0.51(zod@4.5.4))(chat@4.37.0(ai@7.0.51(zod@4.5.4))(zod@4.5.4))(react@19.2.8)(rolldown@1.2.0)(vite@8.1.0(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))(zod@4.5.4)
       tsdown:
         specifier: ^0.22.14
         version: 0.22.14(oxc-resolver@11.24.2)(publint@0.3.23)(tsx@4.23.12)(typescript@7.0.2)
@@ -5655,9 +5655,6 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
-  zod@4.4.3:
-    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
-
   zod@4.5.4:
     resolution: {integrity: sha512-sC95tT5iHHH9gtpj6A81kh+NEaRAUFN+qlUPDUbRfOMvNf5QCBqsb3WgvnpVtK5Y+4UfA6KqufotuTvMGiTlsA==}
 
@@ -5672,11 +5669,11 @@ snapshots:
       '@ai-sdk/provider-utils': 2.2.8(zod@3.25.76)
       zod: 3.25.76
 
-  '@ai-sdk/anthropic@4.0.36(zod@4.4.3)':
+  '@ai-sdk/anthropic@4.0.36(zod@4.5.4)':
     dependencies:
       '@ai-sdk/provider': 4.0.7
-      '@ai-sdk/provider-utils': 5.0.25(zod@4.4.3)
-      zod: 4.4.3
+      '@ai-sdk/provider-utils': 5.0.25(zod@4.5.4)
+      zod: 4.5.4
 
   '@ai-sdk/gateway@2.0.147(zod@3.25.76)':
     dependencies:
@@ -5685,12 +5682,12 @@ snapshots:
       '@vercel/oidc': 3.1.0
       zod: 3.25.76
 
-  '@ai-sdk/gateway@4.0.40(zod@4.4.3)':
+  '@ai-sdk/gateway@4.0.40(zod@4.5.4)':
     dependencies:
       '@ai-sdk/provider': 4.0.5
-      '@ai-sdk/provider-utils': 5.0.20(zod@4.4.3)
+      '@ai-sdk/provider-utils': 5.0.20(zod@4.5.4)
       '@vercel/oidc': 3.2.0
-      zod: 4.4.3
+      zod: 4.5.4
 
   '@ai-sdk/gateway@4.0.75(zod@4.5.4)':
     dependencies:
@@ -5699,17 +5696,17 @@ snapshots:
       '@vercel/oidc': 3.2.0
       zod: 4.5.4
 
-  '@ai-sdk/openai-compatible@3.0.23(zod@4.4.3)':
+  '@ai-sdk/openai-compatible@3.0.23(zod@4.5.4)':
     dependencies:
       '@ai-sdk/provider': 4.0.5
-      '@ai-sdk/provider-utils': 5.0.21(zod@4.4.3)
-      zod: 4.4.3
+      '@ai-sdk/provider-utils': 5.0.21(zod@4.5.4)
+      zod: 4.5.4
 
-  '@ai-sdk/openai@4.0.31(zod@4.4.3)':
+  '@ai-sdk/openai@4.0.31(zod@4.5.4)':
     dependencies:
       '@ai-sdk/provider': 4.0.5
-      '@ai-sdk/provider-utils': 5.0.22(zod@4.4.3)
-      zod: 4.4.3
+      '@ai-sdk/provider-utils': 5.0.22(zod@4.5.4)
+      zod: 4.5.4
 
   '@ai-sdk/provider-utils@2.2.8(zod@3.25.76)':
     dependencies:
@@ -5726,41 +5723,41 @@ snapshots:
       undici: 6.28.0
       zod: 3.25.76
 
-  '@ai-sdk/provider-utils@5.0.20(zod@4.4.3)':
+  '@ai-sdk/provider-utils@5.0.20(zod@4.5.4)':
     dependencies:
       '@ai-sdk/provider': 4.0.5
       '@standard-schema/spec': 1.1.0
       '@workflow/serde': 4.1.0
       eventsource-parser: 3.1.1
       undici: 7.29.0
-      zod: 4.4.3
+      zod: 4.5.4
 
-  '@ai-sdk/provider-utils@5.0.21(zod@4.4.3)':
+  '@ai-sdk/provider-utils@5.0.21(zod@4.5.4)':
     dependencies:
       '@ai-sdk/provider': 4.0.5
       '@standard-schema/spec': 1.1.0
       '@workflow/serde': 4.1.0
       eventsource-parser: 3.1.1
       undici: 7.29.0
-      zod: 4.4.3
+      zod: 4.5.4
 
-  '@ai-sdk/provider-utils@5.0.22(zod@4.4.3)':
+  '@ai-sdk/provider-utils@5.0.22(zod@4.5.4)':
     dependencies:
       '@ai-sdk/provider': 4.0.5
       '@standard-schema/spec': 1.1.0
       '@workflow/serde': 4.1.0
       eventsource-parser: 3.1.0
       undici: 7.29.0
-      zod: 4.4.3
+      zod: 4.5.4
 
-  '@ai-sdk/provider-utils@5.0.25(zod@4.4.3)':
+  '@ai-sdk/provider-utils@5.0.25(zod@4.5.4)':
     dependencies:
       '@ai-sdk/provider': 4.0.7
       '@standard-schema/spec': 1.1.0
       '@workflow/serde': 4.1.0
       eventsource-parser: 3.1.1
       undici: 7.29.0
-      zod: 4.4.3
+      zod: 4.5.4
 
   '@ai-sdk/provider-utils@5.0.36(zod@4.5.4)':
     dependencies:
@@ -6003,28 +6000,28 @@ snapshots:
 
   '@cfworker/json-schema@4.1.1': {}
 
-  '@chat-adapter/shared@4.37.0(ai@7.0.51(zod@4.4.3))(zod@4.4.3)':
+  '@chat-adapter/shared@4.37.0(ai@7.0.51(zod@4.5.4))(zod@4.5.4)':
     dependencies:
-      chat: 4.37.0(ai@7.0.51(zod@4.4.3))(zod@4.4.3)
+      chat: 4.37.0(ai@7.0.51(zod@4.5.4))(zod@4.5.4)
     transitivePeerDependencies:
       - ai
       - supports-color
       - workflow
       - zod
 
-  '@chat-adapter/state-memory@4.37.0(ai@7.0.51(zod@4.4.3))(zod@4.4.3)':
+  '@chat-adapter/state-memory@4.37.0(ai@7.0.51(zod@4.5.4))(zod@4.5.4)':
     dependencies:
-      chat: 4.37.0(ai@7.0.51(zod@4.4.3))(zod@4.4.3)
+      chat: 4.37.0(ai@7.0.51(zod@4.5.4))(zod@4.5.4)
     transitivePeerDependencies:
       - ai
       - supports-color
       - workflow
       - zod
 
-  '@chat-adapter/telegram@4.37.0(ai@7.0.51(zod@4.4.3))(zod@4.4.3)':
+  '@chat-adapter/telegram@4.37.0(ai@7.0.51(zod@4.5.4))(zod@4.5.4)':
     dependencies:
-      '@chat-adapter/shared': 4.37.0(ai@7.0.51(zod@4.4.3))(zod@4.4.3)
-      chat: 4.37.0(ai@7.0.51(zod@4.4.3))(zod@4.4.3)
+      '@chat-adapter/shared': 4.37.0(ai@7.0.51(zod@4.5.4))(zod@4.5.4)
+      chat: 4.37.0(ai@7.0.51(zod@4.5.4))(zod@4.5.4)
     transitivePeerDependencies:
       - ai
       - supports-color
@@ -6524,7 +6521,7 @@ snapshots:
   '@minpeter/opensearch@0.1.3':
     dependencies:
       '@cfworker/json-schema': 4.1.1
-      '@modelcontextprotocol/sdk': 1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      '@modelcontextprotocol/sdk': 1.30.0(@cfworker/json-schema@4.1.1)(zod@4.5.4)
       '@mozilla/readability': 0.6.0
       cheerio: 1.2.0
       jsdom: 30.0.1
@@ -6533,7 +6530,7 @@ snapshots:
       turndown-plugin-gfm: 1.0.2
       undici: 8.10.1
       unpdf: 1.8.1
-      zod: 4.4.3
+      zod: 4.5.4
     optionalDependencies:
       wreq-js: 2.3.1
     transitivePeerDependencies:
@@ -6552,7 +6549,7 @@ snapshots:
       eventsource-parser: 3.1.1
       jose: 6.2.10
       pkce-challenge: 5.0.1
-      zod: 4.4.3
+      zod: 4.5.4
 
   '@modelcontextprotocol/core@2.0.0':
     dependencies:
@@ -6560,31 +6557,7 @@ snapshots:
 
   '@modelcontextprotocol/core@2.0.0-beta.5':
     dependencies:
-      zod: 4.4.3
-
-  '@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)':
-    dependencies:
-      '@hono/node-server': 2.1.1(hono@4.13.7)
-      ajv: 8.20.0
-      ajv-formats: 3.0.1
-      content-type: 1.0.5
-      cors: 2.8.6
-      cross-spawn: 7.0.6
-      eventsource: 3.0.7
-      eventsource-parser: 3.1.1
-      express: 5.2.1
-      express-rate-limit: 8.7.0(express@5.2.1)
-      hono: 4.13.7
-      jose: 6.2.12
-      json-schema-typed: 8.0.2
-      pkce-challenge: 5.0.1
-      raw-body: 3.0.2
-      zod: 4.4.3
-      zod-to-json-schema: 3.25.2(zod@4.4.3)
-    optionalDependencies:
-      '@cfworker/json-schema': 4.1.1
-    transitivePeerDependencies:
-      - supports-color
+      zod: 4.5.4
 
   '@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.5.4)':
     dependencies:
@@ -6613,7 +6586,7 @@ snapshots:
   '@modelcontextprotocol/server@2.0.0':
     dependencies:
       '@modelcontextprotocol/core': 2.0.0
-      zod: 4.4.3
+      zod: 4.5.4
 
   '@mozilla/readability@0.6.0': {}
 
@@ -6975,10 +6948,10 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@t3-oss/env-core@0.13.11(typescript@7.0.2)(zod@4.4.3)':
+  '@t3-oss/env-core@0.13.11(typescript@7.0.2)(zod@4.5.4)':
     optionalDependencies:
       typescript: 7.0.2
-      zod: 4.4.3
+      zod: 4.5.4
 
   '@trpc/client@11.18.0(@trpc/server@11.18.0(typescript@7.0.2))(typescript@7.0.2)':
     dependencies:
@@ -7293,12 +7266,12 @@ snapshots:
 
   acorn@8.18.0: {}
 
-  agents@0.20.1(@babel/core@8.0.1)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260808.1)(@modelcontextprotocol/client@2.0.0-beta.5)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(@modelcontextprotocol/server@2.0.0)(ai@7.0.51(zod@4.4.3))(chat@4.37.0(ai@7.0.51(zod@4.4.3))(zod@4.4.3))(react@19.2.8)(rolldown@1.2.0)(vite@8.1.0(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))(zod@4.4.3):
+  agents@0.20.1(@babel/core@8.0.1)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260808.1)(@modelcontextprotocol/client@2.0.0-beta.5)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.5.4))(@modelcontextprotocol/server@2.0.0)(ai@7.0.51(zod@4.5.4))(chat@4.37.0(ai@7.0.51(zod@4.5.4))(zod@4.5.4))(react@19.2.8)(rolldown@1.2.0)(vite@8.1.0(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))(zod@4.5.4):
     dependencies:
       '@babel/plugin-proposal-decorators': 8.0.2(@babel/core@8.0.1)
       '@cfworker/json-schema': 4.1.1
       '@modelcontextprotocol/client': 2.0.0-beta.5
-      '@modelcontextprotocol/sdk': 1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
+      '@modelcontextprotocol/sdk': 1.30.0(@cfworker/json-schema@4.1.1)(zod@4.5.4)
       '@modelcontextprotocol/server': 2.0.0
       '@rolldown/plugin-babel': 0.2.3(@babel/core@8.0.1)(@babel/runtime@7.29.7)(rolldown@1.2.0)(vite@8.1.0(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
       cron-schedule: 6.0.0
@@ -7310,10 +7283,10 @@ snapshots:
       react: 19.2.8
       yaml: 2.9.0
       yargs: 18.1.0
-      zod: 4.4.3
+      zod: 4.5.4
     optionalDependencies:
-      ai: 7.0.51(zod@4.4.3)
-      chat: 4.37.0(ai@7.0.51(zod@4.4.3))(zod@4.4.3)
+      ai: 7.0.51(zod@4.5.4)
+      chat: 4.37.0(ai@7.0.51(zod@4.5.4))(zod@4.5.4)
       vite: 8.1.0(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0)
     transitivePeerDependencies:
       - '@babel/core'
@@ -7322,7 +7295,7 @@ snapshots:
       - '@cloudflare/workers-types'
       - rolldown
 
-  agents@0.20.1(@babel/core@8.0.1)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260825.1)(@modelcontextprotocol/client@2.0.0-beta.5)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.5.4))(@modelcontextprotocol/server@2.0.0)(ai@7.0.51(zod@4.4.3))(chat@4.37.0(ai@7.0.51(zod@4.4.3))(zod@4.5.4))(react@19.2.8)(rolldown@1.2.0)(vite@8.1.0(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))(zod@4.4.3):
+  agents@0.20.1(@babel/core@8.0.1)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260825.1)(@modelcontextprotocol/client@2.0.0-beta.5)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.5.4))(@modelcontextprotocol/server@2.0.0)(ai@7.0.51(zod@4.5.4))(chat@4.37.0(ai@7.0.51(zod@4.5.4))(zod@4.5.4))(react@19.2.8)(rolldown@1.2.0)(vite@8.1.0(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))(zod@4.5.4):
     dependencies:
       '@babel/plugin-proposal-decorators': 8.0.2(@babel/core@8.0.1)
       '@cfworker/json-schema': 4.1.1
@@ -7339,10 +7312,10 @@ snapshots:
       react: 19.2.8
       yaml: 2.9.0
       yargs: 18.1.0
-      zod: 4.4.3
+      zod: 4.5.4
     optionalDependencies:
-      ai: 7.0.51(zod@4.4.3)
-      chat: 4.37.0(ai@7.0.51(zod@4.4.3))(zod@4.5.4)
+      ai: 7.0.51(zod@4.5.4)
+      chat: 4.37.0(ai@7.0.51(zod@4.5.4))(zod@4.5.4)
       vite: 8.1.0(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0)
     transitivePeerDependencies:
       - '@babel/core'
@@ -7359,12 +7332,12 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       zod: 3.25.76
 
-  ai@7.0.51(zod@4.4.3):
+  ai@7.0.51(zod@4.5.4):
     dependencies:
-      '@ai-sdk/gateway': 4.0.40(zod@4.4.3)
+      '@ai-sdk/gateway': 4.0.40(zod@4.5.4)
       '@ai-sdk/provider': 4.0.5
-      '@ai-sdk/provider-utils': 5.0.20(zod@4.4.3)
-      zod: 4.4.3
+      '@ai-sdk/provider-utils': 5.0.20(zod@4.5.4)
+      zod: 4.5.4
 
   ajv-formats@3.0.1:
     dependencies:
@@ -7585,7 +7558,7 @@ snapshots:
 
   character-entities@2.0.2: {}
 
-  chat@4.37.0(ai@7.0.51(zod@4.4.3))(zod@4.4.3):
+  chat@4.37.0(ai@7.0.51(zod@4.5.4))(zod@4.5.4):
     dependencies:
       '@workflow/serde': 4.1.0-beta.2
       mdast-util-to-string: 4.0.0
@@ -7595,26 +7568,10 @@ snapshots:
       remend: 1.3.1
       unified: 11.0.5
     optionalDependencies:
-      ai: 7.0.51(zod@4.4.3)
-      zod: 4.4.3
-    transitivePeerDependencies:
-      - supports-color
-
-  chat@4.37.0(ai@7.0.51(zod@4.4.3))(zod@4.5.4):
-    dependencies:
-      '@workflow/serde': 4.1.0-beta.2
-      mdast-util-to-string: 4.0.0
-      remark-gfm: 4.0.1
-      remark-parse: 11.0.0
-      remark-stringify: 11.0.0
-      remend: 1.3.1
-      unified: 11.0.5
-    optionalDependencies:
-      ai: 7.0.51(zod@4.4.3)
+      ai: 7.0.51(zod@4.5.4)
       zod: 4.5.4
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   cheerio-select@2.1.0:
     dependencies:
@@ -8143,9 +8100,9 @@ snapshots:
     dependencies:
       eventsource-parser: 3.1.1
 
-  evlog@2.22.4(ai@7.0.51(zod@4.4.3))(express@5.2.1)(hono@4.13.7)(react@19.2.8)(vite@8.1.0(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0)):
+  evlog@2.22.4(ai@7.0.51(zod@4.5.4))(express@5.2.1)(hono@4.13.7)(react@19.2.8)(vite@8.1.0(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0)):
     optionalDependencies:
-      ai: 7.0.51(zod@4.4.3)
+      ai: 7.0.51(zod@4.5.4)
       express: 5.2.1
       hono: 4.13.7
       react: 19.2.8
@@ -10280,7 +10237,7 @@ snapshots:
       resolve.exports: 2.0.3
       string-width: 8.2.2
       yaml: 2.9.0
-      zod: 4.4.3
+      zod: 4.5.4
 
   unbash@4.0.11: {}
 
@@ -10706,10 +10663,6 @@ snapshots:
       '@yuku-parser/binding-win32-arm64': 0.5.48
       '@yuku-parser/binding-win32-x64': 0.5.48
 
-  zod-to-json-schema@3.25.2(zod@4.4.3):
-    dependencies:
-      zod: 4.4.3
-
   zod-to-json-schema@3.25.2(zod@4.5.4):
     dependencies:
       zod: 4.5.4
@@ -10717,8 +10670,6 @@ snapshots:
   zod@3.24.4: {}
 
   zod@3.25.76: {}
-
-  zod@4.4.3: {}
 
   zod@4.5.4: {}
 

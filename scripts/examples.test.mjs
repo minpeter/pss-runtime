@@ -51,7 +51,9 @@ describe("examples workspace packages", () => {
       );
       expect(packageJson.dependencies["@t3-oss/env-core"]).toBe("^0.13.11");
       expect(packageJson.dependencies.dotenv).toBe("^17.4.2");
-      expect(packageJson.dependencies.zod).toBe("^4.4.3");
+      expect(packageJson.dependencies.zod).toBe(
+        rootPackageJson.devDependencies.zod
+      );
       expect(packageJson.dependencies).not.toHaveProperty(
         "@minpeter/pss-coding-agent"
       );
