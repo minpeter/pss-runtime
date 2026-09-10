@@ -1,0 +1,9 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.12/schema.json",
+  "root": false,
+  "files": {
+    "includes": ["src/**", "test/**", "scripts/**", "*.json", "*.jsonc", "*.mjs"]
+  },
+  "formatter": { "indentStyle": "space", "lineWidth": 100 },
+  "linter": { "enabled": true, "rules": { "preset": "recommended" } }
+}

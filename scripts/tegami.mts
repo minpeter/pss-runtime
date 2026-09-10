@@ -21,6 +21,7 @@ const builtinExtensions = new Set([
 const releaseIgnore = [
   "pss-next",
   "@minpeter/pss-worker-agent",
+  "@minpeter/pss-kernel",
   "@minpeter/pss-bench-shared",
   "@minpeter/pss-benchmark-compaction-score",
   "@minpeter/pss-benchmark-nextjs",
