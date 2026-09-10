@@ -7,7 +7,7 @@ import {
 import type { SessionIndexEntry } from "../sessions/session-index";
 import { sanitizeTerminalText } from "./terminal-safety";
 
-export const SESSION_PRIMARY_COLUMN_WIDTH = 30;
+const SESSION_PRIMARY_COLUMN_WIDTH = 30;
 const SESSION_KEY_COLUMN_WIDTH = 9;
 
 export const sessionPrimaryLabel = (

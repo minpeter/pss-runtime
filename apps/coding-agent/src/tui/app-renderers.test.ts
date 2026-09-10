@@ -65,7 +65,7 @@ describe("TUI extension renderer merging", () => {
         {
           createTui: (config) => {
             expect(config.header?.title).toBe(
-              ["█▀▙ ▟▀▘ ▟▀▘", "█▀▘ ▄▄▛ ▄▄▛"].join("\n")
+              ["█🮂🮂𜷞 𜷥𜴸▀▀ 𜷥𜴸▀▀", "█🮂🮂  ▄▄𜶭𜵰 ▄▄𜶭𜵰"].join("\n")
             );
             return Promise.resolve();
           },

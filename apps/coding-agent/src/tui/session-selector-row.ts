@@ -3,12 +3,13 @@ import {
   truncateToWidth,
   visibleWidth,
 } from "@earendil-works/pi-tui";
-import { sessionUpdatedLabel } from "../sessions/session-display";
-import type { SessionIndexEntry } from "../sessions/session-index";
 import {
-  SESSION_PRIMARY_COLUMN_WIDTH,
-  sessionPrimaryLabel,
-} from "./session-option-format";
+  sessionDisplayKey,
+  sessionDisplayTitle,
+  sessionUpdatedLabel,
+} from "../sessions/session-display";
+import type { SessionIndexEntry } from "../sessions/session-index";
+import { sanitizeTerminalText } from "./terminal-safety";
 
 const ANSI_RESET = "\x1b[0m";
 const ANSI_BOLD = "\x1b[1m";
@@ -16,7 +17,6 @@ const ANSI_CYAN = "\x1b[36m";
 const ANSI_DIM = "\x1b[2m";
 const ANSI_GRAY = "\x1b[90m";
 const ANSI_GREEN = "\x1b[32m";
-const LABEL_COLUMN_MIN_WIDTH = 16;
 const COLUMN_GAP = "  ";
 
 const style = (prefix: string, text: string): string =>
@@ -47,11 +47,18 @@ export class SessionSelectorRow implements Component {
   readonly #current: boolean;
   readonly #entry: SessionIndexEntry;
   readonly #selected: boolean;
+  readonly #reserveCurrent: boolean;
 
-  constructor(entry: SessionIndexEntry, current: boolean, selected: boolean) {
+  constructor(
+    entry: SessionIndexEntry,
+    current: boolean,
+    selected: boolean,
+    reserveCurrent = current
+  ) {
     this.#entry = entry;
     this.#current = current;
     this.#selected = selected;
+    this.#reserveCurrent = reserveCurrent;
   }
 
   invalidate(): void {
@@ -59,33 +66,45 @@ export class SessionSelectorRow implements Component {
   }
 
   render(width: number): string[] {
+    const currentMarker = this.#current ? "✓" : "";
+    if (width <= 5) {
+      return [
+        style(
+          ANSI_CYAN,
+          truncateToWidth(this.#selected ? "→" : currentMarker, width)
+        ),
+      ];
+    }
     const prefix = this.#selected ? "→ " : "  ";
-    const suffix = this.#current ? " ✓" : "";
+    const suffix = this.#reserveCurrent ? ` ${currentMarker || " "}` : "";
     const availableWidth = Math.max(
       0,
       width - 1 - visibleWidth(prefix) - visibleWidth(suffix)
     );
     const updated = sessionUpdatedLabel(this.#entry);
     const updatedWidth = visibleWidth(updated);
-    const showUpdated =
-      availableWidth >=
-      LABEL_COLUMN_MIN_WIDTH + visibleWidth(COLUMN_GAP) + updatedWidth;
-    const labelWidth = showUpdated
-      ? Math.min(
-          SESSION_PRIMARY_COLUMN_WIDTH,
-          availableWidth - visibleWidth(COLUMN_GAP) - updatedWidth
-        )
-      : availableWidth;
-    const label = sessionPrimaryLabel(this.#entry, labelWidth);
+    const title = sanitizeTerminalText(sessionDisplayTitle(this.#entry));
+    const key = truncateToWidth(
+      sanitizeTerminalText(sessionDisplayKey(this.#entry)),
+      9
+    );
+    const titleWidth = visibleWidth(title);
+    // Keep titles monotonic across metadata thresholds. Right-anchor the key
+    // even when a row has room for a timestamp and its neighbour does not.
+    const showKey = availableWidth >= titleWidth + 2 + 9;
+    const showUpdated = availableWidth >= titleWidth + 2 + 9 + 2 + updatedWidth;
+    const labelWidth =
+      availableWidth -
+      (showKey ? 11 : 0) -
+      (showUpdated ? 2 + updatedWidth : 0);
+    const label = truncateToWidth(title, labelWidth);
     const paddedLabel = `${label}${" ".repeat(Math.max(0, labelWidth - visibleWidth(label)))}`;
-    const content = showUpdated
-      ? `${paddedLabel}${COLUMN_GAP}${updated}`
-      : paddedLabel;
+    const content = `${paddedLabel}${showUpdated ? `${COLUMN_GAP}${updated}` : ""}${showKey ? `${COLUMN_GAP}${key}${" ".repeat(9 - visibleWidth(key))}` : ""}`;
     const line = `${prefix}${content}`;
     return [
       this.#selected
-        ? `${style(ANSI_CYAN, ` ${line}`)}${this.#current ? style(ANSI_GREEN, suffix) : ""}`
-        : ` ${line}${this.#current ? style(ANSI_GREEN, suffix) : ""}`,
+        ? `${style(ANSI_CYAN, ` ${line}`)}${style(ANSI_GREEN, suffix)}`
+        : ` ${line}${style(ANSI_GREEN, suffix)}`,
     ];
   }
 }
