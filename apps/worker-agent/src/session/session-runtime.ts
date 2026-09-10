@@ -9,9 +9,10 @@ import {
   dispatchAgentNotification,
 } from "@minpeter/pss-runtime/execution";
 
-import type {
-  ReplayEventsResponse,
-  SubmitTurnResponse,
+import {
+  type ReplayEventsResponse,
+  SESSION_REPLAY_MAX_LIMIT,
+  type SubmitTurnResponse,
 } from "./session-contract";
 
 interface DurableThreadEventReader {
@@ -50,8 +51,12 @@ export async function replayDurableThreadEvents(
   thread: DurableThreadEventReader,
   options: ThreadEventReadOptions = {}
 ): Promise<ReplayEventsResponse> {
+  const limit = Math.min(
+    options.limit ?? SESSION_REPLAY_MAX_LIMIT,
+    SESSION_REPLAY_MAX_LIMIT
+  );
   const events: StoredThreadEvent[] = [];
-  for await (const event of thread.events(options)) {
+  for await (const event of thread.events({ ...options, limit })) {
     events.push(event);
   }
   const nextCursor = events.at(-1)?.cursor;

@@ -2,10 +2,16 @@ import type { StoredThreadEvent } from "@minpeter/pss-runtime";
 import { describe, expect, it } from "vitest";
 
 import {
+  parseThreadEventCursor,
+  serializeThreadEventCursor,
+} from "./session-contract";
+import {
   createSessionEventLiveSignal,
   createSessionEventStreamResponse,
 } from "./session-events";
 import { streamRemoteSessionEvents } from "./session-remote";
+
+const SSE_FRAME_ID_PATTERN = /^id: (0|[1-9]\d*)$/u;
 
 const firstEvent = {
   cursor: { offset: 0 },
@@ -24,6 +30,143 @@ const thirdEvent = {
 } satisfies StoredThreadEvent;
 
 describe("session SSE event stream", () => {
+  it("answers with the documented SSE headers", () => {
+    const live = createSessionEventLiveSignal();
+    const response = createSessionEventStreamResponse({
+      live,
+      replay: () => Promise.resolve({ events: [] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe(
+      "text/event-stream; charset=utf-8"
+    );
+    expect(response.headers.get("cache-control")).toBe(
+      "no-cache, no-transform"
+    );
+    expect(response.headers.get("connection")).toBe("keep-alive");
+  });
+
+  it("encodes frames as id/event/data carrying only cursor, event, threadKey", async () => {
+    const committed: StoredThreadEvent[] = [firstEvent, secondEvent];
+    const live = createSessionEventLiveSignal();
+    const response = createSessionEventStreamResponse({
+      after: { offset: 0 },
+      live,
+      replay: (after) =>
+        Promise.resolve(replayAfterCursor(committed, after?.offset)),
+    });
+    if (!response.body) {
+      throw new Error("expected SSE response body");
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (!buffer.includes("\n\n")) {
+      const result = await withTimeout(reader.read());
+      if (result.done) {
+        throw new Error("SSE stream ended before the first frame");
+      }
+      buffer += decoder.decode(result.value, { stream: true });
+    }
+    await reader.cancel();
+
+    const frame = buffer.split("\n\n")[0];
+    expect(frame).toBe(
+      `id: 1\nevent: thread-event\ndata: ${JSON.stringify(secondEvent)}`
+    );
+    const lines = frame?.split("\n") ?? [];
+    expect(lines[0]).toMatch(SSE_FRAME_ID_PATTERN);
+    expect(lines[1]).toBe("event: thread-event");
+    const data = lines[2]?.slice("data: ".length);
+    expect(Object.keys(JSON.parse(data ?? "{}") as object).sort()).toEqual([
+      "cursor",
+      "event",
+      "threadKey",
+    ]);
+  });
+
+  it("matches the replay nextCursor to the SSE id of the same event, so a client can switch paths without loss or duplication", async () => {
+    const committed: StoredThreadEvent[] = [firstEvent, secondEvent];
+    const nextCursor = secondEvent.cursor;
+    const page = { events: committed, nextCursor };
+    const live = createSessionEventLiveSignal();
+    const response = createSessionEventStreamResponse({
+      live,
+      replay: () => Promise.resolve(page),
+    });
+    if (!response.body) {
+      throw new Error("expected SSE response body");
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (buffer.split("\n\n").filter(Boolean).length < 2) {
+      const result = await withTimeout(reader.read());
+      if (result.done) {
+        throw new Error("SSE stream ended before both frames");
+      }
+      buffer += decoder.decode(result.value, { stream: true });
+    }
+    await reader.cancel();
+
+    const frameIds = buffer
+      .split("\n\n")
+      .filter(Boolean)
+      .map(
+        (frame) =>
+          frame
+            .split("\n")
+            .find((line) => line.startsWith("id: "))
+            ?.slice("id: ".length) ?? ""
+      );
+    // Every frame id is the canonical serialized cursor of its own event,
+    // and the last one is exactly the serialized replay nextCursor.
+    expect(frameIds).toEqual([
+      serializeThreadEventCursor(firstEvent.cursor),
+      serializeThreadEventCursor(secondEvent.cursor),
+    ]);
+    expect(frameIds.at(-1)).toBe(serializeThreadEventCursor(nextCursor));
+
+    // Switching paths: feeding the serialized nextCursor back as `after`
+    // (what streamRemoteSessionEvents does on reconnect) resumes strictly
+    // after that event — no redelivery of the nextCursor event, no gap.
+    const resumedAt = parseThreadEventCursor(
+      serializeThreadEventCursor(nextCursor)
+    );
+    const resumed = replayAfterCursor(
+      [...committed, thirdEvent],
+      resumedAt.offset
+    );
+    expect(resumed.events).toEqual([thirdEvent]);
+    expect(resumed.nextCursor).toEqual(thirdEvent.cursor);
+  });
+
+  it("stops the pump on cancellation without a busy-loop", async () => {
+    let replayCalls = 0;
+    const live = createSessionEventLiveSignal();
+    const response = createSessionEventStreamResponse({
+      live,
+      replay: () => {
+        replayCalls += 1;
+        return Promise.resolve({ events: [] });
+      },
+    });
+    if (!response.body) {
+      throw new Error("expected SSE response body");
+    }
+    const reader = response.body.getReader();
+    // Allow the pump to reach its idle wait.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    await reader.cancel();
+    live.publish();
+    live.publish();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(replayCalls).toBe(1);
+  });
+
   it("replays committed events before streaming a newly committed event", async () => {
     const committed: StoredThreadEvent[] = [firstEvent, secondEvent];
     const live = createSessionEventLiveSignal();

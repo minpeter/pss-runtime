@@ -95,23 +95,18 @@ describe("imagePrepareLogEvent", () => {
 });
 
 describe("summarizeImageOmits", () => {
-  it("nests soft-omit diagnostics for wide events", () => {
-    expect(
-      summarizeImageOmits([
-        { limit: "input_bytes", mediaType: "image/heic", filename: "big.heic" },
-      ])
-    ).toEqual({
+  it("nests soft-omit diagnostics for wide events without filenames", () => {
+    const wide = summarizeImageOmits([
+      { limit: "input_bytes", mediaType: "image/heic", filename: "big.heic" },
+    ]);
+    expect(wide).toEqual({
       imageOmits: {
         count: 1,
-        omits: [
-          {
-            limit: "input_bytes",
-            mediaType: "image/heic",
-            filename: "big.heic",
-          },
-        ],
+        omits: [{ limit: "input_bytes", mediaType: "image/heic" }],
       },
     });
+    // User-supplied filenames can be secret-bearing: never emitted.
+    expect(JSON.stringify(wide)).not.toContain("big.heic");
   });
 });
 

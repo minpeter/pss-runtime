@@ -35,17 +35,29 @@ export async function dispatchTuiTurn(
     text,
   } satisfies TuiTurnInput;
 
-  const response = await fetchCloudflareDurableObject({
-    namespace: env.AGENT_DO,
-    objectName: durableObjectName(channelKey(payload.channel)),
-    request: new Request("https://agent.internal/turn", {
-      body: JSON.stringify(payload),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-    }),
-  });
+  let response: Response | undefined;
+  try {
+    response = await fetchCloudflareDurableObject({
+      namespace: env.AGENT_DO,
+      objectName: durableObjectName(channelKey(payload.channel)),
+      request: new Request("https://agent.internal/turn", {
+        body: JSON.stringify(payload),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    });
+  } catch {
+    // A rejected stub fetch is an unreachable Durable Object; never surface
+    // the underlying stub error (it may carry internal identifiers).
+    throw new WorkerServerUpstreamError("agent durable object unavailable");
+  }
 
   if (!response) {
+    throw new WorkerServerUpstreamError("agent durable object unavailable");
+  }
+  if (!response.ok) {
+    // A non-OK Durable Object answer is an upstream failure; the bounded
+    // message never embeds the status or the upstream body.
     throw new WorkerServerUpstreamError("agent durable object unavailable");
   }
 
