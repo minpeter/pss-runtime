@@ -210,7 +210,7 @@ describe.each(["memory", "file"] as const)(
   "%s provider classification",
   (kind) => {
     it.each(["direct", "stream"] as const)(
-      "%s error finish retains completed same-step tools without replay",
+      "%s error finish does not execute tools or retain orphaned calls",
       async (mode) => {
         const directory = await mkdtemp(
           join(tmpdir(), "pss-classification-tools-")
@@ -306,7 +306,7 @@ describe.each(["memory", "file"] as const)(
             (await collect(await thread.send("ORIGINAL"))).at(-1)?.type
           ).toBe("turn-error");
           expect(requests).toHaveLength(1);
-          expect(executions).toBe(1);
+          expect(executions).toBe(0);
           const continuation = await thread.continue();
           expect(continuation).toBeDefined();
           if (!continuation) {
@@ -314,29 +314,13 @@ describe.each(["memory", "file"] as const)(
           }
           expect((await collect(continuation)).at(-1)?.type).toBe("turn-end");
           expect(requests).toHaveLength(2);
-          expect(executions).toBe(1);
+          expect(executions).toBe(0);
           const resumed = requests[1];
           expect(resumed).toBeDefined();
           if (!resumed) {
             throw new Error("Missing continuation request");
           }
-          expect(resumed.map((message) => message.role)).toEqual([
-            "user",
-            "assistant",
-            "tool",
-          ]);
-          expect(resumed[1]).toMatchObject({
-            content: [{ type: "tool-call", toolName: "count" }],
-          });
-          expect(resumed[2]).toMatchObject({
-            content: [
-              {
-                type: "tool-result",
-                toolName: "count",
-                output: { value: "TOOL_RESULT" },
-              },
-            ],
-          });
+          expect(resumed.map((message) => message.role)).toEqual(["user"]);
           expect(JSON.stringify(resumed)).not.toContain("DRAFT");
           expect(await thread.continue()).toBeUndefined();
         } finally {
