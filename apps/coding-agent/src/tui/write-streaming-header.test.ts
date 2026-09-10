@@ -108,7 +108,10 @@ describe("streaming write header", () => {
         expect(header(view)?.trimEnd()).toBe(
           ` write ${sanitizeTerminalText(path, path.length)}`.trimEnd()
         );
-        expect(view.render(240)[1]).toBe("");
+        // path-only preview is header-only: no `path:` metadata body, and no
+        // separator line for a body that does not exist yet.
+        expect(view.render(240)).toHaveLength(1);
+        expect(view.render(240)[0]).not.toContain("path:");
       } finally {
         view.dispose();
       }
