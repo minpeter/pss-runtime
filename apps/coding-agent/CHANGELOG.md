@@ -1,3 +1,36 @@
+## @minpeter/pss-coding-agent@0.0.14-next.21 (next)
+
+### Keep composer controls within their viewport
+
+Budget editor text, completion menus, model/session selectors, and extension prompts with their chrome while retaining the cursor and selected option. Preserve the complete cap across terminal resizes and keep search cursors visible on very narrow terminals.
+
+Retain caller limits and occupied session space on resize, let open extension selections grow, and preserve decorated model labels until the startup header freezes on the first transcript content.
+
+### Continue stopped unfinished tasks
+
+Empty Enter can continue interrupted, failed, or output-limited unfinished tasks in the current live session without duplicating the user prompt or replaying completed tools. Ambiguous effects and storage failures keep an explicit recovery boundary; continuation is not restored after disposal or restart.
+
+### Repository quality and release checks
+
+Add repository quality gates and Worker route validation, with stale release-age exemptions rejected and optional dependency drift detected.
+Measure complete published build output and bound unused-code and duplicate-code reports.
+
+### Preserve recovery contracts and terminal presentation
+
+Retain queued callers across execution-start failures and preserve completed tool inputs and structured results during recovery. Keep narrow transcript tails, renderer notifications, and streamed tool previews intact.
+
+### Update the OpenAI-compatible adapter
+
+Update the OpenAI-compatible adapter to 3.0.44 across all workspaces, preserving structured output and streamed tool inputs while reporting abruptly closed streams without retrying or executing incomplete arguments.
+
+### Update the terminal renderer to pi-tui 0.85.0
+
+Upgrade pi-tui to 0.85.0 and align the bundled LaTeX and Mermaid extension peers with the tested renderer range.
+
+### Update Zod validation
+
+Update Zod to 4.5.4 for structured model output and built-in web tool input validation.
+
 ## @minpeter/pss-coding-agent@0.0.14-next.20 (next)
 
 ### Keep streamed assistant text visible

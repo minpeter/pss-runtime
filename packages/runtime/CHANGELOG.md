@@ -1,3 +1,22 @@
+## @minpeter/pss-runtime@0.3.0-next.19 (next)
+
+### Continue stopped unfinished tasks
+
+Empty Enter can continue interrupted, failed, or output-limited unfinished tasks in the current live session without duplicating the user prompt or replaying completed tools. Ambiguous effects and storage failures keep an explicit recovery boundary; continuation is not restored after disposal or restart.
+
+### Repository quality and release checks
+
+Add repository quality gates and Worker route validation, with stale release-age exemptions rejected and optional dependency drift detected.
+Measure complete published build output and bound unused-code and duplicate-code reports.
+
+### Preserve recovery contracts and terminal presentation
+
+Retain queued callers across execution-start failures and preserve completed tool inputs and structured results during recovery. Keep narrow transcript tails, renderer notifications, and streamed tool previews intact.
+
+### Update the AI Gateway adapter
+
+Update the runtime's AI Gateway adapter to 4.0.75 while preserving provider retry decisions and streamed tool output recovery.
+
 ## @minpeter/pss-runtime@0.3.0-next.18 (next)
 
 ### Harden thread and session lifecycle ownership
