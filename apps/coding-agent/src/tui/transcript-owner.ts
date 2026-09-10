@@ -72,12 +72,23 @@ export class TranscriptOwner extends Container {
   #reservationWidth: number | undefined;
   #height = 0;
   readonly #width: () => number;
-  readonly #onContent: (() => void) | undefined;
+  readonly #beforeAppend: (() => void) | undefined;
+  readonly #boundaryAbove: (() => boolean) | undefined;
 
-  constructor(width: () => number, onContent?: () => void) {
+  /**
+   * Hand off any preceding live region at the output append boundary. When
+   * the region above already ends in a boundary row, the first block skips
+   * its own leading spacer so blocks stay exactly one row apart.
+   */
+  constructor(
+    width: () => number,
+    beforeAppend?: () => void,
+    boundaryAbove?: () => boolean
+  ) {
     super();
     this.#width = width;
-    this.#onContent = onContent;
+    this.#beforeAppend = beforeAppend;
+    this.#boundaryAbove = boundaryAbove;
   }
   get epoch(): number {
     return this.#epoch;
@@ -103,7 +114,10 @@ export class TranscriptOwner extends Container {
 
   /** One-shot appends are immediately COLD. No caller can bypass handoff. */
   override addChild(component: Component): void {
-    this.#onContent?.();
+    if (component instanceof Spacer && this.#opensOnBoundary()) {
+      return;
+    }
+    this.#beforeAppend?.();
     this.finish();
     super.addChild(ColdSnapshot.capture(component, this.#width()));
   }
@@ -119,7 +133,7 @@ export class TranscriptOwner extends Container {
       settle?: (view: T) => void;
     } = {}
   ): TranscriptLease<T> {
-    this.#onContent?.();
+    this.#beforeAppend?.();
     this.finish();
     const controller = new AbortController();
     const epoch = this.#epoch;
@@ -149,7 +163,7 @@ export class TranscriptOwner extends Container {
       block.addChild(view);
       mounted = block;
     }
-    if (options.leadingSpacer ?? true) {
+    if ((options.leadingSpacer ?? true) && !this.#opensOnBoundary()) {
       super.addChild(ColdSnapshot.capture(new Spacer(1), this.#width()));
     }
     super.addChild(mounted);
@@ -187,6 +201,11 @@ export class TranscriptOwner extends Container {
     } finally {
       this.#sealing = false;
     }
+  }
+
+  /** An empty owner directly below a boundary row needs no leading spacer. */
+  #opensOnBoundary(): boolean {
+    return this.children.length === 0 && this.#boundaryAbove?.() === true;
   }
 
   reset(_reason: "initial-replay" | "session-navigation"): void {

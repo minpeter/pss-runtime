@@ -6,23 +6,57 @@ export function normalizeInvalidToolResults({
   responseMessages,
   finalStep,
   finishReason,
+  startedToolCalls,
 }: Pick<
   ModelStepStreamFinalResult,
   "responseMessages" | "finalStep" | "finishReason"
->): ModelStepStreamFinalResult["responseMessages"] {
+> & {
+  readonly startedToolCalls: readonly { id: string; toolName: string }[];
+}): {
+  readonly messages: ModelStepStreamFinalResult["responseMessages"];
+  readonly rejectedOnly: boolean;
+} {
+  const calls = finalStep?.toolCalls ?? [];
+  const assistantCalls = responseMessages.flatMap((message) =>
+    message.role === "assistant" && typeof message.content !== "string"
+      ? message.content.filter((part) => part.type === "tool-call")
+      : []
+  );
+  const results = responseMessages.flatMap((message) =>
+    message.role === "tool"
+      ? message.content.filter((part) => part.type === "tool-result")
+      : []
+  );
   const rejected = new Map(
-    (finalStep?.toolCalls ?? []).flatMap((call) => {
+    calls.flatMap((call) => {
       if (
         !call.invalid ||
         call.providerExecuted ||
-        !InvalidToolInputError.isInstance(call.error)
+        !InvalidToolInputError.isInstance(call.error) ||
+        calls.filter((candidate) => candidate.toolCallId === call.toolCallId)
+          .length !== 1
       ) {
         return [];
       }
-      return [[call.toolCallId, call.error] as const];
+      const pairedCalls = assistantCalls.filter(
+        (part) => part.toolCallId === call.toolCallId
+      );
+      const pairedResults = results.filter(
+        (part) => part.toolCallId === call.toolCallId
+      );
+      if (
+        pairedCalls.length !== 1 ||
+        pairedCalls[0]?.toolName !== call.toolName ||
+        pairedCalls[0]?.providerExecuted ||
+        pairedResults.length !== 1 ||
+        pairedResults[0]?.toolName !== call.toolName
+      ) {
+        return [];
+      }
+      return [[call.toolCallId, call] as const];
     })
   );
-  return responseMessages.map((message) => {
+  const messages = responseMessages.map((message) => {
     if (message.role !== "tool") {
       return message;
     }
@@ -32,10 +66,14 @@ export function normalizeInvalidToolResults({
         if (part.type !== "tool-result") {
           return part;
         }
-        const error = rejected.get(part.toolCallId);
-        if (error === undefined) {
+        const call = rejected.get(part.toolCallId);
+        if (
+          call === undefined ||
+          !InvalidToolInputError.isInstance(call.error)
+        ) {
           return part;
         }
+        const error = call.error;
         const malformedJson = JSONParseError.isInstance(error.cause);
         return {
           ...part,
@@ -55,4 +93,20 @@ export function normalizeInvalidToolResults({
       }),
     };
   });
+  return {
+    messages,
+    // A finalized rejection is feedback, not unfinished generation. A sibling
+    // that only started streaming must not disappear behind that rejection.
+    rejectedOnly:
+      rejected.size > 0 &&
+      rejected.size === calls.length &&
+      assistantCalls.length === calls.length &&
+      results.length === calls.length &&
+      startedToolCalls.every(
+        (start) =>
+          rejected.get(start.id)?.toolName === start.toolName &&
+          startedToolCalls.filter((candidate) => candidate.id === start.id)
+            .length === 1
+      ),
+  };
 }

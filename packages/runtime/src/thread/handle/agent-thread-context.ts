@@ -34,6 +34,8 @@ export interface AgentThreadContext {
   readonly inputQueue: QueuedInput[];
   /** Persisted-state load/shutdown state machine. */
   readonly lifecycle: Fsm<ThreadLifecycleState>;
+  /** Revokes pending continuation admissions synchronously on teardown. */
+  readonly lifetime: AbortController;
   readonly model: ModelGenerationOptions;
   readonly pendingOverlays: QueuedRuntimeInput[];
   readonly pendingRuntimeInputs: QueuedRuntimeInput[];
@@ -67,6 +69,7 @@ export function createAgentThreadContext(
     }),
     execution: resolvedExecution,
     inputAdmissionQueue: Promise.resolve(),
+    lifetime: new AbortController(),
     inputQueue: [],
     lifecycle: createThreadLifecycleMachine(),
     model,

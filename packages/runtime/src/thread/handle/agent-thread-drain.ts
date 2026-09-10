@@ -1,6 +1,10 @@
 import { deferred } from "../../internal/deferred";
 import { closeRuntimeInput } from "../input/runtime-input";
 import { cancelQueuedDurableThreadInputs } from "../runtime/durable-input-cancellation";
+import {
+  cancellationForExecutionRun,
+  cancelThreadExecutionRun,
+} from "../runtime/execution";
 import { unregisterLiveThreadInput } from "../runtime/live-input-ownership";
 import type { AgentThreadContext } from "./agent-thread-context";
 import { assertThreadMachineInvariants } from "./agent-thread-machines";
@@ -87,6 +91,31 @@ export async function drainAgentThreadInputQueue(
     await loop;
   } catch (error) {
     loopFailure = { error };
+    // Preparation can fail before shifting the queue. Never leave a closed
+    // continuation there to execute invisibly on a later send/restart.
+    const controls = context.inputQueue.filter((item) => item.continuation);
+    for (const item of removeQueuedInputsByIdentity(
+      context.inputQueue,
+      controls
+    )) {
+      let failure = error;
+      try {
+        await cancelThreadExecutionRun({
+          cancellation: cancellationForExecutionRun(item.executionRun),
+          executionHost: context.execution.executionHost,
+        });
+      } catch (cancellationError) {
+        failure = new AggregateError(
+          [error, cancellationError],
+          "Thread admission cleanup failed."
+        );
+        loopFailure = { error: failure };
+      } finally {
+        closeRuntimeInput(item.runtimeInput);
+        item.run.emit({ type: "turn-error", message: errorMessage(failure) });
+        item.run.close();
+      }
+    }
   }
 
   try {

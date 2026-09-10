@@ -32,6 +32,11 @@ export interface RuntimeInputState {
 export interface QueuedInput {
   readonly acceptedEvent?: AgentEvent;
   readonly awaitBoundaries?: boolean;
+  readonly continuation?: NonNullable<
+    ReturnType<
+      import("../state/thread-state").ThreadState["continuationCheckpoint"]
+    >
+  >;
   readonly durableInput?: boolean;
   readonly durableInputClaim?: ClaimedThreadInput;
   readonly durableInputKind?: "follow-up" | "send";
