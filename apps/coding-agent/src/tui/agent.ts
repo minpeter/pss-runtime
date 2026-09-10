@@ -47,6 +47,16 @@ import {
   type InputThread,
 } from "./input-routing";
 import { ModelSelectorComponent } from "./model-selector";
+import {
+  ACCENT_INDIGO,
+  ACCENT_LIME,
+  ACCENT_ORANGE,
+  BG_USER_PLATE,
+  STATUS_ERROR,
+  STATUS_WARNING,
+  TEXT_BRIGHT,
+  TEXT_MUTED,
+} from "./palette";
 import { createSpinnerTicker, type SpinnerTicker } from "./pending-spinner";
 import { boundedReloadOperation } from "./reload";
 import { createRepeatedNotice, NOTICE_PULSE_MS } from "./repeated-notice";
@@ -95,17 +105,9 @@ const ANSI_RESET = "\x1b[0m";
 const ANSI_BLACK = "\x1b[30m";
 const ANSI_BOLD = "\x1b[1m";
 const ANSI_DIM = "\x1b[2m";
-const ANSI_BG_SOFT_LIGHT = "\x1b[48;5;249m";
 const ANSI_BG_DARK_GRAY = "\x1b[48;5;235m";
 const ANSI_BG_GRAY = "\x1b[100m";
 const ANSI_BG_WHITE = "\x1b[47m";
-const ANSI_CYAN = "\x1b[36m";
-const ANSI_BRIGHT_CYAN = "\x1b[96m";
-const ANSI_BRIGHT_WHITE = "\x1b[97m";
-const ANSI_GRAY = "\x1b[38;5;245m";
-const ANSI_ORANGE = "\x1b[38;5;208m";
-const ANSI_YELLOW = "\x1b[33m";
-const ANSI_RED = "\x1b[31m";
 const CTRL_C_ETX = "\u0003";
 const MODEL_SELECTOR_COMPACT_ROWS = 16;
 const MODEL_SELECTOR_COMPACT_CHROME_ROWS = 4;
@@ -292,7 +294,7 @@ export class FooterStatusBar extends Text {
 
     const prefix = entry.state === "running" ? this.currentFrame : "";
     const prefixStyle =
-      entry.state === "running" ? style(ANSI_CYAN, prefix) : "";
+      entry.state === "running" ? style(ACCENT_LIME, prefix) : "";
     const messageStylePrefix = this.resolveEntryStylePrefix(entry.level);
     const reservedPrefixWidth = prefix ? visibleWidth(prefix) + 1 : 0;
     const maxMessageWidth = Math.max(0, maxWidth - reservedPrefixWidth);
@@ -332,10 +334,10 @@ export class FooterStatusBar extends Text {
     level: "error" | "info" | "warning" | undefined
   ): string {
     if (level === "error") {
-      return ANSI_RED;
+      return STATUS_ERROR;
     }
     if (level === "warning") {
-      return ANSI_YELLOW;
+      return STATUS_WARNING;
     }
     return ANSI_DIM;
   }
@@ -420,16 +422,16 @@ class ComposerLayer extends Container {
 }
 
 const createDefaultMarkdownTheme = (): MarkdownTheme => ({
-  heading: (text) => style(`${ANSI_BOLD}${ANSI_BRIGHT_CYAN}`, text),
-  link: (text) => style(`${ANSI_BOLD}${ANSI_CYAN}`, text),
-  linkUrl: (text) => style(ANSI_GRAY, text),
-  code: (text) => style(ANSI_CYAN, text),
-  codeBlock: (text) => style(ANSI_CYAN, text),
-  codeBlockBorder: (text) => style(ANSI_GRAY, text),
-  quote: (text) => style(ANSI_GRAY, text),
-  quoteBorder: (text) => style(ANSI_GRAY, text),
-  hr: (text) => style(ANSI_GRAY, text),
-  listBullet: (text) => style(ANSI_CYAN, text),
+  heading: (text) => style(`${ANSI_BOLD}${ACCENT_LIME}`, text),
+  link: (text) => style(`${ANSI_BOLD}${ACCENT_INDIGO}`, text),
+  linkUrl: (text) => style(TEXT_MUTED, text),
+  code: (text) => style(ACCENT_LIME, text),
+  codeBlock: (text) => style(ACCENT_LIME, text),
+  codeBlockBorder: (text) => style(ACCENT_INDIGO, text),
+  quote: (text) => style(TEXT_MUTED, text),
+  quoteBorder: (text) => style(ACCENT_INDIGO, text),
+  hr: (text) => style(ACCENT_INDIGO, text),
+  listBullet: (text) => style(ACCENT_INDIGO, text),
   bold: (text) => style(ANSI_BOLD, text),
   italic: (text) => style(ANSI_DIM, text),
   strikethrough: (text) => style(ANSI_DIM, text),
@@ -438,11 +440,12 @@ const createDefaultMarkdownTheme = (): MarkdownTheme => ({
 });
 
 const createDefaultEditorTheme = (): EditorTheme => ({
-  borderColor: (text: string) => style(ANSI_GRAY, text),
+  borderColor: (text: string) => style(TEXT_MUTED, text),
   selectList: {
-    selectedPrefix: (text: string) => style(`${ANSI_BOLD}${ANSI_CYAN}`, text),
-    selectedText: (text: string) => style(ANSI_CYAN, text),
-    description: (text: string) => style(ANSI_GRAY, text),
+    selectedPrefix: (text: string) =>
+      style(`${ANSI_BOLD}${ACCENT_ORANGE}`, text),
+    selectedText: (text: string) => style(ACCENT_ORANGE, text),
+    description: (text: string) => style(TEXT_MUTED, text),
     scrollInfo: (text: string) => style(ANSI_DIM, text),
     noMatch: (text: string) => style(ANSI_DIM, text),
   },
@@ -456,8 +459,7 @@ const addUserMessage = (
   addChatComponent(
     chatContainer,
     new Markdown(sanitizeTerminalText(message), 1, 1, markdownTheme, {
-      bgColor: (text: string) =>
-        style(`${ANSI_BG_SOFT_LIGHT}${ANSI_BLACK}`, text),
+      bgColor: (text: string) => style(`${BG_USER_PLATE}${TEXT_BRIGHT}`, text),
     })
   );
 };
@@ -484,7 +486,7 @@ const addSessionResumeMessage = (
     "\n"
   );
   const cwd = config.cwd ?? subtitleCwd;
-  const label = `${ANSI_CYAN}Resumed session${ANSI_GRAY}`;
+  const label = `${ACCENT_LIME}Resumed session${TEXT_MUTED}`;
   const name = sanitizeTerminalText(
     entry.name ?? `#${sessionResumeSelector(entry.key).slice(0, 8)}`
   );
@@ -495,7 +497,7 @@ const addSessionResumeMessage = (
   addChatComponent(
     chatContainer,
     new Text(
-      `${label} · ${ANSI_BRIGHT_WHITE}${ANSI_BOLD}${name}\x1b[22m\n${ANSI_GRAY}${secondary}`,
+      `${label} · ${TEXT_BRIGHT}${ANSI_BOLD}${name}\x1b[22m\n${TEXT_MUTED}${secondary}`,
       1,
       1,
       (text) => style(ANSI_BG_DARK_GRAY, text)
@@ -508,7 +510,7 @@ const addContinuationMessage = (chatContainer: Container): void => {
   addChatComponent(
     chatContainer,
     new Text(
-      `${ANSI_CYAN}Continuing${ANSI_GRAY} · ${ANSI_BRIGHT_WHITE}${ANSI_BOLD}unfinished task\x1b[22m`,
+      `${ACCENT_LIME}Continuing${TEXT_MUTED} · ${TEXT_BRIGHT}${ANSI_BOLD}unfinished task\x1b[22m`,
       1,
       1,
       (text) => style(ANSI_BG_GRAY, text)
@@ -519,13 +521,13 @@ const addContinuationMessage = (chatContainer: Container): void => {
 const addErrorMessage = (chatContainer: Container, error: unknown): void => {
   const presentation = createTuiErrorPresentation(error);
   const lines = [
-    style(`${ANSI_BOLD}${ANSI_RED}`, `× ${presentation.title}`),
+    style(`${ANSI_BOLD}${STATUS_ERROR}`, `× ${presentation.title}`),
     `  ${presentation.message}`,
     ...(presentation.hint === undefined
       ? []
-      : [style(ANSI_GRAY, `  ${presentation.hint}`)]),
+      : [style(TEXT_MUTED, `  ${presentation.hint}`)]),
     ...(presentation.correlationIds ?? []).map(({ source, value }) =>
-      style(ANSI_GRAY, `  ${source}: ${value}`)
+      style(TEXT_MUTED, `  ${source}: ${value}`)
     ),
   ];
 
@@ -862,13 +864,17 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
       if (!message) {
         return;
       }
-      const normalText = style(ANSI_GRAY, message);
+      const normalText = style(TEXT_MUTED, message);
       const lease = chatContainer.acquire(() => new Text(normalText, 1, 0), {
         settle: () => repeatedNotice.settle(),
       });
-      return { normalText, row: lease.view, isActive: () => lease.active };
+      return {
+        normalText,
+        row: lease.view,
+        isActive: () => lease.active,
+      };
     },
-    normalStyle: (message) => style(ANSI_GRAY, message),
+    normalStyle: (message) => style(TEXT_MUTED, message),
     pulseStyle: (message) => style(`${ANSI_BG_WHITE}${ANSI_BLACK}`, message),
     requestRender: () => tui.requestRender(),
   });
@@ -892,7 +898,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
       // initial replay replaces. Keep them visible and HOT with the header
       // until replay (or later output) actually appends a different block.
       if (text) {
-        headerContainer.addChild(new Text(style(ANSI_GRAY, text), 1, 0));
+        headerContainer.addChild(new Text(style(TEXT_MUTED, text), 1, 0));
         startupEndsWithBoundary = false;
         tui.requestRender();
       }
@@ -930,7 +936,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     config.header?.title ?? "Agent TUI"
   )
     .split("\n")
-    .map((line) => style(`${ANSI_BOLD}${ANSI_ORANGE}`, line));
+    .map((line) => style(`${ANSI_BOLD}${ACCENT_INDIGO}`, line));
   const startupHeaderSubtitle = sanitizeTerminalText(
     config.header?.subtitle ?? ""
   ).split("\n");
@@ -1276,7 +1282,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
       chatContainer,
       new Text(
         style(
-          ANSI_RED,
+          STATUS_ERROR,
           isContinuation
             ? "■ interrupted. Continuation canceled."
             : "■ interrupted."
@@ -1293,7 +1299,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
       chatContainer,
       new Text(
         style(
-          ANSI_RED,
+          STATUS_ERROR,
           "■ interrupted - press Enter to continue, or enter new instructions."
         ),
         1,
@@ -1312,7 +1318,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
       chatContainer,
       new Text(
         style(
-          ANSI_RED,
+          STATUS_ERROR,
           `■ response ended abnormally (finish reason: ${finishReason})`
         ),
         1,
@@ -2008,7 +2014,11 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
         await renderSessionHistory();
       } catch (error) {
         showSystemMessage(
-          `History load failed for current session ${config.sessionSelector?.currentSessionKey() ?? "unknown"}; previous transcript retained: ${error instanceof Error ? error.message : String(error)}`
+          `History load failed for current session ${
+            config.sessionSelector?.currentSessionKey() ?? "unknown"
+          }; previous transcript retained: ${
+            error instanceof Error ? error.message : String(error)
+          }`
         );
         tui.requestRender();
         return;
@@ -2139,7 +2149,9 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
       try {
         continued = await untilExit(
           Promise.resolve(
-            config.thread.continue?.({ signal: extensionUiController.signal })
+            config.thread.continue?.({
+              signal: extensionUiController.signal,
+            })
           )
         );
       } catch (error) {

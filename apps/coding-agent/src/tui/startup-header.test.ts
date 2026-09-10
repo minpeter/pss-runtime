@@ -33,6 +33,10 @@ describe("startup header CJK boundaries", () => {
             expect(rows.some((line) => line.includes("\x1b[47m"))).toBe(
               pulsing
             );
+            // Settled model reads in the lime accent; the pulse replaces it.
+            expect(rows.some((line) => line.includes("\x1b[38;5;118m"))).toBe(
+              !pulsing
+            );
           }
         }
         view.setModel("CHANGED", !pulsing);

@@ -32,11 +32,15 @@ const createSelector = (overrides?: {
 
 describe("ModelSelectorComponent", () => {
   it("lists the current model first, marked and selected", () => {
-    const { plainLines } = createSelector();
+    const { plainLines, selector } = createSelector();
     const lines = plainLines();
 
     const currentLine = lines.find((line) => line.includes("→"));
     expect(currentLine).toContain("→ model-b ✓");
+    // Selection reads in the orange accent, the current marker in lime.
+    const styled = selector.render(60).find((line) => line.includes("→"));
+    expect(styled).toContain("\x1b[38;5;208m→ \x1b[0m\x1b[38;5;208mmodel-b");
+    expect(styled).toContain("\x1b[38;5;118m ✓\x1b[0m");
   });
 
   it("moves the selection with arrow keys and wraps around", () => {

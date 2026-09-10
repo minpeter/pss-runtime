@@ -34,15 +34,15 @@ describe("pending-spinner fixtures", () => {
     expect(PENDING_SPINNER_INTERVAL_MS).toBe(80);
   });
 
-  it("locks the indicator ANSI byte sequence (cyan frame + dim message)", () => {
+  it("locks the indicator ANSI byte sequence (lime frame + dim message)", () => {
     expect(stylePendingIndicator("⠋", "Executing...")).toBe(
-      "\x1b[36m⠋\x1b[0m \x1b[2mExecuting...\x1b[0m"
+      "\x1b[38;5;118m⠋\x1b[0m \x1b[2mExecuting...\x1b[0m"
     );
     expect(stylePendingIndicator("⠙", "Thinking...")).toBe(
-      "\x1b[36m⠙\x1b[0m \x1b[2mThinking...\x1b[0m"
+      "\x1b[38;5;118m⠙\x1b[0m \x1b[2mThinking...\x1b[0m"
     );
     expect(stylePendingIndicator("⠋", "Working...")).toBe(
-      "\x1b[36m⠋\x1b[0m \x1b[2mWorking...\x1b[0m"
+      "\x1b[38;5;118m⠋\x1b[0m \x1b[2mWorking...\x1b[0m"
     );
   });
 

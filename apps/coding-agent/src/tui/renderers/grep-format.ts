@@ -1,8 +1,10 @@
 const MATCH_LINE = /^(?<path>[^:]+):(?<line>\d+)#[A-Za-z]{2}\|(?<text>.*)$/u;
 const REGEX_METACHARACTERS = /[.*+?^${}()|[\]\\]/gu;
 
+import { ACCENT_LIME } from "../palette";
+
 const ANSI_RESET = "\x1b[0m";
-const ANSI_PATH = "\x1b[36m";
+const ANSI_PATH = ACCENT_LIME;
 const ANSI_LINE_NUMBER = "\x1b[90m";
 const ANSI_MATCH = "\x1b[1m\x1b[33m";
 
