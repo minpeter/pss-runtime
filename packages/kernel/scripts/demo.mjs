@@ -34,7 +34,7 @@ assert.deepEqual(composed.result, {
 });
 assert.deepEqual(
   composed.calls.map((call) => call.tool),
-  ["catalog.search", "pricing.quote", "pricing.quote", "notes.save"],
+  ["catalog.search", "pricing.quote", "pricing.quote", "notes.save"]
 );
 assert.ok(composed.calls.every((call) => call.status === "ok"));
 console.log(
@@ -49,8 +49,8 @@ console.log(
       calls: composed.calls,
     },
     null,
-    2,
-  ),
+    2
+  )
 );
 
 const retained = await post(`/sessions/${session}/eval`, {
@@ -86,6 +86,6 @@ console.log(
       resetPreservesNotes: true,
     },
     null,
-    2,
-  ),
+    2
+  )
 );

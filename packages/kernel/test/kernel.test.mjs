@@ -78,10 +78,15 @@ test("composes dependent async tool calls in one eval request", async () => {
 test("retains global lexical bindings between cells", async () => {
   // Given: declarations evaluated in a live session.
   const session = randomUUID();
-  const first = await execute(session, "const base = 40; let offset = 2; var runs = 1;");
+  const first = await execute(
+    session,
+    "const base = 40; let offset = 2; var runs = 1;"
+  );
   await first.json();
   // When: another request reads the same bindings.
-  const result = await (await execute(session, "({answer: base + offset, runs})")).json();
+  const result = await (
+    await execute(session, "({answer: base + offset, runs})")
+  ).json();
   // Then: values survive across requests, including lexical declarations.
   expect(result).toMatchObject({
     status: "ok",
@@ -102,7 +107,10 @@ test("resets the heap without deleting durable tool data", async () => {
   // Given: a session has volatile state and a saved note.
   const session = randomUUID();
   const before = await (
-    await execute(session, 'var x = 42; tools.notes.save({key:"answer",value:x})')
+    await execute(
+      session,
+      'var x = 42; tools.notes.save({key:"answer",value:x})'
+    )
   ).json();
   // When: the context is explicitly reset.
   const reset = await (
@@ -113,7 +121,7 @@ test("resets the heap without deleting durable tool data", async () => {
   const after = await (
     await execute(
       session,
-      '(async()=>({variable:typeof x,note:await tools.notes.get({key:"answer"})}))()',
+      '(async()=>({variable:typeof x,note:await tools.notes.get({key:"answer"})}))()'
     )
   ).json();
   // Then: the heap changed generation but the storage-backed note remains.
@@ -147,7 +155,9 @@ test("returns a tool error and resets the failed context", async () => {
     stateReset: true,
     calls: [{ tool: "pricing.quote", status: "error" }],
   });
-  expect(await (await execute(session, "typeof previous")).json()).toMatchObject({
+  expect(
+    await (await execute(session, "typeof previous")).json()
+  ).toMatchObject({
     status: "ok",
     result: "undefined",
   });
@@ -160,7 +170,7 @@ test("lets guest code catch a rejected host tool promise", async () => {
   const result = await (
     await execute(
       session,
-      '(async()=>{try {await tools.pricing.quote({sku:"missing",quantity:1});} catch {return "caught";}})()',
+      '(async()=>{try {await tools.pricing.quote({sku:"missing",quantity:1});} catch {return "caught";}})()'
     )
   ).json();
   // Then: the overall execution succeeds without discarding handled errors.
@@ -195,7 +205,10 @@ test("does not expose host process, filesystem, or network globals", async () =>
   const session = randomUUID();
   // When: code checks host-only capabilities.
   const result = await (
-    await execute(session, "[typeof process,typeof Bun,typeof fetch,typeof require]")
+    await execute(
+      session,
+      "[typeof process,typeof Bun,typeof fetch,typeof require]"
+    )
   ).json();
   // Then: only explicit bridged tools can reach host capabilities.
   expect(result).toMatchObject({
@@ -214,6 +227,21 @@ test("rejects invalid eval input before touching the kernel", async () => {
   expect(response.status).toBe(400);
 });
 
+test("rejects new tool calls while serializing a completed result", async () => {
+  // Given: a result serializer tries to start a new host operation.
+  const session = randomUUID();
+  const code =
+    '({toJSON(){tools.notes.save({key:"late",value:42});return "done";}})';
+  // When: the completed result crosses the JSON boundary.
+  const result = await (await execute(session, code)).json();
+  // Then: serialization fails before a host tool is invoked.
+  expect(result).toMatchObject({
+    status: "error",
+    stateReset: true,
+    calls: [],
+  });
+});
+
 test("serializes overlapping cells while async host tools are running", async () => {
   // Given: both cells increment a shared value across a real async storage call.
   const session = randomUUID();
@@ -223,8 +251,8 @@ test("serializes overlapping cells while async host tools are running", async ()
   // When: two HTTP callers submit overlapping eval requests.
   const results = await Promise.all(
     [execute(session, code), execute(session, code)].map(async (response) =>
-      (await response).json(),
-    ),
+      (await response).json()
+    )
   );
   // Then: no increment is lost across the host await boundary.
   expect(results.map((result) => result.result).sort()).toEqual([1, 2]);
