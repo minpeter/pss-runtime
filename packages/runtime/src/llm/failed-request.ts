@@ -34,7 +34,10 @@ export function recordFailedRequest(
   error: unknown,
   messages: readonly ModelMessage[]
 ): void {
-  if (typeof error === "object" && error !== null) {
+  if (
+    (typeof error === "object" && error !== null) ||
+    typeof error === "function"
+  ) {
     failures.set(error, messages);
   }
 }
@@ -42,7 +45,12 @@ export function recordFailedRequest(
 export function failedRequestMessages(
   error: unknown
 ): readonly ModelMessage[] | undefined {
-  if (typeof error !== "object" || error === null) {
+  if (
+    !(
+      (typeof error === "object" && error !== null) ||
+      typeof error === "function"
+    )
+  ) {
     return;
   }
   const messages = failures.get(error);

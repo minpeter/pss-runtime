@@ -1,10 +1,9 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { InvalidToolInputError, tool } from "ai";
+import { InvalidToolInputError, jsonSchema, tool } from "ai";
 import { convertArrayToReadableStream } from "ai/test";
 import { describe, expect, it, vi } from "vitest";
-import { z } from "zod";
 import { Agent } from "../agent/core/agent";
 import { createFileHost } from "../platform/file";
 import { createInMemoryHost } from "../platform/memory";
@@ -24,7 +23,12 @@ type Part =
     : never;
 const secret = "SOURCE_MUST_NOT_APPEAR_IN_ERROR";
 const input = `{"content":"${secret}`;
-const inputSchema = z.object({ content: z.string() });
+const inputSchema = jsonSchema<{ content: string }>({
+  type: "object",
+  properties: { content: { type: "string" } },
+  required: ["content"],
+  additionalProperties: false,
+});
 const finish = (reason: "stop" | "length"): Part => ({
   type: "finish",
   finishReason: { raw: reason, unified: reason },

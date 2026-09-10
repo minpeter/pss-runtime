@@ -27,7 +27,7 @@ import { createTurnModelTransforms } from "./turn-model-transforms";
 import type { ProcessQueuedInputOptions } from "./turn-processor-options";
 import { closeTurnWithDurableTerminalEvent } from "./turn-terminal";
 
-export type QueuedInputOutcome = "processed" | "blocked";
+export type QueuedInputOutcome = "processed" | "blocked" | "start-failed";
 
 export async function processQueuedInput({
   activate,
@@ -235,7 +235,7 @@ export async function processQueuedInput({
       // Start never acquired execution authority. Do not persist history or
       // terminalize a record that may already belong to another worker.
       emitStartFailure(item, error);
-      return "blocked";
+      return "start-failed";
     }
     const blocked =
       pendingDurableInputClaim !== undefined ||

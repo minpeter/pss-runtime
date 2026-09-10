@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { jsonSchema, tool } from "ai";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Agent } from "../../agent/core/agent";
 import type { AgentHooks } from "../../agent/core/hooks";
 import { createFileHost } from "../../platform/file";
@@ -19,6 +19,40 @@ const RECOVERY = /recovery/i;
 
 for (const kind of ["memory", "file"] as const) {
   describe(`hook recovery (${kind})`, () => {
+    it.each([true, false])(
+      "classifies context hook cancellation without swallowing unrelated failure (abort=%s)",
+      async (abort) => {
+        const directory = await mkdtemp(join(tmpdir(), "hook-cancellation-"));
+        const host =
+          kind === "file"
+            ? createFileHost({ directory })
+            : createInMemoryHost();
+        const model = vi.fn(() =>
+          Promise.resolve(mockLanguageModelV4Text("UNEXPECTED"))
+        );
+        const thread = new Agent({
+          host,
+          model: createMockLanguageModelV4(model),
+          hooks: {
+            transformModelContext: (_event, context) => {
+              thread.interrupt();
+              if (abort) {
+                context.signal.throwIfAborted();
+              }
+              throw new Error("UNRELATED_HOOK_FAILURE");
+            },
+          },
+        }).thread("context-cancellation");
+        try {
+          const events = await collect(await thread.send("ORIGINAL"));
+          expect(events.at(-1)?.type).toBe(abort ? "turn-abort" : "turn-error");
+          expect(model).not.toHaveBeenCalled();
+        } finally {
+          await thread.dispose();
+          await rm(directory, { recursive: true, force: true });
+        }
+      }
+    );
     for (const stage of [
       "acceptInput",
       "beforeTurnStart",

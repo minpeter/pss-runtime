@@ -111,29 +111,25 @@ const apiFailure = (statusCode: number, isRetryable: boolean) =>
   });
 
 const streamFailures = [
-  { label: "429", error: apiFailure(429, true), eligible: true },
-  { label: "500", error: apiFailure(500, true), eligible: true },
-  { label: "503", error: apiFailure(503, true), eligible: true },
+  { label: "429", error: apiFailure(429, true) },
+  { label: "500", error: apiFailure(500, true) },
+  { label: "503", error: apiFailure(503, true) },
   {
     label: "503 retry forbidden",
     error: apiFailure(503, false),
-    eligible: true,
   },
-  { label: "400 retry allowed", error: apiFailure(400, true), eligible: true },
+  { label: "400 retry allowed", error: apiFailure(400, true) },
   {
     label: "gateway authentication",
     error: new GatewayAuthenticationError(),
-    eligible: true,
   },
   {
     label: "gateway internal",
     error: new GatewayInternalServerError(),
-    eligible: true,
   },
   {
     label: "transport loss",
     error: new Error("connection lost"),
-    eligible: true,
   },
 ];
 
@@ -142,7 +138,7 @@ describe.each(["memory", "file"] as const)(
   (kind) => {
     it.each(streamFailures)(
       "manually continues $label independently of automatic retryability",
-      async ({ error, eligible }) => {
+      async ({ error }) => {
         const directory = await mkdtemp(join(tmpdir(), "pss-stream-policy-"));
         const host =
           kind === "file"
@@ -200,30 +196,24 @@ describe.each(["memory", "file"] as const)(
             failed.filter((event) => event.type === "model-retry")
           ).toMatchObject([{ phase: "stopped", reason: "stream-ended" }]);
           const continuation = await thread.continue();
-          expect(continuation !== undefined).toBe(eligible);
+          expect(continuation).toBeDefined();
           if (continuation) {
             expect((await collect(continuation)).at(-1)?.type).toBe("turn-end");
           }
-          expect(requests).toHaveLength(eligible ? 2 : 1);
+          expect(requests).toHaveLength(2);
           const history = decodeStoredThreadSnapshot(
             await host.store.threads.load("policy")
           );
-          expect(history).toEqual(
-            eligible
-              ? [
-                  { role: "user", content: "ORIGINAL" },
-                  {
-                    role: "assistant",
-                    content: [{ type: "text", text: "DONE" }],
-                  },
-                ]
-              : []
-          );
-          if (eligible) {
-            expect(requests[1]).toEqual([
-              { role: "user", content: [{ type: "text", text: "ORIGINAL" }] },
-            ]);
-          }
+          expect(history).toEqual([
+            { role: "user", content: "ORIGINAL" },
+            {
+              role: "assistant",
+              content: [{ type: "text", text: "DONE" }],
+            },
+          ]);
+          expect(requests[1]).toEqual([
+            { role: "user", content: [{ type: "text", text: "ORIGINAL" }] },
+          ]);
           expect(await thread.continue()).toBeUndefined();
         } finally {
           await thread.dispose();

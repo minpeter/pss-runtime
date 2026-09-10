@@ -10,6 +10,7 @@ import type {
   StreamAgentEvent,
 } from "../../thread/protocol/events";
 import { modelMessageToAgentEvents } from "../../thread/protocol/mapping";
+import { AgentHookError } from "../core/hook-error";
 import type {
   CapturedModelStepOutput,
   ModelHistory,
@@ -54,6 +55,18 @@ export async function readModelOutput({
       for (const message of stopped.messages) {
         history.appendModelMessage(message);
       }
+      return "aborted";
+    }
+
+    const cancellation =
+      error instanceof AgentHookError && error.hook === "transformModelContext"
+        ? error.cause
+        : error;
+    if (
+      signal.aborted &&
+      cancellation instanceof Error &&
+      cancellation.name === "AbortError"
+    ) {
       return "aborted";
     }
 
