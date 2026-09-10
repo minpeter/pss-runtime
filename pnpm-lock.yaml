@@ -23,8 +23,8 @@ importers:
   .:
     devDependencies:
       '@ai-sdk/openai-compatible':
-        specifier: 3.0.23
-        version: 3.0.23(zod@4.5.4)
+        specifier: 3.0.44
+        version: 3.0.44(zod@4.5.4)
       '@babel/core':
         specifier: 8.0.1
         version: 8.0.1
@@ -122,8 +122,8 @@ importers:
         specifier: 4.0.31
         version: 4.0.31(zod@4.5.4)
       '@ai-sdk/openai-compatible':
-        specifier: 3.0.23
-        version: 3.0.23(zod@4.5.4)
+        specifier: 3.0.44
+        version: 3.0.44(zod@4.5.4)
       '@earendil-works/pi-tui':
         specifier: ^0.84.1
         version: 0.84.3
@@ -207,8 +207,8 @@ importers:
   apps/worker-agent:
     dependencies:
       '@ai-sdk/openai-compatible':
-        specifier: 3.0.23
-        version: 3.0.23(zod@4.5.4)
+        specifier: 3.0.44
+        version: 3.0.44(zod@4.5.4)
       '@chat-adapter/state-memory':
         specifier: 4.37.0
         version: 4.37.0(ai@7.0.51(zod@4.5.4))(zod@4.5.4)
@@ -265,8 +265,8 @@ importers:
   examples/background-subagent:
     dependencies:
       '@ai-sdk/openai-compatible':
-        specifier: 3.0.23
-        version: 3.0.23(zod@4.5.4)
+        specifier: 3.0.44
+        version: 3.0.44(zod@4.5.4)
       '@minpeter/pss-runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -296,8 +296,8 @@ importers:
   examples/basic:
     dependencies:
       '@ai-sdk/openai-compatible':
-        specifier: 3.0.23
-        version: 3.0.23(zod@4.5.4)
+        specifier: 3.0.44
+        version: 3.0.44(zod@4.5.4)
       '@minpeter/pss-runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -321,8 +321,8 @@ importers:
   examples/evals:
     dependencies:
       '@ai-sdk/openai-compatible':
-        specifier: 3.0.23
-        version: 3.0.23(zod@4.5.4)
+        specifier: 3.0.44
+        version: 3.0.44(zod@4.5.4)
       '@minpeter/pss-runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -349,8 +349,8 @@ importers:
   examples/hooks:
     dependencies:
       '@ai-sdk/openai-compatible':
-        specifier: 3.0.23
-        version: 3.0.23(zod@4.5.4)
+        specifier: 3.0.44
+        version: 3.0.44(zod@4.5.4)
       '@minpeter/pss-runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -374,8 +374,8 @@ importers:
   examples/local-file-agent:
     dependencies:
       '@ai-sdk/openai-compatible':
-        specifier: 3.0.23
-        version: 3.0.23(zod@4.5.4)
+        specifier: 3.0.44
+        version: 3.0.44(zod@4.5.4)
       '@minpeter/pss-runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -399,8 +399,8 @@ importers:
   examples/sync-subagent:
     dependencies:
       '@ai-sdk/openai-compatible':
-        specifier: 3.0.23
-        version: 3.0.23(zod@4.5.4)
+        specifier: 3.0.44
+        version: 3.0.44(zod@4.5.4)
       '@minpeter/pss-runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -479,8 +479,8 @@ importers:
   experimental/pss-edit-format-bench:
     dependencies:
       '@ai-sdk/openai-compatible':
-        specifier: 3.0.23
-        version: 3.0.23(zod@4.5.4)
+        specifier: 3.0.44
+        version: 3.0.44(zod@4.5.4)
       '@minpeter/pss-coding-agent':
         specifier: workspace:*
         version: link:../../apps/coding-agent
@@ -712,8 +712,8 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/openai-compatible@3.0.23':
-    resolution: {integrity: sha512-rrEABAjpaFPqRV+2JLkgb70r81+yLHdi7ir99lPir8G9tSXWkHjcuTWaKDhkimG/9W1hqsHtkomgPOqK4mC2hQ==}
+  '@ai-sdk/openai-compatible@3.0.44':
+    resolution: {integrity: sha512-pK7mERd/aIJVtyQCe/nV3G3iEJCY1no8GHDOGbgpNC+petjSfsxj+ni0Q8WVVehTUiY9B04F3Xvir+icBgORCg==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -738,12 +738,6 @@ packages:
 
   '@ai-sdk/provider-utils@5.0.20':
     resolution: {integrity: sha512-9W8c2mXiGgbo9sBBT4ybEWF8znxla2CO8VTim8t5oCCLP4aDH4o6RvkHfwL/iLC6mEbO4a6LpS2FBbQHccU+ig==}
-    engines: {node: '>=22'}
-    peerDependencies:
-      zod: ^3.25.76 || ^4.1.8
-
-  '@ai-sdk/provider-utils@5.0.21':
-    resolution: {integrity: sha512-Q4z27c5vqKuXZN65QuF7FVm+uvm3qxEioiQ+8c3s5xXlhbE1Y/SLGBB4BuF+UWia4KaDu2HmNpdR1RGW02/eGg==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -5696,10 +5690,10 @@ snapshots:
       '@vercel/oidc': 3.2.0
       zod: 4.5.4
 
-  '@ai-sdk/openai-compatible@3.0.23(zod@4.5.4)':
+  '@ai-sdk/openai-compatible@3.0.44(zod@4.5.4)':
     dependencies:
-      '@ai-sdk/provider': 4.0.5
-      '@ai-sdk/provider-utils': 5.0.21(zod@4.5.4)
+      '@ai-sdk/provider': 4.0.10
+      '@ai-sdk/provider-utils': 5.0.36(zod@4.5.4)
       zod: 4.5.4
 
   '@ai-sdk/openai@4.0.31(zod@4.5.4)':
@@ -5724,15 +5718,6 @@ snapshots:
       zod: 3.25.76
 
   '@ai-sdk/provider-utils@5.0.20(zod@4.5.4)':
-    dependencies:
-      '@ai-sdk/provider': 4.0.5
-      '@standard-schema/spec': 1.1.0
-      '@workflow/serde': 4.1.0
-      eventsource-parser: 3.1.1
-      undici: 7.29.0
-      zod: 4.5.4
-
-  '@ai-sdk/provider-utils@5.0.21(zod@4.5.4)':
     dependencies:
       '@ai-sdk/provider': 4.0.5
       '@standard-schema/spec': 1.1.0

@@ -32,7 +32,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "3.0.23",
+    "@ai-sdk/openai-compatible": "3.0.44",
     "@chat-adapter/state-memory": "4.37.0",
     "@chat-adapter/telegram": "4.37.0",
     "@minpeter/pss-runtime": "workspace:*",
