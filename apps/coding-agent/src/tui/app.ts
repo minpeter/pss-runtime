@@ -93,7 +93,7 @@ interface StartTuiDependencies {
 }
 
 const RECOVERY_ACTIVATION_TIMEOUT_MS = 60_000;
-const PSS_PIXEL_WORDMARK = ["█▀▙ ▟▀▘ ▟▀▘", "█▀▘ ▄▄▛ ▄▄▛"].join("\n");
+const PSS_PIXEL_WORDMARK = ["█🮂🮂𜷞 𜷥𜴸▀▀ 𜷥𜴸▀▀", "█🮂🮂  ▄▄𜶭𜵰 ▄▄𜶭𜵰"].join("\n");
 
 const selectedThreadConfig = async (
   config: ReturnType<typeof resolveCodingAgentThreadConfig>,

@@ -269,6 +269,11 @@ describe("/resume", () => {
     expect(manager.switchToSession).toHaveBeenCalledWith("cwd:/work#2");
     expect(switched[0]?.[1]).toBe("resume");
     expect(result.success).toBe(true);
+    expect(result.action).toEqual({
+      clear: true,
+      reason: "resume",
+      type: "session",
+    });
   });
 
   it("opens the picker with unmatched text as its search query", async () => {
