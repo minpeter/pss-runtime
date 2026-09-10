@@ -145,7 +145,7 @@
     "duplicates:apps/worker-agent/src/session/session-events-server.test.ts:279-294=apps/worker-agent/src/session/session-events-server.test.ts:323-338",
     "duplicates:apps/worker-agent/src/session/session-server.ts:99-117=apps/worker-agent/src/tui/tui-server.ts:43-62",
     "duplicates:apps/worker-agent/src/session/session-transcript-projection.ts:87-100=packages/runtime/src/thread/state/history.ts:220-233",
-    "duplicates:apps/worker-agent/src/telegram/telegram-delivery.test.ts:143-181=apps/worker-agent/src/telegram/telegram.test.ts:569-607",
+    "duplicates:apps/worker-agent/src/telegram/telegram-delivery.test.ts:143-181=apps/worker-agent/src/telegram/telegram.test.ts:576-614",
     "duplicates:apps/worker-agent/src/telegram/telegram-delivery.test.ts:143-181=apps/worker-agent/src/tui/tui-server-auth.test.ts:134-172",
     "duplicates:apps/worker-agent/src/telegram/telegram-delivery.ts:29-51=apps/worker-agent/src/tui/tui-contract.ts:15-37",
     "duplicates:apps/worker-agent/src/telegram/telegram-dry-run.test.ts:38-59=apps/worker-agent/src/telegram/telegram.test.ts:48-69",
