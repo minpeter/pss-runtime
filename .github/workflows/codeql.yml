@@ -1,0 +1,50 @@
+name: CodeQL
+
+# CodeQL static analysis for the JavaScript/TypeScript language
+# (VAL-SEC-027/028). Bounded triggers only: push to main, pull requests, a
+# weekly schedule, and manual dispatch. The analyze job holds contents: read
+# plus the minimal security-events: write scope needed to upload SARIF
+# results to code scanning. When that upload fails, the step fails and the
+# run stays visibly red; the failure mode and recovery are documented in
+# docs/runbooks/security-scan-failure-triage.md.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly, Tuesday 03:41 UTC.
+    - cron: "41 3 * * 2"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # Minimal write scope: SARIF upload to code scanning only.
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@6f5948dfacef28e207b48d0905cf90c03365536d # v3
+        with:
+          languages: javascript-typescript
+
+      # Upload failure is visible: no continue-on-error here or on the job,
+      # and the upload input is never disabled, so a failed SARIF upload
+      # fails this step and the whole run instead of passing silently.
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@6f5948dfacef28e207b48d0905cf90c03365536d # v3
+        with:
+          category: "/language:javascript-typescript"

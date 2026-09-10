@@ -1,6 +1,6 @@
 import type { WorkerAgentDeliveredMessage } from "./agent/agent-do-delivery";
 import type { ChannelAddress } from "./channel";
-import type { Env } from "./env";
+import { type Env, readTelegramApiBaseUrl } from "./env";
 import { createTelegramMessageSink } from "./telegram/telegram-sink";
 import type { WorkerAgentSendMessageToolOptions } from "./tools";
 import { createTuiResponseMessageSink } from "./tui/tui-response-sink";
@@ -15,10 +15,12 @@ export function createSendMessageToolOptions(
   channel: () => ChannelAddress | undefined
 ): WorkerAgentSendMessageToolOptions {
   const userName = env.TELEGRAM_BOT_USERNAME?.trim();
+  const apiBaseUrl = readTelegramApiBaseUrl(env);
   return {
     channel,
     sink: createTelegramMessageSink({
       botToken: env.TELEGRAM_BOT_TOKEN,
+      ...(apiBaseUrl ? { apiBaseUrl } : {}),
       ...(userName ? { userName } : {}),
     }),
   };
