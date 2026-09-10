@@ -19,6 +19,7 @@ const EXPECTED_WORKSPACE_SOURCE = `packages:
 autoInstallPeers: false
 patchedDependencies:
   '@vercel/agent-eval@2.2.1': patches/@vercel__agent-eval@2.2.1.patch
+  '@oh-my-pi/pi-natives@18.1.5': patches/@oh-my-pi__pi-natives@18.1.5.patch
 overrides:
   # Security-only, parent-scoped resolutions where direct updates cannot reach the vulnerable edge.
   # Keep these exact so unrelated consumers retain their declared dependency ranges.
@@ -27,6 +28,7 @@ overrides:
   'dockerode@4.0.12>uuid': 11.1.1
   'miniflare@5.20260730.0-alpha>undici': 7.29.0
   'miniflare@5.20260820.0-alpha>sharp': 0.35.4
+  'miniflare@5.20260903.0-alpha>sharp': 0.35.4
   'miniflare@5.20260908.0-alpha>sharp': 0.35.4
   read-yaml-file: 2.1.0
   typescript: ^7.0.2
