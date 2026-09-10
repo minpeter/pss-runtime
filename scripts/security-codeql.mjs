@@ -130,6 +130,10 @@ function workflowProblems(path, doc) {
     problems.push(
       `${path} job "${analyze.jobName}" must contain both CodeQL init and analyze steps`
     );
+  } else if (init.step.uses.split("@")[1] !== analyze.step.uses.split("@")[1]) {
+    problems.push(
+      `${path} job "${analyze.jobName}" must pin CodeQL init and analyze to the same reference`
+    );
   }
   problems.push(...permissionProblems(path, doc, analyze));
   problems.push(...visibleFailureProblems(path, analyze));
