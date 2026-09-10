@@ -9,6 +9,7 @@ import {
   enforceContextGate,
   materializeModelPromptTools,
 } from "./context-gate";
+import { recordFailedRequest, safeFailedMessages } from "./failed-request";
 import { normalizeInvalidToolResults } from "./invalid-tool-input";
 import { createModelAttemptTracker } from "./model-attempt";
 import { ModelToolSelectionError } from "./model-step-error";
@@ -29,9 +30,15 @@ import {
   firstSafeTelemetryIdentifier,
   modelUsageEvent,
 } from "./model-usage";
+import {
+  recordStoppedModelStep,
+  StoppedModelStep,
+  StoppedToolRecoveryError,
+} from "./stopped-model-step";
 import { assertNoUnsupportedToolApproval } from "./tool-approval";
 import { rewriteMessageToolCallIds } from "./tool-call-ids";
 import { normalizeToolCallIds } from "./tool-execution-wrapper";
+import { ToolStepProgress } from "./tool-step-progress";
 
 export async function generateModelStep(
   options: ModelStepOptions
@@ -137,9 +144,15 @@ export async function generateModelStepResult({
   });
   assertNoUnsupportedToolApproval(prepared.tools);
   const attemptTracker = createModelAttemptTracker({ attemptId });
+  let providerFailure = false;
+  const startedToolCalls: { id: string; toolName: string }[] = [];
+  const toolProgress = new ToolStepProgress();
   const handle = createModelStepStream({
     attemptId,
     onRetry: onStreamEvent,
+    onProviderFailure: () => {
+      providerFailure = true;
+    },
     activeTools: prepared.activeTools,
     abortSignal: signal,
     instructions: prompt.instructions,
@@ -156,6 +169,7 @@ export async function generateModelStepResult({
       }
     },
     onAttemptStart: (origin) => {
+      providerFailure = false;
       for (const event of attemptTracker.begin(origin)) {
         onStreamEvent?.(event);
       }
@@ -167,7 +181,8 @@ export async function generateModelStepResult({
     tools: normalizeToolCallIds(
       materializedTools.tools ?? prepared.tools,
       toolCallIds,
-      toolExecution
+      toolExecution,
+      toolProgress
     ),
   });
   prepared.startToolCacheFingerprintReport?.();
@@ -179,6 +194,9 @@ export async function generateModelStepResult({
         continue;
       }
       const event = mapStreamPartToAgentEvent(part);
+      if (part.type === "tool-input-start") {
+        startedToolCalls.push({ id: part.id, toolName: part.toolName });
+      }
       if (event) {
         onStreamEvent?.(event);
         const delta = streamedTokenText(event);
@@ -199,6 +217,27 @@ export async function generateModelStepResult({
     }
     const { finalStep, finishReason, response, responseMessages, usage } =
       await handle.finalize();
+
+    if (toolProgress.hasUnresolved) {
+      if (toolProgress.recoveryError !== undefined) {
+        throw toolProgress.recoveryError;
+      }
+      throw new StoppedToolRecoveryError(() => toolProgress.recover());
+    }
+    const normalized = normalizeInvalidToolResults({
+      responseMessages,
+      finishReason,
+      finalStep,
+      startedToolCalls,
+    });
+    if (finishReason === "length" && !normalized.rejectedOnly) {
+      throw new StoppedModelStep(
+        "length",
+        safeFailedMessages(normalized.messages).map((message) =>
+          rewriteMessageToolCallIds(message, toolCallIds)
+        )
+      );
+    }
 
     const normalizedUsage = modelUsageEvent({
       attemptId,
@@ -226,11 +265,9 @@ export async function generateModelStepResult({
     );
     return {
       ...(usageSnapshot ? { contextUsage: usageSnapshot } : {}),
-      messages: normalizeInvalidToolResults({
-        responseMessages,
-        finishReason,
-        finalStep,
-      }).map((message) => rewriteMessageToolCallIds(message, toolCallIds)),
+      messages: normalized.messages.map((message) =>
+        rewriteMessageToolCallIds(message, toolCallIds)
+      ),
       usage: normalizedUsage,
     };
   } catch (error) {
@@ -246,8 +283,59 @@ export async function generateModelStepResult({
       () => undefined,
       () => undefined
     );
+    if (error instanceof StoppedModelStep) {
+      throw error;
+    }
+    if (toolProgress.hasUnresolved) {
+      if (toolProgress.recoveryError !== undefined) {
+        throw toolProgress.recoveryError;
+      }
+      throw new StoppedToolRecoveryError(() => [
+        ...safeFailedMessages([]),
+        ...toolProgress.recover(),
+      ]);
+    }
+    if (providerFailure || (signal?.aborted && isAbortError(error))) {
+      // Retain only complete model/tool pairs and committed text. Partial
+      // tool arguments and reasoning are intentionally discarded.
+      const partial = await handle.partialMessages?.().catch(() => []);
+      const messages: ModelMessage[] = safeFailedMessages(partial ?? []).map(
+        (message) => rewriteMessageToolCallIds(message, toolCallIds)
+      );
+      const retained = new Set(
+        messages.flatMap((message) =>
+          message.role === "tool"
+            ? message.content.flatMap((part) =>
+                part.type === "tool-result" ? [part.toolCallId] : []
+              )
+            : []
+        )
+      );
+      messages.push(
+        ...toolProgress
+          .recover()
+          .filter((message) =>
+            message.role === "assistant" || message.role === "tool"
+              ? typeof message.content === "string" ||
+                !message.content.some(
+                  (part) =>
+                    "toolCallId" in part && retained.has(part.toolCallId)
+                )
+              : false
+          )
+      );
+      if (signal?.aborted && isAbortError(error)) {
+        recordStoppedModelStep(error, messages);
+        throw error;
+      }
+      recordFailedRequest(error, messages);
+    }
     throw error;
   }
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 function streamedTokenText(

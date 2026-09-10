@@ -1,5 +1,6 @@
 import {
   type Container,
+  Spacer,
   stripTerminalSequences,
   Text,
 } from "@earendil-works/pi-tui";
@@ -10,6 +11,31 @@ const text = (owner: Container, width = 80) =>
   stripTerminalSequences(owner.render(width).join("\n"));
 
 describe("single transcript owner", () => {
+  it.each(["one-shot", "lease"] as const)(
+    "hands off the preceding live region only when appending a %s block",
+    (kind) => {
+      const handoff = vi.fn(() => {
+        expect(owner.children).toHaveLength(0);
+      });
+      const owner = new TranscriptOwner(() => 80, handoff);
+      owner.render(80);
+      owner.finish();
+      owner.reset("initial-replay");
+      expect(handoff).not.toHaveBeenCalled();
+      const view = new Text("CONTENT_SENTINEL", 0, 0);
+      if (kind === "one-shot") {
+        owner.addChild(view);
+      } else {
+        owner.acquire(() => {
+          expect(handoff).toHaveBeenCalledOnce();
+          return view;
+        });
+      }
+      expect(handoff).toHaveBeenCalledOnce();
+      expect(text(owner)).toContain("CONTENT_SENTINEL");
+    }
+  );
+
   it("settles, snapshots, revokes, detaches and disposes before unrelated append", () => {
     const owner = new TranscriptOwner(() => 80);
     const order: string[] = [];
@@ -44,6 +70,39 @@ describe("single transcript owner", () => {
       owner.children.every((component) => component instanceof ColdSnapshot)
     ).toBe(true);
   });
+
+  it.each(["one-shot", "lease"] as const)(
+    "omits only the first %s block's leading spacer below a boundary row",
+    (kind) => {
+      let boundaryAbove = true;
+      const owner = new TranscriptOwner(
+        () => 80,
+        undefined,
+        () => boundaryAbove
+      );
+      const append = (label: string) => {
+        if (kind === "one-shot") {
+          owner.addChild(new Spacer(1));
+          owner.addChild(new Text(label, 0, 0));
+        } else {
+          owner.acquire(() => new Text(label, 0, 0));
+        }
+      };
+      const rows = () => owner.render(80).map((row) => row.trimEnd());
+      append("FIRST");
+      append("SECOND");
+      expect(rows()).toEqual(["FIRST", "", "SECOND"]);
+      // A cleared transcript sits below the same boundary row again.
+      owner.reset("session-navigation");
+      append("AFTER_RESET");
+      expect(rows()).toEqual(["AFTER_RESET"]);
+      // Startup output below the boundary row restores the usual spacer.
+      boundaryAbove = false;
+      owner.reset("session-navigation");
+      append("BELOW_NOTICE");
+      expect(rows()).toEqual(["", "BELOW_NOTICE"]);
+    }
+  );
 
   it("cannot let one stream's finally freeze another owner's HOT notice", () => {
     const owner = new TranscriptOwner(() => 80);
