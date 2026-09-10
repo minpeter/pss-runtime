@@ -8,6 +8,8 @@ import type {
 import { channelKey } from "../channel";
 
 interface TelegramMessageSinkOptions {
+  /** Loopback Bot API override for local dry-run validation; unset in production. */
+  readonly apiBaseUrl?: string;
   readonly botToken: string;
   readonly userName?: string;
 }
@@ -20,12 +22,14 @@ export class TelegramMessageSinkError extends Error {
 }
 
 export function createTelegramMessageSink({
+  apiBaseUrl,
   botToken,
   userName,
 }: TelegramMessageSinkOptions): ChannelMessageSink {
   const adapter = createTelegramAdapter({
     botToken,
     mode: "webhook",
+    ...(apiBaseUrl ? { apiBaseUrl } : {}),
     ...(userName ? { userName } : {}),
   });
 

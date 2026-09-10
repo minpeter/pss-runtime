@@ -67,6 +67,8 @@ export interface ConversationThread {
 
 export interface BotConfig {
   readonly agentNamespace: DurableObjectNamespace;
+  /** Loopback Bot API override for local dry-run validation; unset in production. */
+  readonly apiBaseUrl?: string;
   readonly botToken: string;
   readonly environment: Env["ENVIRONMENT"];
   readonly secretToken: string;
