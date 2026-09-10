@@ -1,3 +1,4 @@
+import { AgentHookError } from "../../agent/core/hook-error";
 import type {
   StoredThreadEvent,
   ThreadEventReadOptions,
@@ -5,7 +6,7 @@ import type {
 import { deferred } from "../../internal/deferred";
 import type { ModelGenerationOptions } from "../../llm/model-step-types";
 import type { AgentInput, UserInput } from "../input/input";
-import type { AgentTurn } from "../protocol/turn";
+import type { AgentTurn, ThreadContinuationOptions } from "../protocol/turn";
 import type {
   CompactionSummaryOptions,
   ManualThreadCompactionResult,
@@ -27,6 +28,7 @@ import {
   type AgentThreadContext,
   createAgentThreadContext,
 } from "./agent-thread-context";
+import { continueAgentThread } from "./agent-thread-continuation";
 import { drainAgentThreadInputQueue } from "./agent-thread-drain";
 import { killAgentThread } from "./agent-thread-kill";
 import {
@@ -54,7 +56,34 @@ export class AgentThread {
   }
 
   async send(input: AgentInput): Promise<AgentTurn> {
-    return await queueAgentThreadInput(this.#context, input, "send");
+    try {
+      return await queueAgentThreadInput(this.#context, input, "send");
+    } catch (error) {
+      if (
+        this.#context.turn.state.tag === "none" &&
+        this.#context.lifecycle.state.tag === "started" &&
+        !(error instanceof AgentHookError && error.hook === "acceptInput") &&
+        !this.#context.state.continuationCheckpoint()?.recover &&
+        this.isOpen()
+      ) {
+        this.#context.state.setContinuationCheckpoint(
+          this.#context.state.modelSnapshot(),
+          () => {
+            throw new Error(
+              "Input admission requires recovery. Repair storage or input processing and reconcile the durable inbox before submitting again.",
+              { cause: error }
+            );
+          }
+        );
+      }
+      throw error;
+    }
+  }
+
+  async continue(
+    options?: ThreadContinuationOptions
+  ): Promise<AgentTurn | undefined> {
+    return await continueAgentThread(this.#context, options);
   }
 
   /** Queue a durable user turn that starts only after the active turn ends. */

@@ -18,10 +18,10 @@ import {
   stylePendingIndicator,
 } from "./pending-spinner";
 import {
-  formatReadHeader,
-  formatWriteHeader,
-  stringField,
-} from "./renderers/utils";
+  createToolInputPreviews,
+  type ToolInputPreview,
+  type ToolInputPreviewMap,
+} from "./renderers/input-preview";
 import {
   SnapshotMarkdown as Markdown,
   SnapshotText as Text,
@@ -246,6 +246,8 @@ export class BaseToolCallView extends Container {
   private readonly content = new Container();
   private readonly markdownTheme: MarkdownTheme;
   private readonly renderers?: ToolRendererMap;
+  private readonly inputPreviews: ToolInputPreviewMap =
+    createToolInputPreviews();
   private readonly showRawToolIo: boolean;
   private displayMode: "content" | "pretty" | "pending" = "content";
   private disposed = false;
@@ -503,15 +505,20 @@ export class BaseToolCallView extends Container {
     );
   }
 
-  private inputPreviewHeader(input: unknown): string {
-    const path = stringField(input, "path");
-    if (path && this.toolName === "write_file") {
-      return formatWriteHeader(path);
-    }
-    if (path && this.toolName === "read_file") {
-      return formatReadHeader(path, input);
-    }
-    return `**${this.toolName || UNKNOWN_TOOL_NAME}** input`;
+  /**
+   * Tool-specific preview of not-yet-executed arguments. Falls back to the
+   * generic field dump for unknown tools or shapes the preview cannot read.
+   */
+  private inputPreview(input: unknown): ToolInputPreview {
+    const preview = Object.hasOwn(this.inputPreviews, this.toolName)
+      ? this.inputPreviews[this.toolName](input)
+      : undefined;
+    return (
+      preview ?? {
+        body: formatInputPreview(input),
+        header: `**${this.toolName || UNKNOWN_TOOL_NAME}** input`,
+      }
+    );
   }
 
   private renderInvalidArguments(error: Record<string, unknown>): void {
@@ -563,10 +570,11 @@ export class BaseToolCallView extends Container {
     // intentionally claim an empty body, or require fields not yet received.
     // Keep this same preview across the complete-input/execution boundary.
     if (this.shouldRenderInputPreview()) {
-      this.setPrettyBlock(
-        this.inputPreviewHeader(bestInput),
-        formatInputPreview(bestInput)
-      );
+      const preview = this.inputPreview(bestInput);
+      this.setPrettyBlock(preview.header, preview.body, {
+        allowAnsi: preview.allowAnsi,
+        useBackground: preview.useBackground,
+      });
       return;
     }
 

@@ -45,6 +45,8 @@ export interface TuiCommand {
   execute: (
     input: {
       args: string[];
+      /** Begin replacing the transcript, before switch lifecycle callbacks. */
+      onSessionNavigation?: () => void;
     },
     context?: TuiCommandContext
   ) => Promise<TuiCommandResult> | TuiCommandResult;

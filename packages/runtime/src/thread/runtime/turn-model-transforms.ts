@@ -1,3 +1,4 @@
+import { AgentHookError } from "../../agent/core/hook-error";
 import type { AgentHookRuntime } from "../../agent/core/hook-runtime";
 import type { RunAgentLoopOptions } from "../../agent/loop/types";
 import type { ThreadState } from "../state/thread-state";
@@ -34,12 +35,21 @@ export function createTurnModelTransforms({
       latestObservation = { input: messages, output };
       return output;
     },
-    transformModelStep: (messages, signal) =>
-      hookRuntime.transformModelStep(
-        threadKey,
-        messages,
-        state.modelSnapshot(),
-        signal
-      ),
+    transformModelStep: async (messages, signal) => {
+      try {
+        return await hookRuntime.transformModelStep(
+          threadKey,
+          messages,
+          state.modelSnapshot(),
+          signal
+        );
+      } catch (error) {
+        if (error instanceof AgentHookError) {
+          // Output has not reached history yet, but its tools already ran.
+          throw new AgentHookError(error.hook, error, messages);
+        }
+        throw error;
+      }
+    },
   };
 }
