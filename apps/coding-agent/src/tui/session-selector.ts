@@ -45,6 +45,8 @@ export interface SessionSelectorOptions {
 
 export class SessionSelectorComponent extends Container {
   #compact: boolean;
+  #requestedCompact: boolean;
+  #requestedMaxVisibleSessions: number;
   readonly #currentSessionKey: string;
   #filtered: readonly SessionIndexEntry[];
   readonly #listContainer = new Container();
@@ -72,6 +74,8 @@ export class SessionSelectorComponent extends Container {
     this.#compact = options.compact ?? false;
     this.#currentSessionKey = options.currentSessionKey;
     this.#maxVisibleSessions = clampVisibleSessions(options.maxVisibleSessions);
+    this.#requestedCompact = this.#compact;
+    this.#requestedMaxVisibleSessions = this.#maxVisibleSessions;
     this.#onCancel = options.onCancel;
     this.#onSelect = options.onSelect;
     this.#sessions = [
@@ -91,11 +95,18 @@ export class SessionSelectorComponent extends Container {
   }
 
   setLayout(maxVisibleSessions: number, compact: boolean): void {
+    this.#requestedMaxVisibleSessions =
+      clampVisibleSessions(maxVisibleSessions);
+    this.#requestedCompact = compact;
+    this.#applyLayout();
+  }
+
+  #applyLayout(): void {
     // Title, search and scroll info reserve three rows; standard decoration
     // reserves six more. Always retain at least one selected-item row.
-    const nextCompact = compact || this.#rowBudget < 10;
+    const nextCompact = this.#requestedCompact || this.#rowBudget < 10;
     const next = Math.min(
-      clampVisibleSessions(maxVisibleSessions),
+      this.#requestedMaxVisibleSessions,
       this.#rowBudget - (nextCompact ? 3 : 9)
     );
     if (next === this.#maxVisibleSessions && nextCompact === this.#compact) {
@@ -109,7 +120,7 @@ export class SessionSelectorComponent extends Container {
 
   setComposerHeight(terminalRows: number): void {
     this.#rowBudget = composerHeightBudget(terminalRows) - 1;
-    this.setLayout(this.#rowBudget, this.#rowBudget < 10);
+    this.#applyLayout();
   }
 
   handleInput(data: string): void {

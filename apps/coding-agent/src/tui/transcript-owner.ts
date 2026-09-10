@@ -72,10 +72,12 @@ export class TranscriptOwner extends Container {
   #reservationWidth: number | undefined;
   #height = 0;
   readonly #width: () => number;
+  readonly #onContent: (() => void) | undefined;
 
-  constructor(width: () => number) {
+  constructor(width: () => number, onContent?: () => void) {
     super();
     this.#width = width;
+    this.#onContent = onContent;
   }
   get epoch(): number {
     return this.#epoch;
@@ -101,6 +103,7 @@ export class TranscriptOwner extends Container {
 
   /** One-shot appends are immediately COLD. No caller can bypass handoff. */
   override addChild(component: Component): void {
+    this.#onContent?.();
     this.finish();
     super.addChild(ColdSnapshot.capture(component, this.#width()));
   }
@@ -116,6 +119,7 @@ export class TranscriptOwner extends Container {
       settle?: (view: T) => void;
     } = {}
   ): TranscriptLease<T> {
+    this.#onContent?.();
     this.finish();
     const controller = new AbortController();
     const epoch = this.#epoch;

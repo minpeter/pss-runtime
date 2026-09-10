@@ -257,6 +257,143 @@ afterEach(() => {
 });
 
 describe.sequential("actual TUI transcript ownership", () => {
+  it.each([false, true])(
+    "freezes the startup header on different notice content (setup=%s)",
+    async (setup) => {
+      let current = "MODEL_A";
+      const models = {
+        currentModelId: () => current,
+        listModelIds: async () => ["MODEL_A", "MODEL_B", "MODEL_C"],
+        switchModel: (id: string) => {
+          current = id;
+        },
+      };
+      const app = await fixture({
+        header: {
+          title: "LOGO",
+          get subtitle() {
+            return current;
+          },
+        },
+        modelSelector: models,
+        setupMessages: setup ? ["NOTICE_SENTINEL"] : [],
+        commands: [
+          createModelCommand(models),
+          {
+            name: "notice",
+            description: "fixture",
+            execute: () => ({ success: true, message: "NOTICE_SENTINEL" }),
+          },
+        ],
+      });
+      try {
+        if (!setup) {
+          await app.command("/model MODEL_B");
+          await app.command("/notice");
+        }
+        expect(plain()).toContain("NOTICE_SENTINEL");
+        const before = rows(surface().children[0]);
+        expect(before.join("\n")).not.toContain("\x1b[47m");
+        await app.command("/model MODEL_C");
+        expect(rows(surface().children[0])).toEqual(before);
+        expect(plain()).toContain("MODEL_C");
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
+  it("keeps an empty startup replay HOT until content arrives", async () => {
+    let current = "MODEL_A";
+    const models = {
+      currentModelId: () => current,
+      listModelIds: async () => ["MODEL_A", "MODEL_B"],
+      switchModel: (id: string) => {
+        current = id;
+      },
+    };
+    const app = await fixture({
+      header: {
+        title: "LOGO",
+        get subtitle() {
+          return current;
+        },
+      },
+      modelSelector: models,
+      commands: [createModelCommand(models)],
+      replayHistoryOnStartup: true,
+      sessionSelector: {
+        currentSessionKey: () => "empty",
+        listSessions: async () => [],
+        loadCurrentHistory: async () => [],
+        switchSession: async () => undefined,
+      },
+    });
+    try {
+      await app.command("/model MODEL_B");
+      expect(rows(surface().children[0]).join("\n")).toContain("MODEL_B");
+      expect(plain().trim()).toBe("");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("recomputes occupied session space on actual terminal resize", async () => {
+    const ids = Array.from({ length: 100 }, (_, i) => `SESSION_${i}`);
+    const app = await fixture({
+      setupMessages: [Array.from({ length: 25 }, () => "OCCUPIED").join("\n")],
+      commands: [
+        {
+          name: "picker",
+          description: "fixture",
+          execute: () => ({
+            success: true,
+            action: { type: "select-session" },
+          }),
+        },
+      ],
+      sessionSelector: {
+        currentSessionKey: () => ids[0],
+        listSessions: async () =>
+          ids.map((key) => ({
+            key,
+            name: key,
+            cwd: "/tmp",
+            createdAt: "",
+            updatedAt: "",
+          })),
+        loadCurrentHistory: async () => [],
+        switchSession: async () => undefined,
+      },
+    });
+    const composer = surface().children.at(-1) as Container;
+    try {
+      await onRender(
+        () => composer.children[0] instanceof SessionSelectorComponent,
+        () => send("/picker\r")
+      );
+      terminal.send("\x1b[A");
+      for (const height of [40, 60, 40]) {
+        Object.assign(surface().terminal, { rows: height });
+        process.stdout.emit("resize");
+        const occupied = surface()
+          .children.slice(0, -1)
+          .reduce((sum, child) => sum + child.render(100).length, 0);
+        expect(composer.render(100).length + occupied).toBeLessThanOrEqual(
+          height
+        );
+        expect(
+          composer.render(100).find((line) => line.includes("→"))
+        ).toContain("SESSION_99");
+      }
+      const ready = idle();
+      terminal.send("\x1b");
+      await ready;
+    } finally {
+      await app.close();
+    }
+  });
+
   it.each(["model", "session"] as const)(
     "enforces the complete %s cap through actual resize dispatch",
     async (kind) => {
@@ -692,7 +829,7 @@ describe.sequential("actual TUI transcript ownership", () => {
       vi.useFakeTimers();
       const header = {
         title: "LOGO_SENTINEL",
-        subtitle: "MODEL_A\n/CWD_SENTINEL\nSESSION_SENTINEL",
+        subtitle: "MODEL_A (free tier)\n/CWD_SENTINEL\nSESSION_SENTINEL",
       };
       let current = "MODEL_A";
       const models = {
@@ -701,7 +838,7 @@ describe.sequential("actual TUI transcript ownership", () => {
         switchModel: vi.fn((id: string) => {
           current = id;
           header.title = "CHANGED_LOGO";
-          header.subtitle = `${id}\n/CHANGED_CWD\nCHANGED_SESSION`;
+          header.subtitle = `${id} (free tier)\n/CHANGED_CWD\nCHANGED_SESSION`;
         }),
       };
       const app = await fixture({
@@ -835,7 +972,12 @@ describe.sequential("actual TUI transcript ownership", () => {
       },
     };
     const app = await fixture({
-      header: { title: "LOGO", subtitle: "MODEL_A\n/CWD" },
+      header: {
+        title: "LOGO",
+        get subtitle() {
+          return `${current}\n/CWD`;
+        },
+      },
       commands: [createModelCommand(models)],
       modelSelector: models,
     });

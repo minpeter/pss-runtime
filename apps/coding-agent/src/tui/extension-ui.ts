@@ -215,11 +215,7 @@ async function selectValue(
       value: option.value,
     };
   });
-  const list = new ComposerSelectList(
-    items,
-    Math.max(1, options.promptHost.contentRows() - 1),
-    selectTheme
-  );
+  const list = new ComposerSelectList(items, items.length, selectTheme);
   return await prompt(
     options,
     label,

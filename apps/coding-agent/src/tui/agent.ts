@@ -822,7 +822,10 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
   tui.setClearOnShrink(false);
 
   const headerContainer = new Container();
-  const chatContainer = new TranscriptOwner(() => terminal.columns);
+  const chatContainer = new TranscriptOwner(
+    () => terminal.columns,
+    () => freezeStartupHeader()
+  );
   const overlayContainer = new Container();
   const footerStatusBar = new FooterStatusBar(tui);
   const assistantViews = new Set<AssistantStreamView>();
@@ -902,8 +905,8 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
       clearTimeout(startupHeaderPulseTimer);
     }
     const model = sanitizeTerminalText(
-      config.modelSelector?.currentModelId() ??
-        (config.header?.subtitle ?? "").split("\n")[0] ??
+      config.header?.subtitle?.split("\n")[0] ||
+        config.modelSelector?.currentModelId() ||
         ""
     );
     startupHeaderView.setModel(model, true);
@@ -1117,10 +1120,14 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     );
     const selector = activeModelSelector;
     if (selector !== undefined) {
+      const layout = getModelSelectorLayout();
+      selector.setLayout(layout.maxVisibleModels, layout.compact);
       selector.setComposerHeight(tui.terminal.rows);
     }
     const sessionSelector = activeSessionSelector;
     if (sessionSelector !== undefined) {
+      const layout = getSessionSelectorLayout();
+      sessionSelector.setLayout(layout.maxVisibleSessions, layout.compact);
       sessionSelector.setComposerHeight(tui.terminal.rows);
     }
     tui.requestRender(true);
@@ -1896,7 +1903,6 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     busy.run(
       steeringRun === undefined ? "Processing..." : "Steering...",
       async () => {
-        freezeStartupHeader();
         addUserMessage(chatContainer, markdownTheme, trimmed);
         tui.requestRender();
 
@@ -2093,7 +2099,6 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     }
     await busy.run("Setting up...", () => config.onSetup?.());
     if (config.replayHistoryOnStartup === true) {
-      freezeStartupHeader();
       await renderSessionHistory(undefined, "initial-replay");
     }
     refreshCurrentStatus();
