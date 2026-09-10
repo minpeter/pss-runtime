@@ -1,0 +1,11 @@
+--- a/native/loader-state.js
++++ b/native/loader-state.js
+@@ -775,7 +775,7 @@
+ 	const platform = overrides.platform ?? process.platform;
+ 	const platformTag = `${platform}-${process.arch}`;
+ 	const packageVersion = packageJson.version;
+-	const nativeDir = overrides.nativeDir ?? path.join(import.meta.dir, "..", "native");
++	const nativeDir = overrides.nativeDir ?? path.join(import.meta.dir ?? import.meta.dirname, "..", "native");
+ 	const execDir = path.dirname(process.execPath);
+ 	const nativesDir = getNativesDir();
+ 	const versionedDir = path.join(nativesDir, packageVersion);
