@@ -88,6 +88,10 @@ class TestSpan {
   ) {
     return this;
   }
+
+  recordException(_exception: unknown) {
+    return;
+  }
 }
 
 const testTracing: Tracing = {
