@@ -105,6 +105,9 @@ const testTracing: Tracing = {
   startSpan(_name) {
     return new TestSpan();
   },
+  getActiveSpan() {
+    return undefined;
+  },
 };
 
 describe("telegram conversation handling", () => {
