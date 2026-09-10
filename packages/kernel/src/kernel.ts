@@ -10,13 +10,14 @@ import {
 import wasmModule from "../node_modules/@jitl/quickjs-wasmfile-release-sync/dist/emscripten-module.wasm";
 
 export class KernelExecutionError extends Error {
+  readonly code: string;
+  override readonly message: string;
   override readonly name = "KernelExecutionError";
 
-  constructor(
-    readonly code: string,
-    override readonly message: string,
-  ) {
+  constructor(code: string, message: string) {
     super(message);
+    this.code = code;
+    this.message = message;
   }
 }
 
@@ -27,24 +28,32 @@ type Helpers = Readonly<{
   errorText: QuickJSHandle;
 }>;
 
-type Invoke = (name: string, args: unknown, signal: AbortSignal) => Promise<unknown>;
-type Bridge = {
-  deferred?: QuickJSDeferredPromise;
-  complete?: (success: boolean, value: unknown) => void;
-};
-type Completion = { bridge: Bridge; success: boolean; value: unknown };
-type Execution = {
-  invoke: Invoke;
+type Invoke = (
+  name: string,
+  args: unknown,
+  signal: AbortSignal
+) => Promise<unknown>;
+interface Bridge {
+  complete?: ((success: boolean, value: unknown) => void) | undefined;
+  deferred?: QuickJSDeferredPromise | undefined;
+}
+interface Completion {
+  bridge: Bridge;
+  success: boolean;
+  value: unknown;
+}
+interface Execution {
   abort: AbortController;
+  acceptingCalls: boolean;
   bridges: Set<Bridge>;
-  completions: Completion[];
-  notify: (() => void) | undefined;
-  failure: KernelExecutionError | undefined;
   calls: number;
   checks: number;
+  completions: Completion[];
+  failure: KernelExecutionError | undefined;
+  invoke: Invoke;
   jobs: number;
-  acceptingCalls: boolean;
-};
+  notify: (() => void) | undefined;
+}
 
 const MAX_CHECKS = 10_000;
 const MAX_JOBS = 10_000;
@@ -54,19 +63,24 @@ const MAX_JSON_BYTES = 64 * 1024;
 
 function checkJsonSize(json: string): void {
   if (new TextEncoder().encode(json).byteLength > MAX_JSON_BYTES) {
-    throw new KernelExecutionError("JSON_SIZE_LIMIT", "Serialized JSON exceeds 64 KiB");
+    throw new KernelExecutionError(
+      "JSON_SIZE_LIMIT",
+      "Serialized JSON exceeds 64 KiB"
+    );
   }
 }
 
 // Native promises retain only this small, detachable bridge after cancellation.
 function observe(operation: Promise<unknown>, bridge: Bridge): void {
-  void operation.then(
+  operation.then(
     (value) => bridge.complete?.(true, value),
-    (error: unknown) => bridge.complete?.(false, error),
+    (error: unknown) => bridge.complete?.(false, error)
   );
 }
 
 export class QuickJsKernel {
+  private readonly runtime: QuickJSRuntime;
+  private readonly context: QuickJSContext;
   private active: Execution | undefined;
   private retired = false;
   private disposed = false;
@@ -75,19 +89,24 @@ export class QuickJsKernel {
 
   private get initializedHelpers(): Helpers {
     if (!this.helpers) {
-      throw new KernelExecutionError("INTERNAL_ERROR", "Kernel helpers are not initialized");
+      throw new KernelExecutionError(
+        "INTERNAL_ERROR",
+        "Kernel helpers are not initialized"
+      );
     }
     return this.helpers;
   }
 
-  private constructor(
-    private readonly runtime: QuickJSRuntime,
-    private readonly context: QuickJSContext,
-  ) {}
+  private constructor(runtime: QuickJSRuntime, context: QuickJSContext) {
+    this.runtime = runtime;
+    this.context = context;
+  }
 
   static async create(): Promise<QuickJsKernel> {
     // No module instance or initialization promise is shared between requests/DOs.
-    const module = await newQuickJSWASMModuleFromVariant(newVariant(RELEASE_SYNC, { wasmModule }));
+    const module = await newQuickJSWASMModuleFromVariant(
+      newVariant(RELEASE_SYNC, { wasmModule })
+    );
     const runtime = module.newRuntime();
     runtime.setMemoryLimit(16 * 1024 * 1024);
     runtime.setMaxStackSize(256 * 1024);
@@ -97,8 +116,11 @@ export class QuickJsKernel {
       kernel.initialize();
       return kernel;
     } catch (error) {
-      if (kernel) kernel.dispose();
-      else runtime.dispose();
+      if (kernel) {
+        kernel.dispose();
+      } else {
+        runtime.dispose();
+      }
       throw error;
     }
   }
@@ -116,7 +138,9 @@ export class QuickJsKernel {
         try {
           for (const method of methods) {
             const name = `${namespace}.${method}`;
-            const fn = vm.newFunction(name, (args) => this.callTool(name, args ?? vm.undefined));
+            const fn = vm.newFunction(name, (args) =>
+              this.callTool(name, args ?? vm.undefined)
+            );
             try {
               vm.setProp(group, method, fn);
             } finally {
@@ -167,8 +191,8 @@ export class QuickJsKernel {
       };
     })()`,
         "kernel-init.js",
-        { type: "global" },
-      ),
+        { type: "global" }
+      )
     );
     try {
       this.helpers = {
@@ -183,11 +207,13 @@ export class QuickJsKernel {
 
     this.runtime.setInterruptHandler(() => {
       const execution = this.active;
-      if (!execution) return this.retired;
+      if (!execution) {
+        return this.retired;
+      }
       if (++execution.checks > MAX_CHECKS) {
         execution.failure ??= new KernelExecutionError(
           "INSTRUCTION_LIMIT",
-          "Guest interrupt-check budget exceeded",
+          "Guest interrupt-check budget exceeded"
         );
       }
       return execution.failure !== undefined;
@@ -210,7 +236,7 @@ export class QuickJsKernel {
           const text = this.context.callFunction(
             this.helpers.errorText,
             this.context.undefined,
-            result.error,
+            result.error
           );
           try {
             if (!text.error) {
@@ -223,12 +249,14 @@ export class QuickJsKernel {
       } finally {
         result.error.dispose();
       }
-      throw this.active?.failure ?? new KernelExecutionError("GUEST_ERROR", message);
+      throw (
+        this.active?.failure ?? new KernelExecutionError("GUEST_ERROR", message)
+      );
     }
     if (!result.value) {
       throw new KernelExecutionError(
         "INTERNAL_ERROR",
-        "QuickJS returned neither a value nor an error",
+        "QuickJS returned neither a value nor an error"
       );
     }
     return result.value;
@@ -238,13 +266,16 @@ export class QuickJsKernel {
     const result = this.context.callFunction(
       this.initializedHelpers.stringify,
       this.context.undefined,
-      value,
+      value
     );
     try {
       if (result.error || this.context.typeof(result.value) !== "string") {
         throw (
           this.active?.failure ??
-          new KernelExecutionError("INVALID_JSON", "Value is not JSON serializable")
+          new KernelExecutionError(
+            "INVALID_JSON",
+            "Value is not JSON serializable"
+          )
         );
       }
       const json = this.context.getString(result.value);
@@ -258,10 +289,16 @@ export class QuickJsKernel {
   private callTool(name: string, args: QuickJSHandle): QuickJSHandle {
     const execution = this.active;
     if (!execution?.acceptingCalls) {
-      throw new KernelExecutionError("INTERNAL_ERROR", "No active tool execution");
+      throw new KernelExecutionError(
+        "INTERNAL_ERROR",
+        "No active tool execution"
+      );
     }
     if (++execution.calls > MAX_CALLS) {
-      execution.failure = new KernelExecutionError("CALL_LIMIT", "Host tool call limit exceeded");
+      execution.failure = new KernelExecutionError(
+        "CALL_LIMIT",
+        "Host tool call limit exceeded"
+      );
       throw execution.failure;
     }
     const decoded = this.toJson(args);
@@ -273,7 +310,12 @@ export class QuickJsKernel {
     };
     execution.bridges.add(bridge);
     try {
-      observe(Promise.resolve(execution.invoke(name, decoded, execution.abort.signal)), bridge);
+      observe(
+        Promise.resolve(
+          execution.invoke(name, decoded, execution.abort.signal)
+        ),
+        bridge
+      );
     } catch (error) {
       bridge.complete(false, error);
     }
@@ -283,7 +325,9 @@ export class QuickJsKernel {
   private settle(execution: Execution, completion: Completion): void {
     const { bridge, success, value } = completion;
     const deferred = bridge.deferred;
-    if (!deferred) return;
+    if (!deferred) {
+      return;
+    }
     let handle: QuickJSHandle | undefined;
     try {
       if (success) {
@@ -291,7 +335,10 @@ export class QuickJsKernel {
         try {
           json = JSON.stringify(value === undefined ? null : value);
         } catch {
-          throw new KernelExecutionError("INVALID_JSON", "Host result is not JSON serializable");
+          throw new KernelExecutionError(
+            "INVALID_JSON",
+            "Host result is not JSON serializable"
+          );
         }
         if (json === undefined) {
           throw new KernelExecutionError("INVALID_JSON", "Invalid host result");
@@ -300,21 +347,27 @@ export class QuickJsKernel {
         const text = this.context.newString(json);
         try {
           handle = this.take(
-            this.context.callFunction(this.initializedHelpers.parse, this.context.undefined, text),
+            this.context.callFunction(
+              this.initializedHelpers.parse,
+              this.context.undefined,
+              text
+            )
           );
         } finally {
           text.dispose();
         }
         deferred.resolve(handle);
       } else {
-        handle = this.context.newError(value instanceof Error ? value.message : "Host tool failed");
+        handle = this.context.newError(
+          value instanceof Error ? value.message : "Host tool failed"
+        );
         deferred.reject(handle);
       }
     } finally {
       handle?.dispose();
       deferred.dispose();
-      delete bridge.deferred;
-      delete bridge.complete;
+      bridge.deferred = undefined;
+      bridge.complete = undefined;
       execution.bridges.delete(bridge);
     }
   }
@@ -325,7 +378,10 @@ export class QuickJsKernel {
       throw new KernelExecutionError("RETIRED", "Kernel is retired");
     }
     if (this.active) {
-      throw new KernelExecutionError("BUSY", "Kernel executions must be serialized");
+      throw new KernelExecutionError(
+        "BUSY",
+        "Kernel executions must be serialized"
+      );
     }
     const execution: Execution = {
       invoke,
@@ -342,18 +398,23 @@ export class QuickJsKernel {
     this.active = execution;
     let root: QuickJSHandle | undefined;
     const timeout = setTimeout(() => {
-      execution.failure = new KernelExecutionError("HUNG_PROMISE", "Execution deadline exceeded");
+      execution.failure = new KernelExecutionError(
+        "HUNG_PROMISE",
+        "Execution deadline exceeded"
+      );
       execution.notify?.();
     }, TIMEOUT_MS);
     try {
-      const evaluated = this.take(this.context.evalCode(code, "eval.js", { type: "global" }));
+      const evaluated = this.take(
+        this.context.evalCode(code, "eval.js", { type: "global" })
+      );
       try {
         root = this.take(
           this.context.callFunction(
             this.initializedHelpers.promise,
             this.context.undefined,
-            evaluated,
-          ),
+            evaluated
+          )
         );
       } finally {
         evaluated.dispose();
@@ -363,53 +424,23 @@ export class QuickJsKernel {
         const changed = new Promise<void>((resolve) => {
           execution.notify = resolve;
         });
-        if (execution.failure) throw execution.failure;
-        for (const completion of execution.completions.splice(0)) {
-          this.settle(execution, completion);
+        this.pumpJobs(execution);
+        const result = this.inspectPromise(execution, root);
+        if (result.done) {
+          return result.value;
         }
-        if (execution.failure) throw execution.failure;
         if (this.runtime.hasPendingJob()) {
-          const jobs = this.runtime.executePendingJobs(128);
-          if (jobs.error) this.take({ error: jobs.error });
-          else execution.jobs += jobs.value;
-          if (execution.jobs > MAX_JOBS) {
-            throw new KernelExecutionError("JOB_LIMIT", "Guest job limit exceeded");
-          }
+          continue;
         }
-        if (execution.failure) throw execution.failure;
-        const state = this.context.getPromiseState(root);
-        switch (state.type) {
-          case "rejected":
-            this.take({ error: state.error });
-            break;
-          case "fulfilled":
-            try {
-              if (!this.runtime.hasPendingJob() && execution.bridges.size === 0) {
-                execution.acceptingCalls = false;
-                return this.toJson(state.value);
-              }
-            } finally {
-              state.value.dispose();
-            }
-            break;
-          case "pending":
-            break;
-          default: {
-            const unexpected: never = state;
-            throw new KernelExecutionError(
-              "INTERNAL_ERROR",
-              `Unexpected promise state: ${unexpected}`,
-            );
-          }
-        }
-        if (this.runtime.hasPendingJob()) continue;
         if (execution.bridges.size === 0) {
           throw new KernelExecutionError(
             "HUNG_PROMISE",
-            "Pending promise has no jobs or host calls",
+            "Pending promise has no jobs or host calls"
           );
         }
-        if (execution.completions.length === 0) await changed;
+        if (execution.completions.length === 0) {
+          await changed;
+        }
       }
     } catch (error) {
       this.retired = true;
@@ -420,15 +451,74 @@ export class QuickJsKernel {
       this.retireBridges(execution);
       root?.dispose();
       this.active = undefined;
-      if (this.disposed) this.release();
+      if (this.disposed) {
+        this.release();
+      }
+    }
+  }
+
+  private inspectPromise(
+    execution: Execution,
+    root: QuickJSHandle
+  ): { done: true; value: unknown } | { done: false } {
+    const state = this.context.getPromiseState(root);
+    switch (state.type) {
+      case "rejected":
+        this.take({ error: state.error });
+        return { done: false };
+      case "fulfilled":
+        try {
+          if (!this.runtime.hasPendingJob() && execution.bridges.size === 0) {
+            execution.acceptingCalls = false;
+            return { done: true, value: this.toJson(state.value) };
+          }
+          return { done: false };
+        } finally {
+          state.value.dispose();
+        }
+      case "pending":
+        return { done: false };
+      default: {
+        const unexpected: never = state;
+        throw new KernelExecutionError(
+          "INTERNAL_ERROR",
+          `Unexpected promise state: ${unexpected}`
+        );
+      }
+    }
+  }
+
+  private pumpJobs(execution: Execution): void {
+    if (execution.failure) {
+      throw execution.failure;
+    }
+    for (const completion of execution.completions.splice(0)) {
+      this.settle(execution, completion);
+    }
+    if (execution.failure) {
+      throw execution.failure;
+    }
+    if (this.runtime.hasPendingJob()) {
+      const jobs = this.runtime.executePendingJobs(128);
+      if (jobs.error) {
+        this.take({ error: jobs.error });
+      } else {
+        execution.jobs += jobs.value;
+      }
+      if (execution.jobs > MAX_JOBS) {
+        throw new KernelExecutionError("JOB_LIMIT", "Guest job limit exceeded");
+      }
+    }
+    if (execution.failure) {
+      throw execution.failure;
     }
   }
 
   private retireBridges(execution: Execution): void {
     for (const bridge of execution.bridges) {
-      delete bridge.complete;
+      bridge.complete = undefined;
       bridge.deferred?.dispose();
-      delete bridge.deferred;
+      bridge.deferred = undefined;
     }
     execution.bridges.clear();
     execution.completions.length = 0;
@@ -438,11 +528,16 @@ export class QuickJsKernel {
   }
 
   dispose(): void {
-    if (this.disposed) return;
+    if (this.disposed) {
+      return;
+    }
     this.disposed = true;
     this.retired = true;
     if (this.active) {
-      this.active.failure = new KernelExecutionError("RETIRED", "Kernel was disposed");
+      this.active.failure = new KernelExecutionError(
+        "RETIRED",
+        "Kernel was disposed"
+      );
       this.retireBridges(this.active);
     } else {
       this.release();
@@ -450,7 +545,9 @@ export class QuickJsKernel {
   }
 
   private release(): void {
-    for (const handle of this.handles.splice(0)) handle.dispose();
+    for (const handle of this.handles.splice(0)) {
+      handle.dispose();
+    }
     this.context.dispose();
     this.runtime.dispose();
   }

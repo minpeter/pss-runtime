@@ -7,5 +7,7 @@
     "bindings": [{ "name": "KERNELS", "class_name": "Kernel" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Kernel"] }],
-  "rules": [{ "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": true }]
+  "rules": [
+    { "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": true }
+  ]
 }

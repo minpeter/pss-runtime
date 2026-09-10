@@ -19,6 +19,7 @@ type ToolCall = {
 );
 
 const evalInput = z.object({ code: z.string().min(1).max(16_000) }).strict();
+const sessionPath = /^\/sessions\/([a-zA-Z0-9_-]{1,80})\/(eval|reset)$/;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -35,7 +36,7 @@ export class Kernel extends DurableObject<Env> {
     // The caller receives rejection; the queue's tail must still admit the next request.
     this.#tail = result.then(
       () => undefined,
-      () => undefined,
+      () => undefined
     );
     return result;
   }
@@ -46,28 +47,33 @@ export class Kernel extends DurableObject<Env> {
       const calls: ToolCall[] = [];
       try {
         this.#kernel ??= await QuickJsKernel.create();
-        const result = await this.#kernel.execute(code, async (tool, rawArgs, signal) => {
-          const args = z.json().parse(rawArgs);
-          const index = calls.length;
-          const base = { sequence: index + 1, tool, args };
-          calls.push({ ...base, status: "pending" });
-          try {
-            const value = z.json().parse(await invokeTool(this.ctx.storage, tool, args, signal));
-            calls[index] = {
-              ...base,
-              status: "ok",
-              result: value,
-            };
-            return value;
-          } catch (error) {
-            calls[index] = {
-              ...base,
-              status: "error",
-              error: errorMessage(error),
-            };
-            throw error;
+        const result = await this.#kernel.execute(
+          code,
+          async (tool, rawArgs, signal) => {
+            const args = z.json().parse(rawArgs);
+            const index = calls.length;
+            const base = { sequence: index + 1, tool, args };
+            calls.push({ ...base, status: "pending" });
+            try {
+              const value = z
+                .json()
+                .parse(await invokeTool(this.ctx.storage, tool, args, signal));
+              calls[index] = {
+                ...base,
+                status: "ok",
+                result: value,
+              };
+              return value;
+            } catch (error) {
+              calls[index] = {
+                ...base,
+                status: "error",
+                error: errorMessage(error),
+              };
+              throw error;
+            }
           }
-        });
+        );
         return {
           status: "ok",
           generation: this.#generation,
@@ -79,7 +85,9 @@ export class Kernel extends DurableObject<Env> {
         this.#kernel?.dispose();
         this.#kernel = undefined;
         this.#generation = crypto.randomUUID();
-        if (!(error instanceof KernelExecutionError)) throw error;
+        if (!(error instanceof KernelExecutionError)) {
+          throw error;
+        }
         return {
           status: "error",
           generation: this.#generation,
@@ -95,11 +103,14 @@ export class Kernel extends DurableObject<Env> {
   }
 
   reset() {
-    return this.#enqueue(async () => {
+    return this.#enqueue(() => {
       this.#kernel?.dispose();
       this.#kernel = undefined;
       this.#generation = crypto.randomUUID();
-      return { status: "reset", generation: this.#generation } as const;
+      return Promise.resolve({
+        status: "reset",
+        generation: this.#generation,
+      } as const);
     });
   }
 }
@@ -130,7 +141,7 @@ export default {
       if (request.method === "GET" && path === "/tools") {
         return Response.json({ tools: toolDefinitions });
       }
-      const match = /^\/sessions\/([a-zA-Z0-9_-]{1,80})\/(eval|reset)$/.exec(path);
+      const match = sessionPath.exec(path);
       const session = match?.[1];
       const action = match?.[2];
       if (!session) {
@@ -141,18 +152,20 @@ export default {
           { error: "method_not_allowed" },
           {
             status: 405,
-          },
+          }
         );
       }
       const kernel = env.KERNELS.getByName(session);
-      if (action === "reset") return Response.json(await kernel.reset());
+      if (action === "reset") {
+        return Response.json(await kernel.reset());
+      }
       const raw = await request.text();
       if (new TextEncoder().encode(raw).byteLength > 32_000) {
         return Response.json(
           { error: "request_too_large" },
           {
             status: 413,
-          },
+          }
         );
       }
       const { code } = evalInput.parse(JSON.parse(raw));
@@ -166,13 +179,13 @@ export default {
             error: "invalid_request",
             message: error.message,
           },
-          { status: 400 },
+          { status: 400 }
         );
       }
       console.error(error);
       return Response.json(
         { error: "internal_error", message: errorMessage(error) },
-        { status: 500 },
+        { status: 500 }
       );
     }
   },

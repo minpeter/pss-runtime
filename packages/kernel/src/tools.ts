@@ -32,23 +32,29 @@ export async function invokeTool(
   storage: DurableObjectStorage,
   name: string,
   args: unknown,
-  signal: AbortSignal,
+  signal: AbortSignal
 ): Promise<unknown> {
   signal.throwIfAborted();
   switch (name) {
     case "catalog.search": {
       const { query } = queryInput.parse(args);
-      const products = (await storage.get<typeof catalog>("catalog")) ?? catalog;
+      const products =
+        (await storage.get<typeof catalog>("catalog")) ?? catalog;
       signal.throwIfAborted();
       await storage.put("catalog", products);
-      return products.filter((product) => product.name.toLowerCase().includes(query.toLowerCase()));
+      return products.filter((product) =>
+        product.name.toLowerCase().includes(query.toLowerCase())
+      );
     }
     case "pricing.quote": {
       const { sku, quantity } = quoteInput.parse(args);
-      const products = (await storage.get<typeof catalog>("catalog")) ?? catalog;
+      const products =
+        (await storage.get<typeof catalog>("catalog")) ?? catalog;
       signal.throwIfAborted();
       const product = products.find((entry) => entry.sku === sku);
-      if (!product) throw new ToolError(`Unknown SKU: ${sku}`);
+      if (!product) {
+        throw new ToolError(`Unknown SKU: ${sku}`);
+      }
       return { sku, quantity, totalCents: product.priceCents * quantity };
     }
     case "notes.save": {

@@ -7,7 +7,7 @@
     "dev": "wrangler dev --local --ip 0.0.0.0 --port 8788",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "biome check .",
+    "lint": "ultracite check .",
     "build": "wrangler deploy --dry-run --outdir dist",
     "demo": "node scripts/demo.mjs"
   },
@@ -17,7 +17,6 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.12",
     "@cloudflare/workers-types": "5.20260903.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11",
