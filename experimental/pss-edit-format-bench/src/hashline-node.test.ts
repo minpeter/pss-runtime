@@ -12,7 +12,7 @@ const path = "example.ts";
 
 describe("hashline Node compatibility with the real native parser", () => {
   it("parses source and isolates same-length cache entries by content and path", () => {
-    const invalid = source.replace("}", "]");
+    const invalid = source.replaceAll("}", "]");
     expect(invalid.length).toBe(source.length);
     for (const text of [source, invalid, source]) {
       expect(parsesCleanly(path, text)).toBe(text === source);
@@ -35,7 +35,7 @@ describe("hashline Node compatibility with the real native parser", () => {
         expect(chain).toEqual([]);
       }
     }
-    for (const text of [source, source.replace("}", "]"), source]) {
+    for (const text of [source, source.replaceAll("}", "]"), source]) {
       expect(enclosingBoundaries(text.split("\n"), path, 1, 2)).toEqual(
         text === source ? [3] : []
       );
