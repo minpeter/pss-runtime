@@ -3,12 +3,12 @@ import {
   Container,
   fuzzyFilter,
   getKeybindings,
-  Input,
   Spacer,
-  Text,
   truncateToWidth,
   visibleWidth,
 } from "@earendil-works/pi-tui";
+import { ComposerInput } from "./bounded-input";
+import { composerHeightBudget } from "./composer-height";
 import { sanitizeTerminalText } from "./terminal-safety";
 
 const ANSI_RESET = "\x1b[0m";
@@ -48,6 +48,10 @@ class ModelRow implements Component {
   }
 
   render(width: number): string[] {
+    if (width <= 5) {
+      const current = this.#current ? "✓" : "";
+      return [style(ANSI_CYAN, this.#selected ? "→" : current)];
+    }
     const prefix = this.#selected ? "→ " : "  ";
     const suffix = this.#current ? " ✓" : "";
     // Account for Text's former left padding and truncate the provider label
@@ -104,12 +108,15 @@ export class ModelSelectorComponent extends Container {
   readonly #listContainer = new Container();
   readonly #onCancel: () => void;
   readonly #onSelect: (modelId: string) => void;
-  readonly #searchInput = new Input();
-  readonly #title: Text;
+  readonly #searchInput = new ComposerInput();
+  readonly #title: Component;
   #compact: boolean;
+  #requestedCompact: boolean;
+  #requestedMaxVisibleModels: number;
   #maxVisibleModels: number;
   #selectedIndex = 0;
   #settled = false;
+  #rowBudget = Number.POSITIVE_INFINITY;
 
   // Focusable: propagate to the search input so the cursor renders there.
   #focused = false;
@@ -130,17 +137,21 @@ export class ModelSelectorComponent extends Container {
     this.#onSelect = options.onSelect;
     this.#compact = options.compact ?? false;
     this.#maxVisibleModels = clampVisibleModels(options.maxVisibleModels);
+    this.#requestedCompact = this.#compact;
+    this.#requestedMaxVisibleModels = this.#maxVisibleModels;
     // Current model first, then the provider's catalog order.
     this.#models = [
       ...options.modelIds.filter((id) => id === options.currentModelId),
       ...options.modelIds.filter((id) => id !== options.currentModelId),
     ];
     this.#filtered = this.#models;
-    this.#title = new Text(
-      `${style(ANSI_BOLD, "Select a model")} ${style(ANSI_DIM, `— current: ${sanitizeTerminalText(options.currentModelId)} · type to search · enter to select · esc to cancel`)}`,
-      1,
-      0
-    );
+    const title = `${style(ANSI_BOLD, "Select a model")} ${style(ANSI_DIM, `— current: ${sanitizeTerminalText(options.currentModelId)} · type to search · enter to select · esc to cancel`)}`;
+    this.#title = {
+      invalidate() {
+        return;
+      },
+      render: (width) => [truncateToWidth(title, width, "")],
+    };
     // Input#setValue preserves its old cursor (zero on a fresh Input), so
     // replay the initial query through normal insertion to place it at end.
     this.#searchInput.handleInput(options.initialQuery ?? "");
@@ -152,18 +163,35 @@ export class ModelSelectorComponent extends Container {
 
   /** Recalculate the selector layout after a terminal-height change. */
   setLayout(maxVisibleModels: number, compact: boolean): void {
-    const next = clampVisibleModels(maxVisibleModels);
-    if (next === this.#maxVisibleModels && compact === this.#compact) {
+    this.#requestedMaxVisibleModels = clampVisibleModels(maxVisibleModels);
+    this.#requestedCompact = compact;
+    this.#applyLayout();
+  }
+
+  #applyLayout(): void {
+    // Title, search and scroll info reserve three rows; standard decoration
+    // reserves six more. Always retain at least one selected-item row.
+    const nextCompact = this.#requestedCompact || this.#rowBudget < 10;
+    const next = Math.min(
+      this.#requestedMaxVisibleModels,
+      this.#rowBudget - (nextCompact ? 3 : 9)
+    );
+    if (next === this.#maxVisibleModels && nextCompact === this.#compact) {
       return;
     }
     this.#maxVisibleModels = next;
-    this.#compact = compact;
+    this.#compact = nextCompact;
     this.#rebuildLayout();
     this.#updateList();
   }
 
   setMaxVisibleModels(maxVisibleModels: number): void {
-    this.setLayout(maxVisibleModels, this.#compact);
+    this.setLayout(maxVisibleModels, this.#requestedCompact);
+  }
+
+  setComposerHeight(terminalRows: number): void {
+    this.#rowBudget = composerHeightBudget(terminalRows) - 1;
+    this.#applyLayout();
   }
 
   handleInput(data: string): void {
@@ -254,9 +282,14 @@ export class ModelSelectorComponent extends Container {
   #updateList(): void {
     this.#listContainer.clear();
     if (this.#filtered.length === 0) {
-      this.#listContainer.addChild(
-        new Text(style(ANSI_DIM, "  No matching models"), 1, 0)
-      );
+      this.#listContainer.addChild({
+        invalidate() {
+          return;
+        },
+        render: (width) => [
+          truncateToWidth(style(ANSI_DIM, "  No matching models"), width, ""),
+        ],
+      });
       return;
     }
 
@@ -284,16 +317,21 @@ export class ModelSelectorComponent extends Container {
     }
 
     if (start > 0 || end < this.#filtered.length) {
-      this.#listContainer.addChild(
-        new Text(
-          style(
-            ANSI_DIM,
-            `  (${this.#selectedIndex + 1}/${this.#filtered.length})`
+      this.#listContainer.addChild({
+        invalidate() {
+          return;
+        },
+        render: (width) => [
+          truncateToWidth(
+            style(
+              ANSI_DIM,
+              `  (${this.#selectedIndex + 1}/${this.#filtered.length})`
+            ),
+            width,
+            ""
           ),
-          1,
-          0
-        )
-      );
+        ],
+      });
     }
   }
 }
