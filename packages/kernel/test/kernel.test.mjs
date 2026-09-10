@@ -200,6 +200,34 @@ test.each([
   });
 });
 
+test("enforces the documented synchronous loop boundary", async () => {
+  // Given: this loop polls twice per iteration in pinned QuickJS 0.32 (~5M iterations).
+  const below = randomUUID();
+  const above = randomUUID();
+  // When: both programs run through real QuickJS/WASM over HTTP.
+  const accepted = await (
+    await execute(below, "for (var i=0;i<4900000;i++) {} i")
+  ).json();
+  const rejected = await (
+    await execute(above, "for (var i=0;i<5100000;i++) {} i")
+  ).json();
+  // Then: useful bounded computation completes, while excess synchronous work resets the VM.
+  expect(accepted).toMatchObject({ status: "ok", result: 4_900_000 });
+  expect(rejected).toMatchObject({
+    status: "error",
+    error: { code: "INSTRUCTION_LIMIT" },
+    stateReset: true,
+  });
+  expect(await (await execute(above, "typeof i")).json()).toMatchObject({
+    status: "ok",
+    result: "undefined",
+  });
+  expect(await (await execute(above, "6 * 7")).json()).toMatchObject({
+    status: "ok",
+    result: 42,
+  });
+});
+
 test("does not expose host process, filesystem, or network globals", async () => {
   // Given: an empty guest context.
   const session = randomUUID();
