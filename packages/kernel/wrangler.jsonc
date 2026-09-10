@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pss-kernel",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-07",
+  "durable_objects": {
+    "bindings": [{ "name": "KERNELS", "class_name": "Kernel" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Kernel"] }],
+  "rules": [
+    { "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": true }
+  ]
+}

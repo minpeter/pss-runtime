@@ -10,7 +10,11 @@
       "project": ["scripts/**", "script/**"]
     },
     "apps/*": {},
-    "packages/*": {},
+    // allowlist[cloudflare-runtime-module]: Workers provides cloudflare:workers
+    // at runtime; Knip 6.34.0 reports its scheme as the package cloudflare.
+    "packages/*": {
+      "ignoreDependencies": ["cloudflare"]
+    },
     "extensions/*": {},
     // allowlist[examples-demo-fixtures]: example apps keep demo fixture
     // modules that are exercised from docs and manual runs, not imports;
