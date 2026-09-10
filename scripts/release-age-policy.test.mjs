@@ -27,6 +27,7 @@ overrides:
   'dockerode@4.0.12>uuid': 11.1.1
   'miniflare@5.20260730.0-alpha>undici': 7.29.0
   'miniflare@5.20260820.0-alpha>sharp': 0.35.4
+  'miniflare@5.20260908.0-alpha>sharp': 0.35.4
   read-yaml-file: 2.1.0
   typescript: ^7.0.2
   rolldown-plugin-dts: 0.27.2
