@@ -75,7 +75,7 @@ function normalizeReplayEventsRequest(
 function normalizeChannel(channel: SubmitTurnRequest["channel"]) {
   const id = channel.id.trim();
   if (!id) {
-    throw new WorkerServerBadRequestError("text and channel required");
+    throw new WorkerServerBadRequestError("channel id required");
   }
   return { id, kind: channel.kind };
 }
@@ -91,22 +91,29 @@ async function requestSessionDurableObject<T>({
   readonly path: string;
   readonly payload: ReplayEventsRequest | SubmitTurnRequest;
 }): Promise<T> {
-  const response = await fetchCloudflareDurableObject({
-    namespace: env.AGENT_DO,
-    objectName: durableObjectName(channelKey(payload.channel)),
-    request: new Request(`https://agent.internal${path}`, {
-      body: JSON.stringify(payload),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-    }),
-  });
+  let response: Response | undefined;
+  try {
+    response = await fetchCloudflareDurableObject({
+      namespace: env.AGENT_DO,
+      objectName: durableObjectName(channelKey(payload.channel)),
+      request: new Request(`https://agent.internal${path}`, {
+        body: JSON.stringify(payload),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    });
+  } catch {
+    // A rejected stub fetch is an unreachable Durable Object; never surface
+    // the underlying stub error (it may carry internal identifiers).
+    throw new WorkerServerUpstreamError("agent durable object unavailable");
+  }
   if (!response) {
     throw new WorkerServerUpstreamError("agent durable object unavailable");
   }
   if (!response.ok) {
-    throw new WorkerServerUpstreamError(
-      `agent durable object session request failed: ${response.status}`
-    );
+    // Fixed literal: the upstream status code is internal detail and must
+    // not surface in the client envelope (matches the SSE route and README).
+    throw new WorkerServerUpstreamError("agent durable object unavailable");
   }
   return parse(await response.json());
 }

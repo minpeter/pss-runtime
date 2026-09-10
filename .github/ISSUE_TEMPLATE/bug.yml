@@ -1,0 +1,71 @@
+name: Bug report
+description: Report a reproducible defect in the runtime, coding agent, or worker agent.
+title: "[Bug]: "
+labels:
+  - "type: bug"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Please fill in the
+        sections below so a maintainer or agent can reproduce the problem.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: A clear and concise description of the bug.
+      placeholder: What went wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: The exact steps required to reproduce the behavior.
+      placeholder: |
+        1. Run '...'
+        2. Observe '...'
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen instead.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment and versions
+      description: >-
+        Node, pnpm, and affected package versions. Run `node --version` and
+        `pnpm --version`; include the runtime or coding-agent version.
+      placeholder: |
+        - Node: 24.x
+        - pnpm: 11.9.0
+        - Package: @minpeter/pss-runtime 0.3.0
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Which part of the project does this affect?
+      options:
+        - runtime
+        - coding-agent
+        - worker-agent
+        - extensions
+        - other
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checks
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I can reproduce this on the latest published version.
+          required: false

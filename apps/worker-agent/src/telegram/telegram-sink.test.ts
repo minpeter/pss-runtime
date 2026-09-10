@@ -6,6 +6,7 @@ import {
 } from "./telegram-sink";
 
 interface TelegramAdapterOptions {
+  readonly apiBaseUrl?: unknown;
   readonly botToken?: unknown;
   readonly mode?: unknown;
   readonly userName?: unknown;
@@ -55,6 +56,22 @@ describe("Telegram channel sink", () => {
       { botToken: "token", mode: "webhook", userName: "bot" },
     ]);
     expect(telegramMock.sent).toEqual(["chat-1:hello"]);
+  });
+
+  it("passes the API base override through to the adapter", async () => {
+    const sink = createTelegramMessageSink({
+      apiBaseUrl: "http://127.0.0.1:8793",
+      botToken: "token",
+    });
+
+    await sink.send({ id: "chat-1", kind: "telegram" }, "hello");
+    expect(telegramMock.adapters).toEqual([
+      {
+        apiBaseUrl: "http://127.0.0.1:8793",
+        botToken: "token",
+        mode: "webhook",
+      },
+    ]);
   });
 
   it("rejects non-telegram channels", async () => {

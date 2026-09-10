@@ -11,7 +11,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "3.0.20",
+    "@ai-sdk/openai-compatible": "3.0.23",
     "@minpeter/pss-coding-agent": "workspace:*",
     "@minpeter/pss-runtime": "workspace:*",
     "@oh-my-pi/hashline": "17.2.11",
@@ -22,6 +22,6 @@
   "devDependencies": {
     "tsx": "^4.23.12",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }
