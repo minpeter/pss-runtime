@@ -27,6 +27,27 @@ const markdownTheme: MarkdownTheme = {
 };
 
 describe("AssistantStreamView terminal safety", () => {
+  it("publishes accepted notices even when the renderer update throws", () => {
+    const notices: string[] = [];
+    const failure = new Error("RENDERER_FAILED");
+    const view = new AssistantStreamView(markdownTheme, {
+      notify: (message) => notices.push(message),
+      assistantRenderer: (context) => ({
+        invalidate: () => undefined,
+        render: () => [],
+        setText: () => {
+          context.notify("ACCEPTED");
+          throw failure;
+        },
+      }),
+    });
+    try {
+      expect(() => view.appendText("TEXT")).toThrow(failure);
+      expect(notices).toEqual(["ACCEPTED"]);
+    } finally {
+      view.dispose();
+    }
+  });
   it("publishes notifications after mounting each update but before append returns", () => {
     const observed: { message: string; rows: string[] }[] = [];
     let context!: AssistantRendererContext;

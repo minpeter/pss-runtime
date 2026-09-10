@@ -144,13 +144,9 @@ export class AssistantStreamView extends Container {
       this.updateSegment(type, delta);
     } finally {
       this.pendingNotifications = undefined;
-    }
-    // A synchronous notice can seal/dispose this lease. Publish only after the
-    // segment and its current text are mounted, still before append returns.
-    // Admission was checked at the call site: handoff by the first notice must
-    // not discard other notices already accepted during this same update.
-    for (const notification of notifications) {
-      notification();
+      for (const notification of notifications) {
+        notification();
+      }
     }
   }
 
