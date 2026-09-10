@@ -1,5 +1,6 @@
+import { Worker } from "node:worker_threads";
 import { decode } from "fast-png";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   formulaCjkLocale,
   formulaSupported,
@@ -119,13 +120,24 @@ describe("MathJax and resvg WASM renderer", () => {
 
   it("restarts successfully after an aborted worker render", async () => {
     const controller = new AbortController();
+    const postMessage = Worker.prototype.postMessage;
+    const dispatch = vi
+      .spyOn(Worker.prototype, "postMessage")
+      .mockImplementationOnce(function (this: Worker, ...args) {
+        postMessage.apply(this, args);
+        controller.abort();
+      });
     const rendering = renderMathJaxPng(
       String.raw`\text{한글 日本語 中文} ${"x+".repeat(2000)}x`,
       "#000000",
       controller.signal
     );
-    setTimeout(() => controller.abort(), 1);
-    await expect(rendering).rejects.toThrow();
+    try {
+      await expect(rendering).rejects.toThrow("This operation was aborted");
+      expect(dispatch).toHaveBeenCalledOnce();
+    } finally {
+      dispatch.mockRestore();
+    }
     await expect(renderMathJaxPng("x+1", "#000000")).resolves.toBeInstanceOf(
       Buffer
     );
