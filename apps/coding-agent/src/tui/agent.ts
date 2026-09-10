@@ -959,10 +959,14 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     if (startupHeaderPulseTimer !== undefined) {
       clearTimeout(startupHeaderPulseTimer);
     }
+    const currentModel = config.modelSelector?.currentModelId();
+    const modelLine = (config.header?.subtitle ?? "").split("\n")[0] ?? "";
     const model = sanitizeTerminalText(
-      config.modelSelector?.currentModelId() ??
-        (config.header?.subtitle ?? "").split("\n")[0] ??
-        ""
+      currentModel === undefined ||
+        modelLine === currentModel ||
+        modelLine.startsWith(`${currentModel} `)
+        ? modelLine
+        : currentModel
     );
     startupHeaderView.setModel(model, true);
     startupHeaderPulseTimer = setTimeout(() => {
@@ -1229,10 +1233,14 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     );
     const selector = activeModelSelector;
     if (selector !== undefined) {
+      const layout = getModelSelectorLayout();
+      selector.setLayout(layout.maxVisibleModels, layout.compact);
       selector.setComposerHeight(tui.terminal.rows);
     }
     const sessionSelector = activeSessionSelector;
     if (sessionSelector !== undefined) {
+      const layout = getSessionSelectorLayout();
+      sessionSelector.setLayout(layout.maxVisibleSessions, layout.compact);
       sessionSelector.setComposerHeight(tui.terminal.rows);
     }
     tui.requestRender(true);
