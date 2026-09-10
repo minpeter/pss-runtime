@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { readWorkflows } from "./report-hygiene.mjs";
 import {
+  CODEQL_WORKFLOW_PATH,
   codeqlProblems,
   runbookCodeqlProblems,
   SECURITY_RUNBOOK_PATH,
@@ -47,6 +48,19 @@ describe("codeql: workflow shape (VAL-SEC-027)", () => {
   it("shipped workflows satisfy the CodeQL shape", () => {
     expect(codeqlProblems(readWorkflows())).toEqual([]);
   });
+
+  it.each(["init", "analyze"])(
+    "fails when only %s uses the old CodeQL pin",
+    (action) => {
+      const source = readFileSync(CODEQL_WORKFLOW_PATH, "utf8").replace(
+        `github/codeql-action/${action}@cdf488f595d80d6e07e03d4674febd5ab45fa938`,
+        `github/codeql-action/${action}@6f5948dfacef28e207b48d0905cf90c03365536d`
+      );
+      expect(problemsOf(source).some((p) => p.includes("same reference"))).toBe(
+        true
+      );
+    }
+  );
 
   it("fails when no workflow runs codeql-action", () => {
     const problems = problemsOf("name: ci\non: push\njobs: {}\n");
