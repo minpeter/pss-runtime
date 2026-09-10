@@ -55,7 +55,10 @@ interface Execution {
   notify: (() => void) | undefined;
 }
 
-const MAX_CHECKS = 10_000;
+// QuickJS 0.32 polls 10,000 times per callback, not once per instruction.
+// Keep synchronous work to ~10 million polls: the former 100 million can
+// block local workerd beyond 10s under contention, starving our own timer.
+const MAX_CHECKS = 1000;
 const MAX_JOBS = 10_000;
 const MAX_CALLS = 64;
 const TIMEOUT_MS = 10_000;

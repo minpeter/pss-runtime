@@ -117,6 +117,15 @@ pnpm --filter @minpeter/pss-kernel build      # WASM 포함 번들 dry run; 클�
 - 명시적으로 등록된 JSON 입출력 도구만 호출할 수 있다. import 모듈 로더는 제공하지 않는다.
 - 세션 내 eval/reset을 직렬 처리한다. 한 셀 내부의 `Promise.all` 도구 호출은 병렬 가능하다.
 - 무한 루프, 과도한 Promise 작업, 끝나지 않는 Promise 및 잘못된 결과 직렬화를 제한한다.
+- 셀당 QuickJS interrupt callback 1,000회까지 허용하고 1,001회째에
+  `INSTRUCTION_LIMIT`로 실패·reset한다. 고정된 QuickJS 0.32는 callback 사이에
+  10,000번의 interrupt poll을 수행한다. poll은 명령어마다가 아니라 분기·함수 호출
+  등에서 수행되므로 JavaScript 문장 수나 정확한 실행 시간 제한이 아니다.
+  이전 10,000 callback은 로컬 CPU 경합에서 동기 실행만 10초를 넘겼다.
+  타이머는 동기 WASM을 중단하지 못하며 Workers의 시계도 환경에 따라 실행 중
+  갱신되지 않을 수 있어, 이 작업량 제한은 시계나 타이머에 의존하지 않는다.
+  비동기 대기 10초, Promise job 10,000개, 도구 호출 64회, JSON 64 KiB,
+  heap 16 MiB와 stack 256 KiB 제한은 그대로다.
 - 인증·사용자별 할당량·운영용 이벤트 기록은 없는 **로컬 PoC**다.
 - 클라우드에서 배포·자동 eviction·요금은 이 로컬 테스트로 검증하지 않는다.
 
