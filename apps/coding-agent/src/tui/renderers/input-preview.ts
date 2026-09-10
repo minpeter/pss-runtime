@@ -75,26 +75,33 @@ const describeField = (value: unknown): string => {
   }
 };
 
-const previewWriteFile = (input: unknown): ToolInputPreview | undefined => {
-  const path = stringField(input, "path");
-  if (!path) {
-    return;
-  }
-  const content = isRecord(input) ? input.content : undefined;
-  // Streamed source is shown as code, in the same palette the read/diff
-  // renderers use. Absent content is a blank body, not a "content:" label.
-  return withExtraFields(
-    {
-      allowAnsi: true,
-      body:
-        typeof content === "string" && content.length > 0
-          ? highlightCode(content)
-          : "",
-      header: formatWriteHeader(path),
-    },
-    input,
-    ["path", "content"]
-  );
+const createWriteFilePreview = (): ToolInputPreviewMap[string] => {
+  // Highlighting is line-local; retain only the current view, not past inputs.
+  let previousLines: string[] = [];
+  let highlightedLines: string[] = [];
+  return (input) => {
+    const path = stringField(input, "path");
+    if (!path) {
+      return;
+    }
+    const content = isRecord(input) ? input.content : undefined;
+    const lines = typeof content === "string" ? normalizedLines(content) : [];
+    highlightedLines = lines.map((line, index) =>
+      line === previousLines[index]
+        ? highlightedLines[index]
+        : highlightCode(line)
+    );
+    previousLines = lines;
+    return withExtraFields(
+      {
+        allowAnsi: true,
+        body: highlightedLines.join("\n"),
+        header: formatWriteHeader(path),
+      },
+      input,
+      ["path", "content"]
+    );
+  };
 };
 
 const previewReadFile = (input: unknown): ToolInputPreview | undefined => {
@@ -235,6 +242,6 @@ export function createToolInputPreviews(): ToolInputPreviewMap {
     grep_files: previewGrepFiles,
     read_file: previewReadFile,
     shell_execute: previewShellExecute,
-    write_file: previewWriteFile,
+    write_file: createWriteFilePreview(),
   };
 }
