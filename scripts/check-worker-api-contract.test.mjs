@@ -57,6 +57,14 @@ describe("worker api contract: the committed document parses (VAL-WORKER-029)", 
 });
 
 describe("worker api contract: schema constraints match Worker validators", () => {
+  it("declares the nullable health version using OpenAPI 3.0 syntax", () => {
+    const raw = parseContractDocument(docText()).raw;
+    expect(raw.components.schemas.HealthOk.properties.version).toEqual({
+      type: "string",
+      nullable: true,
+    });
+  });
+
   it("declares nonblank channel IDs, turn text, and canonical SSE cursors", () => {
     const raw = parseContractDocument(docText()).raw;
     const schemas = raw.components.schemas;
