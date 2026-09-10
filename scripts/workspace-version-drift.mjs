@@ -11,12 +11,10 @@ import { parse as parseYaml } from "yaml";
 // or more workspace manifests. Comparison is over the exact declared range
 // strings: a pin next to a caret range is drift, and is either aligned or
 // accepted through the signature baseline (dependency + sorted versions).
-// The committed baseline records the two reviewed divergences; see
+// The committed baseline records the reviewed divergence; see
 // scripts/workspace-version-drift-baseline.json:
 //   fast-png — coding-agent/latex pin the exact version while
 //     runtime/pss-image-codec-edge-qa use the caret range (same major).
-//   @earendil-works/pi-tui — coding-agent depends on the current pi-tui
-//     while the latex/mermaid extensions declare a wider peer floor.
 
 export const DRIFT_BASELINE_PATH =
   "scripts/workspace-version-drift-baseline.json";
