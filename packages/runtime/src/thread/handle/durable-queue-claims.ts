@@ -73,7 +73,8 @@ export type QueuedDurableInputPreparation =
   | { readonly kind: "prepared"; readonly item: QueuedInput }
   | { readonly kind: "blocked"; readonly released: Promise<void> }
   | { readonly kind: "preceding"; readonly item: QueuedInput }
-  | { readonly kind: "unavailable" };
+  | { readonly kind: "unavailable" }
+  | { readonly kind: "superseded" };
 
 export async function prepareQueuedDurableInput({
   executionHost,
@@ -84,7 +85,7 @@ export async function prepareQueuedDurableInput({
   readonly item: QueuedInput;
   readonly threadKey: string;
 }): Promise<QueuedDurableInputPreparation> {
-  if (!item.durableInput) {
+  if (!(item.durableInput || item.continuation)) {
     return { item, kind: "prepared" };
   }
 
@@ -94,6 +95,15 @@ export async function prepareQueuedDurableInput({
     threadKey,
   });
   if (claimed.kind === "claimed" && claimed.record) {
+    if (item.continuation) {
+      // A continuation is control, not durable user input. Drop it before
+      // waiting on any live input owner (including our own later queue item).
+      await releaseDurableThreadInputClaim({
+        executionHost,
+        record: claimed.record,
+      });
+      return { kind: "superseded" };
+    }
     if (claimed.record.messageId !== item.durableMessageId) {
       const released = liveThreadInputOwnedByOther(
         executionHost,
@@ -127,6 +137,9 @@ export async function prepareQueuedDurableInput({
     };
   }
 
+  if (item.continuation) {
+    return { item, kind: "prepared" };
+  }
   if (item.durableMessageId) {
     unregisterLiveThreadInput(
       executionHost,

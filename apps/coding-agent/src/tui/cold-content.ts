@@ -244,7 +244,7 @@ export const selectTextTail = (
 ): ColdContent => {
   const padding = Math.min(
     content.paddingX,
-    Math.max(0, Math.floor((width - 1) / 2))
+    Math.max(0, Math.floor((width - (width <= 3 ? 2 : 1)) / 2))
   );
   const available = Math.max(1, width - padding * 2);
   const text = content.text.replace(/\t/g, "   ");

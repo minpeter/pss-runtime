@@ -130,7 +130,10 @@ export async function startThreadExecutionRun({
     })
   );
   let running = created.record;
-  if (!(created.ok || isTerminalTurnStatus(created.record.status))) {
+  if (isTerminalTurnStatus(created.record.status)) {
+    throw new TurnTransitionConflictError(runId, "start", "status-conflict");
+  }
+  if (!created.ok) {
     const transition = await transitionTurn(executionHost.store.turns, {
       expected: {
         leaseId: executionRun?.leaseId ?? null,

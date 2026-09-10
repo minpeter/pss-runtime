@@ -9,14 +9,13 @@ import {
   sessionUpdatedLabel,
 } from "../sessions/session-display";
 import type { SessionIndexEntry } from "../sessions/session-index";
+import { ACCENT_LIME, ACCENT_ORANGE } from "./palette";
 import { sanitizeTerminalText } from "./terminal-safety";
 
 const ANSI_RESET = "\x1b[0m";
 const ANSI_BOLD = "\x1b[1m";
-const ANSI_CYAN = "\x1b[36m";
 const ANSI_DIM = "\x1b[2m";
 const ANSI_GRAY = "\x1b[90m";
-const ANSI_GREEN = "\x1b[32m";
 const COLUMN_GAP = "  ";
 
 const style = (prefix: string, text: string): string =>
@@ -70,7 +69,7 @@ export class SessionSelectorRow implements Component {
     if (width <= 5) {
       return [
         style(
-          ANSI_CYAN,
+          ACCENT_ORANGE,
           truncateToWidth(this.#selected ? "→" : currentMarker, width)
         ),
       ];
@@ -103,8 +102,8 @@ export class SessionSelectorRow implements Component {
     const line = `${prefix}${content}`;
     return [
       this.#selected
-        ? `${style(ANSI_CYAN, ` ${line}`)}${style(ANSI_GREEN, suffix)}`
-        : ` ${line}${style(ANSI_GREEN, suffix)}`,
+        ? `${style(ACCENT_ORANGE, ` ${line}`)}${style(ACCENT_LIME, suffix)}`
+        : ` ${line}${style(ACCENT_LIME, suffix)}`,
     ];
   }
 }

@@ -1,6 +1,14 @@
 import type { ModelMessage } from "ai";
-import { TurnTransitionConflictError } from "../../execution/host/turn-transition-conflict";
+import { AgentHookError } from "../../agent/core/hook-error";
 import type { AgentHost } from "../../execution/host/types";
+import {
+  failedRequestMessages,
+  safeFailedMessages,
+} from "../../llm/failed-request";
+import {
+  StoppedModelStep,
+  StoppedToolRecoveryError,
+} from "../../llm/stopped-model-step";
 import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution-checkpoint";
 import {
   closeRuntimeInput,
@@ -23,6 +31,22 @@ import {
 import { normalizeTurnError } from "./turn-error-metadata";
 
 type TurnErrorEvent = Extract<AgentEvent, { type: "turn-error" }>;
+
+export class QueuedInputRecoveryError extends Error {
+  readonly checkpoint: NonNullable<
+    ReturnType<ThreadState["continuationCheckpoint"]>
+  >;
+  constructor(
+    cause: unknown,
+    checkpoint: NonNullable<ReturnType<ThreadState["continuationCheckpoint"]>>
+  ) {
+    super(
+      "Task requires recovery before new work can start. Resolve the reported runtime or storage failure and reconcile pending input.",
+      { cause }
+    );
+    this.checkpoint = checkpoint;
+  }
+}
 
 export async function emitTurnErrorAfterRecovery({
   error,
@@ -50,20 +74,51 @@ export async function emitTurnErrorAfterRecovery({
     try {
       await persistEvent?.(event);
     } finally {
+      // Publication must follow terminal persistence: that commit advances
+      // the version used to validate this recovery sentinel on refresh.
+      state.setContinuationCheckpoint(state.modelSnapshot(), () => {
+        throw new Error(
+          "Task requires recovery because another writer changed this thread. Reload the session and reconcile its stored history before continuing.",
+          { cause: error }
+        );
+      });
       run.emit(event);
     }
     closeRuntimeInput(runtimeInput, "a thread commit conflict");
     return;
   }
 
-  state.rollback(historySnapshot);
+  const partial = isErrorInstance(error, StoppedModelStep)
+    ? error.messages
+    : failedRequestMessages(error);
+  const safeHistory = state.modelSnapshot();
+  const continuation =
+    partial === undefined ? undefined : [...state.modelSnapshot(), ...partial];
+  const { safeHookRetry, retainedHistory } = hookFailureHistory(
+    error,
+    safeHistory,
+    historySnapshot
+  );
+  state.rollback(retainedHistory);
   const normalizedError = normalizeTurnError(error);
+  const recoveryRequired = isErrorInstance(error, QueuedInputRecoveryError);
+  const message = turnFailureMessage(error, normalizedError.message);
   let event: TurnErrorEvent = {
     ...(normalizedError.error === undefined
       ? {}
       : { error: normalizedError.error }),
+    ...(recoveryRequired
+      ? {
+          error: {
+            ...normalizedError.error,
+            category: normalizedError.error?.category ?? "unknown",
+            version: 1 as const,
+            code: "THREAD_RECOVERY_REQUIRED",
+          },
+        }
+      : {}),
     type: "turn-error",
-    message: normalizedError.message ?? "The request failed.",
+    message,
   };
   event = await observeTurnError(event, observeEvent);
   try {
@@ -73,9 +128,12 @@ export async function emitTurnErrorAfterRecovery({
       await state.commit();
     }
   } catch (persistenceError) {
-    if (isErrorInstance(persistenceError, TurnTransitionConflictError)) {
-      throw persistenceError;
-    }
+    state.setContinuationCheckpoint(continuation ?? safeHistory, () => {
+      throw new Error(
+        "Task requires storage recovery: terminal state could not be saved. Repair storage and reconcile the recorded turn before continuing.",
+        { cause: persistenceError }
+      );
+    });
     run.emit({
       ...(event.error === undefined ? {} : { error: event.error }),
       type: "turn-error",
@@ -85,8 +143,80 @@ export async function emitTurnErrorAfterRecovery({
     throw persistenceError;
   }
 
+  if (isErrorInstance(error, QueuedInputRecoveryError)) {
+    state.setContinuationCheckpoint(
+      error.checkpoint.history,
+      error.checkpoint.recover
+    );
+  } else if (safeHookRetry) {
+    state.clearContinuationCheckpoint();
+  } else if (continuation) {
+    state.setContinuationCheckpoint(continuation);
+  } else if (isErrorInstance(error, StoppedToolRecoveryError)) {
+    state.setContinuationCheckpoint(safeHistory, () => [
+      ...safeHistory,
+      ...error.recover(),
+    ]);
+  } else {
+    state.setContinuationCheckpoint(
+      retainedHistory === historySnapshot ? safeHistory : retainedHistory,
+      () => {
+        throw new Error(
+          "Task is pending but runtime recovery is required. Resolve the reported runtime or storage failure before starting new work.",
+          { cause: error }
+        );
+      }
+    );
+  }
   run.emit(event);
   closeRuntimeInput(runtimeInput, "turn-error");
+}
+
+function hookFailureHistory(
+  error: unknown,
+  safeHistory: ModelMessage[],
+  historySnapshot: ModelMessage[]
+) {
+  if (!isErrorInstance(error, AgentHookError)) {
+    return { retainedHistory: historySnapshot, safeHookRetry: false };
+  }
+  const output = error.modelOutput ?? [];
+  const hasEffects = [
+    ...safeHistory.slice(historySnapshot.length),
+    ...output,
+  ].some(
+    (message) =>
+      message.role === "tool" ||
+      (message.role === "assistant" &&
+        Array.isArray(message.content) &&
+        message.content.some((part) => part.type === "tool-call"))
+  );
+  return {
+    retainedHistory: hasEffects
+      ? [...safeHistory, ...safeFailedMessages(output)]
+      : historySnapshot,
+    safeHookRetry:
+      !hasEffects &&
+      (error.hook === "beforeTurnStart" ||
+        error.hook === "transformModelContext" ||
+        error.hook === "transformModelStep"),
+  };
+}
+
+function turnFailureMessage(
+  error: unknown,
+  fallback: string | undefined
+): string {
+  if (isErrorInstance(error, StoppedModelStep)) {
+    return "Output limit reached before completion. Press Enter to continue from retained progress.";
+  }
+  if (
+    isErrorInstance(error, StoppedToolRecoveryError) ||
+    isErrorInstance(error, QueuedInputRecoveryError)
+  ) {
+    return error.message;
+  }
+  return fallback ?? "The request failed.";
 }
 
 export async function recoverTurnProcessingError({
@@ -154,15 +284,19 @@ async function observeTurnError(
 function executionStatusForError(
   error: unknown
 ): ThreadExecutionTerminalStatus {
-  return isErrorInstance(error, ToolExecutionNeedsRecoveryError)
+  return isErrorInstance(error, ToolExecutionNeedsRecoveryError) ||
+    isErrorInstance(error, StoppedToolRecoveryError)
     ? "needs-recovery"
     : "error";
 }
 
-function isErrorInstance(
+function isErrorInstance<T>(
   error: unknown,
-  errorType: { readonly [Symbol.hasInstance]: (value: unknown) => boolean }
-): boolean {
+  errorType: {
+    new (...args: never[]): T;
+    readonly [Symbol.hasInstance]: (value: unknown) => boolean;
+  }
+): error is T {
   try {
     return errorType[Symbol.hasInstance](error);
   } catch {

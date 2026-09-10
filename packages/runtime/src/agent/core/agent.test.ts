@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it, vi } from "vitest";
-import { createNoopTool } from "../../testing/llm-test-utils";
 import {
   createMockLanguageModelV4,
   mockLanguageModelV4Text,
 } from "../../testing/mock-language-model-v4-test-utils";
+import { createNoopTool } from "../../testing/noop-tool-test-utils";
 import {
   Agent,
   type AgentInstrumentation,
@@ -108,11 +108,12 @@ describe("Agent", () => {
         return turn;
       },
     };
+    const generate = vi.fn(() =>
+      Promise.resolve(mockLanguageModelV4Text("DONE"))
+    );
     const agent = new Agent({
       instrumentations: [instrumentation],
-      model: createMockLanguageModelV4(() =>
-        Promise.resolve(mockLanguageModelV4Text("DONE"))
-      ),
+      model: createMockLanguageModelV4(generate),
       namespace: "support",
     });
     const thread = agent.thread("customer-1");
@@ -121,6 +122,7 @@ describe("Agent", () => {
     await collectRun(await thread.followUp("follow up"));
     await collectRun(await thread.steer("one more thing"));
 
+    expect(generate).toHaveBeenCalledTimes(3);
     expect(contexts).toEqual([
       {
         namespace: "support",
