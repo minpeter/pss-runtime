@@ -1,13 +1,16 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { clearTimeout, setTimeout } from "node:timers";
 import {
   type Component,
   type Container,
+  CURSOR_MARKER,
   Markdown,
   stripTerminalSequences,
   type Terminal,
   type TuiMainScreen,
+  visibleWidth,
 } from "@earendil-works/pi-tui";
 import type { AgentEvent, AgentTurn } from "@minpeter/pss-runtime";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -66,9 +69,14 @@ vi.mock("@earendil-works/pi-tui", async (importOriginal) => {
 });
 
 import { type AgentTUIConfig, createAgentTUI } from "./agent";
+import { composerHeightBudget } from "./composer-height";
 import { createModelCommand } from "./model-command";
 import { ModelSelectorComponent } from "./model-selector";
+import { NOTICE_PULSE_MS } from "./repeated-notice";
+import { SessionSelectorComponent } from "./session-selector";
 import { TuiSessionMachine } from "./session-state";
+
+const BLOCK_BORDER = /[\u2502\u2500\u250C\u2510\u2514\u2518]/u;
 
 const gate = <T = void>() => {
   let resolve!: (value: T) => void;
@@ -249,6 +257,233 @@ afterEach(() => {
 });
 
 describe.sequential("actual TUI transcript ownership", () => {
+  it.each([false, true])(
+    "freezes the startup header on different notice content (setup=%s)",
+    async (setup) => {
+      let current = "MODEL_A";
+      const models = {
+        currentModelId: () => current,
+        listModelIds: async () => ["MODEL_A", "MODEL_B", "MODEL_C"],
+        switchModel: (id: string) => {
+          current = id;
+        },
+      };
+      const app = await fixture({
+        header: {
+          title: "LOGO",
+          get subtitle() {
+            return current;
+          },
+        },
+        modelSelector: models,
+        setupMessages: setup ? ["NOTICE_SENTINEL"] : [],
+        commands: [
+          createModelCommand(models),
+          {
+            name: "notice",
+            description: "fixture",
+            execute: () => ({ success: true, message: "NOTICE_SENTINEL" }),
+          },
+        ],
+      });
+      try {
+        if (!setup) {
+          await app.command("/model MODEL_B");
+          await app.command("/notice");
+        }
+        expect(plain()).toContain("NOTICE_SENTINEL");
+        const before = rows(surface().children[0]);
+        expect(before.join("\n")).not.toContain("\x1b[47m");
+        await app.command("/model MODEL_C");
+        expect(rows(surface().children[0])).toEqual(before);
+        expect(plain()).toContain("MODEL_C");
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
+  it("keeps an empty startup replay HOT until content arrives", async () => {
+    let current = "MODEL_A";
+    const models = {
+      currentModelId: () => current,
+      listModelIds: async () => ["MODEL_A", "MODEL_B"],
+      switchModel: (id: string) => {
+        current = id;
+      },
+    };
+    const app = await fixture({
+      header: {
+        title: "LOGO",
+        get subtitle() {
+          return current;
+        },
+      },
+      modelSelector: models,
+      commands: [createModelCommand(models)],
+      replayHistoryOnStartup: true,
+      sessionSelector: {
+        currentSessionKey: () => "empty",
+        listSessions: async () => [],
+        loadCurrentHistory: async () => [],
+        switchSession: async () => undefined,
+      },
+    });
+    try {
+      await app.command("/model MODEL_B");
+      expect(rows(surface().children[0]).join("\n")).toContain("MODEL_B");
+      expect(plain().trim()).toBe("");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("recomputes occupied session space on actual terminal resize", async () => {
+    const ids = Array.from({ length: 100 }, (_, i) => `SESSION_${i}`);
+    const app = await fixture({
+      setupMessages: [Array.from({ length: 25 }, () => "OCCUPIED").join("\n")],
+      commands: [
+        {
+          name: "picker",
+          description: "fixture",
+          execute: () => ({
+            success: true,
+            action: { type: "select-session" },
+          }),
+        },
+      ],
+      sessionSelector: {
+        currentSessionKey: () => ids[0],
+        listSessions: async () =>
+          ids.map((key) => ({
+            key,
+            name: key,
+            cwd: "/tmp",
+            createdAt: "",
+            updatedAt: "",
+          })),
+        loadCurrentHistory: async () => [],
+        switchSession: async () => undefined,
+      },
+    });
+    const composer = surface().children.at(-1) as Container;
+    try {
+      await onRender(
+        () => composer.children[0] instanceof SessionSelectorComponent,
+        () => send("/picker\r")
+      );
+      terminal.send("\x1b[A");
+      for (const height of [40, 60, 40]) {
+        Object.assign(surface().terminal, { rows: height });
+        process.stdout.emit("resize");
+        const occupied = surface()
+          .children.slice(0, -1)
+          .reduce((sum, child) => sum + child.render(100).length, 0);
+        expect(composer.render(100).length + occupied).toBeLessThanOrEqual(
+          height
+        );
+        expect(
+          composer.render(100).find((line) => line.includes("→"))
+        ).toContain("SESSION_99");
+      }
+      const ready = idle();
+      terminal.send("\x1b");
+      await ready;
+    } finally {
+      await app.close();
+    }
+  });
+
+  it.each(["model", "session"] as const)(
+    "enforces the complete %s cap through actual resize dispatch",
+    async (kind) => {
+      const ids = Array.from({ length: 100 }, (_, i) => `item-${i}-한국어`);
+      const switchModel = vi.fn();
+      const switchSession = vi.fn();
+      const app = await fixture({
+        commands: [
+          {
+            name: "picker",
+            description: "fixture",
+            execute: () => ({
+              success: true,
+              action: {
+                type: kind === "model" ? "select-model" : "select-session",
+              },
+            }),
+          },
+        ],
+        modelSelector: {
+          currentModelId: () => ids[0],
+          listModelIds: async () => ids,
+          switchModel,
+        },
+        sessionSelector: {
+          currentSessionKey: () => ids[0],
+          listSessions: async () =>
+            ids.map((key) => ({
+              key,
+              name: key,
+              cwd: "/tmp",
+              createdAt: "",
+              updatedAt: "",
+            })),
+          loadCurrentHistory: async () => [],
+          switchSession,
+        },
+      });
+      const composer = surface().children.at(-1) as Container;
+      try {
+        await onRender(
+          () =>
+            composer.children[0] instanceof
+            (kind === "model"
+              ? ModelSelectorComponent
+              : SessionSelectorComponent),
+          () => send("/picker\r")
+        );
+        terminal.send("\x1b[A");
+        for (const height of [60, 7, 8, 11, 12, 16, 17, 24, 40, 60]) {
+          for (const width of [1, 2, 3, 24, 48, 80, 120]) {
+            terminal.columns = width;
+            Object.assign(surface().terminal, { rows: height });
+            for (let repeat = 0; repeat < 2; repeat++) {
+              process.stdout.emit("resize");
+              const rendered = composer.render(width);
+              expect(rendered.length).toBeLessThanOrEqual(
+                composerHeightBudget(height)
+              );
+              expect(
+                rendered.every((line) => visibleWidth(line) <= width)
+              ).toBe(true);
+              expect(
+                rendered.some((line) => line.includes(CURSOR_MARKER))
+              ).toBe(true);
+              expect(
+                rendered.some((line) =>
+                  stripTerminalSequences(line).trimStart().startsWith("→")
+                )
+              ).toBe(true);
+              if (width >= 24) {
+                expect(rendered.find((line) => line.includes("→"))).toContain(
+                  "item-99"
+                );
+              }
+            }
+          }
+        }
+        const ready = idle();
+        terminal.send("\r");
+        await ready;
+        expect(
+          kind === "model" ? switchModel : switchSession
+        ).toHaveBeenCalledExactlyOnceWith(ids[99]);
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
   it.each(["input", "select", "confirm"] as const)(
     "unmounts revoked host %s without cancelling a replacement prompt",
     async (kind) => {
@@ -404,7 +639,7 @@ describe.sequential("actual TUI transcript ownership", () => {
   );
 
   it.each(["direct", "picker"] as const)(
-    "appends only one model notice through %s and retains session notices and COLD header",
+    "updates the initial model through %s without a notice and retains session notices",
     async (method) => {
       let current = "MODEL_A";
       const cwd = "/CWD_SENTINEL";
@@ -437,7 +672,6 @@ describe.sequential("actual TUI transcript ownership", () => {
         ],
       });
       try {
-        const before = rows(surface().children[0]);
         if (method === "direct") {
           await app.command("/model MODEL_B");
         } else {
@@ -453,12 +687,15 @@ describe.sequential("actual TUI transcript ownership", () => {
         }
         expect(current).toBe("MODEL_B");
         expect(switchModel).toHaveBeenCalledExactlyOnceWith("MODEL_B");
-        expect(rows(surface().children[0])).toEqual(before);
+        expect(
+          stripTerminalSequences(rows(surface().children[0]).join("\n"))
+        ).toContain("MODEL_B");
         const notice = plain()
           .split("\n")
           .filter((line) => line.trim());
-        expect(notice).toHaveLength(1);
-        expect(notice[0].match(/MODEL_B/g)).toHaveLength(1);
+        expect(notice).toHaveLength(0);
+        expect(rows(surface().children[0]).join("\n")).toContain("MODEL_B");
+        expect(plain()).not.toContain("Model changed to MODEL_B");
         expect(plain()).not.toContain(cwd);
         expect(
           stripTerminalSequences(rows(surface().children.at(-1)).join("\n"))
@@ -467,7 +704,9 @@ describe.sequential("actual TUI transcript ownership", () => {
         await app.command("/rename");
         expect(rows().slice(0, noticeRows.length)).toEqual(noticeRows);
         expect(plain()).toContain("SESSION_RENAMED");
-        expect(rows(surface().children[0])).toEqual(before);
+        expect(
+          stripTerminalSequences(rows(surface().children[0]).join("\n"))
+        ).toContain("MODEL_B");
       } finally {
         await app.close();
       }
@@ -477,6 +716,7 @@ describe.sequential("actual TUI transcript ownership", () => {
   it.each(["direct", "picker"] as const)(
     "replaces only the current HOT model notice through %s",
     async (method) => {
+      vi.useFakeTimers();
       let current = "MODEL_A";
       const models = {
         currentModelId: () => current,
@@ -513,12 +753,14 @@ describe.sequential("actual TUI transcript ownership", () => {
         await ready;
       };
       try {
+        await app.start();
+        await app.finish();
         await choose("MODEL_B");
         await choose("MODEL_C");
         expect(
           plain()
             .split("\n")
-            .filter((line) => line.trim())
+            .filter((line) => line.includes("MODEL_"))
         ).toHaveLength(1);
         expect(plain()).not.toContain("MODEL_B");
         expect(plain()).toContain("MODEL_C");
@@ -540,6 +782,7 @@ describe.sequential("actual TUI transcript ownership", () => {
   it.each(["unchanged", "error", "cancel"] as const)(
     "does not claim a picker model change on %s",
     async (outcome) => {
+      vi.useFakeTimers();
       const switchModel = vi.fn(() => {
         if (outcome === "error") {
           throw new Error("SWITCH_ERROR_SENTINEL");
@@ -555,6 +798,7 @@ describe.sequential("actual TUI transcript ownership", () => {
         modelSelector: models,
       });
       try {
+        const before = rows(surface().children[0]);
         await onRender(
           () =>
             (surface().children.at(-1) as Container).children[0] instanceof
@@ -571,6 +815,280 @@ describe.sequential("actual TUI transcript ownership", () => {
           expect(plain().trim()).toBe("");
         }
         expect(switchModel).toHaveBeenCalledTimes(outcome === "cancel" ? 0 : 1);
+        expect(rows(surface().children[0])).toEqual(before);
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
+  it.each(["direct", "picker"] as const)(
+    "updates only the startup model through %s until first send, not typing or picker cancellation",
+    async (method) => {
+      vi.useFakeTimers();
+      const header = {
+        title: "LOGO_SENTINEL",
+        subtitle: "MODEL_A (free tier)\n/CWD_SENTINEL\nSESSION_SENTINEL",
+      };
+      let current = "MODEL_A";
+      const models = {
+        currentModelId: () => current,
+        listModelIds: async () => ["MODEL_A", "MODEL_B", "MODEL_C"],
+        switchModel: vi.fn((id: string) => {
+          current = id;
+          header.title = "CHANGED_LOGO";
+          header.subtitle = `${id} (free tier)\n/CHANGED_CWD\nCHANGED_SESSION`;
+        }),
+      };
+      const app = await fixture({
+        header,
+        commands: [createModelCommand(models)],
+        modelSelector: models,
+      });
+      const headerRows = () => rows(surface().children[0]);
+      const choose = async (model: string) => {
+        if (method === "direct") {
+          await app.command(`/model ${model}`);
+          return;
+        }
+        await onRender(
+          () =>
+            (surface().children.at(-1) as Container).children[0] instanceof
+            ModelSelectorComponent,
+          () => send("/model\r")
+        );
+        const ready = idle();
+        send(`${model}\r`);
+        await ready;
+      };
+      try {
+        const initial = headerRows();
+        send("UNSENT_SENTINEL");
+        expect(rows(surface().children.at(-1)).join("\n")).toContain(
+          "UNSENT_SENTINEL"
+        );
+        expect(headerRows()).toEqual(initial);
+        send("\x15");
+        await onRender(
+          () =>
+            (surface().children.at(-1) as Container).children[0] instanceof
+            ModelSelectorComponent,
+          () => send("/model\r")
+        );
+        const cancelled = idle();
+        send("\x1b");
+        await cancelled;
+        expect(models.switchModel).not.toHaveBeenCalled();
+        expect(headerRows()).toEqual(initial);
+        await choose("MODEL_B");
+        expect(plain().trim()).toBe("");
+        const settled = initial.map((line) =>
+          line.replace("MODEL_A", "MODEL_B")
+        );
+        expect(headerRows()).toEqual(
+          settled.map((line) =>
+            line.replace("\x1b[2mMODEL_B", "\x1b[47m\x1b[30mMODEL_B")
+          )
+        );
+        vi.advanceTimersByTime(NOTICE_PULSE_MS);
+        expect(headerRows()).toEqual(settled);
+        expect(vi.getTimerCount()).toBe(0);
+        await choose("MODEL_C");
+        vi.advanceTimersByTime(NOTICE_PULSE_MS / 2);
+        await choose("MODEL_B");
+        expect(vi.getTimerCount()).toBe(1);
+        vi.advanceTimersByTime(NOTICE_PULSE_MS / 2);
+        expect(headerRows().join("\n")).toContain("\x1b[47m\x1b[30mMODEL_B");
+        const wide = headerRows();
+        terminal.columns = 48;
+        process.stdout.emit("resize");
+        expect(
+          rows(surface().children[0], 48).every(
+            (line) => visibleWidth(line) <= 48
+          )
+        ).toBe(true);
+        terminal.columns = 100;
+        process.stdout.emit("resize");
+        expect(headerRows()).toEqual(wide);
+        await app.start();
+        expect(plain()).toContain("USER");
+        expect(headerRows()).toEqual(settled);
+        await app.finish();
+        expect(vi.getTimerCount()).toBe(0);
+        vi.advanceTimersByTime(NOTICE_PULSE_MS);
+        await choose("MODEL_C");
+        expect(current).toBe("MODEL_C");
+        expect(headerRows()).toEqual(settled);
+        expect(plain()).toContain("MODEL_C");
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
+  it.each(["unchanged", "error"] as const)(
+    "keeps direct %s feedback without changing or pulsing the initial header",
+    async (outcome) => {
+      vi.useFakeTimers();
+      const switchModel = vi.fn(() => {
+        throw new Error("SWITCH_ERROR_SENTINEL");
+      });
+      const models = {
+        currentModelId: () => "MODEL_A",
+        listModelIds: async () => ["MODEL_A", "MODEL_B"],
+        switchModel,
+      };
+      const app = await fixture({
+        header: { title: "LOGO", subtitle: "MODEL_A\n/CWD" },
+        commands: [createModelCommand(models)],
+        modelSelector: models,
+      });
+      try {
+        const before = rows(surface().children[0]);
+        await app.command(
+          `/model ${outcome === "unchanged" ? "MODEL_A" : "MODEL_B"}`
+        );
+        expect(rows(surface().children[0])).toEqual(before);
+        expect(vi.getTimerCount()).toBe(0);
+        expect(plain()).toContain(
+          outcome === "error" ? "SWITCH_ERROR_SENTINEL" : "MODEL_A"
+        );
+        expect(switchModel).toHaveBeenCalledTimes(outcome === "error" ? 1 : 0);
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
+  it("settles the latest startup model and removes its timer before shutdown's final frame", async () => {
+    vi.useFakeTimers();
+    let current = "MODEL_A";
+    const models = {
+      currentModelId: () => current,
+      listModelIds: async () => ["MODEL_A", "MODEL_B"],
+      switchModel: (id: string) => {
+        current = id;
+      },
+    };
+    const app = await fixture({
+      header: {
+        title: "LOGO",
+        get subtitle() {
+          return `${current}\n/CWD`;
+        },
+      },
+      commands: [createModelCommand(models)],
+      modelSelector: models,
+    });
+    try {
+      await app.command("/model MODEL_B");
+      expect(rows(surface().children[0]).join("\n")).toContain(
+        "\x1b[47m\x1b[30mMODEL_B"
+      );
+      expect(vi.getTimerCount()).toBe(1);
+    } finally {
+      await app.close();
+    }
+    expect(vi.getTimerCount()).toBe(0);
+    const final = rows(surface().children[0]);
+    expect(final.join("\n")).toContain("\x1b[2mMODEL_B\x1b[0m");
+    const render = vi.spyOn(surface(), "requestRender");
+    vi.advanceTimersByTime(NOTICE_PULSE_MS);
+    expect(rows(surface().children[0])).toEqual(final);
+    expect(render).not.toHaveBeenCalled();
+  });
+
+  it("freezes the startup model after actual startup history replay before any send", async () => {
+    const header = { title: "LOGO_SENTINEL", subtitle: "MODEL_A\n/CWD" };
+    let current = "MODEL_A";
+    const models = {
+      currentModelId: () => current,
+      listModelIds: async () => ["MODEL_A", "MODEL_B"],
+      switchModel: (id: string) => {
+        current = id;
+        header.subtitle = `${id}\n/CWD`;
+      },
+    };
+    const loadCurrentHistory = vi.fn(async () => [
+      { role: "user" as const, content: "REPLAY_USER_SENTINEL" },
+      { role: "assistant" as const, content: "REPLAY_ANSWER_SENTINEL" },
+    ]);
+    const app = await fixture({
+      header,
+      commands: [createModelCommand(models)],
+      modelSelector: models,
+      replayHistoryOnStartup: true,
+      sessionSelector: {
+        currentSessionKey: () => "replayed",
+        listSessions: async () => [],
+        loadCurrentHistory,
+        switchSession: async () => undefined,
+      },
+    });
+    try {
+      expect(loadCurrentHistory).toHaveBeenCalledOnce();
+      expect(plain()).toContain("REPLAY_USER_SENTINEL");
+      expect(plain()).toContain("REPLAY_ANSWER_SENTINEL");
+      const before = rows(surface().children[0]);
+      const replayed = prefix();
+      await app.command("/model MODEL_B");
+      expect(current).toBe("MODEL_B");
+      expect(rows(surface().children[0])).toEqual(before);
+      unchanged(replayed);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it.each([48, 100])(
+    "places startup metadata beside the wordmark at width %i",
+    async (width) => {
+      // Given: the two-row wordmark and metadata with an optional session row.
+      terminal.columns = width;
+      const logo = ["█🮂🮂𜷞 𜷥𜴸▀▀ 𜷥𜴸▀▀", "█🮂🮂  ▄▄𜶭𜵰 ▄▄𜶭𜵰"];
+      const model = "MODEL_A";
+      const cwd = `/workspace/${"nested/".repeat(8)}project`;
+      const session = "SESSION_A";
+      const header = {
+        title: logo.join("\n"),
+        subtitle: [model, cwd, session].join("\n"),
+      };
+      // When: the actual TUI captures its startup header.
+      const app = await fixture({ header });
+      try {
+        const component = surface().children[0];
+        const rendered = rows(component, width).map((line) =>
+          stripTerminalSequences(line).trimEnd()
+        );
+        // Then: metadata begins exactly two cells after each unchanged logo row.
+        expect(rendered[1]).toBe(` ${logo[0]}  ${model}`);
+        expect(rendered[2]?.startsWith(` ${logo[1]}  /workspace/`)).toBe(true);
+        expect(logo.map(visibleWidth)).toEqual([14, 14]);
+        const content = rendered.join("");
+        expect(content.split(model)).toHaveLength(2);
+        expect(content.replaceAll(" ", "").split(cwd)).toHaveLength(2);
+        expect(rendered.filter((line) => line.trim() === session)).toHaveLength(
+          1
+        );
+        expect(rendered.every((line) => visibleWidth(line) <= width)).toBe(
+          true
+        );
+        // Resizing must reflow copied content, not re-read mutable header state.
+        header.subtitle = "MODEL_B\n/changed\nSESSION_B";
+        const resized = rows(component, 100).map((line) =>
+          stripTerminalSequences(line).trimEnd()
+        );
+        expect(resized.slice(1, 4)).toEqual([
+          ` ${logo[0]}  ${model}`,
+          ` ${logo[1]}  ${cwd}`,
+          ` ${session}`,
+        ]);
+        expect(
+          rows(component, width).map((line) =>
+            stripTerminalSequences(line).trimEnd()
+          )
+        ).toEqual(rendered);
       } finally {
         await app.close();
       }
@@ -606,6 +1124,198 @@ describe.sequential("actual TUI transcript ownership", () => {
     }
   });
 
+  it.each(["direct", "picker"] as const)(
+    "appends one COLD background block after replay through actual %s resume navigation",
+    async (method) => {
+      const target = {
+        key: "cwd:/workspace#deadbeef",
+        name: "RESUME_TITLE_SENTINEL",
+        cwd: "/workspace",
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-01T00:00:00Z",
+      };
+      let current = { ...target, key: "old", name: "OLD_TITLE_SENTINEL" };
+      const header = { title: "LOGO", subtitle: "MODEL_B\n/workspace" };
+      const switchSession = vi.fn(() => {
+        current = target;
+        return Promise.resolve();
+      });
+      const app = await fixture({
+        header,
+        currentSession: () => current,
+        commands: [
+          {
+            name: "resume",
+            description: "fixture",
+            execute: async () => {
+              if (method === "picker") {
+                return { success: true, action: { type: "select-session" } };
+              }
+              await switchSession();
+              return {
+                success: true,
+                action: { type: "session", clear: true, reason: "resume" },
+                message: "GENERIC_DUPLICATE_SENTINEL",
+              };
+            },
+          },
+        ],
+        sessionSelector: {
+          currentSessionKey: () => current.key,
+          listSessions: async () => [target],
+          switchSession,
+          loadCurrentHistory: async () => [
+            { role: "user", content: "REPLAY_USER_SENTINEL" },
+            { role: "assistant", content: "REPLAY_ANSWER_SENTINEL" },
+          ],
+        },
+      });
+      try {
+        if (method === "direct") {
+          await app.command("/resume");
+        } else {
+          await onRender(
+            () =>
+              (surface().children.at(-1) as Container).children[0] instanceof
+              SessionSelectorComponent,
+            () => send("/resume\r")
+          );
+          const selected = idle();
+          send("\r");
+          await selected;
+        }
+        expect(switchSession).toHaveBeenCalledOnce();
+        const block = chat().children.at(-1);
+        expect(block).toBeInstanceOf(ColdSnapshot);
+        expect(plain()).toContain("REPLAY_USER_SENTINEL");
+        expect(plain()).toContain("REPLAY_ANSWER_SENTINEL");
+        expect(plain().indexOf(target.name)).toBeGreaterThan(
+          plain().indexOf("REPLAY_ANSWER_SENTINEL")
+        );
+        expect(plain().split(target.name)).toHaveLength(2);
+        expect(plain()).not.toContain("GENERIC_DUPLICATE_SENTINEL");
+        for (const width of [24, 48, 100]) {
+          const rendered = rows(block, width);
+          const content = rendered
+            .map((line) => stripTerminalSequences(line).trim())
+            .filter(Boolean);
+          if (width >= 48) {
+            expect(content).toHaveLength(2);
+            expect(content[0]).toContain(` · ${target.name}`);
+            expect(content[1]).toBe("MODEL_B · /workspace");
+          } else {
+            expect(content.length).toBeGreaterThan(2);
+          }
+          expect(content.join(" ")).toContain(target.name);
+          expect(content.join(" ")).toContain("MODEL_B · /workspace");
+          expect(rendered.join("\n")).toContain(
+            `\x1b[97m\x1b[1m${target.name}`
+          );
+          expect(rendered.join("\n")).toContain("\x1b[38;5;245mMODEL_B");
+          expect(rendered.join("\n")).toContain("\x1b[36m");
+          expect(rendered.join("\n")).not.toContain("\x1b[2m");
+          expect(rendered.join("\n")).not.toContain("\x1b[30m");
+          expect(rendered.every((line) => visibleWidth(line) === width)).toBe(
+            true
+          );
+          expect(
+            rendered.every((line) => line.includes("\x1b[48;5;235m"))
+          ).toBe(true);
+          for (const line of rendered) {
+            const spans = line.split("\x1b[0m");
+            for (const span of spans.slice(1)) {
+              expect(span === "" || span.startsWith("\x1b[48;5;235m")).toBe(
+                true
+              );
+            }
+          }
+          expect(stripTerminalSequences(rendered.join("\n"))).not.toMatch(
+            BLOCK_BORDER
+          );
+        }
+        const before = rows(block);
+        header.subtitle = "MODEL_C\n/changed";
+        current = { ...target, name: "CHANGED_TITLE" };
+        expect(rows(block)).toEqual(before);
+        const historical = prefix();
+        await app.start();
+        unchanged(historical);
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
+  it.each([
+    { name: "named", sessionName: "Release notes" },
+    { name: "unnamed", sessionName: undefined },
+    {
+      name: "UUID",
+      sessionName: undefined,
+      key: "12345678-1234-1234-1234-123456789abc",
+      label: "#12345678",
+    },
+    {
+      name: "long suffix",
+      sessionName: undefined,
+      key: "cwd:/workspace#12345678-1234-1234-1234-123456789abc",
+      label: "#12345678",
+    },
+  ])(
+    "renders a COLD resume information block for $name sessions",
+    async ({ sessionName, key, label }) => {
+      let currentKey = "old";
+      const header = { title: "LOGO", subtitle: "MODEL_B\n/workspace/project" };
+      const app = await fixture({
+        header,
+        currentSession: () => ({ key: currentKey, name: sessionName }),
+        commands: [
+          {
+            name: "resume-fixture",
+            description: "fixture",
+            execute: () => {
+              currentKey = key ?? "target#42";
+              return {
+                action: { clear: true, reason: "resume", type: "session" },
+                success: true,
+              };
+            },
+          },
+        ],
+        sessionSelector: {
+          currentSessionKey: () => currentKey,
+          listSessions: async () => [],
+          loadCurrentHistory: async () => [
+            { role: "user", content: "REPLAYED_USER" },
+          ],
+          switchSession: async () => undefined,
+        },
+      });
+      try {
+        await app.command("/resume-fixture");
+        const text = stripTerminalSequences(rows().join("\n"));
+        expect(text).toContain("Resumed session");
+        const content = rows(chat().children.at(-1))
+          .map((line) => stripTerminalSequences(line).trim())
+          .filter(Boolean);
+        expect(content).toHaveLength(2);
+        expect(content[0]).toContain(` · ${sessionName ?? label ?? "#42"}`);
+        if (key) {
+          expect(text).not.toContain(key);
+        }
+        expect(text).toContain("MODEL_B · /workspace/project");
+        expect(text).not.toContain("Current session/model");
+        expect(rows(chat().children.at(-1)).join("\n")).toContain(
+          "\x1b[48;5;235m"
+        );
+        const before = rows();
+        header.subtitle = "MODEL_C\n/changed";
+        expect(rows()).toEqual(before);
+      } finally {
+        await app.close();
+      }
+    }
+  );
   it("settles a pulsing notice before user append, not on its historical timeout", async () => {
     const callbacks: (() => void)[] = [];
     const original = globalThis.setTimeout;

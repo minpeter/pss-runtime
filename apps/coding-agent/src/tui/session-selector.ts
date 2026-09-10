@@ -2,11 +2,12 @@ import {
   Container,
   fuzzyFilter,
   getKeybindings,
-  Input,
   Spacer,
-  Text,
+  truncateToWidth,
 } from "@earendil-works/pi-tui";
 import type { SessionIndexEntry } from "../sessions/session-index";
+import { ComposerInput } from "./bounded-input";
+import { composerHeightBudget } from "./composer-height";
 import {
   SessionSelectorRow,
   SessionSelectorRule,
@@ -21,10 +22,16 @@ const style = (prefix: string, text: string): string =>
   `${prefix}${text}${ANSI_RESET}`;
 
 const clampVisibleSessions = (value: number | undefined): number =>
-  Math.max(
-    1,
-    Math.min(MAX_VISIBLE_SESSIONS, Math.floor(value ?? MAX_VISIBLE_SESSIONS))
-  );
+  Math.max(1, Math.floor(value ?? MAX_VISIBLE_SESSIONS));
+
+export const sessionSelectorLayout = (rows: number, occupiedRows: number) => {
+  const available = rows - occupiedRows;
+  const compact = available < 12;
+  return {
+    compact,
+    maxVisibleSessions: Math.max(1, available - (compact ? 3 : 9)),
+  };
+};
 
 export interface SessionSelectorOptions {
   readonly compact?: boolean;
@@ -38,17 +45,20 @@ export interface SessionSelectorOptions {
 
 export class SessionSelectorComponent extends Container {
   #compact: boolean;
+  #requestedCompact: boolean;
+  #requestedMaxVisibleSessions: number;
   readonly #currentSessionKey: string;
   #filtered: readonly SessionIndexEntry[];
   readonly #listContainer = new Container();
   #maxVisibleSessions: number;
   readonly #onCancel: () => void;
   readonly #onSelect: (sessionKey: string) => void;
-  readonly #searchInput = new Input();
+  readonly #searchInput = new ComposerInput();
   #selectedIndex = 0;
   readonly #sessions: readonly SessionIndexEntry[];
   #settled = false;
   #focused = false;
+  #rowBudget = Number.POSITIVE_INFINITY;
 
   get focused(): boolean {
     return this.#focused;
@@ -64,6 +74,8 @@ export class SessionSelectorComponent extends Container {
     this.#compact = options.compact ?? false;
     this.#currentSessionKey = options.currentSessionKey;
     this.#maxVisibleSessions = clampVisibleSessions(options.maxVisibleSessions);
+    this.#requestedCompact = this.#compact;
+    this.#requestedMaxVisibleSessions = this.#maxVisibleSessions;
     this.#onCancel = options.onCancel;
     this.#onSelect = options.onSelect;
     this.#sessions = [
@@ -83,14 +95,32 @@ export class SessionSelectorComponent extends Container {
   }
 
   setLayout(maxVisibleSessions: number, compact: boolean): void {
-    const next = clampVisibleSessions(maxVisibleSessions);
-    if (next === this.#maxVisibleSessions && compact === this.#compact) {
+    this.#requestedMaxVisibleSessions =
+      clampVisibleSessions(maxVisibleSessions);
+    this.#requestedCompact = compact;
+    this.#applyLayout();
+  }
+
+  #applyLayout(): void {
+    // Title, search and scroll info reserve three rows; standard decoration
+    // reserves six more. Always retain at least one selected-item row.
+    const nextCompact = this.#requestedCompact || this.#rowBudget < 10;
+    const next = Math.min(
+      this.#requestedMaxVisibleSessions,
+      this.#rowBudget - (nextCompact ? 3 : 9)
+    );
+    if (next === this.#maxVisibleSessions && nextCompact === this.#compact) {
       return;
     }
     this.#maxVisibleSessions = next;
-    this.#compact = compact;
+    this.#compact = nextCompact;
     this.#rebuildLayout();
     this.#updateList();
+  }
+
+  setComposerHeight(terminalRows: number): void {
+    this.#rowBudget = composerHeightBudget(terminalRows) - 1;
+    this.#applyLayout();
   }
 
   handleInput(data: string): void {
@@ -181,9 +211,14 @@ export class SessionSelectorComponent extends Container {
   #updateList(): void {
     this.#listContainer.clear();
     if (this.#filtered.length === 0) {
-      this.#listContainer.addChild(
-        new Text(style(ANSI_DIM, "  No matching sessions"), 1, 0)
-      );
+      this.#listContainer.addChild({
+        invalidate() {
+          return;
+        },
+        render: (width) => [
+          truncateToWidth(style(ANSI_DIM, "  No matching sessions"), width, ""),
+        ],
+      });
       return;
     }
     const start = Math.max(
@@ -204,22 +239,30 @@ export class SessionSelectorComponent extends Container {
           new SessionSelectorRow(
             entry,
             entry.key === this.#currentSessionKey,
-            index === this.#selectedIndex
+            index === this.#selectedIndex,
+            this.#filtered.some(
+              (session) => session.key === this.#currentSessionKey
+            )
           )
         );
       }
     }
     if (start > 0 || end < this.#filtered.length) {
-      this.#listContainer.addChild(
-        new Text(
-          style(
-            ANSI_DIM,
-            `  (${this.#selectedIndex + 1}/${this.#filtered.length})`
+      this.#listContainer.addChild({
+        invalidate() {
+          return;
+        },
+        render: (width) => [
+          truncateToWidth(
+            style(
+              ANSI_DIM,
+              `  (${this.#selectedIndex + 1}/${this.#filtered.length})`
+            ),
+            width,
+            ""
           ),
-          1,
-          0
-        )
-      );
+        ],
+      });
     }
   }
 }

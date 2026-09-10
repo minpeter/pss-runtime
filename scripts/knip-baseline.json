@@ -57,7 +57,6 @@
     "exports:apps/coding-agent/src/tui/cold-content.ts#restoreTheme",
     "exports:apps/coding-agent/src/tui/renderers/utils.ts#numberField",
     "exports:apps/coding-agent/src/tui/renderers/utils.ts#safeStringify",
-    "exports:apps/coding-agent/src/tui/repeated-notice.ts#NOTICE_PULSE_MS",
     "exports:apps/coding-agent/src/tui/stream-handlers.ts#UNKNOWN_TOOL_NAME",
     "exports:apps/coding-agent/src/tui/stream-handlers.ts#createToolInputState",
     "exports:apps/coding-agent/src/tui/stream-handlers.ts#handleFile",
