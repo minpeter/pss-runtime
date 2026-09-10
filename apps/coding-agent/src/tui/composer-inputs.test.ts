@@ -65,7 +65,25 @@ describe("complete composer inputs", () => {
     });
     try {
       editor.handleInput("/");
-      await ready;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          ready,
+          new Promise<never>((_resolve, reject) => {
+            timer = setTimeout(
+              () =>
+                reject(
+                  new Error(
+                    "Autocomplete menu did not request its ready render"
+                  )
+                ),
+              2000
+            );
+          }),
+        ]);
+      } finally {
+        clearTimeout(timer);
+      }
       editor.handleInput("\x1b[A");
       for (const height of heights) {
         terminal.rows = height;

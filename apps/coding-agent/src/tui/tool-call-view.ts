@@ -510,7 +510,9 @@ export class BaseToolCallView extends Container {
    * generic field dump for unknown tools or shapes the preview cannot read.
    */
   private inputPreview(input: unknown): ToolInputPreview {
-    const preview = this.inputPreviews[this.toolName]?.(input);
+    const preview = Object.hasOwn(this.inputPreviews, this.toolName)
+      ? this.inputPreviews[this.toolName](input)
+      : undefined;
     return (
       preview ?? {
         body: formatInputPreview(input),

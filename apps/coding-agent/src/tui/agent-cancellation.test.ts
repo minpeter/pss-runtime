@@ -3,9 +3,8 @@ import {
   type Terminal,
   type TuiMainScreen,
 } from "@earendil-works/pi-tui";
-import type { AgentTurn } from "@minpeter/pss-runtime";
+import type { AgentEvent, AgentTurn } from "@minpeter/pss-runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BufferedAgentTurn } from "../../../../packages/runtime/src/thread/protocol/turn";
 
 const terminal = vi.hoisted(() => ({
   send: (_data: string): void => undefined,
@@ -58,6 +57,44 @@ const gate = <T = void>() => {
     reject = no;
   });
   return { promise, resolve, reject };
+};
+
+// Local public-contract fixture: producers await the consumer's next pull,
+// so assertions observe a processed boundary rather than merely queued input.
+const eventChannel = () => {
+  const queue: {
+    event: AgentEvent;
+    consumed: ReturnType<typeof gate<void>>;
+  }[] = [];
+  let available = gate();
+  let closed = false;
+  return {
+    async *events(): AsyncIterable<AgentEvent> {
+      while (!closed || queue.length > 0) {
+        const next = queue.shift();
+        if (next) {
+          try {
+            yield next.event;
+          } finally {
+            next.consumed.resolve();
+          }
+        } else {
+          await available.promise;
+          available = gate();
+        }
+      }
+    },
+    emitBoundary(event: AgentEvent): Promise<void> {
+      const consumed = gate();
+      queue.push({ event, consumed });
+      available.resolve();
+      return consumed.promise;
+    },
+    close() {
+      closed = true;
+      available.resolve();
+    },
+  };
 };
 const bounded = async <T>(promise: Promise<T>): Promise<T> => {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -139,7 +176,7 @@ describe.sequential("TUI cancellation terminal ownership", () => {
   ])(
     "settles $continuation continuation / $local local / $error error / $abort abort",
     async ({ continuation, local, error, abort }) => {
-      const channel = new BufferedAgentTurn();
+      const channel = eventChannel();
       const subscribed = gate();
       const run: AgentTurn = {
         events() {
@@ -175,7 +212,7 @@ describe.sequential("TUI cancellation terminal ownership", () => {
           send("\x1b");
           expect(api.interrupt).toHaveBeenCalledTimes(1);
         }
-        // Real runtime event channel: abort can precede a storage/settlement error.
+        // Public event contract: abort can precede a storage/settlement error.
         if (abort) {
           await bounded(channel.emitBoundary({ type: "turn-abort" }));
         }

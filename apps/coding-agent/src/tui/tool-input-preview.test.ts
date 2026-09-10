@@ -59,6 +59,18 @@ const headerRow = (view: BaseToolCallView): string =>
   stripTerminalSequences(view.render(120)[0] ?? "").trim();
 
 describe("tool input previews use the per-tool pretty grammar", () => {
+  it.each(["__proto__", "constructor", "toString"])(
+    "uses a generic preview for inherited name %s",
+    async (name) => {
+      const view = createView(name);
+      try {
+        await view.appendInputChunk('{"value":"CUSTOM_INPUT"}');
+        expect(plain(view)).toContain("CUSTOM_INPUT");
+      } finally {
+        view.dispose();
+      }
+    }
+  );
   it("write_file shows the write header with highlighted multi-line content, not a field dump", async () => {
     const view = createView("write_file");
     try {

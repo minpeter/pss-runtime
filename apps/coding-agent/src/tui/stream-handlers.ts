@@ -486,11 +486,7 @@ export const isVisibleStreamPart = (
     case "text-delta":
       return typeof part.text === "string" && part.text.trim().length > 0;
     case "reasoning-delta":
-      return (
-        flags.showReasoning &&
-        typeof part.text === "string" &&
-        part.text.trim().length > 0
-      );
+      return false;
     default:
       return true;
   }

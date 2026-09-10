@@ -554,8 +554,12 @@ describe("isVisibleStreamPart — reasoning parts must never trigger first-visib
   it.each(["reasoning-start", "reasoning-delta", "reasoning-end"] as const)(
     "%s is invisible regardless of flags",
     (type) => {
-      expect(isVisibleStreamPart({ type } as never, FLAGS_ALL_ON)).toBe(false);
-      expect(isVisibleStreamPart({ type } as never, FLAGS_ALL_OFF)).toBe(false);
+      expect(
+        isVisibleStreamPart({ type, text: "THINKING" } as never, FLAGS_ALL_ON)
+      ).toBe(false);
+      expect(
+        isVisibleStreamPart({ type, text: "THINKING" } as never, FLAGS_ALL_OFF)
+      ).toBe(false);
     }
   );
 

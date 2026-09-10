@@ -36,6 +36,13 @@ const edits = [
 ];
 // Observe the dependency's serialized completion boundary without timing delays.
 const requestTask = "autocompleteRequestTask";
+function completionTask(editor: ComposerEditor): Promise<void> {
+  const task: unknown = editor[requestTask];
+  if (!(task instanceof Promise)) {
+    throw new Error("pi-tui serialized autocomplete task is missing");
+  }
+  return task;
+}
 function gate<T = void>() {
   let resolve: (value: T) => void = () => undefined;
   const promise = new Promise<T>((done) => {
@@ -186,7 +193,6 @@ describe("cleared editor completion ownership", () => {
       // Then no stale command can escape through onSubmit.
       expect(submitted.mock.calls).toEqual([[""]]);
       expect(editor.isShowingAutocomplete()).toBe(false);
-      editor.setAutocompleteProvider(slashProvider());
     }
   );
 
@@ -228,7 +234,7 @@ describe("cleared editor completion ownership", () => {
           }
           release.resolve();
           // Await pi-tui's actual serialized request, not a guessed microtask count.
-          await bounded(editor[requestTask]);
+          await bounded(completionTask(editor));
           if (order === "after") {
             editor.handleInput("\r");
           }
@@ -238,7 +244,7 @@ describe("cleared editor completion ownership", () => {
         } finally {
           release.resolve();
           editor.setAutocompleteProvider(provider);
-          await bounded(editor[requestTask]);
+          await bounded(completionTask(editor));
         }
       }
     );

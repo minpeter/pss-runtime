@@ -67,23 +67,37 @@ const formatPatternHeader = (
   context: readonly string[]
 ): string => {
   const suffix = context.length > 0 ? ` (${context.join(", ")})` : "";
-  return `**${operation}** \`${sanitizeTerminalText(pattern)}\`${suffix}`;
+  return `**${operation}** ${formatPatternSegment(pattern)}${suffix}`;
+};
+
+const formatPatternSegment = (value: string): string => {
+  const safe = sanitizeTerminalText(value, value.length);
+  const longest = Array.from(safe.matchAll(/`+/g)).reduce(
+    (maximum, match) => Math.max(maximum, match[0].length),
+    0
+  );
+  const fence = "`".repeat(longest + 1);
+  return `${fence} ${safe} ${fence}`;
 };
 
 export const formatGlobHeader = (pattern: string, input: unknown): string => {
   const path = stringField(input, "path");
-  return formatPatternHeader("glob", pattern, path ? [`path: ${path}`] : []);
+  return formatPatternHeader(
+    "glob",
+    pattern,
+    path ? [`path: ${formatPatternSegment(path)}`] : []
+  );
 };
 
 export const formatGrepHeader = (pattern: string, input: unknown): string => {
   const context: string[] = [];
   const path = stringField(input, "path");
   if (path) {
-    context.push(`path: ${path}`);
+    context.push(`path: ${formatPatternSegment(path)}`);
   }
   const include = stringField(input, "include");
   if (include) {
-    context.push(`include: ${include}`);
+    context.push(`include: ${formatPatternSegment(include)}`);
   }
   return formatPatternHeader("grep", pattern, context);
 };
