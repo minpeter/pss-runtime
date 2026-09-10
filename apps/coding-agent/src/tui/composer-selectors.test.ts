@@ -6,10 +6,14 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import { composerHeightBudget } from "./composer-height";
 import { ModelSelectorComponent } from "./model-selector";
-import { SessionSelectorComponent } from "./session-selector";
+import {
+  SessionSelectorComponent,
+  sessionSelectorLayout,
+} from "./session-selector";
 
 const widths = [1, 2, 3, 24, 48, 80, 120];
 const heights = [7, 8, 11, 12, 16, 17, 24, 40, 60];
+const ITEM_ROW = /^\s*(?:→ | {2})item-/u;
 const ids = Array.from(
   { length: 100 },
   (_, i) => `item-${String(i).padStart(2, "0")}-${"한국어".repeat(30)}`
@@ -44,6 +48,21 @@ function fixture(kind: "model" | "session", count: number) {
 }
 
 describe.each(["model", "session"] as const)("complete %s composer", (kind) => {
+  it("retains caller limits separately from the transient composer budget", () => {
+    const { selector } = fixture(kind, 100);
+    selector.setLayout(2, true);
+    selector.handleInput("\x1b[A");
+    for (const height of [120, 7, 120]) {
+      selector.setComposerHeight(height);
+      const rendered = selector.render(80);
+      const itemRows = rendered.filter((line) =>
+        ITEM_ROW.test(stripTerminalSequences(line))
+      );
+      expect(itemRows).toHaveLength(height === 7 ? 1 : 2);
+      expect(rendered.find((line) => line.includes("→"))).toContain("item-99");
+    }
+  });
+
   it.each([0, 1, 100])("bounds a %d-item catalog through resize", (count) => {
     const { selector, onSelect, onCancel } = fixture(kind, count);
     selector.handleInput("\x1b[A");
@@ -104,4 +123,40 @@ describe.each(["model", "session"] as const)("complete %s composer", (kind) => {
       }
     }
   );
+});
+
+it("retains a constructor model limit and an explicitly updated maximum", () => {
+  const selector = new ModelSelectorComponent({
+    currentModelId: ids[0],
+    modelIds: ids,
+    maxVisibleModels: 2,
+    onCancel: vi.fn(),
+    onSelect: vi.fn(),
+  });
+  selector.setComposerHeight(120);
+  expect(
+    selector.render(80).filter((line) => line.includes("item-"))
+  ).toHaveLength(3);
+  selector.setMaxVisibleModels(3);
+  selector.setComposerHeight(7);
+  selector.setComposerHeight(120);
+  expect(
+    selector.render(80).filter((line) => line.includes("item-"))
+  ).toHaveLength(4);
+});
+
+it("combines occupied session rows with the composer cap on shrink and grow", () => {
+  const { selector } = fixture("session", 100);
+  for (const [height, occupied] of [
+    [40, 35],
+    [60, 10],
+    [40, 35],
+  ]) {
+    const layout = sessionSelectorLayout(height, occupied);
+    selector.setLayout(layout.maxVisibleSessions, layout.compact);
+    selector.setComposerHeight(height);
+    expect(selector.render(80).length).toBeLessThanOrEqual(
+      Math.min(height - occupied, composerHeightBudget(height) - 1)
+    );
+  }
 });

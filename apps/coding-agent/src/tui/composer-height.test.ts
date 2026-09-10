@@ -21,9 +21,9 @@ describe("shared composer height budget", () => {
   });
 
   it.each([1, 2, 3, 24, 48, 80, 120])(
-    "keeps a positive budget at width %d",
-    () => {
-      expect(composerContentBudget(7)).toBeGreaterThan(0);
+    "keeps a positive budget at height %d",
+    (height) => {
+      expect(composerContentBudget(height)).toBeGreaterThan(0);
     }
   );
 });
