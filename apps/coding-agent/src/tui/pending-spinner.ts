@@ -1,6 +1,7 @@
+import { ACCENT_LIME } from "./palette";
+
 const ANSI_RESET = "\x1b[0m";
 const ANSI_DIM = "\x1b[2m";
-const ANSI_CYAN = "\x1b[36m";
 
 export const PENDING_SPINNER_FRAMES = [
   "⠋",
@@ -18,7 +19,7 @@ export const PENDING_SPINNER_FRAMES = [
 export const PENDING_SPINNER_INTERVAL_MS = 80;
 
 export const stylePendingIndicator = (frame: string, message: string): string =>
-  `${ANSI_CYAN}${frame}${ANSI_RESET} ${ANSI_DIM}${message}${ANSI_RESET}`;
+  `${ACCENT_LIME}${frame}${ANSI_RESET} ${ANSI_DIM}${message}${ANSI_RESET}`;
 
 export interface SpinnerTicker {
   stop(): void;

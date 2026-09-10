@@ -1,6 +1,10 @@
 import { Fsm } from "../../fsm";
 import type { AgentEvent } from "./events";
 
+export interface ThreadContinuationOptions {
+  readonly signal?: AbortSignal;
+}
+
 export interface AgentTurn {
   events(): AsyncIterable<AgentEvent>;
   readonly runId?: string | undefined;

@@ -50,6 +50,9 @@ export async function closeTurnWithDurableTerminalEvent({
     status: result === "aborted" ? "cancelled" : "completed",
     threadKey,
   });
+  if (result === "aborted") {
+    state.setContinuationCheckpoint(state.modelSnapshot());
+  }
   events.emitProcessedEvent(run, terminalEvent);
 }
 

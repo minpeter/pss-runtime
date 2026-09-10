@@ -5,6 +5,7 @@ import type {
   UserModelMessage,
 } from "ai";
 import type { TuiStreamPart } from "./stream-handlers";
+import { toolResultStreamPart } from "./tool-result-stream-part";
 
 export type SessionHistoryReplayPart =
   | { readonly type: "clear" }
@@ -24,24 +25,14 @@ const stream = (part: TuiStreamPart): SessionHistoryReplayPart => ({
 const textStream = (
   type: "reasoning" | "text",
   text: string
-): readonly SessionHistoryReplayPart[] => [
-  stream({ type: `${type}-start` }),
-  stream({ text, type: `${type}-delta` }),
-  stream({ type: `${type}-end` }),
-];
-
-const toolResultOutput = (output: unknown): unknown => {
-  if (
-    typeof output === "object" &&
-    output !== null &&
-    "type" in output &&
-    "value" in output &&
-    (output.type === "text" || output.type === "json")
-  ) {
-    return output.value;
-  }
-  return output;
-};
+): readonly SessionHistoryReplayPart[] =>
+  text.trim().length === 0
+    ? []
+    : [
+        stream({ type: `${type}-start` }),
+        stream({ text, type: `${type}-delta` }),
+        stream({ type: `${type}-end` }),
+      ];
 
 type ReplayContentPart =
   | Exclude<AssistantModelMessage["content"], string>[number]
@@ -64,14 +55,7 @@ const replayContentPart = (
     ];
   }
   if (part.type === "tool-result") {
-    return [
-      stream({
-        output: toolResultOutput(part.output),
-        toolCallId: part.toolCallId,
-        toolName: part.toolName,
-        type: "tool-result",
-      }),
-    ];
+    return [stream(toolResultStreamPart(part))];
   }
   return [];
 };

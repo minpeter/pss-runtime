@@ -7,6 +7,10 @@ import {
   type ToolSet,
 } from "ai";
 import type { ModelRetry } from "../thread/protocol/events";
+import {
+  normalizeProviderException,
+  ProviderReportedError,
+} from "./failed-request";
 import { createModelRetry } from "./model-retry";
 import { configuredModelId, configuredProvider } from "./model-usage";
 
@@ -36,6 +40,8 @@ export interface ModelStepStreamOptions {
   ) => void;
   /** Notified when one physical provider call starts. */
   readonly onAttemptStart?: (origin: ModelAttemptOriginSignal) => void;
+  /** Physical request/stream failure, excluding SDK tool or storage errors. */
+  readonly onProviderFailure?: () => void;
   readonly onRetry?: (event: ModelRetry) => void;
   readonly seed?: number;
   readonly temperature?: number;
@@ -54,6 +60,7 @@ export interface ModelStepStreamFinalResult {
 
 export interface ModelStepStreamHandle {
   finalize(): Promise<ModelStepStreamFinalResult>;
+  partialMessages?(): Promise<ModelMessage[]>;
   readonly parts: AsyncIterable<ModelStepStreamPart>;
 }
 
@@ -163,6 +170,7 @@ function streamingModelStep(
     model,
     attemptId,
     onRetry,
+    onProviderFailure,
     onAttemptEnd,
     onAttemptStart,
     ...streamOptions
@@ -181,10 +189,12 @@ function streamingModelStep(
     model,
     attemptId,
     onRetry,
+    onProviderFailure,
     abortSignal: options.abortSignal,
     onAttemptEnd: notifyAttemptEnd,
     onAttemptStart: notifyAttemptStart,
     onProviderStreamError: (error) => {
+      onProviderFailure?.();
       streamFailure ??= { error };
     },
   });
@@ -206,6 +216,7 @@ function streamingModelStep(
   });
   let finalization: Promise<ModelStepStreamFinalResult> | undefined;
   return {
+    partialMessages: async () => await result.responseMessages,
     parts: observeStreamFailures(
       result.stream as AsyncIterable<ModelStepStreamPart>,
       (error) => {
@@ -249,10 +260,12 @@ function streamingModelStep(
 function generatedModelStep(
   options: ModelStepStreamOptions
 ): ModelStepStreamHandle {
+  let providerError: unknown;
   const {
     model,
     attemptId,
     onRetry,
+    onProviderFailure,
     onAttemptEnd,
     onAttemptStart,
     ...generateOptions
@@ -261,9 +274,13 @@ function generatedModelStep(
     model,
     attemptId,
     onRetry,
+    onProviderFailure,
     abortSignal: options.abortSignal,
     onAttemptEnd,
     onAttemptStart,
+    onProviderStreamError: (error) => {
+      providerError = error;
+    },
   });
   const result = generateText({
     ...generateOptions,
@@ -271,9 +288,15 @@ function generatedModelStep(
   });
   let finalization: Promise<ModelStepStreamFinalResult> | undefined;
   return {
+    partialMessages: async () => (await result).responseMessages,
     parts: synthesizedParts(result),
     finalize() {
-      finalization ??= result.then(finalResultFromGenerateText);
+      finalization ??= result.then((output) => {
+        if (providerError !== undefined) {
+          throw providerError;
+        }
+        return finalResultFromGenerateText(output);
+      });
       return finalization;
     },
   };
@@ -389,6 +412,7 @@ function modelWithAttemptObserver({
   attemptId = crypto.randomUUID(),
   abortSignal,
   onRetry,
+  onProviderFailure,
   onAttemptEnd,
   onAttemptStart,
   onProviderStreamError,
@@ -398,6 +422,7 @@ function modelWithAttemptObserver({
   | "attemptId"
   | "abortSignal"
   | "onRetry"
+  | "onProviderFailure"
   | "onAttemptEnd"
   | "onAttemptStart"
 > & {
@@ -431,17 +456,22 @@ function modelWithAttemptObserver({
             observeProviderCall({
               execute: async () => {
                 abortSignal?.throwIfAborted();
-                const result = await Reflect.apply(
-                  original,
-                  resolvedModel,
-                  args
-                );
+                let result: unknown;
+                try {
+                  result = await Reflect.apply(original, resolvedModel, args);
+                } catch (error) {
+                  // Only exceptions from the actual provider invocation are
+                  // normalized; callbacks and other runtime errors stay intact.
+                  throw normalizeProviderException(error);
+                }
                 return property === "doStream" && onProviderStreamError
                   ? observeProviderStreamErrors(result, onProviderStreamError)
                   : result;
               },
               origin,
               onAttemptEnd,
+              onProviderFailure,
+              onProviderStreamError,
               onAttemptStart,
               settleOnReturn: property === "doGenerate",
             })
@@ -463,19 +493,29 @@ function observeProviderStreamErrors(
   const result = value as {
     readonly stream: ReadableStream<{
       readonly error?: unknown;
+      readonly finishReason?: {
+        readonly unified: string;
+        readonly raw?: string;
+      };
       readonly type: string;
     }>;
   };
   return {
     ...result,
-    stream: result.stream.pipeThrough(
+    stream: observePhysicalStream(result.stream, onError).pipeThrough(
       new TransformStream({
         transform(part, controller) {
           if (part.type === "error") {
-            onError(part.error);
+            const error = normalizeProviderException(part.error);
+            onError(error);
+            controller.enqueue({ ...part, error });
+            return;
           }
           if (part.type === "finish") {
             finished = true;
+            if (part.finishReason?.unified === "error") {
+              onError(new ProviderReportedError(part.finishReason.raw));
+            }
           }
           controller.enqueue(part);
         },
@@ -491,30 +531,71 @@ function observeProviderStreamErrors(
   };
 }
 
+function observePhysicalStream<T>(
+  stream: ReadableStream<T>,
+  onError: (error: unknown) => void
+): ReadableStream<T> {
+  const reader = stream.getReader();
+  return new ReadableStream<T>({
+    async pull(controller) {
+      try {
+        const next = await reader.read();
+        if (next.done) {
+          controller.close();
+        } else {
+          controller.enqueue(next.value);
+        }
+      } catch (error) {
+        const failure = normalizeProviderException(error);
+        onError(failure);
+        controller.error(failure);
+      }
+    },
+    cancel: (reason) => reader.cancel(reason),
+  });
+}
+
 async function observeProviderCall<T>({
   execute,
   origin,
   onAttemptEnd,
+  onProviderFailure,
+  onProviderStreamError,
   onAttemptStart,
   settleOnReturn,
 }: {
   readonly execute: () => PromiseLike<T>;
   readonly origin: ModelAttemptOriginSignal;
   readonly settleOnReturn: boolean;
+  readonly onProviderStreamError?: (error: unknown) => void;
 } & Pick<
   ModelStepStreamOptions,
-  "onAttemptEnd" | "onAttemptStart"
+  "onAttemptEnd" | "onAttemptStart" | "onProviderFailure"
 >): Promise<T> {
   onAttemptStart?.(origin);
   let result: T;
   try {
     result = await execute();
   } catch (error) {
+    onProviderFailure?.();
     onAttemptEnd?.({ error, outcome: "failed" });
     throw error;
   }
   if (settleOnReturn) {
-    onAttemptEnd?.({ origin, outcome: "succeeded" });
+    const output = result as {
+      readonly finishReason: {
+        readonly unified: string;
+        readonly raw?: string;
+      };
+    };
+    if (output.finishReason.unified === "error") {
+      const error = new ProviderReportedError(output.finishReason.raw);
+      onProviderFailure?.();
+      onProviderStreamError?.(error);
+      onAttemptEnd?.({ error, outcome: "failed" });
+    } else {
+      onAttemptEnd?.({ origin, outcome: "succeeded" });
+    }
   }
   return result;
 }

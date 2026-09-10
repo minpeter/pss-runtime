@@ -106,6 +106,9 @@ const lines = (component: Component = surface().children[1]) =>
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
+/** Every rendered row, blanks included; `lines` hides boundary rows. */
+const rawRows = (component: Component) =>
+  component.render(120).map((row) => stripTerminalSequences(row).trimEnd());
 const send = (text: string) => {
   for (const char of text) {
     terminal.input(char);
@@ -331,6 +334,24 @@ describe.sequential("new session notices through startTui", () => {
       expect(lines()).toEqual(before);
       expect(reset).toHaveBeenCalledTimes(1);
       expect(transcript.epoch).toBe(previousEpoch + 1);
+    }
+  );
+});
+
+describe.sequential("new session boundary rows through startTui", () => {
+  it.each(["/new", "/clear"])(
+    "%s leaves exactly one blank row between the startup help and its notice",
+    async (input) => {
+      await fixture();
+      await command(input);
+      const header = rawRows(surface().children[0]);
+      const help = header.findIndex((row) => row.includes("Enter to submit"));
+      expect(help).toBeGreaterThanOrEqual(0);
+      const transcript = rawRows(surface().children[1]);
+      const notice = transcript.at(-1);
+      expect(notice).toBeTruthy();
+      // Startup help, one neutral boundary row, the notice, then the composer.
+      expect([...header.slice(help + 1), ...transcript]).toEqual(["", notice]);
     }
   );
 });

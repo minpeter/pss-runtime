@@ -1,4 +1,4 @@
-import type { ModelMessage } from "ai";
+import { APICallError, type ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { Agent } from "../../agent/core/agent";
 import {
@@ -17,7 +17,45 @@ import { isRuntimeAttachmentData } from "../input/attachments";
 import type { AgentEvent } from "../protocol/events";
 import { userTextToModelMessage } from "../protocol/mapping";
 
+const collect = async (turn: { events(): AsyncIterable<AgentEvent> }) => {
+  const events: AgentEvent[] = [];
+  for await (const event of turn.events()) {
+    events.push(event);
+  }
+  return events;
+};
+
 describe("Agent thread runtime input continuation", () => {
+  it("resumes a failed request without duplicating the original user message", async () => {
+    let calls = 0;
+    const agent = new Agent({
+      model: createCallbackModel(({ history }) => {
+        calls += 1;
+        if (calls <= 3) {
+          expect(history).toHaveLength(1);
+          return Promise.reject(
+            new APICallError({
+              message: "temporary failure",
+              url: "https://fixture.invalid",
+              requestBodyValues: {},
+              statusCode: 503,
+              responseHeaders: { "retry-after-ms": "0" },
+            })
+          );
+        }
+        expect(history).toEqual([userTextToModelMessage(userText("original"))]);
+        return Promise.resolve([assistantMessage("continued")]);
+      }),
+    });
+    const thread = agent.thread("failed-continuation");
+    await collect(await thread.send("original"));
+    const resumed = await thread.continue();
+    expect(resumed).toBeDefined();
+    if (resumed) {
+      await collect(resumed);
+    }
+    expect(calls).toBe(4);
+  });
   it("active thread.steer at step-end continues the current turn with appended user input", async () => {
     const seenHistory: ModelMessage[][] = [];
     let calls = 0;
