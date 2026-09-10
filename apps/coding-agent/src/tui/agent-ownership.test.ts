@@ -278,6 +278,62 @@ const continuationBlocks = () =>
   );
 
 describe.sequential("actual TUI transcript ownership", () => {
+  it("recomputes occupied session space on actual terminal resize", async () => {
+    const ids = Array.from({ length: 100 }, (_, i) => `SESSION_${i}`);
+    const app = await fixture({
+      setupMessages: [Array.from({ length: 25 }, () => "OCCUPIED").join("\n")],
+      commands: [
+        {
+          name: "picker",
+          description: "fixture",
+          execute: () => ({
+            success: true,
+            action: { type: "select-session" },
+          }),
+        },
+      ],
+      sessionSelector: {
+        currentSessionKey: () => ids[0],
+        listSessions: async () =>
+          ids.map((key) => ({
+            key,
+            name: key,
+            cwd: "/tmp",
+            createdAt: "",
+            updatedAt: "",
+          })),
+        loadCurrentHistory: async () => [],
+        switchSession: async () => undefined,
+      },
+    });
+    const composer = surface().children.at(-1) as Container;
+    try {
+      await onRender(
+        () => composer.children[0] instanceof SessionSelectorComponent,
+        () => send("/picker\r")
+      );
+      terminal.send("\x1b[A");
+      for (const height of [40, 60, 40]) {
+        Object.assign(surface().terminal, { rows: height });
+        process.stdout.emit("resize");
+        const occupied = surface()
+          .children.slice(0, -1)
+          .reduce((sum, child) => sum + child.render(100).length, 0);
+        expect(composer.render(100).length + occupied).toBeLessThanOrEqual(
+          height
+        );
+        expect(
+          composer.render(100).find((line) => line.includes("→"))
+        ).toContain("SESSION_99");
+      }
+      const ready = idle();
+      terminal.send("\x1b");
+      await ready;
+    } finally {
+      await app.close();
+    }
+  });
+
   it("keeps startup HOT until the first content block, including model feedback", async () => {
     vi.useFakeTimers();
     let current = "MODEL_A";
@@ -1423,7 +1479,7 @@ describe.sequential("actual TUI transcript ownership", () => {
       vi.useFakeTimers();
       const header = {
         title: "LOGO_SENTINEL",
-        subtitle: "MODEL_A\n/CWD_SENTINEL\nSESSION_SENTINEL",
+        subtitle: "MODEL_A (free tier)\n/CWD_SENTINEL\nSESSION_SENTINEL",
       };
       let current = "MODEL_A";
       const models = {
@@ -1432,7 +1488,7 @@ describe.sequential("actual TUI transcript ownership", () => {
         switchModel: vi.fn((id: string) => {
           current = id;
           header.title = "CHANGED_LOGO";
-          header.subtitle = `${id}\n/CHANGED_CWD\nCHANGED_SESSION`;
+          header.subtitle = `${id} (free tier)\n/CHANGED_CWD\nCHANGED_SESSION`;
         }),
       };
       const app = await fixture({
