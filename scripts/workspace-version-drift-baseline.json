@@ -1,7 +1,4 @@
 {
   "version": 1,
-  "signatures": [
-    "@earendil-works/pi-tui: ^0.82.1 ^0.84.1",
-    "fast-png: 8.0.0 ^8.0.0"
-  ]
+  "signatures": ["fast-png: 8.0.0 ^8.0.0"]
 }
