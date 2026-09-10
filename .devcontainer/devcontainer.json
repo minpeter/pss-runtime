@@ -1,0 +1,7 @@
+{
+  "name": "pss-runtime",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "postCreateCommand": "pnpm install --frozen-lockfile"
+}

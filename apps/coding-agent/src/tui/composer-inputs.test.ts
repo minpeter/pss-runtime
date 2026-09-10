@@ -25,6 +25,43 @@ const theme = {
 };
 
 describe("complete composer inputs", () => {
+  it("expands an open extension select after growth and retains the selected value", async () => {
+    let height = 7;
+    let mounted!: Component;
+    const unmount = vi.fn();
+    const ui = createExtensionUi({
+      signal: new AbortController().signal,
+      showMessage: vi.fn(),
+      showStatus: () => vi.fn(),
+      promptHost: {
+        contentRows: () => composerHeightBudget(height) - 1,
+        mount(component) {
+          mounted = component;
+          return unmount;
+        },
+      },
+    });
+    const result = ui.select({
+      label: "SELECT_SENTINEL",
+      options: Array.from({ length: 100 }, (_, i) => ({
+        label: `OPTION_${i}`,
+        value: String(i),
+      })),
+    });
+    mounted.handleInput?.("\x1b[A");
+    for (const rows of [7, 60, 7, 60]) {
+      height = rows;
+      const rendered = mounted.render(80);
+      expect(rendered).toHaveLength(composerHeightBudget(height) - 1);
+      expect(rendered.find((line) => line.includes("→"))).toContain(
+        "OPTION_99"
+      );
+    }
+    mounted.handleInput?.("\r");
+    await expect(result).resolves.toBe("99");
+    expect(unmount).toHaveBeenCalledOnce();
+  });
+
   it.each([1, 2])(
     "uses cursor-only input mode at width %d without losing input",
     (width) => {

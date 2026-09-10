@@ -3,7 +3,28 @@
   "root": true,
   "extends": ["ultracite/biome/core"],
   "files": {
-    "includes": ["**/*", "!!**/.omo", "!!**/.senpi"]
+    // `vcs.useIgnoreFile` is off (see below), so these `!!` excludes are the
+    // only thing keeping generated output out of the lint/format run. Keep
+    // them in sync with .gitignore's generated-artifact entries.
+    "includes": [
+      "**/*",
+      "!!**/node_modules",
+      "!!**/dist",
+      "!!**/build",
+      "!!**/out",
+      "!!**/coverage",
+      "!!**/.turbo",
+      "!!**/.wrangler",
+      "!!**/.artifacts",
+      "!!**/.husky",
+      "!!**/.omo",
+      "!!**/.senpi",
+      "!!experimental/nextjs-bench/results",
+      "!!experimental/nextjs-bench/evals",
+      "!!experimental/nextjs-bench/.artifacts",
+      "!!experimental/nextjs-bench/.evals-checkout",
+      "!!experimental/nextjs-bench/.evals-staging"
+    ]
   },
   "assist": {
     "actions": {
@@ -12,6 +33,13 @@
         "useSortedPackageJson": "off"
       }
     }
+  },
+  "vcs": {
+    // Lint untracked and gitignored files too: scratch lint-probe fixtures
+    // (`*.scratch.ts`, gitignored) must fail `pnpm lint` when they plant an
+    // out-of-convention identifier. Generated output stays out via the `!!`
+    // excludes above.
+    "useIgnoreFile": false
   },
   "linter": {
     "rules": {
@@ -24,6 +52,27 @@
       },
       "style": {
         "noIncrementDecrement": "off",
+        // Identifier naming, documented rule-by-rule (with enforcement
+        // status) in CONTRIBUTING.md; scripts/naming-conventions.test.mjs
+        // keeps this config and the docs coherent. Acronyms keep consecutive
+        // capitals (strictCase off); constants may be CONSTANT_CASE at any
+        // scope; object-literal and type members mirror external contracts
+        // (env keys, JSON payloads, protocol markers), so they are advisory.
+        "useNamingConvention": {
+          "level": "error",
+          "options": {
+            "strictCase": false,
+            "conventions": [
+              {
+                "selector": { "kind": "const" },
+                "match": "_?(.+?)_?",
+                "formats": ["camelCase", "PascalCase", "CONSTANT_CASE"]
+              },
+              { "selector": { "kind": "objectLiteralMember" }, "match": ".*" },
+              { "selector": { "kind": "typeMember" }, "match": ".*" }
+            ]
+          }
+        },
         "useConsistentMethodSignatures": "off",
         "useDestructuring": "off",
         "useErrorCause": "off"
