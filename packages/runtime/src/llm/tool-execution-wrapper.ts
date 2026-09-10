@@ -4,13 +4,17 @@ import { ToolExecutionNeedsRecoveryError } from "./tool-execution-checkpoint";
 import type {
   RuntimeToolExecutionCheckpoint,
   RuntimeToolExecutionContext,
+  RuntimeToolExecutionDecision,
+  RuntimeToolExecutionResult,
   RuntimeToolRetryPolicy,
 } from "./tool-execution-types";
+import type { ToolStepProgress } from "./tool-step-progress";
 
 export function normalizeToolCallIds(
   tools: ToolSet | undefined,
   toolCallIds: Map<string, string>,
-  toolExecution: RuntimeToolExecutionContext | undefined
+  toolExecution: RuntimeToolExecutionContext | undefined,
+  progress?: ToolStepProgress
 ): ToolSet | undefined {
   if (!tools) {
     return;
@@ -19,16 +23,61 @@ export function normalizeToolCallIds(
   return Object.fromEntries(
     Object.entries(tools).map(([name, candidate]) => [
       name,
-      wrapToolExecute(name, candidate, toolCallIds, toolExecution),
+      observeToolExecution(
+        wrapToolExecute(name, candidate, toolCallIds, toolExecution, progress),
+        name,
+        toolCallIds,
+        progress
+      ),
     ])
   ) as ToolSet;
+}
+
+function observeToolExecution(
+  definition: unknown,
+  name: string,
+  ids: Map<string, string>,
+  progress: ToolStepProgress | undefined
+): unknown {
+  if (!(progress && isExecutableToolDefinition(definition))) {
+    return definition;
+  }
+  return {
+    ...definition,
+    execute: async (input: unknown, options: ToolExecutionOptionsLike) => {
+      const entry = progress.begin(
+        input,
+        publicToolCallId(options.toolCallId, ids),
+        name
+      );
+      try {
+        const output = await definition.execute(input, options);
+        entry.complete(output);
+        return output;
+      } catch (error) {
+        if (error instanceof ToolExecutionNeedsRecoveryError) {
+          progress.recordRecoveryError(error);
+        }
+        entry.failed(
+          error,
+          !(
+            options.abortSignal?.aborted ||
+            progress.authorityFailed ||
+            error instanceof ToolExecutionNeedsRecoveryError
+          )
+        );
+        throw error;
+      }
+    },
+  };
 }
 
 function wrapToolExecute(
   toolName: string,
   toolDefinition: unknown,
   toolCallIds: Map<string, string>,
-  toolExecution: RuntimeToolExecutionContext | undefined
+  toolExecution: RuntimeToolExecutionContext | undefined,
+  progress?: ToolStepProgress
 ): unknown {
   if (!isExecutableToolDefinition(toolDefinition)) {
     return toolDefinition;
@@ -57,7 +106,13 @@ function wrapToolExecute(
         toolExecution,
         toolName,
       });
-      const decision = await toolExecution.beforeTool?.(checkpoint);
+      let decision: RuntimeToolExecutionDecision;
+      try {
+        decision = await toolExecution.beforeTool?.(checkpoint);
+      } catch (error) {
+        progress?.markAuthorityFailure();
+        throw error;
+      }
       if (decision?.status === "needs-recovery") {
         throw new ToolExecutionNeedsRecoveryError(checkpoint);
       }
@@ -71,6 +126,8 @@ function wrapToolExecute(
           ? { ...checkpoint, input: executeInput }
           : checkpoint;
 
+      progress?.updateInput(toolCallId, executeInput);
+
       const output = await execute(executeInput, {
         ...options,
         attempt: checkpoint.attempt,
@@ -81,10 +138,16 @@ function wrapToolExecute(
           : { signal: options.abortSignal }),
         toolCallId,
       });
-      const transformed = await toolExecution.afterTool?.({
-        ...executionCheckpoint,
-        output,
-      });
+      let transformed: RuntimeToolExecutionResult | undefined;
+      try {
+        transformed = await toolExecution.afterTool?.({
+          ...executionCheckpoint,
+          output,
+        });
+      } catch (error) {
+        progress?.markAuthorityFailure();
+        throw error;
+      }
       return transformed ? transformed.output : output;
     },
   };

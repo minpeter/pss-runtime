@@ -2,6 +2,7 @@ import type { BaseToolCallView } from "../tool-call-view";
 import { groupStartLine, parseDiffSection, renderDiffGroup } from "./diff";
 import { highlightCode } from "./highlight";
 import {
+  formatEditHeader,
   formatReadHeader,
   formatWriteHeader,
   isRecord,
@@ -146,7 +147,7 @@ export const renderEditFile = (
       (left, right) => groupStartLine(left) - groupStartLine(right)
     );
     view.setPrettyBlock(
-      `**edit** \`${path}\``,
+      formatEditHeader(path),
       sortedGroups.map(renderDiffGroup).join("\n\n"),
       { allowAnsi: true, useBackground: false }
     );
@@ -157,7 +158,7 @@ export const renderEditFile = (
   const edits = Array.isArray(editsValue) ? editsValue.filter(isEditOp) : [];
   const body = summarizeEdits(edits);
 
-  view.setPrettyBlock(`**edit** \`${path}\``, body, {
+  view.setPrettyBlock(formatEditHeader(path), body, {
     allowAnsi: true,
     useBackground: false,
   });

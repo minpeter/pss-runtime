@@ -4,6 +4,7 @@ import {
   type MarkdownTheme,
   Text,
 } from "@earendil-works/pi-tui";
+import { renderBoundedText } from "./bounded-text";
 import {
   type ColdContent,
   type ColdTheme,
@@ -38,6 +39,15 @@ export class SnapshotText extends Text {
     this.#background = background;
     super.setCustomBgFn(background);
   }
+  override render(width: number): string[] {
+    return width <= 3
+      ? renderBoundedText(
+          this.#source,
+          { width, paddingX: this.#paddingX, paddingY: this.#paddingY },
+          this.#background
+        )
+      : super.render(width);
+  }
   captureCold(width: number): ColdContent {
     return preservePresentation(
       {
@@ -47,7 +57,7 @@ export class SnapshotText extends Text {
         paddingY: this.#paddingY,
         background: this.#background && captureStyle(this.#background),
       },
-      super.render(width),
+      this.render(width),
       width
     );
   }

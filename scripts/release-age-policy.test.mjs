@@ -17,14 +17,17 @@ const EXPECTED_WORKSPACE_SOURCE = `packages:
   - "experimental/*"
   - "extensions/*"
 autoInstallPeers: false
+patchedDependencies:
+  '@vercel/agent-eval@2.2.1': patches/@vercel__agent-eval@2.2.1.patch
 overrides:
   # Security-only, parent-scoped resolutions where direct updates cannot reach the vulnerable edge.
   # Keep these exact so unrelated consumers retain their declared dependency ranges.
-  '@ai-sdk/provider-utils@3.0.31>undici': 6.28.0
+  '@ai-sdk/provider-utils@3.0.36>undici': 6.28.0
   'nanoid@3.3.17': 3.3.18
   'dockerode@4.0.12>uuid': 11.1.1
   'miniflare@5.20260730.0-alpha>undici': 7.29.0
   'miniflare@5.20260820.0-alpha>sharp': 0.35.4
+  'miniflare@5.20260908.0-alpha>sharp': 0.35.4
   read-yaml-file: 2.1.0
   typescript: ^7.0.2
   rolldown-plugin-dts: 0.27.2

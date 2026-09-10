@@ -21,8 +21,10 @@ export function killAgentThread(context: AgentThreadContext): Promise<void> {
   // synchronous abort listeners, and re-entrant kill()/#assertOpen() calls
   // from those listeners must already observe the thread as killed.
   context.terminal.to({ tag: "killed", killPromise });
+  context.state.revokeContinuation();
 
   const killedError = threadKilledError();
+  context.lifetime.abort(killedError);
   context.pendingOverlays.length = 0;
   context.pendingRuntimeInputs.length = 0;
   turnAbort(context.turn)?.abort();

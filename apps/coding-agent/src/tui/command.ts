@@ -15,7 +15,7 @@ export type TuiCommandAction =
     }
   | { type: "refresh-header"; reason?: "model-change" }
   | { type: "reload" }
-  | { clear: boolean; reason?: "new"; type: "session" }
+  | { clear: boolean; reason?: "new" | "resume"; type: "session" }
   | { query?: string; type: "select-session" }
   | { prompt: string; type: "submit-prompt" }
   | { type: "select-model"; query?: string };
@@ -45,6 +45,8 @@ export interface TuiCommand {
   execute: (
     input: {
       args: string[];
+      /** Begin replacing the transcript, before switch lifecycle callbacks. */
+      onSessionNavigation?: () => void;
     },
     context?: TuiCommandContext
   ) => Promise<TuiCommandResult> | TuiCommandResult;

@@ -3,7 +3,10 @@ import type {
   ThreadEventReadOptions,
 } from "../../execution/host/types";
 import type { AgentInput, UserInput } from "../../thread/input/input";
-import type { AgentTurn } from "../../thread/protocol/turn";
+import type {
+  AgentTurn,
+  ThreadContinuationOptions,
+} from "../../thread/protocol/turn";
 import type {
   CompactionSummaryOptions,
   ManualThreadCompactionResult,
@@ -29,6 +32,15 @@ export interface ThreadHandle {
   compact(
     options?: CompactionSummaryOptions
   ): Promise<ManualThreadCompactionResult>;
+  /**
+   * Continue the latest safely stopped unfinished task on this live handle.
+   * Adds no user message; returns undefined only without a current checkpoint.
+   * Busy/queued work rejects with code THREAD_CONTINUATION_BUSY. An optional
+   * signal cancels pending admission; accepted turns always end explicitly.
+   * Checkpoints are session-local, not restored after disposal/reload. New user
+   * work supersedes them. Completed tools are retained, never replayed.
+   */
+  continue(options?: ThreadContinuationOptions): Promise<AgentTurn | undefined>;
   delete(): Promise<void>;
   dispose(): Promise<void>;
   events(options?: ThreadEventReadOptions): AsyncIterable<StoredThreadEvent>;
