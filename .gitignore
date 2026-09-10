@@ -14,6 +14,13 @@ AGENTS.md
 .artifacts
 packages/*/.turbo
 .wrangler
+.husky/_/
+
+# Analysis reports (Knip/jscpd/drift/bundle budgets/test timing/flaky) are
+# local artifacts: produced on demand, never committed. The bare `report`
+# entry covers the file and directory variants at any depth.
+report
+report/
 
 # Agent workspace. QA evidence and session state are local artifacts: they are
 # mandatory to produce (see CONTRIBUTING.md) but never committed. Only plans
@@ -22,3 +29,8 @@ packages/*/.turbo
 !.omo/plans/
 !.omo/plans/**
 .senpi/
+
+# Scratch lint-probe fixtures: gitignored so they are never committed, but
+# biome still lints them (vcs.useIgnoreFile is off in biome.jsonc), so a
+# planted out-of-convention identifier fails `pnpm lint`.
+*.scratch.ts

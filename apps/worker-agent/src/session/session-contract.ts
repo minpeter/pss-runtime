@@ -12,7 +12,9 @@ import {
 } from "../channel";
 
 const SERIALIZED_CURSOR_PATTERN = /^(0|[1-9]\d*)$/u;
-const SESSION_REPLAY_MAX_LIMIT = 100;
+
+/** Maximum events per replay page; also the default when `limit` is absent. */
+export const SESSION_REPLAY_MAX_LIMIT = 100;
 
 declare const serializedThreadEventCursorBrand: unique symbol;
 

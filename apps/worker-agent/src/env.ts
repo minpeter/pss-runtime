@@ -19,6 +19,12 @@ export interface Env {
   /** Present when wrangler `version_metadata` binding is configured. */
   readonly CF_VERSION_METADATA?: WorkerVersionMetadata;
   readonly ENVIRONMENT: EnvironmentName;
+  /**
+   * Optional loopback override for the Telegram Bot API base URL (local
+   * validation only, e.g. a request recorder during ingress dry-runs). Never
+   * set in production; unset means the adapter default (api.telegram.org).
+   */
+  readonly TELEGRAM_API_BASE_URL?: string;
   readonly TELEGRAM_BOT_TOKEN: string;
   readonly TELEGRAM_BOT_USERNAME?: string;
   /**
@@ -42,6 +48,41 @@ export function isTelegramIngressDryRun(env: {
 }): boolean {
   const value = env.TELEGRAM_INGRESS_DRY_RUN?.trim().toLowerCase();
   return value === "1" || value === "true" || value === "yes";
+}
+
+/** Development-only credential-free HTTP(S) loopback override. */
+export function readTelegramApiBaseUrl(env: {
+  readonly ENVIRONMENT: EnvironmentName;
+  readonly TELEGRAM_API_BASE_URL?: string;
+}): string | undefined {
+  const value = env.TELEGRAM_API_BASE_URL?.trim();
+  if (!value) {
+    return;
+  }
+  if (env.ENVIRONMENT !== "development") {
+    throw new WorkerAgentConfigError(
+      "TELEGRAM_API_BASE_URL is only allowed in development."
+    );
+  }
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new WorkerAgentConfigError(
+      "TELEGRAM_API_BASE_URL must be a credential-free HTTP(S) loopback URL."
+    );
+  }
+  if (
+    !(url.protocol === "http:" || url.protocol === "https:") ||
+    url.username ||
+    url.password ||
+    !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)
+  ) {
+    throw new WorkerAgentConfigError(
+      "TELEGRAM_API_BASE_URL must be a credential-free HTTP(S) loopback URL."
+    );
+  }
+  return value;
 }
 
 export function durableObjectName(channelId: string): string {

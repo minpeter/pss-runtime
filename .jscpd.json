@@ -1,0 +1,30 @@
+{
+  "minTokens": 70,
+  "minLines": 5,
+  "mode": "mild",
+  "reporters": ["json"],
+  "output": "report/jscpd",
+  "ignore": [
+    "**/dist/**",
+    "**/node_modules/**",
+    "**/.wrangler/**",
+    "**/.turbo/**",
+    "**/coverage/**",
+    "experimental/nextjs-bench/results/**",
+    "**/pnpm-lock.yaml",
+    "**/package-lock.json",
+    "**/yarn.lock"
+  ],
+  "allowlist": [
+    {
+      "name": "examples-demo-fixtures",
+      "path": "examples/**/fixtures/**",
+      "justification": "Example apps keep demo fixture modules that are exercised from docs and manual runs; duplicated boilerplate inside fixture directories only is accepted while the example sources themselves stay analyzed."
+    },
+    {
+      "name": "experimental-benchmark-fixtures",
+      "path": "experimental/**/fixtures/**",
+      "justification": "Live-provider benchmarks keep recorded fixtures whose duplicated payloads are intentional test data; the benchmark sources themselves stay analyzed."
+    }
+  ]
+}

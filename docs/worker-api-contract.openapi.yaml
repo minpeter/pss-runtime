@@ -1,0 +1,514 @@
+openapi: 3.0.3
+info:
+  title: PSS Worker Agent public HTTP contract
+  version: 1.0.0
+  description: >-
+    Public HTTP surface of the `@minpeter/pss-worker-agent` Cloudflare Worker.
+    Route dispatch is pathname-only, in this order: `/healthz` (and the
+    trailing-slash alias `/healthz/`) is the health probe; the exact pathname
+    `/session/events` is the SSE stream; `/trpc` and every `/trpc/*` sub-path
+    go to the tRPC fetch adapter; every other pathname falls through to the
+    Telegram webhook catch-all.
+
+    Auth matrix: `/healthz` is unauthenticated and never checks a token.
+    `/trpc/*` and `/session/events` require the exact header
+    `Authorization: Bearer <WORKER_AGENT_TUI_TOKEN>` only when the
+    WORKER_AGENT_TUI_TOKEN binding is configured; when the binding is not
+    configured and ENVIRONMENT is `development`, those routes are open
+    (development exception), while `production` without a configured token
+    fails closed with 401. The Telegram webhook catch-all authenticates with
+    the `X-Telegram-Bot-Api-Secret-Token` header instead of a bearer token.
+components:
+  securitySchemes:
+    TuiBearerToken:
+      type: http
+      scheme: bearer
+      description: >-
+        `Authorization: Bearer <WORKER_AGENT_TUI_TOKEN>`, compared as an exact
+        byte match (wrong scheme, wrong case, or extra whitespace all fail
+        with 401). Required only when the WORKER_AGENT_TUI_TOKEN binding is
+        configured. Development exception: when the binding is not configured
+        and ENVIRONMENT is `development`, no token is required and the route
+        is open; `production` without a configured token fails closed with
+        401. This scheme never applies to `/healthz`.
+    TelegramWebhookSecretToken:
+      type: apiKey
+      in: header
+      name: X-Telegram-Bot-Api-Secret-Token
+      description: >-
+        Telegram webhook verification secret (the
+        TELEGRAM_WEBHOOK_SECRET_TOKEN binding), compared timing-safe against
+        the `X-Telegram-Bot-Api-Secret-Token` header. The check runs before
+        any method, path, or body handling, so a missing or invalid secret
+        always answers 401 `Invalid secret token`.
+  schemas:
+    HealthOk:
+      type: object
+      required: [environment, version, agentDo]
+      properties:
+        environment:
+          type: string
+          enum: [development, production]
+        version:
+          type: string
+          nullable: true
+        agentDo:
+          type: boolean
+          description: Presence of the AGENT_DO binding; no Durable Object fetch.
+    ErrorBody:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+    ChannelAddress:
+      type: object
+      required: [id, kind]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          pattern: ".*\\S.*"
+        kind:
+          type: string
+          enum: [tui, telegram]
+      additionalProperties: false
+    TrpcErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [message, code, data]
+          properties:
+            message:
+              type: string
+            code:
+              type: integer
+            data:
+              type: object
+              required: [code, httpStatus]
+              properties:
+                code:
+                  type: string
+                  enum:
+                    [
+                      BAD_GATEWAY,
+                      BAD_REQUEST,
+                      INTERNAL_SERVER_ERROR,
+                      METHOD_NOT_SUPPORTED,
+                      NOT_FOUND,
+                      UNAUTHORIZED,
+                    ]
+                httpStatus:
+                  type: integer
+                path:
+                  type: string
+  responses:
+    TrpcNotFound:
+      description: >-
+        tRPC error envelope with `data.code: NOT_FOUND` and
+        `data.httpStatus: 404`.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/TrpcErrorEnvelope"
+    TrpcUnauthorized:
+      description: >-
+        tRPC error envelope with `data.code: UNAUTHORIZED` and
+        `data.httpStatus: 401`; raised before input validation or Durable
+        Object dispatch while WORKER_AGENT_TUI_TOKEN is configured.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/TrpcErrorEnvelope"
+    TrpcBadRequest:
+      description: >-
+        tRPC error envelope with `data.code: BAD_REQUEST` and
+        `data.httpStatus: 400` for schema-invalid input or a rejected
+        admission. Schema-validation failures answer with the fixed bounded
+        message `invalid request`; the raw validation issue dump (which
+        could echo request-body key names) never leaves the worker.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/TrpcErrorEnvelope"
+    TrpcUnsupportedMediaType:
+      description: >-
+        A POST without an `application/json` content type is rejected by the
+        tRPC fetch adapter with 415 before procedure resolution.
+      content:
+        text/plain:
+          schema:
+            type: string
+    TrpcInternalError:
+      description: >-
+        tRPC error envelope with `data.code: INTERNAL_SERVER_ERROR` and a
+        generic `internal error` message; internal detail (for example a
+        schema-invalid Durable Object payload or an unexpected dispatch
+        failure) never leaks into the envelope.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/TrpcErrorEnvelope"
+    TrpcBadGateway:
+      description: >-
+        tRPC error envelope with `data.code: BAD_GATEWAY` and
+        `data.httpStatus: 502` (`agent durable object unavailable`) when the
+        channel Durable Object is unreachable, rejects, or answers non-OK.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/TrpcErrorEnvelope"
+    WebhookInvalidSecret:
+      description: >-
+        Plain-text `Invalid secret token` when the
+        `X-Telegram-Bot-Api-Secret-Token` header is missing or does not match
+        the configured secret.
+      content:
+        text/plain:
+          schema:
+            type: string
+            enum: [Invalid secret token]
+    WebhookInvalidJson:
+      description: Plain-text `Invalid JSON` when the body is not parseable JSON.
+      content:
+        text/plain:
+          schema:
+            type: string
+            enum: [Invalid JSON]
+paths:
+  /healthz:
+    x-pss-path-aliases:
+      - /healthz/
+    x-pss-rejected-methods:
+      status: 405
+      description: >-
+        Every non-GET method is rejected with 405
+        `{"error":"method not allowed"}` and an `Allow: GET` header, before
+        any other dispatch.
+    get:
+      summary: Unauthenticated liveness probe
+      description: >-
+        Read-only and unauthenticated: performs no Durable Object fetch, model
+        call, or Telegram call, and never checks a token. The success body is
+        bounded (under 1 KiB) and deterministic for a fixed binding state.
+      security: []
+      responses:
+        "200":
+          description: Bounded health JSON for a fixed binding state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthOk"
+        "503":
+          description: >-
+            Opaque `{"error":"unavailable"}` when a baseline binding
+            (AGENT_DO, ENVIRONMENT, CF_VERSION_METADATA) is missing or
+            invalid; detail stays in structured worker logs.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+  /session/events:
+    x-pss-rejected-methods:
+      status: 405
+      description: >-
+        Every non-GET method is rejected with a plain-text 405
+        `method not allowed` before auth or channel parsing.
+    get:
+      summary: Server-sent events stream of durable thread events
+      description: >-
+        Replays committed events after `after`, then follows newly committed
+        events. Frames are `id: <offset>`, `event: thread-event`, `data:
+        <StoredThreadEvent JSON>`. Failure precedence (each with zero Durable
+        Object fetches): method 405, bearer auth 401 `unauthorized`, missing
+        `channel` 400 `channel required`, unparseable `channel` or malformed
+        `after` (only `^(0|[1-9]\d*)$` safe integers) 400 `invalid session
+        event stream`. A trimmed non-empty `sessionScopeKey` is forwarded; a
+        blank one is omitted.
+      security:
+        - TuiBearerToken: []
+      parameters:
+        - name: channel
+          in: query
+          required: true
+          description: Serialized channel address, e.g. `tui%3Alocal`.
+          schema:
+            type: string
+            minLength: 1
+        - name: after
+          in: query
+          required: false
+          description: Serialized thread event cursor (exclusive).
+          schema:
+            type: string
+            minLength: 1
+            pattern: "^(0|[1-9]\\d*)$"
+        - name: sessionScopeKey
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: >-
+            SSE stream; `content-type: text/event-stream; charset=utf-8` and
+            `cache-control: no-cache, no-transform` (the app also sets
+            `connection: keep-alive`, which workerd strips on the wire as a
+            hop-by-hop header).
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          description: Missing or unparseable channel / malformed cursor.
+          content:
+            text/plain:
+              schema:
+                type: string
+                enum: [channel required, invalid session event stream]
+        "401":
+          description: >-
+            Bearer token missing or not an exact match while
+            WORKER_AGENT_TUI_TOKEN is configured.
+          content:
+            text/plain:
+              schema:
+                type: string
+                enum: [unauthorized]
+        "502":
+          description: >-
+            Plain-text `agent durable object unavailable` when the channel
+            Durable Object is unreachable or non-OK; answered before any SSE
+            frame is sent.
+          content:
+            text/plain:
+              schema:
+                type: string
+  /trpc:
+    get:
+      summary: Bare tRPC endpoint
+      description: >-
+        The bare endpoint names no procedure, so the adapter answers the
+        NOT_FOUND envelope before any auth middleware runs.
+      security: []
+      responses:
+        "404":
+          $ref: "#/components/responses/TrpcNotFound"
+  /trpc/session.replayEvents:
+    x-pss-rejected-methods:
+      status: 405
+      description: >-
+        Queries are GET-only; any other method is rejected by the tRPC fetch
+        adapter with a 405 METHOD_NOT_SUPPORTED envelope before auth or input
+        validation.
+    get:
+      summary: Replay durable thread events after a cursor
+      description: >-
+        tRPC query; input is the JSON-encoded `ReplayEventsRequest`
+        `{channel, after?, limit?, sessionScopeKey?}` in the `input` query
+        parameter. `limit` is an integer in 1..100 (default and maximum 100).
+      security:
+        - TuiBearerToken: []
+      parameters:
+        - name: input
+          in: query
+          required: true
+          description: JSON-encoded ReplayEventsRequest.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: >-
+            tRPC result envelope `{result:{data:{events, nextCursor?}}}` with
+            committed stored thread events.
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/TrpcBadRequest"
+        "401":
+          $ref: "#/components/responses/TrpcUnauthorized"
+        "502":
+          $ref: "#/components/responses/TrpcBadGateway"
+  /trpc/session.submitTurn:
+    x-pss-rejected-methods:
+      status: 405
+      description: >-
+        Mutations are POST-only; any other method is rejected by the tRPC
+        fetch adapter with a 405 METHOD_NOT_SUPPORTED envelope before auth or
+        input validation.
+    post:
+      summary: Admit a turn durably and return an admission receipt
+      description: >-
+        tRPC mutation accepting `{channel, text, sessionScopeKey?,
+        idempotencyKey?}` and answering `{accepted: true, runId, threadKey,
+        eventCursor?}` immediately after durable admission. Repeating a
+        submission with the same `idempotencyKey` collapses into the original
+        admission.
+      security:
+        - TuiBearerToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel, text]
+              properties:
+                channel:
+                  $ref: "#/components/schemas/ChannelAddress"
+                text:
+                  type: string
+                  minLength: 1
+                  pattern: ".*\\S.*"
+                sessionScopeKey:
+                  type: string
+                idempotencyKey:
+                  type: string
+              additionalProperties: false
+      responses:
+        "200":
+          description: tRPC result envelope with the admission receipt.
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/TrpcBadRequest"
+        "401":
+          $ref: "#/components/responses/TrpcUnauthorized"
+        "415":
+          $ref: "#/components/responses/TrpcUnsupportedMediaType"
+        "502":
+          $ref: "#/components/responses/TrpcBadGateway"
+  /trpc/tui.turn:
+    x-pss-rejected-methods:
+      status: 405
+      description: >-
+        Mutations are POST-only; any other method is rejected by the tRPC
+        fetch adapter with a 405 METHOD_NOT_SUPPORTED envelope before auth or
+        input validation.
+    post:
+      summary: Compatibility remote TUI turn (runs to delivery)
+      description: >-
+        tRPC mutation retained for compatibility with
+        `createRemoteTuiDeliveryClient()`. Accepts `{channel, text,
+        sessionScopeKey?}` and runs the turn synchronously in the Durable
+        Object, answering a tool-only delivery result instead of an admission
+        receipt.
+      security:
+        - TuiBearerToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel, text]
+              properties:
+                channel:
+                  $ref: "#/components/schemas/ChannelAddress"
+                text:
+                  type: string
+                  minLength: 1
+                  pattern: ".*\\S.*"
+                sessionScopeKey:
+                  type: string
+              additionalProperties: false
+      responses:
+        "200":
+          description: tRPC result envelope with the delivery result.
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/TrpcBadRequest"
+        "401":
+          $ref: "#/components/responses/TrpcUnauthorized"
+        "415":
+          $ref: "#/components/responses/TrpcUnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/TrpcInternalError"
+        "502":
+          $ref: "#/components/responses/TrpcBadGateway"
+  "/trpc/{procedure}":
+    parameters:
+      - name: procedure
+        in: path
+        required: true
+        description: Any procedure name other than the three documented above.
+        schema:
+          type: string
+    get:
+      summary: Unknown procedure
+      description: >-
+        Any unknown procedure name is answered with the NOT_FOUND envelope
+        before auth middleware runs, so no token is required and a valid
+        bearer token does not change the outcome.
+      security: []
+      responses:
+        "404":
+          $ref: "#/components/responses/TrpcNotFound"
+    post:
+      summary: Unknown procedure (mutation-style call)
+      description: Same NOT_FOUND behavior as GET for JSON POST bodies.
+      security: []
+      responses:
+        "404":
+          $ref: "#/components/responses/TrpcNotFound"
+  "/{webhookPath}":
+    x-pss-match: catchall
+    parameters:
+      - name: webhookPath
+        in: path
+        required: true
+        description: >-
+          Catch-all: every pathname not matched by the routes above (for
+          example `/`, `/telegram`, `/healthcheck`, `/healthz/foo`,
+          `/session/events/replay`) is the Telegram webhook endpoint,
+          regardless of depth.
+        schema:
+          type: string
+    get:
+      summary: Telegram webhook catch-all (GET)
+      description: >-
+        The secret-token check runs before method, path, or body handling.
+        With a valid secret, a GET has no JSON body and is answered 400
+        `Invalid JSON`.
+      security:
+        - TelegramWebhookSecretToken: []
+      responses:
+        "400":
+          $ref: "#/components/responses/WebhookInvalidJson"
+        "401":
+          $ref: "#/components/responses/WebhookInvalidSecret"
+    post:
+      summary: Telegram webhook catch-all (POST)
+      description: >-
+        With a valid secret and a parseable JSON update body the adapter
+        processes the update and answers 200 `OK`; other methods behave
+        identically (secret check first, then JSON parsing).
+      security:
+        - TelegramWebhookSecretToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Plain-text `OK` after accepting a parseable update.
+          content:
+            text/plain:
+              schema:
+                type: string
+                enum: [OK]
+        "400":
+          $ref: "#/components/responses/WebhookInvalidJson"
+        "401":
+          $ref: "#/components/responses/WebhookInvalidSecret"
