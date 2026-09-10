@@ -106,7 +106,7 @@ const testTracing: Tracing = {
     return new TestSpan();
   },
   getActiveSpan() {
-    return undefined;
+    return;
   },
 };
 

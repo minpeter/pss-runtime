@@ -7,4 +7,5 @@ packages:
 
 ## Keep Worker dependency validation green
 
-Keep the Worker tracing test double compatible with refreshed type definitions and retain the patched sharp resolution for the updated dependency graph.
+Keep the Worker tracing test double and shared package ranges compatible with refreshed dependencies, and align the Biome schema with its upgraded CLI.
+Retain the patched sharp resolution for the updated dependency graph.
