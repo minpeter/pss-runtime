@@ -1,10 +1,10 @@
 ---
 packages:
-  npm:@minpeter/pss-coding-agent:
+  npm:@minpeter/pss-runtime:
     replay:
-      - exit-prerelease(npm:@minpeter/pss-coding-agent)
+      - exit-prerelease(npm:@minpeter/pss-runtime)
 ---
 
-## Keep the edit-format comparison runnable on Node
+## Keep hashline benchmarks compatible with Node
 
-Development-only: update the private hashline comparison to 18.1.5 with exact-version Node compatibility patches for native loading and syntax-cache keys. No published behavior or version changes; the coding agent's existing hashline anchors remain unchanged.
+Patch the hashline native loader and internal syntax-cache keys so the refreshed 18.1.5 dependency remains usable in the repository's Node-based benchmark and test runners. Development-only: no published behavior or version changes; the coding agent's existing hashline anchors and native syntax validation remain unchanged.
