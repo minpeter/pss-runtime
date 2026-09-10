@@ -50,3 +50,6 @@
 
 # Static assets.
 /assets/                @minpeter
+
+# Version-pinned dependency compatibility patches.
+/patches/               @minpeter
