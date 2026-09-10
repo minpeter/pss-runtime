@@ -1,0 +1,51 @@
+--- a/src/syntax.ts
++++ b/src/syntax.ts
+@@ -9,6 +9,7 @@
+  * normalization remains available.
+  */
+ 
++import { createHash } from "node:crypto";
+ import { enclosingBlockBoundaries, type NodeSpan, nodeChainAt } from "@oh-my-pi/pi-natives";
+ 
+ export type { NodeSpan };
+@@ -21,6 +22,13 @@
+ 
+ const chainCache = new Map<string, readonly NodeSpan[]>();
+ 
++// Cache identity only; this does not change file tags or line anchors.
++function cacheHash(text: string): string {
++	return typeof Bun !== "undefined"
++		? Bun.hash(text).toString(36)
++		: createHash("sha256").update(text).digest("hex");
++}
++
+ /**
+  * Named-node chain (innermost-first) containing `line`, excluding the file
+  * root: single-line nodes beginning on the line (attributes, decorators)
+@@ -30,7 +38,7 @@
+  */
+ export function nodeChain(lines: readonly string[], path: string, line: number): readonly NodeSpan[] {
+ 	const text = lines.join("\n");
+-	const key = `${Bun.hash(text).toString(36)}:${text.length}:${path}:${line}`;
++	const key = `${cacheHash(text)}:${text.length}:${path}:${line}`;
+ 	const cached = chainCache.get(key);
+ 	if (cached !== undefined) return cached;
+ 	let chain: readonly NodeSpan[];
+@@ -55,7 +63,7 @@
+ 	endLine: number,
+ ): readonly number[] {
+ 	const text = lines.join("\n");
+-	const key = `${Bun.hash(text).toString(36)}:${text.length}:${path}:${startLine}:${endLine}`;
++	const key = `${cacheHash(text)}:${text.length}:${path}:${startLine}:${endLine}`;
+ 	const cached = boundaryCache.get(key);
+ 	if (cached !== undefined) return cached;
+ 	let boundaries: readonly number[];
+@@ -86,7 +94,7 @@
+  */
+ export function parsesCleanly(path: string | undefined, text: string): boolean {
+ 	if (path === undefined) return false;
+-	const key = `${Bun.hash(text).toString(36)}:${text.length}:${path}`;
++	const key = `${cacheHash(text)}:${text.length}:${path}`;
+ 	const cached = parseCache.get(key);
+ 	if (cached !== undefined) return cached;
+ 	const lineCount = text.length === 0 ? 1 : text.split("\n").length;
