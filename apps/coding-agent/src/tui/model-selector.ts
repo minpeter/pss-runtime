@@ -111,6 +111,8 @@ export class ModelSelectorComponent extends Container {
   readonly #searchInput = new ComposerInput();
   readonly #title: Component;
   #compact: boolean;
+  #requestedCompact: boolean;
+  #requestedMaxVisibleModels: number;
   #maxVisibleModels: number;
   #selectedIndex = 0;
   #settled = false;
@@ -135,6 +137,8 @@ export class ModelSelectorComponent extends Container {
     this.#onSelect = options.onSelect;
     this.#compact = options.compact ?? false;
     this.#maxVisibleModels = clampVisibleModels(options.maxVisibleModels);
+    this.#requestedCompact = this.#compact;
+    this.#requestedMaxVisibleModels = this.#maxVisibleModels;
     // Current model first, then the provider's catalog order.
     this.#models = [
       ...options.modelIds.filter((id) => id === options.currentModelId),
@@ -159,11 +163,17 @@ export class ModelSelectorComponent extends Container {
 
   /** Recalculate the selector layout after a terminal-height change. */
   setLayout(maxVisibleModels: number, compact: boolean): void {
+    this.#requestedMaxVisibleModels = clampVisibleModels(maxVisibleModels);
+    this.#requestedCompact = compact;
+    this.#applyLayout();
+  }
+
+  #applyLayout(): void {
     // Title, search and scroll info reserve three rows; standard decoration
     // reserves six more. Always retain at least one selected-item row.
-    const nextCompact = compact || this.#rowBudget < 10;
+    const nextCompact = this.#requestedCompact || this.#rowBudget < 10;
     const next = Math.min(
-      clampVisibleModels(maxVisibleModels),
+      this.#requestedMaxVisibleModels,
       this.#rowBudget - (nextCompact ? 3 : 9)
     );
     if (next === this.#maxVisibleModels && nextCompact === this.#compact) {
@@ -176,12 +186,12 @@ export class ModelSelectorComponent extends Container {
   }
 
   setMaxVisibleModels(maxVisibleModels: number): void {
-    this.setLayout(maxVisibleModels, this.#compact);
+    this.setLayout(maxVisibleModels, this.#requestedCompact);
   }
 
   setComposerHeight(terminalRows: number): void {
     this.#rowBudget = composerHeightBudget(terminalRows) - 1;
-    this.setLayout(MAX_VISIBLE_MODELS, this.#rowBudget < 10);
+    this.#applyLayout();
   }
 
   handleInput(data: string): void {
