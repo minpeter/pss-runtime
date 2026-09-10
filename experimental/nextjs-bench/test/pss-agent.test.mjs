@@ -3,6 +3,10 @@ import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
+import {
+  resolveJudgeRuntime,
+  runWithDefinition,
+} from "@vercel/agent-eval/orchestrator";
 import { createPssAgent } from "../src/pss-agent.mjs";
 import { runAgent } from "../src/sandbox-runner.mjs";
 
@@ -60,6 +64,47 @@ test("PSS definition exposes deterministic install and auth settings", () => {
     5
   );
   assert.match(agent.definition.install()[1].args.join(" "), tarballPattern);
+});
+
+test("PSS adapter preserves the exported orchestrator's pre-abort result", async () => {
+  const agent = createPssAgent();
+  const options = {
+    apiKey: "secret",
+    model: "requested-qwen",
+    prompt: "Do not run",
+    signal: AbortSignal.abort(),
+    timeout: 5000,
+    webResearch: false,
+  };
+  // The real orchestrator must return before fixture access or sandbox creation.
+  const direct = await runWithDefinition(agent.definition, "", options);
+  assert.deepEqual(direct, {
+    success: false,
+    output: "",
+    error: "Aborted before start",
+    duration: 0,
+  });
+  assert.deepEqual(await agent.run("", options), direct);
+});
+
+test("v2 self-judge keeps PSS auth, model and runner timeout separate", () => {
+  const agent = createPssAgent();
+  const options = {
+    apiKey: "secret",
+    agentOptions: { baseUrl: "https://gateway.example/v1" },
+    model: "requested-qwen",
+    prompt: "Do not run",
+    timeout: 5000,
+    webResearch: false,
+  };
+  const runtime = resolveJudgeRuntime(agent.definition, options);
+  assert.equal(runtime.isSelf, true);
+  assert.equal(runtime.judgeDef, agent.definition);
+  assert.equal(runtime.runnerSource, null);
+  assert.deepEqual(runtime.authEnv, agent.definition.authEnv(options));
+  assert.equal(runtime.config.model, options.model);
+  assert.deepEqual(runtime.config.extra, { timeoutSeconds: 5 });
+  assert.equal(JSON.stringify(runtime.config).includes(options.apiKey), false);
 });
 
 test("sandbox runner invokes pss exec and returns its observed model", () => {

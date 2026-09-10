@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { runWithDefinition } from "@vercel/agent-eval/dist/lib/agents/plugin/orchestrator.js";
+import { runWithDefinition } from "@vercel/agent-eval/orchestrator";
 import { DEFAULT_BASE_URL, DEFAULT_MODEL } from "./constants.mjs";
 
 function createPssDefinition() {
