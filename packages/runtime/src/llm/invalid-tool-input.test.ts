@@ -51,7 +51,7 @@ describe.each(["memory", "file"] as const)(
   "%s finalized invalid tool feedback",
   (kind) => {
     it.each(["rejected", "two-rejected", "unfinished", "mixed"] as const)(
-      "preserves the %s boundary without replaying effects",
+      "preserves the %s boundary without executing tools after an unsafe finish",
       async (scenario) => {
         const directory = await mkdtemp(join(tmpdir(), "invalid-tools-"));
         const host =
@@ -114,7 +114,7 @@ describe.each(["memory", "file"] as const)(
             }
           }
           expect(requests).toHaveLength(2);
-          expect(execute).toHaveBeenCalledTimes(scenario === "mixed" ? 1 : 0);
+          expect(execute).not.toHaveBeenCalled();
           const prompt = requests[1]?.prompt ?? [];
           const feedback = prompt.flatMap((message) =>
             message.role === "tool"
@@ -143,7 +143,7 @@ describe.each(["memory", "file"] as const)(
           expect(JSON.stringify(prompt)).not.toContain(secret);
           expect(JSON.stringify(prompt)).not.toContain("unfinished");
           if (scenario === "mixed") {
-            expect(JSON.stringify(prompt)).toContain("EFFECT_COMMITTED");
+            expect(JSON.stringify(prompt)).not.toContain("EFFECT_COMMITTED");
           }
           const history = decodeStoredThreadSnapshot(
             await host.store.threads.load("rejection")
