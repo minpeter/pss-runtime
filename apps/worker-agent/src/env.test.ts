@@ -4,6 +4,7 @@ import {
   assertWebhookSecretToken,
   durableObjectName,
   isTelegramIngressDryRun,
+  readTelegramApiBaseUrl,
   readWebhookSecretToken,
   WorkerAgentConfigError,
 } from "./env";
@@ -30,6 +31,65 @@ describe("worker-agent env helpers", () => {
 
   it("rejects missing webhook secrets", () => {
     expect(() => readWebhookSecretToken({})).toThrow(WorkerAgentConfigError);
+  });
+
+  it("preserves unset default in both environments", () => {
+    expect(
+      readTelegramApiBaseUrl({ ENVIRONMENT: "production" })
+    ).toBeUndefined();
+    expect(
+      readTelegramApiBaseUrl({
+        ENVIRONMENT: "development",
+        TELEGRAM_API_BASE_URL: " ",
+      })
+    ).toBeUndefined();
+  });
+
+  it.each([
+    "http://localhost:8793",
+    "https://localhost:8793",
+    "http://127.0.0.1:8793",
+    "https://127.0.0.1:8793",
+    "http://[::1]:8793",
+    "https://[::1]:8793",
+  ])("allows development loopback %s", (url) => {
+    expect(
+      readTelegramApiBaseUrl({
+        ENVIRONMENT: "development",
+        TELEGRAM_API_BASE_URL: ` ${url} `,
+      })
+    ).toBe(url);
+  });
+
+  it.each(["http://localhost:8793", "https://api.telegram.org"])(
+    "rejects production override %s",
+    (url) => {
+      expect(() =>
+        readTelegramApiBaseUrl({
+          ENVIRONMENT: "production",
+          TELEGRAM_API_BASE_URL: url,
+        })
+      ).toThrow(WorkerAgentConfigError);
+    }
+  );
+
+  it.each([
+    "https://api.telegram.org",
+    "http://localhost.example.com",
+    "http://127.0.0.2",
+    "http://[::2]:8793",
+    "ftp://localhost:8793",
+    "not-a-url",
+    "http://[::1",
+    "http://localhost:99999",
+    "http://user:password@localhost:8793",
+  ])("rejects unsafe or malformed development override %s", (url) => {
+    expect(() =>
+      readTelegramApiBaseUrl({
+        ENVIRONMENT: "development",
+        TELEGRAM_API_BASE_URL: url,
+      })
+    ).toThrow(WorkerAgentConfigError);
   });
 
   it("rejects bot-token-shaped webhook secrets", () => {

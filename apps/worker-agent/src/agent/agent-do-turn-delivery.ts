@@ -155,7 +155,6 @@ export class AgentDoTurn {
             message: "pss-runtime image-omit",
             limit: omit.limit,
             mediaType: omit.mediaType,
-            ...(omit.filename === undefined ? {} : { filename: omit.filename }),
           });
         }, runTurn)
     );

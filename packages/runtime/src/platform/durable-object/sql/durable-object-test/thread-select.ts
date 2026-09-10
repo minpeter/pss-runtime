@@ -73,7 +73,9 @@ function selectThreadMetaRows(
     return row ? [projectThreadMeta(row, query)] : [];
   }
   if (query === "select thread_key from pss_thread_meta") {
-    return [...state.threadMeta.keys()].map((thread_key) => ({ thread_key }));
+    return [...state.threadMeta.keys()].map((threadKey) => ({
+      thread_key: threadKey,
+    }));
   }
   throw new Error(`Unsupported in-memory thread meta SQL query: ${query}`);
 }

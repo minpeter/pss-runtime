@@ -4,10 +4,11 @@
   "type": "module",
   "scripts": {
     "prebuild": "pnpm -F @minpeter/pss-runtime build",
-    "build": "wrangler deploy --dry-run --env=\"\"",
+    "build": "WRANGLER_HIDE_BANNER=true WRANGLER_SEND_METRICS=false wrangler deploy --dry-run --env=\"\"",
     "predev": "pnpm -F @minpeter/pss-runtime build",
     "dev": "run-p dev:worker dev:relay",
     "dev:ingress": "run-p dev:worker:ingress dev:relay",
+    "dev:recorder": "node scripts/loopback-recorder.mjs --port 8793 --log ../../.omo/evidence/egress-recorder.jsonl",
     "dev:relay": "tsx scripts/telegram.ts relay",
     "dev:worker": "wrangler dev -e dev",
     "dev:worker:ingress": "wrangler dev -e dev --var TELEGRAM_INGRESS_DRY_RUN:1",
@@ -18,18 +19,20 @@
     "eval:scripted": "PSS_WORKER_AGENT_EVAL_REAL=0 tsx --conditions=@minpeter/pss-source src/evals/run.ts",
     "eval:scripted:json": "PSS_WORKER_AGENT_EVAL_REAL=0 tsx --conditions=@minpeter/pss-source src/evals/run.ts --json",
     "lint": "ultracite check .",
+    "probe:negative-battery": "node scripts/negative-response-battery.mjs",
     "ship": "run-s ship:secrets ship:worker ship:webhook",
     "ship:secrets": "wrangler secret bulk .dev.vars --env=\"\"",
     "ship:webhook": "tsx scripts/telegram.ts webhook",
     "preship:worker": "pnpm -F @minpeter/pss-runtime build",
     "ship:worker": "wrangler deploy --env=\"\"",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "tui": "tsx --conditions=@minpeter/pss-source src/tui/tui.ts",
     "pretypecheck": "pnpm -F @minpeter/pss-runtime build",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "3.0.20",
+    "@ai-sdk/openai-compatible": "3.0.23",
     "@chat-adapter/state-memory": "4.37.0",
     "@chat-adapter/telegram": "4.37.0",
     "@minpeter/pss-runtime": "workspace:*",
@@ -47,7 +50,7 @@
     "npm-run-all": "^4.1.5",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10",
+    "vitest": "^4.1.11",
     "wrangler": "^4.120.0"
   }
 }
