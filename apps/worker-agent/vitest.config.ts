@@ -73,5 +73,26 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "json-summary"],
+      reportsDirectory: "coverage/worker",
+      include: ["src/**/*.ts"],
+      exclude: [
+        "src/**/*.test.ts",
+        "src/**/*.test-support.ts",
+        // Test-only shims for cloudflare:workers, agents, and image codecs.
+        "src/testing/**/*.ts",
+        // Generated files (declarations, codegen output).
+        "src/**/*.d.ts",
+        "src/**/*.generated.ts",
+      ],
+      thresholds: {
+        statements: 50,
+        branches: 45,
+        functions: 48,
+        lines: 50,
+      },
+    },
   },
 });

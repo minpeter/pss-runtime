@@ -163,7 +163,9 @@ describe("telegram conversation handling", () => {
 
   it("uses concurrent delivery plus app quiet-window coalesce", async () => {
     await handleTelegramWebhook(
-      new Request("https://worker.test/"),
+      new Request("https://worker.test/", {
+        headers: { "x-telegram-bot-api-secret-token": "secret" },
+      }),
       createWebhookEnv(createDurableObjectNamespace("coalesce-concurrency")),
       createExecutionContext()
     );
@@ -177,6 +179,49 @@ describe("telegram conversation handling", () => {
       strategy: "concurrent",
     });
     expect(TELEGRAM_COALESCE_QUIET_MS).toBe(1200);
+  });
+
+  it("passes TELEGRAM_API_BASE_URL through to the adapter only when set", async () => {
+    const namespace = createDurableObjectNamespace("api-base-url");
+    await handleTelegramWebhook(
+      new Request("https://worker.test/", {
+        headers: { "x-telegram-bot-api-secret-token": "secret" },
+      }),
+      {
+        ...createWebhookEnv(namespace),
+        ENVIRONMENT: "development",
+        TELEGRAM_API_BASE_URL: "http://127.0.0.1:8793",
+      },
+      createExecutionContext()
+    );
+
+    expect(chatConstructors.at(-1)).toEqual(
+      expect.objectContaining({
+        adapters: expect.objectContaining({
+          telegram: expect.objectContaining({
+            apiBaseUrl: "http://127.0.0.1:8793",
+          }),
+        }),
+      })
+    );
+
+    await handleTelegramWebhook(
+      new Request("https://worker.test/", {
+        headers: { "x-telegram-bot-api-secret-token": "secret-no-override" },
+      }),
+      {
+        ...createWebhookEnv(namespace),
+        TELEGRAM_WEBHOOK_SECRET_TOKEN: "secret-no-override",
+      },
+      createExecutionContext()
+    );
+
+    const adapters = (
+      chatConstructors.at(-1) as {
+        readonly adapters: { readonly telegram: Record<string, unknown> };
+      }
+    ).adapters;
+    expect("apiBaseUrl" in adapters.telegram).toBe(false);
   });
 
   it("collects images from every message in a batch", async () => {
@@ -480,12 +525,16 @@ describe("telegram conversation handling", () => {
     const secondEnv = createWebhookEnv(createDurableObjectNamespace("second"));
 
     await handleTelegramWebhook(
-      new Request("https://worker.test/"),
+      new Request("https://worker.test/", {
+        headers: { "x-telegram-bot-api-secret-token": "secret" },
+      }),
       firstEnv,
       context
     );
     await handleTelegramWebhook(
-      new Request("https://worker.test/"),
+      new Request("https://worker.test/", {
+        headers: { "x-telegram-bot-api-secret-token": "secret" },
+      }),
       secondEnv,
       context
     );

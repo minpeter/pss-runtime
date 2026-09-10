@@ -30,7 +30,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -84,11 +84,47 @@ jobs:
       - name: Check tegami entry sections
         run: pnpm check:tegami-notes
 
+      # Workspace shared-dependency drift gate. Deterministic; pinned to
+      # Node 24 like the audit/coverage steps so it runs exactly once.
+      - name: Check workspace version drift
+        if: matrix.node == '24'
+        run: pnpm check:workspace-drift --check
+
       - name: Lint
         run: pnpm lint
 
       - name: Typecheck
         run: pnpm typecheck
+
+      # Knip unused-code gate. Deterministic; pinned to Node 24 like the
+      # audit/coverage steps. If the knip binary is unavailable (or fails to
+      # execute) the step and the wrapper print a documented SKIP message and
+      # exit 0 — never a silent pass, never a workflow failure.
+      - name: Check unused files and exports (Knip)
+        if: matrix.node == '24'
+        shell: bash
+        run: |
+          if [[ ! -x node_modules/.bin/knip ]]; then
+            echo "::warning::check:unused skipped: the knip binary is unavailable; run pnpm install to enable this gate."
+            echo "### check:unused skipped: knip binary unavailable" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          pnpm check:unused
+
+      # jscpd duplicate-code gate. Deterministic; pinned to Node 24 like the
+      # audit/coverage steps. If the jscpd binary is unavailable (or fails to
+      # execute) the step and the wrapper print a documented SKIP message and
+      # exit 0 — never a silent pass, never a workflow failure.
+      - name: Check duplicate code (jscpd)
+        if: matrix.node == '24'
+        shell: bash
+        run: |
+          if [[ ! -x node_modules/.bin/jscpd ]]; then
+            echo "::warning::check:duplicates skipped: the jscpd binary is unavailable; run pnpm install to enable this gate."
+            echo "### check:duplicates skipped: jscpd binary unavailable" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          pnpm check:duplicates
 
       - name: Test
         env:
@@ -99,11 +135,39 @@ jobs:
         if: matrix.node == '24'
         run: pnpm coverage
 
+      - name: Check Worker coverage
+        if: matrix.node == '24'
+        run: pnpm --filter @minpeter/pss-worker-agent test:coverage
+
       - name: Build
         run: pnpm build
+
+      # Bundle budget gate over the built dist/ artifacts; must run after
+      # the Build step (a missing artifact fails the gate). Deterministic;
+      # pinned to Node 24 so it runs exactly once.
+      - name: Check bundle size budget
+        if: matrix.node == '24'
+        run: pnpm check:bundle-size --check
 
       - name: Check runtime public API snapshot
         run: pnpm api:check
 
       - name: Verify release artifacts
         run: pnpm verify:release
+
+      # Test-timing producer (VAL-SEC-024): runs the deterministic scripts
+      # invariant suite through the Vitest JSON reporter and normalizes it to
+      # report/test-timing.json (gitignored, never committed), uploaded below
+      # as a bounded artifact. Pinned to Node 24 like the other single-leg
+      # steps so the artifact is produced and uploaded exactly once.
+      - name: Produce test-timing report
+        if: matrix.node == '24'
+        run: pnpm test:timing
+
+      - name: Upload test-timing report
+        if: ${{ always() && matrix.node == '24' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-timing
+          path: report/test-timing.json
+          retention-days: 7

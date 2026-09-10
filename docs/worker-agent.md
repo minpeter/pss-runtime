@@ -1,5 +1,38 @@
 # Worker agent notes
 
+## Metrics and wide events
+
+The Worker owns a minimal metrics surface: structured wide log events (via
+evlog) with bounded, fixed key sets, plus the OpenTelemetry spans described
+below. There is no counters pipeline and no hosted metrics backend — wide
+events in the Workers log stream are the metric record.
+
+Bounded field sets per event kind:
+
+- Request wide events: `correlationId`, `handler`, `method`, `path`,
+  `status` — set on every route.
+- Turn metrics (`turn:` on the agent-turn wide event, Durable Object turn
+  path only): `steps` (count), `toolCalls` (tool names, deduped by
+  `toolCallId`), and `errors` (`turn-error` messages only). User and
+  assistant message text is never recorded: the collector drops
+  `user-input` and `assistant-output` events, so wide events carry
+  counts/ids/names only.
+- Attachment metrics (`input.attachments`): `count`, `mediaTypes`, and
+  `payloadBytes` (a byte estimate derived from the base64 length — the
+  payload itself is never logged).
+- Image events: prepare events carry `path` (an internal prepare-strategy
+  enum, not a filesystem path), input/output byte sizes, media types,
+  decoded geometry (`decodedWidth`/`decodedHeight`), `hasAlpha`, and
+  `maxImageBytes`; omit events carry `limit` and `mediaType` only.
+  Base64 payloads, decoded pixels, image content, and user-supplied
+  filenames (which can be secret-bearing) are never recorded.
+
+Metric emission is lazy: turn/step/tool records exist only when a turn
+actually ran. Read-only probes (`/healthz`, session replay, SSE) emit only
+the request wide event — zero turn-metric records. Emission never blocks or
+changes request handling; the observability instrumentation yields the
+event stream unchanged.
+
 ## OpenTelemetry tracing
 
 `apps/worker-agent` wires the runtime's OpenTelemetry instrumentation into
