@@ -1,0 +1,47 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // Analysis scope mirrors the pnpm workspace layout exactly: every
+  // `workspaces` key below is one of the `packages` globs declared in
+  // pnpm-workspace.yaml (validated by scripts/knip-unused.test.mjs).
+  "workspaces": {
+    ".": {
+      // Root package: repo tooling lives in scripts/ and script/.
+      "entry": ["scripts/**/*.{mjs,mts}", "script/**/*.mjs"],
+      "project": ["scripts/**", "script/**"]
+    },
+    "apps/*": {},
+    // allowlist[cloudflare-runtime-module]: Workers provides cloudflare:workers
+    // at runtime; Knip 6.34.0 reports its scheme as the package cloudflare.
+    "packages/*": {
+      "ignoreDependencies": ["cloudflare"]
+    },
+    "extensions/*": {},
+    // allowlist[examples-demo-fixtures]: example apps keep demo fixture
+    // modules that are exercised from docs and manual runs, not imports;
+    // suppress unused-file noise under fixture directories only. The
+    // workspace itself stays fully analyzed (not a global disable).
+    "examples/*": {
+      "ignore": ["**/fixtures/**"]
+    },
+    // allowlist[experimental-benchmark-fixtures]: live-provider benchmarks
+    // keep recorded fixtures, and nextjs-bench result payloads are generated
+    // campaign output; both are excluded from findings while the benchmark
+    // sources stay analyzed.
+    "experimental/*": {
+      "ignore": ["**/fixtures/**", "nextjs-bench/results/**"]
+    }
+  },
+  // Generated and third-party output is never analyzed: reports must be
+  // source-only and cannot flag committed or built artifacts.
+  "ignore": [
+    "**/dist/**",
+    "**/node_modules/**",
+    "**/.wrangler/**",
+    "**/.turbo/**",
+    "**/coverage/**",
+    "experimental/nextjs-bench/results/**",
+    "**/pnpm-lock.yaml",
+    "**/package-lock.json",
+    "**/yarn.lock"
+  ]
+}

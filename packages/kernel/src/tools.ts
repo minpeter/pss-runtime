@@ -24,7 +24,7 @@ export const toolDefinitions = [
   { name: "notes.get", input: z.toJSONSchema(getInput) },
 ] as const;
 
-export class ToolError extends Error {
+class ToolError extends Error {
   override readonly name = "ToolError";
 }
 

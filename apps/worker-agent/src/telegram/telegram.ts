@@ -1,9 +1,15 @@
+import { timingSafeEqual } from "node:crypto";
+
 import { createMemoryState } from "@chat-adapter/state-memory";
 import { createTelegramAdapter } from "@chat-adapter/telegram";
 import { Chat, type Message, type MessageContext, type Thread } from "chat";
 
 import type { Env } from "../env";
-import { isTelegramIngressDryRun, readWebhookSecretToken } from "../env";
+import {
+  isTelegramIngressDryRun,
+  readTelegramApiBaseUrl,
+  readWebhookSecretToken,
+} from "../env";
 import { TELEGRAM_INGRESS_LAYER } from "../message-path-layers";
 import { logError, logInfo, newCorrelationId } from "../worker-log";
 import { replyToThread, requestAgentDelivery } from "./telegram-delivery";
@@ -39,6 +45,7 @@ function createBot(env: Env, config: BotConfig): Chat {
         mode: "webhook",
         secretToken: config.secretToken,
         userName: config.userName,
+        ...(config.apiBaseUrl ? { apiBaseUrl: config.apiBaseUrl } : {}),
       }),
     },
     state: createMemoryState(),
@@ -152,7 +159,21 @@ export function handleTelegramWebhook(
   ctx: ExecutionContext,
   options: { readonly correlationId?: string } = {}
 ): Promise<Response> {
-  const config = readBotConfig(env);
+  const secretToken = readWebhookSecretToken(env);
+  const expected = new TextEncoder().encode(secretToken);
+  const supplied = new TextEncoder().encode(
+    request.headers.get("x-telegram-bot-api-secret-token") ?? ""
+  );
+  // Chat initializes the adapter (including getMe) before its secret check.
+  if (
+    supplied.byteLength !== expected.byteLength ||
+    !timingSafeEqual(supplied, expected)
+  ) {
+    return Promise.resolve(
+      new Response("Invalid secret token", { status: 401 })
+    );
+  }
+  const config = readBotConfig(env, secretToken);
   if (!(cachedBot && isSameBotConfig(cachedBot.config, config))) {
     cachedBot = { bot: createBot(env, config), config };
   }
@@ -171,12 +192,13 @@ export function handleTelegramWebhook(
   );
 }
 
-function readBotConfig(env: Env): BotConfig {
+function readBotConfig(env: Env, secretToken: string): BotConfig {
   return {
     agentNamespace: env.AGENT_DO,
+    apiBaseUrl: readTelegramApiBaseUrl(env),
     botToken: env.TELEGRAM_BOT_TOKEN,
     environment: env.ENVIRONMENT,
-    secretToken: readWebhookSecretToken(env),
+    secretToken,
     userName: env.TELEGRAM_BOT_USERNAME?.trim() || "pss_echo_bot",
   };
 }
@@ -184,6 +206,7 @@ function readBotConfig(env: Env): BotConfig {
 function isSameBotConfig(left: BotConfig, right: BotConfig): boolean {
   return (
     left.agentNamespace === right.agentNamespace &&
+    left.apiBaseUrl === right.apiBaseUrl &&
     left.botToken === right.botToken &&
     left.environment === right.environment &&
     left.secretToken === right.secretToken &&
