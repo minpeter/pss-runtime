@@ -6,6 +6,8 @@ packages:
   - "extensions/*"
 autoInstallPeers: false
 patchedDependencies:
+  '@oh-my-pi/hashline@18.1.5': patches/@oh-my-pi__hashline@18.1.5.patch
+  '@oh-my-pi/pi-natives@18.1.5': patches/@oh-my-pi__pi-natives@18.1.5.patch
   '@vercel/agent-eval@2.2.1': patches/@vercel__agent-eval@2.2.1.patch
 overrides:
   # Security-only, parent-scoped resolutions where direct updates cannot reach the vulnerable edge.
