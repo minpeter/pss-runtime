@@ -41,11 +41,21 @@ test("Given the AGENTS.md option, when dry-running the benchmark, then the manif
         cwd: benchmarkDirectory,
         encoding: "utf8",
         env: { ...process.env, PSS_BENCH_EVALS_DIR: evalsRoot },
+        timeout: 10_000,
       }
     );
 
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(JSON.parse(result.stdout).agentsMd, true);
+    const manifest = JSON.parse(result.stdout);
+    assert.equal(manifest.agentsMd, true);
+    assert.equal(manifest.agent, "pss");
+    assert.equal(manifest.fixtureCount, 1);
+    assert.deepEqual(manifest.fixtures, [
+      "agent-000-app-router-migration-simple",
+    ]);
+    assert.equal(manifest.profile, "official");
+    assert.equal(manifest.runs, 4);
+    assert.equal(manifest.earlyExit, true);
   } finally {
     rmSync(evalsRoot, { force: true, recursive: true });
   }
