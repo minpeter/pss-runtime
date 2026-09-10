@@ -1,15 +1,19 @@
 import {
   type Component,
   Container,
-  Input,
   isFocusable,
   isKeyRelease,
   Key,
   matchesKey,
-  SelectList,
   Text,
+  truncateToWidth,
 } from "@earendil-works/pi-tui";
 import type { CodingAgentExtensionUi } from "../extensions/types";
+import {
+  ComposerInput,
+  ComposerSelectList,
+  selectionWindow,
+} from "./bounded-input";
 import { sanitizeTerminalText } from "./terminal-safety";
 
 const selectTheme = {
@@ -22,20 +26,41 @@ const selectTheme = {
 
 /** Prompts share the HOT composer slot, never a screen overlay. */
 export interface ExtensionPromptHost {
+  contentRows: () => number;
   mount(component: Component): () => void;
 }
 
 class InlinePrompt extends Container {
   readonly #input: Component;
   readonly #cancel: () => void;
+  readonly #rows: () => number;
   #focused = false;
 
-  constructor(label: string, input: Component, cancel: () => void) {
+  constructor(
+    label: string,
+    input: Component,
+    cancel: () => void,
+    rows: () => number
+  ) {
     super();
     this.#input = input;
     this.#cancel = cancel;
+    this.#rows = rows;
     this.addChild(new Text(label, 1, 0));
     this.addChild(input);
+  }
+
+  override render(width: number): string[] {
+    const budget = this.#rows();
+    const label = this.children[0].render(width);
+    const labelRows = Math.min(label.length, Math.max(0, budget - 2));
+    const inputRows = this.#input.render(width);
+    return [
+      ...label
+        .slice(0, labelRows)
+        .map((line) => truncateToWidth(line, width, "")),
+      ...selectionWindow(inputRows, budget - labelRows),
+    ];
   }
 
   get focused(): boolean {
@@ -87,7 +112,7 @@ export function createExtensionUi(options: UiOptions): CodingAgentExtensionUi {
       if (options.signal.aborted) {
         return;
       }
-      const input = new Input();
+      const input = new ComposerInput();
       input.setValue(initialValue ?? "");
       return await prompt(
         options,
@@ -145,7 +170,9 @@ async function prompt(
       };
       const abort = () => settle(undefined);
       configure(settle);
-      unmount = options.promptHost.mount(new InlinePrompt(label, input, abort));
+      unmount = options.promptHost.mount(
+        new InlinePrompt(label, input, abort, options.promptHost.contentRows)
+      );
       signal.addEventListener("abort", abort, { once: true });
     });
   } finally {
@@ -188,7 +215,7 @@ async function selectValue(
       value: option.value,
     };
   });
-  const list = new SelectList(items, 8, selectTheme);
+  const list = new ComposerSelectList(items, items.length, selectTheme);
   return await prompt(
     options,
     label,

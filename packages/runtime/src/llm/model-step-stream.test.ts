@@ -7,6 +7,7 @@ import {
   type MockLanguageModelV4GenerateResult,
   type MockLanguageModelV4StreamResult,
 } from "../testing/mock-language-model-v4-test-utils";
+import { PrimitiveProviderError } from "./failed-request";
 import {
   createModelStepStream,
   type ModelStepStreamPart,
@@ -314,7 +315,7 @@ describe("createModelStepStream", () => {
     { error: null, invalidText: true },
     { error: undefined, invalidText: true },
   ])(
-    "preserves original $error with SDK failure: $invalidText",
+    "preserves original $error as provider cause with SDK failure: $invalidText",
     async ({ error, invalidText }) => {
       const model = createStreamingMockLanguageModelV4([
         {
@@ -341,7 +342,10 @@ describe("createModelStepStream", () => {
       const source = createModelStepStream({ messages: [...prompt], model });
 
       await collectParts(source.parts);
-      await expect(source.finalize()).rejects.toBe(error);
+      const finalization = source.finalize();
+      expect(source.finalize()).toBe(finalization);
+      await expect(finalization).rejects.toBeInstanceOf(PrimitiveProviderError);
+      await expect(finalization).rejects.toHaveProperty("cause", error);
       expect(model.doStreamCalls).toHaveLength(1);
     }
   );

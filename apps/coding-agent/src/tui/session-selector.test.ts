@@ -52,7 +52,7 @@ describe("SessionSelectorComponent", () => {
     expect(sessionRows).toHaveLength(2);
     expect(sessionRows[0]).toContain("main");
     expect(sessionRows[1]).toContain("parser spike");
-    expect(sessionRows.map((line) => line.indexOf("#"))).toEqual([24, 24]);
+    expect(sessionRows[0]?.indexOf("#")).toBe(sessionRows[1]?.indexOf("#"));
     expect(rendered).not.toContain("cwd:/work");
   });
 
@@ -119,7 +119,8 @@ describe("SessionSelectorComponent", () => {
       .join("\n");
     expect(rendered).toContain("main");
     expect(rendered).toContain("#aaaaaaaa");
-    expect(rendered).toContain("updated 2026-07-29 ✓");
+    expect(rendered).toContain("updated 2026-07-29");
+    expect(rendered).toContain("#aaaaaaaa ✓");
     expect(rendered).not.toContain("#bbbbbbbb");
     expect(rendered).not.toContain("2026-07-27");
   });
@@ -143,7 +144,7 @@ describe("SessionSelectorComponent", () => {
     ).toHaveLength(1);
   });
 
-  it("aligns compact timestamps while truncating long titles", () => {
+  it("aligns timestamps when full titles fit and hides metadata before truncating", () => {
     const selector = new SessionSelectorComponent({
       currentSessionKey: "cwd:/work#long",
       onCancel: vi.fn(),
@@ -166,18 +167,20 @@ describe("SessionSelectorComponent", () => {
       ],
     });
     const rows = selector
-      .render(100)
+      .render(120)
       .map((line) => line.replace(ANSI_PATTERN, ""))
       .filter((line) => line.includes("updated"));
     expect(rows).toHaveLength(2);
     expect(rows[0]?.indexOf("updated")).toBe(rows[1]?.indexOf("updated"));
-    expect(rows[0]?.indexOf("updated")).toBe(35);
-    expect(rows.join("\n")).not.toContain(
+    expect(rows.join("\n")).toContain(
       "ultralongtitlehanlding-test-ulralooooooooooooooooooooooooooong"
     );
 
     const narrowRows = selector.render(30);
     expect(narrowRows.every((line) => visibleWidth(line) <= 30)).toBe(true);
     expect(narrowRows.join("\n")).not.toContain("updated");
+    expect(narrowRows.join("\n")).not.toContain(
+      "ultralongtitlehanlding-test-ulralooooooooooooooooooooooooooong"
+    );
   });
 });

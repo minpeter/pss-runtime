@@ -244,8 +244,20 @@ describe("malformed tool JSON through runtime and TUI", () => {
     const result = await run(validInput.slice(0, -2), undefined);
     expect(result.execute).not.toHaveBeenCalled();
     expect(result.bytes.toString()).toBe("original");
+    expect(result.files).toEqual(["index.html"]);
+    expect(result.requests).toHaveLength(1);
+    expect(result.events.at(-1)?.type).toBe("turn-error");
     expect(
       result.events.filter((event) => event.type === "model-retry")
-    ).toEqual([]);
+    ).toEqual([
+      {
+        attempt: 1,
+        attemptId: expect.any(String),
+        phase: "stopped",
+        reason: "stream-ended",
+        remainingRetries: 0,
+        type: "model-retry",
+      },
+    ]);
   });
 });

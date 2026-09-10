@@ -69,6 +69,7 @@ function createNewCommand(context: SessionCommandContext): TuiCommand {
     execute: (input) =>
       runSessionCommand(async () => {
         const name = optionalName(input.args);
+        input.onSessionNavigation?.();
         await context.ensureApproved("switch", {
           fromKey: context.currentSession().key,
           reason: "new",
@@ -106,7 +107,7 @@ function createResumeCommand(context: SessionCommandContext): TuiCommand {
             success: true,
           };
         }
-        return await resumeSession(context, entry);
+        return await resumeSession(context, entry, input.onSessionNavigation);
       }),
     getArgumentCompletions: async (argumentPrefix) => {
       const prefix = argumentPrefix.trim().toLowerCase();
@@ -182,6 +183,7 @@ function createForkCommand(context: SessionCommandContext): TuiCommand {
           }
           beforeHistoryIndex = point.beforeHistoryIndex;
         }
+        input.onSessionNavigation?.();
         await context.ensureApproved("fork", { fromKey, reason: "fork" });
         const entry = await context.manager.forkSession(fromKey, {
           ...(beforeHistoryIndex === undefined ? {} : { beforeHistoryIndex }),
@@ -227,11 +229,13 @@ function createNameCommand(context: SessionCommandContext): TuiCommand {
 
 async function resumeSession(
   context: SessionCommandContext,
-  entry: SessionIndexEntry
+  entry: SessionIndexEntry,
+  onSessionNavigation?: () => void
 ): Promise<TuiCommandResult> {
   if (entry.key === context.currentSession().key) {
     return { message: "Already on that session.", success: true };
   }
+  onSessionNavigation?.();
   await context.ensureApproved("switch", {
     fromKey: context.currentSession().key,
     reason: "resume",
@@ -240,7 +244,7 @@ async function resumeSession(
   const switched = await context.manager.switchToSession(entry.key);
   await context.switchThread(switched, "resume");
   return {
-    action: { clear: true, type: "session" },
+    action: { clear: true, reason: "resume", type: "session" },
     message: `Resumed session ${describeSession(switched)}.`,
     success: true,
   };

@@ -57,10 +57,15 @@ import { TuiSessionMachine } from "./session-state";
 import { sanitizeTerminalText } from "./terminal-safety";
 import { TranscriptOwner } from "./transcript-owner";
 
-const EMPTY_NOTICE = "Please enter a message.";
+const SYSTEM_NOTICE = "Fixture system notice.";
 const NOTICE_PULSE_MS = 140;
-const GRAY_NOTICE = `\x1b[38;5;245m${EMPTY_NOTICE}\x1b[0m`;
-const PULSED_NOTICE = `\x1b[47m\x1b[30m${EMPTY_NOTICE}\x1b[0m`;
+const GRAY_NOTICE = `\x1b[38;5;245m${SYSTEM_NOTICE}\x1b[0m`;
+const PULSED_NOTICE = `\x1b[47m\x1b[30m${SYSTEM_NOTICE}\x1b[0m`;
+const noticeCommand = {
+  name: "notice",
+  description: "fixture system notice",
+  execute: () => ({ success: true, message: SYSTEM_NOTICE }),
+};
 
 const gate = <T = void>() => {
   let resolve!: (value: T) => void;
@@ -114,7 +119,7 @@ const rows = (): string[] => {
 };
 
 const noticeRows = (): string[] =>
-  rows().filter((row) => row.includes(EMPTY_NOTICE));
+  rows().filter((row) => row.includes(SYSTEM_NOTICE));
 
 const exit = async (run: Promise<void>) => {
   process.emit("SIGINT", "SIGINT");
@@ -134,12 +139,12 @@ const thread = () => ({
 });
 
 /**
- * Submits an empty line and waits for the TUI to be back at the prompt, so
+ * Emits a command's system notice and waits for the TUI prompt, so
  * every assertion runs against a settled transcript instead of a race.
  */
-const submitEmpty = async (): Promise<void> => {
+const submitNotice = async (): Promise<void> => {
   const settled = idleGate();
-  input("\r");
+  input("/notice\r");
   await settled;
 };
 
@@ -367,7 +372,17 @@ describe.sequential("common system notices", () => {
       execute: () => model.execute({ args: [requested] }),
     };
     const ready = idleGate();
-    const run = createAgentTUI({ thread: thread(), commands: [command] });
+    const run = createAgentTUI({
+      thread: thread(),
+      commands: [command],
+      replayHistoryOnStartup: true,
+      sessionSelector: {
+        currentSessionKey: () => "replay",
+        listSessions: async () => [],
+        loadCurrentHistory: async () => [{ role: "user", content: "REPLAY" }],
+        switchSession: async () => undefined,
+      },
+    });
     const matching = () => rows().filter((row) => row.includes("MODEL_"));
     try {
       await ready;
@@ -473,10 +488,11 @@ describe.sequential("common system notices", () => {
     }
   );
 
-  it("appends after real user content interrupts an active empty-input pulse", async () => {
+  it("appends after real user content interrupts an active system-notice pulse", async () => {
     const idle = idleGate();
     const run = createAgentTUI({
       thread: thread(),
+      commands: [noticeCommand],
       preprocessUserInput: async () => ({
         success: false,
         error: "Input rejected.",
@@ -484,13 +500,13 @@ describe.sequential("common system notices", () => {
     });
     try {
       await idle;
-      await submitEmpty();
-      await submitEmpty();
+      await submitNotice();
+      await submitNotice();
       const settled = idleGate();
       input("Visible user content\r");
       await settled;
       expect(noticeRows()).toEqual([GRAY_NOTICE]);
-      await submitEmpty();
+      await submitNotice();
       expect(noticeRows()).toEqual([GRAY_NOTICE, GRAY_NOTICE]);
     } finally {
       await exit(run);
@@ -498,17 +514,53 @@ describe.sequential("common system notices", () => {
   });
 });
 
-describe.sequential("repeated empty-input notice", () => {
+describe.sequential("repeated system notice", () => {
+  it("pulses the same empty-input notice row and restores it without stacking", async () => {
+    const ready = idleGate();
+    const source = thread();
+    const run = createAgentTUI({ thread: source });
+    try {
+      await ready;
+      let settled = idleGate();
+      input("\r");
+      await settled;
+      const chat = terminalHarness.surface?.children[1];
+      expect(chat).toBeInstanceOf(TranscriptOwner);
+      const normal = chat?.render(80);
+      expect(normal?.some((row) => row.includes("\x1b[38;5;245m"))).toBe(true);
+      const timers = vi.getTimerCount();
+      for (let attempt = 0; attempt < 3; attempt++) {
+        settled = idleGate();
+        input("\r");
+        await settled;
+        expect(chat?.render(80)).toEqual(
+          normal?.map((row) =>
+            row.replace("\x1b[38;5;245m", "\x1b[47m\x1b[30m")
+          )
+        );
+        expect(vi.getTimerCount()).toBe(timers + 1);
+        vi.advanceTimersByTime(NOTICE_PULSE_MS / 2);
+      }
+      vi.advanceTimersByTime(NOTICE_PULSE_MS);
+      expect(chat?.render(80)).toEqual(normal);
+      expect(vi.getTimerCount()).toBe(timers);
+      expect(source.send).not.toHaveBeenCalled();
+      expect(source.steer).not.toHaveBeenCalled();
+    } finally {
+      await exit(run);
+    }
+  });
+
   it("reuses one row and pulses black text on white instead of appending duplicates", async () => {
     const idle = idleGate();
-    const run = createAgentTUI({ thread: thread() });
+    const run = createAgentTUI({ thread: thread(), commands: [noticeCommand] });
     try {
       await idle;
 
-      await submitEmpty();
+      await submitNotice();
       expect(noticeRows()).toEqual([GRAY_NOTICE]);
 
-      await submitEmpty();
+      await submitNotice();
       // Still exactly one row: the repeat reuses the visible notice.
       expect(noticeRows()).toEqual([PULSED_NOTICE]);
 
@@ -522,15 +574,15 @@ describe.sequential("repeated empty-input notice", () => {
 
   it("keeps one row and one pulse timer across rapid repeats", async () => {
     const idle = idleGate();
-    const run = createAgentTUI({ thread: thread() });
+    const run = createAgentTUI({ thread: thread(), commands: [noticeCommand] });
     try {
       await idle;
 
-      await submitEmpty();
+      await submitNotice();
       const baseTimers = vi.getTimerCount();
 
       for (let attempt = 0; attempt < 4; attempt++) {
-        await submitEmpty();
+        await submitNotice();
         vi.advanceTimersByTime(NOTICE_PULSE_MS / 4);
         expect(noticeRows()).toEqual([PULSED_NOTICE]);
         // The repeat re-arms the same pulse rather than stacking timers.
@@ -550,6 +602,7 @@ describe.sequential("repeated empty-input notice", () => {
     const run = createAgentTUI({
       thread: thread(),
       commands: [
+        noticeCommand,
         {
           name: "note",
           description: "fixture",
@@ -560,7 +613,7 @@ describe.sequential("repeated empty-input notice", () => {
     try {
       await idle;
 
-      await submitEmpty();
+      await submitNotice();
       expect(noticeRows()).toEqual([GRAY_NOTICE]);
 
       const settled = idleGate();
@@ -570,11 +623,11 @@ describe.sequential("repeated empty-input notice", () => {
 
       // The tracked notice is no longer the last row, so this is a genuinely
       // new notice and must not be suppressed.
-      await submitEmpty();
+      await submitNotice();
       expect(noticeRows()).toEqual([GRAY_NOTICE, GRAY_NOTICE]);
 
       // The newest notice is the one that pulses.
-      await submitEmpty();
+      await submitNotice();
       expect(noticeRows()).toEqual([GRAY_NOTICE, PULSED_NOTICE]);
       vi.advanceTimersByTime(NOTICE_PULSE_MS);
       expect(noticeRows()).toEqual([GRAY_NOTICE, GRAY_NOTICE]);
@@ -585,11 +638,11 @@ describe.sequential("repeated empty-input notice", () => {
 
   it("leaves no pulse timer or stuck inversion when the TUI shuts down mid-pulse", async () => {
     const idle = idleGate();
-    const run = createAgentTUI({ thread: thread() });
+    const run = createAgentTUI({ thread: thread(), commands: [noticeCommand] });
     await idle;
 
-    await submitEmpty();
-    await submitEmpty();
+    await submitNotice();
+    await submitNotice();
     expect(noticeRows()).toEqual([PULSED_NOTICE]);
 
     // exit() asserts the timer count is zero, i.e. the in-flight pulse timer

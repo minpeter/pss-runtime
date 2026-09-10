@@ -44,6 +44,12 @@ export class ThreadState {
   readonly #persistence: ThreadStatePersistence;
   #history = new ModelMessageHistory();
   readonly #writes = new ThreadWriteQueue();
+  #continuationRevoked = false;
+  #continuation?: {
+    readonly history: ModelMessage[];
+    readonly version: string | null;
+    readonly recover?: () => ModelMessage[];
+  };
 
   constructor(persistence: ThreadPersistenceOptions) {
     this.compactionIdentity = createCompactionThreadIdentity(
@@ -128,6 +134,7 @@ export class ThreadState {
   }
 
   appendUserInput(input: HistoryUserInput) {
+    this.clearContinuationCheckpoint();
     this.#history.appendUserInput(input);
   }
 
@@ -141,6 +148,62 @@ export class ThreadState {
 
   rollback(snapshot: ModelMessage[]): void {
     this.#history.rollback(snapshot);
+  }
+
+  setContinuationCheckpoint(
+    snapshot: ModelMessage[],
+    recover?: () => ModelMessage[]
+  ): void {
+    if (this.#continuationRevoked) {
+      return;
+    }
+    this.#continuation = {
+      history: structuredClone(snapshot),
+      version: this.#persistence.checkpointVersion,
+      ...(recover ? { recover } : {}),
+    };
+  }
+
+  clearContinuationCheckpoint(): void {
+    this.#continuation = undefined;
+  }
+
+  revokeContinuation(): void {
+    this.#continuationRevoked = true;
+    this.clearContinuationCheckpoint();
+  }
+
+  continuationCheckpoint() {
+    return this.#continuation;
+  }
+
+  isContinuationCurrent(
+    checkpoint: NonNullable<ReturnType<ThreadState["continuationCheckpoint"]>>
+  ): boolean {
+    if (checkpoint !== this.#continuation) {
+      return false;
+    }
+    if (checkpoint.version === this.#persistence.checkpointVersion) {
+      return true;
+    }
+    if (checkpoint.recover) {
+      throw new Error(
+        "Task requires recovery after the stored thread changed. Reload and reconcile its history before starting new work."
+      );
+    }
+    this.clearContinuationCheckpoint();
+    return false;
+  }
+
+  applyContinuationCheckpoint(
+    checkpoint: NonNullable<ReturnType<ThreadState["continuationCheckpoint"]>>
+  ): boolean {
+    if (!this.isContinuationCurrent(checkpoint)) {
+      return false;
+    }
+    this.#continuation = undefined;
+    this.rollback(checkpoint.history);
+    return true;
   }
 
   async compact(

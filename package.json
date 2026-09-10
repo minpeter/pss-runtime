@@ -54,11 +54,11 @@
     "verify:release": "node scripts/verify-release-artifacts.mjs && pnpm verify:package-apis"
   },
   "devDependencies": {
-    "@ai-sdk/openai-compatible": "3.0.23",
+    "@ai-sdk/openai-compatible": "3.0.44",
     "@babel/core": "8.0.1",
     "@babel/parser": "8.0.4",
     "@biomejs/biome": "2.5.5",
-    "@earendil-works/pi-tui": "^0.84.1",
+    "@earendil-works/pi-tui": "^0.85.0",
     "@minpeter/pss-coding-agent": "workspace:*",
     "@minpeter/pss-runtime": "workspace:*",
     "@modelcontextprotocol/client": "2.0.0-beta.5",
@@ -69,7 +69,7 @@
     "@xterm/xterm": "6.0.0",
     "ajv": "8.20.0",
     "dotenv": "^17.4.2",
-    "eslint": "10.7.0",
+    "eslint": "10.10.0",
     "husky": "9.1.7",
     "jscpd": "5.1.2",
     "knip": "6.34.0",
@@ -77,13 +77,13 @@
     "publint": "^0.3.23",
     "react": "19.2.8",
     "tegami": "1.4.0",
-    "tsx": "^4.23.12",
+    "tsx": "^4.23.13",
     "turbo": "^2.10.8",
     "typescript": "^7.0.2",
     "ultracite": "7.10.6",
     "vitest": "^4.1.11",
     "yaml": "2.9.0",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "packageManager": "pnpm@11.9.0+sha512.bd682d5d03fe525ef7c9fd6780c6884d1e756ac4c9c9fe00c538782824310dcf90e3ddc4f53835f06dfaebd5085e41855e0bcbb3b60de2ac5bbab89e5036f03b",
   "engines": {

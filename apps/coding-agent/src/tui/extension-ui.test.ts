@@ -15,6 +15,7 @@ const fixture = () => {
   const unmounted = vi.fn();
   const ui = createExtensionUi({
     promptHost: {
+      contentRows: () => 6,
       mount: (component) => {
         mounted.push(component);
         return unmounted;

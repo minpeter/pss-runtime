@@ -9,18 +9,20 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
-
+import { renderBoundedText } from "./bounded-text";
 import {
   type ColdTable,
   renderColdTable,
   selectMarkdownTables,
 } from "./cold-table";
+import { type ColdStartupHeader, renderStartupHeader } from "./startup-header";
 
 const HARD_BREAK = /\r\n|\r|\n/;
 
 /** Renderer-free values. A snapshot must describe the presentation, not new input. */
 export type ColdContent =
   | ColdTable
+  | ColdStartupHeader
   | { readonly kind: "group"; readonly children: readonly ColdContent[] }
   | { readonly kind: "spacer"; readonly rows: number }
   | {
@@ -166,6 +168,8 @@ export const renderColdContent = (
       return Array.from({ length: content.rows }, () => "");
     case "table":
       return renderColdTable(content, width);
+    case "startup-header":
+      return renderStartupHeader(content, width);
     case "fixed":
       return content.reason === "graphics"
         ? [...content.rows]
@@ -175,6 +179,13 @@ export const renderColdContent = (
         ? [...content.rows]
         : renderColdContent(content.content, width);
     case "text":
+      if (width <= 3) {
+        return renderBoundedText(
+          content.text,
+          { width, paddingX: content.paddingX, paddingY: content.paddingY },
+          content.background && styleFunction(content.background)
+        );
+      }
       return new Text(
         content.text,
         content.paddingX,
@@ -233,7 +244,7 @@ export const selectTextTail = (
 ): ColdContent => {
   const padding = Math.min(
     content.paddingX,
-    Math.max(0, Math.floor((width - 1) / 2))
+    Math.max(0, Math.floor((width - (width <= 3 ? 2 : 1)) / 2))
   );
   const available = Math.max(1, width - padding * 2);
   const text = content.text.replace(/\t/g, "   ");

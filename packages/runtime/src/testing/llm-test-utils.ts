@@ -1,5 +1,4 @@
 import type { Tool, ToolSet } from "ai";
-import { jsonSchema, tool } from "ai";
 import { expect, type Mock, vi } from "vitest";
 import type {
   ModelGenerationOptions,
@@ -10,6 +9,7 @@ import {
   createMockLanguageModelV4,
   mockLanguageModelV4Empty,
 } from "./mock-language-model-v4-test-utils";
+import { createNoopTool as noopTool } from "./noop-tool-test-utils";
 
 const { generateTextMock } = vi.hoisted(() => ({
   generateTextMock: vi.fn(),
@@ -52,21 +52,7 @@ export function getGenerateTextMock(): Mock {
   return generateTextMock;
 }
 
-export const createNoopTool = (): Tool =>
-  tool({
-    description: "No-op test tool.",
-    execute: () => ({}),
-    inputSchema: jsonSchema({
-      type: "object",
-      properties: {},
-      additionalProperties: false,
-    }),
-    outputSchema: jsonSchema({
-      type: "object",
-      properties: {},
-      additionalProperties: false,
-    }),
-  });
+export const createNoopTool = noopTool;
 
 export async function loadModelStepRunner() {
   const { generateModelStep } = await import("../llm/model-step");
