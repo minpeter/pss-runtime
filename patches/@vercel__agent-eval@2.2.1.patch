@@ -1,0 +1,14 @@
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -14,6 +14,10 @@
+       "types": "./dist/index.d.ts",
+       "default": "./dist/index.js"
+     },
++    "./orchestrator": {
++      "types": "./dist/lib/agents/plugin/orchestrator.d.ts",
++      "default": "./dist/lib/agents/plugin/orchestrator.js"
++    },
+     "./eval": {
+       "types": "./dist/lib/agents/eval-helper.d.mts",
+       "default": "./dist/lib/agents/eval-helper.mjs"
