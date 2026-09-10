@@ -240,7 +240,7 @@ async function resumeSession(
   const switched = await context.manager.switchToSession(entry.key);
   await context.switchThread(switched, "resume");
   return {
-    action: { clear: true, type: "session" },
+    action: { clear: true, reason: "resume", type: "session" },
     message: `Resumed session ${describeSession(switched)}.`,
     success: true,
   };

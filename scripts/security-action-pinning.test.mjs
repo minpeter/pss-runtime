@@ -15,7 +15,7 @@ import {
 // checks are static over committed files and pure fixtures.
 
 const CHECKOUT_V7 = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
-const PNPM_V6 = "pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86";
+const PNPM_V6 = "pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413";
 const NODE_V7 = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020";
 
 function workflow({ steps = [], extraSteps = "" } = {}) {
@@ -45,7 +45,7 @@ describe("pinning: shipped workflows are fully SHA-pinned (VAL-SEC-038)", () => 
       path.endsWith("release.yml")
     );
     expect(release.source).toContain(`${CHECKOUT_V7} # v7`);
-    expect(release.source).toContain(`${PNPM_V6} # v6.0.10`);
+    expect(release.source).toContain(`${PNPM_V6} # v6.1.0`);
     expect(release.source).toContain(`${NODE_V7} # v7`);
     expect(release.source).not.toContain("actions/checkout@v7");
   });
