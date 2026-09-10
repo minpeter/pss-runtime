@@ -5,6 +5,8 @@ packages:
   - "experimental/*"
   - "extensions/*"
 autoInstallPeers: false
+patchedDependencies:
+  '@vercel/agent-eval@2.2.1': patches/@vercel__agent-eval@2.2.1.patch
 overrides:
   # Security-only, parent-scoped resolutions where direct updates cannot reach the vulnerable edge.
   # Keep these exact so unrelated consumers retain their declared dependency ranges.

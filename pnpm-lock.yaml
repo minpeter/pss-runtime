@@ -14,6 +14,9 @@ overrides:
   rolldown-plugin-dts: 0.27.2
   vite: 8.1.0
 
+patchedDependencies:
+  '@vercel/agent-eval@2.2.1': 05cef63751494e5378395a2a0cfa449c7c818e1011d2079a65c49ca44e491fbc
+
 importers:
 
   .:
@@ -452,7 +455,7 @@ importers:
         version: link:../bench-shared
       '@vercel/agent-eval':
         specifier: 2.2.1
-        version: 2.2.1
+        version: 2.2.1(patch_hash=05cef63751494e5378395a2a0cfa449c7c818e1011d2079a65c49ca44e491fbc)
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -6626,7 +6629,7 @@ snapshots:
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
 
-  '@vercel/agent-eval@2.2.1':
+  '@vercel/agent-eval@2.2.1(patch_hash=05cef63751494e5378395a2a0cfa449c7c818e1011d2079a65c49ca44e491fbc)':
     dependencies:
       '@ai-sdk/anthropic': 1.2.12(zod@3.25.76)
       '@vercel/sandbox': 1.10.2
