@@ -1,11 +1,6 @@
 {
   "version": 1,
   "signatures": [
-    "binaries:experimental/pss-image-codec-edge-qa/package.json#wrangler",
-    "binaries:extensions/latex/package.json#tsdown",
-    "binaries:extensions/mermaid/package.json#tsdown",
-    "binaries:extensions/web/package.json#tsdown",
-    "binaries:packages/kernel/package.json#wrangler",
     "dependencies:apps/coding-agent/package.json#@fontsource-variable/noto-sans",
     "dependencies:apps/coding-agent/package.json#@fontsource-variable/noto-sans-arabic",
     "dependencies:apps/coding-agent/package.json#@fontsource-variable/noto-sans-devanagari",
@@ -15,7 +10,6 @@
     "dependencies:apps/coding-agent/package.json#@fontsource-variable/noto-sans-sc",
     "dependencies:apps/coding-agent/package.json#@fontsource-variable/noto-sans-tc",
     "dependencies:apps/coding-agent/package.json#@fontsource-variable/noto-sans-thai",
-    "dependencies:apps/coding-agent/package.json#@minpeter/opensearch",
     "dependencies:apps/coding-agent/package.json#@resvg/resvg-wasm",
     "dependencies:apps/coding-agent/package.json#beautiful-mermaid",
     "dependencies:apps/coding-agent/package.json#fast-png",
@@ -32,7 +26,6 @@
     "dependencies:extensions/latex/package.json#@fontsource-variable/noto-sans-sc",
     "dependencies:extensions/latex/package.json#@fontsource-variable/noto-sans-tc",
     "dependencies:extensions/latex/package.json#@fontsource-variable/noto-sans-thai",
-    "devDependencies:experimental/pss-image-codec-edge-qa/package.json#wrangler",
     "devDependencies:extensions/latex/package.json#playwright-core",
     "devDependencies:package.json#@ai-sdk/openai-compatible",
     "devDependencies:package.json#@babel/core",
