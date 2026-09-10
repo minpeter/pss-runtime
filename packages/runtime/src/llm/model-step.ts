@@ -295,7 +295,7 @@ export async function generateModelStepResult({
         ...toolProgress.recover(),
       ]);
     }
-    if (providerFailure || signal?.aborted) {
+    if (providerFailure || (signal?.aborted && isAbortError(error))) {
       // Retain only complete model/tool pairs and committed text. Partial
       // tool arguments and reasoning are intentionally discarded.
       const partial = await handle.partialMessages?.().catch(() => []);
@@ -324,7 +324,7 @@ export async function generateModelStepResult({
               : false
           )
       );
-      if (signal?.aborted) {
+      if (signal?.aborted && isAbortError(error)) {
         recordStoppedModelStep(error, messages);
         throw error;
       }
@@ -332,6 +332,10 @@ export async function generateModelStepResult({
     }
     throw error;
   }
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 function streamedTokenText(

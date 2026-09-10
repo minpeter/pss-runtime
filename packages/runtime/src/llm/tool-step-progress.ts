@@ -1,9 +1,11 @@
-import type { ModelMessage } from "ai";
+import type { JSONValue, ModelMessage } from "ai";
 import { StoppedToolRecoveryError } from "./stopped-model-step";
 
 interface Entry {
-  readonly input: unknown;
-  outcome?: { readonly value: string; readonly type: "text" | "error-text" };
+  input: unknown;
+  outcome?:
+    | { readonly value: string; readonly type: "text" | "error-text" }
+    | { readonly value: JSONValue; readonly type: "json" };
   settled: boolean;
   readonly toolCallId: string;
   readonly toolName: string;
@@ -28,18 +30,27 @@ export class ToolStepProgress {
     this.#recoveryError = error;
   }
 
+  updateInput(toolCallId: string, input: unknown): void {
+    const entry = this.#entries.find(
+      (candidate) => candidate.toolCallId === toolCallId
+    );
+    if (entry) {
+      entry.input = input;
+    }
+  }
+
   begin(input: unknown, toolCallId: string, toolName: string) {
     const entry: Entry = { input, toolCallId, toolName, settled: false };
     this.#entries.push(entry);
     return {
       complete: (output: unknown) => {
-        entry.outcome = {
-          type: "text",
-          value:
-            typeof output === "string"
-              ? output
-              : (JSON.stringify(output) ?? "undefined"),
-        };
+        entry.outcome =
+          typeof output === "string"
+            ? { type: "text", value: output }
+            : {
+                type: "json",
+                value: output === undefined ? null : (output as JSONValue),
+              };
         entry.settled = true;
       },
       failed: (error: unknown, recoverable: boolean) => {

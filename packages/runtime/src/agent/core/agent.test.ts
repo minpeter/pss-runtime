@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
-import { jsonSchema, tool } from "ai";
 import { describe, expect, it, vi } from "vitest";
 import {
   createMockLanguageModelV4,
   mockLanguageModelV4Text,
 } from "../../testing/mock-language-model-v4-test-utils";
+import { createNoopTool } from "../../testing/noop-tool-test-utils";
 import {
   Agent,
   type AgentInstrumentation,
@@ -13,22 +13,6 @@ import {
   createAgent,
 } from "./agent";
 import { threadStoreKey } from "./thread-entry";
-
-const createNoopTool = () =>
-  tool({
-    description: "No-op test tool.",
-    execute: () => ({}),
-    inputSchema: jsonSchema({
-      type: "object",
-      properties: {},
-      additionalProperties: false,
-    }),
-    outputSchema: jsonSchema({
-      type: "object",
-      properties: {},
-      additionalProperties: false,
-    }),
-  });
 
 const fakeModel = createMockLanguageModelV4([mockLanguageModelV4Text("DONE")]);
 const functionModel = () => Promise.resolve([]);

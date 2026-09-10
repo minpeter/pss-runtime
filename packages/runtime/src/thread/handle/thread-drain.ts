@@ -82,6 +82,11 @@ export async function runThreadInputDrainLoop({
       }
 
       const outcome = await processInput(preparation.item);
+      if (outcome === "start-failed") {
+        // Later callers still own pending work. No recovery authority was
+        // acquired, so retain their queue entries and event channels.
+        break;
+      }
       if (outcome === "blocked") {
         await parkQueuedInputs(inputQueue, execution, threadKey);
         break;
@@ -110,7 +115,7 @@ export async function runThreadInputDrainLoop({
     }
 
     const outcome = await processInput(item);
-    if (outcome === "blocked") {
+    if (outcome !== "processed") {
       break;
     }
     claimOrphanDurableInput = true;

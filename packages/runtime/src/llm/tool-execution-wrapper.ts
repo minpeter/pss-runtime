@@ -126,6 +126,8 @@ function wrapToolExecute(
           ? { ...checkpoint, input: executeInput }
           : checkpoint;
 
+      progress?.updateInput(toolCallId, executeInput);
+
       const output = await execute(executeInput, {
         ...options,
         attempt: checkpoint.attempt,
