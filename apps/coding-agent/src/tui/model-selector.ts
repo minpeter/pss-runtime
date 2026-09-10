@@ -9,13 +9,12 @@ import {
 } from "@earendil-works/pi-tui";
 import { ComposerInput } from "./bounded-input";
 import { composerHeightBudget } from "./composer-height";
+import { ACCENT_LIME, ACCENT_ORANGE } from "./palette";
 import { sanitizeTerminalText } from "./terminal-safety";
 
 const ANSI_RESET = "\x1b[0m";
 const ANSI_BOLD = "\x1b[1m";
 const ANSI_DIM = "\x1b[2m";
-const ANSI_CYAN = "\x1b[36m";
-const ANSI_GREEN = "\x1b[32m";
 const ANSI_GRAY = "\x1b[90m";
 
 const style = (prefix: string, text: string): string =>
@@ -50,7 +49,7 @@ class ModelRow implements Component {
   render(width: number): string[] {
     if (width <= 5) {
       const current = this.#current ? "✓" : "";
-      return [style(ANSI_CYAN, this.#selected ? "→" : current)];
+      return [style(ACCENT_ORANGE, this.#selected ? "→" : current)];
     }
     const prefix = this.#selected ? "→ " : "  ";
     const suffix = this.#current ? " ✓" : "";
@@ -62,8 +61,8 @@ class ModelRow implements Component {
     );
     const label = truncateToWidth(this.#id, labelWidth);
     const line = this.#selected
-      ? `${style(ANSI_CYAN, prefix)}${style(ANSI_CYAN, label)}${this.#current ? style(ANSI_GREEN, suffix) : ""}`
-      : `${prefix}${label}${this.#current ? style(ANSI_GREEN, suffix) : ""}`;
+      ? `${style(ACCENT_ORANGE, prefix)}${style(ACCENT_ORANGE, label)}${this.#current ? style(ACCENT_LIME, suffix) : ""}`
+      : `${prefix}${label}${this.#current ? style(ACCENT_LIME, suffix) : ""}`;
     return [truncateToWidth(` ${line}`, width)];
   }
 }

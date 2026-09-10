@@ -86,6 +86,10 @@ import { SessionSelectorComponent } from "./session-selector";
 import { TuiSessionMachine } from "./session-state";
 
 const BLOCK_BORDER = /[\u2502\u2500\u250C\u2510\u2514\u2518]/u;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI token under test.
+const LIME_SPINNER_FRAME = /\x1b\[38;5;118m[\u2800-\u28ff]\x1b\[0m/u;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI token under test.
+const INDIGO_RULE = /\x1b\[38;5;99m\u2500+\x1b\[0m/u;
 
 const gate = <T = void>() => {
   let resolve!: (value: T) => void;
@@ -285,7 +289,10 @@ describe.sequential("actual TUI transcript ownership", () => {
       },
     };
     const app = await fixture({
-      header: { title: "LOGO_SENTINEL", subtitle: "MODEL_A\n/CWD_SENTINEL" },
+      header: {
+        title: "LOGO_SENTINEL",
+        subtitle: "MODEL_A\n/CWD_SENTINEL",
+      },
       commands: [createModelCommand(models)],
       modelSelector: models,
     });
@@ -296,6 +303,9 @@ describe.sequential("actual TUI transcript ownership", () => {
       ).toBe(false);
       expect(chat().children).toHaveLength(0);
       const initial = rows(startup());
+      expect(initial.join("\n")).toContain(
+        "\x1b[1m\x1b[38;5;99mLOGO_SENTINEL\x1b[0m"
+      );
       await app.command("/model MODEL_B");
       expect(
         startup().children.some((child) => child instanceof ColdSnapshot)
@@ -541,6 +551,17 @@ describe.sequential("actual TUI transcript ownership", () => {
         expect(text.join("\n")).not.toMatch(BLOCK_BORDER);
       }
       expect(rows(block).join("\n")).toContain("\x1b[97m\x1b[1m");
+      expect(rows(block).join("\n")).toContain("\x1b[38;5;118mContinuing");
+      const userPlate = chat().children.find((component) =>
+        rows(component).some(
+          (line) => stripTerminalSequences(line).trim() === "hi"
+        )
+      );
+      expect(userPlate).toBeDefined();
+      for (const line of rows(userPlate as Component)) {
+        expect(line.startsWith("\x1b[48;5;54m\x1b[97m")).toBe(true);
+      }
+      expect(rows().join("\n")).toContain("\x1b[1m\x1b[31m× ");
       expect(users).toEqual(["hi"]);
     } finally {
       process.emit("SIGINT", "SIGINT");
@@ -568,7 +589,10 @@ describe.sequential("actual TUI transcript ownership", () => {
           checkpoint = outcome === "failure";
           yield await Promise.resolve(
             outcome === "failure"
-              ? { type: "turn-error" as const, message: "still failing" }
+              ? {
+                  type: "turn-error" as const,
+                  message: "still failing",
+                }
               : {
                   type: "assistant-output-delta" as const,
                   text: "CONTINUED_ANSWER",
@@ -691,7 +715,11 @@ describe.sequential("actual TUI transcript ownership", () => {
         prefix: "/",
         items: [{ value: "item", label: "item" }],
       }),
-      applyCompletion: () => ({ lines: ["item"], cursorLine: 0, cursorCol: 4 }),
+      applyCompletion: () => ({
+        lines: ["item"],
+        cursorLine: 0,
+        cursorCol: 4,
+      }),
     });
     try {
       await onRender(
@@ -998,7 +1026,10 @@ describe.sequential("actual TUI transcript ownership", () => {
         ).toHaveLength(1);
         const cold = prefix().slice(0, -1);
         contexts[0]?.notify("STALE_NOTICE");
-        await app.emit({ type: "assistant-output-delta", text: "LATER_TEXT" });
+        await app.emit({
+          type: "assistant-output-delta",
+          text: "LATER_TEXT",
+        });
         unchanged(cold);
         expect(plain().split("CURRENT_TEXT")).toHaveLength(2);
         expect(plain().split("LATER_TEXT")).toHaveLength(2);
@@ -1023,10 +1054,16 @@ describe.sequential("actual TUI transcript ownership", () => {
     });
     try {
       await app.start();
-      await app.emit({ type: "assistant-output-delta", text: "BEFORE_NOTICE" });
+      await app.emit({
+        type: "assistant-output-delta",
+        text: "BEFORE_NOTICE",
+      });
       contexts.at(-1)?.notify("NOTICE_ID");
       const first = rows();
-      await app.emit({ type: "assistant-output-delta", text: "AFTER_NOTICE" });
+      await app.emit({
+        type: "assistant-output-delta",
+        text: "AFTER_NOTICE",
+      });
       contexts.at(-1)?.notify("NOTICE_ID");
       expect(rows().slice(0, first.length)).toEqual(first);
       expect(plain().split("NOTICE_ID")).toHaveLength(3);
@@ -1087,7 +1124,10 @@ describe.sequential("actual TUI transcript ownership", () => {
       });
       try {
         await app.start();
-        await app.emit({ type: "assistant-output", text: "OLD_ANSWER" });
+        await app.emit({
+          type: "assistant-output",
+          text: "OLD_ANSWER",
+        });
         await app.finish();
         const before = prefix();
         const epoch = (chat() as TranscriptOwner).epoch;
@@ -1137,7 +1177,10 @@ describe.sequential("actual TUI transcript ownership", () => {
             description: "fixture",
             execute: ({ args }) => {
               models.switchModel(args[0]);
-              return { success: true, action: { type: "refresh-header" } };
+              return {
+                success: true,
+                action: { type: "refresh-header" },
+              };
             },
           },
         ],
@@ -1163,7 +1206,9 @@ describe.sequential("actual TUI transcript ownership", () => {
         let notice: Component | undefined;
         for (const id of ["MODEL_C", "MODEL_D"]) {
           await app.command(`/refresh ${id}`);
-          const expected = await shippedCommand.execute({ args: [id] });
+          const expected = await shippedCommand.execute({
+            args: [id],
+          });
           const hot = chat().children.filter(
             (child) => !(child instanceof ColdSnapshot)
           );
@@ -1215,7 +1260,10 @@ describe.sequential("actual TUI transcript ownership", () => {
             description: "fixture",
             execute: () => {
               header.subtitle = `${current}\n${cwd}\nSESSION_RENAMED`;
-              return { success: true, action: { type: "refresh-header" } };
+              return {
+                success: true,
+                action: { type: "refresh-header" },
+              };
             },
           },
         ],
@@ -1434,7 +1482,7 @@ describe.sequential("actual TUI transcript ownership", () => {
         );
         expect(headerRows()).toEqual(
           settled.map((line) =>
-            line.replace("\x1b[2mMODEL_B", "\x1b[47m\x1b[30mMODEL_B")
+            line.replace("\x1b[38;5;118mMODEL_B", "\x1b[47m\x1b[30mMODEL_B")
           )
         );
         vi.advanceTimersByTime(NOTICE_PULSE_MS);
@@ -1534,7 +1582,7 @@ describe.sequential("actual TUI transcript ownership", () => {
     }
     expect(vi.getTimerCount()).toBe(0);
     const final = rows(surface().children[0]);
-    expect(final.join("\n")).toContain("\x1b[2mMODEL_B\x1b[0m");
+    expect(final.join("\n")).toContain("\x1b[38;5;118mMODEL_B\x1b[0m");
     const render = vi.spyOn(surface(), "requestRender");
     vi.advanceTimersByTime(NOTICE_PULSE_MS);
     expect(rows(surface().children[0])).toEqual(final);
@@ -1571,7 +1619,10 @@ describe.sequential("actual TUI transcript ownership", () => {
         },
       };
       const app = await fixture({
-        header: { title: "LOGO_SENTINEL", subtitle: "MODEL_A\n/CWD" },
+        header: {
+          title: "LOGO_SENTINEL",
+          subtitle: "MODEL_A\n/CWD",
+        },
         modelSelector: models,
         replayHistoryOnStartup: route === "startup",
         commands: [
@@ -1623,7 +1674,10 @@ describe.sequential("actual TUI transcript ownership", () => {
         },
       };
       const app = await fixture({
-        header: { title: "LOGO_SENTINEL", subtitle: "MODEL_A\n/CWD_SENTINEL" },
+        header: {
+          title: "LOGO_SENTINEL",
+          subtitle: "MODEL_A\n/CWD_SENTINEL",
+        },
         modelSelector: models,
         commands: [
           createModelCommand(models),
@@ -1710,12 +1764,20 @@ describe.sequential("actual TUI transcript ownership", () => {
         activationFrozen.push(startup().children[0] instanceof ColdSnapshot);
         return Promise.resolve(
           replay === "nonempty"
-            ? [{ role: "user" as const, content: "REPLAY_USER_SENTINEL" }]
+            ? [
+                {
+                  role: "user" as const,
+                  content: "REPLAY_USER_SENTINEL",
+                },
+              ]
             : []
         );
       });
       const app = await fixture({
-        header: { title: "LOGO_SENTINEL", subtitle: "MODEL_A\n/CWD_SENTINEL" },
+        header: {
+          title: "LOGO_SENTINEL",
+          subtitle: "MODEL_A\n/CWD_SENTINEL",
+        },
         commands: [createModelCommand(models)],
         modelSelector: models,
         onExtensionUiReady: (createUi) => {
@@ -2095,7 +2157,12 @@ describe.sequential("actual TUI transcript ownership", () => {
             ui.notify("LOAD_NOTICE_ID");
             return result === "load"
               ? Promise.reject(new Error("LOAD_FAILURE_ID"))
-              : Promise.resolve([{ role: "assistant", content: "REPLAY_ID" }]);
+              : Promise.resolve([
+                  {
+                    role: "assistant",
+                    content: "REPLAY_ID",
+                  },
+                ]);
           },
         },
       });
@@ -2160,12 +2227,19 @@ describe.sequential("actual TUI transcript ownership", () => {
             description: "fixture",
             execute: async () => {
               if (method === "picker") {
-                return { success: true, action: { type: "select-session" } };
+                return {
+                  success: true,
+                  action: { type: "select-session" },
+                };
               }
               await switchSession();
               return {
                 success: true,
-                action: { type: "session", clear: true, reason: "resume" },
+                action: {
+                  type: "session",
+                  clear: true,
+                  reason: "resume",
+                },
                 message: "GENERIC_DUPLICATE_SENTINEL",
               };
             },
@@ -2177,7 +2251,10 @@ describe.sequential("actual TUI transcript ownership", () => {
           switchSession,
           loadCurrentHistory: async () => [
             { role: "user", content: "REPLAY_USER_SENTINEL" },
-            { role: "assistant", content: "REPLAY_ANSWER_SENTINEL" },
+            {
+              role: "assistant",
+              content: "REPLAY_ANSWER_SENTINEL",
+            },
           ],
         },
       });
@@ -2223,7 +2300,9 @@ describe.sequential("actual TUI transcript ownership", () => {
             `\x1b[97m\x1b[1m${target.name}`
           );
           expect(rendered.join("\n")).toContain("\x1b[38;5;245mMODEL_B");
-          expect(rendered.join("\n")).toContain("\x1b[36m");
+          expect(rendered.join("\n")).toContain(
+            "\x1b[38;5;118mResumed session"
+          );
           expect(rendered.join("\n")).not.toContain("\x1b[2m");
           expect(rendered.join("\n")).not.toContain("\x1b[30m");
           expect(rendered.every((line) => visibleWidth(line) === width)).toBe(
@@ -2276,7 +2355,10 @@ describe.sequential("actual TUI transcript ownership", () => {
     "renders a COLD resume information block for $name sessions",
     async ({ sessionName, key, label }) => {
       let currentKey = "old";
-      const header = { title: "LOGO", subtitle: "MODEL_B\n/workspace/project" };
+      const header = {
+        title: "LOGO",
+        subtitle: "MODEL_B\n/workspace/project",
+      };
       const app = await fixture({
         header,
         currentSession: () => ({ key: currentKey, name: sessionName }),
@@ -2287,7 +2369,11 @@ describe.sequential("actual TUI transcript ownership", () => {
             execute: () => {
               currentKey = key ?? "target#42";
               return {
-                action: { clear: true, reason: "resume", type: "session" },
+                action: {
+                  clear: true,
+                  reason: "resume",
+                  type: "session",
+                },
                 success: true,
               };
             },
@@ -2397,7 +2483,10 @@ describe.sequential("actual TUI transcript ownership", () => {
         const toolBlock = chat().children.at(-1);
         expect(toolBlock?.render(width)).toHaveLength(1);
         const cold = prefix();
-        await app.emit({ type: "assistant-output-delta", text: "AFTER" });
+        await app.emit({
+          type: "assistant-output-delta",
+          text: "AFTER",
+        });
         const rendered = rows(chat(), width).map(stripTerminalSequences);
         const assistantRow = rendered.findIndex((row) => row.includes("AFTER"));
         expect(rendered.slice(assistantRow - 2, assistantRow)).toEqual([
@@ -2405,7 +2494,10 @@ describe.sequential("actual TUI transcript ownership", () => {
           "",
         ]);
         const count = chat().children.length;
-        await app.emit({ type: "assistant-output-delta", text: " CONTINUED" });
+        await app.emit({
+          type: "assistant-output-delta",
+          text: " CONTINUED",
+        });
         expect(chat().children).toHaveLength(count);
         expect(rows(chat(), width).map(stripTerminalSequences)).toContainEqual(
           expect.stringContaining("AFTER CONTINUED")
@@ -2419,7 +2511,13 @@ describe.sequential("actual TUI transcript ownership", () => {
   );
 
   it.each([
-    ["populated", { type: "text", value: "OK - directory\npath: .\nENTRY" }],
+    [
+      "populated",
+      {
+        type: "text",
+        value: "OK - directory\npath: .\nENTRY",
+      },
+    ],
     ["error", { type: "error-text", value: "READ_FAILURE" }],
   ])(
     "separates %s tools from the next assistant block",
@@ -2441,7 +2539,10 @@ describe.sequential("actual TUI transcript ownership", () => {
         });
         const content = rows(chat().children.at(-1));
         const cold = prefix();
-        await app.emit({ type: "assistant-output-delta", text: "AFTER" });
+        await app.emit({
+          type: "assistant-output-delta",
+          text: "AFTER",
+        });
         const rendered = rows().map(stripTerminalSequences);
         const index = rendered.findIndex((row) => row.includes("AFTER"));
         expect(rendered.slice(index - 2, index)).toEqual([
@@ -2472,7 +2573,10 @@ describe.sequential("actual TUI transcript ownership", () => {
             type: "tool-result",
             toolCallId: "first",
             toolName: "read_file",
-            output: { type: "text", value: "OK - directory\npath: .\n" },
+            output: {
+              type: "text",
+              value: "OK - directory\npath: .\n",
+            },
           });
         }
         const before = chat().children.length;
@@ -2492,7 +2596,10 @@ describe.sequential("actual TUI transcript ownership", () => {
         } else if (next === "user") {
           await app.steer();
         } else if (next === "system") {
-          await app.emit({ type: "turn-error", error: "SYSTEM_FAILURE" });
+          await app.emit({
+            type: "turn-error",
+            error: "SYSTEM_FAILURE",
+          });
         } else {
           await app.emit({
             type: "assistant-output-delta",
@@ -2514,7 +2621,10 @@ describe.sequential("actual TUI transcript ownership", () => {
             type: "tool-result",
             toolCallId: "first",
             toolName: "read_file",
-            output: { type: "text", value: "OK - directory\npath: .\n" },
+            output: {
+              type: "text",
+              value: "OK - directory\npath: .\n",
+            },
           });
           const continuation = chat().children.at(-1);
           expect(
@@ -2636,7 +2746,10 @@ describe.sequential("actual TUI transcript ownership", () => {
     });
     try {
       await app.start();
-      await app.emit({ type: "assistant-output-delta", text: "FIRST_ANSWER" });
+      await app.emit({
+        type: "assistant-output-delta",
+        text: "FIRST_ANSWER",
+      });
       await app.emit({ type: "assistant-output", text: "FIRST_ANSWER" });
       const cold = prefix();
       late();
@@ -2700,7 +2813,10 @@ describe.sequential("actual TUI transcript ownership", () => {
           output: { type: "text", value: "TOOL_PREFIX" },
         });
         const cold = prefix();
-        await app.emit({ type: "assistant-output-delta", text: answer });
+        await app.emit({
+          type: "assistant-output-delta",
+          text: answer,
+        });
         const active = chat().children.at(-1);
         const live = rows(active, width);
         expect(live.length).toBeGreaterThan(8);
@@ -2751,13 +2867,19 @@ describe.sequential("actual TUI transcript ownership", () => {
     try {
       await app.start();
       if (mode === "late-reasoning") {
-        await app.emit({ type: "assistant-reasoning-delta", text: reasoning });
+        await app.emit({
+          type: "assistant-reasoning-delta",
+          text: reasoning,
+        });
       }
       if (mode !== "fallback") {
         await app.emit({ type: "assistant-output-delta", text });
       }
       if (mode === "late-reasoning") {
-        await app.emit({ type: "assistant-reasoning", text: reasoning });
+        await app.emit({
+          type: "assistant-reasoning",
+          text: reasoning,
+        });
         expect(chat().children.at(-1)).not.toBeInstanceOf(ColdSnapshot);
       }
       const streamed = rows();
@@ -2776,8 +2898,14 @@ describe.sequential("actual TUI transcript ownership", () => {
         await app.steer();
         const cold = prefix();
         const continuation = text.replaceAll("TEXT", "NEXT");
-        await app.emit({ type: "assistant-output-delta", text: continuation });
-        await app.emit({ type: "assistant-output", text: text + continuation });
+        await app.emit({
+          type: "assistant-output-delta",
+          text: continuation,
+        });
+        await app.emit({
+          type: "assistant-output",
+          text: text + continuation,
+        });
         unchanged(cold);
         expect(plain().split("TEXT_00")).toHaveLength(2);
         for (const marker of lines) {
@@ -2810,7 +2938,10 @@ describe.sequential("actual TUI transcript ownership", () => {
             output: { type: "text", value: "RESULT_ID" },
           });
           await app.emit({ type: "step-start" });
-          await app.emit({ type: "assistant-output", text: "FINAL_ID" });
+          await app.emit({
+            type: "assistant-output",
+            text: "FINAL_ID",
+          });
           unchanged(cold);
           expect(plain().split("TEXT_00")).toHaveLength(2);
         }
@@ -2848,7 +2979,10 @@ describe.sequential("actual TUI transcript ownership", () => {
     });
     try {
       await app.start();
-      await app.emit({ type: "assistant-output-delta", text: "SOURCE_ID" });
+      await app.emit({
+        type: "assistant-output-delta",
+        text: "SOURCE_ID",
+      });
       release.resolve();
       await bounded(ready.promise);
       const live = rows(chat().children.at(-1));
@@ -2882,7 +3016,10 @@ describe.sequential("actual TUI transcript ownership", () => {
     );
     try {
       await app.start();
-      await app.emit({ type: "assistant-reasoning-delta", text: reasoning });
+      await app.emit({
+        type: "assistant-reasoning-delta",
+        text: reasoning,
+      });
       const shown = rows(chat().children[chat().children.length - 1]);
       expect(shown).toHaveLength(8);
       await app.emit({ type: "assistant-reasoning", text: reasoning });
@@ -2906,8 +3043,11 @@ describe.sequential("actual TUI transcript ownership", () => {
   });
 
   it("keeps exact canonical arguments across interleaved A/B/C continuations and isolates retained tool setters", async () => {
-    const calls: { input: unknown; output: unknown; view: BaseToolCallView }[] =
-      [];
+    const calls: {
+      input: unknown;
+      output: unknown;
+      view: BaseToolCallView;
+    }[] = [];
     const app = await fixture({
       toolRenderers: {
         fixture: (view, input, output) => {
@@ -2995,10 +3135,16 @@ describe.sequential("actual TUI transcript ownership", () => {
       try {
         await app.start();
         if (ending !== "empty") {
-          await app.emit({ type: "assistant-output-delta", text: "PARTIAL" });
+          await app.emit({
+            type: "assistant-output-delta",
+            text: "PARTIAL",
+          });
         }
         if (ending === "error") {
-          await app.emit({ type: "turn-error", message: "ERROR_SENTINEL" });
+          await app.emit({
+            type: "turn-error",
+            message: "ERROR_SENTINEL",
+          });
         }
         if (ending === "abort") {
           await app.emit({ type: "turn-abort" });
@@ -3049,12 +3195,20 @@ describe.sequential("actual TUI transcript ownership", () => {
         loadCurrentHistory: () =>
           fail
             ? Promise.reject(new Error("LOAD_FAILED"))
-            : Promise.resolve([{ role: "assistant", content: "REPLAY" }]),
+            : Promise.resolve([
+                {
+                  role: "assistant",
+                  content: "REPLAY",
+                },
+              ]),
       },
     });
     try {
       await app.start();
-      await app.emit({ type: "assistant-output-delta", text: "OLD_ANSWER" });
+      await app.emit({
+        type: "assistant-output-delta",
+        text: "OLD_ANSWER",
+      });
       await app.finish();
       const before = prefix();
       const epoch = (chat() as TranscriptOwner).epoch;
@@ -3109,7 +3263,10 @@ describe.sequential("actual TUI transcript ownership", () => {
     });
     try {
       await app.start();
-      await app.emit({ type: "assistant-output-delta", text: "FALLBACK" });
+      await app.emit({
+        type: "assistant-output-delta",
+        text: "FALLBACK",
+      });
       complete();
       expect(plain()).toContain("READY_ENRICHMENT");
       await app.finish();
@@ -3150,7 +3307,10 @@ describe.sequential("actual TUI transcript ownership", () => {
           text: "GRAPHIC_FALLBACK",
         });
         ready = readyAtSeal;
-        await app.emit({ type: "assistant-output", text: "GRAPHIC_FALLBACK" });
+        await app.emit({
+          type: "assistant-output",
+          text: "GRAPHIC_FALLBACK",
+        });
         const cold = prefix();
         const count = renderCount;
         ready = true;
@@ -3261,7 +3421,10 @@ describe.sequential("actual TUI transcript ownership", () => {
     const app = await fixture();
     try {
       await app.start();
-      await app.emit({ type: "assistant-reasoning-delta", text: "REASONING" });
+      await app.emit({
+        type: "assistant-reasoning-delta",
+        text: "REASONING",
+      });
       const composer = surface().children[3] as Container;
       const footer = composer.children[1] as FooterStatusBar;
       const message = footer.getForegroundMessage();
@@ -3303,7 +3466,10 @@ describe.sequential("actual TUI transcript ownership", () => {
     });
     try {
       await app.start();
-      await app.emit({ type: "assistant-output-delta", text: "OLD_STREAM" });
+      await app.emit({
+        type: "assistant-output-delta",
+        text: "OLD_STREAM",
+      });
       const epoch = (chat() as TranscriptOwner).epoch;
       await onRender(
         () => plain().includes("RESET_DONE"),
@@ -3319,7 +3485,10 @@ describe.sequential("actual TUI transcript ownership", () => {
           ended.resolve();
         }
       );
-      await app.emit({ type: "assistant-output-delta", text: "STALE_DELTA" });
+      await app.emit({
+        type: "assistant-output-delta",
+        text: "STALE_DELTA",
+      });
       expect(app.returned).toHaveBeenCalledTimes(1);
       await bounded(ended.promise);
       expect(rows()).toEqual(afterReset);
@@ -3411,13 +3580,20 @@ describe.sequential("actual TUI transcript ownership", () => {
           toolName: "fixture",
           input: {},
         });
-        await app.emit({ type: "assistant-output", text: "LATER_ANSWER" });
+        await app.emit({
+          type: "assistant-output",
+          text: "LATER_ANSWER",
+        });
         const cold = prefix();
         await app.emit({
           type: "tool-result",
           toolCallId: "A",
           toolName: "fixture",
-          output: { type, value: "ERROR_RESULT", reason: "DENIED_RESULT" },
+          output: {
+            type,
+            value: "ERROR_RESULT",
+            reason: "DENIED_RESULT",
+          },
         });
         unchanged(cold);
         expect(chat().children.every((c) => c instanceof ColdSnapshot)).toBe(
@@ -3446,7 +3622,10 @@ describe.sequential("actual TUI transcript ownership", () => {
       await app.finish();
       const cold = prefix();
       const overlay = vi.spyOn(surface(), "showOverlay");
-      const one = ui.input({ label: "FIRST_PROMPT", initialValue: "draft" });
+      const one = ui.input({
+        label: "FIRST_PROMPT",
+        initialValue: "draft",
+      });
       const two = secondUi.select({
         label: "SECOND_PROMPT",
         options: [
@@ -3479,6 +3658,40 @@ describe.sequential("actual TUI transcript ownership", () => {
     } finally {
       firstHost.abort();
       secondHost.abort();
+      await app.close();
+    }
+  });
+
+  it("paints the Unit-01 palette on the user plate, assistant markdown, and spinner", async () => {
+    const app = await fixture();
+    try {
+      await app.start();
+      const footer = surface().children.at(-1) as Container;
+      // Live status: lime braille frame in the one-row footer.
+      expect(rows(footer).join("\n")).toMatch(LIME_SPINNER_FRAME);
+      await app.emit({
+        type: "assistant-output-delta",
+        text: "# Sync\n\nInline `code` here.\n\n- bullet\n\n---\n",
+      });
+      await app.finish();
+      const text = rows().join("\n");
+      const userPlate = chat().children.find((component) =>
+        rows(component).some(
+          (line) => stripTerminalSequences(line).trim() === "USER"
+        )
+      );
+      expect(userPlate).toBeDefined();
+      for (const line of rows(userPlate as Component)) {
+        expect(line.startsWith("\x1b[48;5;54m\x1b[97m")).toBe(true);
+        expect(visibleWidth(line)).toBe(100);
+      }
+      expect(text).toContain("\x1b[1m\x1b[38;5;118m");
+      expect(text).toContain("\x1b[38;5;118mcode\x1b[0m");
+      expect(text).toContain("\x1b[38;5;99m- \x1b[0m");
+      expect(text).toMatch(INDIGO_RULE);
+      expect(text).not.toContain("\x1b[36m");
+      expect(text).not.toContain("\x1b[96m");
+    } finally {
       await app.close();
     }
   });

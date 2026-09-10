@@ -4,9 +4,9 @@ import {
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 import { renderBoundedText } from "./bounded-text";
+import { ACCENT_LIME } from "./palette";
 
 const ANSI_RESET = "\x1b[0m";
-const ANSI_DIM = "\x1b[2m";
 const ANSI_BG_WHITE = "\x1b[47m";
 const ANSI_BLACK = "\x1b[30m";
 
@@ -81,11 +81,11 @@ export class StartupHeaderView implements Component {
   }
 
   captureCold(): ColdStartupHeader {
-    // Pulse raw model text so inherited dim styling cannot leak into the
-    // white/black feedback frame; restore the normal dim model afterward.
+    // Pulse raw model text so inherited accent styling cannot leak into the
+    // white/black feedback frame; restore the normal lime model afterward.
     const model = this.#pulsing
       ? `${ANSI_BG_WHITE}${ANSI_BLACK}${this.#model}${ANSI_RESET}`
-      : `${ANSI_DIM}${this.#model}${ANSI_RESET}`;
+      : `${ACCENT_LIME}${this.#model}${ANSI_RESET}`;
     return {
       kind: "startup-header",
       title: this.title,
