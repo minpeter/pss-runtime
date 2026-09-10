@@ -54,7 +54,7 @@
     "verify:release": "node scripts/verify-release-artifacts.mjs && pnpm verify:package-apis"
   },
   "devDependencies": {
-    "@ai-sdk/openai-compatible": "3.0.23",
+    "@ai-sdk/openai-compatible": "3.0.44",
     "@babel/core": "8.0.1",
     "@babel/parser": "8.0.4",
     "@biomejs/biome": "2.5.5",
