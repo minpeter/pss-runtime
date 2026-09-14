@@ -1,18 +1,19 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { CI_WORKFLOW_PATH } from "./ci-fast-gate.mjs";
+import {
+  ciWorkflow,
+  DEFERRED_OK,
+  githubExpression,
+  releaseWorkflow,
+} from "./ci-release-gating.fixture.mjs";
 import {
   deferredBranchProtectionProblems,
-  RELEASE_WORKFLOW,
   releaseSequencingProblems,
   securityVisibilityProblems,
 } from "./ci-release-gating.mjs";
 import { DEFERRED_DOC } from "./governance-readme.mjs";
 import { readWorkflows } from "./report-hygiene.mjs";
-
-const githubExpression = (name) => `\${{ ${name} }}`;
-const ISOLATED_CI_GROUP = `ci-${githubExpression("github.workflow")}-${githubExpression("github.ref")}`;
 
 // Same-SHA release gating and security-visibility invariants
 // (VAL-CROSS-005/007): the release publish job needs the complete reusable
@@ -22,32 +23,6 @@ const ISOLATED_CI_GROUP = `ci-${githubExpression("github.workflow")}-${githubExp
 // scan failures stay visible without any blocking claim, and the clean
 // ci.yml path never publishes. Static over committed files and pure string
 // fixtures only.
-
-function releaseWorkflow({
-  cancelInProgress = false,
-  needs = "validate",
-  publishIf,
-  publishPermissions = "contents: write\n      pull-requests: write\n      id-token: write",
-  publishRun = "pnpm tegami ci",
-  validationPermissions = "contents: read",
-  validationUses = "./.github/workflows/ci.yml",
-} = {}) {
-  const condition = publishIf ? `    if: ${publishIf}\n` : "";
-  return {
-    path: RELEASE_WORKFLOW,
-    source: `name: Release\non:\n  push:\n    branches: [main]\nconcurrency:\n  group: release-main\n  cancel-in-progress: ${cancelInProgress}\npermissions: {}\njobs:\n  validate:\n    uses: ${validationUses}\n    permissions:\n      ${validationPermissions}\n  publish:\n    needs: ${needs}\n${condition}    permissions:\n      ${publishPermissions}\n    steps:\n      - run: pnpm build\n      - run: pnpm verify:release\n      - run: ${publishRun}\n`,
-  };
-}
-
-function ciWorkflow(extraRuns = [], concurrencyGroup = ISOLATED_CI_GROUP) {
-  const steps = ["pnpm test", ...extraRuns]
-    .map((run) => `      - name: step\n        run: ${run}`)
-    .join("\n");
-  return {
-    path: CI_WORKFLOW_PATH,
-    source: `name: CI\non: [push, pull_request, workflow_call]\nconcurrency:\n  group: ${concurrencyGroup}\n  cancel-in-progress: true\njobs:\n  checks:\n    steps:\n${steps}\n`,
-  };
-}
 
 function securityWorkflow(path, triggers, extraJobYaml = "") {
   const list = triggers.map((trigger) => `"${trigger}"`).join(", ");
@@ -68,17 +43,6 @@ function baseSet() {
     ]),
   ];
 }
-
-const DEFERRED_OK = [
-  "## List",
-  "",
-  "### 1. Branch-protection enforcement",
-  "",
-  "Status: deferred. External-only; cannot be verified from repository files",
-  "or local commands.",
-  "",
-  "## Other",
-].join("\n");
 
 describe("same-SHA reusable-workflow release gating (VAL-CROSS-005)", () => {
   it("shipped workflows satisfy the gating and visibility invariants", () => {
@@ -144,12 +108,15 @@ describe("same-SHA reusable-workflow release gating (VAL-CROSS-005)", () => {
     expect(problems.some((p) => p.includes("cancel stale runs"))).toBe(true);
   });
 
-  it("fails when a status override can publish after failed validation", () => {
-    const problems = releaseSequencingProblems([
-      releaseWorkflow({ publishIf: githubExpression("always()") }),
-    ]);
-    expect(problems.some((p) => p.includes("status override"))).toBe(true);
-  });
+  it.each(["always()", "!success()", "success() || true"])(
+    "fails when publish overrides successful-needs with %s",
+    (condition) => {
+      const problems = releaseSequencingProblems([
+        releaseWorkflow({ publishIf: githubExpression(condition) }),
+      ]);
+      expect(problems.some((p) => p.includes("successful-needs"))).toBe(true);
+    }
+  );
 
   it("fails when reusable validation receives a write permission", () => {
     const problems = releaseSequencingProblems([
@@ -158,6 +125,16 @@ describe("same-SHA reusable-workflow release gating (VAL-CROSS-005)", () => {
       }),
     ]);
     expect(problems.some((p) => p.includes("must not have write"))).toBe(true);
+  });
+
+  it("fails when publish receives a permission outside its allowlist", () => {
+    const problems = releaseSequencingProblems([
+      releaseWorkflow({
+        publishPermissions:
+          "contents: write\n      pull-requests: write\n      id-token: write\n      actions: write",
+      }),
+    ]);
+    expect(problems.some((p) => p.includes("allowlist"))).toBe(true);
   });
 
   it.each([
@@ -171,6 +148,28 @@ describe("same-SHA reusable-workflow release gating (VAL-CROSS-005)", () => {
     );
     const problems = releaseSequencingProblems([workflow]);
     expect(problems.some((p) => p.includes(error))).toBe(true);
+  });
+
+  it.each(["if: false", "continue-on-error: true"])(
+    "fails when an artifact gate adds %s",
+    (policy) => {
+      const workflow = releaseWorkflow();
+      workflow.source = workflow.source.replace(
+        "      - run: pnpm build",
+        `      - run: pnpm build\n        ${policy}`
+      );
+      const problems = releaseSequencingProblems([workflow]);
+      expect(problems.some((p) => p.includes("does not build"))).toBe(true);
+    }
+  );
+
+  it("fails when release concurrency varies by commit", () => {
+    const problems = releaseSequencingProblems([
+      releaseWorkflow({
+        concurrencyGroup: githubExpression("github.sha"),
+      }),
+    ]);
+    expect(problems.some((p) => p.includes("stable group"))).toBe(true);
   });
 
   it("fails when release.yml has no publish step", () => {

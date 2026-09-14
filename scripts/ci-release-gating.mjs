@@ -16,6 +16,7 @@
 //                                    protection with a deferred status.
 
 import { CI_WORKFLOW_PATH } from "./ci-fast-gate.mjs";
+import { publishJobProblems } from "./ci-publish-policy.mjs";
 import { triggerSet } from "./flaky-ci.mjs";
 import { itemSections } from "./governance-deferred.mjs";
 import { parseWorkflowDocs } from "./workflow-docs.mjs";
@@ -29,56 +30,13 @@ const SECURITY_WORKFLOW_FILES = [
 
 const PUBLISH_STEP = /(^|\s)pnpm\s+tegami\s+ci(\s|$)/;
 const PUBLISH_ANYWHERE = /\btegami\s+ci\b|\bnpm\s+publish\b|\bpnpm\s+publish\b/;
-const BUILD_STEP = /^\s*pnpm\s+build\s*$/;
-const VERIFY_STEP = /^\s*pnpm\s+verify:release\s*$/;
-const STATUS_OVERRIDE = /\b(?:always|failure|cancelled)\s*\(/;
 const BRANCH_PROTECTION = /branch[- ]protection/i;
 const DEFERRED_STATUS = /status:\s*deferred/i;
 
 const VALIDATION_WORKFLOW = "./.github/workflows/ci.yml";
 const githubExpression = (name) => `\${{ ${name} }}`;
 const ISOLATED_CI_GROUP = `ci-${githubExpression("github.workflow")}-${githubExpression("github.ref")}`;
-const WRITE_PERMISSIONS = ["contents", "pull-requests", "id-token"];
-
-function needsJob(job, dependency) {
-  return [job?.needs ?? []].flat().map(String).includes(dependency);
-}
-
-function publishJobProblems(jobId, job, validationIds, publishIndex) {
-  const problems = [];
-  if (!validationIds.some((id) => needsJob(job, id))) {
-    problems.push(
-      `${RELEASE_WORKFLOW} job "${jobId}" publishes without needing the complete validation job`
-    );
-  }
-  const permissions = job?.permissions ?? {};
-  for (const permission of WRITE_PERMISSIONS) {
-    if (permissions[permission] !== "write") {
-      problems.push(
-        `${RELEASE_WORKFLOW} publish job "${jobId}" lacks ${permission}: write`
-      );
-    }
-  }
-  if (STATUS_OVERRIDE.test(String(job?.if ?? ""))) {
-    problems.push(
-      `${RELEASE_WORKFLOW} publish job "${jobId}" uses a status override that can bypass successful validation`
-    );
-  }
-  const priorRuns = (job?.steps ?? [])
-    .slice(0, publishIndex)
-    .map((step) => String(step?.run ?? ""));
-  if (!priorRuns.some((run) => BUILD_STEP.test(run))) {
-    problems.push(
-      `${RELEASE_WORKFLOW} publish job "${jobId}" does not build artifacts on its fresh runner before publishing`
-    );
-  }
-  if (!priorRuns.some((run) => VERIFY_STEP.test(run))) {
-    problems.push(
-      `${RELEASE_WORKFLOW} publish job "${jobId}" does not verify fresh-runner artifacts before publishing`
-    );
-  }
-  return problems;
-}
+const RELEASE_GROUP = `${githubExpression("github.workflow")}-${githubExpression("github.ref")}`;
 
 function permissionIsolationProblems(jobs, validationIds) {
   const problems = [];
@@ -132,7 +90,13 @@ function publishSequencingProblems(docs, problems) {
     }
     publishSeen = true;
     problems.push(
-      ...publishJobProblems(jobId, job, validationIds, publishIndex)
+      ...publishJobProblems({
+        jobId,
+        job,
+        validationIds,
+        publishIndex,
+        workflowPath: RELEASE_WORKFLOW,
+      })
     );
   }
   if (!publishSeen) {
@@ -142,6 +106,11 @@ function publishSequencingProblems(docs, problems) {
   if (release.doc?.concurrency?.["cancel-in-progress"] !== false) {
     problems.push(
       `${RELEASE_WORKFLOW} must not cancel an in-flight release run`
+    );
+  }
+  if (release.doc?.concurrency?.group !== RELEASE_GROUP) {
+    problems.push(
+      `${RELEASE_WORKFLOW} must serialize release runs in one stable group per ref`
     );
   }
 }
