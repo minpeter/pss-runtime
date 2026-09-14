@@ -49,7 +49,7 @@ describe("release workflow", () => {
       "pnpm verify:package-apis"
     );
     expect(packageJson.scripts["verify:package-apis"]).toBe(
-      "publint packages/runtime && publint apps/coding-agent && publint extensions/latex && publint extensions/mermaid && publint extensions/web && node scripts/packed-consumer-smoke.mjs"
+      "publint packages/runtime && publint apps/coding-agent && publint extensions/latex && publint extensions/mermaid && publint extensions/web && attw --pack extensions/latex --profile esm-only && attw --pack extensions/mermaid --profile esm-only && attw --pack extensions/web --profile esm-only && node scripts/packed-consumer-smoke.mjs"
     );
     expect(workflow).not.toContain("Verify coding-agent dependency resolution");
     expect(workflow).not.toContain("NPM_CONFIG_PROVENANCE");

@@ -63,7 +63,7 @@ describe("jscpd: duplicate-code configuration", () => {
   });
 
   it("fails when a required generated-path exclusion is removed (VAL-SEC-003)", () => {
-    for (const token of ["dist", "CHANGELOG.md"]) {
+    for (const token of ["dist", "CHANGELOG.md", "LICENSE.md"]) {
       const mutated = structuredClone(config);
       mutated.ignore = mutated.ignore.filter((p) => !p.includes(token));
       expect(ignoreCoverageProblems(mutated).join("\n")).toContain(token);
