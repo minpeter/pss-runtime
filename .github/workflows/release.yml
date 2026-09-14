@@ -47,6 +47,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Validation runs on a separate runner, so recreate and recheck the
+      # package artifacts in this runner before Tegami can publish them.
+      - name: Build release artifacts
+        run: pnpm build
+
+      - name: Verify release artifacts
+        run: pnpm verify:release
+
       - name: Version or publish packages
         run: pnpm tegami ci
         env:

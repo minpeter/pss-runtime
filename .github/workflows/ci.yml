@@ -9,9 +9,10 @@ on:
       - main
 
 concurrency:
-  # Keep the reusable call's group distinct from release.yml's parent group;
-  # matching groups can cancel the caller when cancel-in-progress is true.
-  group: ci-${{ github.ref }}
+  # github.workflow is CI for standalone runs and Release for reusable calls.
+  # Keep those runs isolated so either can cancel stale work without canceling
+  # the release validation for the same ref.
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:

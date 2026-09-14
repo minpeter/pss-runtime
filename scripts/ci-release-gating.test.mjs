@@ -11,6 +11,9 @@ import {
 import { DEFERRED_DOC } from "./governance-readme.mjs";
 import { readWorkflows } from "./report-hygiene.mjs";
 
+const githubExpression = (name) => `\${{ ${name} }}`;
+const ISOLATED_CI_GROUP = `ci-${githubExpression("github.workflow")}-${githubExpression("github.ref")}`;
+
 // Same-SHA release gating and security-visibility invariants
 // (VAL-CROSS-005/007): the release publish job needs the complete reusable
 // ci.yml workflow, owns the only write permissions, release runs serialize,
@@ -23,23 +26,26 @@ import { readWorkflows } from "./report-hygiene.mjs";
 function releaseWorkflow({
   cancelInProgress = false,
   needs = "validate",
+  publishIf,
   publishPermissions = "contents: write\n      pull-requests: write\n      id-token: write",
   publishRun = "pnpm tegami ci",
+  validationPermissions = "contents: read",
   validationUses = "./.github/workflows/ci.yml",
 } = {}) {
+  const condition = publishIf ? `    if: ${publishIf}\n` : "";
   return {
     path: RELEASE_WORKFLOW,
-    source: `name: Release\non:\n  push:\n    branches: [main]\nconcurrency:\n  group: release-main\n  cancel-in-progress: ${cancelInProgress}\npermissions: {}\njobs:\n  validate:\n    uses: ${validationUses}\n    permissions:\n      contents: read\n  publish:\n    needs: ${needs}\n    permissions:\n      ${publishPermissions}\n    steps:\n      - run: ${publishRun}\n`,
+    source: `name: Release\non:\n  push:\n    branches: [main]\nconcurrency:\n  group: release-main\n  cancel-in-progress: ${cancelInProgress}\npermissions: {}\njobs:\n  validate:\n    uses: ${validationUses}\n    permissions:\n      ${validationPermissions}\n  publish:\n    needs: ${needs}\n${condition}    permissions:\n      ${publishPermissions}\n    steps:\n      - run: pnpm build\n      - run: pnpm verify:release\n      - run: ${publishRun}\n`,
   };
 }
 
-function ciWorkflow(extraRuns = []) {
+function ciWorkflow(extraRuns = [], concurrencyGroup = ISOLATED_CI_GROUP) {
   const steps = ["pnpm test", ...extraRuns]
     .map((run) => `      - name: step\n        run: ${run}`)
     .join("\n");
   return {
     path: CI_WORKFLOW_PATH,
-    source: `name: CI\non: [push, pull_request]\njobs:\n  checks:\n    steps:\n${steps}\n`,
+    source: `name: CI\non: [push, pull_request, workflow_call]\nconcurrency:\n  group: ${concurrencyGroup}\n  cancel-in-progress: true\njobs:\n  checks:\n    steps:\n${steps}\n`,
   };
 }
 
@@ -118,6 +124,53 @@ describe("same-SHA reusable-workflow release gating (VAL-CROSS-005)", () => {
       releaseWorkflow({ cancelInProgress: true }),
     ]);
     expect(problems.some((p) => p.includes("must not cancel"))).toBe(true);
+  });
+
+  it("fails when standalone CI and reusable release validation collide", () => {
+    const problems = releaseSequencingProblems([
+      releaseWorkflow(),
+      ciWorkflow([], `ci-${githubExpression("github.ref")}`),
+    ]);
+    expect(problems.some((p) => p.includes("github.workflow"))).toBe(true);
+  });
+
+  it("fails when isolated CI groups stop canceling stale runs", () => {
+    const workflow = ciWorkflow();
+    workflow.source = workflow.source.replace(
+      "cancel-in-progress: true",
+      "cancel-in-progress: false"
+    );
+    const problems = releaseSequencingProblems([releaseWorkflow(), workflow]);
+    expect(problems.some((p) => p.includes("cancel stale runs"))).toBe(true);
+  });
+
+  it("fails when a status override can publish after failed validation", () => {
+    const problems = releaseSequencingProblems([
+      releaseWorkflow({ publishIf: githubExpression("always()") }),
+    ]);
+    expect(problems.some((p) => p.includes("status override"))).toBe(true);
+  });
+
+  it("fails when reusable validation receives a write permission", () => {
+    const problems = releaseSequencingProblems([
+      releaseWorkflow({
+        validationPermissions: "contents: read\n      id-token: write",
+      }),
+    ]);
+    expect(problems.some((p) => p.includes("must not have write"))).toBe(true);
+  });
+
+  it.each([
+    ["build", "does not build"],
+    ["verify:release", "does not verify"],
+  ])("fails when fresh-runner artifacts omit %s", (command, error) => {
+    const workflow = releaseWorkflow();
+    workflow.source = workflow.source.replace(
+      `      - run: pnpm ${command}\n`,
+      ""
+    );
+    const problems = releaseSequencingProblems([workflow]);
+    expect(problems.some((p) => p.includes(error))).toBe(true);
   });
 
   it("fails when release.yml has no publish step", () => {

@@ -29,17 +29,22 @@ const SECURITY_WORKFLOW_FILES = [
 
 const PUBLISH_STEP = /(^|\s)pnpm\s+tegami\s+ci(\s|$)/;
 const PUBLISH_ANYWHERE = /\btegami\s+ci\b|\bnpm\s+publish\b|\bpnpm\s+publish\b/;
+const BUILD_STEP = /^\s*pnpm\s+build\s*$/;
+const VERIFY_STEP = /^\s*pnpm\s+verify:release\s*$/;
+const STATUS_OVERRIDE = /\b(?:always|failure|cancelled)\s*\(/;
 const BRANCH_PROTECTION = /branch[- ]protection/i;
 const DEFERRED_STATUS = /status:\s*deferred/i;
 
 const VALIDATION_WORKFLOW = "./.github/workflows/ci.yml";
+const githubExpression = (name) => `\${{ ${name} }}`;
+const ISOLATED_CI_GROUP = `ci-${githubExpression("github.workflow")}-${githubExpression("github.ref")}`;
 const WRITE_PERMISSIONS = ["contents", "pull-requests", "id-token"];
 
 function needsJob(job, dependency) {
   return [job?.needs ?? []].flat().map(String).includes(dependency);
 }
 
-function publishJobProblems(jobId, job, validationIds) {
+function publishJobProblems(jobId, job, validationIds, publishIndex) {
   const problems = [];
   if (!validationIds.some((id) => needsJob(job, id))) {
     problems.push(
@@ -54,6 +59,24 @@ function publishJobProblems(jobId, job, validationIds) {
       );
     }
   }
+  if (STATUS_OVERRIDE.test(String(job?.if ?? ""))) {
+    problems.push(
+      `${RELEASE_WORKFLOW} publish job "${jobId}" uses a status override that can bypass successful validation`
+    );
+  }
+  const priorRuns = (job?.steps ?? [])
+    .slice(0, publishIndex)
+    .map((step) => String(step?.run ?? ""));
+  if (!priorRuns.some((run) => BUILD_STEP.test(run))) {
+    problems.push(
+      `${RELEASE_WORKFLOW} publish job "${jobId}" does not build artifacts on its fresh runner before publishing`
+    );
+  }
+  if (!priorRuns.some((run) => VERIFY_STEP.test(run))) {
+    problems.push(
+      `${RELEASE_WORKFLOW} publish job "${jobId}" does not verify fresh-runner artifacts before publishing`
+    );
+  }
   return problems;
 }
 
@@ -64,6 +87,11 @@ function permissionIsolationProblems(jobs, validationIds) {
       if (job?.permissions?.contents !== "read") {
         problems.push(
           `${RELEASE_WORKFLOW} validation job must use contents: read`
+        );
+      }
+      if (Object.values(job?.permissions ?? {}).includes("write")) {
+        problems.push(
+          `${RELEASE_WORKFLOW} validation job must not have write permission`
         );
       }
     } else if (
@@ -103,7 +131,9 @@ function publishSequencingProblems(docs, problems) {
       continue;
     }
     publishSeen = true;
-    problems.push(...publishJobProblems(jobId, job, validationIds));
+    problems.push(
+      ...publishJobProblems(jobId, job, validationIds, publishIndex)
+    );
   }
   if (!publishSeen) {
     problems.push(`${RELEASE_WORKFLOW} has no publish step (pnpm tegami ci)`);
@@ -112,6 +142,23 @@ function publishSequencingProblems(docs, problems) {
   if (release.doc?.concurrency?.["cancel-in-progress"] !== false) {
     problems.push(
       `${RELEASE_WORKFLOW} must not cancel an in-flight release run`
+    );
+  }
+}
+
+function reusableConcurrencyProblems(docs, problems) {
+  const ci = docs.find(({ path }) => path === CI_WORKFLOW_PATH);
+  if (!ci) {
+    return;
+  }
+  if (ci.doc?.concurrency?.group !== ISOLATED_CI_GROUP) {
+    problems.push(
+      `${CI_WORKFLOW_PATH} concurrency must include github.workflow so standalone CI cannot cancel release validation on the same ref`
+    );
+  }
+  if (ci.doc?.concurrency?.["cancel-in-progress"] !== true) {
+    problems.push(
+      `${CI_WORKFLOW_PATH} must cancel stale runs within each isolated caller group`
     );
   }
 }
@@ -134,6 +181,7 @@ export function releaseSequencingProblems(workflows) {
     }
   }
   publishSequencingProblems(docs, problems);
+  reusableConcurrencyProblems(docs, problems);
   return problems;
 }
 

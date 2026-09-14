@@ -14,14 +14,19 @@ The `release.yml` workflow validates and publishes one exact commit SHA:
 - The separate `publish` job needs `validate`, has a 15-minute timeout, and is
   the only job granted `contents: write`, `pull-requests: write`, and
   `id-token: write`.
-- `publish` runs `pnpm tegami ci`, which
+- Because jobs do not share filesystems, `publish` rebuilds and verifies the
+  release artifacts on its fresh runner before running `pnpm tegami ci`, which
   either opens/updates the automated "Version Packages" pull request or, when
   that pull request is merged, publishes the changed packages to the npm
   registry.
 
 Release runs share one non-canceling concurrency group. A newer push waits for
 an in-flight version or publish operation instead of racing it or canceling it
-mid-publication.
+mid-publication. GitHub keeps at most one pending run per concurrency group, so
+several pushes during an in-flight release can replace an older pending run
+with the newest commit. That is intentional: the newest `main` commit contains
+the preceding pushes and runs the complete validation and Tegami plan for their
+combined state, while the active publish is never interrupted.
 
 Publishing authenticates through npm Trusted Publishing (GitHub OIDC). No
 publish token or credential is stored in the repository, and none should ever
