@@ -11,30 +11,25 @@ import {
 import { DEFERRED_DOC } from "./governance-readme.mjs";
 import { readWorkflows } from "./report-hygiene.mjs";
 
-// Intra-workflow release gating and security-visibility invariants
-// (VAL-CROSS-005/007): the release publish step is sequenced after the
-// correctness gates INSIDE the same workflow job, no cross-workflow
-// dependency or branch-protection mechanism is used or claimed, security
+// Same-SHA release gating and security-visibility invariants
+// (VAL-CROSS-005/007): the release publish job needs the complete reusable
+// ci.yml workflow, owns the only write permissions, release runs serialize,
+// no event-level cross-workflow dependency or branch-protection mechanism is
+// used or claimed, security
 // scan failures stay visible without any blocking claim, and the clean
 // ci.yml path never publishes. Static over committed files and pure string
 // fixtures only.
 
-const PREREQUISITE_RUNS = [
-  "pnpm boundaries",
-  "pnpm lint",
-  "pnpm typecheck",
-  "pnpm test",
-  "pnpm build",
-  "pnpm verify:release",
-];
-
-function releaseWorkflow(runs = [...PREREQUISITE_RUNS, "pnpm tegami ci"]) {
-  const steps = runs
-    .map((run) => `      - name: step\n        run: ${run}`)
-    .join("\n");
+function releaseWorkflow({
+  cancelInProgress = false,
+  needs = "validate",
+  publishPermissions = "contents: write\n      pull-requests: write\n      id-token: write",
+  publishRun = "pnpm tegami ci",
+  validationUses = "./.github/workflows/ci.yml",
+} = {}) {
   return {
     path: RELEASE_WORKFLOW,
-    source: `name: Release\non:\n  push:\n    branches: [main]\njobs:\n  release:\n    steps:\n${steps}\n`,
+    source: `name: Release\non:\n  push:\n    branches: [main]\nconcurrency:\n  group: release-main\n  cancel-in-progress: ${cancelInProgress}\npermissions: {}\njobs:\n  validate:\n    uses: ${validationUses}\n    permissions:\n      contents: read\n  publish:\n    needs: ${needs}\n    permissions:\n      ${publishPermissions}\n    steps:\n      - run: ${publishRun}\n`,
   };
 }
 
@@ -79,7 +74,7 @@ const DEFERRED_OK = [
   "## Other",
 ].join("\n");
 
-describe("intra-workflow release gating (VAL-CROSS-005)", () => {
+describe("same-SHA reusable-workflow release gating (VAL-CROSS-005)", () => {
   it("shipped workflows satisfy the gating and visibility invariants", () => {
     const workflows = readWorkflows();
     expect(releaseSequencingProblems(workflows)).toEqual([]);
@@ -95,25 +90,39 @@ describe("intra-workflow release gating (VAL-CROSS-005)", () => {
     ).toEqual([]);
   });
 
-  it("fails when the publish step precedes a correctness gate", () => {
-    const runs = ["pnpm tegami ci", ...PREREQUISITE_RUNS];
-    const problems = releaseSequencingProblems([releaseWorkflow(runs)]);
-    expect(problems.some((p) => p.includes("publishes without"))).toBe(true);
+  it("fails when publish does not need the reusable validation job", () => {
+    const problems = releaseSequencingProblems([
+      releaseWorkflow({ needs: "other" }),
+    ]);
+    expect(problems.some((p) => p.includes("without needing"))).toBe(true);
   });
 
-  it("fails when the publish job drops a prerequisite gate", () => {
-    const runs = PREREQUISITE_RUNS.filter((run) => run !== "pnpm test");
+  it("fails when release calls a workflow other than the complete CI gate", () => {
     const problems = releaseSequencingProblems([
-      releaseWorkflow([...runs, "pnpm tegami ci"]),
+      releaseWorkflow({ validationUses: "./.github/workflows/partial.yml" }),
     ]);
-    expect(
-      problems.some((p) => p.includes("test") && p.includes("publishes"))
-    ).toBe(true);
+    expect(problems.some((p) => p.includes("ci.yml"))).toBe(true);
+  });
+
+  it("fails when publish lacks an OIDC or repository write permission", () => {
+    const problems = releaseSequencingProblems([
+      releaseWorkflow({
+        publishPermissions: "contents: write\n      pull-requests: write",
+      }),
+    ]);
+    expect(problems.some((p) => p.includes("id-token: write"))).toBe(true);
+  });
+
+  it("fails when a release run can cancel an in-flight publish", () => {
+    const problems = releaseSequencingProblems([
+      releaseWorkflow({ cancelInProgress: true }),
+    ]);
+    expect(problems.some((p) => p.includes("must not cancel"))).toBe(true);
   });
 
   it("fails when release.yml has no publish step", () => {
     const problems = releaseSequencingProblems([
-      releaseWorkflow(PREREQUISITE_RUNS),
+      releaseWorkflow({ publishRun: "pnpm test" }),
     ]);
     expect(problems.some((p) => p.includes("no publish step"))).toBe(true);
   });

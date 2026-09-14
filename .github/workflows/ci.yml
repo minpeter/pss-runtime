@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_call:
   workflow_dispatch:
   pull_request:
   push:
@@ -8,7 +9,9 @@ on:
       - main
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Keep the reusable call's group distinct from release.yml's parent group;
+  # matching groups can cancel the caller when cancel-in-progress is true.
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -18,6 +21,7 @@ jobs:
   checks:
     name: Validate (node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:

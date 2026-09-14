@@ -1,21 +1,27 @@
 # Release procedure
 
-Releasing is automated by the `release.yml` job `release`, which runs on every
-push to `main`. This runbook explains how that job is driven and what a
+Releasing is automated by `release.yml`, which runs on every push to `main`.
+This runbook explains how that workflow is driven and what a
 contributor prepares locally; it never runs a publish or deploy from a laptop.
 
 ## What the release job does
 
-The `release.yml` job `release` re-runs the core gate before it can version or
-publish:
+The `release.yml` workflow validates and publishes one exact commit SHA:
 
-- `release.yml` step `Test` and `release.yml` step `Build` repeat the same
-  checks as the pull-request gate.
-- `release.yml` step `Verify release artifacts` runs `pnpm verify:release`.
-- `release.yml` step `Version or publish packages` runs `pnpm tegami ci`, which
+- The `validate` job calls the repository's complete `ci.yml` workflow at the
+  release commit. Both Node matrix legs and every required validation step must
+  pass.
+- The separate `publish` job needs `validate`, has a 15-minute timeout, and is
+  the only job granted `contents: write`, `pull-requests: write`, and
+  `id-token: write`.
+- `publish` runs `pnpm tegami ci`, which
   either opens/updates the automated "Version Packages" pull request or, when
   that pull request is merged, publishes the changed packages to the npm
   registry.
+
+Release runs share one non-canceling concurrency group. A newer push waits for
+an in-flight version or publish operation instead of racing it or canceling it
+mid-publication.
 
 Publishing authenticates through npm Trusted Publishing (GitHub OIDC). No
 publish token or credential is stored in the repository, and none should ever

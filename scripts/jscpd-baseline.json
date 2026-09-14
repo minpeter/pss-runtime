@@ -1,7 +1,6 @@
 {
   "version": 1,
   "signatures": [
-    "duplicates:.github/workflows/ci.yml:41-74=.github/workflows/release.yml:36-69",
     "duplicates:.github/workflows/extended-verification.yml:150-161=.github/workflows/extended-verification.yml:83-94",
     "duplicates:LICENSE.md:markdown:1-88=apps/coding-agent/LICENSE.md:markdown:1-88",
     "duplicates:LICENSE.md:markdown:1-88=packages/runtime/LICENSE.md:markdown:1-88",
