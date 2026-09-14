@@ -24,5 +24,17 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    coverage: {
+      exclude: ["src/**/*.test.ts"],
+      include: ["src/**/*.ts"],
+      provider: "v8",
+      reportsDirectory: "coverage",
+      thresholds: {
+        branches: 60,
+        functions: 75,
+        lines: 70,
+        statements: 70,
+      },
+    },
   },
 });

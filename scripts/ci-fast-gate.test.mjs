@@ -25,6 +25,7 @@ const FAST_RUNS = [
   "pnpm check:workspace-drift --check",
   "pnpm check:unused",
   "pnpm check:duplicates",
+  "pnpm coverage:extensions",
   ...CORE_RUNS,
   "pnpm check:bundle-size --check",
   "pnpm test:timing",
@@ -101,6 +102,14 @@ describe("fast gate: deterministic checks wired into ci.yml (VAL-SEC-046)", () =
     const problems = fastGateProblems([ciWorkflow(runs)]);
     expect(problems.some((p) => p.includes("Knip"))).toBe(true);
     expect(problems.some((p) => p.includes("jscpd"))).toBe(true);
+  });
+
+  it("fails when extension coverage is missing", () => {
+    const runs = FAST_RUNS.filter(
+      (run) => !run.includes("coverage:extensions")
+    );
+    const problems = fastGateProblems([ciWorkflow(runs)]);
+    expect(problems.some((p) => p.includes("extension coverage"))).toBe(true);
   });
 
   it("fails when the documentation-carrying test step or test timing is missing", () => {

@@ -40,6 +40,10 @@ const REQUIRED_FAST_CHECKS = [
     pattern: /(^|\s)check:duplicates(\s|$|\|)/,
   },
   {
+    label: "extension coverage gate (coverage:extensions)",
+    pattern: /(^|\s)coverage:extensions(\s|$)/,
+  },
+  {
     // The root `pnpm test` collects scripts/*.test.mjs, which carries the
     // documentation invariants (runtime-docs, governance-readme, ...).
     label: "documentation invariants via the root test suite (pnpm test)",

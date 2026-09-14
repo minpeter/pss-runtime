@@ -47,6 +47,7 @@ export function createFixture() {
       join(packageRoot, "package.json"),
       JSON.stringify(packageMetadata(packageName), null, 2)
     );
+    writeFileSync(join(packageRoot, "LICENSE.md"), "fixture license\n");
     writePackageDeclarationFixtures(cwd, packageName, packageRoot);
   }
 
@@ -79,8 +80,10 @@ function packageMetadata(packageName) {
         types: "./dist/index.d.ts",
       },
     },
-    files: ["dist", "README.md"],
+    files: ["dist", "README.md", "LICENSE.md"],
+    license: "SEE LICENSE IN LICENSE.md",
     name: `@minpeter/pss-${packageName}`,
+    publishConfig: { access: "public", provenance: true },
   };
 }
 
