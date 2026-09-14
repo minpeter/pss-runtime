@@ -3624,6 +3624,46 @@ describe.sequential("actual TUI transcript ownership", () => {
     }
   });
 
+  it.each(["turn-abort", "turn-error"] as const)(
+    "preserves queued tool input when %s seals the transcript",
+    async (ending) => {
+      vi.useFakeTimers({
+        toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"],
+      });
+      const app = await fixture();
+      try {
+        await app.start();
+        await app.emit({
+          type: "tool-call-input-start",
+          toolCallId: "QUEUED_INPUT",
+          toolName: "write_file",
+        });
+        await app.emit({
+          type: "tool-call-input-delta",
+          toolCallId: "QUEUED_INPUT",
+          inputTextDelta: '{"path":"lost.ts","content":"LAST_BYTES_BEFORE_END',
+        });
+
+        await app.emit(
+          ending === "turn-error"
+            ? { type: ending, message: "STREAM_FAILURE" }
+            : { type: ending }
+        );
+
+        expect(plain()).toContain("lost.ts");
+        expect(plain()).toContain("LAST_BYTES_BEFORE_END");
+        if (ending === "turn-error") {
+          expect(plain()).toContain("STREAM_FAILURE");
+        }
+        expect(
+          chat().children.every((child) => child instanceof ColdSnapshot)
+        ).toBe(true);
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
   it.each(["error-text", "execution-denied"] as const)(
     "appends a late %s result without changing the old tool",
     async (type) => {

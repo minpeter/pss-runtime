@@ -22,10 +22,8 @@ export const JSCPD_RAW_REPORT_NAME = "jscpd-report.json";
 // (VAL-SEC-006), each strictly narrower than the scope itself.
 export const ALLOWLIST_SCOPES = ["examples/", "experimental/"];
 
-const JSCPD_REQUIRED_IGNORE_TOKENS = [
-  ...REQUIRED_IGNORE_TOKENS,
-  "CHANGELOG.md",
-];
+const JSCPD_REQUIRED_IGNORE_TOKENS = [...REQUIRED_IGNORE_TOKENS];
+const REQUIRED_CHANGELOG_IGNORE = "**/CHANGELOG.md";
 const BARE_WILDCARDS = new Set(["*", "**", "**/*", "**/**", "*/**"]);
 const KEBAB_NAME = /^[a-z0-9-]+$/;
 const MIN_JUSTIFICATION_LENGTH = 12;
@@ -69,6 +67,11 @@ export function ignoreCoverageProblems(config) {
     (token) =>
       `jscpd ignore list lacks a generated-path exclusion for "${token}"`
   );
+  if (!patterns.includes(REQUIRED_CHANGELOG_IGNORE)) {
+    problems.push(
+      `jscpd ignore list lacks the repository-wide generated-path exclusion "${REQUIRED_CHANGELOG_IGNORE}"`
+    );
+  }
   const hasLockfile = LOCKFILE_TOKENS.some((token) =>
     patterns.some((pattern) => pattern.includes(token))
   );

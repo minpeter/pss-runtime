@@ -255,6 +255,8 @@ export class BaseToolCallView extends Container {
   private error: unknown;
   private finalInput: unknown;
   private inputBuffer = "";
+  private inputPreviewDirty = false;
+  private inputPreviewRevision = 0;
   private inputPreviewTimer: ReturnType<typeof setTimeout> | undefined;
   private output: unknown;
   private outputDenied = false;
@@ -290,6 +292,13 @@ export class BaseToolCallView extends Container {
   }
 
   settle(): void {
+    if (this.inputPreviewDirty) {
+      this.cancelInputPreviewTimer();
+      this.inputPreviewRevision += 1;
+      this.parsedInput = undefined;
+      this.refresh();
+      this.inputPreviewDirty = false;
+    }
     if (this.pendingIndicator) {
       this.pendingIndicator.setText("Preparing tool call…");
     }
@@ -308,6 +317,7 @@ export class BaseToolCallView extends Container {
     }
     this.cancelInputPreviewTimer();
     this.inputBuffer += chunk;
+    this.inputPreviewRevision += 1;
     await this.refreshParsedInput();
   }
 
@@ -316,6 +326,8 @@ export class BaseToolCallView extends Container {
       return;
     }
     this.inputBuffer += chunk;
+    this.inputPreviewDirty = true;
+    this.inputPreviewRevision += 1;
     if (this.inputPreviewTimer !== undefined) {
       return;
     }
@@ -334,11 +346,12 @@ export class BaseToolCallView extends Container {
 
   private async refreshParsedInput(): Promise<boolean> {
     const input = this.inputBuffer;
+    const revision = this.inputPreviewRevision;
     const { value, state } = await parsePartialJson(input);
     if (this.disposed) {
       return false;
     }
-    if (input !== this.inputBuffer) {
+    if (revision !== this.inputPreviewRevision || input !== this.inputBuffer) {
       return false;
     }
     // Suppress transient empty objects during partial parsing to prevent
@@ -346,31 +359,32 @@ export class BaseToolCallView extends Container {
     if (state !== "successful-parse" && isPlainEmptyObject(value)) {
       return false;
     }
+    this.inputPreviewDirty = false;
     this.parsedInput = value;
     this.refresh();
     return true;
   }
 
   setError(error: unknown): void {
-    this.cancelInputPreviewTimer();
+    this.prepareTerminalInput();
     this.error = error;
     this.refresh();
   }
 
   setFinalInput(input: unknown): void {
-    this.cancelInputPreviewTimer();
+    this.prepareTerminalInput();
     this.finalInput = input;
     this.refresh();
   }
 
   setOutput(output: unknown): void {
-    this.cancelInputPreviewTimer();
+    this.prepareTerminalInput();
     this.output = output;
     this.refresh();
   }
 
   setOutputDenied(reason?: string): void {
-    this.cancelInputPreviewTimer();
+    this.prepareTerminalInput();
     this.outputDenied = true;
     this.outputDeniedReason =
       reason === undefined ? undefined : sanitizeTerminalText(reason);
@@ -437,6 +451,15 @@ export class BaseToolCallView extends Container {
     if (this.inputPreviewTimer !== undefined) {
       clearTimeout(this.inputPreviewTimer);
       this.inputPreviewTimer = undefined;
+    }
+  }
+
+  private prepareTerminalInput(): void {
+    this.cancelInputPreviewTimer();
+    this.inputPreviewRevision += 1;
+    if (this.inputPreviewDirty) {
+      this.parsedInput = undefined;
+      this.inputPreviewDirty = false;
     }
   }
 

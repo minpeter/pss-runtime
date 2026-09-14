@@ -7,7 +7,7 @@
     "duplicates:LICENSE.md:markdown:1-88=packages/runtime/LICENSE.md:markdown:1-88",
     "duplicates:apps/coding-agent/scripts/preview-assistant-render.ts:4-21=apps/coding-agent/scripts/preview-edit-render.ts:10-27",
     "duplicates:apps/coding-agent/scripts/preview-assistant-render.ts:6-23=apps/coding-agent/src/edit-file-flow.test.ts:18-37",
-    "duplicates:apps/coding-agent/scripts/preview-assistant-render.ts:6-23=apps/coding-agent/src/tui/tool-call-view.test.ts:6-23",
+    "duplicates:apps/coding-agent/scripts/preview-assistant-render.ts:6-23=apps/coding-agent/src/tui/tool-call-view.test.ts:7-24",
     "duplicates:apps/coding-agent/scripts/preview-edit-render.ts:157-182=apps/coding-agent/src/edit-file-flow.test.ts:185-210",
     "duplicates:apps/coding-agent/scripts/preview-retry-wait-tui.ts:51-65=apps/coding-agent/scripts/preview-retry-wait.ts:96-109",
     "duplicates:apps/coding-agent/scripts/preview-retry-wait-tui.ts:66-91=apps/coding-agent/scripts/preview-retry-wait.ts:109-134",
