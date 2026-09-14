@@ -2,6 +2,7 @@ import type { MarkdownTheme } from "@earendil-works/pi-tui";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PENDING_SPINNER_FRAMES } from "./pending-spinner";
 import { BaseToolCallView } from "./tool-call-view";
+import { TranscriptOwner } from "./transcript-owner";
 
 const markdownTheme: MarkdownTheme = {
   heading: (t) => t,
@@ -142,6 +143,54 @@ describe("BaseToolCallView rendering", () => {
     expect(output).not.toContain("\u0007");
 
     view.dispose();
+  });
+
+  it("batches a burst of large streaming input into one preview refresh", async () => {
+    const requestRender = vi.fn();
+    const view = new BaseToolCallView(
+      "call_large_stream",
+      "write_file",
+      markdownTheme,
+      requestRender
+    );
+    requestRender.mockClear();
+    view.queueInputChunk('{"path":"large.ts","content":"');
+    for (let index = 0; index < 2000; index += 1) {
+      view.queueInputChunk(`line ${index}\\n`);
+    }
+
+    expect(requestRender).not.toHaveBeenCalled();
+    await vi.runAllTimersAsync();
+
+    expect(requestRender).toHaveBeenCalledOnce();
+    expect(renderView(view)).toContain("large.ts");
+    expect(renderView(view)).toContain("1999");
+    view.dispose();
+  });
+
+  it("flushes queued input before an immediate lease finish", () => {
+    const transcript = new TranscriptOwner(() => 120);
+    const lease = transcript.acquire(
+      () =>
+        new BaseToolCallView(
+          "call_aborted_stream",
+          "write_file",
+          markdownTheme
+        ),
+      {
+        dispose: (view) => view.dispose(),
+        settle: (view) => view.settle(),
+      }
+    );
+    lease.view.queueInputChunk(
+      '{"path":"aborted.ts","content":"LATEST_PARTIAL_INPUT'
+    );
+
+    transcript.finish(lease);
+
+    const output = transcript.render(120).join("\n");
+    expect(output).toContain("aborted.ts");
+    expect(output).toContain("LATEST_PARTIAL_INPUT");
   });
 });
 
