@@ -26,7 +26,7 @@ const theme = {
 };
 const callId = "call_malformed_fixture";
 const secret = "SOURCE_MUST_NOT_APPEAR_IN_ERROR";
-const content = `preview-sentinel\n${'quote " slash \\ \uD83D\uDE80 \uD55C\n'.repeat(2500)}${secret}`;
+const content = `preview-sentinel\n${'quote " slash \\ \uD83D\uDE80 \uD55C\n'.repeat(1500)}${secret}`;
 const validInput = JSON.stringify({ path: "index.html", content });
 
 function sse(input: string, finishReason: string | undefined): Response {
