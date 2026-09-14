@@ -6,7 +6,10 @@ import {
   releaseWorkflow,
   replaceWorkflowSource,
 } from "./ci-release-gating.fixture.mjs";
-import { releaseSequencingProblems } from "./ci-release-gating.mjs";
+import {
+  releaseSequencingProblems,
+  securityVisibilityProblems,
+} from "./ci-release-gating.mjs";
 
 function expectRejected(workflow, fragment = "canonical") {
   const problems = releaseSequencingProblems([
@@ -17,6 +20,15 @@ function expectRejected(workflow, fragment = "canonical") {
     problems.some((problem) => problem.includes(fragment)),
     problems
   ).toBe(true);
+}
+
+function cleanPathProblems(command) {
+  const workflow = replaceWorkflowSource(
+    ciWorkflow(),
+    "        run: pnpm test",
+    `        run: |\n          ${command.replaceAll("\n", "\n          ")}`
+  );
+  return securityVisibilityProblems([workflow]);
 }
 
 const BEFORE_BUILD =
@@ -42,16 +54,15 @@ it.each([
   expectRejected(workflow, "canonical steps");
 });
 
-it.each(["n\\\npm p\\\nub", "n\"\"pm p''ub", "pn\\\npm publish"])(
+it.each(["n\\\npm p\\\nub", "n\"\"pm p''ub", 'n"p"m pub', "pn\\\npm publish"])(
   "recognizes shell-tokenized publication: %s",
   (command) => {
     expect(containsPublishCommand(command)).toBe(true);
-    const workflow = replaceWorkflowSource(
-      releaseWorkflow(),
-      BEFORE_BUILD,
-      `      - run: |\n          ${command.replaceAll("\n", "\n          ")}\n${BEFORE_BUILD}`
-    );
-    expectRejected(workflow, "canonical steps");
+    expect(
+      cleanPathProblems(command).some((problem) =>
+        problem.includes("never publishes")
+      )
+    ).toBe(true);
   }
 );
 
@@ -186,10 +197,16 @@ it.each([
 
 it.each([
   'echo "npm publish is disabled"',
+  'echo "status | npm publish is disabled"',
   "# npm publish is disabled",
   "printf '%s\\n' 'pnpm publish'",
   "echo npm publish",
   "npm exec echo pub",
 ])("does not classify harmless text as publication: %s", (command) => {
   expect(containsPublishCommand(command)).toBe(false);
+  expect(
+    cleanPathProblems(command).some((problem) =>
+      problem.includes("never publishes")
+    )
+  ).toBe(false);
 });
