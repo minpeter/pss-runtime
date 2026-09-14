@@ -38,6 +38,11 @@ function classWorkflow(triggers, timeout = 30) {
   return `name: x\non: [${list}]\njobs:\n  job:\n${bound}    steps: []\n`;
 }
 
+function reusableWorkflow(triggers, uses) {
+  const list = triggers.map((trigger) => `"${trigger}"`).join(", ");
+  return `name: x\non: [${list}]\njobs:\n  job:\n    uses: ${uses}\n`;
+}
+
 function classSet(overrides = {}) {
   return WORKFLOW_CLASSES.map((entry) => ({
     path: entry.path,
@@ -167,6 +172,51 @@ describe("workflow classification (VAL-CROSS-004)", () => {
         (p) => p.includes("codeql.yml") && p.includes("timeout-minutes")
       )
     ).toBe(true);
+  });
+
+  it.each([
+    "owner/repo/.github/workflows/ci.yml@main",
+    "./.github/workflows/unknown.yml",
+  ])("fails closed for an uninspectable reusable workflow %s", (uses) => {
+    const problems = workflowClassProblems(
+      classSet({
+        ".github/workflows/release.yml": reusableWorkflow(["push"], uses),
+      })
+    );
+    expect(
+      problems.some((p) => p.includes("inspectable timeout evidence"))
+    ).toBe(true);
+  });
+
+  it("allows the known local reusable CI workflow when its jobs are bounded", () => {
+    expect(
+      workflowClassProblems(
+        classSet({
+          ".github/workflows/release.yml": reusableWorkflow(
+            ["push"],
+            "./.github/workflows/ci.yml"
+          ),
+        })
+      )
+    ).toEqual([]);
+  });
+
+  it("fails when the known reusable CI workflow loses timeout evidence", () => {
+    const problems = workflowClassProblems(
+      classSet({
+        ".github/workflows/ci.yml": classWorkflow(
+          ["pull_request", "push", "workflow_call", "workflow_dispatch"],
+          null
+        ),
+        ".github/workflows/release.yml": reusableWorkflow(
+          ["push"],
+          "./.github/workflows/ci.yml"
+        ),
+      })
+    );
+    expect(problems.some((p) => p.includes("bounded timeout evidence"))).toBe(
+      true
+    );
   });
 
   it("fails when a classified workflow file is missing", () => {
