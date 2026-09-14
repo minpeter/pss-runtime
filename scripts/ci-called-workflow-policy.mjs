@@ -12,6 +12,15 @@ const UPLOAD_ACTION =
   "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
 const CANONICAL_STEPS_SHA256 =
   "343d4108ea9e5f4ad6305d5fbb6ee6dbe2690efedf14cfa1004dc7b6d5fb961b";
+const CALLED_JOB_KEYS = new Set([
+  "continue-on-error",
+  "name",
+  "runs-on",
+  "steps",
+  "strategy",
+  "timeout-minutes",
+]);
+const WORKFLOW_PERMISSIONS = { contents: "read" };
 
 const NODE_24_STEPS = new Set([
   "Audit dependencies",
@@ -95,8 +104,26 @@ function actionProblems(step, jobId, workflowPath) {
   ];
 }
 
-function calledJobProblems(jobId, job, workflowPath) {
+function calledJobShapeProblems(jobId, job, workflowPath) {
+  const unknownKeys = Object.keys(job ?? {}).filter(
+    (key) => !CALLED_JOB_KEYS.has(key)
+  );
   const problems = [];
+  if (unknownKeys.length > 0) {
+    problems.push(
+      `${workflowPath} runner job "${jobId}" has unapproved fields: ${unknownKeys.join(", ")}`
+    );
+  }
+  if (job?.["runs-on"] !== "ubuntu-latest") {
+    problems.push(
+      `${workflowPath} runner job "${jobId}" must run on ubuntu-latest`
+    );
+  }
+  return problems;
+}
+
+function calledJobProblems(jobId, job, workflowPath) {
+  const problems = calledJobShapeProblems(jobId, job, workflowPath);
   const steps = job?.steps ?? [];
   if (stepsDigest(steps) !== CANONICAL_STEPS_SHA256) {
     problems.push(
@@ -166,6 +193,9 @@ function calledJobProblems(jobId, job, workflowPath) {
 
 export function calledWorkflowProblems(doc, workflowPath) {
   const problems = [];
+  if (!isDeepStrictEqual(doc?.permissions, WORKFLOW_PERMISSIONS)) {
+    problems.push(`${workflowPath} must use exact read-only permissions`);
+  }
   if (doc?.defaults !== undefined) {
     problems.push(`${workflowPath} must not define execution defaults`);
   }
