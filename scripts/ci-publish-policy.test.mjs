@@ -159,6 +159,15 @@ it("requires numeric timeout evidence on every called runner job", () => {
   expectRejected(ci, "numeric timeout");
 });
 
+it("rejects a failure-masked called validation command", () => {
+  const ci = replaceWorkflowSource(
+    ciWorkflow(),
+    "        run: pnpm test",
+    "        run: pnpm test || true"
+  );
+  expectRejected(ci, "exact canonical validation steps");
+});
+
 it("rejects a skip condition on a called validation gate", () => {
   const ci = replaceWorkflowSource(
     ciWorkflow(),
@@ -202,6 +211,33 @@ it("rejects release workflow run defaults", () => {
     "permissions: {}\ndefaults:\n  run:\n    working-directory: packages/runtime\n"
   );
   expectRejected(workflow, "execution defaults");
+});
+
+it.each([
+  [
+    "workflow",
+    "permissions:\n  contents: read\n",
+    'permissions:\n  contents: read\ndefaults:\n  run:\n    shell: "true {0}"\n',
+  ],
+  [
+    "job",
+    "  checks:\n",
+    '  checks:\n    defaults:\n      run:\n        shell: "true {0}"\n',
+  ],
+])("rejects called CI %s execution defaults", (_label, from, to) => {
+  expectRejected(
+    replaceWorkflowSource(ciWorkflow(), from, to),
+    "execution defaults"
+  );
+});
+
+it("restricts release triggers to pushes on main", () => {
+  const workflow = replaceWorkflowSource(
+    releaseWorkflow(),
+    "on:\n  push:\n    branches: [main]",
+    "on:\n  push:\n    branches: [main]\n  pull_request_target:"
+  );
+  expectRejected(workflow, "only on pushes to main");
 });
 
 it.each([

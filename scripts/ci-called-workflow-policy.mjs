@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 
 const githubExpression = (name) => `\${{ ${name} }}`;
@@ -9,6 +10,8 @@ const NODE_ACTION =
   "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020";
 const UPLOAD_ACTION =
   "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
+const CANONICAL_STEPS_SHA256 =
+  "fc9caa3e23e9605df91360e1c50814294432735d794786fd6535bc31821113ac";
 
 const NODE_24_STEPS = new Set([
   "Audit dependencies",
@@ -49,6 +52,26 @@ function policyStep(step) {
   return rest;
 }
 
+function canonicalValue(value) {
+  if (Array.isArray(value)) {
+    return value.map(canonicalValue);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, canonicalValue(value[key])])
+    );
+  }
+  return value;
+}
+
+function stepsDigest(steps) {
+  return createHash("sha256")
+    .update(JSON.stringify(canonicalValue(steps.map(policyStep))))
+    .digest("hex");
+}
+
 function hasAllowedCondition(step) {
   return (
     step?.if === undefined ||
@@ -75,6 +98,16 @@ function actionProblems(step, jobId, workflowPath) {
 function calledJobProblems(jobId, job, workflowPath) {
   const problems = [];
   const steps = job?.steps ?? [];
+  if (stepsDigest(steps) !== CANONICAL_STEPS_SHA256) {
+    problems.push(
+      `${workflowPath} runner job "${jobId}" must use the exact canonical validation steps`
+    );
+  }
+  if (job?.defaults !== undefined) {
+    problems.push(
+      `${workflowPath} runner job "${jobId}" must not define execution defaults`
+    );
+  }
   if (
     !isDeepStrictEqual(job?.strategy, {
       "fail-fast": false,
@@ -127,7 +160,14 @@ function calledJobProblems(jobId, job, workflowPath) {
 }
 
 export function calledWorkflowProblems(doc, workflowPath) {
-  return Object.entries(doc?.jobs ?? {}).flatMap(([jobId, job]) =>
-    calledJobProblems(jobId, job, workflowPath)
+  const problems = [];
+  if (doc?.defaults !== undefined) {
+    problems.push(`${workflowPath} must not define execution defaults`);
+  }
+  problems.push(
+    ...Object.entries(doc?.jobs ?? {}).flatMap(([jobId, job]) =>
+      calledJobProblems(jobId, job, workflowPath)
+    )
   );
+  return problems;
 }

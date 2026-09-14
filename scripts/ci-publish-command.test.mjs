@@ -44,6 +44,10 @@ it.each(["bash -c 'npm publish'", "bash -lc 'npm publish'", "sh -c 'npm pub'"])(
   expectCleanPathPublication
 );
 
+it("recognizes publication delegated through eval", () => {
+  expectCleanPathPublication("eval 'npm pub'");
+});
+
 it.each(["CI+=1 npm publish", "env CI+=1 pnpm publish"])(
   "recognizes publication after an append assignment: %s",
   expectCleanPathPublication

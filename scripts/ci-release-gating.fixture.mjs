@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { CI_WORKFLOW_PATH } from "./ci-fast-gate.mjs";
 import { RELEASE_WORKFLOW } from "./ci-release-gating.mjs";
 
@@ -60,11 +61,25 @@ export function ciWorkflow(
   extraRuns = [],
   concurrencyGroup = ISOLATED_CI_GROUP
 ) {
-  const steps = ["pnpm test", ...extraRuns]
-    .map((run) => `      - name: step\n        run: ${run}`)
-    .join("\n");
+  let source = readFileSync(
+    new URL("../.github/workflows/ci.yml", import.meta.url),
+    "utf8"
+  );
+  if (concurrencyGroup !== ISOLATED_CI_GROUP) {
+    source = replaceRequiredText(source, ISOLATED_CI_GROUP, concurrencyGroup);
+  }
+  if (extraRuns.length > 0) {
+    const injected = extraRuns
+      .map((run) => `      - name: injected test step\n        run: ${run}\n\n`)
+      .join("");
+    source = replaceRequiredText(
+      source,
+      "      - name: Upload test-timing report",
+      `${injected}      - name: Upload test-timing report`
+    );
+  }
   return {
     path: CI_WORKFLOW_PATH,
-    source: `name: CI\non: [push, pull_request, workflow_call]\nconcurrency:\n  group: ${concurrencyGroup}\n  cancel-in-progress: true\njobs:\n  checks:\n    timeout-minutes: 45\n    strategy:\n      fail-fast: false\n      matrix:\n        node: ["24", "26"]\n    steps:\n      - name: Checkout\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n        with:\n          fetch-depth: 0\n${steps}\n`,
+    source,
   };
 }

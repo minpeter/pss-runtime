@@ -238,6 +238,9 @@ function packageCommand(tokens, executableName, commandPattern) {
 
 function delegatedCommand(tokens) {
   const executable = invokedExecutable(tokens);
+  if (tokens[executable]?.replace(BASENAME, "") === "eval") {
+    return tokens.slice(executable + 1).join(" ");
+  }
   if (!SHELL_INTERPRETERS.has(tokens[executable]?.replace(BASENAME, ""))) {
     return;
   }

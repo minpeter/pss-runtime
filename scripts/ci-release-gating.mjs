@@ -15,6 +15,7 @@
 //   deferredBranchProtectionProblems the deferred list keeps naming branch
 //                                    protection with a deferred status.
 
+import { isDeepStrictEqual } from "node:util";
 import { calledWorkflowProblems } from "./ci-called-workflow-policy.mjs";
 import { CI_WORKFLOW_PATH } from "./ci-fast-gate.mjs";
 import { containsPublishCommand } from "./ci-publish-command.mjs";
@@ -42,6 +43,7 @@ const VALIDATION_WORKFLOW = "./.github/workflows/ci.yml";
 const githubExpression = (name) => `\${{ ${name} }}`;
 const ISOLATED_CI_GROUP = `ci-${githubExpression("github.workflow")}-${githubExpression("github.ref")}`;
 const RELEASE_GROUP = `${githubExpression("github.workflow")}-${githubExpression("github.ref")}`;
+const RELEASE_TRIGGER = { push: { branches: ["main"] } };
 
 function permissionIsolationProblems(jobs, validationIds) {
   const problems = [];
@@ -79,6 +81,9 @@ function publishSequencingProblems(docs, problems) {
     problems.push(
       `${RELEASE_WORKFLOW} must not define workflow-level execution defaults`
     );
+  }
+  if (!isDeepStrictEqual(release.doc?.on, RELEASE_TRIGGER)) {
+    problems.push(`${RELEASE_WORKFLOW} must trigger only on pushes to main`);
   }
   const jobs = release.doc?.jobs ?? {};
   const validationIds = Object.entries(jobs)
