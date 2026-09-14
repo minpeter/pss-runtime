@@ -1,4 +1,5 @@
-const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*\+?=/;
+import { invokedExecutable } from "./ci-command-prefixes.mjs";
+
 const BASENAME = /^.*\//;
 const COMMAND_SEPARATOR = /[\n;&|]/u;
 const CONTINUATION = /\\\r?\n[\t ]*/g;
@@ -8,28 +9,6 @@ const QUOTE = /["']/u;
 const SHELL_COMMAND_OPTION = /^-[^-]*c/;
 const SHELL_INTERPRETERS = new Set(["bash", "dash", "ksh", "sh", "zsh"]);
 const WHITESPACE = /\s/u;
-const ENV_OPTIONS_WITH_VALUE = new Set([
-  "-C",
-  "--chdir",
-  "-S",
-  "--split-string",
-  "-u",
-  "--unset",
-]);
-const SUDO_OPTIONS_WITH_VALUE = new Set([
-  "-C",
-  "--close-from",
-  "-D",
-  "--chdir",
-  "-g",
-  "--group",
-  "-h",
-  "--host",
-  "-p",
-  "--prompt",
-  "-u",
-  "--user",
-]);
 const isEscaped = (character, quote) => character === "\\" && quote !== "'";
 
 function closingParenthesis(text, start) {
@@ -146,75 +125,6 @@ function shellCommands(source) {
   }
   finishCommand();
   return commands;
-}
-
-function skipAssignments(tokens, start) {
-  let index = start;
-  while (ASSIGNMENT.test(tokens[index] ?? "")) {
-    index += 1;
-  }
-  return index;
-}
-
-function afterCommandPrefix(tokens, start) {
-  if (["-v", "-V"].includes(tokens[start])) {
-    return -1;
-  }
-  let index = start;
-  while (["-p", "--"].includes(tokens[index])) {
-    index += 1;
-  }
-  return index;
-}
-
-function afterExecPrefix(tokens, start) {
-  let index = start;
-  while (["-c", "-l", "--"].includes(tokens[index])) {
-    index += 1;
-  }
-  return tokens[index] === "-a" ? index + 2 : index;
-}
-
-function afterEnvPrefix(tokens, start) {
-  let index = start;
-  while (tokens[index]?.startsWith("-")) {
-    const option = tokens[index++];
-    if (ENV_OPTIONS_WITH_VALUE.has(option)) {
-      index += 1;
-    }
-  }
-  return skipAssignments(tokens, index);
-}
-
-function afterSudoPrefix(tokens, start) {
-  let index = start;
-  while (tokens[index]?.startsWith("-")) {
-    const option = tokens[index++];
-    if (SUDO_OPTIONS_WITH_VALUE.has(option)) {
-      index += 1;
-    }
-  }
-  return skipAssignments(tokens, index);
-}
-
-const PREFIX_UNWRAPPERS = new Map([
-  ["command", afterCommandPrefix],
-  ["env", afterEnvPrefix],
-  ["exec", afterExecPrefix],
-  ["sudo", afterSudoPrefix],
-]);
-
-function invokedExecutable(tokens) {
-  let index = skipAssignments(tokens, 0);
-  while (index < tokens.length) {
-    const executable = tokens[index]?.replace(BASENAME, "");
-    const unwrap = PREFIX_UNWRAPPERS.get(executable);
-    if (unwrap === undefined) {
-      return index;
-    }
-    index = unwrap(tokens, index + 1);
-  }
-  return -1;
 }
 
 function packageCommand(tokens, executableName, commandPattern) {

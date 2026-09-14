@@ -82,6 +82,11 @@ function publishSequencingProblems(docs, problems) {
       `${RELEASE_WORKFLOW} must not define workflow-level execution defaults`
     );
   }
+  if (release.doc?.env !== undefined) {
+    problems.push(
+      `${RELEASE_WORKFLOW} must not define workflow-level inherited environment`
+    );
+  }
   if (!isDeepStrictEqual(release.doc?.on, RELEASE_TRIGGER)) {
     problems.push(`${RELEASE_WORKFLOW} must trigger only on pushes to main`);
   }

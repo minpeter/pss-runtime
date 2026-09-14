@@ -108,6 +108,11 @@ function calledJobProblems(jobId, job, workflowPath) {
       `${workflowPath} runner job "${jobId}" must not define execution defaults`
     );
   }
+  if (job?.env !== undefined) {
+    problems.push(
+      `${workflowPath} runner job "${jobId}" must not define inherited environment`
+    );
+  }
   if (
     !isDeepStrictEqual(job?.strategy, {
       "fail-fast": false,
@@ -163,6 +168,9 @@ export function calledWorkflowProblems(doc, workflowPath) {
   const problems = [];
   if (doc?.defaults !== undefined) {
     problems.push(`${workflowPath} must not define execution defaults`);
+  }
+  if (doc?.env !== undefined) {
+    problems.push(`${workflowPath} must not define inherited environment`);
   }
   problems.push(
     ...Object.entries(doc?.jobs ?? {}).flatMap(([jobId, job]) =>

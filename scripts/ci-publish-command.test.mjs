@@ -34,6 +34,10 @@ it.each([
   "env RELEASE=true pnpm publish",
   "exec npm publ",
   "sudo npm publish",
+  "time npm publish",
+  "time -p npm pub",
+  "/usr/bin/time --format elapsed npm publ",
+  "! pnpm publish",
 ])(
   "recognizes publication through a shell command wrapper: %s",
   expectCleanPathPublication
@@ -68,6 +72,7 @@ it.each([
   "npm exec echo pub",
   "command -v npm pub",
   "bash -c 'echo npm publish'",
+  "time npm exec echo publish",
 ])("does not classify harmless text as publication: %s", (command) => {
   expect(containsPublishCommand(command)).toBe(false);
   expect(

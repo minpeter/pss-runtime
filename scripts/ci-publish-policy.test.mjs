@@ -218,17 +218,16 @@ it.each([
     "workflow",
     "permissions:\n  contents: read\n",
     'permissions:\n  contents: read\ndefaults:\n  run:\n    shell: "true {0}"\n',
+    "execution defaults",
   ],
   [
     "job",
     "  checks:\n",
     '  checks:\n    defaults:\n      run:\n        shell: "true {0}"\n',
+    "execution defaults",
   ],
-])("rejects called CI %s execution defaults", (_label, from, to) => {
-  expectRejected(
-    replaceWorkflowSource(ciWorkflow(), from, to),
-    "execution defaults"
-  );
+])("rejects called CI %s", (_label, from, to, error) => {
+  expectRejected(replaceWorkflowSource(ciWorkflow(), from, to), error);
 });
 
 it("restricts release triggers to pushes on main", () => {
