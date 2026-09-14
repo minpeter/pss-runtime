@@ -95,6 +95,11 @@ function calledJobProblems(jobId, job, workflowPath) {
   if (![undefined, false].includes(job?.["continue-on-error"])) {
     problems.push(`${workflowPath} runner job "${jobId}" must fail closed`);
   }
+  if (job?.if !== undefined) {
+    problems.push(
+      `${workflowPath} runner job "${jobId}" must not have a skip condition`
+    );
+  }
   for (const step of steps) {
     if (!hasAllowedCondition(step)) {
       problems.push(

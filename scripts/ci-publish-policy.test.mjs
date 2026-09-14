@@ -31,6 +31,15 @@ function cleanPathProblems(command) {
   return securityVisibilityProblems([workflow]);
 }
 
+function expectCleanPathPublication(command) {
+  expect(containsPublishCommand(command)).toBe(true);
+  expect(
+    cleanPathProblems(command).some((problem) =>
+      problem.includes("never publishes")
+    )
+  ).toBe(true);
+}
+
 const BEFORE_BUILD =
   "      - name: Build release artifacts\n        run: pnpm build";
 const VERIFY =
@@ -56,26 +65,17 @@ it.each([
 
 it.each(["n\\\npm p\\\nub", "n\"\"pm p''ub", 'n"p"m pub', "pn\\\npm publish"])(
   "recognizes shell-tokenized publication: %s",
-  (command) => {
-    expect(containsPublishCommand(command)).toBe(true);
-    expect(
-      cleanPathProblems(command).some((problem) =>
-        problem.includes("never publishes")
-      )
-    ).toBe(true);
-  }
+  expectCleanPathPublication
+);
+
+it.each(["command npm pub", "env RELEASE=true pnpm publish", "exec npm publ"])(
+  "recognizes publication through a shell command wrapper: %s",
+  expectCleanPathPublication
 );
 
 it.each(['echo "$(npm pub)"', "result=`pnpm publish`"])(
   "recognizes publication inside command substitution: %s",
-  (command) => {
-    expect(containsPublishCommand(command)).toBe(true);
-    expect(
-      cleanPathProblems(command).some((problem) =>
-        problem.includes("never publishes")
-      )
-    ).toBe(true);
-  }
+  expectCleanPathPublication
 );
 
 it.each([
@@ -205,6 +205,15 @@ it("rejects a skip condition on a called validation gate", () => {
   expectRejected(ci, "unapproved condition");
 });
 
+it("rejects a skip condition on a called runner job", () => {
+  const ci = replaceWorkflowSource(
+    ciWorkflow(),
+    "  checks:\n",
+    "  checks:\n    if: false\n"
+  );
+  expectRejected(ci, "skip condition");
+});
+
 it("rejects called CI checkout ref drift", () => {
   const ci = replaceWorkflowSource(
     ciWorkflow(),
@@ -248,6 +257,7 @@ it.each([
   "printf '%s\\n' 'pnpm publish'",
   "echo npm publish",
   "npm exec echo pub",
+  "command -v npm pub",
 ])("does not classify harmless text as publication: %s", (command) => {
   expect(containsPublishCommand(command)).toBe(false);
   expect(

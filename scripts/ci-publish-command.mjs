@@ -6,6 +6,14 @@ const NPM_PUBLISH = /^pub(?:l(?:i(?:s(?:h)?)?)?)?$/;
 const PNPM_PUBLISH = /^publish$/;
 const QUOTE = /["']/u;
 const WHITESPACE = /\s/u;
+const ENV_OPTIONS_WITH_VALUE = new Set([
+  "-C",
+  "--chdir",
+  "-S",
+  "--split-string",
+  "-u",
+  "--unset",
+]);
 const isEscaped = (character, quote) => character === "\\" && quote !== "'";
 
 function closingParenthesis(text, start) {
@@ -124,8 +132,65 @@ function shellCommands(source) {
   return commands;
 }
 
+function skipAssignments(tokens, start) {
+  let index = start;
+  while (ASSIGNMENT.test(tokens[index] ?? "")) {
+    index += 1;
+  }
+  return index;
+}
+
+function afterCommandPrefix(tokens, start) {
+  if (["-v", "-V"].includes(tokens[start])) {
+    return -1;
+  }
+  let index = start;
+  while (["-p", "--"].includes(tokens[index])) {
+    index += 1;
+  }
+  return index;
+}
+
+function afterExecPrefix(tokens, start) {
+  let index = start;
+  while (["-c", "-l", "--"].includes(tokens[index])) {
+    index += 1;
+  }
+  return tokens[index] === "-a" ? index + 2 : index;
+}
+
+function afterEnvPrefix(tokens, start) {
+  let index = start;
+  while (tokens[index]?.startsWith("-")) {
+    const option = tokens[index++];
+    if (ENV_OPTIONS_WITH_VALUE.has(option)) {
+      index += 1;
+    }
+  }
+  return skipAssignments(tokens, index);
+}
+
+const PREFIX_UNWRAPPERS = new Map([
+  ["command", afterCommandPrefix],
+  ["env", afterEnvPrefix],
+  ["exec", afterExecPrefix],
+]);
+
+function invokedExecutable(tokens) {
+  let index = skipAssignments(tokens, 0);
+  while (index < tokens.length) {
+    const executable = tokens[index]?.replace(BASENAME, "");
+    const unwrap = PREFIX_UNWRAPPERS.get(executable);
+    if (unwrap === undefined) {
+      return index;
+    }
+    index = unwrap(tokens, index + 1);
+  }
+  return -1;
+}
+
 function packageCommand(tokens, executableName, commandPattern) {
-  const executable = tokens.findIndex((token) => !ASSIGNMENT.test(token));
+  const executable = invokedExecutable(tokens);
   if (tokens[executable]?.replace(BASENAME, "") !== executableName) {
     return false;
   }
