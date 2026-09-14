@@ -1,128 +1,195 @@
 import { expect, it } from "vitest";
+import { containsPublishCommand } from "./ci-publish-command.mjs";
 import {
+  ciWorkflow,
   githubExpression,
   releaseWorkflow,
+  replaceWorkflowSource,
 } from "./ci-release-gating.fixture.mjs";
 import { releaseSequencingProblems } from "./ci-release-gating.mjs";
 
-// Publish must retain GitHub's default success propagation. These mutations
-// model overrides that could otherwise publish after an earlier gate failed.
-it.each([
-  [`if: ${githubExpression("always()")}`, "successful-step"],
-  ["continue-on-error: true", "fail closed"],
-])("fails when the publish step adds %s", (override, error) => {
-  const workflow = releaseWorkflow();
-  workflow.source = workflow.source.replace(
-    "      - run: pnpm tegami ci",
-    `      - run: pnpm tegami ci\n        ${override}`
-  );
-  const problems = releaseSequencingProblems([workflow]);
-  expect(problems.some((problem) => problem.includes(error))).toBe(true);
-});
+function expectRejected(workflow, fragment = "canonical") {
+  const problems = releaseSequencingProblems([
+    workflow,
+    ...(workflow.path.endsWith("release.yml") ? [ciWorkflow()] : []),
+  ]);
+  expect(
+    problems.some((problem) => problem.includes(fragment)),
+    problems
+  ).toBe(true);
+}
 
-it("checks a second matching publish step for status overrides", () => {
-  const workflow = releaseWorkflow();
-  workflow.source = workflow.source.replace(
-    "      - run: pnpm tegami ci",
-    `      - run: pnpm tegami ci\n      - run: pnpm tegami ci\n        if: ${githubExpression("always()")}`
-  );
-  const problems = releaseSequencingProblems([workflow]);
-  expect(problems.some((problem) => problem.includes("successful-step"))).toBe(
-    true
-  );
-});
-
-it("rejects duplicate publish steps even without a status override", () => {
-  const workflow = releaseWorkflow();
-  workflow.source = workflow.source.replace(
-    "      - run: pnpm tegami ci",
-    "      - run: pnpm tegami ci\n      - run: pnpm tegami ci"
-  );
-  const problems = releaseSequencingProblems([workflow]);
-  expect(problems.some((problem) => problem.includes("exactly one"))).toBe(
-    true
-  );
-});
-
-it("rejects steps after publish and alternate publish commands", () => {
-  const workflow = releaseWorkflow();
-  workflow.source = workflow.source.replace(
-    "      - run: pnpm tegami ci",
-    "      - run: pnpm tegami ci\n      - run: pnpm publish --recursive"
-  );
-  const problems = releaseSequencingProblems([workflow]);
-  expect(problems.some((problem) => problem.includes("unrecognized"))).toBe(
-    true
-  );
-  expect(problems.some((problem) => problem.includes("final step"))).toBe(true);
-});
+const BEFORE_BUILD =
+  "      - name: Build release artifacts\n        run: pnpm build";
+const VERIFY =
+  "      - name: Verify release artifacts\n        run: pnpm verify:release";
+const PUBLISH =
+  "      - name: Version or publish packages\n        run: pnpm tegami ci";
 
 it.each([
+  "npm --workspace packages/runtime pub",
+  "npm --workspace packages/runtime publ",
+  "npm --workspace packages/runtime publi",
+  "npm --workspace packages/runtime publis",
+  "npm --loglevel verbose --workspace packages/runtime pub",
   "pnpm --filter @minpeter/pss-runtime publish",
-  "npm --workspace packages/runtime publish",
-])("rejects option-bearing alternate publish command: %s", (command) => {
-  const workflow = releaseWorkflow();
-  workflow.source = workflow.source.replace(
-    "      - run: pnpm build",
-    `      - run: ${command}\n      - run: pnpm build`
+])("rejects an alternate package command before publish: %s", (command) => {
+  const workflow = replaceWorkflowSource(
+    releaseWorkflow(),
+    BEFORE_BUILD,
+    `      - run: ${command}\n${BEFORE_BUILD}`
   );
-  const problems = releaseSequencingProblems([workflow]);
-  expect(problems.some((problem) => problem.includes("unrecognized"))).toBe(
-    true
-  );
+  expectRejected(workflow, "canonical steps");
 });
 
-it("rejects a strategy that would execute the publish job more than once", () => {
-  const workflow = releaseWorkflow();
-  workflow.source = workflow.source.replace(
-    "  publish:\n",
-    "  publish:\n    strategy:\n      matrix:\n        registry: [one, two]\n"
-  );
-  const problems = releaseSequencingProblems([workflow]);
-  expect(problems.some((problem) => problem.includes("exactly once"))).toBe(
-    true
-  );
-});
-
-it.each(["true", githubExpression("true")])(
-  "rejects an expression-capable artifact gate override %s",
-  (value) => {
-    const workflow = releaseWorkflow();
-    workflow.source = workflow.source.replace(
-      "      - run: pnpm build",
-      `      - run: pnpm build\n        continue-on-error: ${value}`
+it.each(["n\\\npm p\\\nub", "n\"\"pm p''ub", "pn\\\npm publish"])(
+  "recognizes shell-tokenized publication: %s",
+  (command) => {
+    expect(containsPublishCommand(command)).toBe(true);
+    const workflow = replaceWorkflowSource(
+      releaseWorkflow(),
+      BEFORE_BUILD,
+      `      - run: |\n          ${command.replaceAll("\n", "\n          ")}\n${BEFORE_BUILD}`
     );
-    const problems = releaseSequencingProblems([workflow]);
-    expect(problems.some((problem) => problem.includes("does not build"))).toBe(
-      true
+    expectRejected(workflow, "canonical steps");
+  }
+);
+
+it.each([
+  "./.github/actions/publish",
+  "vendor/npm-publish@0123456789012345678901234567890123456789",
+])("rejects a local or external publication action: %s", (uses) => {
+  const workflow = replaceWorkflowSource(
+    releaseWorkflow(),
+    BEFORE_BUILD,
+    `      - uses: ${uses}\n${BEFORE_BUILD}`
+  );
+  expectRejected(workflow, "canonical steps");
+});
+
+it("rejects a later alternate publish command", () => {
+  const workflow = replaceWorkflowSource(
+    releaseWorkflow(),
+    PUBLISH,
+    `${PUBLISH}\n      - run: npm pub`
+  );
+  expectRejected(workflow, "canonical steps");
+});
+
+it("requires verification to be byte-adjacent to publication", () => {
+  const workflow = replaceWorkflowSource(
+    releaseWorkflow(),
+    VERIFY,
+    `${VERIFY}\n      - run: rm -rf dist && pnpm build`
+  );
+  expectRejected(workflow, "canonical steps");
+});
+
+it.each([
+  [BEFORE_BUILD, "does not build"],
+  [VERIFY, "does not verify"],
+])("rejects an omitted artifact gate", (gate, error) => {
+  const workflow = replaceWorkflowSource(releaseWorkflow(), `${gate}\n`, "");
+  expectRejected(workflow, error);
+});
+
+it.each(["if: false", "continue-on-error: true"])(
+  "rejects a fail-open build gate: %s",
+  (override) => {
+    const workflow = replaceWorkflowSource(
+      releaseWorkflow(),
+      BEFORE_BUILD,
+      `${BEFORE_BUILD}\n        ${override}`
+    );
+    expectRejected(workflow, "does not build");
+  }
+);
+
+it.each(["true", '"false"', githubExpression("inputs.tolerate")])(
+  "rejects validation caller continue-on-error %s",
+  (value) => {
+    expectRejected(
+      releaseWorkflow({ validationContinueOnError: value }),
+      "validation job"
     );
   }
 );
 
-it("accepts literal false on fail-closed artifact gates", () => {
-  const workflow = releaseWorkflow();
-  workflow.source = workflow.source
-    .replace(
-      "      - run: pnpm build",
-      "      - run: pnpm build\n        continue-on-error: false"
-    )
-    .replace(
-      "      - run: pnpm verify:release",
-      "      - run: pnpm verify:release\n        continue-on-error: false"
-    );
-  expect(releaseSequencingProblems([workflow])).toEqual([]);
+it("accepts absent or literal false validation caller overrides", () => {
+  expect(releaseSequencingProblems([releaseWorkflow(), ciWorkflow()])).toEqual(
+    []
+  );
+  expect(
+    releaseSequencingProblems([
+      releaseWorkflow({ validationContinueOnError: false }),
+      ciWorkflow(),
+    ])
+  ).toEqual([]);
 });
 
-it("rejects a job-level continue-on-error override", () => {
-  const workflow = releaseWorkflow();
-  workflow.source = workflow.source.replace(
-    "  publish:\n",
-    `  publish:\n    continue-on-error: ${githubExpression("true")}\n`
+it("accepts literal false on called runner jobs and steps", () => {
+  const jobFalse = replaceWorkflowSource(
+    ciWorkflow(),
+    "  checks:\n",
+    "  checks:\n    continue-on-error: false\n"
   );
-  const problems = releaseSequencingProblems([workflow]);
-  expect(
-    problems.some((problem) =>
-      problem.includes('job "publish" must fail closed')
-    )
-  ).toBe(true);
+  const stepFalse = replaceWorkflowSource(
+    jobFalse,
+    "        run: pnpm test",
+    "        run: pnpm test\n        continue-on-error: false"
+  );
+  expect(releaseSequencingProblems([releaseWorkflow(), stepFalse])).toEqual([]);
+});
+
+it.each([
+  ["job", "  checks:\n", "  checks:\n    continue-on-error: true\n"],
+  [
+    "step expression",
+    "        run: pnpm test",
+    `        run: pnpm test\n        continue-on-error: ${githubExpression("true")}`,
+  ],
+  [
+    "step string false",
+    "        run: pnpm test",
+    '        run: pnpm test\n        continue-on-error: "false"',
+  ],
+])("rejects fail-open nested CI %s override", (_label, from, to) => {
+  const ci = replaceWorkflowSource(ciWorkflow(), from, to);
+  expectRejected(ci, "must fail closed");
+});
+
+it("requires numeric timeout evidence on every called runner job", () => {
+  const ci = replaceWorkflowSource(
+    ciWorkflow(),
+    "    timeout-minutes: 45\n",
+    `    timeout-minutes: ${githubExpression("inputs.timeout")}\n`
+  );
+  expectRejected(ci, "numeric timeout");
+});
+
+it.each([
+  ["trigger branch", `ref: ${githubExpression("github.sha")}`, "ref: main"],
+  [
+    "dynamic ref",
+    `ref: ${githubExpression("github.sha")}`,
+    `ref: ${githubExpression("inputs.ref")}`,
+  ],
+  [
+    "checkout action",
+    "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+    "actions/checkout@v7",
+  ],
+  ["checkout semantics", "fetch-depth: 0", "fetch-depth: 1"],
+])("rejects publish checkout drift: %s", (_label, from, to) => {
+  expectRejected(replaceWorkflowSource(releaseWorkflow(), from, to));
+});
+
+it.each([
+  'echo "npm publish is disabled"',
+  "# npm publish is disabled",
+  "printf '%s\\n' 'pnpm publish'",
+  "echo npm publish",
+  "npm exec echo pub",
+])("does not classify harmless text as publication: %s", (command) => {
+  expect(containsPublishCommand(command)).toBe(false);
 });

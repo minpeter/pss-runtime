@@ -10,4 +10,5 @@ packages:
 
 ## Close remaining release-policy bypasses
 
-Require one final, non-matrix publish and reject dynamic fail-open overrides on release artifact gates.
+Allowlist the exact same-SHA build, verification, and final publish sequence, and
+reject alternate publication paths or fail-open validation overrides.

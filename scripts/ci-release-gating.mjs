@@ -16,10 +16,12 @@
 //                                    protection with a deferred status.
 
 import { CI_WORKFLOW_PATH } from "./ci-fast-gate.mjs";
+import { containsPublishCommand } from "./ci-publish-command.mjs";
 import {
-  containsPublishCommand,
+  calledWorkflowProblems,
   publishJobProblems,
   publishStepLocations,
+  validationJobProblems,
 } from "./ci-publish-policy.mjs";
 import { triggerSet } from "./flaky-ci.mjs";
 import { itemSections } from "./governance-deferred.mjs";
@@ -82,35 +84,34 @@ function publishSequencingProblems(docs, problems) {
       `${RELEASE_WORKFLOW} must call ${VALIDATION_WORKFLOW} exactly once`
     );
   }
+  for (const validationId of validationIds) {
+    problems.push(
+      ...validationJobProblems(
+        validationId,
+        jobs[validationId],
+        RELEASE_WORKFLOW
+      )
+    );
+  }
   const publishLocations = publishStepLocations(
     jobs,
     RELEASE_WORKFLOW,
     problems
   );
-  for (const { jobId, job, publishIndex } of publishLocations) {
+  for (const { jobId, job } of publishLocations) {
     problems.push(
       ...publishJobProblems({
         jobId,
         job,
         validationIds,
-        publishIndex,
         workflowPath: RELEASE_WORKFLOW,
       })
     );
   }
-  if (publishLocations.length === 0) {
+  if (Object.keys(jobs).length !== 2) {
     problems.push(
-      `${RELEASE_WORKFLOW} has no publish step; expected exactly one (pnpm tegami ci)`
+      `${RELEASE_WORKFLOW} must contain only validation and canonical publish jobs`
     );
-  } else if (publishLocations.length > 1) {
-    problems.push(
-      `${RELEASE_WORKFLOW} must have exactly one publish step (pnpm tegami ci)`
-    );
-  } else {
-    const [{ jobId, publishIndex }] = publishLocations;
-    if (publishIndex !== (jobs[jobId]?.steps?.length ?? 0) - 1) {
-      problems.push(`${RELEASE_WORKFLOW} publish step must be the final step`);
-    }
   }
   problems.push(...permissionIsolationProblems(jobs, validationIds));
   if (release.doc?.concurrency?.["cancel-in-progress"] !== false) {
@@ -140,6 +141,7 @@ function reusableConcurrencyProblems(docs, problems) {
       `${CI_WORKFLOW_PATH} must cancel stale runs within each isolated caller group`
     );
   }
+  problems.push(...calledWorkflowProblems(ci.doc, CI_WORKFLOW_PATH));
 }
 
 export function releaseSequencingProblems(workflows) {
