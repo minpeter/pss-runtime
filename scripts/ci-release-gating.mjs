@@ -82,22 +82,26 @@ function publishSequencingProblems(docs, problems) {
   let publishSeen = false;
   for (const [jobId, job] of Object.entries(release.doc?.jobs ?? {})) {
     const steps = job?.steps ?? [];
-    const publishIndex = steps.findIndex(
-      (step) => typeof step?.run === "string" && PUBLISH_STEP.test(step.run)
+    const publishIndexes = steps.flatMap((step, index) =>
+      typeof step?.run === "string" && PUBLISH_STEP.test(step.run)
+        ? [index]
+        : []
     );
-    if (publishIndex === -1) {
+    if (publishIndexes.length === 0) {
       continue;
     }
     publishSeen = true;
-    problems.push(
-      ...publishJobProblems({
-        jobId,
-        job,
-        validationIds,
-        publishIndex,
-        workflowPath: RELEASE_WORKFLOW,
-      })
-    );
+    for (const publishIndex of publishIndexes) {
+      problems.push(
+        ...publishJobProblems({
+          jobId,
+          job,
+          validationIds,
+          publishIndex,
+          workflowPath: RELEASE_WORKFLOW,
+        })
+      );
+    }
   }
   if (!publishSeen) {
     problems.push(`${RELEASE_WORKFLOW} has no publish step (pnpm tegami ci)`);

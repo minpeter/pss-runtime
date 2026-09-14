@@ -25,6 +25,7 @@ export function publishJobProblems({
   workflowPath,
 }) {
   const problems = [];
+  const publishStep = job?.steps?.[publishIndex];
   if (!validationIds.some((id) => needsJob(job, id))) {
     problems.push(
       `${workflowPath} job "${jobId}" publishes without needing the complete validation job`
@@ -51,6 +52,14 @@ export function publishJobProblems({
     problems.push(
       `${workflowPath} publish job "${jobId}" must rely on the default successful-needs condition`
     );
+  }
+  if (publishStep?.if !== undefined) {
+    problems.push(
+      `${workflowPath} publish step must rely on the default successful-step condition`
+    );
+  }
+  if (publishStep?.["continue-on-error"] !== undefined) {
+    problems.push(`${workflowPath} publish step must fail closed`);
   }
   if (!hasRequiredStep(job, publishIndex, BUILD_STEP)) {
     problems.push(
