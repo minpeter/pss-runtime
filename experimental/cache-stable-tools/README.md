@@ -168,10 +168,10 @@ the current tree, and no verifier can re-check the snapshot.
 
 ## Artifacts and interpretation
 
-[`latest-freerouter.json`](./latest-freerouter.json) is the campaign's
-serialized evidence. It was authoritative only while its independent verifier
-and runner-source hash could be re-run; both are gone, so read it as a dated
-record. Snapshot results and SHA-256 are recorded below.
+The former `latest-freerouter.json` snapshot was removed because it was exactly
+1 MiB of truncated, invalid JSON and its retired verifier could no longer
+validate it. The human-readable snapshot and its historical SHA-256 remain
+below as the dated campaign record; they are not reproducible evidence.
 
 The router's upstream provider, retry behavior, backend affinity, cache policy,
 load, and usage normalization remain opaque. Sanitized
