@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
+const githubExpression = (name) => `\${{ ${name} }}`;
+
 describe("release workflow", () => {
   it("versions or publishes main through Tegami", () => {
     const ciWorkflow = readFileSync(".github/workflows/ci.yml", "utf8");
@@ -25,13 +27,24 @@ describe("release workflow", () => {
     expect(ciWorkflow).toContain("node-version: ${{ matrix.node }}");
     expect(ciWorkflow).toContain('node: ["24", "26"]');
     expect(ciWorkflow).toContain("cancel-in-progress: true");
-    expect(workflow).toContain("- name: Install sandbox prerequisite");
-    expect(workflow).toContain(
+    expect(ciWorkflow).toContain("  workflow_call:");
+    expect(ciWorkflow).toContain(
+      `group: ci-${githubExpression("github.workflow")}-${githubExpression("github.ref")}`
+    );
+    expect(ciWorkflow).toContain("timeout-minutes: 45");
+    expect(ciWorkflow).toContain("- name: Install sandbox prerequisite");
+    expect(ciWorkflow).toContain(
       "sudo apt-get install --yes --no-install-recommends bubblewrap procps util-linux"
     );
-    expect(workflow).toContain('PSS_TASK_VALIDATOR_NETWORK_ISOLATED: "1"');
-    expect(workflow).toContain("pnpm tegami ci");
+    expect(ciWorkflow).toContain('PSS_TASK_VALIDATOR_NETWORK_ISOLATED: "1"');
+    expect(workflow).toContain("uses: ./.github/workflows/ci.yml");
+    expect(workflow).toContain("needs: validate");
+    expect(workflow).toContain("cancel-in-progress: false");
+    expect(workflow).toContain("timeout-minutes: 15");
+    expect(workflow).toContain("pnpm build");
     expect(workflow).toContain("pnpm verify:release");
+    expect(workflow).toContain("pnpm tegami ci");
+    expect(ciWorkflow).toContain("pnpm verify:release");
     expect(packageJson.scripts["verify:release"]).toContain(
       "pnpm verify:package-apis"
     );
