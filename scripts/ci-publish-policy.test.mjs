@@ -76,6 +76,12 @@ it.each([
     `      - uses: ${uses}\n${BEFORE_BUILD}`
   );
   expectRejected(workflow, "canonical steps");
+  const ci = replaceWorkflowSource(
+    ciWorkflow(),
+    "        run: pnpm test",
+    `        uses: ${uses}`
+  );
+  expectRejected(ci, "unapproved action");
 });
 
 it("rejects a later alternate publish command", () => {
