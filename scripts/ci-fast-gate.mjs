@@ -71,6 +71,12 @@ const CORE_STEP_ORDER = [
 
 const BUILD_STEP = /(^|\s)pnpm\s+build(\s|$)/;
 const BUNDLE_STEP = /(^|\s)check:bundle-size\b/;
+const FAIL_OPEN_ANALYSIS =
+  /(^|\s)check:(?:unused|duplicates)\b[^\n]*--allow-unavailable(\s|$)/;
+
+function joinShellContinuations(command) {
+  return command.replace(/\\\r?\n[\t ]*/g, " ");
+}
 
 // Expensive or scheduled checks that must never run inline in ci.yml. Each
 // pattern matches the step fields (name/run/uses) of the check's home
@@ -142,6 +148,13 @@ export function fastGateProblems(workflows) {
     if (!steps.some((text) => pattern.test(text))) {
       problems.push(`ci.yml does not invoke the ${label}`);
     }
+  }
+  if (
+    steps.some((text) => FAIL_OPEN_ANALYSIS.test(joinShellContinuations(text)))
+  ) {
+    problems.push(
+      "ci.yml opts into --allow-unavailable; Knip and jscpd must fail closed in CI"
+    );
   }
   problems.push(...orderProblems(steps));
   const buildIndex = firstIndex(steps, BUILD_STEP);

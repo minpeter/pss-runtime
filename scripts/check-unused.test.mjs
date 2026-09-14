@@ -148,21 +148,21 @@ describe("check:unused wrapper", () => {
     expect(report.truncated).toBe(true);
   });
 
-  it("emits an explicit SKIP message and exits 0 when the binary is absent (VAL-SEC-004)", () => {
+  it("fails closed when the binary is absent (VAL-SEC-004)", () => {
     const dir = fixtureDir();
     const result = run(["--bin", join(dir, "no-such-knip-binary")]);
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain("SKIP check:unused");
-    expect(result.stdout).toContain("not a pass");
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("failing closed");
   });
 
-  it("emits an explicit SKIP message and exits 0 when the tool fails to execute (VAL-SEC-004)", () => {
+  it("skips an unavailable tool only with explicit local opt-in (VAL-SEC-004)", () => {
     const dir = fixtureDir();
     const fake = join(dir, "fake-knip");
     writeFileSync(fake, "#!/bin/sh\nexit 3\n", { mode: 0o755 });
-    const result = run(["--bin", fake]);
+    const result = run(["--allow-unavailable", "--bin", fake]);
     expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain("SKIP check:unused");
+    expect(result.stdout).toContain("SKIP check:unused unavailable");
+    expect(result.stdout).toContain("explicitly allowed, not a pass");
   });
 
   it("fails the run when the committed baseline file is unreadable", () => {
