@@ -18,9 +18,8 @@
 //   --write-baseline  rewrite the baseline from current findings; the result
 //                     is a reviewed signature diff, never a numeric count
 //
-// Tool unavailable (binary missing, fails to execute, or emits no parseable
-// report): prints an explicit SKIP message and exits 0 — a documented skip,
-// never a silent pass and never a workflow failure (VAL-SEC-004).
+// Tool failures fail closed. Local callers may explicitly opt into a
+// documented skip with --allow-unavailable; CI never uses that mode.
 
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -45,6 +44,7 @@ Modes:
 
 Options:
   --help                 print this usage and exit 0
+  --allow-unavailable    local-only: exit 0 when Knip cannot run
   --input <path>         read a knip JSON report instead of running knip
   --baseline <path>      baseline file (default: scripts/knip-baseline.json)
   --out <path>           report output (default: report/knip-unused.json)
@@ -57,6 +57,7 @@ signature list (file + symbol), never a numeric count.`;
 function parseArgs(argv) {
   const args = {
     help: false,
+    allowUnavailable: false,
     report: false,
     writeBaseline: false,
     input: null,
@@ -69,6 +70,8 @@ function parseArgs(argv) {
     const token = argv[index];
     if (token === "--help" || token === "-h") {
       args.help = true;
+    } else if (token === "--allow-unavailable") {
+      args.allowUnavailable = true;
     } else if (token === "--report") {
       args.report = true;
     } else if (token === "--write-baseline") {
@@ -166,10 +169,15 @@ function main() {
   }
   const loaded = loadReport(args);
   if (loaded.skip) {
-    console.log(
-      `SKIP check:unused: ${loaded.skip}; the gate was not evaluated (documented skip, not a pass).`
+    const message = `check:unused unavailable: ${loaded.skip}`;
+    if (args.allowUnavailable) {
+      console.log(`SKIP ${message}; explicitly allowed, not a pass.`);
+      return 0;
+    }
+    console.error(
+      `${message}; failing closed (use --allow-unavailable locally to skip).`
     );
-    return 0;
+    return 1;
   }
   if (loaded.error) {
     console.error(`check:unused error: ${loaded.error}`);

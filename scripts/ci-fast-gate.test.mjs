@@ -104,6 +104,27 @@ describe("fast gate: deterministic checks wired into ci.yml (VAL-SEC-046)", () =
     expect(problems.some((p) => p.includes("jscpd"))).toBe(true);
   });
 
+  it.each(["check:unused", "check:duplicates"])(
+    "fails when CI opts %s into the local availability bypass",
+    (command) => {
+      const runs = FAST_RUNS.map((run) =>
+        run === `pnpm ${command}` ? `${run} --allow-unavailable` : run
+      );
+      const problems = fastGateProblems([ciWorkflow(runs)]);
+      expect(problems.some((p) => p.includes("must fail closed"))).toBe(true);
+    }
+  );
+
+  it("fails when CI hides the local availability bypass after a shell continuation", () => {
+    const workflow = ciWorkflow();
+    workflow.source = workflow.source.replace(
+      "      - run: pnpm check:unused",
+      "      - run: |\n          pnpm check:unused \\\n            --allow-unavailable"
+    );
+    const problems = fastGateProblems([workflow]);
+    expect(problems.some((p) => p.includes("must fail closed"))).toBe(true);
+  });
+
   it("fails when extension coverage is missing", () => {
     const runs = FAST_RUNS.filter(
       (run) => !run.includes("coverage:extensions")
