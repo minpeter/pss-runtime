@@ -29,6 +29,7 @@
     "check:unused:report": "node scripts/check-unused.mjs --report",
     "check:workspace-drift": "node scripts/check-workspace-version-drift.mjs --check",
     "coverage": "pnpm --filter @minpeter/pss-coding-agent build && vitest run --config vitest.coverage.config.ts --coverage",
+    "coverage:extensions": "pnpm --filter './extensions/*' test:coverage",
     "dev": "pnpm --filter @minpeter/pss-example-basic start",
     "dev:tui": "tsx --conditions=@minpeter/pss-source scripts/dev-tui.mjs",
     "eval:edge-remote": "pnpm --filter @minpeter/pss-worker-agent eval:remote",
@@ -50,11 +51,12 @@
     "test:timing": "node scripts/test-timing.mjs",
     "typecheck": "turbo run typecheck && tsc -p tsconfig.json --noEmit",
     "verify:edge": "pnpm --filter @minpeter/pss-worker-agent build",
-    "verify:package-apis": "publint packages/runtime && publint apps/coding-agent && publint extensions/latex && publint extensions/mermaid && publint extensions/web && node scripts/packed-consumer-smoke.mjs",
+    "verify:package-apis": "publint packages/runtime && publint apps/coding-agent && publint extensions/latex && publint extensions/mermaid && publint extensions/web && attw --pack extensions/latex --profile esm-only && attw --pack extensions/mermaid --profile esm-only && attw --pack extensions/web --profile esm-only && node scripts/packed-consumer-smoke.mjs",
     "verify:release": "node scripts/verify-release-artifacts.mjs && pnpm verify:package-apis"
   },
   "devDependencies": {
     "@ai-sdk/openai-compatible": "3.0.44",
+    "@arethetypeswrong/cli": "0.18.5",
     "@babel/core": "8.0.1",
     "@babel/parser": "8.0.4",
     "@biomejs/biome": "2.5.12",

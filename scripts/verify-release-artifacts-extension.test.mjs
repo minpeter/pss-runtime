@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { verifyReleaseArtifacts } from "./verify-release-artifacts/core.mjs";
@@ -9,6 +9,18 @@ import {
 
 const malformedWebManifestPattern =
   /^extensions\/web\/package\.json: cannot read package\.json /u;
+
+function removeLicense(manifest) {
+  manifest.license = undefined;
+}
+
+function removePublicAccess(manifest) {
+  manifest.publishConfig.access = undefined;
+}
+
+function removeProvenance(manifest) {
+  manifest.publishConfig.provenance = undefined;
+}
 
 afterEach(cleanupFixtures);
 
@@ -36,6 +48,36 @@ describe("verifyReleaseArtifacts extension package checks", () => {
     expect(
       verifyReleaseArtifacts({ cwd, packages: ["extension-web"] })
     ).toEqual([expect.stringMatching(malformedWebManifestPattern)]);
+  });
+
+  it.each([
+    ["license", removeLicense],
+    ["license file list", (manifest) => manifest.files.pop()],
+    ["public access", removePublicAccess],
+    ["provenance", removeProvenance],
+  ])("fails closed when extension metadata loses %s", (_label, mutate) => {
+    const cwd = createFixture();
+    const manifestPath = resolve(cwd, "extensions/web/package.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    mutate(manifest);
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+
+    expect(
+      verifyReleaseArtifacts({ cwd, packages: ["extension-web"] })
+    ).toContain(
+      "extensions/web/package.json: invalid extension package contract"
+    );
+  });
+
+  it("fails closed when the packaged license file is missing", () => {
+    const cwd = createFixture();
+    rmSync(resolve(cwd, "extensions/web/LICENSE.md"));
+
+    expect(
+      verifyReleaseArtifacts({ cwd, packages: ["extension-web"] })
+    ).toContain(
+      "extensions/web/LICENSE.md is missing; required extension license artifact"
+    );
   });
 
   it("fails closed when Mermaid public entrypoints are missing", () => {

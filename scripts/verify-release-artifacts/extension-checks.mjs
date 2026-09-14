@@ -23,6 +23,28 @@ const EXTENSION_CONTRACTS = {
   },
 };
 
+function extensionManifestIsValid(value, contract) {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const rootExport = isRecord(value.exports) ? value.exports["."] : undefined;
+  const publishConfig = isRecord(value.publishConfig)
+    ? value.publishConfig
+    : undefined;
+  return (
+    value.name === contract.name &&
+    value.license === "SEE LICENSE IN LICENSE.md" &&
+    isRecord(rootExport) &&
+    rootExport.import === "./dist/index.js" &&
+    rootExport.types === "./dist/index.d.ts" &&
+    Array.isArray(value.files) &&
+    value.files.includes("dist") &&
+    value.files.includes("LICENSE.md") &&
+    publishConfig?.access === "public" &&
+    publishConfig.provenance === true
+  );
+}
+
 export function findExtensionArtifactErrors({ cwd, packages }) {
   const errors = [];
 
@@ -37,27 +59,17 @@ export function findExtensionArtifactErrors({ cwd, packages }) {
     const packageJson = readJsonForVerification({ cwd, file: packageJsonPath });
     if (packageJson.error) {
       errors.push(packageJson.error);
-    } else {
-      const value = packageJson.value;
-      const rootExport =
-        isRecord(value) && isRecord(value.exports)
-          ? value.exports["."]
-          : undefined;
-      if (
-        !(
-          isRecord(value) &&
-          value.name === contract.name &&
-          isRecord(rootExport) &&
-          rootExport.import === "./dist/index.js" &&
-          rootExport.types === "./dist/index.d.ts" &&
-          Array.isArray(value.files) &&
-          value.files.includes("dist")
-        )
-      ) {
-        errors.push(
-          `${relativeToCwd(cwd, packageJsonPath)}: invalid extension package contract`
-        );
-      }
+    } else if (!extensionManifestIsValid(packageJson.value, contract)) {
+      errors.push(
+        `${relativeToCwd(cwd, packageJsonPath)}: invalid extension package contract`
+      );
+    }
+
+    const licensePath = join(packageRoot, "LICENSE.md");
+    if (!(existsSync(licensePath) && statSync(licensePath).isFile())) {
+      errors.push(
+        `${relativeToCwd(cwd, licensePath)} is missing; required extension license artifact`
+      );
     }
 
     const distPath = packageDistPath(cwd, packageName);

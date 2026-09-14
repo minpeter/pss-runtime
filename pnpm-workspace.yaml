@@ -10,6 +10,8 @@ patchedDependencies:
   '@oh-my-pi/pi-natives@18.1.5': patches/@oh-my-pi__pi-natives@18.1.5.patch
   '@vercel/agent-eval@2.2.1': patches/@vercel__agent-eval@2.2.1.patch
 overrides:
+  # attw relies on this exact TypeScript build's internal API; do not apply the workspace TypeScript override to it.
+  '@arethetypeswrong/core@0.18.5>typescript': 5.6.1-rc
   # Security-only, parent-scoped resolutions where direct updates cannot reach the vulnerable edge.
   # Keep these exact so unrelated consumers retain their declared dependency ranges.
   '@ai-sdk/provider-utils@3.0.36>undici': 6.28.0

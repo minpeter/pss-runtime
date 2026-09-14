@@ -32,6 +32,13 @@ describe("official extension packages", () => {
       expect(manifest.exports["."].import).toBe("./dist/index.js");
       expect(manifest.exports["."].types).toBe("./dist/index.d.ts");
       expect(manifest.files).toContain("dist");
+      expect(manifest.files).toContain("LICENSE.md");
+      expect(manifest.license).toBe("SEE LICENSE IN LICENSE.md");
+      expect(manifest.publishConfig).toEqual({
+        access: "public",
+        provenance: true,
+      });
+      expect(existsSync(`${directory}/LICENSE.md`)).toBe(true);
     }
   );
 });

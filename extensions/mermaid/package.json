@@ -2,6 +2,7 @@
   "name": "@minpeter/pss-extension-mermaid",
   "version": "0.0.1-next.3",
   "description": "Self-contained Mermaid diagram rendering for the PSS coding-agent TUI.",
+  "license": "SEE LICENSE IN LICENSE.md",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/minpeter/pss-runtime.git",
@@ -19,12 +20,18 @@
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE.md"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsdown",
     "lint": "ultracite check .",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
