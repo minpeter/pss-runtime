@@ -6,7 +6,7 @@ const EMPTY_QUOTES = /""|''/g;
 const ESCAPED_CHARACTER = /\\(.)/g;
 const NPM_PUBLISH = /^pub(?:l(?:i(?:s(?:h)?)?)?)?$/;
 const PNPM_PUBLISH = /^publish$/;
-const SHELL_WORD = /(?:[^\s"'\\]+|"(?:\\.|[^"])*"|'[^']*'|\\.)+/g;
+const SHELL_WORD = /(?:[^\s"'\\]+|"(?:\\.|[^"\\])*"|'[^']*'|\\.)+/g;
 
 function words(command) {
   if (command.trimStart().startsWith("#")) {
