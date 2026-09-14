@@ -16,7 +16,11 @@
 //                                    protection with a deferred status.
 
 import { CI_WORKFLOW_PATH } from "./ci-fast-gate.mjs";
-import { publishJobProblems } from "./ci-publish-policy.mjs";
+import {
+  containsPublishCommand,
+  publishJobProblems,
+  publishStepLocations,
+} from "./ci-publish-policy.mjs";
 import { triggerSet } from "./flaky-ci.mjs";
 import { itemSections } from "./governance-deferred.mjs";
 import { parseWorkflowDocs } from "./workflow-docs.mjs";
@@ -29,7 +33,6 @@ const SECURITY_WORKFLOW_FILES = [
 ];
 
 const PUBLISH_STEP = /(^|\s)pnpm\s+tegami\s+ci(\s|$)/;
-const PUBLISH_ANYWHERE = /\btegami\s+ci\b|\bnpm\s+publish\b|\bpnpm\s+publish\b/;
 const BRANCH_PROTECTION = /branch[- ]protection/i;
 const DEFERRED_STATUS = /status:\s*deferred/i;
 
@@ -79,32 +82,35 @@ function publishSequencingProblems(docs, problems) {
       `${RELEASE_WORKFLOW} must call ${VALIDATION_WORKFLOW} exactly once`
     );
   }
-  let publishSeen = false;
-  for (const [jobId, job] of Object.entries(release.doc?.jobs ?? {})) {
-    const steps = job?.steps ?? [];
-    const publishIndexes = steps.flatMap((step, index) =>
-      typeof step?.run === "string" && PUBLISH_STEP.test(step.run)
-        ? [index]
-        : []
+  const publishLocations = publishStepLocations(
+    jobs,
+    RELEASE_WORKFLOW,
+    problems
+  );
+  for (const { jobId, job, publishIndex } of publishLocations) {
+    problems.push(
+      ...publishJobProblems({
+        jobId,
+        job,
+        validationIds,
+        publishIndex,
+        workflowPath: RELEASE_WORKFLOW,
+      })
     );
-    if (publishIndexes.length === 0) {
-      continue;
-    }
-    publishSeen = true;
-    for (const publishIndex of publishIndexes) {
-      problems.push(
-        ...publishJobProblems({
-          jobId,
-          job,
-          validationIds,
-          publishIndex,
-          workflowPath: RELEASE_WORKFLOW,
-        })
-      );
-    }
   }
-  if (!publishSeen) {
-    problems.push(`${RELEASE_WORKFLOW} has no publish step (pnpm tegami ci)`);
+  if (publishLocations.length === 0) {
+    problems.push(
+      `${RELEASE_WORKFLOW} has no publish step; expected exactly one (pnpm tegami ci)`
+    );
+  } else if (publishLocations.length > 1) {
+    problems.push(
+      `${RELEASE_WORKFLOW} must have exactly one publish step (pnpm tegami ci)`
+    );
+  } else {
+    const [{ jobId, publishIndex }] = publishLocations;
+    if (publishIndex !== (jobs[jobId]?.steps?.length ?? 0) - 1) {
+      problems.push(`${RELEASE_WORKFLOW} publish step must be the final step`);
+    }
   }
   problems.push(...permissionIsolationProblems(jobs, validationIds));
   if (release.doc?.concurrency?.["cancel-in-progress"] !== false) {
@@ -218,7 +224,7 @@ function cleanPathProblems(docs, problems) {
   }
   for (const job of Object.values(ci.doc?.jobs ?? {})) {
     for (const step of job?.steps ?? []) {
-      if (typeof step?.run === "string" && PUBLISH_ANYWHERE.test(step.run)) {
+      if (typeof step?.run === "string" && containsPublishCommand(step.run)) {
         problems.push(
           `${CI_WORKFLOW_PATH} runs a publish step ("${step?.name ?? "?"}"); the clean fast-gate path never publishes`
         );
