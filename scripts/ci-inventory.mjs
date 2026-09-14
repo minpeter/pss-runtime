@@ -21,6 +21,8 @@ import { triggerSet } from "./flaky-ci.mjs";
 import { parseWorkflowDocs } from "./workflow-docs.mjs";
 
 export const CI_INVENTORY_WORKFLOW = ".github/workflows/ci.yml";
+const KNOWN_BOUNDED_REUSABLE_WORKFLOWS = new Set([CI_INVENTORY_WORKFLOW]);
+const LOCAL_PREFIX = /^\.\//;
 
 // The twelve documented fast-gate steps of the ci.yml job `checks`, pinned
 // in relative order (VAL-CROSS-004).
@@ -149,9 +151,36 @@ function classTriggerProblems(entry, triggers) {
   return problems;
 }
 
+function boundedJobProblems(entry, jobId, job, docsByPath) {
+  if (typeof job?.uses !== "string") {
+    return typeof job?.["timeout-minutes"] === "number"
+      ? []
+      : [`${entry.path} job "${jobId}" lacks a bounded timeout-minutes`];
+  }
+  const calledPath = String(job.uses).replace(LOCAL_PREFIX, "");
+  if (!KNOWN_BOUNDED_REUSABLE_WORKFLOWS.has(calledPath)) {
+    return [
+      `${entry.path} job "${jobId}" calls ${job.uses}; only known local reusable workflows have inspectable timeout evidence`,
+    ];
+  }
+  const calledJobs = Object.values(docsByPath.get(calledPath)?.jobs ?? {});
+  if (
+    calledJobs.length === 0 ||
+    calledJobs.some(
+      (calledJob) => typeof calledJob?.["timeout-minutes"] !== "number"
+    )
+  ) {
+    return [
+      `${entry.path} job "${jobId}" calls ${job.uses} without complete bounded timeout evidence`,
+    ];
+  }
+  return [];
+}
+
 export function workflowClassProblems(workflows) {
   const problems = [];
   const docs = parseWorkflowDocs(workflows, problems);
+  const docsByPath = new Map(docs.map(({ path, doc }) => [path, doc]));
   const known = new Set(WORKFLOW_CLASSES.map((entry) => entry.path));
   for (const { path } of docs) {
     if (!known.has(path)) {
@@ -169,16 +198,7 @@ export function workflowClassProblems(workflows) {
     problems.push(...classTriggerProblems(entry, triggerSet(doc?.on)));
     if (entry.bounded) {
       for (const [jobId, job] of Object.entries(doc?.jobs ?? {})) {
-        // Reusable-workflow jobs cannot declare timeout-minutes; their called
-        // workflow owns bounded runner jobs instead.
-        if (
-          typeof job?.uses !== "string" &&
-          typeof job?.["timeout-minutes"] !== "number"
-        ) {
-          problems.push(
-            `${entry.path} job "${jobId}" lacks a bounded timeout-minutes`
-          );
-        }
+        problems.push(...boundedJobProblems(entry, jobId, job, docsByPath));
       }
     }
   }
