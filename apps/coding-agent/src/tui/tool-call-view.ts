@@ -32,6 +32,7 @@ const UNKNOWN_TOOL_NAME = "tool";
 const TRAILING_NEWLINES = /\n+$/;
 const TAB_PATTERN = /\t/g;
 const BACKTICK_FENCE_PATTERN = /`{3,}/g;
+const INPUT_PREVIEW_FRAME_MS = 16;
 
 const ANSI_RESET = "\x1b[0m";
 const ANSI_BG_GRAY = "\x1b[100m";
@@ -254,6 +255,7 @@ export class BaseToolCallView extends Container {
   private error: unknown;
   private finalInput: unknown;
   private inputBuffer = "";
+  private inputPreviewTimer: ReturnType<typeof setTimeout> | undefined;
   private output: unknown;
   private outputDenied = false;
   private outputDeniedReason: string | undefined;
@@ -296,40 +298,79 @@ export class BaseToolCallView extends Container {
 
   dispose(): void {
     this.disposed = true;
+    this.cancelInputPreviewTimer();
     this.stopPendingIndicator();
   }
 
   async appendInputChunk(chunk: string): Promise<void> {
-    this.inputBuffer += chunk;
-    const { value, state } = await parsePartialJson(this.inputBuffer);
     if (this.disposed) {
       return;
+    }
+    this.cancelInputPreviewTimer();
+    this.inputBuffer += chunk;
+    await this.refreshParsedInput();
+  }
+
+  queueInputChunk(chunk: string): void {
+    if (this.disposed) {
+      return;
+    }
+    this.inputBuffer += chunk;
+    if (this.inputPreviewTimer !== undefined) {
+      return;
+    }
+    this.inputPreviewTimer = setTimeout(() => {
+      this.inputPreviewTimer = undefined;
+      this.refreshParsedInput()
+        .then((refreshed) => {
+          if (refreshed) {
+            this.requestRender();
+          }
+        })
+        .catch(() => undefined);
+    }, INPUT_PREVIEW_FRAME_MS);
+    this.inputPreviewTimer.unref?.();
+  }
+
+  private async refreshParsedInput(): Promise<boolean> {
+    const input = this.inputBuffer;
+    const { value, state } = await parsePartialJson(input);
+    if (this.disposed) {
+      return false;
+    }
+    if (input !== this.inputBuffer) {
+      return false;
     }
     // Suppress transient empty objects during partial parsing to prevent
     // renderers from briefly showing "(unknown)" headers before real data arrives.
     if (state !== "successful-parse" && isPlainEmptyObject(value)) {
-      return;
+      return false;
     }
     this.parsedInput = value;
     this.refresh();
+    return true;
   }
 
   setError(error: unknown): void {
+    this.cancelInputPreviewTimer();
     this.error = error;
     this.refresh();
   }
 
   setFinalInput(input: unknown): void {
+    this.cancelInputPreviewTimer();
     this.finalInput = input;
     this.refresh();
   }
 
   setOutput(output: unknown): void {
+    this.cancelInputPreviewTimer();
     this.output = output;
     this.refresh();
   }
 
   setOutputDenied(reason?: string): void {
+    this.cancelInputPreviewTimer();
     this.outputDenied = true;
     this.outputDeniedReason =
       reason === undefined ? undefined : sanitizeTerminalText(reason);
@@ -390,6 +431,13 @@ export class BaseToolCallView extends Container {
     this.readBody.setText(
       options?.allowAnsi ? body : sanitizeTerminalText(body)
     );
+  }
+
+  private cancelInputPreviewTimer(): void {
+    if (this.inputPreviewTimer !== undefined) {
+      clearTimeout(this.inputPreviewTimer);
+      this.inputPreviewTimer = undefined;
+    }
   }
 
   private ensurePrettyBlockComponents(): void {

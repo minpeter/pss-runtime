@@ -143,6 +143,29 @@ describe("BaseToolCallView rendering", () => {
 
     view.dispose();
   });
+
+  it("batches a burst of large streaming input into one preview refresh", async () => {
+    const requestRender = vi.fn();
+    const view = new BaseToolCallView(
+      "call_large_stream",
+      "write_file",
+      markdownTheme,
+      requestRender
+    );
+    requestRender.mockClear();
+    view.queueInputChunk('{"path":"large.ts","content":"');
+    for (let index = 0; index < 2000; index += 1) {
+      view.queueInputChunk(`line ${index}\\n`);
+    }
+
+    expect(requestRender).not.toHaveBeenCalled();
+    await vi.runAllTimersAsync();
+
+    expect(requestRender).toHaveBeenCalledOnce();
+    expect(renderView(view)).toContain("large.ts");
+    expect(renderView(view)).toContain("1999");
+    view.dispose();
+  });
 });
 
 const collapseBlankLines = (lines: string[]): string[] =>

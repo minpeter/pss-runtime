@@ -110,11 +110,11 @@ export interface PiTuiStreamState {
   streamedToolCallIds: Set<string>;
 }
 
-export const syncToolInputToView = async (
+export const syncToolInputToView = (
   state: PiTuiStreamState,
   toolCallId: string,
   toolState: ToolInputRenderState
-): Promise<void> => {
+): void => {
   const hasKnownToolName = toolState.toolName !== UNKNOWN_TOOL_NAME;
   if (!(state.flags.showRawToolIo || hasKnownToolName)) {
     return;
@@ -132,7 +132,7 @@ export const syncToolInputToView = async (
     return;
   }
 
-  await toolView.appendInputChunk(pendingInput);
+  toolView.queueInputChunk(pendingInput);
   toolState.renderedInputLength = toolState.inputBuffer.length;
 };
 
@@ -186,7 +186,7 @@ export const handleReasoningEnd: StreamPartHandler = (_part, state) => {
   state.onReasoningEnd?.();
 };
 
-export const handleToolInputStart: StreamPartHandler = async (part, state) => {
+export const handleToolInputStart: StreamPartHandler = (part, state) => {
   const toolCallId = getToolInputId(
     part as { id?: string; toolCallId?: string }
   );
@@ -201,10 +201,10 @@ export const handleToolInputStart: StreamPartHandler = async (part, state) => {
 
   state.activeToolInputs.set(toolCallId, toolState);
   state.streamedToolCallIds.add(toolCallId);
-  await syncToolInputToView(state, toolCallId, toolState);
+  syncToolInputToView(state, toolCallId, toolState);
 };
 
-export const handleToolInputDelta: StreamPartHandler = async (part, state) => {
+export const handleToolInputDelta: StreamPartHandler = (part, state) => {
   const toolCallId = getToolInputId(
     part as { id?: string; toolCallId?: string }
   );
@@ -227,7 +227,7 @@ export const handleToolInputDelta: StreamPartHandler = async (part, state) => {
   if (chunk && toolState) {
     toolState.inputBuffer += chunk;
     toolState.hasContent = true;
-    await syncToolInputToView(state, toolCallId, toolState);
+    syncToolInputToView(state, toolCallId, toolState);
   }
 
   state.streamedToolCallIds.add(toolCallId);
