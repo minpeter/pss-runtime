@@ -11,7 +11,7 @@ const NODE_ACTION =
 const UPLOAD_ACTION =
   "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
 const CANONICAL_STEPS_SHA256 =
-  "fc9caa3e23e9605df91360e1c50814294432735d794786fd6535bc31821113ac";
+  "343d4108ea9e5f4ad6305d5fbb6ee6dbe2690efedf14cfa1004dc7b6d5fb961b";
 
 const NODE_24_STEPS = new Set([
   "Audit dependencies",
