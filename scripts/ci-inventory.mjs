@@ -45,15 +45,15 @@ export const FAST_GATE_STEPS = [
 export const WORKFLOW_CLASSES = [
   {
     path: CI_INVENTORY_WORKFLOW,
-    require: ["pull_request", "push", "workflow_dispatch"],
+    require: ["pull_request", "push", "workflow_call", "workflow_dispatch"],
     forbid: ["schedule"],
-    bounded: false,
+    bounded: true,
   },
   {
     path: ".github/workflows/release.yml",
     require: ["push"],
     forbid: ["pull_request", "schedule", "workflow_dispatch"],
-    bounded: false,
+    bounded: true,
   },
   {
     path: ".github/workflows/codeql.yml",
@@ -169,7 +169,12 @@ export function workflowClassProblems(workflows) {
     problems.push(...classTriggerProblems(entry, triggerSet(doc?.on)));
     if (entry.bounded) {
       for (const [jobId, job] of Object.entries(doc?.jobs ?? {})) {
-        if (typeof job?.["timeout-minutes"] !== "number") {
+        // Reusable-workflow jobs cannot declare timeout-minutes; their called
+        // workflow owns bounded runner jobs instead.
+        if (
+          typeof job?.uses !== "string" &&
+          typeof job?.["timeout-minutes"] !== "number"
+        ) {
           problems.push(
             `${entry.path} job "${jobId}" lacks a bounded timeout-minutes`
           );

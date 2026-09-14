@@ -3,14 +3,10 @@
 // Everything here is static over committed files: no network, no ports, no
 // writes.
 //
-//   releaseSequencingProblems        release.yml publishes only after the
-//                                    correctness gates INSIDE the same job
-//                                    (sequential steps fail the job, so a
-//                                    later publish step cannot report pass
-//                                    while an earlier gate fails); no
-//                                    cross-workflow dependency
-//                                    (workflow_run) and no branch-protection
-//                                    mechanism is used or claimed.
+//   releaseSequencingProblems        release.yml calls the complete ci.yml
+//                                    gate at the same SHA, then a separate,
+//                                    least-privilege publish job needs that
+//                                    validation; release runs are serialized.
 //   securityVisibilityProblems       CodeQL/gitleaks failures stay visible
 //                                    (pull_request trigger, no
 //                                    continue-on-error), no document claims
@@ -20,6 +16,7 @@
 //                                    protection with a deferred status.
 
 import { CI_WORKFLOW_PATH } from "./ci-fast-gate.mjs";
+import { publishJobProblems } from "./ci-publish-policy.mjs";
 import { triggerSet } from "./flaky-ci.mjs";
 import { itemSections } from "./governance-deferred.mjs";
 import { parseWorkflowDocs } from "./workflow-docs.mjs";
@@ -36,24 +33,51 @@ const PUBLISH_ANYWHERE = /\btegami\s+ci\b|\bnpm\s+publish\b|\bpnpm\s+publish\b/;
 const BRANCH_PROTECTION = /branch[- ]protection/i;
 const DEFERRED_STATUS = /status:\s*deferred/i;
 
-// Gates that must precede the publish step inside the same release job.
-const PREREQUISITES = [
-  { label: "package boundaries", pattern: /(^|\s)pnpm\s+boundaries(\s|$)/ },
-  { label: "lint", pattern: /(^|\s)pnpm\s+lint(\s|$)/ },
-  { label: "typecheck", pattern: /(^|\s)pnpm\s+typecheck(\s|$)/ },
-  { label: "test", pattern: /(^|\s)pnpm\s+test(\s|$)/ },
-  { label: "build", pattern: /(^|\s)pnpm\s+build(\s|$)/ },
-  {
-    label: "release verification",
-    pattern: /(^|\s)pnpm\s+verify:release(\s|$)/,
-  },
-];
+const VALIDATION_WORKFLOW = "./.github/workflows/ci.yml";
+const githubExpression = (name) => `\${{ ${name} }}`;
+const ISOLATED_CI_GROUP = `ci-${githubExpression("github.workflow")}-${githubExpression("github.ref")}`;
+const RELEASE_GROUP = `${githubExpression("github.workflow")}-${githubExpression("github.ref")}`;
+
+function permissionIsolationProblems(jobs, validationIds) {
+  const problems = [];
+  for (const [jobId, job] of Object.entries(jobs)) {
+    if (validationIds.includes(jobId)) {
+      if (job?.permissions?.contents !== "read") {
+        problems.push(
+          `${RELEASE_WORKFLOW} validation job must use contents: read`
+        );
+      }
+      if (Object.values(job?.permissions ?? {}).includes("write")) {
+        problems.push(
+          `${RELEASE_WORKFLOW} validation job must not have write permission`
+        );
+      }
+    } else if (
+      Object.values(job?.permissions ?? {}).includes("write") &&
+      !job?.steps?.some((step) => PUBLISH_STEP.test(String(step?.run ?? "")))
+    ) {
+      problems.push(
+        `${RELEASE_WORKFLOW} non-publish job "${jobId}" has write permission`
+      );
+    }
+  }
+  return problems;
+}
 
 function publishSequencingProblems(docs, problems) {
   const release = docs.find(({ path }) => path === RELEASE_WORKFLOW);
   if (!release) {
     problems.push(`${RELEASE_WORKFLOW} is missing from the workflow set`);
     return;
+  }
+  const jobs = release.doc?.jobs ?? {};
+  const validationIds = Object.entries(jobs)
+    .filter(([, job]) => job?.uses === VALIDATION_WORKFLOW)
+    .map(([jobId]) => jobId);
+  if (validationIds.length !== 1) {
+    problems.push(
+      `${RELEASE_WORKFLOW} must call ${VALIDATION_WORKFLOW} exactly once`
+    );
   }
   let publishSeen = false;
   for (const [jobId, job] of Object.entries(release.doc?.jobs ?? {})) {
@@ -65,19 +89,46 @@ function publishSequencingProblems(docs, problems) {
       continue;
     }
     publishSeen = true;
-    const earlier = steps
-      .slice(0, publishIndex)
-      .map((step) => String(step?.run ?? ""));
-    for (const { label, pattern } of PREREQUISITES) {
-      if (!earlier.some((run) => pattern.test(run))) {
-        problems.push(
-          `${RELEASE_WORKFLOW} job "${jobId}" publishes without an earlier ${label} step; a failing gate in the same job must stop the publish step`
-        );
-      }
-    }
+    problems.push(
+      ...publishJobProblems({
+        jobId,
+        job,
+        validationIds,
+        publishIndex,
+        workflowPath: RELEASE_WORKFLOW,
+      })
+    );
   }
   if (!publishSeen) {
     problems.push(`${RELEASE_WORKFLOW} has no publish step (pnpm tegami ci)`);
+  }
+  problems.push(...permissionIsolationProblems(jobs, validationIds));
+  if (release.doc?.concurrency?.["cancel-in-progress"] !== false) {
+    problems.push(
+      `${RELEASE_WORKFLOW} must not cancel an in-flight release run`
+    );
+  }
+  if (release.doc?.concurrency?.group !== RELEASE_GROUP) {
+    problems.push(
+      `${RELEASE_WORKFLOW} must serialize release runs in one stable group per ref`
+    );
+  }
+}
+
+function reusableConcurrencyProblems(docs, problems) {
+  const ci = docs.find(({ path }) => path === CI_WORKFLOW_PATH);
+  if (!ci) {
+    return;
+  }
+  if (ci.doc?.concurrency?.group !== ISOLATED_CI_GROUP) {
+    problems.push(
+      `${CI_WORKFLOW_PATH} concurrency must include github.workflow so standalone CI cannot cancel release validation on the same ref`
+    );
+  }
+  if (ci.doc?.concurrency?.["cancel-in-progress"] !== true) {
+    problems.push(
+      `${CI_WORKFLOW_PATH} must cancel stale runs within each isolated caller group`
+    );
   }
 }
 
@@ -99,6 +150,7 @@ export function releaseSequencingProblems(workflows) {
     }
   }
   publishSequencingProblems(docs, problems);
+  reusableConcurrencyProblems(docs, problems);
   return problems;
 }
 
