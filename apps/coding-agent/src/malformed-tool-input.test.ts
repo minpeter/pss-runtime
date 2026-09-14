@@ -138,7 +138,7 @@ async function render(events: AgentEvent[]) {
     }
     for await (const part of agentEventStreamParts(stream())) {
       if (part.type === "tool-input-delta") {
-        await view.appendInputChunk(String(part.inputTextDelta));
+        view.queueInputChunk(String(part.inputTextDelta));
       }
       if (part.type === "tool-call") {
         view.setFinalInput(part.input);

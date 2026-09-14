@@ -63,9 +63,21 @@ describe("jscpd: duplicate-code configuration", () => {
   });
 
   it("fails when a required generated-path exclusion is removed (VAL-SEC-003)", () => {
+    for (const token of ["dist", "CHANGELOG.md"]) {
+      const mutated = structuredClone(config);
+      mutated.ignore = mutated.ignore.filter((p) => !p.includes(token));
+      expect(ignoreCoverageProblems(mutated).join("\n")).toContain(token);
+    }
+  });
+
+  it("rejects a changelog ignore narrowed to one package (VAL-SEC-003)", () => {
     const mutated = structuredClone(config);
-    mutated.ignore = mutated.ignore.filter((p) => !p.includes("dist"));
-    expect(ignoreCoverageProblems(mutated).join("\n")).toContain("dist");
+    mutated.ignore = mutated.ignore.map((pattern) =>
+      pattern === "**/CHANGELOG.md" ? "apps/coding-agent/CHANGELOG.md" : pattern
+    );
+    expect(ignoreCoverageProblems(mutated).join("\n")).toContain(
+      "**/CHANGELOG.md"
+    );
   });
 
   it("contains no bare-wildcard suppression (VAL-SEC-005)", () => {

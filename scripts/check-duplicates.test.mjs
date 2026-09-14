@@ -210,11 +210,11 @@ describe("check:duplicates wrapper", () => {
   // Availability-classified (VAL-SEC-004): when the jscpd binary is not
   // installed this leg is a documented skip, exactly like the GATE itself.
   it.skipIf(!existsSync(DEFAULT_BIN))(
-    "a synthetic duplicate inside an ignored directory produces no finding (VAL-SEC-003)",
+    "production ignores exclude changelogs but retain README and source duplicates (VAL-SEC-003)",
     () => {
       const dir = fixtureDir();
       const tree = join(dir, "tree");
-      const block = [
+      const sourceBlock = [
         "export function alpha(value: number): number {",
         "  const stepOne = value + 1;",
         "  const stepTwo = stepOne * 2;",
@@ -222,33 +222,32 @@ describe("check:duplicates wrapper", () => {
         "  const stepFour = stepThree / 4;",
         "  const stepFive = stepFour + 5;",
         "  const stepSix = stepFive * 6;",
-        "  return stepSix;",
+        "  const stepSeven = stepSix - 7;",
+        "  const stepEight = stepSeven / 8;",
+        "  const stepNine = stepEight + 9;",
+        "  const stepTen = stepNine * 10;",
+        "  return stepTen;",
         "}",
         "",
       ].join("\n");
-      for (const scope of ["dist", "src"]) {
-        mkdirSync(join(tree, scope), { recursive: true });
-        writeFileSync(join(tree, scope, "dup-a.ts"), block);
-        writeFileSync(
-          join(tree, scope, "dup-b.ts"),
-          block.replaceAll("alpha", "beta")
-        );
-      }
-      const config = join(dir, "jscpd.json");
+      const proseBlock = `${Array.from(
+        { length: 8 },
+        () =>
+          "A generated release paragraph repeats stable words for duplicate scanner verification."
+      ).join("\n")}\n`;
+      mkdirSync(join(tree, "src"), { recursive: true });
+      mkdirSync(join(tree, "docs"), { recursive: true });
+      writeFileSync(join(tree, "src", "dup-a.ts"), sourceBlock);
       writeFileSync(
-        config,
-        JSON.stringify({
-          minTokens: 20,
-          minLines: 3,
-          ignore: ["**/dist/**"],
-          allowlist: [],
-        })
+        join(tree, "src", "dup-b.ts"),
+        sourceBlock.replaceAll("alpha", "beta")
       );
+      writeFileSync(join(tree, "CHANGELOG.md"), proseBlock.repeat(2));
+      writeFileSync(join(tree, "README.md"), proseBlock);
+      writeFileSync(join(tree, "docs", "README.md"), proseBlock);
       const out = join(dir, "report.json");
       const result = run([
         "--report",
-        "--config",
-        config,
         "--baseline",
         baselineFixture(dir, []),
         "--out",
@@ -257,9 +256,10 @@ describe("check:duplicates wrapper", () => {
       ]);
       expect(result.status, result.stderr).toBe(0);
       const report = JSON.parse(readFileSync(out, "utf8"));
-      expect(report.totalSignatures).toBe(1);
-      expect(report.signatures[0]).toContain("src/dup-a.ts");
-      expect(JSON.stringify(report.signatures)).not.toContain("dist/");
+      const signatures = JSON.stringify(report.signatures);
+      expect(signatures).toContain("README.md");
+      expect(signatures).toContain("src/dup-a.ts");
+      expect(signatures).not.toContain("CHANGELOG.md");
     }
   );
 });
