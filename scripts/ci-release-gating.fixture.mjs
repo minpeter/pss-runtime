@@ -65,6 +65,6 @@ export function ciWorkflow(
     .join("\n");
   return {
     path: CI_WORKFLOW_PATH,
-    source: `name: CI\non: [push, pull_request, workflow_call]\nconcurrency:\n  group: ${concurrencyGroup}\n  cancel-in-progress: true\njobs:\n  checks:\n    timeout-minutes: 45\n    steps:\n      - name: Checkout\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n        with:\n          fetch-depth: 0\n${steps}\n`,
+    source: `name: CI\non: [push, pull_request, workflow_call]\nconcurrency:\n  group: ${concurrencyGroup}\n  cancel-in-progress: true\njobs:\n  checks:\n    timeout-minutes: 45\n    strategy:\n      fail-fast: false\n      matrix:\n        node: ["24", "26"]\n    steps:\n      - name: Checkout\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n        with:\n          fetch-depth: 0\n${steps}\n`,
   };
 }

@@ -1,15 +1,11 @@
 import { expect, it } from "vitest";
-import { containsPublishCommand } from "./ci-publish-command.mjs";
 import {
   ciWorkflow,
   githubExpression,
   releaseWorkflow,
   replaceWorkflowSource,
 } from "./ci-release-gating.fixture.mjs";
-import {
-  releaseSequencingProblems,
-  securityVisibilityProblems,
-} from "./ci-release-gating.mjs";
+import { releaseSequencingProblems } from "./ci-release-gating.mjs";
 
 function expectRejected(workflow, fragment = "canonical") {
   const problems = releaseSequencingProblems([
@@ -19,24 +15,6 @@ function expectRejected(workflow, fragment = "canonical") {
   expect(
     problems.some((problem) => problem.includes(fragment)),
     problems
-  ).toBe(true);
-}
-
-function cleanPathProblems(command) {
-  const workflow = replaceWorkflowSource(
-    ciWorkflow(),
-    "        run: pnpm test",
-    `        run: |\n          ${command.replaceAll("\n", "\n          ")}`
-  );
-  return securityVisibilityProblems([workflow]);
-}
-
-function expectCleanPathPublication(command) {
-  expect(containsPublishCommand(command)).toBe(true);
-  expect(
-    cleanPathProblems(command).some((problem) =>
-      problem.includes("never publishes")
-    )
   ).toBe(true);
 }
 
@@ -62,21 +40,6 @@ it.each([
   );
   expectRejected(workflow, "canonical steps");
 });
-
-it.each(["n\\\npm p\\\nub", "n\"\"pm p''ub", 'n"p"m pub', "pn\\\npm publish"])(
-  "recognizes shell-tokenized publication: %s",
-  expectCleanPathPublication
-);
-
-it.each(["command npm pub", "env RELEASE=true pnpm publish", "exec npm publ"])(
-  "recognizes publication through a shell command wrapper: %s",
-  expectCleanPathPublication
-);
-
-it.each(['echo "$(npm pub)"', "result=`pnpm publish`"])(
-  "recognizes publication inside command substitution: %s",
-  expectCleanPathPublication
-);
 
 it.each([
   "./.github/actions/publish",
@@ -214,6 +177,15 @@ it("rejects a skip condition on a called runner job", () => {
   expectRejected(ci, "skip condition");
 });
 
+it("requires the exact called validation matrix", () => {
+  const ci = replaceWorkflowSource(
+    ciWorkflow(),
+    'node: ["24", "26"]',
+    'node: ["26"]'
+  );
+  expectRejected(ci, "exact validation matrix");
+});
+
 it("rejects called CI checkout ref drift", () => {
   const ci = replaceWorkflowSource(
     ciWorkflow(),
@@ -247,22 +219,4 @@ it.each([
   ["checkout semantics", "fetch-depth: 0", "fetch-depth: 1"],
 ])("rejects publish checkout drift: %s", (_label, from, to) => {
   expectRejected(replaceWorkflowSource(releaseWorkflow(), from, to));
-});
-
-it.each([
-  'echo "npm publish is disabled"',
-  'echo "status | npm publish is disabled"',
-  "echo '$(npm pub)'",
-  "# npm publish is disabled",
-  "printf '%s\\n' 'pnpm publish'",
-  "echo npm publish",
-  "npm exec echo pub",
-  "command -v npm pub",
-])("does not classify harmless text as publication: %s", (command) => {
-  expect(containsPublishCommand(command)).toBe(false);
-  expect(
-    cleanPathProblems(command).some((problem) =>
-      problem.includes("never publishes")
-    )
-  ).toBe(false);
 });

@@ -75,6 +75,16 @@ function actionProblems(step, jobId, workflowPath) {
 function calledJobProblems(jobId, job, workflowPath) {
   const problems = [];
   const steps = job?.steps ?? [];
+  if (
+    !isDeepStrictEqual(job?.strategy, {
+      "fail-fast": false,
+      matrix: { node: ["24", "26"] },
+    })
+  ) {
+    problems.push(
+      `${workflowPath} runner job "${jobId}" must use the exact validation matrix`
+    );
+  }
   const checkouts = steps.filter((step) => step?.uses === CHECKOUT_ACTION);
   if (
     checkouts.length !== 1 ||

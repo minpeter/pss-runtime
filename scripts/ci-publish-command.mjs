@@ -1,10 +1,12 @@
-const ASSIGNMENT = /^\w+=/;
+const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*\+?=/;
 const BASENAME = /^.*\//;
 const COMMAND_SEPARATOR = /[\n;&|]/u;
 const CONTINUATION = /\\\r?\n[\t ]*/g;
 const NPM_PUBLISH = /^pub(?:l(?:i(?:s(?:h)?)?)?)?$/;
 const PNPM_PUBLISH = /^publish$/;
 const QUOTE = /["']/u;
+const SHELL_COMMAND_OPTION = /^-[^-]*c/;
+const SHELL_INTERPRETERS = new Set(["bash", "dash", "ksh", "sh", "zsh"]);
 const WHITESPACE = /\s/u;
 const ENV_OPTIONS_WITH_VALUE = new Set([
   "-C",
@@ -13,6 +15,20 @@ const ENV_OPTIONS_WITH_VALUE = new Set([
   "--split-string",
   "-u",
   "--unset",
+]);
+const SUDO_OPTIONS_WITH_VALUE = new Set([
+  "-C",
+  "--close-from",
+  "-D",
+  "--chdir",
+  "-g",
+  "--group",
+  "-h",
+  "--host",
+  "-p",
+  "--prompt",
+  "-u",
+  "--user",
 ]);
 const isEscaped = (character, quote) => character === "\\" && quote !== "'";
 
@@ -170,10 +186,22 @@ function afterEnvPrefix(tokens, start) {
   return skipAssignments(tokens, index);
 }
 
+function afterSudoPrefix(tokens, start) {
+  let index = start;
+  while (tokens[index]?.startsWith("-")) {
+    const option = tokens[index++];
+    if (SUDO_OPTIONS_WITH_VALUE.has(option)) {
+      index += 1;
+    }
+  }
+  return skipAssignments(tokens, index);
+}
+
 const PREFIX_UNWRAPPERS = new Map([
   ["command", afterCommandPrefix],
   ["env", afterEnvPrefix],
   ["exec", afterExecPrefix],
+  ["sudo", afterSudoPrefix],
 ]);
 
 function invokedExecutable(tokens) {
@@ -208,11 +236,24 @@ function packageCommand(tokens, executableName, commandPattern) {
     );
 }
 
+function delegatedCommand(tokens) {
+  const executable = invokedExecutable(tokens);
+  if (!SHELL_INTERPRETERS.has(tokens[executable]?.replace(BASENAME, ""))) {
+    return;
+  }
+  const option = tokens.findIndex(
+    (token, index) =>
+      index > executable && SHELL_COMMAND_OPTION.test(token) && token !== "-O"
+  );
+  return option < 0 ? undefined : tokens[option + 1];
+}
+
 export function containsPublishCommand(source) {
   return (
     substitutionBodies(source).some(containsPublishCommand) ||
     shellCommands(source).some(
       (tokens) =>
+        containsPublishCommand(delegatedCommand(tokens) ?? "") ||
         packageCommand(tokens, "npm", NPM_PUBLISH) ||
         packageCommand(tokens, "pnpm", PNPM_PUBLISH) ||
         tokens.join(" ") === "pnpm tegami ci"
