@@ -1,5 +1,7 @@
 ---
 packages:
+  npm:@minpeter/pss-coding-agent:
+    type: patch
   npm:@minpeter/pss-extension-latex:
     type: patch
   npm:@minpeter/pss-extension-mermaid:
