@@ -15,10 +15,10 @@
 //   deferredBranchProtectionProblems the deferred list keeps naming branch
 //                                    protection with a deferred status.
 
+import { calledWorkflowProblems } from "./ci-called-workflow-policy.mjs";
 import { CI_WORKFLOW_PATH } from "./ci-fast-gate.mjs";
 import { containsPublishCommand } from "./ci-publish-command.mjs";
 import {
-  calledWorkflowProblems,
   publishJobProblems,
   publishStepLocations,
   validationJobProblems,
@@ -74,6 +74,11 @@ function publishSequencingProblems(docs, problems) {
   if (!release) {
     problems.push(`${RELEASE_WORKFLOW} is missing from the workflow set`);
     return;
+  }
+  if (release.doc?.defaults !== undefined) {
+    problems.push(
+      `${RELEASE_WORKFLOW} must not define workflow-level execution defaults`
+    );
   }
   const jobs = release.doc?.jobs ?? {};
   const validationIds = Object.entries(jobs)

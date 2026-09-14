@@ -66,6 +66,18 @@ it.each(["n\\\npm p\\\nub", "n\"\"pm p''ub", 'n"p"m pub', "pn\\\npm publish"])(
   }
 );
 
+it.each(['echo "$(npm pub)"', "result=`pnpm publish`"])(
+  "recognizes publication inside command substitution: %s",
+  (command) => {
+    expect(containsPublishCommand(command)).toBe(true);
+    expect(
+      cleanPathProblems(command).some((problem) =>
+        problem.includes("never publishes")
+      )
+    ).toBe(true);
+  }
+);
+
 it.each([
   "./.github/actions/publish",
   "vendor/npm-publish@0123456789012345678901234567890123456789",
@@ -184,6 +196,33 @@ it("requires numeric timeout evidence on every called runner job", () => {
   expectRejected(ci, "numeric timeout");
 });
 
+it("rejects a skip condition on a called validation gate", () => {
+  const ci = replaceWorkflowSource(
+    ciWorkflow(),
+    "        run: pnpm test",
+    "        run: pnpm test\n        if: false"
+  );
+  expectRejected(ci, "unapproved condition");
+});
+
+it("rejects called CI checkout ref drift", () => {
+  const ci = replaceWorkflowSource(
+    ciWorkflow(),
+    "          fetch-depth: 0",
+    "          fetch-depth: 0\n          ref: main"
+  );
+  expectRejected(ci, "action semantics");
+});
+
+it("rejects release workflow run defaults", () => {
+  const workflow = replaceWorkflowSource(
+    releaseWorkflow(),
+    "permissions: {}\n",
+    "permissions: {}\ndefaults:\n  run:\n    working-directory: packages/runtime\n"
+  );
+  expectRejected(workflow, "execution defaults");
+});
+
 it.each([
   ["trigger branch", `ref: ${githubExpression("github.sha")}`, "ref: main"],
   [
@@ -204,6 +243,7 @@ it.each([
 it.each([
   'echo "npm publish is disabled"',
   'echo "status | npm publish is disabled"',
+  "echo '$(npm pub)'",
   "# npm publish is disabled",
   "printf '%s\\n' 'pnpm publish'",
   "echo npm publish",

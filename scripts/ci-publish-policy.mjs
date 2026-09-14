@@ -4,14 +4,7 @@ const PNPM_ACTION =
   "pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413";
 const NODE_ACTION =
   "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020";
-const UPLOAD_ACTION =
-  "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
-const VALIDATION_ACTIONS = new Set([
-  CHECKOUT_ACTION,
-  PNPM_ACTION,
-  NODE_ACTION,
-  UPLOAD_ACTION,
-]);
+
 const githubExpression = (name) => `\${{ ${name} }}`;
 const SHA = githubExpression("github.sha");
 const TOKEN = githubExpression("secrets.GITHUB_TOKEN");
@@ -99,36 +92,6 @@ export function validationJobProblems(jobId, job, workflowPath) {
   const problems = [];
   if (![undefined, false].includes(job?.["continue-on-error"])) {
     problems.push(`${workflowPath} validation job "${jobId}" must fail closed`);
-  }
-  return problems;
-}
-
-export function calledWorkflowProblems(doc, workflowPath) {
-  const problems = [];
-  for (const [jobId, job] of Object.entries(doc?.jobs ?? {})) {
-    if (
-      typeof job?.["timeout-minutes"] !== "number" ||
-      job["timeout-minutes"] <= 0
-    ) {
-      problems.push(
-        `${workflowPath} runner job "${jobId}" needs a numeric timeout`
-      );
-    }
-    if (![undefined, false].includes(job?.["continue-on-error"])) {
-      problems.push(`${workflowPath} runner job "${jobId}" must fail closed`);
-    }
-    for (const step of job?.steps ?? []) {
-      if (step?.uses !== undefined && !VALIDATION_ACTIONS.has(step.uses)) {
-        problems.push(
-          `${workflowPath} runner job "${jobId}" uses an unapproved action`
-        );
-      }
-      if (![undefined, false].includes(step?.["continue-on-error"])) {
-        problems.push(
-          `${workflowPath} runner job "${jobId}" step "${step?.name ?? "?"}" must fail closed`
-        );
-      }
-    }
   }
   return problems;
 }

@@ -4,7 +4,57 @@ const COMMAND_SEPARATOR = /[\n;&|]/u;
 const CONTINUATION = /\\\r?\n[\t ]*/g;
 const NPM_PUBLISH = /^pub(?:l(?:i(?:s(?:h)?)?)?)?$/;
 const PNPM_PUBLISH = /^publish$/;
+const QUOTE = /["']/u;
 const WHITESPACE = /\s/u;
+const isEscaped = (character, quote) => character === "\\" && quote !== "'";
+
+function closingParenthesis(text, start) {
+  let depth = 1;
+  let quote;
+  for (let index = start; index < text.length; index += 1) {
+    const character = text[index];
+    if (quote !== undefined) {
+      if (character === quote) {
+        quote = undefined;
+      } else if (character === "\\" && quote === '"') {
+        index += 1;
+      }
+    } else if (character === '"' || character === "'") {
+      quote = character;
+    } else if (character === "\\") {
+      index += 1;
+    } else if (character === "(") {
+      depth += 1;
+    } else if (character === ")" && --depth === 0) {
+      return index;
+    }
+  }
+  return text.length;
+}
+
+function substitutionBodies(source) {
+  const bodies = [];
+  let quote;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (isEscaped(character, quote)) {
+      index += 1;
+    } else if (quote !== "'" && source.startsWith("$(", index)) {
+      const end = closingParenthesis(source, index + 2);
+      bodies.push(source.slice(index + 2, end));
+      index = end;
+    } else if (quote !== "'" && character === "`") {
+      const end = source.indexOf("`", index + 1);
+      bodies.push(source.slice(index + 1, end < 0 ? source.length : end));
+      index = end < 0 ? source.length : end;
+    } else if (character === quote) {
+      quote = undefined;
+    } else if (quote === undefined && QUOTE.test(character)) {
+      quote = character;
+    }
+  }
+  return bodies;
+}
 
 function quotedPart(text, index, quote) {
   const character = text[index];
@@ -94,10 +144,13 @@ function packageCommand(tokens, executableName, commandPattern) {
 }
 
 export function containsPublishCommand(source) {
-  return shellCommands(source).some(
-    (tokens) =>
-      packageCommand(tokens, "npm", NPM_PUBLISH) ||
-      packageCommand(tokens, "pnpm", PNPM_PUBLISH) ||
-      tokens.join(" ") === "pnpm tegami ci"
+  return (
+    substitutionBodies(source).some(containsPublishCommand) ||
+    shellCommands(source).some(
+      (tokens) =>
+        packageCommand(tokens, "npm", NPM_PUBLISH) ||
+        packageCommand(tokens, "pnpm", PNPM_PUBLISH) ||
+        tokens.join(" ") === "pnpm tegami ci"
+    )
   );
 }
