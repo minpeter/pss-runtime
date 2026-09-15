@@ -3,6 +3,8 @@ import { invokedExecutable } from "./ci-command-prefixes.mjs";
 const BASENAME = /^.*\//;
 const COMMAND_SEPARATOR = /[\n;&|]/u;
 const CONTINUATION = /\\\r?\n[\t ]*/g;
+const ENV_OPTIONS_WITH_VALUE = new Set(["-C", "--chdir", "-u", "--unset"]);
+const EXEC = /^exec$/;
 const NPM_PUBLISH = /^pub(?:l(?:i(?:s(?:h)?)?)?)?$/;
 const PNPM_PUBLISH = /^publish$/;
 const QUOTE = /["']/u;
@@ -70,7 +72,7 @@ function quotedPart(text, index, quote) {
   return { index, quote, value: character };
 }
 
-function shellCommands(source) {
+function shellCommands(source, commandSeparator = COMMAND_SEPARATOR) {
   const commands = [];
   let tokens = [];
   let word = "";
@@ -114,7 +116,7 @@ function shellCommands(source) {
         break;
       }
       finishCommand();
-    } else if (COMMAND_SEPARATOR.test(character)) {
+    } else if (commandSeparator?.test(character)) {
       finishCommand();
     } else if (WHITESPACE.test(character)) {
       finishWord();
@@ -127,23 +129,78 @@ function shellCommands(source) {
   return commands;
 }
 
-function packageCommand(tokens, executableName, commandPattern) {
+function packageSubcommand(tokens, executableName, commandPattern) {
   const executable = invokedExecutable(tokens);
   if (tokens[executable]?.replace(BASENAME, "") !== executableName) {
-    return false;
+    return -1;
   }
   const command = tokens.findIndex(
     (token, index) => index > executable && commandPattern.test(token)
   );
   if (command < 0) {
-    return false;
+    return -1;
   }
   return tokens
     .slice(executable + 1, command)
     .every(
       (token, index) =>
         token.startsWith("-") || tokens[executable + index]?.startsWith("-")
-    );
+    )
+    ? command
+    : -1;
+}
+
+function packageCommand(tokens, executableName, commandPattern) {
+  return packageSubcommand(tokens, executableName, commandPattern) >= 0;
+}
+
+function packageExecTokens(tokens, executableName) {
+  const command = packageSubcommand(tokens, executableName, EXEC);
+  if (command < 0) {
+    return;
+  }
+  const nested = tokens[command + 1] === "--" ? command + 2 : command + 1;
+  return tokens.slice(nested);
+}
+
+function envSplitTokens(tokens) {
+  const env = tokens.findIndex(
+    (token, index) =>
+      token.replace(BASENAME, "") === "env" &&
+      invokedExecutable([...tokens.slice(0, index), "__probe__"]) === index
+  );
+  if (env < 0) {
+    return;
+  }
+  let option = env + 1;
+  while (option < tokens.length) {
+    const candidate = tokens[option];
+    if (
+      candidate === "-S" ||
+      candidate === "--split-string" ||
+      candidate.startsWith("-S") ||
+      candidate.startsWith("--split-string=")
+    ) {
+      break;
+    }
+    if (!candidate.startsWith("-") || candidate === "--") {
+      return;
+    }
+    option += ENV_OPTIONS_WITH_VALUE.has(candidate) ? 2 : 1;
+  }
+  if (option >= tokens.length) {
+    return;
+  }
+  const token = tokens[option];
+  const attached = token !== "-S" && token !== "--split-string";
+  let value = tokens[option + 1];
+  if (token.startsWith("--split-string=")) {
+    value = token.slice("--split-string=".length);
+  } else if (attached) {
+    value = token.slice(2);
+  }
+  const words = shellCommands(value ?? "", null)[0] ?? [];
+  return [...words, ...tokens.slice(option + (attached ? 1 : 2))];
 }
 
 function delegatedCommand(tokens) {
@@ -161,15 +218,27 @@ function delegatedCommand(tokens) {
   return option < 0 ? undefined : tokens[option + 1];
 }
 
+function containsPublishTokens(tokens) {
+  if (tokens.length === 0) {
+    return false;
+  }
+  const splitEnv = envSplitTokens(tokens);
+  if (splitEnv !== undefined) {
+    return containsPublishTokens(splitEnv);
+  }
+  return (
+    containsPublishCommand(delegatedCommand(tokens) ?? "") ||
+    containsPublishTokens(packageExecTokens(tokens, "npm") ?? []) ||
+    containsPublishTokens(packageExecTokens(tokens, "pnpm") ?? []) ||
+    packageCommand(tokens, "npm", NPM_PUBLISH) ||
+    packageCommand(tokens, "pnpm", PNPM_PUBLISH) ||
+    tokens.join(" ") === "pnpm tegami ci"
+  );
+}
+
 export function containsPublishCommand(source) {
   return (
     substitutionBodies(source).some(containsPublishCommand) ||
-    shellCommands(source).some(
-      (tokens) =>
-        containsPublishCommand(delegatedCommand(tokens) ?? "") ||
-        packageCommand(tokens, "npm", NPM_PUBLISH) ||
-        packageCommand(tokens, "pnpm", PNPM_PUBLISH) ||
-        tokens.join(" ") === "pnpm tegami ci"
-    )
+    shellCommands(source).some(containsPublishTokens)
   );
 }

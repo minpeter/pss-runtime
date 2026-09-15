@@ -35,26 +35,34 @@ export function replaceWorkflowSource(workflow, from, to) {
   };
 }
 
-export function releaseWorkflow({
-  cancelInProgress = false,
-  concurrencyGroup = RELEASE_GROUP,
-  needs = "validate",
-  publishIf,
-  publishPermissions = "contents: write\n      pull-requests: write\n      id-token: write",
-  publishRun = "pnpm tegami ci",
-  validationContinueOnError,
-  validationPermissions = "contents: read",
-  validationUses = "./.github/workflows/ci.yml",
-} = {}) {
+export function releaseWorkflow(options = {}) {
+  const {
+    cancelInProgress = false,
+    concurrencyGroup = RELEASE_GROUP,
+    needs = "validate",
+    publishIf,
+    publishPermissions = "contents: write\n      pull-requests: write\n      id-token: write",
+    publishRun = "pnpm tegami ci",
+    validationContinueOnError,
+    validationPermissions = "contents: read",
+    validationUses = "./.github/workflows/ci.yml",
+  } = options;
   const condition = publishIf ? `    if: ${publishIf}\n` : "";
   const validationOverride =
     validationContinueOnError === undefined
       ? ""
       : `    continue-on-error: ${validationContinueOnError}\n`;
-  return {
+  const workflow = {
     path: RELEASE_WORKFLOW,
     source: `name: Release\non:\n  push:\n    branches: [main]\nconcurrency:\n  group: ${concurrencyGroup}\n  cancel-in-progress: ${cancelInProgress}\npermissions: {}\njobs:\n  validate:\n    name: Validate release SHA\n    uses: ${validationUses}\n    permissions:\n      ${validationPermissions}\n${validationOverride}  publish:\n    name: Version and publish\n    needs: ${needs}\n${condition}    runs-on: ubuntu-latest\n    timeout-minutes: 15\n    permissions:\n      ${publishPermissions}\n    steps:\n      - name: Checkout\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n        with:\n          fetch-depth: 0\n          ref: ${githubExpression("github.sha")}\n      - name: Setup pnpm\n        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413\n      - name: Setup Node.js\n        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020\n        with:\n          node-version-file: .node-version\n          registry-url: https://registry.npmjs.org\n          package-manager-cache: false\n      - name: Install dependencies\n        run: pnpm install --frozen-lockfile\n      - name: Build release artifacts\n        run: pnpm build\n      - name: Verify release artifacts\n        run: pnpm verify:release\n      - name: Version or publish packages\n        run: ${publishRun}\n        env:\n          GITHUB_TOKEN: ${githubExpression("secrets.GITHUB_TOKEN")}\n`,
   };
+  if (
+    Object.keys(options).length > 0 &&
+    workflow.source === releaseWorkflow().source
+  ) {
+    throw new Error("release workflow mutation did not change source bytes");
+  }
+  return workflow;
 }
 
 export function ciWorkflow(

@@ -22,7 +22,22 @@ const SUDO_OPTIONS_WITH_VALUE = new Set([
   "-u",
   "--user",
 ]);
+const NICE_OPTIONS_WITH_VALUE = new Set(["-n", "--adjustment"]);
+const STDBUF_OPTIONS_WITH_VALUE = new Set([
+  "-e",
+  "--error",
+  "-i",
+  "--input",
+  "-o",
+  "--output",
+]);
 const TIME_OPTIONS_WITH_VALUE = new Set(["-f", "--format", "-o", "--output"]);
+const TIMEOUT_OPTIONS_WITH_VALUE = new Set([
+  "-k",
+  "--kill-after",
+  "-s",
+  "--signal",
+]);
 
 function skipAssignments(tokens, start) {
   let index = start;
@@ -76,16 +91,31 @@ function afterSudoPrefix(tokens, start) {
   );
 }
 
+function afterTimeoutPrefix(tokens, start) {
+  const duration = afterOptions(tokens, start, TIMEOUT_OPTIONS_WITH_VALUE);
+  return duration + 1;
+}
+
 const PREFIX_UNWRAPPERS = new Map([
   ["!", (_tokens, start) => start],
   ["command", afterCommandPrefix],
   ["env", afterEnvPrefix],
   ["exec", afterExecPrefix],
+  [
+    "nice",
+    (tokens, start) => afterOptions(tokens, start, NICE_OPTIONS_WITH_VALUE),
+  ],
+  ["nohup", (tokens, start) => afterOptions(tokens, start, new Set())],
+  [
+    "stdbuf",
+    (tokens, start) => afterOptions(tokens, start, STDBUF_OPTIONS_WITH_VALUE),
+  ],
   ["sudo", afterSudoPrefix],
   [
     "time",
     (tokens, start) => afterOptions(tokens, start, TIME_OPTIONS_WITH_VALUE),
   ],
+  ["timeout", afterTimeoutPrefix],
 ]);
 
 export function invokedExecutable(tokens) {

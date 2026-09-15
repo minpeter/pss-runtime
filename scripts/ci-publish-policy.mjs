@@ -10,6 +10,17 @@ const SHA = githubExpression("github.sha");
 const TOKEN = githubExpression("secrets.GITHUB_TOKEN");
 const WRITE_PERMISSIONS = ["contents", "pull-requests", "id-token"];
 const PUBLISH_RUN = "pnpm tegami ci";
+const VALIDATION_JOB_KEYS = ["name", "permissions", "uses"];
+const VALIDATION_PERMISSIONS = { contents: "read" };
+const VALIDATION_WORKFLOW = "./.github/workflows/ci.yml";
+const RELEASE_JOB_IDS = ["publish", "validate"];
+const RELEASE_WORKFLOW_KEYS = [
+  "concurrency",
+  "jobs",
+  "name",
+  "on",
+  "permissions",
+];
 
 const ownKeysEqual = (value, expected) => {
   const keys = Object.keys(value ?? {}).sort();
@@ -92,6 +103,42 @@ export function validationJobProblems(jobId, job, workflowPath) {
   const problems = [];
   if (![undefined, false].includes(job?.["continue-on-error"])) {
     problems.push(`${workflowPath} validation job "${jobId}" must fail closed`);
+  }
+  if (
+    !ownKeysEqual(
+      Object.fromEntries(policyKeys(job).map((key) => [key, job[key]])),
+      VALIDATION_JOB_KEYS
+    ) ||
+    job?.name !== "Validate release SHA" ||
+    job?.uses !== VALIDATION_WORKFLOW ||
+    !objectEquals(job?.permissions, VALIDATION_PERMISSIONS)
+  ) {
+    problems.push(
+      `${workflowPath} validation job "${jobId}" must use the strict caller allowlist`
+    );
+  }
+  return problems;
+}
+
+export function releaseWorkflowShapeProblems(doc, workflowPath) {
+  const problems = [];
+  if (!ownKeysEqual(doc, RELEASE_WORKFLOW_KEYS)) {
+    problems.push(
+      `${workflowPath} must use the strict workflow-level key allowlist`
+    );
+  }
+  if (!objectEquals(doc?.permissions, {})) {
+    problems.push(`${workflowPath} must deny workflow-level permissions`);
+  }
+  if (doc?.name !== "Release") {
+    problems.push(
+      `${workflowPath} must retain the canonical Release workflow name`
+    );
+  }
+  if (!ownKeysEqual(doc?.jobs, RELEASE_JOB_IDS)) {
+    problems.push(
+      `${workflowPath} must contain exactly the canonical validate and publish jobs`
+    );
   }
   return problems;
 }

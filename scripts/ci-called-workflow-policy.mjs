@@ -12,6 +12,7 @@ const UPLOAD_ACTION =
   "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
 const CANONICAL_STEPS_SHA256 =
   "343d4108ea9e5f4ad6305d5fbb6ee6dbe2690efedf14cfa1004dc7b6d5fb961b";
+const CALLED_JOB_IDS = ["checks"];
 const CALLED_JOB_KEYS = new Set([
   "continue-on-error",
   "name",
@@ -21,6 +22,7 @@ const CALLED_JOB_KEYS = new Set([
   "timeout-minutes",
 ]);
 const WORKFLOW_PERMISSIONS = { contents: "read" };
+const CALLED_JOB_NAME = `Validate (node ${githubExpression("matrix.node")})`;
 
 const NODE_24_STEPS = new Set([
   "Audit dependencies",
@@ -119,6 +121,11 @@ function calledJobShapeProblems(jobId, job, workflowPath) {
       `${workflowPath} runner job "${jobId}" must run on ubuntu-latest`
     );
   }
+  if (job?.name !== CALLED_JOB_NAME) {
+    problems.push(
+      `${workflowPath} runner job "${jobId}" must use the canonical name`
+    );
+  }
   return problems;
 }
 
@@ -159,12 +166,9 @@ function calledJobProblems(jobId, job, workflowPath) {
       `${workflowPath} runner job "${jobId}" must use exactly one canonical same-SHA checkout`
     );
   }
-  if (
-    typeof job?.["timeout-minutes"] !== "number" ||
-    job["timeout-minutes"] <= 0
-  ) {
+  if (job?.["timeout-minutes"] !== 45) {
     problems.push(
-      `${workflowPath} runner job "${jobId}" needs a numeric timeout`
+      `${workflowPath} runner job "${jobId}" must use timeout-minutes: 45`
     );
   }
   if (![undefined, false].includes(job?.["continue-on-error"])) {
@@ -193,6 +197,9 @@ function calledJobProblems(jobId, job, workflowPath) {
 
 export function calledWorkflowProblems(doc, workflowPath) {
   const problems = [];
+  if (doc?.name !== "CI") {
+    problems.push(`${workflowPath} must retain the canonical CI workflow name`);
+  }
   if (!isDeepStrictEqual(doc?.permissions, WORKFLOW_PERMISSIONS)) {
     problems.push(`${workflowPath} must use exact read-only permissions`);
   }
@@ -201,6 +208,12 @@ export function calledWorkflowProblems(doc, workflowPath) {
   }
   if (doc?.env !== undefined) {
     problems.push(`${workflowPath} must not define inherited environment`);
+  }
+  const jobIds = Object.keys(doc?.jobs ?? {});
+  if (!isDeepStrictEqual(jobIds, CALLED_JOB_IDS)) {
+    problems.push(
+      `${workflowPath} must contain exactly the canonical jobs: ${CALLED_JOB_IDS.join(", ")}`
+    );
   }
   problems.push(
     ...Object.entries(doc?.jobs ?? {}).flatMap(([jobId, job]) =>

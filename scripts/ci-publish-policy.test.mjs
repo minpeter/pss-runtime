@@ -150,14 +150,17 @@ it.each([
   expectRejected(ci, "must fail closed");
 });
 
-it("requires numeric timeout evidence on every called runner job", () => {
-  const ci = replaceWorkflowSource(
-    ciWorkflow(),
-    "    timeout-minutes: 45\n",
-    `    timeout-minutes: ${githubExpression("inputs.timeout")}\n`
-  );
-  expectRejected(ci, "numeric timeout");
-});
+it.each(["1", githubExpression("inputs.timeout")])(
+  "requires exact timeout-minutes: 45 instead of %s",
+  (timeout) => {
+    const ci = replaceWorkflowSource(
+      ciWorkflow(),
+      "    timeout-minutes: 45\n",
+      `    timeout-minutes: ${timeout}\n`
+    );
+    expectRejected(ci, "timeout-minutes: 45");
+  }
+);
 
 it("rejects a failure-masked called validation command", () => {
   const ci = replaceWorkflowSource(

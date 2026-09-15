@@ -22,6 +22,7 @@ import { containsPublishCommand } from "./ci-publish-command.mjs";
 import {
   publishJobProblems,
   publishStepLocations,
+  releaseWorkflowShapeProblems,
   validationJobProblems,
 } from "./ci-publish-policy.mjs";
 import { triggerSet } from "./flaky-ci.mjs";
@@ -87,6 +88,7 @@ function publishSequencingProblems(docs, problems) {
       `${RELEASE_WORKFLOW} must not define workflow-level inherited environment`
     );
   }
+  problems.push(...releaseWorkflowShapeProblems(release.doc, RELEASE_WORKFLOW));
   if (!isDeepStrictEqual(release.doc?.on, RELEASE_TRIGGER)) {
     problems.push(`${RELEASE_WORKFLOW} must trigger only on pushes to main`);
   }
