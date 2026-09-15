@@ -1,3 +1,9 @@
+## @minpeter/pss-extension-mermaid@0.0.1-next.4
+
+### Harden extension packages
+
+Ship explicit license, public-access, and provenance metadata, validate packed ESM types, and enforce package-specific test coverage floors.
+
 ## @minpeter/pss-extension-mermaid@0.0.1-next.3
 
 ### Publish built-in extensions to the latest dist-tag

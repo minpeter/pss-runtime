@@ -1,13 +1,17 @@
 ---
 packages:
   npm:@minpeter/pss-coding-agent:
-    type: patch
+    replay:
+      - exit-prerelease(npm:@minpeter/pss-coding-agent)
   npm:@minpeter/pss-extension-latex:
-    type: patch
+    replay:
+      - exit-prerelease(npm:@minpeter/pss-extension-latex)
   npm:@minpeter/pss-extension-mermaid:
-    type: patch
+    replay:
+      - exit-prerelease(npm:@minpeter/pss-extension-mermaid)
   npm:@minpeter/pss-extension-web:
-    type: patch
+    replay:
+      - exit-prerelease(npm:@minpeter/pss-extension-web)
 ---
 
 ## Harden extension packages
