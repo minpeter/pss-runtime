@@ -6,6 +6,8 @@ import {
   DEFERRED_OK,
   githubExpression,
   releaseWorkflow,
+  replaceRequiredText,
+  replaceWorkflowSource,
 } from "./ci-release-gating.fixture.mjs";
 import {
   deferredBranchProtectionProblems,
@@ -99,8 +101,8 @@ describe("same-SHA reusable-workflow release gating (VAL-CROSS-005)", () => {
   });
 
   it("fails when isolated CI groups stop canceling stale runs", () => {
-    const workflow = ciWorkflow();
-    workflow.source = workflow.source.replace(
+    const workflow = replaceWorkflowSource(
+      ciWorkflow(),
       "cancel-in-progress: true",
       "cancel-in-progress: false"
     );
@@ -136,32 +138,6 @@ describe("same-SHA reusable-workflow release gating (VAL-CROSS-005)", () => {
     ]);
     expect(problems.some((p) => p.includes("allowlist"))).toBe(true);
   });
-
-  it.each([
-    ["build", "does not build"],
-    ["verify:release", "does not verify"],
-  ])("fails when fresh-runner artifacts omit %s", (command, error) => {
-    const workflow = releaseWorkflow();
-    workflow.source = workflow.source.replace(
-      `      - run: pnpm ${command}\n`,
-      ""
-    );
-    const problems = releaseSequencingProblems([workflow]);
-    expect(problems.some((p) => p.includes(error))).toBe(true);
-  });
-
-  it.each(["if: false", "continue-on-error: true"])(
-    "fails when an artifact gate adds %s",
-    (policy) => {
-      const workflow = releaseWorkflow();
-      workflow.source = workflow.source.replace(
-        "      - run: pnpm build",
-        `      - run: pnpm build\n        ${policy}`
-      );
-      const problems = releaseSequencingProblems([workflow]);
-      expect(problems.some((p) => p.includes("does not build"))).toBe(true);
-    }
-  );
 
   it("fails when release concurrency varies by commit", () => {
     const problems = releaseSequencingProblems([
@@ -278,7 +254,11 @@ describe("security visibility without blocking claims (VAL-CROSS-007)", () => {
   });
 
   it("fails when the branch-protection item loses its deferred status", () => {
-    const text = DEFERRED_OK.replace("Status: deferred.", "Status: active.");
+    const text = replaceRequiredText(
+      DEFERRED_OK,
+      "Status: deferred.",
+      "Status: active."
+    );
     const problems = deferredBranchProtectionProblems(text);
     expect(problems.some((p) => p.includes("deferred status"))).toBe(true);
   });

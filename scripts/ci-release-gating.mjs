@@ -15,8 +15,16 @@
 //   deferredBranchProtectionProblems the deferred list keeps naming branch
 //                                    protection with a deferred status.
 
+import { isDeepStrictEqual } from "node:util";
+import { calledWorkflowProblems } from "./ci-called-workflow-policy.mjs";
 import { CI_WORKFLOW_PATH } from "./ci-fast-gate.mjs";
-import { publishJobProblems } from "./ci-publish-policy.mjs";
+import { containsPublishCommand } from "./ci-publish-command.mjs";
+import {
+  publishJobProblems,
+  publishStepLocations,
+  releaseWorkflowShapeProblems,
+  validationJobProblems,
+} from "./ci-publish-policy.mjs";
 import { triggerSet } from "./flaky-ci.mjs";
 import { itemSections } from "./governance-deferred.mjs";
 import { parseWorkflowDocs } from "./workflow-docs.mjs";
@@ -29,7 +37,6 @@ const SECURITY_WORKFLOW_FILES = [
 ];
 
 const PUBLISH_STEP = /(^|\s)pnpm\s+tegami\s+ci(\s|$)/;
-const PUBLISH_ANYWHERE = /\btegami\s+ci\b|\bnpm\s+publish\b|\bpnpm\s+publish\b/;
 const BRANCH_PROTECTION = /branch[- ]protection/i;
 const DEFERRED_STATUS = /status:\s*deferred/i;
 
@@ -37,6 +44,7 @@ const VALIDATION_WORKFLOW = "./.github/workflows/ci.yml";
 const githubExpression = (name) => `\${{ ${name} }}`;
 const ISOLATED_CI_GROUP = `ci-${githubExpression("github.workflow")}-${githubExpression("github.ref")}`;
 const RELEASE_GROUP = `${githubExpression("github.workflow")}-${githubExpression("github.ref")}`;
+const RELEASE_TRIGGER = { push: { branches: ["main"] } };
 
 function permissionIsolationProblems(jobs, validationIds) {
   const problems = [];
@@ -70,6 +78,20 @@ function publishSequencingProblems(docs, problems) {
     problems.push(`${RELEASE_WORKFLOW} is missing from the workflow set`);
     return;
   }
+  if (release.doc?.defaults !== undefined) {
+    problems.push(
+      `${RELEASE_WORKFLOW} must not define workflow-level execution defaults`
+    );
+  }
+  if (release.doc?.env !== undefined) {
+    problems.push(
+      `${RELEASE_WORKFLOW} must not define workflow-level inherited environment`
+    );
+  }
+  problems.push(...releaseWorkflowShapeProblems(release.doc, RELEASE_WORKFLOW));
+  if (!isDeepStrictEqual(release.doc?.on, RELEASE_TRIGGER)) {
+    problems.push(`${RELEASE_WORKFLOW} must trigger only on pushes to main`);
+  }
   const jobs = release.doc?.jobs ?? {};
   const validationIds = Object.entries(jobs)
     .filter(([, job]) => job?.uses === VALIDATION_WORKFLOW)
@@ -79,32 +101,34 @@ function publishSequencingProblems(docs, problems) {
       `${RELEASE_WORKFLOW} must call ${VALIDATION_WORKFLOW} exactly once`
     );
   }
-  let publishSeen = false;
-  for (const [jobId, job] of Object.entries(release.doc?.jobs ?? {})) {
-    const steps = job?.steps ?? [];
-    const publishIndexes = steps.flatMap((step, index) =>
-      typeof step?.run === "string" && PUBLISH_STEP.test(step.run)
-        ? [index]
-        : []
+  for (const validationId of validationIds) {
+    problems.push(
+      ...validationJobProblems(
+        validationId,
+        jobs[validationId],
+        RELEASE_WORKFLOW
+      )
     );
-    if (publishIndexes.length === 0) {
-      continue;
-    }
-    publishSeen = true;
-    for (const publishIndex of publishIndexes) {
-      problems.push(
-        ...publishJobProblems({
-          jobId,
-          job,
-          validationIds,
-          publishIndex,
-          workflowPath: RELEASE_WORKFLOW,
-        })
-      );
-    }
   }
-  if (!publishSeen) {
-    problems.push(`${RELEASE_WORKFLOW} has no publish step (pnpm tegami ci)`);
+  const publishLocations = publishStepLocations(
+    jobs,
+    RELEASE_WORKFLOW,
+    problems
+  );
+  for (const { jobId, job } of publishLocations) {
+    problems.push(
+      ...publishJobProblems({
+        jobId,
+        job,
+        validationIds,
+        workflowPath: RELEASE_WORKFLOW,
+      })
+    );
+  }
+  if (Object.keys(jobs).length !== 2) {
+    problems.push(
+      `${RELEASE_WORKFLOW} must contain only validation and canonical publish jobs`
+    );
   }
   problems.push(...permissionIsolationProblems(jobs, validationIds));
   if (release.doc?.concurrency?.["cancel-in-progress"] !== false) {
@@ -134,6 +158,7 @@ function reusableConcurrencyProblems(docs, problems) {
       `${CI_WORKFLOW_PATH} must cancel stale runs within each isolated caller group`
     );
   }
+  problems.push(...calledWorkflowProblems(ci.doc, CI_WORKFLOW_PATH));
 }
 
 export function releaseSequencingProblems(workflows) {
@@ -216,9 +241,12 @@ function cleanPathProblems(docs, problems) {
   if (!ci) {
     return;
   }
+  if (calledWorkflowProblems(ci.doc, CI_WORKFLOW_PATH).length > 0) {
+    problems.push(`${CI_WORKFLOW_PATH} deviates from canonical clean workflow`);
+  }
   for (const job of Object.values(ci.doc?.jobs ?? {})) {
     for (const step of job?.steps ?? []) {
-      if (typeof step?.run === "string" && PUBLISH_ANYWHERE.test(step.run)) {
+      if (typeof step?.run === "string" && containsPublishCommand(step.run)) {
         problems.push(
           `${CI_WORKFLOW_PATH} runs a publish step ("${step?.name ?? "?"}"); the clean fast-gate path never publishes`
         );
