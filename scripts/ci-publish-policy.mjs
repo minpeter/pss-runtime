@@ -1,34 +1,158 @@
-const BUILD_STEP = /^\s*pnpm\s+build\s*$/;
-const VERIFY_STEP = /^\s*pnpm\s+verify:release\s*$/;
-const WRITE_PERMISSIONS = ["contents", "pull-requests", "id-token"];
+const CHECKOUT_ACTION =
+  "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
+const PNPM_ACTION =
+  "pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413";
+const NODE_ACTION =
+  "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020";
 
-function needsJob(job, dependency) {
-  return [job?.needs ?? []].flat().map(String).includes(dependency);
+const githubExpression = (name) => `\${{ ${name} }}`;
+const SHA = githubExpression("github.sha");
+const TOKEN = githubExpression("secrets.GITHUB_TOKEN");
+const WRITE_PERMISSIONS = ["contents", "pull-requests", "id-token"];
+const PUBLISH_RUN = "pnpm tegami ci";
+const VALIDATION_JOB_KEYS = ["name", "permissions", "uses"];
+const VALIDATION_PERMISSIONS = { contents: "read" };
+const VALIDATION_WORKFLOW = "./.github/workflows/ci.yml";
+const RELEASE_JOB_IDS = ["publish", "validate"];
+const RELEASE_WORKFLOW_KEYS = [
+  "concurrency",
+  "jobs",
+  "name",
+  "on",
+  "permissions",
+];
+
+const ownKeysEqual = (value, expected) => {
+  const keys = Object.keys(value ?? {}).sort();
+  return (
+    keys.length === expected.length &&
+    keys.every((key, i) => key === [...expected].sort()[i])
+  );
+};
+
+const policyKeys = (value) =>
+  Object.keys(value ?? {}).filter(
+    (key) => key !== "continue-on-error" || value[key] !== false
+  );
+
+const objectEquals = (value, expected) =>
+  ownKeysEqual(value, Object.keys(expected)) &&
+  Object.entries(expected).every(
+    ([key, expectedValue]) => value[key] === expectedValue
+  );
+
+const stepEquals = (step, expected) =>
+  ownKeysEqual(
+    Object.fromEntries(policyKeys(step).map((key) => [key, step[key]])),
+    Object.keys(expected)
+  ) &&
+  Object.entries(expected).every(([key, value]) =>
+    typeof value === "object"
+      ? objectEquals(step[key], value)
+      : step[key] === value
+  );
+
+const EXPECTED_STEPS = [
+  {
+    name: "Checkout",
+    uses: CHECKOUT_ACTION,
+    with: { "fetch-depth": 0, ref: SHA },
+  },
+  { name: "Setup pnpm", uses: PNPM_ACTION },
+  {
+    name: "Setup Node.js",
+    uses: NODE_ACTION,
+    with: {
+      "node-version-file": ".node-version",
+      "registry-url": "https://registry.npmjs.org",
+      "package-manager-cache": false,
+    },
+  },
+  { name: "Install dependencies", run: "pnpm install --frozen-lockfile" },
+  { name: "Build release artifacts", run: "pnpm build" },
+  { name: "Verify release artifacts", run: "pnpm verify:release" },
+  {
+    name: "Version or publish packages",
+    run: PUBLISH_RUN,
+    env: { GITHUB_TOKEN: TOKEN },
+  },
+];
+
+export function publishStepLocations(jobs, workflowPath, problems) {
+  const locations = [];
+  for (const [jobId, job] of Object.entries(jobs)) {
+    for (const [publishIndex, step] of (job?.steps ?? []).entries()) {
+      if (step?.run === PUBLISH_RUN) {
+        locations.push({ jobId, job, publishIndex });
+      }
+    }
+  }
+  if (locations.length === 0) {
+    problems.push(
+      `${workflowPath} has no publish step; expected ${PUBLISH_RUN}`
+    );
+  } else if (locations.length > 1) {
+    problems.push(
+      `${workflowPath} must have exactly one canonical publish step (${PUBLISH_RUN})`
+    );
+  }
+  return locations;
 }
 
-function hasRequiredStep(job, publishIndex, pattern) {
-  return (job?.steps ?? [])
-    .slice(0, publishIndex)
-    .some(
-      (step) =>
-        pattern.test(String(step?.run ?? "")) &&
-        step?.if === undefined &&
-        step?.["continue-on-error"] !== true
+export function validationJobProblems(jobId, job, workflowPath) {
+  const problems = [];
+  if (![undefined, false].includes(job?.["continue-on-error"])) {
+    problems.push(`${workflowPath} validation job "${jobId}" must fail closed`);
+  }
+  if (
+    !ownKeysEqual(
+      Object.fromEntries(policyKeys(job).map((key) => [key, job[key]])),
+      VALIDATION_JOB_KEYS
+    ) ||
+    job?.name !== "Validate release SHA" ||
+    job?.uses !== VALIDATION_WORKFLOW ||
+    !objectEquals(job?.permissions, VALIDATION_PERMISSIONS)
+  ) {
+    problems.push(
+      `${workflowPath} validation job "${jobId}" must use the strict caller allowlist`
     );
+  }
+  return problems;
+}
+
+export function releaseWorkflowShapeProblems(doc, workflowPath) {
+  const problems = [];
+  if (!ownKeysEqual(doc, RELEASE_WORKFLOW_KEYS)) {
+    problems.push(
+      `${workflowPath} must use the strict workflow-level key allowlist`
+    );
+  }
+  if (!objectEquals(doc?.permissions, {})) {
+    problems.push(`${workflowPath} must deny workflow-level permissions`);
+  }
+  if (doc?.name !== "Release") {
+    problems.push(
+      `${workflowPath} must retain the canonical Release workflow name`
+    );
+  }
+  if (!ownKeysEqual(doc?.jobs, RELEASE_JOB_IDS)) {
+    problems.push(
+      `${workflowPath} must contain exactly the canonical validate and publish jobs`
+    );
+  }
+  return problems;
 }
 
 export function publishJobProblems({
   jobId,
   job,
   validationIds,
-  publishIndex,
   workflowPath,
 }) {
   const problems = [];
-  const publishStep = job?.steps?.[publishIndex];
-  if (!validationIds.some((id) => needsJob(job, id))) {
+  if (job?.needs !== validationIds[0]) {
     problems.push(
-      `${workflowPath} job "${jobId}" publishes without needing the complete validation job`
+      `${workflowPath} job "${jobId}" publishes without needing only the complete validation job`
     );
   }
   const permissions = job?.permissions ?? {};
@@ -40,35 +164,68 @@ export function publishJobProblems({
     }
   }
   if (
-    Object.keys(permissions).some(
-      (permission) => !WRITE_PERMISSIONS.includes(permission)
-    )
+    Object.keys(permissions).some((key) => !WRITE_PERMISSIONS.includes(key))
   ) {
     problems.push(
       `${workflowPath} publish job "${jobId}" has permission outside the publish allowlist`
     );
   }
+  if (
+    !objectEquals(
+      permissions,
+      Object.fromEntries(WRITE_PERMISSIONS.map((key) => [key, "write"]))
+    )
+  ) {
+    problems.push(
+      `${workflowPath} publish job "${jobId}" has non-canonical permissions`
+    );
+  }
   if (job?.if !== undefined) {
     problems.push(
-      `${workflowPath} publish job "${jobId}" must rely on the default successful-needs condition`
+      `${workflowPath} publish job "${jobId}" must rely on successful-needs`
     );
   }
-  if (publishStep?.if !== undefined) {
+  const expectedJobKeys = [
+    "name",
+    "needs",
+    "runs-on",
+    "timeout-minutes",
+    "permissions",
+    "steps",
+  ];
+  if (
+    !ownKeysEqual(
+      Object.fromEntries(policyKeys(job).map((key) => [key, job[key]])),
+      expectedJobKeys
+    ) ||
+    job.name !== "Version and publish" ||
+    job["runs-on"] !== "ubuntu-latest" ||
+    job["timeout-minutes"] !== 15
+  ) {
     problems.push(
-      `${workflowPath} publish step must rely on the default successful-step condition`
+      `${workflowPath} publish job "${jobId}" must use the strict job allowlist`
     );
   }
-  if (publishStep?.["continue-on-error"] !== undefined) {
-    problems.push(`${workflowPath} publish step must fail closed`);
-  }
-  if (!hasRequiredStep(job, publishIndex, BUILD_STEP)) {
+  if ((job?.steps ?? []).length !== EXPECTED_STEPS.length) {
     problems.push(
-      `${workflowPath} publish job "${jobId}" does not build artifacts on its fresh runner before publishing`
+      `${workflowPath} publish job "${jobId}" must contain only the canonical steps`
     );
   }
-  if (!hasRequiredStep(job, publishIndex, VERIFY_STEP)) {
+  for (const [index, expected] of EXPECTED_STEPS.entries()) {
+    if (!stepEquals(job?.steps?.[index], expected)) {
+      problems.push(
+        `${workflowPath} publish job "${jobId}" step ${index + 1} is not canonical`
+      );
+    }
+  }
+  if (!(job?.steps ?? []).some((step) => stepEquals(step, EXPECTED_STEPS[4]))) {
     problems.push(
-      `${workflowPath} publish job "${jobId}" does not verify fresh-runner artifacts before publishing`
+      `${workflowPath} publish job "${jobId}" does not build artifacts`
+    );
+  }
+  if (!(job?.steps ?? []).some((step) => stepEquals(step, EXPECTED_STEPS[5]))) {
+    problems.push(
+      `${workflowPath} publish job "${jobId}" does not verify artifacts`
     );
   }
   return problems;
