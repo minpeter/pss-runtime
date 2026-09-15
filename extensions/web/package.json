@@ -1,6 +1,6 @@
 {
   "name": "@minpeter/pss-extension-web",
-  "version": "0.0.1-next.5",
+  "version": "0.0.1-next.6",
   "description": "OpenSearch-backed web tools for the PSS coding agent.",
   "license": "SEE LICENSE IN LICENSE.md",
   "repository": {
