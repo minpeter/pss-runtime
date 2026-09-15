@@ -1,15 +1,19 @@
 import { invokedExecutable } from "./ci-command-prefixes.mjs";
+import { envSplitTokens } from "./ci-env-split.mjs";
 
 const BASENAME = /^.*\//;
 const COMMAND_SEPARATOR = /[\n;&|]/u;
 const CONTINUATION = /\\\r?\n[\t ]*/g;
-const ENV_OPTIONS_WITH_VALUE = new Set(["-C", "--chdir", "-u", "--unset"]);
-const EXEC = /^exec$/;
-const NPM_PUBLISH = /^pub(?:l(?:i(?:s(?:h)?)?)?)?$/;
+const DOUBLE_QUOTE_ESCAPES = new Set(['"', "$", "`", "\\", "\n"]);
+const EXEC = /^(?:exec|x)$/;
+const NPM_PUBLISH = /^pu(?:b(?:l(?:i(?:s(?:h)?)?)?)?)?$/;
 const PNPM_PUBLISH = /^publish$/;
 const QUOTE = /["']/u;
 const SHELL_COMMAND_OPTION = /^-[^-]*c/;
 const SHELL_INTERPRETERS = new Set(["bash", "dash", "ksh", "sh", "zsh"]);
+const COMPOUND_PREFIX =
+  /^(?:\(|\{|case|do|elif|else|for|function|if|select|then|until|while|\[\[)$/;
+const COMPOUND_SUFFIX = /^(?:\)|\}|done|esac|fi)$/;
 const WHITESPACE = /\s/u;
 const isEscaped = (character, quote) => character === "\\" && quote !== "'";
 
@@ -66,7 +70,11 @@ function quotedPart(text, index, quote) {
   if (character === quote) {
     return { index, quote: undefined, value: "" };
   }
-  if (character === "\\" && quote === '"' && index + 1 < text.length) {
+  if (
+    character === "\\" &&
+    quote === '"' &&
+    DOUBLE_QUOTE_ESCAPES.has(text[index + 1])
+  ) {
     return { index: index + 1, quote, value: text[index + 1] };
   }
   return { index, quote, value: character };
@@ -163,44 +171,35 @@ function packageExecTokens(tokens, executableName) {
   return tokens.slice(nested);
 }
 
-function envSplitTokens(tokens) {
-  const env = tokens.findIndex(
-    (token, index) =>
-      token.replace(BASENAME, "") === "env" &&
-      invokedExecutable([...tokens.slice(0, index), "__probe__"]) === index
-  );
-  if (env < 0) {
+function packageExecCommand(tokens) {
+  const command = packageSubcommand(tokens, "npm", EXEC);
+  const option = tokens[command + 1];
+  if (command < 0 || option === undefined) {
     return;
   }
-  let option = env + 1;
-  while (option < tokens.length) {
-    const candidate = tokens[option];
-    if (
-      candidate === "-S" ||
-      candidate === "--split-string" ||
-      candidate.startsWith("-S") ||
-      candidate.startsWith("--split-string=")
-    ) {
-      break;
-    }
-    if (!candidate.startsWith("-") || candidate === "--") {
-      return;
-    }
-    option += ENV_OPTIONS_WITH_VALUE.has(candidate) ? 2 : 1;
+  if (option === "-c" || option === "--call") {
+    return tokens[command + 2];
   }
-  if (option >= tokens.length) {
-    return;
+  return option.startsWith("--call=")
+    ? option.slice("--call=".length)
+    : undefined;
+}
+
+function compoundCommandTokens(tokens) {
+  const executable = invokedExecutable(tokens);
+  const token = tokens[executable] ?? "";
+  if (COMPOUND_SUFFIX.test(token)) {
+    return [];
   }
-  const token = tokens[option];
-  const attached = token !== "-S" && token !== "--split-string";
-  let value = tokens[option + 1];
-  if (token.startsWith("--split-string=")) {
-    value = token.slice("--split-string=".length);
-  } else if (attached) {
-    value = token.slice(2);
+  if (COMPOUND_PREFIX.test(token)) {
+    return tokens.slice(executable + 1);
   }
-  const words = shellCommands(value ?? "", null)[0] ?? [];
-  return [...words, ...tokens.slice(option + (attached ? 1 : 2))];
+  if (token.startsWith("(") || token.startsWith("{")) {
+    return tokens
+      .slice(executable)
+      .map((word) => word.replace(/^[({]+|[)}]+$/g, ""))
+      .filter(Boolean);
+  }
 }
 
 function delegatedCommand(tokens) {
@@ -222,12 +221,24 @@ function containsPublishTokens(tokens) {
   if (tokens.length === 0) {
     return false;
   }
-  const splitEnv = envSplitTokens(tokens);
+  const splitEnv = envSplitTokens(
+    tokens,
+    (source) => shellCommands(source, null)[0] ?? []
+  );
   if (splitEnv !== undefined) {
     return containsPublishTokens(splitEnv);
   }
+  const executable = invokedExecutable(tokens);
+  if (executable === -2) {
+    return true;
+  }
+  const compound = compoundCommandTokens(tokens);
+  if (compound !== undefined) {
+    return containsPublishTokens(compound);
+  }
   return (
     containsPublishCommand(delegatedCommand(tokens) ?? "") ||
+    containsPublishCommand(packageExecCommand(tokens) ?? "") ||
     containsPublishTokens(packageExecTokens(tokens, "npm") ?? []) ||
     containsPublishTokens(packageExecTokens(tokens, "pnpm") ?? []) ||
     packageCommand(tokens, "npm", NPM_PUBLISH) ||

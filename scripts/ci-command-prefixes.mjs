@@ -19,8 +19,55 @@ const SUDO_OPTIONS_WITH_VALUE = new Set([
   "--host",
   "-p",
   "--prompt",
+  "-R",
+  "--chroot",
+  "-r",
+  "--role",
+  "-T",
+  "--command-timeout",
+  "-t",
+  "--type",
   "-u",
   "--user",
+  "-U",
+  "--other-user",
+]);
+const SUDO_OPTIONS = new Set([
+  ...SUDO_OPTIONS_WITH_VALUE,
+  "-A",
+  "--askpass",
+  "-b",
+  "--background",
+  "-B",
+  "--bell",
+  "-E",
+  "--preserve-env",
+  "-e",
+  "--edit",
+  "-H",
+  "--set-home",
+  "-i",
+  "--login",
+  "-K",
+  "--remove-timestamp",
+  "-k",
+  "--reset-timestamp",
+  "-l",
+  "--list",
+  "-N",
+  "--no-update",
+  "-n",
+  "--non-interactive",
+  "-P",
+  "--preserve-groups",
+  "-S",
+  "--stdin",
+  "-s",
+  "--shell",
+  "-V",
+  "--version",
+  "-v",
+  "--validate",
 ]);
 const NICE_OPTIONS_WITH_VALUE = new Set(["-n", "--adjustment"]);
 const STDBUF_OPTIONS_WITH_VALUE = new Set([
@@ -85,10 +132,23 @@ function afterEnvPrefix(tokens, start) {
 }
 
 function afterSudoPrefix(tokens, start) {
-  return skipAssignments(
-    tokens,
-    afterOptions(tokens, start, SUDO_OPTIONS_WITH_VALUE)
-  );
+  let index = start;
+  while (tokens[index]?.startsWith("-")) {
+    const option = tokens[index];
+    if (option === "--") {
+      index += 1;
+      break;
+    }
+    const name = option.split("=", 1)[0];
+    if (!SUDO_OPTIONS.has(name)) {
+      return -2;
+    }
+    index += 1;
+    if (SUDO_OPTIONS_WITH_VALUE.has(name) && !option.includes("=")) {
+      index += 1;
+    }
+  }
+  return skipAssignments(tokens, index);
 }
 
 function afterTimeoutPrefix(tokens, start) {
@@ -121,6 +181,9 @@ const PREFIX_UNWRAPPERS = new Map([
 export function invokedExecutable(tokens) {
   let index = skipAssignments(tokens, 0);
   while (index < tokens.length) {
+    if (index < 0) {
+      return index;
+    }
     const executable = tokens[index]?.replace(BASENAME, "");
     const unwrap = PREFIX_UNWRAPPERS.get(executable);
     if (unwrap === undefined) {

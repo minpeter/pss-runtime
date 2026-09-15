@@ -24,12 +24,21 @@ function expectCleanPathPublication(command) {
   ).toBe(true);
 }
 
+function expectCleanPathMutationRejected(command) {
+  expect(
+    cleanPathProblems(command).some((problem) =>
+      problem.includes("canonical clean workflow")
+    )
+  ).toBe(true);
+}
+
 it.each(["n\\\npm p\\\nub", "n\"\"pm p''ub", 'n"p"m pub', "pn\\\npm publish"])(
   "recognizes shell-tokenized publication: %s",
   expectCleanPathPublication
 );
 
 it.each([
+  "npm pu",
   "npm --workspace packages/runtime p\\\nubl",
   "npm --loglevel verbose pub",
   "pnpm --filter @minpeter/pss-runtime publish",
@@ -40,6 +49,8 @@ it.each([
   "env RELEASE=true pnpm publish",
   "exec npm publ",
   "sudo npm publish",
+  "sudo -T 30 /path/to/npm pub",
+  "sudo --unknown-wrapper-option value npm pub",
   "time npm publish",
   "time -p npm pub",
   "/usr/bin/time --format elapsed npm publ",
@@ -64,14 +75,35 @@ it.each([
   "env -S 'npm publish' .",
   "env -S'npm publish'",
   "env -S'npm publish --access=public'",
+  "env -S'npm\\_pub'",
   "env --split-string 'npm --workspace packages/runtime publ'",
   "env --split-string='pnpm publish' --access public",
   "npm exec -- npm pub",
+  "npm x -- npm pub",
+  "npm exec -c 'npm pub'",
+  "npm exec --call='npm pub'",
   "pnpm exec npm publish",
   "pnpm exec sh -c 'npm publish'",
 ])(
   "recognizes publication through delegated commands: %s",
   expectCleanPathPublication
+);
+
+it.each(["if true; then npm pub; fi", "(npm pub)", "{ npm pub; }"])(
+  "fails closed on publication in a shell compound construct: %s",
+  expectCleanPathPublication
+);
+
+it.each([
+  "npm exec --yes --call 'npm pub'",
+  "npm --call='npm pub' exec",
+  "( npm pub)",
+  "case x in x) npm pub;; esac",
+  "env -S'npm pub\\c ignored'",
+  "env -vS'npm\\_pub'",
+])(
+  "rejects unsupported delegated syntax through the canonical clean workflow: %s",
+  expectCleanPathMutationRejected
 );
 
 it("recognizes publication delegated through eval", () => {
@@ -97,6 +129,7 @@ it.each([
   "echo npm publish",
   "npm exec echo pub",
   "npm exec -- echo npm publish",
+  "npm exec -c 'echo npm publish'",
   "pnpm exec printf '%s' 'npm publish'",
   "pnpm exec echo 'status | npm publish is disabled'",
   "pnpm exec echo -- npm publish",
@@ -106,6 +139,8 @@ it.each([
   "env -S'echo npm publish'",
   "env -S 'echo' npm publish",
   "env echo -S'npm publish'",
+  "if true; then echo npm publish; fi",
+  "( printf '%s' 'npm publish' )",
   "time npm exec echo publish",
   "timeout 30 echo npm publish",
   "nice nohup stdbuf -oL printf '%s' 'npm publish'",

@@ -241,6 +241,9 @@ function cleanPathProblems(docs, problems) {
   if (!ci) {
     return;
   }
+  if (calledWorkflowProblems(ci.doc, CI_WORKFLOW_PATH).length > 0) {
+    problems.push(`${CI_WORKFLOW_PATH} deviates from canonical clean workflow`);
+  }
   for (const job of Object.values(ci.doc?.jobs ?? {})) {
     for (const step of job?.steps ?? []) {
       if (typeof step?.run === "string" && containsPublishCommand(step.run)) {
