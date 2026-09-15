@@ -28,7 +28,7 @@
   "dependencies": {
     "@minpeter/pss-coding-agent": "workspace:*",
     "@minpeter/pss-runtime": "workspace:*",
-    "ai": "7.0.93"
+    "ai": "7.0.99"
   },
   "devDependencies": {
     "typescript": "^7.0.2",
