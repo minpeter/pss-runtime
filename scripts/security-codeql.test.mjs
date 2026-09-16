@@ -53,8 +53,8 @@ describe("codeql: workflow shape (VAL-SEC-027)", () => {
     "fails when only %s uses the old CodeQL pin",
     (action) => {
       const source = readFileSync(CODEQL_WORKFLOW_PATH, "utf8").replace(
-        `github/codeql-action/${action}@cdf488f595d80d6e07e03d4674febd5ab45fa938`,
-        `github/codeql-action/${action}@6f5948dfacef28e207b48d0905cf90c03365536d`
+        `github/codeql-action/${action}@b96794f015dfd88f77b49b1c93e0fa7110f94c63`,
+        `github/codeql-action/${action}@cdf488f595d80d6e07e03d4674febd5ab45fa938`
       );
       expect(problemsOf(source).some((p) => p.includes("same reference"))).toBe(
         true
