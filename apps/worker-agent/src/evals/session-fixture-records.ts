@@ -10,17 +10,17 @@ export interface EvalSessionRecord {
 }
 
 export const projectZephyrRecord = {
-  keywords: ["project", "zephyr", "금요일", "출시", "launch"],
+  keywords: ["project", "zephyr", "friday", "Released", "launch"],
   messages: [
     {
       index: 0,
       role: "user",
-      text: "Project Zephyr 출시 일정은 언제가 좋아?",
+      text: "When do you like Project Zephyr release schedule?",
     },
     {
       index: 1,
       role: "assistant",
-      text: "금요일 오전에 출시하고 목요일에는 체크리스트만 닫자.",
+      text: "Let's launch on Friday morning and close the checklist on Thursday.",
     },
   ],
   score: 4,
@@ -28,24 +28,24 @@ export const projectZephyrRecord = {
     channel: { id: "zephyr", kind: "telegram" },
     conversationKey: "telegram:zephyr",
     lastSeenAt: Date.UTC(2026, 5, 25, 8),
-    snippet: "Project Zephyr 출시 일정은 금요일 오전으로 정리했다.",
+    snippet: "The Project Zephyr launch schedule was set for Friday morning.",
     threadKey: "thread:telegram:zephyr",
     turnCount: 4,
   },
 } satisfies EvalSessionRecord;
 
 export const databaseMigrationRecord = {
-  keywords: ["database", "migration", "데이터베이스", "마이그레이션"],
+  keywords: ["database", "migration", "in the database", "Get ready to "],
   messages: [
     {
       index: 0,
       role: "user",
-      text: "데이터베이스 마이그레이션 순서 다시 알려줘.",
+      text: "Remind me of the database migration sequence.",
     },
     {
       index: 1,
       role: "assistant",
-      text: "백업, dry-run, read-only 전환, migration, smoke test 순서였어.",
+      text: "It was in the order of backup, dry-run, read-only conversion, migration, and smoke test.",
     },
   ],
   score: 5,
@@ -53,24 +53,25 @@ export const databaseMigrationRecord = {
     channel: { id: "database", kind: "telegram" },
     conversationKey: "telegram:database",
     lastSeenAt: Date.UTC(2026, 5, 24, 22),
-    snippet: "DB migration은 백업과 dry-run 이후 smoke test까지 진행한다.",
+    snippet:
+      "DB migration is performed up to the smoke test after backup and dry-run.",
     threadKey: "thread:telegram:database",
     turnCount: 6,
   },
 } satisfies EvalSessionRecord;
 
 export const billingRecord = {
-  keywords: ["billing", "invoice", "청구", "인보이스"],
+  keywords: ["billing", "invoice", "Charge", "Invoice"],
   messages: [
     {
       index: 0,
       role: "user",
-      text: "6월 인보이스는 누구에게 보내기로 했지?",
+      text: "Who did you decide to send the June invoice to?",
     },
     {
       index: 1,
       role: "assistant",
-      text: "finance@acme.example 로 보내기로 정리했어.",
+      text: "i decided to send it to finance@acme.example.",
     },
   ],
   score: 3,
@@ -78,24 +79,24 @@ export const billingRecord = {
     channel: { id: "billing", kind: "telegram" },
     conversationKey: "telegram:billing",
     lastSeenAt: Date.UTC(2026, 5, 23, 17),
-    snippet: "6월 인보이스 수신자는 finance@acme.example 이다.",
+    snippet: "The June invoice recipient is finance@acme.example.",
     threadKey: "thread:telegram:billing",
     turnCount: 3,
   },
 } satisfies EvalSessionRecord;
 
 export const kyotoTravelRecord = {
-  keywords: ["kyoto", "교토", "travel", "여행"],
+  keywords: ["kyoto", "Kyoto", "travel", "Travel"],
   messages: [
     {
       index: 0,
       role: "user",
-      text: "교토 일정에서 둘째 날은 어디로 잡았지?",
+      text: "Where did you schedule the second day in Kyoto?",
     },
     {
       index: 1,
       role: "assistant",
-      text: "둘째 날은 아라시야마와 니시키 시장으로 잡았어.",
+      text: "The second day was held as Arashiyama and Nishiki markets.",
     },
   ],
   score: 2,
@@ -103,24 +104,24 @@ export const kyotoTravelRecord = {
     channel: { id: "kyoto", kind: "telegram" },
     conversationKey: "telegram:kyoto",
     lastSeenAt: Date.UTC(2026, 5, 22, 11),
-    snippet: "교토 둘째 날 일정은 아라시야마와 니시키 시장이다.",
+    snippet: "The second day in Kyoto is Arashiyama and Nishiki Market.",
     threadKey: "thread:telegram:kyoto",
     turnCount: 5,
   },
 } satisfies EvalSessionRecord;
 
 export const webSearchLimitRecord = {
-  keywords: ["web", "search", "웹검색", "검색"],
+  keywords: ["web", "search", "Web search", "search"],
   messages: [
     {
       index: 0,
       role: "user",
-      text: "웹검색으로 최신 가격을 확인할 수 있어?",
+      text: "Can you find the latest prices by searching the web?",
     },
     {
       index: 1,
       role: "assistant",
-      text: "이 worker에는 웹검색 도구가 없어서 실시간 웹 확인은 못 해.",
+      text: "This worker doesn't have a web search tool, so it can't check the web in real time.",
     },
   ],
   score: 2,
@@ -128,7 +129,8 @@ export const webSearchLimitRecord = {
     channel: { id: "web-search", kind: "telegram" },
     conversationKey: "telegram:web-search",
     lastSeenAt: Date.UTC(2026, 5, 21, 9),
-    snippet: "웹검색 도구가 없어 실시간 웹 확인은 못 한다고 안내했다.",
+    snippet:
+      "He informed me that there is no web search tool, so I cannot check the web in real time.",
     threadKey: "thread:telegram:web-search",
     turnCount: 2,
   },

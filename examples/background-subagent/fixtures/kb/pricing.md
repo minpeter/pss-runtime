@@ -1,20 +1,20 @@
-# 요금제
+# Plan
 
 ## Free
 
-- 월 1,000회 에이전트 호출
-- 기본 플러그인
+- 1,000 agent calls per month
+- Default Plugin
 
 ## Pro
 
-- 월 50,000회 에이전트 호출
-- 백그라운드 서브에이전트
-- 팀 공유 세션
+- 50,000 agent calls per month
+- Background Sub-Agent
+- Team sharing sessions
 
-월 요금: 29,000원
+Monthly fee: 29,000 KRW
 
-## 환불 정책
+## Refund Policy
 
-- Pro 플랜은 결제 후 7일 이내 전액 환불 가능
-- 7일이 지나면 남은 기간 일할 계산 환불
-- 연간 결제는 첫 14일 이내 전액 환불 가능
+- Pro Plan is fully refundable within 7 days of payment
+-A prorated refund after 7 days
+- Annual payments are fully refundable within the first 14 days

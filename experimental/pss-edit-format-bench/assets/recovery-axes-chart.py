@@ -79,7 +79,7 @@ top.set_edgecolor("#C0392B")
 top.set_linewidth(2.2)
 top.set_zorder(4)
 ax_bar.annotate(
-    "first-shot 최고 (95.8%)",
+    "first-shot High (95.8%)",
     xy=(top.get_x() + top.get_width() / 2, top.get_height()),
     xytext=(top.get_x() + top.get_width() / 2 + 0.55, 100),
     fontsize=10,
@@ -91,7 +91,7 @@ ax_bar.set_xticks(list(x))
 ax_bar.set_xticklabels(FORMATS, fontsize=12)
 ax_bar.set_ylim(0, 108)
 ax_bar.set_ylabel("first-shot pass rate (%)", fontsize=12)
-ax_bar.set_title("first-shot 통과율 — 본 벤치 (24 tasks × 2 runs)", fontsize=13, pad=10)
+ax_bar.set_title("first-shot Pass Rate — Bone Bench (24 tasks × 2 runs)", fontsize=13, pad=10)
 ax_bar.yaxis.grid(True, color="#d8dde3", lw=0.8, zorder=0)
 ax_bar.set_axisbelow(True)
 for spine in ("top", "right"):
@@ -115,7 +115,7 @@ for model in MODELS:
                 edgecolors="#C0392B",
                 linewidths=2.0,
                 zorder=5,
-                label=f"{SHORT[model]} × {fmt} (복구율 0%)",
+                label=f"{SHORT[model]} × {fmt} (Recovery rate 0%)",
             )
         else:
             ax_scat.scatter(
@@ -131,19 +131,19 @@ for model in MODELS:
 ax_scat.axhspan(50, 112, color="#eaf5ec", zorder=0)
 ax_scat.axhspan(-12, 50, color="#fdeeec", zorder=0)
 ax_scat.text(
-    61.0, 105.5, "복구 가능 (데모 실패 없음 = n/a, 빈 마커)",
+    61.0, 105.5, "Recoverable (no demo failures = n/a, Empty marker)",
     fontsize=10.5, color="#2e7d46", ha="left", va="top",
 )
 ax_scat.text(
-    61.0, 5.0, "막다른 포맷 (dead-end)\n실패 시 재시도로도 복구 불가",
+    61.0, 5.0, "Dead-end formatting (dead-end)\nUnable to recover on retry if failed",
     fontsize=10.5, color="#b03a2e", ha="left", va="bottom",
 )
 ax_scat.axvline(95.8, color="#C0392B", lw=1.2, ls="--", alpha=0.7)
 ax_scat.scatter(95.8, 0.0, marker="D", s=260, color="#C0392B",
                 edgecolors="black", linewidths=1.4, zorder=6)
 ax_scat.annotate(
-    "deepseek × grok-json\npy-append-method 실패 → 3회 재시도 전부 미복구\n"
-    "(같은 오류 클래스 indentation 반복 = repeated failure)",
+    "deepseek × grok-json\npy-append-method Failure → 3 retries All undeveloped\n"
+    "(Same error class indentation Repetitions = repeated failure)",
     xy=(95.8, 0.0),
     xytext=(66, 30),
     fontsize=10.5,
@@ -154,9 +154,9 @@ ax_scat.annotate(
 )
 ax_scat.set_xlim(60, 112)
 ax_scat.set_ylim(-12, 112)
-ax_scat.set_xlabel("first-shot pass rate — 본 벤치 (%)", fontsize=12)
-ax_scat.set_ylabel("recovery rate — 실패 시도 중 복구율 (%)", fontsize=12)
-ax_scat.set_title("first-shot 성공률과 복구성은 독립적 축", fontsize=13, pad=10)
+ax_scat.set_xlabel("first-shot pass rate — Bone Bench (%)", fontsize=12)
+ax_scat.set_ylabel("recovery rate — Recovery rate during failed attempts (%)", fontsize=12)
+ax_scat.set_title("first-shot Success rate and resilience are independent axes", fontsize=13, pad=10)
 ax_scat.xaxis.grid(True, color="#d8dde3", lw=0.8, zorder=0)
 ax_scat.yaxis.grid(True, color="#d8dde3", lw=0.8, zorder=0)
 ax_scat.set_axisbelow(True)
@@ -171,21 +171,21 @@ legend_handles = [
     Line2D([0], [0], marker="o", color="none", markerfacecolor=COLOR["minimax-m3"],
            markeredgecolor=COLOR["minimax-m3"], markersize=9, label="minimax-m3"),
     Line2D([0], [0], marker="s", color="none", markerfacecolor="none",
-           markeredgecolor="#555", markersize=8, label="빈 마커 = 데모에서 실패 없음 (n/a)"),
+           markeredgecolor="#555", markersize=8, label="Empty marker = No Failure in Demo (n/a)"),
 ]
 ax_scat.legend(handles=legend_handles, loc="lower right", frameon=False, fontsize=10)
 
 fig.suptitle(
-    "first-shot 성공률 vs 복구성 — deepseek×grok-json은 최고 성적처럼 보이지만 실패 시 막다른 포맷",
+    "first-shot Success rate vs Recoverability — deepseek×grok-jsonlooks like the best performance, but in the event of failure, the dead-end format",
     fontsize=14, y=0.99,
 )
 fig.text(
     0.5, 0.012,
-    "본 벤치: 384 attempts (2 models × 4 formats × 24 tasks × 2 runs, freerouter, temperature 0).  "
-    "복구 데모: 16 attempts (2 tasks × 1 run, --recovery 3).  "
-    "데모에서 실패한 유일한 셀 = deepseek×grok-json의 py-append-method(1/16).  "
-    "3회 재시도 모두 같은 오류 클래스(indentation)로 미복구 → recovery rate 0%, repeated-failure.  "
-    "나머지 7셀은 데모 실패가 없어 recovery rate n/a(빈 마커).",
+    "Bone Bench: 384 attempts (2 models × 4 formats × 24 tasks × 2 runs, freerouter, temperature 0).  "
+    "Recovery Demo: 16 attempts (2 tasks × 1 run, --recovery 3).  "
+    "Only cells that failed in the demo = deepseek×grok-jsonof py-append-method(1/16).  "
+    "All three retries repeated the same error class (indentation) without recovery → recovery rate 0%, repeated-failure.  "
+    "The other seven cells had no demo failures, so recovery rate is n/a (empty marker).",
     ha="center", fontsize=9.5, color="#555",
 )
 

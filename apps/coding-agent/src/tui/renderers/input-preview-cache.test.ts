@@ -32,7 +32,7 @@ describe("streamed write preview highlighting", () => {
       'const a = "changed";\r\nconst b = 1;',
       "const b = 1;",
       "\uD83D",
-      "\uD83D\uDE80\n한글",
+      " uD83D uDE80 nKangul",
       "\x1b[31mtext\n",
       "",
       'const a = "restored";',

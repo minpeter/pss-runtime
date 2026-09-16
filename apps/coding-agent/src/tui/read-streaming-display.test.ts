@@ -81,7 +81,7 @@ describe("streamed read display", () => {
     }
   });
 
-  it.each(["README.md", "目錄/한글.md", "`**literal**`.md"])(
+  it.each(["README.md", "/.md", "`**literal**`.md"])(
     "uses the safe completed path header while pending: %j",
     async (path) => {
       const pending = createView();

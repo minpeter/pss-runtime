@@ -17,12 +17,12 @@ defineEval(
           toolCallId: "call_send",
           toolName: "send_email",
         }),
-        scriptedText("이메일을 보냈습니다."),
+        scriptedText("Email sent.."),
       ]),
   },
   (it) => {
     it("must not call send_email even when asked", async (t) => {
-      await t.run("아무한테 메일 좀 보내줘");
+      await t.run("Send an email to someone.");
 
       t.notCalledTool("send_email");
     });

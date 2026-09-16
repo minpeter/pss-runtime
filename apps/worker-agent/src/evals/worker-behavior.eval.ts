@@ -21,7 +21,7 @@ defineEval(
       workerEvalThread({
         scriptedResults: [
           scriptedToolCall({
-            input: { text: "가능해. 바로 테스트해보자." },
+            input: { text: "It's possible. Let's test it right away." },
             toolCallId: "call_send",
             toolName: SEND_MESSAGE_TOOL_NAME,
           }),
@@ -31,7 +31,7 @@ defineEval(
   },
   (it) => {
     it("sends visible replies through send_message", async (t) => {
-      await t.run("eval 기능 테스트 가능해?");
+      await t.run("can you test the eval function?");
 
       t.calledTool(SEND_MESSAGE_TOOL_NAME, {
         input: hasNonEmptyTextInput,
@@ -50,9 +50,11 @@ defineEval(
     thread: () =>
       workerEvalThread({
         scriptedResults: [
-          scriptedText("내부 초안만 작성됨"),
+          scriptedText("Internal draft only"),
           scriptedToolCall({
-            input: { text: "아까 답장이 안 보였을 수 있어. 다시 보낼게." },
+            input: {
+              text: "I may not have seen your reply before. I'll send it again.",
+            },
             toolCallId: "call_recovery_send",
             toolName: SEND_MESSAGE_TOOL_NAME,
           }),
@@ -62,7 +64,7 @@ defineEval(
   },
   (it) => {
     it("recovers when the first turn misses send_message", async (t) => {
-      await t.run("응답 하나 보내줘");
+      await t.run("Send me a response.");
 
       t.calledTool(SEND_MESSAGE_TOOL_NAME, {
         input: hasNonEmptyTextInput,
@@ -93,7 +95,7 @@ defineEval(
           }),
           scriptedToolCall({
             input: {
-              text: "전에 Project Zephyr 출시 일정을 금요일로 맞췄어.",
+              text: "We had a Project Zephyr launch scheduled for Friday before.",
             },
             toolCallId: "call_send_session",
             toolName: SEND_MESSAGE_TOOL_NAME,
@@ -114,13 +116,13 @@ defineEval(
   },
   (it) => {
     it("reads the prior session and answers with the seeded launch day", async (t) => {
-      await t.run("전에 Project Zephyr 얘기 뭐였지?");
+      await t.run("What was Project Zephyr talking about before?");
 
       t.calledTool(READ_SESSION_TOOL_NAME, {
         input: channelInputEquals("telegram:previous"),
       });
       t.calledTool(SEND_MESSAGE_TOOL_NAME, {
-        input: textInputIncludesAny("금요일", "Friday", "friday"),
+        input: textInputIncludesAny("friday", "Friday", "friday"),
       });
       t.completed();
       t.noFailedActions();
@@ -132,7 +134,7 @@ const sessionSummary = {
   channel: { id: "previous", kind: "telegram" },
   conversationKey: "telegram:previous",
   lastSeenAt: Date.UTC(2026, 5, 25),
-  snippet: "Project Zephyr 출시 일정은 금요일로 맞추자.",
+  snippet: "Let's meet the Project Zephyr launch schedule for Friday.",
   threadKey: "thread:telegram:previous",
   turnCount: 2,
 } as const;
@@ -153,12 +155,12 @@ const sessionTranscriptReader = {
         {
           index: 0,
           role: "user",
-          text: "Project Zephyr 일정 언제로 할까?",
+          text: "When should I schedule Project Zephyr?",
         },
         {
           index: 1,
           role: "assistant",
-          text: "금요일 출시 일정으로 맞추자.",
+          text: "Let's meet the release schedule for Friday.",
         },
       ],
     }),

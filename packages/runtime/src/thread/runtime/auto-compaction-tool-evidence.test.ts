@@ -74,9 +74,9 @@ describe("buildToolEvidenceLedger", () => {
       '{"event":"finalized","checksum":"9f2e4c11ab30"}',
       ...Array.from(
         { length: 150 },
-        (_, index) => `알림: 캐시 항목 ${index} 갱신됨`
+        (_, index) => `notice: cache entry ${index} updated`
       ),
-      "최종 스냅샷 태그는 v0.9.3-rc2 입니다",
+      "The final snapshot tag is v0.9.3-rc2",
     ].join("\n");
     const budgetTokens = Math.floor(measureTokens(source) / 4);
 
@@ -89,7 +89,7 @@ describe("buildToolEvidenceLedger", () => {
     expect(ledger).toContain("9f2e4c11ab30");
     expect(ledger).toContain("v0.9.3-rc2");
     expect(ledger).not.toContain('\\"seq\\":77');
-    expect(ledger).not.toContain("캐시 항목 77");
+    expect(ledger).not.toContain("cache entry 77");
   });
 
   it("returns an empty ledger when nothing fits the budget", () => {

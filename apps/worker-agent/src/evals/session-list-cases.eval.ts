@@ -22,13 +22,13 @@ const sessionListCases = [
     expectList: true,
     id: "worker-agent-session-list-recent",
     name: "lists recent sessions before summarizing",
-    prompt: "최근에 어떤 대화를 했는지 요약해줘.",
-    responseIncludes: ["최근", "Zephyr"],
+    prompt: "Summarize what you've been talking about lately.",
+    responseIncludes: ["Recently ", "Zephyr"],
     scriptedResults: [
       listCall("list-recent", { limit: 3 }),
       sendCall(
         "list-recent",
-        "최근에는 Project Zephyr, DB migration, 인보이스 이야기가 있었어."
+        "Recently, there has been talk of Project Zephyr, DB migration, and invoices."
       ),
       scriptedText(""),
     ],
@@ -38,15 +38,16 @@ const sessionListCases = [
     expectList: true,
     id: "worker-agent-session-list-then-read",
     name: "reads a selected recent session before answering details",
-    prompt: "최근 대화 중 DB migration 세부 순서가 뭐였지?",
+    prompt:
+      "What was the detailed sequence of DB migration during the recent conversation?",
     readChannel: "telegram:database",
-    responseIncludes: ["백업", "dry-run", "smoke"],
+    responseIncludes: ["Backup", "dry-run", "smoke"],
     scriptedResults: [
       listCall("list-then-read", { limit: 5 }),
       readCall("list-then-read", "telegram:database"),
       sendCall(
         "list-then-read",
-        "DB migration은 백업, dry-run, read-only, migration, smoke test 순서였어."
+        "DB migration was in the order of backup, dry-run, read-only, migration, and smoke test."
       ),
       scriptedText(""),
     ],
@@ -60,12 +61,18 @@ const sessionListCases = [
     id: "worker-agent-session-search-no-results",
     name: "says when no prior session matches",
     notCalledTools: [READ_SESSION_TOOL_NAME],
-    prompt: "전에 moon base 예산 이야기했었나?",
-    realResponseIncludesAny: ["없", "안보", "못찾", "확인되지", "잡히지"],
-    responseIncludes: ["관련", "기록", "없"],
+    prompt: "Did we talk about the moon base budget before?",
+    realResponseIncludesAny: [
+      "none",
+      "Security",
+      "Not found",
+      "Unverified",
+      "will not be caught",
+    ],
+    responseIncludes: ["relacion coneccion", "Record", "none"],
     scriptedResults: [
-      searchCall("no-results", "moon base 예산"),
-      sendCall("no-results", "관련 기록은 없어."),
+      searchCall("no-results", "moon base budget"),
+      sendCall("no-results", "There are no related records."),
       scriptedText(""),
     ],
     searchIncludes: ["moon"],
@@ -77,15 +84,24 @@ const sessionListCases = [
     id: "worker-agent-session-no-hallucination-empty-search",
     name: "does not invent a memory when search is empty",
     notCalledTools: [READ_SESSION_TOOL_NAME],
-    prompt: "전에 내 급여 계좌 정보를 말했는지 알려줘.",
-    realResponseIncludesAny: ["없", "안보", "못찾", "확인되지", "공유하지"],
-    responseIncludes: ["기록", "없"],
+    prompt: "Let me know if you told me my payroll account information before.",
+    realResponseIncludesAny: [
+      "none",
+      "Security",
+      "Not found",
+      "Unverified",
+      "Don't share",
+    ],
+    responseIncludes: ["Record", "none"],
     scriptedResults: [
-      searchCall("empty-sensitive", "급여 계좌"),
-      sendCall("empty-sensitive", "이전 대화에서 관련 기록은 없어."),
+      searchCall("empty-sensitive", "Payroll Account"),
+      sendCall(
+        "empty-sensitive",
+        "There is no relevant record from the previous conversation."
+      ),
       scriptedText(""),
     ],
-    searchIncludes: ["급여"],
+    searchIncludes: ["Salary"],
     searchResultCount: 0,
     sessionTools: noSessionTools,
     toolOrder: [SEARCH_SESSIONS_TOOL_NAME, SEND_MESSAGE_TOOL_NAME],
@@ -95,13 +111,13 @@ const sessionListCases = [
     id: "worker-agent-session-list-snippets-only",
     name: "summarizes recent snippets without reading details",
     notCalledTools: [READ_SESSION_TOOL_NAME],
-    prompt: "최근 대화 주제만 간단히 나열해줘.",
-    responseIncludes: ["Zephyr", "migration", "인보이스"],
+    prompt: "Briefly list only the topics of recent conversations.",
+    responseIncludes: ["Zephyr", "migration", "Invoice"],
     scriptedResults: [
       listCall("snippets-only", { limit: 3 }),
       sendCall(
         "snippets-only",
-        "최근 주제는 Zephyr 출시, DB migration, 인보이스야."
+        "Recent topics include Zephyr launch, DB migration, and invoices."
       ),
       scriptedText(""),
     ],

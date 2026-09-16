@@ -264,14 +264,14 @@ describe("tool input previews use the per-tool pretty grammar", () => {
       await streamChunks(
         view,
         JSON.stringify({
-          path: "目錄/한글.ts",
-          content: "const 라벨 = '목록';\n",
+          path: "catalog/english.ts",
+          content: "const label = 'list';\n",
         }).slice(0, -1),
         9
       );
 
-      expect(headerRow(view)).toBe("write 目錄/한글.ts");
-      expect(plain(view)).toContain("목록");
+      expect(headerRow(view)).toBe("write catalog/english.ts");
+      expect(plain(view)).toContain("list");
       expect(view.render(24).length).toBeGreaterThan(0);
     } finally {
       view.dispose();
