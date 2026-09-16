@@ -1,3 +1,15 @@
+## @minpeter/pss-coding-agent@0.0.14-next.22 (next)
+
+### Harden extension packages
+
+Ship explicit license, public-access, and provenance metadata, validate packed ESM types, and enforce package-specific test coverage floors.
+
+### Stabilize duplicate-code validation
+
+Exclude generated changelogs from duplicate-code signatures so release updates do not invalidate the source baseline.
+Exercise the production exclusion with real scanner fixtures and batch streamed tool-input previews per frame to avoid repeatedly rebuilding large partial writes.
+Preserve the latest queued arguments when an aborted or failed stream seals the transcript.
+
 ## @minpeter/pss-coding-agent@0.0.14-next.21 (next)
 
 ### Keep composer controls within their viewport

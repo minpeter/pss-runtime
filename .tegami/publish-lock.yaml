@@ -1,52 +1,30 @@
 core:changelogs:
-  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Keep composer controls within their viewport\n\nBudget editor text, completion menus, model/session selectors, and extension prompts with their chrome while retaining the cursor and selected option. Preserve the complete cap across terminal resizes and keep search cursors visible on very narrow terminals.\n\nRetain caller limits and occupied session space on resize, let open extension selections grow, and preserve decorated model labels until the startup header freezes on the first transcript content.\n"
-    filename: 2026-09-08-composer-viewport.md
+  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n  npm:@minpeter/pss-extension-latex:\n    type: patch\n  npm:@minpeter/pss-extension-mermaid:\n    type: patch\n  npm:@minpeter/pss-extension-web:\n    type: patch\n---\n\n## Harden extension packages\n\nShip explicit license, public-access, and provenance metadata, validate packed ESM types, and enforce package-specific test coverage floors.\n"
+    filename: 2026-09-14-extension-package-hardening.md
     v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Continue stopped unfinished tasks\n\nEmpty Enter can continue interrupted, failed, or output-limited unfinished tasks in the current live session without duplicating the user prompt or replaying completed tools. Ambiguous effects and storage failures keep an explicit recovery boundary; continuation is not restored after disposal or restart.\n"
-    filename: 2026-09-08-empty-enter-continuation.md
-    v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Repository quality and release checks\n\nAdd repository quality gates and Worker route validation, with stale release-age exemptions rejected and optional dependency drift detected.\nMeasure complete published build output and bound unused-code and duplicate-code reports.\n"
-    filename: 2026-09-09-repository-quality-gates.md
-    v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Preserve recovery contracts and terminal presentation\n\nRetain queued callers across execution-start failures and preserve completed tool inputs and structured results during recovery. Keep narrow transcript tails, renderer notifications, and streamed tool previews intact.\n"
-    filename: 2026-09-10-continuation-review-fixes.md
-    v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Update the OpenAI-compatible adapter\n\nUpdate the OpenAI-compatible adapter to 3.0.44 across all workspaces, preserving structured output and streamed tool inputs while reporting abruptly closed streams without retrying or executing incomplete arguments.\n"
-    filename: 2026-09-10-openai-compatible-3-0-44.md
-    v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Update the terminal renderer to pi-tui 0.85.0\n\nUpgrade pi-tui to 0.85.0 and align the bundled LaTeX and Mermaid extension peers with the tested renderer range.\n"
-    filename: 2026-09-10-pi-tui-085.md
-    v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Update Zod validation\n\nUpdate Zod to 4.5.4 for structured model output and built-in web tool input validation.\n"
-    filename: 2026-09-10-zod-4-5-4.md
-    v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n---\n\n## Update the AI Gateway adapter\n\nUpdate the runtime's AI Gateway adapter to 4.0.75 while preserving provider retry decisions and streamed tool output recovery.\n"
-    filename: 2026-09-10-gateway-4-0-75.md
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    replay:\n      - exit-prerelease(npm:@minpeter/pss-runtime)\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Stabilize duplicate-code validation\n\nExclude generated changelogs from duplicate-code signatures so release updates do not invalidate the source baseline.\nExercise the production exclusion with real scanner fixtures and batch streamed tool-input previews per frame to avoid repeatedly rebuilding large partial writes.\nPreserve the latest queued arguments when an aborted or failed stream seals the transcript.\n"
+    filename: 2026-09-14-jscpd-generated-changelogs.md
     v: 0.0.0
 core:packages:
   - changelogIds:
-      - 2026-09-08-composer-viewport.md
-      - 2026-09-08-empty-enter-continuation.md
-      - 2026-09-09-repository-quality-gates.md
-      - 2026-09-10-continuation-review-fixes.md
-      - 2026-09-10-openai-compatible-3-0-44.md
-      - 2026-09-10-pi-tui-085.md
-      - 2026-09-10-zod-4-5-4.md
+      - 2026-09-14-extension-package-hardening.md
+      - 2026-09-14-jscpd-generated-changelogs.md
     id: npm:@minpeter/pss-coding-agent
     updated: true
-  - id: npm:@minpeter/pss-extension-latex
-    updated: false
-  - id: npm:@minpeter/pss-extension-mermaid
-    updated: false
-  - id: npm:@minpeter/pss-extension-web
-    updated: false
   - changelogIds:
-      - 2026-09-08-empty-enter-continuation.md
-      - 2026-09-09-repository-quality-gates.md
-      - 2026-09-10-continuation-review-fixes.md
-      - 2026-09-10-gateway-4-0-75.md
-    id: npm:@minpeter/pss-runtime
+      - 2026-09-14-extension-package-hardening.md
+    id: npm:@minpeter/pss-extension-latex
     updated: true
+  - changelogIds:
+      - 2026-09-14-extension-package-hardening.md
+    id: npm:@minpeter/pss-extension-mermaid
+    updated: true
+  - changelogIds:
+      - 2026-09-14-extension-package-hardening.md
+    id: npm:@minpeter/pss-extension-web
+    updated: true
+  - id: npm:@minpeter/pss-runtime
+    updated: false
 npm:packages:
   - distTag: next
     id: npm:@minpeter/pss-coding-agent

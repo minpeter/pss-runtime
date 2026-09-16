@@ -1,3 +1,9 @@
+## @minpeter/pss-extension-web@0.0.1-next.6
+
+### Harden extension packages
+
+Ship explicit license, public-access, and provenance metadata, validate packed ESM types, and enforce package-specific test coverage floors.
+
 ## @minpeter/pss-extension-web@0.0.1-next.5
 
 ### Cancel in-flight web tool requests

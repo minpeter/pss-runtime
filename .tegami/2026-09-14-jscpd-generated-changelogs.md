@@ -4,7 +4,8 @@ packages:
     replay:
       - exit-prerelease(npm:@minpeter/pss-runtime)
   npm:@minpeter/pss-coding-agent:
-    type: patch
+    replay:
+      - exit-prerelease(npm:@minpeter/pss-coding-agent)
 ---
 
 ## Stabilize duplicate-code validation
