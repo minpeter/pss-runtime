@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 jobs:
-  checks:
+  validation:
     name: Validate (node ${{ matrix.node }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -118,26 +118,77 @@ jobs:
           PSS_TASK_VALIDATOR_NETWORK_ISOLATED: "1"
         run: pnpm test
 
+  # Keep this as one additional job, rather than sharding every check: the
+  # 2m50 Node 24 test and 2m10 coverage gate can overlap while peak runner
+  # demand grows only from two runners to three.
+  artifacts:
+    name: Coverage, build, and release validation (node 24)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install sandbox prerequisite
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends bubblewrap procps util-linux
+          sudo mv /usr/bin/bwrap /usr/bin/bwrap.real
+          sudo tee /usr/bin/bwrap >/dev/null <<'EOF'
+          #!/bin/bash
+          args=()
+          for argument in "$@"; do
+            if [[ "$argument" != "--unshare-net" ]]; then
+              args+=("$argument")
+            fi
+          done
+          kill_tree() {
+            local parent=$1 child
+            while read -r child; do
+              if [[ -n "$child" ]]; then
+                kill_tree "$child"
+              fi
+            done < <(pgrep -P "$parent" 2>/dev/null || true)
+            sudo kill -KILL "$parent" 2>/dev/null || true
+          }
+          sudo /usr/bin/unshare --net --fork /usr/bin/bwrap.real "${args[@]}" &
+          child=$!
+          trap 'kill_tree "$child"; exit 143' TERM INT HUP
+          wait "$child"
+          EOF
+          sudo chmod 0755 /usr/bin/bwrap
+          /usr/bin/bwrap --unshare-net --ro-bind / / --dev /dev --proc /proc -- /usr/bin/env true
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Check core package coverage
-        if: matrix.node == '24'
         run: pnpm coverage
 
       - name: Check extension package coverage
-        if: matrix.node == '24'
         run: pnpm coverage:extensions
 
       - name: Check Worker coverage
-        if: matrix.node == '24'
         run: pnpm --filter @minpeter/pss-worker-agent test:coverage
 
       - name: Build
         run: pnpm build
 
       # Bundle budget gate over the built dist/ artifacts; must run after
-      # the Build step (a missing artifact fails the gate). Deterministic;
-      # pinned to Node 24 so it runs exactly once.
+      # the Build step (a missing artifact fails the gate).
       - name: Check bundle size budget
-        if: matrix.node == '24'
         run: pnpm check:bundle-size --check
 
       - name: Check runtime public API snapshot
@@ -146,17 +197,13 @@ jobs:
       - name: Verify release artifacts
         run: pnpm verify:release
 
-      # Test-timing producer (VAL-SEC-024): runs the deterministic scripts
-      # invariant suite through the Vitest JSON reporter and normalizes it to
-      # report/test-timing.json (gitignored, never committed), uploaded below
-      # as a bounded artifact. Pinned to Node 24 like the other single-leg
-      # steps so the artifact is produced and uploaded exactly once.
+      # Test-timing producer (VAL-SEC-024): reruns the deterministic scripts
+      # suite and uploads its normalized report as a bounded artifact.
       - name: Produce test-timing report
-        if: matrix.node == '24'
         run: pnpm test:timing
 
       - name: Upload test-timing report
-        if: ${{ always() && matrix.node == '24' }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-timing

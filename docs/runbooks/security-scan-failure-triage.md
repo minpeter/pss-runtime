@@ -38,7 +38,7 @@ unpinned external reference.
 ## Secret detection
 
 The repository scans for committed secrets in two layers: a deterministic
-secret-pattern scan that runs inside the `ci.yml` job `checks` (in the `Test`
+secret-pattern scan that runs inside the `ci.yml` job `validation` (in the `Test`
 step, collected by `pnpm test`), and the `gitleaks.yml` workflow, which runs
 the gitleaks binary over the repository checkout.
 

@@ -10,9 +10,12 @@ const NODE_ACTION =
   "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020";
 const UPLOAD_ACTION =
   "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
-const CANONICAL_STEPS_SHA256 =
-  "343d4108ea9e5f4ad6305d5fbb6ee6dbe2690efedf14cfa1004dc7b6d5fb961b";
-const CALLED_JOB_IDS = ["checks"];
+const CANONICAL_STEPS_SHA256 = {
+  artifacts: "3f9b17f305ee5e485b4450f0a6e9d9a80064bf497a137b44e3d8eb25bcea934e",
+  validation:
+    "263d0621548ed38cc7e876c8ce0df72bf4f5b1d753ae4574079ff90e44139ce1",
+};
+const CALLED_JOB_IDS = ["validation", "artifacts"];
 const CALLED_JOB_KEYS = new Set([
   "continue-on-error",
   "name",
@@ -22,7 +25,10 @@ const CALLED_JOB_KEYS = new Set([
   "timeout-minutes",
 ]);
 const WORKFLOW_PERMISSIONS = { contents: "read" };
-const CALLED_JOB_NAME = `Validate (node ${githubExpression("matrix.node")})`;
+const JOB_NAMES = {
+  artifacts: "Coverage, build, and release validation (node 24)",
+  validation: `Validate (node ${githubExpression("matrix.node")})`,
+};
 
 const NODE_24_STEPS = new Set([
   "Audit dependencies",
@@ -44,9 +50,14 @@ const CALLED_ACTION_STEPS = [
     with: { "node-version": githubExpression("matrix.node"), cache: "pnpm" },
   },
   {
+    name: "Setup Node.js",
+    uses: NODE_ACTION,
+    with: { "node-version": "24", cache: "pnpm" },
+  },
+  {
     name: "Upload test-timing report",
     uses: UPLOAD_ACTION,
-    if: githubExpression("always() && matrix.node == '24'"),
+    if: githubExpression("always()"),
     with: {
       name: "test-timing",
       path: "report/test-timing.json",
@@ -83,12 +94,14 @@ function stepsDigest(steps) {
     .digest("hex");
 }
 
-function hasAllowedCondition(step) {
+function hasAllowedCondition(step, jobId) {
   return (
     step?.if === undefined ||
-    (NODE_24_STEPS.has(step?.name) && step.if === "matrix.node == '24'") ||
+    (jobId === "validation" &&
+      NODE_24_STEPS.has(step?.name) &&
+      step.if === "matrix.node == '24'") ||
     (step?.name === "Upload test-timing report" &&
-      step.if === githubExpression("always() && matrix.node == '24'"))
+      step.if === githubExpression("always()"))
   );
 }
 
@@ -121,7 +134,7 @@ function calledJobShapeProblems(jobId, job, workflowPath) {
       `${workflowPath} runner job "${jobId}" must run on ubuntu-latest`
     );
   }
-  if (job?.name !== CALLED_JOB_NAME) {
+  if (job?.name !== JOB_NAMES[jobId]) {
     problems.push(
       `${workflowPath} runner job "${jobId}" must use the canonical name`
     );
@@ -132,7 +145,7 @@ function calledJobShapeProblems(jobId, job, workflowPath) {
 function calledJobProblems(jobId, job, workflowPath) {
   const problems = calledJobShapeProblems(jobId, job, workflowPath);
   const steps = job?.steps ?? [];
-  if (stepsDigest(steps) !== CANONICAL_STEPS_SHA256) {
+  if (stepsDigest(steps) !== CANONICAL_STEPS_SHA256[jobId]) {
     problems.push(
       `${workflowPath} runner job "${jobId}" must use the exact canonical validation steps`
     );
@@ -147,12 +160,11 @@ function calledJobProblems(jobId, job, workflowPath) {
       `${workflowPath} runner job "${jobId}" must not define inherited environment`
     );
   }
-  if (
-    !isDeepStrictEqual(job?.strategy, {
-      "fail-fast": false,
-      matrix: { node: ["24", "26"] },
-    })
-  ) {
+  const expectedStrategy =
+    jobId === "validation"
+      ? { "fail-fast": false, matrix: { node: ["24", "26"] } }
+      : undefined;
+  if (!isDeepStrictEqual(job?.strategy, expectedStrategy)) {
     problems.push(
       `${workflowPath} runner job "${jobId}" must use the exact validation matrix`
     );
@@ -180,7 +192,7 @@ function calledJobProblems(jobId, job, workflowPath) {
     );
   }
   for (const step of steps) {
-    if (!hasAllowedCondition(step)) {
+    if (!hasAllowedCondition(step, jobId)) {
       problems.push(
         `${workflowPath} runner job "${jobId}" step "${step?.name ?? "?"}" has an unapproved condition`
       );

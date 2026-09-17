@@ -122,8 +122,8 @@ it("accepts absent or literal false validation caller overrides", () => {
 it("accepts literal false on called runner jobs and steps", () => {
   const jobFalse = replaceWorkflowSource(
     ciWorkflow(),
-    "  checks:\n",
-    "  checks:\n    continue-on-error: false\n"
+    "  validation:\n",
+    "  validation:\n    continue-on-error: false\n"
   );
   const stepFalse = replaceWorkflowSource(
     jobFalse,
@@ -134,7 +134,7 @@ it("accepts literal false on called runner jobs and steps", () => {
 });
 
 it.each([
-  ["job", "  checks:\n", "  checks:\n    continue-on-error: true\n"],
+  ["job", "  validation:\n", "  validation:\n    continue-on-error: true\n"],
   [
     "step expression",
     "        run: pnpm test",
@@ -183,8 +183,8 @@ it("rejects a skip condition on a called validation gate", () => {
 it("rejects a skip condition on a called runner job", () => {
   const ci = replaceWorkflowSource(
     ciWorkflow(),
-    "  checks:\n",
-    "  checks:\n    if: false\n"
+    "  validation:\n",
+    "  validation:\n    if: false\n"
   );
   expectRejected(ci, "skip condition");
 });
@@ -225,8 +225,8 @@ it.each([
   ],
   [
     "job",
-    "  checks:\n",
-    '  checks:\n    defaults:\n      run:\n        shell: "true {0}"\n',
+    "  validation:\n",
+    '  validation:\n    defaults:\n      run:\n        shell: "true {0}"\n',
     "execution defaults",
   ],
 ])("rejects called CI %s", (_label, from, to, error) => {
