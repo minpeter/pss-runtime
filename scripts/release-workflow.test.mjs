@@ -6,6 +6,10 @@ const githubExpression = (name) => `\${{ ${name} }}`;
 describe("release workflow", () => {
   it("versions or publishes main through Tegami", () => {
     const ciWorkflow = readFileSync(".github/workflows/ci.yml", "utf8");
+    const sandboxAction = readFileSync(
+      ".github/actions/ci-sandbox-prerequisite/action.yml",
+      "utf8"
+    );
     const workflow = readFileSync(".github/workflows/release.yml", "utf8");
     const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 
@@ -34,6 +38,9 @@ describe("release workflow", () => {
     expect(ciWorkflow).toContain("timeout-minutes: 45");
     expect(ciWorkflow).toContain("- name: Install sandbox prerequisite");
     expect(ciWorkflow).toContain(
+      "uses: ./.github/actions/ci-sandbox-prerequisite"
+    );
+    expect(sandboxAction).toContain(
       "sudo apt-get install --yes --no-install-recommends bubblewrap procps util-linux"
     );
     expect(ciWorkflow).toContain('PSS_TASK_VALIDATOR_NETWORK_ISOLATED: "1"');

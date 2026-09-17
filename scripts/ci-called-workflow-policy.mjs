@@ -10,10 +10,11 @@ const NODE_ACTION =
   "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020";
 const UPLOAD_ACTION =
   "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
+const SANDBOX_ACTION = "./.github/actions/ci-sandbox-prerequisite";
 const CANONICAL_STEPS_SHA256 = {
-  artifacts: "3f9b17f305ee5e485b4450f0a6e9d9a80064bf497a137b44e3d8eb25bcea934e",
+  artifacts: "9bad434c4310c74ffd665649923830360e979b6eb65732555daada70e7b92a1d",
   validation:
-    "263d0621548ed38cc7e876c8ce0df72bf4f5b1d753ae4574079ff90e44139ce1",
+    "0ee57e2f1fde21b5812171a639e7014c5a1680421ee68b427798b6fc79d4d6c6",
 };
 const CALLED_JOB_IDS = ["validation", "artifacts"];
 const CALLED_JOB_KEYS = new Set([
@@ -44,6 +45,7 @@ const NODE_24_STEPS = new Set([
 const CALLED_ACTION_STEPS = [
   { name: "Checkout", uses: CHECKOUT_ACTION, with: { "fetch-depth": 0 } },
   { name: "Setup pnpm", uses: PNPM_ACTION },
+  { name: "Install sandbox prerequisite", uses: SANDBOX_ACTION },
   {
     name: "Setup Node.js",
     uses: NODE_ACTION,
