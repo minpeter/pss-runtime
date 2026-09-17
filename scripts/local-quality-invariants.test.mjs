@@ -134,12 +134,9 @@ describe("local quality: fast-gate scope (VAL-LOCAL-024)", () => {
       "| Single invariant | vitest run one | ≤ 30 s |";
     expect(gateBoundProblems(section(goodRows))).toEqual([]);
     expect(
-      gateBoundProblems(
-        section(goodRows.replace("≤ 60 s", "≤ 90 s")).replace(
-          "Pre-commit",
-          "Pre-commit"
-        )
-      ).join("\n")
+      gateBoundProblems(section(goodRows.replace("≤ 60 s", "≤ 90 s"))).join(
+        "\n"
+      )
     ).toContain("60s ceiling");
     expect(
       gateBoundProblems(

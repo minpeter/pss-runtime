@@ -1,6 +1,41 @@
 import { describe, expect, it, vi } from "vitest";
 import { cleanupPrefix } from "./celld-bucket";
 
+const LOOPBACK_ENDPOINT = "http://127.0.0.1:14566";
+const EMPTY_LISTING = "<ListBucketResult></ListBucketResult>";
+
+const mockBucketFetch = (pages: readonly string[]) => {
+  let listingCount = 0;
+  return vi.fn<typeof fetch>((_input, init) => {
+    if (init?.method === "DELETE") {
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
+    const xml = pages[listingCount] ?? EMPTY_LISTING;
+    listingCount += 1;
+    return Promise.resolve(new Response(xml));
+  });
+};
+
+const cleanupOnLoopback = (
+  prefix: string,
+  fetchImpl: ReturnType<typeof mockBucketFetch>
+) => cleanupPrefix(prefix, { endpoint: LOOPBACK_ENDPOINT, fetchImpl });
+
+const requestUrls = (
+  fetchImpl: ReturnType<typeof mockBucketFetch>,
+  method: "DELETE" | "LIST"
+): string[] =>
+  fetchImpl.mock.calls
+    .filter(([, init]) =>
+      method === "DELETE"
+        ? init?.method === "DELETE"
+        : init?.method !== "DELETE"
+    )
+    .map(([input]) => String(input));
+
+const objectUrl = (...segments: string[]): string =>
+  `${LOOPBACK_ENDPOINT}/pss-celld-qa/${segments.map(encodeURIComponent).join("/")}`;
+
 describe("Celld bucket cleanup boundary", () => {
   it("rejects a remote endpoint before issuing requests", async () => {
     const fetchImpl = vi.fn<typeof fetch>();
@@ -67,25 +102,74 @@ describe("Celld bucket cleanup boundary", () => {
   });
 
   it("fails when the final verification still finds an object", async () => {
-    let listingCount = 0;
-    const fetchImpl = vi.fn<typeof fetch>((_input, init) => {
-      if (init?.method === "DELETE") {
-        return Promise.resolve(new Response(null, { status: 204 }));
-      }
-      listingCount += 1;
-      return Promise.resolve(
-        new Response(
-          `<ListBucketResult><Key>run/${listingCount === 1 ? "initial" : "late"}</Key></ListBucketResult>`
-        )
-      );
-    });
+    const fetchImpl = mockBucketFetch([
+      "<ListBucketResult><Key>run/initial</Key></ListBucketResult>",
+      "<ListBucketResult><Key>run/late</Key></ListBucketResult>",
+    ]);
 
-    await expect(
-      cleanupPrefix("run", {
-        endpoint: "http://127.0.0.1:14566",
-        fetchImpl,
-      })
-    ).rejects.toThrow("not empty after cleanup");
-    expect(listingCount).toBe(2);
+    await expect(cleanupOnLoopback("run", fetchImpl)).rejects.toThrow(
+      "not empty after cleanup"
+    );
+    expect(requestUrls(fetchImpl, "LIST")).toHaveLength(2);
+  });
+
+  it("deletes the literal key when listing XML double-escapes an ampersand entity", async () => {
+    const fetchImpl = mockBucketFetch([
+      "<ListBucketResult><Key>run/&amp;lt;file</Key></ListBucketResult>",
+    ]);
+
+    await cleanupOnLoopback("run", fetchImpl);
+
+    expect(requestUrls(fetchImpl, "DELETE")).toEqual([
+      objectUrl("run", "&lt;file"),
+    ]);
+  });
+
+  it("still deletes a key whose listing XML encodes a real less-than character", async () => {
+    const fetchImpl = mockBucketFetch([
+      "<ListBucketResult><Key>run/&lt;x</Key></ListBucketResult>",
+    ]);
+
+    await cleanupOnLoopback("run", fetchImpl);
+
+    expect(requestUrls(fetchImpl, "DELETE")).toEqual([objectUrl("run", "<x")]);
+  });
+
+  it("decodes mixed named entities in a nested key once", async () => {
+    const fetchImpl = mockBucketFetch([
+      "<ListBucketResult><Key>run/sub/&quot;&lt;a&amp;b&gt;&apos;</Key></ListBucketResult>",
+    ]);
+
+    await cleanupOnLoopback("run", fetchImpl);
+
+    expect(requestUrls(fetchImpl, "DELETE")).toEqual([
+      objectUrl("run", "sub", `"<a&b>'`),
+    ]);
+  });
+
+  it("keeps a double-escaped prefix inside the cleanup boundary", async () => {
+    const fetchImpl = mockBucketFetch([
+      "<ListBucketResult><Key>run/&amp;lt;/file</Key></ListBucketResult>",
+    ]);
+
+    await cleanupOnLoopback("run/&lt;", fetchImpl);
+
+    expect(requestUrls(fetchImpl, "DELETE")).toEqual([
+      objectUrl("run", "&lt;", "file"),
+    ]);
+  });
+
+  it("decodes NextContinuationToken once before the next listing request", async () => {
+    const fetchImpl = mockBucketFetch([
+      "<ListBucketResult><NextContinuationToken>&amp;lt;</NextContinuationToken></ListBucketResult>",
+    ]);
+
+    await cleanupOnLoopback("run", fetchImpl);
+
+    expect(
+      requestUrls(fetchImpl, "LIST").map((url) =>
+        new URL(url).searchParams.get("continuation-token")
+      )
+    ).toEqual([null, "&lt;", null]);
   });
 });
