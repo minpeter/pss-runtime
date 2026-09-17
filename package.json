@@ -28,7 +28,7 @@
     "check:worker-api-contract": "node scripts/check-worker-api-contract.mjs --check",
     "check:unused:report": "node scripts/check-unused.mjs --report",
     "check:workspace-drift": "node scripts/check-workspace-version-drift.mjs --check",
-    "coverage": "pnpm --filter @minpeter/pss-coding-agent build && vitest run --config vitest.coverage.config.ts --coverage",
+    "coverage": "pnpm --filter @minpeter/pss-coding-agent... build && vitest run --config vitest.coverage.config.ts --coverage",
     "coverage:extensions": "pnpm --filter './extensions/*' test:coverage",
     "dev": "pnpm --filter @minpeter/pss-example-basic start",
     "dev:tui": "tsx --conditions=@minpeter/pss-source scripts/dev-tui.mjs",

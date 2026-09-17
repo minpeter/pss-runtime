@@ -114,7 +114,8 @@ describe("governance: runbook workflow/job references resolve (VAL-GOV-031)", ()
   });
 
   it("parses real job names from ci.yml", () => {
-    expect(parseWorkflows()["ci.yml"].jobs.has("checks")).toBe(true);
+    expect(parseWorkflows()["ci.yml"].jobs.has("validation")).toBe(true);
+    expect(parseWorkflows()["ci.yml"].jobs.has("artifacts")).toBe(true);
   });
 });
 

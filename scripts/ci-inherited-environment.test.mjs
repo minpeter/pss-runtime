@@ -31,8 +31,8 @@ it.each([
   ],
   [
     "runner job",
-    "  checks:\n",
-    "  checks:\n    env:\n      BASH_ENV: .github/hooks/ci.sh\n",
+    "  validation:\n",
+    "  validation:\n    env:\n      BASH_ENV: .github/hooks/ci.sh\n",
   ],
 ])("rejects inherited called CI %s environment", (_label, from, to) => {
   const ci = replaceWorkflowSource(ciWorkflow(), from, to);

@@ -171,7 +171,7 @@ describe("local quality: CI wiring (VAL-LOCAL-023)", () => {
   it("rejects a matrix without Node 24/26 and a test step without isolation", () => {
     const workflow = `
 jobs:
-  checks:
+  validation:
     strategy:
       matrix:
         node: ["24"]
@@ -183,7 +183,7 @@ jobs:
     expect(problems).toContain("PSS_TASK_VALIDATOR_NETWORK_ISOLATED");
     const noTestStep = `
 jobs:
-  checks:
+  validation:
     strategy:
       matrix:
         node: ["24", "26"]
