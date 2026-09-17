@@ -15,6 +15,7 @@ import {
   missingCategories,
   parseSections,
   REQUIRED_CATEGORIES,
+  readTaxonomy,
   statesRemoteDeferral,
   TAXONOMY_PATH,
   taxonomyLinkResolves,
@@ -24,10 +25,6 @@ import {
 
 function taxonomy() {
   return readTaxonomy();
-}
-
-function readTaxonomy() {
-  return spawnSync("cat", [TAXONOMY_PATH], { encoding: "utf8" }).stdout;
 }
 
 describe("governance: label taxonomy", () => {

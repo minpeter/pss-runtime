@@ -88,4 +88,94 @@ describe("Celld bucket cleanup boundary", () => {
     ).rejects.toThrow("not empty after cleanup");
     expect(listingCount).toBe(2);
   });
+
+  it("deletes the literal key when listing XML double-escapes an ampersand entity", async () => {
+    let listingCount = 0;
+    const fetchImpl = vi.fn<typeof fetch>((_input, init) => {
+      if (init?.method === "DELETE") {
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      listingCount += 1;
+      return Promise.resolve(
+        new Response(
+          listingCount === 1
+            ? "<ListBucketResult><Key>run/&amp;lt;file</Key></ListBucketResult>"
+            : "<ListBucketResult></ListBucketResult>"
+        )
+      );
+    });
+
+    await cleanupPrefix("run", {
+      endpoint: "http://127.0.0.1:14566",
+      fetchImpl,
+    });
+
+    expect(
+      fetchImpl.mock.calls
+        .filter(([, init]) => init?.method === "DELETE")
+        .map(([input]) => String(input))
+    ).toEqual([
+      `http://127.0.0.1:14566/pss-celld-qa/run/${encodeURIComponent("&lt;file")}`,
+    ]);
+  });
+
+  it("still deletes a key whose listing XML encodes a real less-than character", async () => {
+    let listingCount = 0;
+    const fetchImpl = vi.fn<typeof fetch>((_input, init) => {
+      if (init?.method === "DELETE") {
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      listingCount += 1;
+      return Promise.resolve(
+        new Response(
+          listingCount === 1
+            ? "<ListBucketResult><Key>run/&lt;x</Key></ListBucketResult>"
+            : "<ListBucketResult></ListBucketResult>"
+        )
+      );
+    });
+
+    await cleanupPrefix("run", {
+      endpoint: "http://127.0.0.1:14566",
+      fetchImpl,
+    });
+
+    expect(
+      fetchImpl.mock.calls
+        .filter(([, init]) => init?.method === "DELETE")
+        .map(([input]) => String(input))
+    ).toEqual([
+      `http://127.0.0.1:14566/pss-celld-qa/run/${encodeURIComponent("<x")}`,
+    ]);
+  });
+
+  it("decodes NextContinuationToken once before the next listing request", async () => {
+    let listingCount = 0;
+    const fetchImpl = vi.fn<typeof fetch>((_input, init) => {
+      if (init?.method === "DELETE") {
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      listingCount += 1;
+      return Promise.resolve(
+        new Response(
+          listingCount === 1
+            ? "<ListBucketResult><NextContinuationToken>&amp;lt;</NextContinuationToken></ListBucketResult>"
+            : "<ListBucketResult></ListBucketResult>"
+        )
+      );
+    });
+
+    await cleanupPrefix("run", {
+      endpoint: "http://127.0.0.1:14566",
+      fetchImpl,
+    });
+
+    const listingUrls = fetchImpl.mock.calls
+      .filter(([, init]) => init?.method !== "DELETE")
+      .map(([input]) => new URL(String(input)));
+    expect(listingUrls).toHaveLength(3);
+    expect(listingUrls[0]?.searchParams.get("continuation-token")).toBeNull();
+    expect(listingUrls[1]?.searchParams.get("continuation-token")).toBe("&lt;");
+    expect(listingUrls[2]?.searchParams.get("continuation-token")).toBeNull();
+  });
 });
