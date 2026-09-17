@@ -10,4 +10,4 @@ packages:
 
 ## Address CodeQL code scanning alerts
 
-Decode S3 XML entities in one pass during Celld QA cleanup, and drop test-only patterns that CodeQL flagged (`cat`, identity replace, first-only `\r` strip). Remaining scanner hits were dismissed on GitHub.
+Decode S3 XML entities in one pass in the private Celld QA harness, and drop test-only patterns that CodeQL flagged (`cat`, identity replace, first-only `\r` strip). Remaining scanner hits were dismissed on GitHub. No published package behavior changes.
