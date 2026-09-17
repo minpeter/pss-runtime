@@ -107,9 +107,9 @@ for ax, model, data in zip(axes, ("m3", "m2.7"), (M3, M27)):
                 fontweight="bold" if step == 3 else "normal",
             )
     ax.set_xticks(STEPS)
-    ax.set_xticklabels([f"{step}회차" for step in STEPS], fontsize=11)
+    ax.set_xticklabels([f"{step}Episodes" for step in STEPS], fontsize=11)
     ax.set_ylim(60, 103)
-    ax.set_xlabel("재시도 시도", fontsize=11)
+    ax.set_xlabel("Retry attempt", fontsize=11)
     ax.set_title(
         f"minimax {model} × 4 formats\n"
         f"(scored: {', '.join(f'{name} {SCORED[model][name]}' for name in FORMATS)})",
@@ -124,17 +124,17 @@ for ax, model, data in zip(axes, ("m3", "m2.7"), (M3, M27)):
         ax.spines[spine].set_color("#b8c0c8")
     ax.legend(loc="lower right", frameon=False, fontsize=9.5)
 
-axes[0].set_ylabel("누적 통과율 (%)", fontsize=11)
+axes[0].set_ylabel("Cumulative pass rate (%)", fontsize=11)
 fig.suptitle(
-    "runs=10 — 3턴 recovery ladder: 재시도할수록 누적 통과율이 얼마나 오르는가",
+    "runs=10 — three-turn recovery ladder: cumulative pass rate by retry",
     fontsize=15,
     y=0.98,
 )
 fig.text(
     0.5,
     0.015,
-    "read_file 검증 채널 + 누적 상태 · --recovery 3 · temperature 0 · thinking off · "
-    "각 점은 해당 턴 이내 최종 해결 비율",
+    "read_file Verification channel + Accumulated state · --recovery 3 · temperature 0 · thinking off · "
+    "Each point is the final resolution rate by that turn",
     ha="center",
     fontsize=9.5,
     color="#555",

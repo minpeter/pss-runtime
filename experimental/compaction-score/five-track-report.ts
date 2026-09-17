@@ -4,11 +4,11 @@ export function renderFiveTrackReport(report: FiveTrackReport): string {
   const lines = [
     "# PSS Runtime 5-track compaction benchmark",
     "",
-    "> 단일 종합 점수는 사용하지 않는다. 각 표의 측정값, 추정값, 미측정값을 분리한다.",
-    `> Quality output budget은 \`${report.methodology.qualityOutputBudgetEnforcement}\` 방식으로 양 arm에 동일 적용했다.`,
-    "> Provider token-limit 인자는 hard cap으로 간주하지 않았고, 양 arm의 deterministic state를 포함한 최종 summary를 local cap한 뒤 평가했다.",
+    "> No single composite score will be used. Separate measurements, estimates, and unmeasured values in each table.",
+    `> Quality output budgetSilver \`${report.methodology.qualityOutputBudgetEnforcement}\` Quantity in a way armApplied the same to.`,
+    "> Provider token-limit Factor is hard capwas not considered to be, and the amount armof deterministic stateFinal, including summaryThe local capand then evaluated it..",
     "",
-    "## 증거 provenance",
+    "## Evidence provenance",
     "",
     "| Track | Model | Mode | Status | Artifact SHA-256 | Receipt SHA-256 |",
     "|---|---|---|---|---|---|",
@@ -17,16 +17,16 @@ export function renderFiveTrackReport(report: FiveTrackReport): string {
         `| ${input.track} | ${input.model ?? "n/a"} | ${input.mode ?? "n/a"} | ${input.status} | ${input.sha256.slice(0, 19)}... | ${input.receiptSha256?.slice(0, 19) ?? "embedded/null"} |`
     ),
     "",
-    "## 동일 출력 예산 비교 (측정)",
+    "## Same Output Budget Comparison (Measure)",
     "",
     "| Arm | Budget | Retention (Wilson 95%) | Compression | Latency | Valid/Invalid | Cost |",
     "|---|---:|---:|---:|---:|---:|---:|",
     ...report.fairness.matchedOutputBudget.cells.map(
       (cell) =>
-        `| ${cell.arm} | ${cell.budget} | ${percent(cell.correct / cell.total)} ${interval(cell.wilson95)} | ${number(cell.compressionRatioMean)} | ${milliseconds(cell.latencyMeanMs)} | ${cell.valid}/${cell.invalid} | 미측정 |`
+        `| ${cell.arm} | ${cell.budget} | ${percent(cell.correct / cell.total)} ${interval(cell.wilson95)} | ${number(cell.compressionRatioMean)} | ${milliseconds(cell.latencyMeanMs)} | ${cell.valid}/${cell.invalid} | Not Measured |`
     ),
     "",
-    "## 동일 품질 예산 비교 (추정)",
+    "## Same Quality Budget Comparison (Estimation)",
     "",
     "| Retention target | PSS budget (95%) | pi budget (95%) | pi/PSS ratio (95%) | Bootstrap draws |",
     "|---:|---:|---:|---:|---:|",
@@ -35,37 +35,37 @@ export function renderFiveTrackReport(report: FiveTrackReport): string {
         `| ${percent(estimate.quality)} | ${estimate.pssBudget.toFixed(1)} ${optionalInterval(estimate.pssBudgetCi95)} | ${estimate.piBudget.toFixed(1)} ${optionalInterval(estimate.piBudgetCi95)} | ${estimate.ratio.toFixed(3)} ${optionalInterval(estimate.ratioCi95)} | ${estimate.bootstrapValidDraws} |`
     ),
     "",
-    "## Rate-distortion-latency curve (측정)",
+    "## Rate-distortion-latency curve (Measurement)",
     "",
     "| Arm | Budget | Retention | Compression | Latency | Cost |",
     "|---|---:|---:|---:|---:|---:|",
     ...report.curves.rateDistortionLatency.points.map(
       (point) =>
-        `| ${point.arm} | ${point.budget} | ${percent(point.retention)} | ${number(point.compressionRatio)} | ${milliseconds(point.latencyMeanMs)} | 미측정 |`
+        `| ${point.arm} | ${point.budget} | ${percent(point.retention)} | ${number(point.compressionRatio)} | ${milliseconds(point.latencyMeanMs)} | Not Measured |`
     ),
     "",
-    `Quality Pareto (추정): ${report.pareto.quality.front.join(", ") || "없음"}`,
+    `Quality Pareto (Estimation): ${report.pareto.quality.front.join(", ") || "FREE"}`,
     "",
-    "## Downstream coding-agent utility (측정)",
+    "## Downstream coding-agent utility (Measurement)",
     "",
     "| Metric | Full control | Compact |",
     "|---|---:|---:|",
     `| Task success | ${rate(report.curves.utility.summary.fullControlSuccess)} | ${rate(report.curves.utility.summary.compactConditionalSuccess)} |`,
     `| Quality | ${rate(report.curves.utility.summary.fullQuality)} | ${rate(report.curves.utility.summary.compactQuality)} |`,
     `| Latency mean (95%) | ${latency(report.curves.utility.summary.fullLatencyMs)} | ${latency(report.curves.utility.summary.compactLatencyMs)} |`,
-    "| Cost | 미측정 | 미측정 |",
+    "| Cost | Not Measured | Not Measured |",
     "",
-    "## 실제 사람 보정 (측정)",
+    "## Real People Calibration (Measurement)",
     "",
     `- Annotators: ${report.humanCalibration.annotatorIds.join(", ")}`,
     `- Labels: ${report.humanCalibration.labelCount}`,
     `- Fixture exact agreement: ${percent(report.humanCalibration.humanFixtureAgreement)} ${interval(report.humanCalibration.humanFixtureWilson95)}`,
     `- Candidate semantic agreement: ${percent(report.humanCalibration.semanticAgreement)} ${interval(report.humanCalibration.semanticWilson95)}`,
-    `- Multi-rater kappa: ${report.humanCalibration.interRaterKappa?.toFixed(3) ?? "미측정"}`,
+    `- Multi-rater kappa: ${report.humanCalibration.interRaterKappa?.toFixed(3) ?? "Not Measured"}`,
     `- Packet digest: ${report.humanCalibration.packetContentDigest}`,
     `- Labels digest: ${report.humanCalibration.labelsContentDigest}`,
     "",
-    "## Production speculative-overlap (측정)",
+    "## Production speculative-overlap (Measurement)",
     "",
     "| Scenario | User block mean (95%) | Dispatch block mean (95%) | Candidate applied | Background overlap |",
     "|---|---:|---:|---:|---:|",
@@ -74,7 +74,7 @@ export function renderFiveTrackReport(report: FiveTrackReport): string {
         `| ${aggregate.scenario} | ${distribution(aggregate.actualUserBlockMs)} | ${distribution(aggregate.dispatchBlockMs)} | ${rate(aggregate.candidateApplied)} | ${rate(aggregate.overlap)} |`
     ),
     "",
-    "## Deadline outcomes / Pareto (측정값 기반 추정)",
+    "## Deadline outcomes / Pareto (Measurement-based estimation)",
     "",
     "| Scenario | Deadline | Provider start | Timeout | Candidate applied | Reliability | Decision latency |",
     "|---|---:|---:|---:|---:|---:|---:|",
@@ -84,7 +84,7 @@ export function renderFiveTrackReport(report: FiveTrackReport): string {
       ([scenario, deadlines]) => `- ${scenario}: ${deadlines.join(", ")} ms`
     ),
     "",
-    "Cost는 provider 요율이 없어 전 track에서 미측정이며 0으로 대체하지 않았다.",
+    "Cost is  provider Before there was no rate trackUnmeasured in and not replaced by zero.",
     "",
   ];
   return lines.join("\n");
@@ -126,15 +126,15 @@ function interval(value: readonly [number, number]): string {
 }
 
 function optionalInterval(value: readonly [number, number] | null): string {
-  return value === null ? "[추정 불가]" : interval(value);
+  return value === null ? "[Unestimated]" : interval(value);
 }
 
 function milliseconds(value: number | null): string {
-  return value === null ? "미측정" : `${value.toFixed(1)} ms`;
+  return value === null ? "Not Measured" : `${value.toFixed(1)} ms`;
 }
 
 function number(value: number | null): string {
-  return value === null ? "미측정" : value.toFixed(3);
+  return value === null ? "Not Measured" : value.toFixed(3);
 }
 
 function percent(value: number): string {

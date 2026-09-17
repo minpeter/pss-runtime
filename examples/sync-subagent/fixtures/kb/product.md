@@ -1,13 +1,13 @@
 # PSS Docs
 
-PSS Docs는 팀이 에이전트 워크플로를 실험하고 배포하는 문서 플랫폼이다.
+PSS Docsis a documentation platform where teams experiment and deploy agent workflows.
 
-## 주요 기능
+## Key Features
 
-- 에이전트 세션 관리
-- 플러그인 기반 대화 커스터마이징
-- 앱 소유 위임 도구로 서브에이전트 연결
+- Agent session management
+- Plugin-based conversation customization
+- Connect subagents with app-owned delegation tools
 
-## 대상 사용자
+## Target Users
 
-제품팀, 플랫폼팀, 사내 도구를 만드는 엔지니어 팀.
+Product team, platform team, engineer team building in-house tools.

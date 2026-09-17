@@ -15,7 +15,7 @@ interface ReadFileInput {
 export function createReadFileTool() {
   return tool<ReadFileInput, string, Record<string, unknown>>({
     description:
-      "예제 fixtures/kb 지식베이스에서 텍스트 파일을 읽는다. 경로는 fixtures/ 아래여야 한다.",
+      "Read a text file from the example fixtures/kb knowledge base. The path must be below fixtures/.",
     execute: async ({ path }) => {
       const resolvedPath = resolve(fixturesRoot, path);
       const insideFixtures =
@@ -32,7 +32,8 @@ export function createReadFileTool() {
       properties: {
         path: {
           type: "string",
-          description: 'fixtures/ 아래 상대 경로. 예: "kb/pricing.md".',
+          description:
+            'Relative path below fixtures/. For example: "kb/pricing.md".',
         },
       },
       required: ["path"],

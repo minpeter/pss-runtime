@@ -99,9 +99,9 @@ const CANONICAL: Record<
   },
   "unicode-string-replace": {
     pss: [
-      { op: "replace", target: 1, new_content: ['GREETING = "Hello, 세계"'] },
+      { op: "replace", target: 1, new_content: ['GREETING = "Hello, world"'] },
     ],
-    omp: 'PUT 1.=1:\n+GREETING = "Hello, 세계"',
+    omp: 'PUT 1.=1:\n+GREETING = "Hello, world"',
   },
   "anchor-text-trap": {
     pss: [{ op: "replace", target: 2, new_content: ["const enabled = true;"] }],

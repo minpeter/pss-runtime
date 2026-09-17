@@ -67,11 +67,11 @@ defineEval("weather", {
   thread: () => evalThread([ /* scripted results, ignored in real mode */ ]),
 }, (it) => {
   it("calls get_weather", async (t) => {
-    await t.run("서울 날씨 알려줘");
+    await t.run("Let me know the weather in Seoul");
 
-    t.calledTool("get_weather", { input: { city: "서울" } });
+    t.calledTool("get_weather", { input: { city: "Seoul" } });
     t.notCalledTool("send_email");
-    t.messageIncludes("서울");
+    t.messageIncludes("Seoul");
     t.completed();
   });
 });

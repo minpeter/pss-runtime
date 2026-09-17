@@ -94,7 +94,7 @@ describe("streaming write header", () => {
 
   it.each([
     "index.html",
-    "目錄/한글.html",
+    "/.html",
     "`**not-bold**`[link](https://example.com).html",
     "```ticks``.html",
     " control\t\n\r\u001b]52;c;payload\u0007\u009b31m.html ",

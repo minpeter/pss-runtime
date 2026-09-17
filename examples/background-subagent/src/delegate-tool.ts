@@ -55,7 +55,7 @@ export function createDelegateToReaderTool(options: {
         prompt: {
           type: "string",
           description:
-            "reader 에이전트에 전달할 작업 프롬프트. 반드시 단일 문자열이어야 한다.",
+            "Task prompt to forward to the reader agent. Must be a single string.",
         },
       },
       required: ["prompt"],

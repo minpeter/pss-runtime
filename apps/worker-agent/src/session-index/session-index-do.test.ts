@@ -177,12 +177,14 @@ describe("AgentDurableObject session-index routes", () => {
 describe("AgentDurableObject session transcript route", () => {
   it("reads a capped transcript from the durable thread", async () => {
     const object = await createDurableObjectWithThread([
-      { role: "user", content: "지난번 주제 뭐였지?" },
+      { role: "user", content: "What was the last topic?" },
       {
         role: "assistant",
         content: [
           {
-            input: { text: "세션 검색 다음에 read_session을 붙이기로 했어." },
+            input: {
+              text: "I decided to paste the read_session after the session search.",
+            },
             toolCallId: "call-1",
             toolName: "send_message",
             type: "tool-call",
@@ -202,11 +204,11 @@ describe("AgentDurableObject session transcript route", () => {
       hasMore: false,
       messageCount: 2,
       messages: [
-        { index: 0, role: "user", text: "지난번 주제 뭐였지?" },
+        { index: 0, role: "user", text: "What was the last topic?" },
         {
           index: 1,
           role: "assistant",
-          text: "세션 검색 다음에 read_session을 붙이기로 했어.",
+          text: "I decided to paste the read_session after the session search.",
         },
       ],
     });

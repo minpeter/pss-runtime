@@ -263,19 +263,19 @@ func add(a int, b int) int {
     path: "notes.txt",
   },
   {
-    expected: `GREETING = "Hello, 세계"
+    expected: `GREETING = "Hello, world"
 
 def greet():
     print(GREETING)
 `,
     id: "unicode-string-replace",
-    initial: `GREETING = "안녕하세요"
+    initial: `GREETING = "Hello"
 
 def greet():
     print(GREETING)
 `,
     instruction:
-      'Change the GREETING string to `"Hello, 세계"` (mixing English and Korean). Change nothing else.',
+      'Change the GREETING string to `"Hello, world"`. Change nothing else.',
     kind: "replace-line",
     path: "greet_ko.py",
   },

@@ -66,14 +66,14 @@ describe("storage payload guard", () => {
   it("measures serialized payload size in UTF-8 bytes", () => {
     const serialized = stringifyJsonPayloadWithinBudget(
       "thread-message",
-      "한글",
-      8
+      "text",
+      6
     );
 
-    expect(serialized).toBe(JSON.stringify("한글"));
-    expect(serializedJsonByteLength(serialized)).toBe(8);
+    expect(serialized).toBe(JSON.stringify("text"));
+    expect(serializedJsonByteLength(serialized)).toBe(6);
     expect(() =>
-      stringifyJsonPayloadWithinBudget("thread-message", "한글", 7)
+      stringifyJsonPayloadWithinBudget("thread-message", "text", 5)
     ).toThrow(StoragePayloadTooLargeError);
   });
 

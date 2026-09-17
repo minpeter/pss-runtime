@@ -36,12 +36,13 @@ const continuityCases = [
     turns: [
       {
         prompt:
-          "이번 대화에서 코드워드는 marigold야. 이 대화 안에서만 기억해줘.",
-        response: "알겠어. 이 대화의 코드워드는 marigold로 기억할게.",
+          "In this conversation, the codeword is marigold. Please only remember me in this conversation.",
+        response:
+          "Okay. I'll remember the codeword of this conversation as marigold.",
       },
       {
         expectedTokens: ["marigold"],
-        prompt: "방금 말한 코드워드만 답해줘.",
+        prompt: "Just answer the codeword I just said.",
         response: "marigold",
       },
     ],
@@ -51,17 +52,19 @@ const continuityCases = [
     name: "uses the latest correction from same-thread history",
     turns: [
       {
-        prompt: "Project Zephyr 출시일은 Friday라고 일단 메모해줘.",
-        response: "Project Zephyr 출시일을 Friday로 메모했어.",
+        prompt: "Please note that Project Zephyr release date is Friday.",
+        response:
+          "I made a note of the release date of Project Zephyr as Friday.",
       },
       {
-        prompt: "정정할게. Project Zephyr 출시일은 Friday가 아니라 Thursday야.",
-        response: "정정했어. Project Zephyr 출시일은 Thursday야.",
+        prompt:
+          "I'll fix it. Project Zephyr release date is Thursday, not Friday.",
+        response: "Correct. Project Zephyr release date is Thursday.",
       },
       {
         expectedTokens: ["Thursday"],
-        prompt: "최종 Project Zephyr 출시일이 뭐였지?",
-        response: "Project Zephyr의 최종 출시일은 Thursday야.",
+        prompt: "What was the final Project Zephyr release date?",
+        response: "The final release date for Project Zephyr is Thursday.",
       },
     ],
   },
@@ -71,13 +74,13 @@ const continuityCases = [
     turns: [
       {
         prompt:
-          "배포 전 체크리스트는 backup, dry-run, smoke-test 순서라고 기억해줘.",
+          "Please remember that the pre-deployment checklist is in the order of backup, dry-run, and smoke-test.",
         response:
-          "배포 전 체크리스트 순서는 backup, dry-run, smoke-test로 기억할게.",
+          "I'll remember the checklist order before deployment as backup, dry-run, and smoke-test.",
       },
       {
         expectedTokens: ["dry-run"],
-        prompt: "그중 두 번째 항목만 답해줘.",
+        prompt: "Please answer the second item.",
         response: "dry-run",
       },
     ],

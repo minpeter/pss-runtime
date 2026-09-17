@@ -63,9 +63,9 @@ async function writeDemoScenario(runtimeHost: AgentHost): Promise<void> {
     {
       state: {
         history: [
-          { content: "내 이번 주문 상태 알려줘", role: "user" },
-          { content: "확인해볼게요.", role: "assistant" },
-          { content: "긴 입력 ".repeat(24_000), role: "user" },
+          { content: "Tell me the status of my latest order", role: "user" },
+          { content: "I'll check.", role: "assistant" },
+          { content: "long input ".repeat(24_000), role: "user" },
         ],
         schemaVersion: 1,
       },
@@ -88,7 +88,7 @@ async function writeDemoScenario(runtimeHost: AgentHost): Promise<void> {
     { type: "turn-start" },
     { type: "step-start" },
     {
-      text: "주문 조회를 위해 내부 도구를 호출합니다.",
+      text: "Calling an internal tool to look up the order.",
       type: "assistant-output",
     },
     {
@@ -99,7 +99,7 @@ async function writeDemoScenario(runtimeHost: AgentHost): Promise<void> {
     },
     {
       output: {
-        details: "큰 도구 결과 ".repeat(12_000),
+        details: "large tool result ".repeat(12_000),
         eta: "tomorrow",
         status: "shipping",
       },
@@ -134,7 +134,7 @@ async function writeDemoScenario(runtimeHost: AgentHost): Promise<void> {
   const notification: NotificationRecord = {
     idempotencyKey: ids.idempotencyKey,
     input: {
-      text: "배송 알림이 들어왔어. 이어서 처리해줘.",
+      text: "A shipping notification arrived. Continue processing it.",
       type: "user-input",
     },
     notificationId: ids.notificationId,
@@ -146,7 +146,7 @@ async function writeDemoScenario(runtimeHost: AgentHost): Promise<void> {
   await runtimeHost.store.notifications.enqueue(notification);
   await runtimeHost.store.inputs.admit({
     input: {
-      text: "배송지 변경 요청도 같은 실행에 반영해줘.",
+      text: "Include the delivery address change request in the same run.",
       type: "user-input",
     },
     kind: "steer",
