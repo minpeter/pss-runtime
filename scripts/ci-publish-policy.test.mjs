@@ -174,8 +174,8 @@ it("rejects a failure-masked called validation command", () => {
 it("rejects a skip condition on a called validation gate", () => {
   const ci = replaceWorkflowSource(
     ciWorkflow(),
-    "        run: pnpm test",
-    "        run: pnpm test\n        if: false"
+    "        if: github.event_name != 'pull_request' || matrix.node == '24'",
+    "        if: false"
   );
   expectRejected(ci, "unapproved condition");
 });

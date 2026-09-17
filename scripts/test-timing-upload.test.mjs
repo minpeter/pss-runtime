@@ -12,7 +12,9 @@ it("uploads timing evidence on Node 24 even after the producer fails", () => {
 
   expect(producer).toBeGreaterThanOrEqual(0);
   expect(upload).toBeGreaterThan(producer);
-  expect(steps[upload].if).toBe(`\${{ always() && matrix.node == '24' }}`);
+  expect(steps[upload].if).toBe(
+    `\${{ always() && github.event_name != 'pull_request' && matrix.node == '24' }}`
+  );
   expect(steps[upload].with["retention-days"]).toBe(7);
   expect(steps[producer]["continue-on-error"]).not.toBe(true);
 });

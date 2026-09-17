@@ -11,7 +11,7 @@ const NODE_ACTION =
 const UPLOAD_ACTION =
   "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
 const CANONICAL_STEPS_SHA256 =
-  "343d4108ea9e5f4ad6305d5fbb6ee6dbe2690efedf14cfa1004dc7b6d5fb961b";
+  "bc204380bc981946e04429add08a1cefe71c447186d480f865284f14f90bd778";
 const CALLED_JOB_IDS = ["checks"];
 const CALLED_JOB_KEYS = new Set([
   "continue-on-error",
@@ -35,6 +35,23 @@ const NODE_24_STEPS = new Set([
   "Check bundle size budget",
   "Produce test-timing report",
 ]);
+const PR_FULL_GATE_CONDITION = "github.event_name != 'pull_request'";
+const PR_NODE_24_OR_FULL_CONDITION =
+  "github.event_name != 'pull_request' || matrix.node == '24'";
+const PR_NODE_26_SMOKE_CONDITION =
+  "github.event_name == 'pull_request' && matrix.node == '26'";
+const PR_FULL_NODE_24_STEPS = new Set([
+  "Check core package coverage",
+  "Check extension package coverage",
+  "Check Worker coverage",
+  "Check bundle size budget",
+  "Produce test-timing report",
+]);
+const PR_FULL_MATRIX_STEPS = new Set([
+  "Build",
+  "Check runtime public API snapshot",
+  "Verify release artifacts",
+]);
 const CALLED_ACTION_STEPS = [
   { name: "Checkout", uses: CHECKOUT_ACTION, with: { "fetch-depth": 0 } },
   { name: "Setup pnpm", uses: PNPM_ACTION },
@@ -46,7 +63,9 @@ const CALLED_ACTION_STEPS = [
   {
     name: "Upload test-timing report",
     uses: UPLOAD_ACTION,
-    if: githubExpression("always() && matrix.node == '24'"),
+    if: githubExpression(
+      "always() && github.event_name != 'pull_request' && matrix.node == '24'"
+    ),
     with: {
       name: "test-timing",
       path: "report/test-timing.json",
@@ -87,8 +106,18 @@ function hasAllowedCondition(step) {
   return (
     step?.if === undefined ||
     (NODE_24_STEPS.has(step?.name) && step.if === "matrix.node == '24'") ||
+    (step?.name === "Test" && step.if === PR_NODE_24_OR_FULL_CONDITION) ||
+    (step?.name === "Node 26 compatibility smoke" &&
+      step.if === PR_NODE_26_SMOKE_CONDITION) ||
+    (PR_FULL_NODE_24_STEPS.has(step?.name) &&
+      step.if === `${PR_FULL_GATE_CONDITION} && matrix.node == '24'`) ||
+    (PR_FULL_MATRIX_STEPS.has(step?.name) &&
+      step.if === PR_FULL_GATE_CONDITION) ||
     (step?.name === "Upload test-timing report" &&
-      step.if === githubExpression("always() && matrix.node == '24'"))
+      step.if ===
+        githubExpression(
+          "always() && github.event_name != 'pull_request' && matrix.node == '24'"
+        ))
   );
 }
 
