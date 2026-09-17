@@ -148,7 +148,9 @@ describe("worker coverage isolation (VAL-SEC-023)", () => {
         step.run === "pnpm --filter @minpeter/pss-worker-agent test:coverage"
     );
     expect(steps).toHaveLength(1);
-    expect(steps[0].if).toBe("matrix.node == '24'");
+    expect(steps[0].if).toBe(
+      "github.event_name != 'pull_request' && matrix.node == '24'"
+    );
     expect(steps[0]["continue-on-error"]).not.toBe(true);
   });
   it("declares a test:coverage script that enables coverage", () => {

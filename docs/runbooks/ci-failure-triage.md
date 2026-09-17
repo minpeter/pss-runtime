@@ -1,8 +1,9 @@
 # CI failure triage
 
-Use this runbook when the pull-request CI check is red. The pull-request gate
-is the `ci.yml` job `checks`; it is the source of truth for core correctness
-and runs on every pull request and push to `main`.
+Use this runbook when CI is red. The `ci.yml` `checks` job is the source of
+truth for core correctness and runs on every pull request and push to `main`.
+Pull requests use its fast lane; pushes to `main` and release validation run its
+full lane.
 
 ## Fast gate steps
 
@@ -21,12 +22,13 @@ running the same script:
 - `pnpm lint` — Biome/Ultracite lint (`ci.yml` step `Lint`).
 - `pnpm typecheck` — TypeScript project checks (`ci.yml` step `Typecheck`).
 - `pnpm test` — Turbo tests plus `vitest run scripts/*.test.mjs` (`ci.yml`
-  step `Test`, run with `PSS_TASK_VALIDATOR_NETWORK_ISOLATED=1`).
-- `pnpm coverage` — core package coverage gate (node 24 only: the `ci.yml`
-  step is gated behind `if: matrix.node == '24'`).
-- `pnpm build` — full workspace build (`ci.yml` step `Build`).
-- `pnpm api:check` — runtime public API snapshot check.
-- `pnpm verify:release` — release-artifact verification.
+  step `Test`, run with `PSS_TASK_VALIDATOR_NETWORK_ISOLATED=1`). Pull requests
+  run it on Node 24; the full lane also runs it on Node 26.
+- `pnpm test:cross-platform-smoke` — Node 26 pull-request compatibility smoke.
+- `pnpm coverage` — core package coverage gate (full lane, Node 24 only).
+- `pnpm build` — full workspace build (full lane only).
+- `pnpm api:check` — runtime public API snapshot check (full lane only).
+- `pnpm verify:release` — release-artifact verification (full lane only).
 
 ## Triage steps
 
@@ -42,12 +44,11 @@ running the same script:
 
 ## Matrix and environment notes
 
-- The gate runs on the Node `24` and `26` matrix; a failure on only one Node
-  version usually points at a version-specific API or type difference.
-- The `Audit dependencies` and `Check core package coverage` steps run only on
-  the Node `24` matrix leg (`if: matrix.node == '24'`); a red `26` run can
-  never be caused by those two steps, and an advisory or coverage regression
-  surfaces on the `24` leg only.
+- The fast pull-request lane runs typechecking on Node `24` and `26`, full tests
+  on Node `24`, and a Node `26` compatibility smoke. A push to `main` or a
+  release validation call runs the complete matrix on both Node versions.
+- `Audit dependencies` runs on Node `24` only. Coverage runs on Node `24` in
+  the full lane only; a red Node `26` run can never be caused by either gate.
 - The `Test` step runs under `PSS_TASK_VALIDATOR_NETWORK_ISOLATED=1`, so a test
   that reaches the network locally but is skipped in isolation is a bug in the
   test, not in CI.

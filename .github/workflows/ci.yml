@@ -114,36 +114,44 @@ jobs:
         run: pnpm check:duplicates
 
       - name: Test
+        if: github.event_name != 'pull_request' || matrix.node == '24'
         env:
           PSS_TASK_VALIDATOR_NETWORK_ISOLATED: "1"
         run: pnpm test
 
+      - name: Node 26 compatibility smoke
+        if: github.event_name == 'pull_request' && matrix.node == '26'
+        run: pnpm test:cross-platform-smoke
+
       - name: Check core package coverage
-        if: matrix.node == '24'
+        if: github.event_name != 'pull_request' && matrix.node == '24'
         run: pnpm coverage
 
       - name: Check extension package coverage
-        if: matrix.node == '24'
+        if: github.event_name != 'pull_request' && matrix.node == '24'
         run: pnpm coverage:extensions
 
       - name: Check Worker coverage
-        if: matrix.node == '24'
+        if: github.event_name != 'pull_request' && matrix.node == '24'
         run: pnpm --filter @minpeter/pss-worker-agent test:coverage
 
       - name: Build
+        if: github.event_name != 'pull_request'
         run: pnpm build
 
       # Bundle budget gate over the built dist/ artifacts; must run after
       # the Build step (a missing artifact fails the gate). Deterministic;
       # pinned to Node 24 so it runs exactly once.
       - name: Check bundle size budget
-        if: matrix.node == '24'
+        if: github.event_name != 'pull_request' && matrix.node == '24'
         run: pnpm check:bundle-size --check
 
       - name: Check runtime public API snapshot
+        if: github.event_name != 'pull_request'
         run: pnpm api:check
 
       - name: Verify release artifacts
+        if: github.event_name != 'pull_request'
         run: pnpm verify:release
 
       # Test-timing producer (VAL-SEC-024): runs the deterministic scripts
@@ -152,11 +160,11 @@ jobs:
       # as a bounded artifact. Pinned to Node 24 like the other single-leg
       # steps so the artifact is produced and uploaded exactly once.
       - name: Produce test-timing report
-        if: matrix.node == '24'
+        if: github.event_name != 'pull_request' && matrix.node == '24'
         run: pnpm test:timing
 
       - name: Upload test-timing report
-        if: ${{ always() && matrix.node == '24' }}
+        if: ${{ always() && github.event_name != 'pull_request' && matrix.node == '24' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-timing
