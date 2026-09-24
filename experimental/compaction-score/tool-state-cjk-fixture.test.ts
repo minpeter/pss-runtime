@@ -24,13 +24,13 @@ describe("tool-state CJK fixture", () => {
     const end = fixture.compactionEnds[0] ?? 0;
 
     for (const value of [
-      "src/한글/設定/漢字.ts",
-      "프로필＿更新・状態",
+      "src/Korean/設定/漢字.ts",
+      "Author：＿更新・状態",
       "全角文字は80桁で切り詰めない",
-      "명령 실패: 권한 거부 (EACCES)",
-      "재시도 성공: 캐시를 초기화했습니다",
-      "실패: 2개; 型エラー at 漢字.ts:42",
-      "통과: 18개; 東京✓",
+      "Command failed: Permission denied (EACCES)",
+      "Retry successful: cache has been reset",
+      "Failed: 2; 型エラー at 漢字.ts:42",
+      "Passing: 18; 東京✓",
     ]) {
       expect(source).toContain(value);
     }

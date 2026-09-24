@@ -445,7 +445,7 @@ describe("progressive tool arguments", () => {
   it.each([true, false])(
     "write decodes source with path first=%s and replaces preview once",
     async (pathFirst) => {
-      const content = 'EARLY "quote"\nLATER 한글 café 😀\nEND';
+      const content = 'EARLY "quote"\nLATER English café 😀\nEND';
       const input = pathFirst
         ? { path: "sample.ts", content }
         : { content, path: "sample.ts" };
@@ -470,7 +470,7 @@ describe("progressive tool arguments", () => {
       expect(renderPlainText(view)).not.toContain("\\n");
       await view.appendInputChunk(full.slice(full.indexOf("LATER")));
       const lines = view.render(120).map(stripTerminalSequences);
-      expect(lines.some((line) => line.includes("LATER 한글 café 😀"))).toBe(
+      expect(lines.some((line) => line.includes("LATER English café 😀"))).toBe(
         true
       );
       expect(lines.findIndex((line) => line.includes("LATER"))).toBeGreaterThan(

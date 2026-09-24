@@ -14,8 +14,8 @@ const backgroundWatchers = new Set<Promise<void>>();
 output.write(
   [
     "background-subagent CLI",
-    "종료: /quit",
-    "kb/ 지식베이스 질문 가능. 백그라운드 작업 중에도 계속 입력할 수 있어요.",
+    "Shutdown: /quit",
+    "Ask questions about the kb/ knowledge base. You can keep entering messages while background tasks run.",
     "",
   ].join("\n")
 );
@@ -58,7 +58,7 @@ async function watchBackgroundCompletions(host: LocalHost) {
       const run = await host.resumeThread({
         timeoutMs: notificationTimeoutMs,
       });
-      output.write("\n--- [system] 백그라운드 작업 완료 ---\n");
+      output.write("\n--- [system] Background job completed ---\n");
       await drainRunForCli(run);
       output.write("\n");
     } catch {

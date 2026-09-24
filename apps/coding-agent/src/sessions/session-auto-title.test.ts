@@ -6,8 +6,11 @@ import {
 } from "./session-auto-title";
 
 const history: readonly ModelMessage[] = [
-  { content: "세션 이름을 자동으로 만들자", role: "user" },
-  { content: "첫 응답 후 제목을 생성하겠습니다.", role: "assistant" },
+  { content: "Let's automatically create a session name", role: "user" },
+  {
+    content: "We'll create a title after our first response.",
+    role: "assistant",
+  },
 ];
 
 const modelWithText = (text: string, inspect?: (options: unknown) => void) =>
@@ -43,10 +46,10 @@ describe("generateSessionTitle", () => {
     const title = await generateSessionTitle({
       history,
       instructions: "coding instructions",
-      model: modelWithText("세션 자동 제목", inspect),
+      model: modelWithText("Session Auto Title", inspect),
     });
 
-    expect(title).toBe("세션 자동 제목");
+    expect(title).toBe("Session Auto Title");
     expect(inspect).toHaveBeenCalledOnce();
     expect(inspect.mock.calls[0]?.[0]).toMatchObject({
       maxOutputTokens: 24,
@@ -74,18 +77,16 @@ describe("generateSessionTitle", () => {
       history: [
         {
           content:
-            "아주 긴 사용자 요청을 바탕으로 자동 제목을 생성하지만 모델 호출에 실패한 경우에도 읽을 수 있어야 합니다",
+            "Generate automatic titles from long user requests while keeping the fallback readable when the model call fails",
           role: "user",
         },
-        { content: "응답", role: "assistant" },
+        { content: "Respond", role: "assistant" },
       ],
       instructions: "coding instructions",
       model: failingModel,
     });
 
-    expect(title).toBe(
-      "아주 긴 사용자 요청을 바탕으로 자동 제목을 생성하지만 모델 호출에 실패한 경우에도 읽을…"
-    );
+    expect(title).toBe("Generate automatic titles from long user requests…");
   });
 
   it("does not title sessions that already contain multiple user turns", async () => {
@@ -93,11 +94,11 @@ describe("generateSessionTitle", () => {
     const title = await generateSessionTitle({
       history: [
         ...history,
-        { content: "두 번째 요청", role: "user" },
-        { content: "두 번째 응답", role: "assistant" },
+        { content: "Second request", role: "user" },
+        { content: "Second Response", role: "assistant" },
       ],
       instructions: "coding instructions",
-      model: modelWithText("제목", inspect),
+      model: modelWithText("title", inspect),
     });
 
     expect(title).toBeUndefined();
@@ -107,21 +108,23 @@ describe("generateSessionTitle", () => {
   it("uses the first message fallback when a turn has no assistant text", async () => {
     const inspect = vi.fn();
     const title = await generateSessionTitle({
-      history: [{ content: "도구 호출 세션", role: "user" }],
+      history: [{ content: "Tool call session", role: "user" }],
       instructions: "coding instructions",
       model: modelWithText("unused", inspect),
     });
 
-    expect(title).toBe("도구 호출 세션");
+    expect(title).toBe("Tool call session");
     expect(inspect).not.toHaveBeenCalled();
   });
 });
 
 describe("sanitizeGeneratedTitle", () => {
   it("removes common wrappers and bounds generated titles", () => {
-    expect(sanitizeGeneratedTitle('제목: **"세션 자동 제목"**\n설명')).toBe(
-      "세션 자동 제목"
-    );
+    expect(
+      sanitizeGeneratedTitle(
+        'Title: **"Automatic session title"**\nDescription'
+      )
+    ).toBe("Automatic session title");
     expect(sanitizeGeneratedTitle("x".repeat(50))).toBe(`${"x".repeat(39)}…`);
     expect(sanitizeGeneratedTitle(" \n ")).toBeUndefined();
   });

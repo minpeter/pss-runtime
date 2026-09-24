@@ -54,12 +54,14 @@ describe("session transcript reader", () => {
   it("reads user text and send_message tool-call text as a compact transcript", async () => {
     const store = new FakeThreadStore();
     await commitHistory(store, "telegram:a", [
-      { role: "user", content: "deploy 얘기 뭐였지?" },
+      { role: "user", content: "what was it about deploy?" },
       {
         role: "assistant",
         content: [
           {
-            input: { text: "배포는 금요일 오전으로 잡자고 했어." },
+            input: {
+              text: "I asked you to schedule the distribution for Friday morning.",
+            },
             toolCallId: "call-1",
             toolName: "send_message",
             type: "tool-call",
@@ -90,11 +92,11 @@ describe("session transcript reader", () => {
       hasMore: false,
       messageCount: 2,
       messages: [
-        { index: 0, role: "user", text: "deploy 얘기 뭐였지?" },
+        { index: 0, role: "user", text: "what was it about deploy?" },
         {
           index: 1,
           role: "assistant",
-          text: "배포는 금요일 오전으로 잡자고 했어.",
+          text: "I asked you to schedule the distribution for Friday morning.",
         },
       ],
     });

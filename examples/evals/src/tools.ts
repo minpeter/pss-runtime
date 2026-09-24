@@ -3,7 +3,7 @@ import { jsonSchema, type ToolSet, tool } from "ai";
 export const tools = {
   get_weather: tool({
     description: "Get the current weather for a city.",
-    execute: async () => ({ city: "서울", condition: "맑음", tempC: 21 }),
+    execute: async () => ({ city: "Seoul", condition: "Light", tempC: 21 }),
     inputSchema: jsonSchema({
       additionalProperties: false,
       properties: { city: { type: "string" } },

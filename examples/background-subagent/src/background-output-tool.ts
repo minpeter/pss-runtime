@@ -17,13 +17,13 @@ export function createBackgroundOutputTool({
   readonly parentThreadKey: string;
 }) {
   return tool<BackgroundOutputInput, unknown, Record<string, unknown>>({
-    description: "백그라운드 reader 작업의 결과를 가져온다.",
+    description: "Retrieve the result of a background reader task.",
     execute: async ({ task_id }) => {
       const record = await executionHost.store.turns.get(
         `background:${task_id}`
       );
       if (!record || record.publicTaskId !== task_id) {
-        throw new Error(`알 수 없는 백그라운드 작업 ${task_id}.`);
+        throw new Error(`Unknown background task ${task_id}.`);
       }
       const checkpoint = await executionHost.store.checkpoints.latest(
         record.runId
@@ -34,7 +34,7 @@ export function createBackgroundOutputTool({
         state?.parentThreadKey !== parentThreadKey ||
         state.subagent !== readerChildName
       ) {
-        throw new Error(`백그라운드 작업 ${task_id}에 접근할 수 없다.`);
+        throw new Error(`I don't have access to background job ${task_id}.`);
       }
 
       return {

@@ -33,7 +33,7 @@ describe("MathJax and resvg WASM renderer", () => {
   it.each([
     ["ASCII", "x^2+y^2=z^2"],
     ["multiline AMS", String.raw`\begin{aligned}a&=b+c\\d&=e-f\end{aligned}`],
-    ["Korean/CJK", String.raw`\text{타원곡선 椭圆曲线}`],
+    ["English/CJK", String.raw`\text{elliptic curve 椭圆曲线}`],
     ["Arabic/Hebrew", String.raw`\text{مرحبا שלום}`],
     ["Devanagari", String.raw`\text{नमस्ते दुनिया}`],
     ["Thai", String.raw`\text{สวัสดีชาวโลก}`],
@@ -128,7 +128,7 @@ describe("MathJax and resvg WASM renderer", () => {
         controller.abort();
       });
     const rendering = renderMathJaxPng(
-      String.raw`\text{한글 日本語 中文} ${"x+".repeat(2000)}x`,
+      String.raw`\text{English 日本語 中文} ${"x+".repeat(2000)}x`,
       "#000000",
       controller.signal
     );

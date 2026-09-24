@@ -23,7 +23,7 @@ import { correlationStore } from "./telegram-types";
 
 const DEV_NOTICE = "🧪 DEVELOPMENT ENVIRONMENT";
 const FAILURE_REPLY =
-  "처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
+  "An error occurred during processing. Please try again in a moment.";
 const MISSING_SEND_MESSAGE_ERROR = "missing_send_message";
 
 const AgentDeliverySchema = z.discriminatedUnion("delivered", [

@@ -4,12 +4,12 @@ import { encodeJsonl, JsonlDecoder } from "./jsonl";
 describe("JSONL framing", () => {
   it("frames split UTF-8 chunks and multiple records", () => {
     const bytes = new TextEncoder().encode(
-      `${encodeJsonl({ text: "안녕" })}${encodeJsonl({ ok: true })}`
+      `${encodeJsonl({ text: "hello 😀" })}${encodeJsonl({ ok: true })}`
     );
     const decoder = new JsonlDecoder();
     expect(decoder.push(bytes.slice(0, 8))).toEqual([]);
     expect(decoder.push(bytes.slice(8))).toEqual([
-      { text: "안녕" },
+      { text: "hello 😀" },
       { ok: true },
     ]);
     expect(decoder.finish()).toEqual([]);
@@ -29,18 +29,18 @@ describe("JSONL framing", () => {
   it("keeps decoder UTF-8 state isolated when instances interleave", () => {
     const first = new JsonlDecoder();
     const second = new JsonlDecoder();
-    const one = new TextEncoder().encode('{"text":"한"}\n');
-    const two = new TextEncoder().encode('{"text":"글"}\n');
+    const one = new TextEncoder().encode('{"text":"😀"}\n');
+    const two = new TextEncoder().encode('{"text":"🚀"}\n');
     expect(first.push(one.slice(0, 10))).toEqual([]);
     expect(second.push(two.slice(0, 10))).toEqual([]);
-    expect(first.push(one.slice(10))).toEqual([{ text: "한" }]);
-    expect(second.push(two.slice(10))).toEqual([{ text: "글" }]);
+    expect(first.push(one.slice(10))).toEqual([{ text: "😀" }]);
+    expect(second.push(two.slice(10))).toEqual([{ text: "🚀" }]);
   });
 
   it("bounds frames by UTF-8 bytes across chunks and recovers at newline", () => {
     const decoder = new JsonlDecoder({ maxFrameBytes: 8 });
     expect(decoder.pushResults('{"x":"')).toEqual([]);
-    const oversized = decoder.pushResults("한");
+    const oversized = decoder.pushResults("😀");
     expect(oversized).toHaveLength(1);
     expect(oversized[0]).toHaveProperty("error");
     expect(decoder.pushResults('"}\n{"x":1}\n')).toEqual([{ value: { x: 1 } }]);

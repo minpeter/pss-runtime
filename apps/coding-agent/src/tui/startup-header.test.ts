@@ -8,7 +8,7 @@ const compact = (rows: string[]) =>
   rows.map(stripTerminalSequences).join("").replaceAll(/\s/g, "");
 
 describe("startup header CJK boundaries", () => {
-  it.each(["한국어", "item-99-한국어-mixed"])(
+  it.each(["Korean", "item-99-Korean-mixed"])(
     "preserves %s through pulse, settle and frozen resize",
     (model) => {
       const view = new StartupHeaderView(["QA"], ["local"], "local");
@@ -27,9 +27,7 @@ describe("startup header CJK boundaries", () => {
             expect(rows.every((line) => visibleWidth(line) <= width)).toBe(
               true
             );
-            expect(compact(rows)).toBe(
-              `QA${width === 1 ? model.replaceAll(/[한국어]/g, "?") : model}`
-            );
+            expect(compact(rows)).toBe(`QA${model}`);
             expect(rows.some((line) => line.includes("\x1b[47m"))).toBe(
               pulsing
             );

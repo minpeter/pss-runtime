@@ -60,7 +60,7 @@ describe("app-owned background delegation", () => {
           toolCallId: "call-output",
         }
       )
-    ).rejects.toThrow("접근할 수 없다");
+    ).rejects.toThrow("I don't have access to background job");
   });
 
   it("does not create a duplicate notification run after duplicate enqueue", async () => {

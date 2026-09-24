@@ -177,83 +177,99 @@ function buildHoldoutJsonFixture(seed: string): CompactionFixture {
 }
 
 function buildHoldoutCjkFixture(seed: string): CompactionFixture {
-  const verifyHash = sha(`${seed}:검증`, 16);
-  const restoreCommand = `bae undo ${sha(`${seed}:복원`, 9)}`;
+  const verifyHash = sha(`${seed}:Verify`, 16);
+  const restoreCommand = `bae undo ${sha(`${seed}:Restore`, 9)}`;
   const region = "kr-central-2";
   const failedLesson =
-    "메모리 캐시 프리로딩은 재시도 금지 - 콜드스타트 지연이 3배로 늘었다";
+    "Do not retry memory cache freeloading - cold start delay tripled";
 
   const cjkNoise = (count: number): string[] =>
     Array.from(
       { length: count },
       (_, index) =>
-        `알림: 캐시 항목 ${index + 1000}번이 갱신되었습니다 (지연 ${(index * 3) % 97}ms)`
+        `Reminder: Cache Items ${index + 1000}has been renewed (delayed) ${(index * 3) % 97}ms)`
     );
   const deployLog = [
-    `대상 리전은 ${region} 입니다`,
+    `Target Region is ${region} venky`,
     ...cjkNoise(110),
-    `최종 검증 해시는 ${verifyHash} 입니다`,
+    `The final validation hash ${verifyHash} venky`,
     ...cjkNoise(110),
-    `복원 절차: ${restoreCommand}`,
+    `Restore procedure: ${restoreCommand}`,
   ].join("\n");
 
   const messages: ModelMessage[] = [
-    user("결제 서비스 배포를 진행하고 모든 검증 값을 정확히 보존해 주세요."),
-    assistant("배포를 진행하며 검증 값을 그대로 보존하겠습니다."),
-    user("제약: 공개 API 이름은 절대 바꾸지 마세요."),
-    assistant("공개 API 이름 변경 금지 제약을 기록했습니다."),
-    user("임시 포트는 8080 입니다."),
-    assistant("포트 8080을 임시 값으로 기록했습니다."),
-    user("배포 로그를 확인해 주세요."),
+    user(
+      "Proceed with payment service deployment and ensure all validated values are preserved correctly."
+    ),
+    assistant(
+      "As we proceed with the deployment, we will preserve the validation values as they."
+    ),
+    user("Constraints: Public API Never change your name."),
+    assistant("Transparent API Restrictions on name change recorded."),
+    user("Temporary port is 8080."),
+    assistant("Port 8080 has been logged as a temporary value."),
+    user("Please check the deployment log."),
     toolCall("deploy-1", "read_deploy_log"),
     toolResult("deploy-1", "read_deploy_log", deployLog),
-    assistant("배포 로그의 값이 최종본이며 여기서 반복하지 않겠습니다."),
-    user("정정: 최종 포트는 8443 입니다. 8080이 아닙니다."),
-    assistant("최종 포트를 8443으로 기록했습니다."),
-    user(`실패 교훈: ${failedLesson}.`),
-    assistant("해당 접근은 재시도하지 않도록 기록했습니다."),
-    user("다음 작업: 8443 포트로 헬스체크를 붙이고 배포 티켓을 닫아 주세요."),
-    assistant("8443 헬스체크 연결 후 배포 티켓을 닫겠습니다."),
+    assistant(
+      "The value in the deployment log is the final copy and I will not repeat it here."
+    ),
+    user("Correction: The final port is 8443, not 8080."),
+    assistant("I logged the final port as 8443.."),
+    user(`Failure Lessons: ${failedLesson}.`),
+    assistant("We have logged this access so that it will not be retried."),
+    user(
+      "Next action: Attach health check to port 8443 and close distribution ticket."
+    ),
+    assistant(
+      "8443 I will close the distribution ticket after connecting the health check."
+    ),
   ];
   const end = messages.length;
   messages.push(
-    user("이제 릴리스 노트 문구만 다듬어 봅시다."),
-    assistant("릴리스 노트 문구는 기록된 배포 값에 영향을 주지 않습니다."),
-    user("문구 작업 중에도 배포 값은 바꾸지 마세요."),
-    assistant("배포 값은 기록된 그대로 유지됩니다.")
+    user("Now let's just refine the release note text.."),
+    assistant(
+      "Release notes wording will not affect the recorded deployment value."
+    ),
+    user("Do not change the distribution value during stationery operations."),
+    assistant("Distribution values will remain as recorded.")
   );
 
   const questions: FixtureQuestion[] = [
     question(
       "exact-recall",
       verifyHash,
-      "배포 로그에 기록된 정확한 최종 검증 해시는 무엇인가요?"
+      "What is the exact final validation hash recorded in the deployment log?"
     ),
     question(
       "exact-recall",
       restoreCommand,
-      "배포 로그에 기록된 정확한 복원 명령은 무엇인가요?"
+      "What is the exact restore command recorded in the deployment log??"
     ),
     question(
       "tool-history",
       region,
-      "배포 로그에 기록된 정확한 대상 리전은 무엇인가요?"
+      "What is the exact target region recorded in the deployment log??"
     ),
-    question("temporal-resolution", "8443", "최종 포트는 정확히 몇 번인가요?"),
+    question(
+      "temporal-resolution",
+      "8443",
+      "Exactly how many times is the final port??"
+    ),
     question(
       "negative-knowledge",
       failedLesson,
-      "재시도하면 안 되는 접근과 그 이유는 정확히 무엇인가요?"
+      "Exactly what approach should not be retried and why??"
     ),
     question(
       "constraint-retention",
-      "공개 API 이름은 절대 바꾸지 마세요",
-      "기록된 공개 API 제약은 정확히 무엇인가요?"
+      "Transparent API Never change the name ",
+      "Recorded Disclosures API What are the exact constraints??"
     ),
     question(
       "task-continuation",
-      "8443 포트로 헬스체크를 붙이고 배포 티켓을 닫아 주세요",
-      "기록된 다음 작업은 무엇인가요?"
+      "8443 Please paste the health check into the port and close the distribution ticket ",
+      "What's the next task that's been recorded??"
     ),
   ];
 

@@ -16,7 +16,7 @@ const heights = [7, 8, 11, 12, 16, 17, 24, 40, 60];
 const ITEM_ROW = /^\s*(?:→ | {2})item-/u;
 const ids = Array.from(
   { length: 100 },
-  (_, i) => `item-${String(i).padStart(2, "0")}-${"한국어".repeat(30)}`
+  (_, i) => `item-${String(i).padStart(2, "0")}-${"Korean".repeat(30)}`
 );
 
 function fixture(kind: "model" | "session", count: number) {

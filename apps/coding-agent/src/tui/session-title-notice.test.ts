@@ -155,7 +155,7 @@ async function fixture(
       return Promise.reject(new Error("TITLE_PROVIDER_ERROR"));
     }
     return Promise.resolve({
-      content: [{ type: "text" as const, text: "자동 제목 TITLE_A" }],
+      content: [{ type: "text" as const, text: "Automatic title TITLE_A" }],
       finishReason,
       usage,
       warnings: [],
@@ -369,24 +369,24 @@ describe.sequential("session title notices through startTui", () => {
     expect(lines()).toHaveLength(3);
     expect(lines().filter((line) => line.includes("TITLE_A"))).toHaveLength(1);
     expect(lines().at(-1)).toBe(
-      'Session title updated to "자동 제목 TITLE_A".'
+      'Session title updated to "Automatic title TITLE_A".'
     );
     expect(lines().join("\n")).not.toContain(directory);
     expect(lines().join("\n")).not.toContain(header[1]);
     expect(lines(surface().children[0])).toEqual(header);
     const before = lines();
-    await command("/name 자동 제목 TITLE_A");
+    await command("/name Automatic title TITLE_A");
     expect(lines()).toEqual(before);
   });
 
   it("renders a direct rename once and retains navigation", async () => {
     await fixture();
     const header = lines(surface().children[0]);
-    await command("/name 직접 TITLE_B");
-    expect(lines()).toEqual(['Session title updated to "직접 TITLE_B".']);
+    await command("/name direct title_B");
+    expect(lines()).toEqual(['Session title updated to "direct title_B".']);
     expect(lines(surface().children[0])).toEqual(header);
     const before = lines();
-    await command("/name 직접 TITLE_B");
+    await command("/name direct title_B");
     expect(lines()).toEqual(before);
     await command("/name");
     expect(lines()).toHaveLength(2);
@@ -409,7 +409,7 @@ describe.sequential("session title notices through startTui", () => {
 
   it("renders structured title metadata safely without relying on subtitle changes", async () => {
     await fixture();
-    const name = '제목 "quoted"\nnext\t\x1b[2J\x1b]52;c;payload\x07\u2028end';
+    const name = 'Title "quoted"\nnext\t\x1b[2J\x1b]52;c;payload\x07\u2028end';
     const current = config.currentSession?.();
     if (!current) {
       throw new Error("Missing session metadata");
@@ -425,7 +425,7 @@ describe.sequential("session title notices through startTui", () => {
     await done;
     expect(lines()).toHaveLength(3);
     expect(lines().at(-1)).toBe(
-      'Session title updated to "제목 "quoted"^Jnext^I^[[2J^[]52;c;payload^Gend".'
+      'Session title updated to "Title "quoted"^Jnext^I^[[2J^[]52;c;payload^Gend".'
     );
     expect(lines(surface().children.at(-1))).toContain("FOOTER_UPDATED");
     expect(generate).not.toHaveBeenCalled();

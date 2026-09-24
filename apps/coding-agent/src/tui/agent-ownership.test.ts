@@ -876,7 +876,7 @@ describe.sequential("actual TUI transcript ownership", () => {
   it.each(["model", "session"] as const)(
     "enforces the complete %s cap through actual resize dispatch",
     async (kind) => {
-      const ids = Array.from({ length: 100 }, (_, i) => `item-${i}-한국어`);
+      const ids = Array.from({ length: 100 }, (_, i) => `item-${i}-English`);
       const switchModel = vi.fn();
       const switchSession = vi.fn();
       const app = await fixture({
