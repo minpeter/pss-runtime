@@ -32,25 +32,25 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "3.0.48",
-    "@chat-adapter/state-memory": "4.40.0",
-    "@chat-adapter/telegram": "4.40.0",
+    "@ai-sdk/openai-compatible": "3.0.62",
+    "@chat-adapter/state-memory": "4.41.1",
+    "@chat-adapter/telegram": "4.41.1",
     "@minpeter/pss-runtime": "workspace:*",
     "@opentelemetry/api": "^1.9.1",
-    "@trpc/client": "11.18.0",
-    "@trpc/server": "11.18.0",
-    "agents": "0.23.0",
-    "chat": "4.40.0",
+    "@trpc/client": "11.19.0",
+    "@trpc/server": "11.19.0",
+    "agents": "0.26.0",
+    "chat": "4.41.1",
     "evlog": "^2.29.0",
-    "zod": "^4.6.2"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260911.1",
-    "@types/node": "^26.5.1",
+    "@cloudflare/workers-types": "^5.20261003.1",
+    "@types/node": "^26.6.4",
     "npm-run-all": "^4.1.5",
-    "tsx": "^4.23.13",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11",
-    "wrangler": "^4.131.1"
+    "wrangler": "^4.147.0"
   }
 }
