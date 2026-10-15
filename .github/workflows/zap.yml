@@ -35,7 +35,7 @@ permissions:
 jobs:
   baseline:
     name: ZAP baseline scan
-    runs-on: ubuntu-latest
+    runs-on: instabox-k3s
     timeout-minutes: 20
     permissions:
       contents: read

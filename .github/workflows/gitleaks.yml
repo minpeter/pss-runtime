@@ -32,7 +32,7 @@ permissions:
 jobs:
   scan:
     name: Scan git history for secrets
-    runs-on: ubuntu-latest
+    runs-on: instabox-k3s
     timeout-minutes: 15
     permissions:
       contents: read

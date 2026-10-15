@@ -40,7 +40,7 @@ jobs:
       github.event.schedule == '17 3 * * 1' ||
       (github.event_name == 'workflow_dispatch' &&
        (inputs.suite == 'all' || inputs.suite == 'storage'))
-    runs-on: ubuntu-latest
+    runs-on: instabox-k3s
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -81,7 +81,7 @@ jobs:
       github.event.schedule == '23 5 * * 4' ||
       (github.event_name == 'workflow_dispatch' &&
        (inputs.suite == 'all' || inputs.suite == 'edge'))
-    runs-on: ubuntu-latest
+    runs-on: instabox-k3s
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -100,7 +100,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' &&
        (inputs.suite == 'all' || inputs.suite == 'live-provider' ||
         inputs.suite == 'remote-edge'))
-    runs-on: ubuntu-latest
+    runs-on: instabox-k3s
     timeout-minutes: 2
     outputs:
       provider: ${{ steps.detect.outputs.provider }}
@@ -148,7 +148,7 @@ jobs:
       (github.event.schedule == '23 5 * * 4' ||
        (github.event_name == 'workflow_dispatch' &&
         (inputs.suite == 'all' || inputs.suite == 'live-provider')))
-    runs-on: ubuntu-latest
+    runs-on: instabox-k3s
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -172,7 +172,7 @@ jobs:
       needs.secret-gate.outputs.remote_edge == 'true' &&
       github.event_name == 'workflow_dispatch' &&
       (inputs.suite == 'all' || inputs.suite == 'remote-edge')
-    runs-on: ubuntu-latest
+    runs-on: instabox-k3s
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
