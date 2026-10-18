@@ -63,7 +63,7 @@
     "@earendil-works/pi-tui": "^0.85.1",
     "@minpeter/pss-coding-agent": "workspace:*",
     "@minpeter/pss-runtime": "workspace:*",
-    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/client": "2.2.0",
     "@modelcontextprotocol/server": "2.0.0",
     "@t3-oss/env-core": "^0.13.11",
     "@types/node": "^26.5.1",
