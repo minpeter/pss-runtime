@@ -1,5 +1,4 @@
-import type { Stats } from "node:fs";
-import { readdir, stat } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
   applyTurnTransitionUpdate,
@@ -11,6 +10,7 @@ import type {
   ClaimTurnResult,
   CreateTurnResult,
   TurnRecord,
+  TurnStatus,
   TurnStore,
   TurnTransitionExpected,
   TurnTransitionResult,
@@ -28,34 +28,51 @@ function nextCreatedOrder(): number {
   return lastCreatedOrder;
 }
 
+/**
+ * `createdOrder` reserved for runs written before creation order was
+ * persisted. Their real order is unrecoverable (copies rewrote file times), so
+ * the first read assigns this marker and every rewrite persists it: a legacy
+ * run never moves after runs with a real (positive) creation order, whatever
+ * its later status.
+ */
+const LEGACY_CREATED_ORDER = 0;
+
+const SETTLED_STATUS: Record<TurnStatus, boolean> = {
+  cancelled: true,
+  completed: true,
+  error: true,
+  leased: false,
+  "needs-recovery": true,
+  queued: false,
+  running: false,
+  suspended: false,
+};
+
 async function readRunFile(file: string): Promise<TurnRecord | null> {
   const record = await readJsonFile(file, parseRunRecord, "run file");
-  if (!record || runCreatedOrder.has(record)) {
-    return record;
+  if (record && !runCreatedOrder.has(record)) {
+    runCreatedOrder.set(record, LEGACY_CREATED_ORDER);
   }
-  // Files written before `createdOrder` existed approximate it from their
-  // mtime on nextCreatedOrder's microsecond scale: the legacy run's last write,
-  // not its creation. Birth time is never used because generation copies
-  // reset it while preserving mtime. Every later write persists the
-  // approximation unchanged.
-  let stats: Stats;
-  try {
-    stats = await stat(file);
-  } catch (error) {
-    if (isNodeError(error) && error.code === "ENOENT") {
-      return null;
-    }
-    throw error;
-  }
-  runCreatedOrder.set(record, Math.trunc(stats.mtimeMs * 1000));
   return record;
 }
 
 function compareRunCreation(left: TurnRecord, right: TurnRecord): number {
-  const orderDelta =
-    (runCreatedOrder.get(left) ?? 0) - (runCreatedOrder.get(right) ?? 0);
-  if (orderDelta !== 0) {
-    return orderDelta;
+  const leftOrder = runCreatedOrder.get(left) ?? LEGACY_CREATED_ORDER;
+  const rightOrder = runCreatedOrder.get(right) ?? LEGACY_CREATED_ORDER;
+  if (leftOrder !== rightOrder) {
+    return leftOrder - rightOrder;
+  }
+  // Among legacy runs, settled ones sort after unsettled ones and are read as
+  // the latest work, so recovery never resumes a stale crashed legacy run when
+  // a later one finished. Placement follows the current status on purpose: a
+  // recovered legacy run that settles becomes the latest legacy run.
+  if (leftOrder === LEGACY_CREATED_ORDER) {
+    const settledDelta =
+      Number(SETTLED_STATUS[left.status]) -
+      Number(SETTLED_STATUS[right.status]);
+    if (settledDelta !== 0) {
+      return settledDelta;
+    }
   }
   if (left.runId === right.runId) {
     return 0;

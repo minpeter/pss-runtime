@@ -89,12 +89,15 @@ export class InMemoryDurableObjectStorage implements DurableObjectStorage {
     await previousTransaction;
 
     const transactionValues = cloneMap(this.#values);
-    let transactionAlarmTime = this.#alarmTime;
+    // Only alarm writes made by this transaction are committed, so an alarm
+    // set outside it while it was open survives.
+    let writtenAlarm: { readonly time: Date | number | undefined } | undefined;
     const transactionStorage = new TransactionalDurableObjectStorage({
       alarm: {
-        get: () => transactionAlarmTime,
+        get: () =>
+          writtenAlarm === undefined ? this.#alarmTime : writtenAlarm.time,
         set: (scheduledTime) => {
-          transactionAlarmTime = scheduledTime;
+          writtenAlarm = { time: scheduledTime };
         },
       },
       sql: this.sql,
@@ -106,7 +109,9 @@ export class InMemoryDurableObjectStorage implements DurableObjectStorage {
         fn(transactionStorage)
       );
       this.#values = transactionValues;
-      this.#alarmTime = transactionAlarmTime;
+      if (writtenAlarm !== undefined) {
+        this.#alarmTime = writtenAlarm.time;
+      }
       return result;
     } finally {
       releaseTransaction();

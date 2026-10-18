@@ -14,6 +14,7 @@ import { Agent } from "../../../agent/core/agent";
 import { agentNamespace } from "../../../agent/identity/namespace";
 import { describeAgentHostFaultContract } from "../../../contracts/agent-host-fault-contract";
 import { dispatchAgentNotification } from "../../../execution/dispatch/notification-dispatch";
+import { createThreadExecutionRunId } from "../../../execution/host/thread-execution-run-id";
 import {
   assistantMessage,
   createCallbackModel,
@@ -367,6 +368,85 @@ describe("createFileHost", () => {
       }
     }
   );
+
+  it("skips a run queued behind older pending input and finishes it on a later pass", async () => {
+    // Given two admitted sends whose precreated runs never started, with the
+    // newer run listed first
+    const directory = await tempDir();
+    try {
+      const host = createFileHost({ directory });
+      const threadKey = "thread:pending";
+      const olderRunId = createThreadExecutionRunId({
+        threadKey,
+        turnId: "msg-old",
+      });
+      const newerRunId = createThreadExecutionRunId({
+        threadKey,
+        turnId: "msg-new",
+      });
+      for (const [messageId, runId] of [
+        ["msg-old", olderRunId],
+        ["msg-new", newerRunId],
+      ] as const) {
+        await host.store.inputs.admit({
+          input: { text: `${messageId} prompt`, type: "user-input" },
+          kind: "send",
+          messageId,
+          threadKey,
+        });
+        await host.store.turns.create({
+          checkpointVersion: 0,
+          kind: "user-turn",
+          rootRunId: runId,
+          runId,
+          status: "queued",
+          threadKey,
+        });
+      }
+      await appendScheduledNodeRun(directory, newerRunId);
+      await appendScheduledNodeRun(directory, olderRunId, {
+        runAfterMs: 60_000,
+      });
+      const agent = new Agent({
+        host,
+        model: createCallbackModel(() =>
+          Promise.resolve([assistantMessage("REPLY")])
+        ),
+      });
+      const nowMs = Date.now() + 120_000;
+
+      // When
+      const first = await drainScheduledNodeWork({
+        agentForRun: () => agent,
+        directory,
+        nowMs,
+      });
+      // The older turn's live drain goes on to process msg-new; a later send
+      // queues behind it, so its end means msg-new's run has settled.
+      await collect(await agent.thread(threadKey).send("barrier"));
+      const second = await drainScheduledNodeWork({
+        agentForRun: () => agent,
+        directory,
+        nowMs,
+      });
+
+      // Then
+      expect(first.skippedRuns).toEqual([newerRunId]);
+      expect(first.ackedRuns).toEqual([olderRunId]);
+      expect(second.ackedRuns).toEqual([newerRunId]);
+      await expect(host.store.turns.get(olderRunId)).resolves.toMatchObject({
+        status: "completed",
+      });
+      await expect(host.store.turns.get(newerRunId)).resolves.toMatchObject({
+        status: "completed",
+      });
+      await expect(
+        listScheduledNodeRuns(directory, { nowMs })
+      ).resolves.toEqual([]);
+    } finally {
+      await removeTempDir(directory);
+    }
+  });
 
   it("throws deterministic errors for malformed scheduled work files", async () => {
     const directory = await tempDir();

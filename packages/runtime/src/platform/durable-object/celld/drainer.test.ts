@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Agent } from "../../../agent/core/agent";
+import { createThreadExecutionRunId } from "../../../execution/host/thread-execution-run-id";
 import type {
   HostStore,
   TurnRecord,
@@ -9,6 +10,7 @@ import {
   assistantMessage,
   createCallbackModel,
 } from "../../../testing/test-fixtures";
+import { collect } from "../../../thread/handle/test-support";
 import type { AgentEvent } from "../../../thread/protocol/events";
 import type { AgentTurn } from "../../../thread/protocol/turn";
 import { createInMemoryHost } from "../../memory/execution/execution-host";
@@ -220,6 +222,80 @@ describe("drainCelldScheduledWork", () => {
     await expect(
       listCelldScheduledRuns(storage, { nowMs: 1000 })
     ).resolves.toEqual(["run-1"]);
+  });
+
+  it("retries a run queued behind older pending input without aborting the pass", async () => {
+    // Given two admitted sends whose precreated runs never started, with the
+    // newer run listed first
+    const storage = createCelldTestStorage();
+    const scheduler = createCelldScheduler({ clock: () => 0, storage });
+    const host = createInMemoryHost();
+    const threadKey = "thread-pending";
+    const olderRunId = createThreadExecutionRunId({
+      threadKey,
+      turnId: "msg-old",
+    });
+    const newerRunId = createThreadExecutionRunId({
+      threadKey,
+      turnId: "msg-new",
+    });
+    for (const [messageId, runId] of [
+      ["msg-old", olderRunId],
+      ["msg-new", newerRunId],
+    ] as const) {
+      await host.store.inputs.admit({
+        input: { text: `${messageId} prompt`, type: "user-input" },
+        kind: "send",
+        messageId,
+        threadKey,
+      });
+      await host.store.turns.create({
+        checkpointVersion: 0,
+        kind: "user-turn",
+        rootRunId: runId,
+        runId,
+        status: "queued",
+        threadKey,
+      });
+    }
+    await scheduler.enqueueRun(newerRunId);
+    await scheduler.enqueueRun(olderRunId);
+    const agent = new Agent({
+      host,
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("REPLY")])
+      ),
+    });
+    const drainAt = (nowMs: number) =>
+      drainCelldScheduledWork({
+        agentForRun: () => ({
+          host,
+          resume: (runId) => agent.resume(runId),
+        }),
+        nowMs,
+        storage,
+      });
+
+    // When
+    const first = await drainAt(0);
+    // The older turn's live drain goes on to process msg-new; a later send
+    // queues behind it, so its end means msg-new's run has settled.
+    await collect(await agent.thread(threadKey).send("barrier"));
+    const second = await drainAt(1000);
+
+    // Then
+    expect(first.skippedRuns).toEqual([newerRunId]);
+    expect(first.ackedRuns).toEqual([olderRunId]);
+    expect(second.ackedRuns).toEqual([newerRunId]);
+    await expect(host.store.turns.get(olderRunId)).resolves.toMatchObject({
+      status: "completed",
+    });
+    await expect(host.store.turns.get(newerRunId)).resolves.toMatchObject({
+      status: "completed",
+    });
+    await expect(
+      listCelldScheduledRuns(storage, { nowMs: Number.MAX_SAFE_INTEGER })
+    ).resolves.toEqual([]);
   });
 });
 

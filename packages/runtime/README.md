@@ -1121,7 +1121,12 @@ or `null` when a duplicate queue/alarm delivery already claimed it.
 `agent.resume(runId)` also returns `null` when the host does not support durable
 resume (`agent.supportsResume === false`); it never throws for an unsupported
 host. Check `supportsResume` first when you need to distinguish an unsupported
-host from a missing or already-claimed run.
+host from a missing or already-claimed run. It also returns `null` after
+cancelling a crashed run that newer thread work superseded (a later completed
+run, or newer pending input while the run's own input is already consumed);
+that run's completed but uncommitted tool results are discarded. A thread that
+is busy, or whose run still waits behind older pending input, rejects with
+code `THREAD_CONTINUATION_BUSY`; schedulers should retry it on a later pass.
 
 Runtime-originated input is delivered through the host notification inbox and
 internal runtime paths. App code should use `thread.send()`, `thread.followUp()`, `thread.steer()`,

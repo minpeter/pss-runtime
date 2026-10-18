@@ -30,10 +30,9 @@ import {
   precreateThreadExecutionRun,
   type QueuedThreadExecutionRun,
 } from "../runtime/execution";
-import type { CompletedToolCall } from "../runtime/execution-checkpoints";
 import {
-  priorCompletedToolCalls,
-  recordedThreadVersion,
+  type CompletedToolCall,
+  toolCheckpointEvidence,
 } from "../runtime/execution-checkpoints";
 import {
   registerLiveThreadInput,
@@ -528,19 +527,9 @@ async function prepareClaimedContinuation(
     }
   }
   const committedHistory = context.state.modelSnapshot();
-  const committedVersion =
-    context.state.threadCheckpointReference().threadVersion;
   const turns = context.execution.executionHost?.store.turns;
-  // Provider tool call ids can recur across steps and turns, so a result
-  // counts as committed only when the thread was committed after its
-  // checkpoint. Step-end commits include the step's results, but a
-  // background compaction can commit mid-step, so the id must also appear.
-  const unrestorable = priorCompletedToolCalls(checkpoint).filter(
-    (call) =>
-      call.threadVersion === undefined ||
-      call.threadVersion === committedVersion ||
-      !historyHasToolResult(committedHistory, call.toolCallId)
-  );
+  const { latestResultCommitted, unrestorable } =
+    evaluateToolCheckpointEvidence(checkpoint, context.state.history);
   const [firstUnrestorable, ...restUnrestorable] = unrestorable;
   if (firstUnrestorable) {
     // Only the latest tool checkpoint can be restored; resuming without an
@@ -559,8 +548,8 @@ async function prepareClaimedContinuation(
   }
   const history = buildRecoveredContinuationHistory(
     committedHistory,
-    committedVersion,
-    checkpoint
+    checkpoint,
+    latestResultCommitted
   );
   if (history.length === 0) {
     if (turns) {
@@ -588,6 +577,56 @@ async function prepareClaimedContinuation(
     return;
   }
   return enqueuePreparedTurn(context, { continuation }, executionRun);
+}
+
+/**
+ * Provider tool call ids can recur across steps and turns, so a result is
+ * committed only when committed history holds more same-id results than the
+ * in-memory history held when it was checkpointed. Tool checkpoints without
+ * this evidence (older formats) cannot prove earlier results and fail closed.
+ * A shrunken count (a migration dropped results) re-adds the latest result
+ * rather than risk the model repeating its effects.
+ */
+function evaluateToolCheckpointEvidence(
+  checkpoint: Checkpoint | null,
+  committed: { toolResultCount(toolCallId: string): number }
+): {
+  readonly latestResultCommitted: boolean;
+  readonly unrestorable: CompletedToolCall[];
+} {
+  const evidence = toolCheckpointEvidence(checkpoint);
+  if (!evidence) {
+    return { latestResultCommitted: false, unrestorable: [] };
+  }
+  const unrestorable: CompletedToolCall[] = evidence.priorCompleted
+    ? []
+    : [evidence.toolCall];
+  for (const call of evidence.priorCompleted ?? []) {
+    if (
+      call.priorResultCount === undefined ||
+      committed.toolResultCount(call.toolCallId) <= call.priorResultCount
+    ) {
+      unrestorable.push(call);
+    }
+  }
+  const latestResultCount =
+    checkpoint?.phase === "after-tool"
+      ? evidence.toolCall.priorResultCount
+      : undefined;
+  if (
+    evidence.priorCompleted &&
+    checkpoint?.phase === "after-tool" &&
+    latestResultCount === undefined
+  ) {
+    unrestorable.push(evidence.toolCall);
+  }
+  return {
+    latestResultCommitted:
+      latestResultCount !== undefined &&
+      committed.toolResultCount(evidence.toolCall.toolCallId) >
+        latestResultCount,
+    unrestorable,
+  };
 }
 
 function busyError(message = "Thread has active or queued work."): Error {
@@ -660,27 +699,10 @@ export async function releaseClaimedContinuationRun(
   }
 }
 
-function historyHasToolResult(
-  history: readonly ModelMessage[],
-  toolCallId: string
-): boolean {
-  return history.some(
-    (message) =>
-      message.role === "tool" &&
-      Array.isArray(message.content) &&
-      message.content.some(
-        (part) =>
-          typeof part === "object" &&
-          part !== null &&
-          "toolCallId" in part &&
-          part.toolCallId === toolCallId
-      )
-  );
-}
-
 /**
- * Parks a crashed run whose earlier completed tool results never reached
- * committed history. It is a needs-recovery error so callers never requeue.
+ * Parks a crashed run whose earlier completed tool results cannot be shown
+ * to be in committed history. It is a needs-recovery error so callers never
+ * requeue.
  */
 class UnrestorableToolResultsError extends ToolExecutionNeedsRecoveryError {
   readonly runId: string;
@@ -698,11 +720,11 @@ class UnrestorableToolResultsError extends ToolExecutionNeedsRecoveryError {
       toolCallId: first.toolCallId,
       toolName: first.toolName,
     });
-    this.message = `Thread execution run ${runId} requires manual recovery: completed tool calls ${toolCalls
+    this.message = `Thread execution run ${runId} requires manual recovery: results of completed tool calls ${toolCalls
       .map((call) => `${call.toolName} (${call.toolCallId})`)
       .join(
         ", "
-      )} are missing from committed thread history and cannot be restored.`;
+      )} cannot be verified in committed thread history and cannot be restored.`;
     this.runId = runId;
     this.toolCalls = toolCalls;
   }
@@ -710,8 +732,8 @@ class UnrestorableToolResultsError extends ToolExecutionNeedsRecoveryError {
 
 function buildRecoveredContinuationHistory(
   baseHistory: readonly ModelMessage[],
-  committedVersion: string | null,
-  checkpoint: Checkpoint | null
+  checkpoint: Checkpoint | null,
+  latestResultCommitted: boolean
 ): ModelMessage[] {
   const unrecoverableTool = manualRecoveryToolCheckpoint(checkpoint);
   if (unrecoverableTool) {
@@ -737,13 +759,7 @@ function buildRecoveredContinuationHistory(
   const toolCallId = candidate.toolCallId;
   const toolName = candidate.toolName;
   const rawOutput = "output" in candidate ? candidate.output : null;
-  // Unchanged thread version: nothing committed the result, even if an older
-  // call reused its id. Otherwise the id shows whether the commit included it.
-  const resultVersion = recordedThreadVersion(checkpoint);
-  if (
-    (resultVersion === undefined || resultVersion !== committedVersion) &&
-    historyHasToolResult(history, toolCallId)
-  ) {
+  if (latestResultCommitted) {
     return history;
   }
   history.push(

@@ -148,8 +148,11 @@ export function listDueWork<T>(
  * Applies `mutate` to scheduled-work rows and re-arms the alarm for the
  * earliest persisted due time in one storage transaction, so the alarm never
  * reflects rows another transaction has since changed. A transaction without
- * the needed alarm method gets the storage-level alarm write after commit:
- * written inside, it would be replaced by the transaction's buffered alarm.
+ * setAlarm gets the storage-level write after commit: written inside, it would
+ * be replaced by the transaction's buffered alarm. A transaction without
+ * deleteAlarm leaves the alarm in place: deleting after commit could erase an
+ * alarm a concurrent transaction just armed, while a stale alarm only costs
+ * one empty drain, which re-arms.
  */
 export async function armNextAlarm(
   storage: CelldDurableObjectStorage,
@@ -162,10 +165,7 @@ export async function armNextAlarm(
       await mutate?.(transaction);
       const dueAtMs = earliestDueAt(transaction, prefix);
       if (dueAtMs === undefined) {
-        if (transaction.deleteAlarm === undefined) {
-          return () => storage.deleteAlarm();
-        }
-        await transaction.deleteAlarm();
+        await transaction.deleteAlarm?.();
         return;
       }
       if (transaction.setAlarm === undefined) {

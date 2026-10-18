@@ -202,11 +202,19 @@ async function resumeAndDrain(
   onEvent: CelldScheduledWorkDrainOptions["onEvent"]
 ): Promise<boolean> {
   const agent = await agentForRun(context);
-  // Manual recovery rejects resume after parking the run; once the record is
-  // settled the scheduled work can never make progress, so it is acked.
+  // Manual recovery rejects resume after parking the run, and a run queued
+  // behind older pending input rejects busy after requeueing itself. Both fall
+  // through to the record check: settled work is acked, queued work retried.
   const turn = await agent
     .resume(context.runId)
     .catch(async (error: unknown) => {
+      if (
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "THREAD_CONTINUATION_BUSY"
+      ) {
+        return null;
+      }
       const record = await agent.host.store.turns.get(context.runId);
       if (record !== null && isSettled(record.status)) {
         return null;

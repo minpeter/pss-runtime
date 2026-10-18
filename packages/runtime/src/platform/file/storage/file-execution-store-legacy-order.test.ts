@@ -1,4 +1,4 @@
-import { readFile, utimes, writeFile } from "node:fs/promises";
+import { cp, readFile, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { Agent } from "../../../agent/core/agent";
@@ -14,6 +14,10 @@ import { encodeThreadSnapshot } from "../../../thread/state/snapshot";
 import { createInMemoryHost } from "../../memory";
 import { FileExecutionStore } from "./file-execution-store";
 import {
+  GENERATIONS_DIRECTORY,
+  writeCurrentGeneration,
+} from "./file-execution-store/generation";
+import {
   base64Url,
   checkpointRecord,
   currentDataDirectory,
@@ -23,13 +27,24 @@ import {
 
 const LEGACY_EPOCH_SECONDS = 1_700_000_000;
 
-// Files are created in `creation` order but their mtimes follow `mtimeOrder`;
-// both disagree with lexical runId order, so only an mtime-based fallback
-// yields `mtimeOrder`.
-const legacyRuns = {
-  creation: ["run-m", "run-a", "run-z", "run-c"],
-  mtimeOrder: ["run-z", "run-m", "run-c", "run-a"],
-} as const;
+const legacyStatuses: readonly (readonly [string, TurnRecord["status"]])[] = [
+  ["run-a", "completed"],
+  ["run-b", "running"],
+  ["run-c", "error"],
+  ["run-d", "queued"],
+  ["run-e", "needs-recovery"],
+  ["run-f", "cancelled"],
+];
+
+// Unsettled legacy runs first, then settled ones, each group by runId.
+const expectedLegacyOrder = [
+  "run-b",
+  "run-d",
+  "run-a",
+  "run-c",
+  "run-e",
+  "run-f",
+];
 
 type StoredRunRecord = TurnRecord & { readonly createdOrder?: number };
 
@@ -61,115 +76,145 @@ async function readStoredRun(
   ) as StoredRunRecord;
 }
 
-/** Writes run files in origin/main format with an explicit mtime each. */
+/**
+ * Writes run files in origin/main format. Each file's mtime is set from
+ * `mtimeRank` so that file metadata contradicts the expected order.
+ */
 async function writeRunFiles(
   dataDirectory: string,
   files: readonly {
-    readonly mtimeSeconds: number;
+    readonly mtimeRank: number;
     readonly record: StoredRunRecord;
   }[]
 ): Promise<void> {
-  for (const { mtimeSeconds, record } of files) {
+  for (const { mtimeRank, record } of files) {
     const file = runFile(dataDirectory, record.runId);
     await writeFile(file, `${JSON.stringify(record, null, 2)}\n`);
+    const mtimeSeconds = LEGACY_EPOCH_SECONDS + mtimeRank * 60;
     await utimes(file, mtimeSeconds, mtimeSeconds);
   }
 }
 
-async function createStoreWithLegacyRuns(): Promise<{
+async function createEmptyStore(): Promise<{
+  readonly dataDirectory: string;
   readonly directory: string;
   readonly store: FileExecutionStore;
 }> {
   const directory = await tempDir();
   const store = new FileExecutionStore(directory);
   await store.turns.create(runRecord("seed", { threadKey: "seed-thread" }));
+  return {
+    dataDirectory: await currentDataDirectory(directory),
+    directory,
+    store,
+  };
+}
+
+async function createStoreWithLegacyRuns(): Promise<{
+  readonly directory: string;
+  readonly store: FileExecutionStore;
+}> {
+  const { dataDirectory, directory, store } = await createEmptyStore();
   await writeRunFiles(
-    await currentDataDirectory(directory),
-    legacyRuns.creation.map((runId) => ({
-      mtimeSeconds:
-        LEGACY_EPOCH_SECONDS + legacyRuns.mtimeOrder.indexOf(runId) * 60,
-      record: runRecord(runId, { status: "completed" }),
+    dataDirectory,
+    legacyStatuses.map(([runId, status]) => ({
+      // Newest mtime for the run expected first.
+      mtimeRank: -expectedLegacyOrder.indexOf(runId),
+      record: runRecord(runId, { status }),
     }))
   );
   return { directory, store };
 }
 
+/**
+ * Commits a generation the way origin/main did: a copy that does not preserve
+ * timestamps, so every run file's mtime becomes arbitrary.
+ */
+async function copyGenerationLikeOriginMain(directory: string): Promise<void> {
+  const source = await currentDataDirectory(directory);
+  const generationId = "origin-main-copy";
+  const target = join(directory, GENERATIONS_DIRECTORY, generationId);
+  await cp(source, target, { recursive: true });
+  for (const [index, [runId]] of legacyStatuses.entries()) {
+    const mtimeSeconds = LEGACY_EPOCH_SECONDS + ((index * 7) % 5) * 60;
+    await utimes(runFile(target, runId), mtimeSeconds, mtimeSeconds);
+  }
+  await writeCurrentGeneration(directory, generationId);
+}
+
 describe("FileExecutionStore legacy run ordering", () => {
-  it("orders runs without createdOrder by mtime, not file creation or runId", async () => {
-    // Given legacy run files whose creation, mtime, and lexical orders differ
-    const { directory, store } = await createStoreWithLegacyRuns();
-
-    // When the thread runs are listed
-    // Then they follow mtime order
-    await expect(listThreadRuns(store)).resolves.toEqual(legacyRuns.mtimeOrder);
-
-    // When the oldest legacy run is rewritten and a modern run is created
-    await store.turns.update(
-      runRecord("run-z", { output: "rewritten", status: "completed" })
-    );
+  it("orders legacy runs before modern ones, unsettled before settled, ignoring file times", async () => {
+    // Given legacy runs whose mtimes reverse the expected order, and a modern
+    // run created after the upgrade with the lexically smallest runId
+    const { store } = await createStoreWithLegacyRuns();
     await store.turns.create(runRecord("run-0-modern"));
 
-    // Then the rewrite persists its fallback order and the modern run sorts last
-    expect(typeof (await readStoredRun(directory, "run-z")).createdOrder).toBe(
-      "number"
-    );
+    // When the thread runs are listed
+    // Then legacy runs come first, unsettled before settled, by runId
     await expect(listThreadRuns(store)).resolves.toEqual([
-      ...legacyRuns.mtimeOrder,
+      ...expectedLegacyOrder,
       "run-0-modern",
     ]);
   });
 
-  it("keeps legacy and modern order across store.transaction()", async () => {
-    // Given legacy runs and a modern run created after the upgrade
-    const { store } = await createStoreWithLegacyRuns();
+  it("keeps a rewritten legacy run in the legacy group with a persisted marker", async () => {
+    // Given legacy runs and a modern run
+    const { directory, store } = await createStoreWithLegacyRuns();
     await store.turns.create(runRecord("run-0-modern"));
 
-    // When an unrelated transaction copies the data directory
+    // When an unsettled legacy run is rewritten as completed
+    await store.turns.update(runRecord("run-b", { status: "completed" }));
+
+    // Then it persists the legacy marker and moves among settled legacy runs,
+    // never after the modern run
+    expect((await readStoredRun(directory, "run-b")).createdOrder).toBe(0);
+    await expect(listThreadRuns(store)).resolves.toEqual([
+      "run-d",
+      "run-a",
+      "run-b",
+      "run-c",
+      "run-e",
+      "run-f",
+      "run-0-modern",
+    ]);
+  });
+
+  it("keeps order across store.transaction() and origin/main-style copies", async () => {
+    // Given legacy runs and a modern run
+    const { directory, store } = await createStoreWithLegacyRuns();
+    await store.turns.create(runRecord("run-0-modern"));
+    const expected = [...expectedLegacyOrder, "run-0-modern"];
+
+    // When an unrelated transaction commits a new generation
     await store.transaction(async (tx) => {
       await tx.turns.create(runRecord("other", { threadKey: "other-thread" }));
     });
 
-    // Then the copied legacy files keep their order before the modern run
-    await expect(listThreadRuns(store)).resolves.toEqual([
-      ...legacyRuns.mtimeOrder,
-      "run-0-modern",
-    ]);
-  });
+    // Then the order is unchanged
+    await expect(listThreadRuns(store)).resolves.toEqual(expected);
 
-  it("keeps legacy and modern order across store.checkpoints.append()", async () => {
-    // Given legacy runs and a modern run created after the upgrade
-    const { store } = await createStoreWithLegacyRuns();
-    await store.turns.create(runRecord("run-0-modern"));
+    // When a generation is copied without preserving file times
+    await copyGenerationLikeOriginMain(directory);
 
-    // When a checkpoint append commits a new generation
-    await store.checkpoints.append(checkpointRecord("seed", 1), {
-      expectedVersion: 0,
-    });
-
-    // Then the copied legacy files keep their order before the modern run
-    await expect(listThreadRuns(store)).resolves.toEqual([
-      ...legacyRuns.mtimeOrder,
-      "run-0-modern",
-    ]);
+    // Then the order is still unchanged
+    await expect(listThreadRuns(store)).resolves.toEqual(expected);
   });
 
   it("keeps a persisted createdOrder over mtime and runId", async () => {
     // Given run files whose persisted createdOrder contradicts both their
     // mtime order and their lexical runId order
-    const directory = await tempDir();
-    const store = new FileExecutionStore(directory);
-    await store.turns.create(runRecord("seed", { threadKey: "seed-thread" }));
-    await writeRunFiles(await currentDataDirectory(directory), [
+    const { dataDirectory, store } = await createEmptyStore();
+    await writeRunFiles(dataDirectory, [
       {
-        mtimeSeconds: LEGACY_EPOCH_SECONDS,
+        mtimeRank: 0,
         record: { ...runRecord("run-a-persisted-third"), createdOrder: 3000 },
       },
       {
-        mtimeSeconds: LEGACY_EPOCH_SECONDS + 60,
+        mtimeRank: 1,
         record: { ...runRecord("run-m-persisted-second"), createdOrder: 2000 },
       },
       {
-        mtimeSeconds: LEGACY_EPOCH_SECONDS + 120,
+        mtimeRank: 2,
         record: { ...runRecord("run-z-persisted-first"), createdOrder: 1000 },
       },
     ]);
@@ -190,32 +235,31 @@ describe("FileExecutionStore legacy run ordering", () => {
     // When update() writes a run that did not exist
     await store.turns.update(runRecord("run-0-upserted"));
 
-    // Then it persists a creation order that sorts after the legacy runs
+    // Then it persists a real creation order that sorts after legacy runs
     expect(
-      typeof (await readStoredRun(directory, "run-0-upserted")).createdOrder
-    ).toBe("number");
+      (await readStoredRun(directory, "run-0-upserted")).createdOrder
+    ).toBeGreaterThan(0);
     await expect(listThreadRuns(store)).resolves.toEqual([
-      ...legacyRuns.mtimeOrder,
+      ...expectedLegacyOrder,
       "run-0-upserted",
     ]);
   });
 });
 
 describe("FileExecutionStore legacy runs during recovery", () => {
-  async function createCrashedModernRun(threadKey: string): Promise<{
+  async function createLegacyThread(
+    threadKey: string,
+    files: readonly {
+      readonly mtimeRank: number;
+      readonly record: StoredRunRecord;
+    }[]
+  ): Promise<{
     readonly calls: () => number;
     readonly restarted: Agent;
     readonly store: FileExecutionStore;
   }> {
-    const directory = await tempDir();
-    const store = new FileExecutionStore(directory);
-    await store.turns.create(runRecord("seed", { threadKey: "seed-thread" }));
-    await writeRunFiles(await currentDataDirectory(directory), [
-      {
-        mtimeSeconds: LEGACY_EPOCH_SECONDS,
-        record: runRecord("legacy-r0", { status: "completed", threadKey }),
-      },
-    ]);
+    const { dataDirectory, store } = await createEmptyStore();
+    await writeRunFiles(dataDirectory, files);
     await store.threads.commit(
       threadKey,
       {
@@ -226,9 +270,6 @@ describe("FileExecutionStore legacy runs during recovery", () => {
         ]),
       },
       { expectedVersion: null }
-    );
-    await store.turns.create(
-      runRecord("modern-r1", { status: "running", threadKey })
     );
     // Another thread's checkpoint commits a new generation after the crash.
     await store.checkpoints.append(checkpointRecord("seed", 1), {
@@ -249,40 +290,58 @@ describe("FileExecutionStore legacy runs during recovery", () => {
     };
   }
 
-  it("agent.resume() resumes a crashed modern run instead of cancelling it", async () => {
-    // Given an upgraded thread: a completed legacy run, then a crashed modern run
-    const { calls, restarted, store } =
-      await createCrashedModernRun("legacy-resume");
+  it("thread.continue() does not resume a stale crashed legacy run once a legacy run completed", async () => {
+    // Given a completed legacy run and an older crashed legacy run whose file
+    // time and runId both look newer
+    const threadKey = "legacy-stale";
+    const { calls, restarted, store } = await createLegacyThread(threadKey, [
+      {
+        mtimeRank: 0,
+        record: runRecord("legacy-a-completed", {
+          status: "completed",
+          threadKey,
+        }),
+      },
+      {
+        mtimeRank: 1,
+        record: runRecord("legacy-z-crashed", { status: "running", threadKey }),
+      },
+    ]);
 
-    // When a restarted agent resumes the modern run
-    const resumed = await restarted.resume("modern-r1");
+    // When a restarted agent continues the thread
+    const turn = await restarted.thread(threadKey).continue();
 
-    // Then it replies instead of being cancelled as superseded
-    if (!resumed) {
-      throw new Error("Expected the crashed modern run to resume.");
-    }
-    expect(eventTypes(await collect(resumed))).toContain("turn-end");
-    expect(calls()).toBe(1);
-    await expect(store.turns.get("modern-r1")).resolves.toMatchObject({
-      status: "completed",
+    // Then nothing is recovered
+    expect(turn).toBeUndefined();
+    expect(calls()).toBe(0);
+    await expect(store.turns.get("legacy-z-crashed")).resolves.toMatchObject({
+      status: "running",
     });
   });
 
-  it("thread.continue() recovers a crashed modern run after a legacy run", async () => {
-    // Given an upgraded thread: a completed legacy run, then a crashed modern run
-    const { calls, restarted, store } =
-      await createCrashedModernRun("legacy-continue");
+  it("thread.continue() recovers a crashed legacy run when no legacy run settled", async () => {
+    // Given a single crashed legacy run
+    const threadKey = "legacy-crashed";
+    const { calls, restarted, store } = await createLegacyThread(threadKey, [
+      {
+        mtimeRank: 0,
+        record: runRecord("legacy-crashed-r0", {
+          status: "running",
+          threadKey,
+        }),
+      },
+    ]);
 
     // When a restarted agent continues the thread
-    const turn = await restarted.thread("legacy-continue").continue();
+    const turn = await restarted.thread(threadKey).continue();
 
-    // Then the modern run is recovered
+    // Then the crashed run is recovered
     if (!turn) {
-      throw new Error("Expected thread.continue() to recover the modern run.");
+      throw new Error("Expected thread.continue() to recover the legacy run.");
     }
     expect(eventTypes(await collect(turn))).toContain("turn-end");
     expect(calls()).toBe(1);
-    await expect(store.turns.get("modern-r1")).resolves.toMatchObject({
+    await expect(store.turns.get("legacy-crashed-r0")).resolves.toMatchObject({
       status: "completed",
     });
   });

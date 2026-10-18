@@ -18,13 +18,16 @@ import {
   type ThreadToolResultInterceptor,
 } from "./execution-checkpoints";
 
+interface RunContext {
+  readonly context: RuntimeToolExecutionContext;
+  readonly host: InMemoryHost;
+  readonly state: ThreadState;
+}
+
 async function createRunContext(
   runId: string,
   interceptToolResult?: ThreadToolResultInterceptor
-): Promise<{
-  readonly context: RuntimeToolExecutionContext;
-  readonly host: InMemoryHost;
-}> {
+): Promise<RunContext> {
   const host = createInMemoryHost();
   await host.store.turns.create({
     checkpointVersion: 0,
@@ -34,14 +37,15 @@ async function createRunContext(
     status: "running",
     threadKey: "thread",
   });
+  const state = new ThreadState({ key: "thread", store: host.store.threads });
   const context = createThreadToolExecutionContext({
     executionHost: host,
     ...(interceptToolResult ? { interceptToolResult } : {}),
     leaseId: null,
     runId,
-    state: new ThreadState({ key: "thread", store: host.store.threads }),
+    state,
   });
-  return { context, host };
+  return { context, host, state };
 }
 
 function toolCall(
@@ -287,4 +291,128 @@ describe("thread tool execution checkpoints", () => {
     );
     expect(modelCalls).toBe(0);
   });
+
+  it("records same-id results already in history on each after-tool checkpoint", async () => {
+    // Given: history holds one earlier result for provider id call_0.
+    const runId = "result-count";
+    const { context, host, state } = await createRunContext(runId);
+    await state.ensureLoaded();
+    appendToolStep(state, "call_0", "deploy", "EARLIER");
+
+    // When: a later call_0 result is checkpointed.
+    await completeTool(context, toolCall(runId, "call_0", "deploy"), "LATER");
+
+    // Then: the checkpoint records the one earlier same-id result.
+    await expect(host.store.checkpoints.latest(runId)).resolves.toMatchObject({
+      phase: "after-tool",
+      runtimeState: { priorResultCount: 1, toolCallId: "call_0" },
+    });
+  });
+
+  it("restores both results when a background compaction committed an earlier step mid-step", async () => {
+    // Given: step 1's call_0 result reached history at step end, and a
+    // background compaction committed it while step 2's call_0 ran.
+    const runId = "mid-step-compaction-committed";
+    const { context, host, state } = await commitLoadedThread(runId);
+    const reused = toolCall(runId, "call_0", "deploy");
+    await completeTool(context, reused, "STEP1_RESULT");
+    appendToolStep(state, "call_0", "deploy", "STEP1_RESULT");
+    await expect(state.compact(compactFirstMessage)).resolves.toBe(true);
+    await completeTool(context, reused, "STEP2_RESULT");
+
+    // When: the process crashes and the thread is continued.
+    const histories: string[] = [];
+    const agent = await createAgent({
+      host,
+      model: createCallbackModel(({ history }) => {
+        histories.push(JSON.stringify(history));
+        return Promise.resolve([assistantMessage("RECOVERED")]);
+      }),
+    });
+    const turn = await agent.thread("thread").continue();
+    if (!turn) {
+      throw new Error("Expected the crashed run to continue.");
+    }
+    for await (const _event of turn.events()) {
+      // Drain the recovered turn.
+    }
+
+    // Then: each result reaches the model exactly once.
+    const [history = ""] = histories;
+    expect(history.split("STEP1_RESULT")).toHaveLength(2);
+    expect(history.split("STEP2_RESULT")).toHaveLength(2);
+  });
+
+  it("fails closed when a background compaction committed before a reused-id result reached history", async () => {
+    // Given: a previous turn committed call_0; this turn's call_0 completed,
+    // and a background compaction committed before step end appended it.
+    const runId = "mid-step-compaction-uncommitted";
+    const { context, host, state } = await commitLoadedThread(runId);
+    appendToolStep(state, "call_0", "lookup", "OLD_RESULT");
+    await state.commit();
+    const reused = toolCall(runId, "call_0", "deploy");
+    await completeTool(context, reused, "DEPLOYED");
+    await expect(state.compact(compactFirstMessage)).resolves.toBe(true);
+    appendToolStep(state, "call_0", "deploy", "DEPLOYED");
+    await context.beforeTool?.(toolCall(runId, "call_1", "verify"));
+
+    // When: the process crashes and the thread is continued.
+    let modelCalls = 0;
+    const agent = await createAgent({
+      host,
+      model: createCallbackModel(() => {
+        modelCalls += 1;
+        return Promise.resolve([assistantMessage("UNREACHABLE")]);
+      }),
+    });
+
+    // Then: recovery parks the run instead of replaying deploy.
+    await expect(agent.thread("thread").continue()).rejects.toBeInstanceOf(
+      ToolExecutionNeedsRecoveryError
+    );
+    expect(modelCalls).toBe(0);
+    await expect(host.store.turns.get(runId)).resolves.toMatchObject({
+      status: "needs-recovery",
+    });
+  });
 });
+
+const compactFirstMessage = {
+  endSeqExclusive: 1,
+  startSeq: 0,
+  summary: "earlier conversation",
+};
+
+async function commitLoadedThread(runId: string): Promise<RunContext> {
+  const run = await createRunContext(runId);
+  await run.host.store.threads.commit(
+    "thread",
+    { state: encodeThreadSnapshot([{ content: "go", role: "user" }]) },
+    { expectedVersion: null }
+  );
+  await run.state.ensureLoaded();
+  return run;
+}
+
+function appendToolStep(
+  state: ThreadState,
+  toolCallId: string,
+  toolName: string,
+  value: string
+): void {
+  state.history.appendModelMessage({
+    content: [{ input: {}, toolCallId, toolName, type: "tool-call" }],
+    role: "assistant",
+  });
+  state.history.appendModelMessage({
+    content: [
+      {
+        output: { type: "text", value },
+        toolCallId,
+        toolName,
+        type: "tool-result",
+      },
+    ],
+    role: "tool",
+  });
+}

@@ -136,10 +136,12 @@ export class Agent implements AsyncDisposable {
   /**
    * Resume a durable run by id. Returns the resumed `AgentTurn`, or `null` when
    * the host does not support durable resume (`supportsResume === false`), the
-   * run id is unknown to this namespace, or a duplicate queue/alarm delivery
-   * already claimed it. This never throws for a missing host; check
-   * `supportsResume` first when you need to distinguish unsupported from
-   * not-found.
+   * run id is unknown to this namespace, a duplicate queue/alarm delivery
+   * already claimed it, or newer thread work superseded the run (the run is
+   * then cancelled, including any completed but uncommitted tool results).
+   * This never throws for a missing host; check `supportsResume` first when you
+   * need to distinguish unsupported from not-found. Busy threads reject with
+   * code `THREAD_CONTINUATION_BUSY`; retry those later.
    */
   async resume(
     runId: string,

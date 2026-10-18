@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { createDeferred } from "../../../contracts/execution-store/fixtures";
 import type { DurableObjectTransactionStorage } from "../storage/durable-object/durable-object-storage";
+import { withTransaction } from "../storage/durable-object/sql-access";
 import { createCelldSqliteTestStorage } from "./celld-sqlite-test-storage";
 import { createCelldScheduler, listCelldScheduledRuns } from "./scheduler";
 import { ackCelldScheduledRun } from "./scheduler-claims";
 import type { CelldDurableObjectStorage } from "./scheduler-support";
 
-// createCelldSqliteTestStorage buffers a transaction's alarm and commits it on
-// success, like Durable Object storage, so an outer-storage alarm write made
-// inside a transaction would be overwritten by the commit.
+// createCelldSqliteTestStorage commits a transaction's own alarm writes on
+// success, like Durable Object storage.
 describe("Celld scheduling with transactions that only expose setAlarm", () => {
   it("enqueues and arms the earliest persisted due time", async () => {
     // Given
@@ -38,7 +39,7 @@ describe("Celld scheduling with transactions that only expose setAlarm", () => {
     await expect(storage.getAlarm()).resolves.toBe(100);
   });
 
-  it("re-arms and clears the storage alarm after acks commit", async () => {
+  it("re-arms after acks and leaves an alarm it cannot delete transactionally", async () => {
     // Given
     const storage = setAlarmOnlyTransactions(createCelldSqliteTestStorage());
     const scheduler = createCelldScheduler({ clock: () => 0, storage });
@@ -50,9 +51,43 @@ describe("Celld scheduling with transactions that only expose setAlarm", () => {
     const alarmAfterFirstAck = await storage.getAlarm();
     await ackCelldScheduledRun(storage, "late");
 
-    // Then
+    // Then the stale alarm only costs one empty drain
     expect(alarmAfterFirstAck).toBe(500);
-    await expect(storage.getAlarm()).resolves.toBeNull();
+    await expect(storage.getAlarm()).resolves.toBe(500);
+    await expect(
+      listCelldScheduledRuns(storage, { nowMs: Number.MAX_SAFE_INTEGER })
+    ).resolves.toEqual([]);
+  });
+
+  it("keeps an alarm a concurrent store transaction armed after the last ack", async () => {
+    // Given
+    const deleteEntered = createDeferred();
+    const deleteGate = createDeferred();
+    const storage = setAlarmOnlyTransactions(
+      createCelldSqliteTestStorage({
+        deleteAlarm: async () => {
+          deleteEntered.resolve();
+          await deleteGate.promise;
+        },
+      })
+    );
+    const scheduler = createCelldScheduler({ clock: () => 7, storage });
+    await scheduler.enqueueRun("last", { runAfterMs: 500 });
+
+    // When
+    const ack = ackCelldScheduledRun(storage, "last");
+    await Promise.race([ack, deleteEntered.promise]);
+    await withTransaction(storage, (tx) =>
+      scheduler.createTransactionScheduler(tx).enqueueRun("fresh")
+    );
+    deleteGate.resolve();
+    await ack;
+
+    // Then
+    await expect(
+      listCelldScheduledRuns(storage, { nowMs: 7 })
+    ).resolves.toEqual(["fresh"]);
+    await expect(storage.getAlarm()).resolves.toBe(7);
   });
 });
 

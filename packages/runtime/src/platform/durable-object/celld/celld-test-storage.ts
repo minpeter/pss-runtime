@@ -27,30 +27,33 @@ export function createCelldTestStorage(
       await inner.setAlarm(scheduledTime);
     },
     sql: inner.sql,
-    // Like Durable Object storage, a transaction's alarm writes are buffered
-    // and become visible only when the transaction commits.
+    // Like Durable Object storage, only alarm writes made by a transaction are
+    // committed, and only when it succeeds.
     transaction: <T>(
       operation: (storage: DurableObjectTransactionStorage) => Promise<T>
     ): Promise<T> =>
       inner.transaction(async (transaction) => {
-        let transactionAlarm = alarmTime;
+        let written: { readonly alarm: number | null } | undefined;
         const result = await operation({
           delete: (key) => transaction.delete(key),
           deleteAlarm: async () => {
-            transactionAlarm = null;
+            written = { alarm: null };
             await transaction.deleteAlarm?.();
           },
           get: (key) => transaction.get(key),
-          getAlarm: () => Promise.resolve(transactionAlarm),
+          getAlarm: () =>
+            Promise.resolve(written === undefined ? alarmTime : written.alarm),
           put: (key, value) => transaction.put(key, value),
           setAlarm: async (scheduledTime) => {
             await options.setAlarm?.(scheduledTime);
-            transactionAlarm = alarmValue(scheduledTime);
+            written = { alarm: alarmValue(scheduledTime) };
             await transaction.setAlarm?.(scheduledTime);
           },
           sql: transaction.sql ?? inner.sql,
         });
-        alarmTime = transactionAlarm;
+        if (written !== undefined) {
+          alarmTime = written.alarm;
+        }
         return result;
       }),
     transactionSync: inner.transactionSync.bind(inner),

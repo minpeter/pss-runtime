@@ -176,6 +176,8 @@ describe("durable lifecycle characterization", () => {
         runtimeState: {
           input: { q: "status" },
           output: "TOOL_OUTPUT_RETAINED",
+          priorCompletedToolCalls: [],
+          priorResultCount: 0,
           toolCallId: "call-1",
           toolName: "lookup",
         },
@@ -262,6 +264,8 @@ describe("durable lifecycle characterization", () => {
           hasOutput: true,
           input: { step: 2 },
           output: null,
+          priorCompletedToolCalls: [],
+          priorResultCount: 0,
           toolCallId: "call-2",
           toolName: "void_tool",
         },

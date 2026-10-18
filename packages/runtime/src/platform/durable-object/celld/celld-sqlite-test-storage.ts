@@ -107,34 +107,34 @@ export function createCelldSqliteTestStorage(
       });
       openTransactions += 1;
       await previous;
-      const previousAlarm = alarm;
-      let nextAlarm = alarm;
+      // Like Durable Object storage, only alarm writes made by this
+      // transaction are committed, and only when it succeeds.
+      let written: { readonly alarm: number | null } | undefined;
       try {
         const result = await sql.transaction(() =>
           operation({
             delete: storage.delete,
             deleteAlarm: async () => {
               await options.deleteAlarm?.();
-              nextAlarm = null;
+              written = { alarm: null };
             },
             get: storage.get,
             getAlarm: async () => {
               await options.getAlarm?.();
-              return nextAlarm;
+              return written === undefined ? alarm : written.alarm;
             },
             put: storage.put,
             setAlarm: async (scheduledTime) => {
               await options.setAlarm?.(scheduledTime);
-              nextAlarm = alarmValue(scheduledTime);
+              written = { alarm: alarmValue(scheduledTime) };
             },
             sql,
           })
         );
-        alarm = nextAlarm;
+        if (written !== undefined) {
+          alarm = written.alarm;
+        }
         return result;
-      } catch (error) {
-        alarm = previousAlarm;
-        throw error;
       } finally {
         openTransactions -= 1;
         release();

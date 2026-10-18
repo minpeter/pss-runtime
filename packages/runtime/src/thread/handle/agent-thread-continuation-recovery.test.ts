@@ -16,6 +16,8 @@ import {
   createCallbackModel,
   eventTypes,
 } from "../../testing/test-fixtures";
+import type { AgentTurn } from "../protocol/turn";
+import type { ThreadMigrationSnapshot } from "../state/migrations";
 import { encodeThreadSnapshot } from "../state/snapshot";
 import { DisposedResourceError } from "../state/thread-errors";
 import { AgentThread } from "./agent-thread";
@@ -129,7 +131,7 @@ describe("thread continuation admission", () => {
 describe("crash recovery with earlier completed tools", () => {
   async function seedMultiToolCrash(runId: string, threadKey: string) {
     const host = createInMemoryHost();
-    const initial = await host.store.threads.commit(
+    await host.store.threads.commit(
       threadKey,
       {
         state: encodeThreadSnapshot([
@@ -158,15 +160,16 @@ describe("crash recovery with earlier completed tools", () => {
           priorCompletedToolCalls: [
             {
               checkpointVersion: 0,
-              threadVersion: initial.ok ? initial.version : null,
+              priorResultCount: 0,
               toolCallId: "call-deploy",
               toolName: "deploy",
             },
           ],
+          priorResultCount: 0,
           toolCallId: "call-verify",
           toolName: "verify",
         },
-        threadSnapshot: { threadVersion: initial.ok ? initial.version : null },
+        threadSnapshot: {},
         version: 1,
       },
       { expectedVersion: 0 }
@@ -539,31 +542,22 @@ describe("agent.resume with newer pending input", () => {
 
 describe("crash recovery with reused provider tool call ids", () => {
   async function seedCrashedRun({
-    commits,
+    checkpoint,
+    history,
     runId,
     threadKey,
-    toolCheckpoint,
   }: {
-    readonly commits: readonly (readonly ModelMessage[])[];
+    readonly checkpoint?: Pick<Checkpoint, "phase" | "runtimeState">;
+    readonly history: readonly ModelMessage[];
     readonly runId: string;
     readonly threadKey: string;
-    readonly toolCheckpoint: (
-      versions: readonly string[]
-    ) => Pick<Checkpoint, "phase" | "runtimeState" | "threadSnapshot">;
-  }) {
+  }): Promise<InMemoryHost> {
     const host = createInMemoryHost();
-    const versions: string[] = [];
-    for (const history of commits) {
-      const committed = await host.store.threads.commit(
-        threadKey,
-        { state: encodeThreadSnapshot([...history]) },
-        { expectedVersion: versions.at(-1) ?? null }
-      );
-      if (!committed.ok) {
-        throw new Error("Expected the seed commit to succeed.");
-      }
-      versions.push(committed.version);
-    }
+    await host.store.threads.commit(
+      threadKey,
+      { state: encodeThreadSnapshot([...history]) },
+      { expectedVersion: null }
+    );
     await host.store.turns.create({
       checkpointVersion: 0,
       kind: "user-turn",
@@ -572,15 +566,18 @@ describe("crash recovery with reused provider tool call ids", () => {
       status: "running",
       threadKey,
     });
-    await host.store.checkpoints.append(
-      {
-        ...toolCheckpoint(versions),
-        checkpointId: `${runId}:1:tool`,
-        runId,
-        version: 1,
-      },
-      { expectedVersion: 0 }
-    );
+    if (checkpoint) {
+      await host.store.checkpoints.append(
+        {
+          ...checkpoint,
+          checkpointId: `${runId}:1:tool`,
+          runId,
+          threadSnapshot: {},
+          version: 1,
+        },
+        { expectedVersion: 0 }
+      );
+    }
     return host;
   }
 
@@ -625,24 +622,58 @@ describe("crash recovery with reused provider tool call ids", () => {
     { content: "second", role: "user" },
   ];
 
+  // Commits the recovering process makes before reading committed history.
+  const interveningCommits = [
+    { name: "no intervening commit" },
+    {
+      name: "a thread migration",
+      threadMigrations: [
+        {
+          id: "identity",
+          migrate: (snapshot: ThreadMigrationSnapshot) => snapshot,
+          version: 1,
+        },
+      ],
+    },
+    {
+      compact: true,
+      name: "a manual compaction between crash and continue",
+    },
+  ] as const;
+
+  async function continueAfter(
+    host: InMemoryHost,
+    threadKey: string,
+    variant: (typeof interveningCommits)[number],
+    model: MockLanguageModelV4
+  ): Promise<AgentTurn | undefined> {
+    const agent = await createAgent({
+      host,
+      model,
+      ...("threadMigrations" in variant
+        ? { threadMigrations: variant.threadMigrations }
+        : {}),
+    });
+    const thread = agent.thread(threadKey);
+    if ("compact" in variant) {
+      await expect(
+        thread.compact({
+          endSeqExclusive: 1,
+          startSeq: 0,
+          summary: "earlier conversation",
+        })
+      ).resolves.toBe(true);
+    }
+    return await thread.continue();
+  }
+
   it("restores the latest result once after a steer committed a same-id step", async () => {
     // Given: step 1's call_0 result was committed by a steer, then step 2
     // reused call_0 and crashed after its result checkpoint.
     const runId = "reused-id-steer";
     const threadKey = "reused-id-steer-thread";
     const host = await seedCrashedRun({
-      commits: [
-        [{ content: "go", role: "user" }],
-        [
-          { content: "go", role: "user" },
-          toolCall("call_0", "deploy"),
-          toolResult("call_0", "deploy", "STEP1_RESULT"),
-          { content: "steer", role: "user" },
-        ],
-      ],
-      runId,
-      threadKey,
-      toolCheckpoint: ([beforeSteer, afterSteer]) => ({
+      checkpoint: {
         phase: "after-tool",
         runtimeState: {
           hasOutput: true,
@@ -651,16 +682,24 @@ describe("crash recovery with reused provider tool call ids", () => {
           priorCompletedToolCalls: [
             {
               checkpointVersion: 2,
-              threadVersion: beforeSteer,
+              priorResultCount: 0,
               toolCallId: "call_0",
               toolName: "deploy",
             },
           ],
+          priorResultCount: 1,
           toolCallId: "call_0",
           toolName: "deploy",
         },
-        threadSnapshot: { threadVersion: afterSteer },
-      }),
+      },
+      history: [
+        { content: "go", role: "user" },
+        toolCall("call_0", "deploy"),
+        toolResult("call_0", "deploy", "STEP1_RESULT"),
+        { content: "steer", role: "user" },
+      ],
+      runId,
+      threadKey,
     });
     const model = recordingModel();
     const agent = await createAgent({ host, model: model.model });
@@ -678,72 +717,141 @@ describe("crash recovery with reused provider tool call ids", () => {
     expect(history.split("STEP2_RESULT")).toHaveLength(2);
   });
 
-  it("fails closed when an earlier completed call reuses a previous turn's id", async () => {
-    // Given: this turn's call_0 result was never committed, but a previous
-    // turn committed a result with the same provider id.
-    const runId = "reused-id-cross-turn";
-    const threadKey = "reused-id-cross-turn-thread";
-    const host = await seedCrashedRun({
-      commits: [previousTurn],
-      runId,
-      threadKey,
-      toolCheckpoint: ([inputCommit]) => ({
-        phase: "after-tool",
-        runtimeState: {
-          hasOutput: true,
-          input: {},
-          output: "VERIFIED",
-          priorCompletedToolCalls: [
-            {
-              checkpointVersion: 2,
-              threadVersion: inputCommit,
-              toolCallId: "call_0",
-              toolName: "deploy",
-            },
-          ],
-          toolCallId: "call_1",
-          toolName: "verify",
+  it.each(interveningCommits)(
+    "fails closed when an earlier completed call reuses a previous turn's id after $name",
+    async (variant) => {
+      // Given: this turn's call_0 result was never committed, but a previous
+      // turn committed a result with the same provider id.
+      const runId = "reused-id-cross-turn";
+      const threadKey = "reused-id-cross-turn-thread";
+      const host = await seedCrashedRun({
+        checkpoint: {
+          phase: "after-tool",
+          runtimeState: {
+            hasOutput: true,
+            input: {},
+            output: "VERIFIED",
+            priorCompletedToolCalls: [
+              {
+                checkpointVersion: 2,
+                priorResultCount: 1,
+                toolCallId: "call_0",
+                toolName: "deploy",
+              },
+            ],
+            priorResultCount: 0,
+            toolCallId: "call_1",
+            toolName: "verify",
+          },
         },
-        threadSnapshot: { threadVersion: inputCommit },
-      }),
-    });
-    const model = recordingModel();
-    const agent = await createAgent({ host, model: model.model });
+        history: previousTurn,
+        runId,
+        threadKey,
+      });
+      const model = recordingModel();
 
-    // When: the thread is continued.
-    const continued = agent.thread(threadKey).continue();
+      // When: the recovering process commits, then continues the thread.
+      const continued = continueAfter(host, threadKey, variant, model.model);
 
-    // Then: recovery parks the run instead of replaying deploy.
-    await expect(continued).rejects.toBeInstanceOf(
-      ToolExecutionNeedsRecoveryError
-    );
-    expect(model.histories).toEqual([]);
-    await expect(host.store.turns.get(runId)).resolves.toMatchObject({
-      status: "needs-recovery",
-    });
-  });
+      // Then: recovery parks the run instead of replaying deploy.
+      await expect(continued).rejects.toBeInstanceOf(
+        ToolExecutionNeedsRecoveryError
+      );
+      expect(model.histories).toEqual([]);
+      await expect(host.store.turns.get(runId)).resolves.toMatchObject({
+        status: "needs-recovery",
+      });
+    }
+  );
 
-  it("restores the latest result when a previous turn used the same id", async () => {
-    // Given: this turn's call_0 crashed after its result checkpoint while a
-    // previous turn's call_0 result is committed.
-    const runId = "reused-id-cross-turn-latest";
-    const threadKey = "reused-id-cross-turn-latest-thread";
-    const host = await seedCrashedRun({
-      commits: [previousTurn],
-      runId,
-      threadKey,
-      toolCheckpoint: ([inputCommit]) => ({
-        phase: "after-tool",
-        runtimeState: {
-          hasOutput: true,
-          input: {},
-          output: "NEW_RESULT",
-          priorCompletedToolCalls: [],
-          toolCallId: "call_0",
-          toolName: "lookup",
+  it.each(interveningCommits)(
+    "restores the latest result when a previous turn used the same id after $name",
+    async (variant) => {
+      // Given: this turn's call_0 crashed after its result checkpoint while a
+      // previous turn's call_0 result is committed.
+      const threadKey = "reused-id-cross-turn-latest-thread";
+      const host = await seedCrashedRun({
+        checkpoint: {
+          phase: "after-tool",
+          runtimeState: {
+            hasOutput: true,
+            input: {},
+            output: "NEW_RESULT",
+            priorCompletedToolCalls: [],
+            priorResultCount: 1,
+            toolCallId: "call_0",
+            toolName: "lookup",
+          },
         },
-        threadSnapshot: { threadVersion: inputCommit },
-      }),
+        history: previousTurn,
+        runId: "reused-id-cross-turn-latest",
+        threadKey,
+      });
+      const model = recordingModel();
+
+      // When: the recovering process commits, then continues the thread.
+      const turn = await continueAfter(host, threadKey, variant, model.model);
+      if (!turn) {
+        throw new Error("Expected the crashed run to continue.");
+      }
+
+      // Then: the new result reaches the model instead of being lost.
+      expect(eventTypes(await collect(turn))).toContain("turn-end");
+      expect(model.histories[0]).toContain("NEW_RESULT");
+    }
+  );
+
+  it.each([
+    {
+      name: "after-tool",
+      runtimeState: {
+        input: {},
+        output: "RESULT",
+        toolCallId: "call_1",
+        toolName: "verify",
+      },
+    },
+    {
+      name: "before-tool",
+      runtimeState: { toolCallId: "call_1", toolName: "verify" },
+    },
+  ] as const)(
+    "parks a run whose latest $name checkpoint predates completed-tool evidence",
+    async ({ name, runtimeState }) => {
+      // Given: an origin/main-format tool checkpoint, which cannot show
+      // whether earlier tools of the run completed.
+      const runId = `legacy-${name}`;
+      const threadKey = `legacy-${name}-thread`;
+      const host = await seedCrashedRun({
+        checkpoint: { phase: name, runtimeState },
+        history: [{ content: "go", role: "user" }],
+        runId,
+        threadKey,
+      });
+      const model = recordingModel();
+      const agent = await createAgent({ host, model: model.model });
+
+      // When: the thread is continued.
+      const continued = agent.thread(threadKey).continue();
+
+      // Then: recovery fails closed.
+      await expect(continued).rejects.toBeInstanceOf(
+        ToolExecutionNeedsRecoveryError
+      );
+      expect(model.histories).toEqual([]);
+      await expect(host.store.turns.get(runId)).resolves.toMatchObject({
+        status: "needs-recovery",
+      });
+    }
+  );
+
+  it("recovers a run that crashed before any tool checkpoint", async () => {
+    // Given: a crashed run without checkpoints.
+    const threadKey = "no-tool-thread";
+    const host = await seedCrashedRun({
+      history: [{ content: "go", role: "user" }],
+      runId: "no-tool",
+      threadKey,
     });
     const model = recordingModel();
     const agent = await createAgent({ host, model: model.model });
@@ -754,9 +862,11 @@ describe("crash recovery with reused provider tool call ids", () => {
       throw new Error("Expected the crashed run to continue.");
     }
 
-    // Then: the new result reaches the model instead of being lost.
+    // Then: it completes.
     expect(eventTypes(await collect(turn))).toContain("turn-end");
-    expect(model.histories[0]).toContain("NEW_RESULT");
+    await expect(host.store.turns.get("no-tool")).resolves.toMatchObject({
+      status: "completed",
+    });
   });
 });
 
