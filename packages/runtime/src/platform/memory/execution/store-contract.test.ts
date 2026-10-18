@@ -8,6 +8,12 @@ import { createInMemoryHost } from "./execution-host";
 
 describeExecutionStoreContract({
   createStore: () => createInMemoryHost().store,
+  listScheduledRuns: (store) =>
+    (
+      store as ReturnType<typeof createInMemoryHost>["store"] & {
+        readonly scheduler: ReturnType<typeof createInMemoryHost>["scheduler"];
+      }
+    ).scheduler.listScheduledRuns(),
   name: "InMemoryExecutionStore",
 });
 

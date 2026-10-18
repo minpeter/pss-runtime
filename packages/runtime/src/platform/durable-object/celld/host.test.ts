@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { describeAgentHostFaultContract } from "../../../contracts/agent-host-fault-contract";
 import { createCelldTestStorage } from "./celld-test-storage";
-import { createCelldHost } from "./host";
+import { createCelldHost, listCelldScheduledRuns } from "./host";
 
 let hostPrefix = 0;
 
@@ -28,6 +28,12 @@ describe("createCelldHost", () => {
     await host.scheduler.enqueueRun("celld-run");
 
     await expect(state.storage.getAlarm()).resolves.toBeDefined();
+    await host.store.transaction(async (tx) => {
+      await tx.scheduler?.enqueueRun("celld-tx-run", { runAfterMs: 10 });
+    });
+    await expect(
+      listCelldScheduledRuns(state.storage, { nowMs: Date.now() + 20 })
+    ).resolves.toContain("celld-tx-run");
   });
 
   it("requires no Cloudflare Agents SDK object or fiber", () => {

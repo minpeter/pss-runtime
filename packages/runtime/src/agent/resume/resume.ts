@@ -13,9 +13,11 @@ import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution-checkp
 import {
   DEFAULT_MAX_TURN_CLAIM_ATTEMPTS,
   isRecordClaimableByAgent,
+  releaseClaimedContinuationRun,
   throwIfManualToolRecovery,
   verifyClaimedRunCheckpoint,
 } from "../../thread/handle/agent-thread-continuation";
+import { isThreadDrainOwned } from "../../thread/handle/thread-drain-coordinator";
 import type { AgentTurn } from "../../thread/protocol/turn";
 import { ownsAgentNamespace } from "../identity/namespace";
 import { leaseIdForResumeClaim } from "./retry-authority";
@@ -157,6 +159,9 @@ async function resumeClaimedExecutionTurn({
     await throwIfManualToolRecovery(host, run.runId);
     return null;
   }
+  if (isThreadDrainOwned(host, run.threadKey)) {
+    return null;
+  }
   const claimed = await host.store.transaction(
     async (transaction) =>
       await claimRun(transaction.turns, run, retryLeaseId, maxAttempts)
@@ -201,25 +206,8 @@ async function claimNotificationForRun(
   return null;
 }
 
-async function requeueClaimedRun(
-  turns: TurnStore,
-  run: TurnRecord
-): Promise<void> {
-  const transition = await transitionTurn(turns, {
-    expected: {
-      leaseId: run.lease?.leaseId ?? null,
-      status: run.status,
-    },
-    runId: run.runId,
-    update: { lease: null, status: "queued" },
-  });
-  if (!transition.ok) {
-    throw new TurnTransitionConflictError(
-      run.runId,
-      "notification",
-      transition.reason
-    );
-  }
+function requeueClaimedRun(turns: TurnStore, run: TurnRecord): Promise<void> {
+  return releaseClaimedContinuationRun(turns, run, run.lease?.leaseId ?? null);
 }
 
 export async function completeNotificationRun(

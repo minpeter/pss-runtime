@@ -3,6 +3,7 @@ import { describeExecutionStoreContract } from "../../../../contracts/execution-
 import type { NotificationRecord, TurnRecord } from "../../../../execution";
 import {
   createDurableObjectStorageHost,
+  listScheduledDurableObjectRuns,
   InMemoryDurableObjectStorage as PublicInMemoryDurableObjectStorage,
 } from "../../host/storage-host";
 import { InMemorySqlStorage } from "../../sql/node-test/node-sqlite-storage";
@@ -10,14 +11,26 @@ import { InMemoryDurableObjectStorage } from "../durable-object/durable-object-s
 import { DurableObjectExecutionStore } from "./store";
 import { TransactionalInMemorySqlStorage } from "./store-delete-thread.test-support";
 
+const storeStorages = new WeakMap<object, InMemoryDurableObjectStorage>();
+
 describeExecutionStoreContract({
-  createStore: () =>
-    new DurableObjectExecutionStore({
+  createStore: () => {
+    const storage = new InMemoryDurableObjectStorage({
+      sql: new TransactionalInMemorySqlStorage(),
+    });
+    const store = new DurableObjectExecutionStore({
       prefix: "contract-test",
-      storage: new InMemoryDurableObjectStorage({
-        sql: new TransactionalInMemorySqlStorage(),
-      }),
-    }),
+      storage,
+    });
+    storeStorages.set(store, storage);
+    return store;
+  },
+  listScheduledRuns: (store) => {
+    const storage = storeStorages.get(store);
+    return storage
+      ? listScheduledDurableObjectRuns(storage, { prefix: "contract-test" })
+      : Promise.resolve([]);
+  },
   name: "DurableObjectExecutionStore",
 });
 

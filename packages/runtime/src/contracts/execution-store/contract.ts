@@ -12,11 +12,13 @@ import { describeThreadInputInboxContract } from "./thread-input-contract";
 
 export interface ExecutionStoreContractOptions {
   readonly createStore: () => HostStore;
+  readonly listScheduledRuns?: (store: HostStore) => Promise<readonly string[]>;
   readonly name: string;
 }
 
 export function describeExecutionStoreContract({
   createStore,
+  listScheduledRuns,
   name,
 }: ExecutionStoreContractOptions): void {
   describe(`${name} HostStore contract`, () => {
@@ -138,6 +140,11 @@ export function describeExecutionStoreContract({
       ).rejects.toThrow("outbox rollback");
 
       await expect(store.turns.get("run-rolled-back")).resolves.toBeNull();
+      if (listScheduledRuns) {
+        await expect(listScheduledRuns(store)).resolves.not.toContain(
+          "run-rolled-back"
+        );
+      }
     });
 
     it("deletes aggregate thread execution data when supported", async () => {

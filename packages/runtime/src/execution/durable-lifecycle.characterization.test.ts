@@ -16,6 +16,8 @@ import { encodeThreadSnapshot } from "../thread/state/snapshot";
 import { DisposedResourceError } from "../thread/state/thread-errors";
 import { dispatchAgentNotification } from "./dispatch/notification-dispatch";
 
+import { createThreadExecutionRunId } from "./host/thread-execution-run-id";
+
 describe("durable lifecycle characterization", () => {
   it("dispatches one durable notification for an idempotency key", async () => {
     const host = createInMemoryHost();
@@ -267,6 +269,35 @@ describe("durable lifecycle characterization", () => {
     await expect(
       host.store.turns.get("crashed-user-turn-2")
     ).resolves.toMatchObject({ status: "completed" });
+    const pendingRunId = createThreadExecutionRunId({
+      threadKey: "fresh-thread",
+      turnId: "msg-pending",
+    });
+    await host.store.inputs.admit({
+      input: { text: "pending durable prompt", type: "user-input" },
+      kind: "send",
+      messageId: "msg-pending",
+      threadKey: "fresh-thread",
+    });
+    await host.store.turns.create({
+      checkpointVersion: 0,
+      kind: "user-turn",
+      rootRunId: pendingRunId,
+      runId: pendingRunId,
+      status: "queued",
+      threadKey: "fresh-thread",
+    });
+    const pendingTurn = await recoveredAgent.resume(pendingRunId);
+    expect(pendingTurn?.runId).toBe(pendingRunId);
+    if (!pendingTurn) {
+      throw new Error(
+        "Expected agent.resume to execute pending durable input."
+      );
+    }
+    expect(eventTypes(await collect(pendingTurn))).toContain("turn-end");
+    await expect(host.store.turns.get(pendingRunId)).resolves.toMatchObject({
+      status: "completed",
+    });
   });
 
   it("fails closed when resuming a run interrupted mid manual-recovery tool", async () => {

@@ -1,5 +1,6 @@
 import type { JSONValue, ModelMessage } from "ai";
 import { ownsAgentNamespace } from "../../agent/identity/namespace";
+import { createThreadExecutionRunId } from "../../execution/host/thread-execution-run-id";
 import { transitionTurn } from "../../execution/host/turn-status";
 import type {
   AgentHost,
@@ -9,6 +10,8 @@ import type {
 } from "../../execution/host/types";
 import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution-checkpoint";
 import type { RuntimeToolExecutionCheckpointMetadata } from "../../llm/tool-execution-types";
+import { attachInputMeta } from "../input/input-meta";
+import type { QueuedInput } from "../input/runtime-input";
 import { createRuntimeInputState } from "../input/runtime-input";
 import {
   type AgentTurn,
@@ -36,36 +39,67 @@ import {
   ensureAgentThreadStarted,
 } from "./agent-thread-lifecycle";
 import { recoverThreadDurableInputClaims } from "./durable-queue-claims";
+import { inputMetaForQueuedKind } from "./durable-queue-send";
+import { isThreadDrainOwned } from "./thread-drain-coordinator";
 
 /** Session-local: queued user input always supersedes a failed generation. */
 export async function continueAgentThread(
   context: AgentThreadContext,
   options: ThreadContinuationOptions = {}
 ): Promise<AgentTurn | undefined> {
-  assertAgentThreadOpen(context);
   const signal = options.signal
     ? AbortSignal.any([context.lifetime.signal, options.signal])
     : context.lifetime.signal;
+  return await waitForCompactionQueue(
+    runReservedContinuationAdmission(context, signal, () =>
+      admitContinuation(context, signal)
+    ),
+    signal
+  );
+}
+
+async function runReservedContinuationAdmission<T>(
+  context: AgentThreadContext,
+  signal: AbortSignal,
+  admit: () => Promise<T>
+): Promise<T> {
+  assertAgentThreadOpen(context);
   signal.throwIfAborted();
   const host = context.execution.executionHost;
   const reservation = host
     ? reserveThreadInputAdmission(host, context.threadKey, signal)
     : undefined;
   let reservationEntered = false;
-  const admission = enqueueAgentThreadInputAdmission(
-    context,
-    async () => {
-      reservationEntered = true;
-      const admit = () => admitContinuation(context, signal);
-      return await (reservation ? reservation(admit) : admit());
-    },
-    signal
-  );
   try {
-    return await waitForCompactionQueue(admission, signal);
+    return await enqueueAgentThreadInputAdmission(
+      context,
+      async () => {
+        reservationEntered = true;
+        const run = async (): Promise<T> => {
+          await waitForCompactionQueue(
+            ensureAgentThreadStarted(context),
+            signal
+          );
+          assertAgentThreadOpen(context);
+          signal.throwIfAborted();
+          await recoverThreadDurableInputClaims({
+            executionHost: host,
+            signal,
+            state: context.durableInputRecovery,
+            threadKey: context.threadKey,
+          });
+          assertAgentThreadOpen(context);
+          signal.throwIfAborted();
+          if (context.turn.state.tag !== "none" || context.inputQueue.length) {
+            throw busyError();
+          }
+          return await admit();
+        };
+        return await (reservation ? reservation(run) : run());
+      },
+      signal
+    );
   } finally {
-    // Also abandon when local FIFO cancellation prevented entering the host
-    // reservation at all. Abandon preserves the previous reservation's tail.
     if (signal.aborted && !reservationEntered) {
       reservation?.abandon();
     }
@@ -77,24 +111,12 @@ async function admitContinuation(
   signal: AbortSignal
 ): Promise<AgentTurn | undefined> {
   const host = context.execution.executionHost;
-  signal.throwIfAborted();
-  await waitForCompactionQueue(ensureAgentThreadStarted(context), signal);
-  assertAgentThreadOpen(context);
-  signal.throwIfAborted();
-  await recoverThreadDurableInputClaims({
-    executionHost: host,
-    signal,
-    state: context.durableInputRecovery,
-    threadKey: context.threadKey,
-  });
-  assertAgentThreadOpen(context);
-  signal.throwIfAborted();
-  if (context.turn.state.tag !== "none" || context.inputQueue.length) {
-    throw busyError();
-  }
   const inMemoryContinuation = context.state.continuationCheckpoint();
   if (!inMemoryContinuation) {
-    return await admitPersistedContinuation(context, signal);
+    if (await tryEnqueuePendingDurableInputForRun(context, undefined, signal)) {
+      return;
+    }
+    return await recoverPersistedThreadContinuation(context, signal);
   }
   // Keep the serial position until the physical refresh settles. A
   // cancelled caller can stop waiting, but a late load cannot overtake B.
@@ -145,12 +167,20 @@ function enqueueContinuationTurn(
   >,
   executionRun?: QueuedThreadExecutionRun
 ): BufferedAgentTurn {
+  return enqueuePreparedTurn(context, { continuation }, executionRun);
+}
+
+function enqueuePreparedTurn(
+  context: AgentThreadContext,
+  extra: Partial<QueuedInput>,
+  executionRun?: QueuedThreadExecutionRun
+): BufferedAgentTurn {
   const run = new BufferedAgentTurn();
   if (executionRun) {
     bindTurnExecutionRun(run, executionRun.runId, executionRun.leaseId ?? null);
   }
   context.inputQueue.push({
-    continuation,
+    ...extra,
     ...(executionRun ? { executionRun } : {}),
     initialEvents: [],
     preUserRuntimeInputs: [],
@@ -161,8 +191,49 @@ function enqueueContinuationTurn(
   return run;
 }
 
-async function admitPersistedContinuation(
+export async function resumeClaimedExecutionRunOnThread(
   context: AgentThreadContext,
+  executionRun: QueuedThreadExecutionRun,
+  checkpoint: Checkpoint | null
+): Promise<AgentTurn> {
+  const signal = context.lifetime.signal;
+  return await runReservedContinuationAdmission(context, signal, async () => {
+    const host = context.execution.executionHost;
+    if (host && isThreadDrainOwned(host, context.threadKey)) {
+      throw busyError();
+    }
+    const pendingTurn = await tryEnqueuePendingDurableInputForRun(
+      context,
+      executionRun,
+      signal
+    );
+    if (pendingTurn) {
+      return pendingTurn;
+    }
+    const turn = await prepareClaimedContinuation(
+      context,
+      executionRun,
+      checkpoint,
+      signal
+    );
+    if (turn) {
+      return turn;
+    }
+    const aborted = new BufferedAgentTurn();
+    bindTurnExecutionRun(
+      aborted,
+      executionRun.runId,
+      executionRun.leaseId ?? null
+    );
+    aborted.emit({ type: "turn-abort" });
+    aborted.close();
+    return aborted;
+  });
+}
+
+async function tryEnqueuePendingDurableInputForRun(
+  context: AgentThreadContext,
+  executionRun: QueuedThreadExecutionRun | undefined,
   signal: AbortSignal
 ): Promise<AgentTurn | undefined> {
   const host = context.execution.executionHost;
@@ -171,7 +242,21 @@ async function admitPersistedContinuation(
     executionHost: host,
     threadKey: context.threadKey,
   });
-  if (pending.kind === "claimed" && pending.record) {
+  if (pending.kind !== "claimed" || !pending.record) {
+    assertAgentThreadOpen(context);
+    signal.throwIfAborted();
+    return;
+  }
+  if (
+    !executionRun ||
+    createThreadExecutionRunId({
+      threadKey: context.threadKey,
+      turnId: pending.record.messageId,
+    }) !== executionRun.runId ||
+    pending.record.kind === "steer" ||
+    signal.aborted ||
+    context.terminal.state.tag !== "open"
+  ) {
     await releaseDurableThreadInputClaim({
       executionHost: host,
       record: pending.record,
@@ -180,47 +265,19 @@ async function admitPersistedContinuation(
     signal.throwIfAborted();
     throw busyError("Thread has queued durable work.");
   }
-  assertAgentThreadOpen(context);
-  signal.throwIfAborted();
-  return await recoverPersistedThreadContinuation(context, signal);
-}
-
-export async function resumeClaimedExecutionRunOnThread(
-  context: AgentThreadContext,
-  executionRun: QueuedThreadExecutionRun,
-  checkpoint: Checkpoint | null
-): Promise<AgentTurn> {
-  assertAgentThreadOpen(context);
-  const signal = context.lifetime.signal;
-  signal.throwIfAborted();
-  return await enqueueAgentThreadInputAdmission(
+  return enqueuePreparedTurn(
     context,
-    async () => {
-      await waitForCompactionQueue(ensureAgentThreadStarted(context), signal);
-      assertAgentThreadOpen(context);
-      if (context.turn.state.tag !== "none" || context.inputQueue.length) {
-        throw busyError();
-      }
-      const turn = await prepareClaimedContinuation(
-        context,
-        executionRun,
-        checkpoint,
-        signal
-      );
-      if (turn) {
-        return turn;
-      }
-      const aborted = new BufferedAgentTurn();
-      bindTurnExecutionRun(
-        aborted,
-        executionRun.runId,
-        executionRun.leaseId ?? null
-      );
-      aborted.emit({ type: "turn-abort" });
-      aborted.close();
-      return aborted;
+    {
+      acceptedEvent: attachInputMeta(
+        pending.record.input,
+        inputMetaForQueuedKind(pending.record.kind)
+      ),
+      awaitBoundaries: true,
+      durableInputClaim: pending.record,
+      durableInputKind:
+        pending.record.kind === "follow-up" ? "follow-up" : "send",
     },
-    signal
+    executionRun
   );
 }
 
@@ -234,6 +291,9 @@ async function recoverPersistedThreadContinuation(
   const turns = host?.store.turns;
   if (!(host && turns?.listByThreadKey)) {
     return;
+  }
+  if (isThreadDrainOwned(host, context.threadKey)) {
+    throw busyError();
   }
   const ownerNamespace = context.execution.ownerNamespace ?? "";
   const hasExplicitNamespace = context.execution.ownerNamespace !== undefined;
@@ -338,11 +398,11 @@ async function prepareClaimedContinuation(
   const continuation = context.state.continuationCheckpoint();
   if (!continuation) {
     if (turns && executionRun.leaseId) {
-      await transitionTurn(turns, {
-        expected: { leaseId: executionRun.leaseId, status: "leased" },
-        runId: executionRun.runId,
-        update: { lease: null, status: "queued" },
-      });
+      await releaseClaimedContinuationRun(
+        turns,
+        { runId: executionRun.runId, status: "leased" } as TurnRecord,
+        executionRun.leaseId
+      );
     }
     return;
   }
@@ -394,10 +454,10 @@ export async function throwIfManualToolRecovery(
   }
 }
 
-async function releaseClaimedContinuationRun(
+export async function releaseClaimedContinuationRun(
   turns: TurnStore,
-  record: TurnRecord,
-  leaseId: string
+  record: Pick<TurnRecord, "runId" | "status">,
+  leaseId: string | null
 ): Promise<void> {
   await transitionTurn(turns, {
     expected: { leaseId, status: record.status },
@@ -485,13 +545,10 @@ function buildRecoveredContinuationHistory(
 function manualRecoveryToolCheckpoint(
   checkpoint: Checkpoint | null
 ): RuntimeToolExecutionCheckpointMetadata | undefined {
-  if (checkpoint?.phase !== "before-tool") {
-    return;
-  }
-  const candidate = checkpoint.pendingToolCall as
-    | Record<string, unknown>
-    | null
-    | undefined;
+  const candidate =
+    checkpoint?.phase === "before-tool"
+      ? (checkpoint.pendingToolCall as Record<string, unknown> | undefined)
+      : undefined;
   if (
     candidate &&
     typeof candidate === "object" &&
@@ -509,7 +566,6 @@ function manualRecoveryToolCheckpoint(
       toolName: candidate.toolName,
     };
   }
-  return;
 }
 
 export function isRecordClaimableByAgent(

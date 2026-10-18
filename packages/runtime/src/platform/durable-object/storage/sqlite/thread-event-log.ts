@@ -55,10 +55,16 @@ export class DurableObjectSqliteThreadEventLog implements ThreadEventLog {
     return new Promise((resolve) => {
       this.#ensureSchema();
       const key = this.#rowKey(threadKey);
-      const seq = this.#readNextSeq(key);
+      const seq =
+        this.#sql
+          .exec<ThreadEventMetaRow>(
+            "SELECT next_seq FROM pss_thread_event_meta WHERE thread_key = ?",
+            key
+          )
+          .toArray()[0]?.next_seq ?? 0;
       const serializedEvent = writeJsonPayloadToSqlRows(
         this.#sql,
-        this.#payloadLocation(key, seq),
+        { ownerKey: key, payloadKey: String(seq), scope: "thread-event" },
         "thread-event",
         event,
         this.#maxPayloadBytes
@@ -69,7 +75,11 @@ export class DurableObjectSqliteThreadEventLog implements ThreadEventLog {
         seq,
         serializedEvent
       );
-      this.#writeNextSeq(key, seq + 1);
+      this.#sql.exec(
+        "INSERT INTO pss_thread_event_meta (thread_key, next_seq) VALUES (?, ?) ON CONFLICT(thread_key) DO UPDATE SET next_seq = excluded.next_seq",
+        key,
+        seq + 1
+      );
       resolve(createThreadEventCursor(seq + 1));
     });
   }
@@ -147,27 +157,5 @@ export class DurableObjectSqliteThreadEventLog implements ThreadEventLog {
     );
     ensurePayloadChunkSchema(this.#sql);
     this.#schemaReady = true;
-  }
-
-  #readNextSeq(key: string): number {
-    const row = this.#sql
-      .exec<ThreadEventMetaRow>(
-        "SELECT next_seq FROM pss_thread_event_meta WHERE thread_key = ?",
-        key
-      )
-      .toArray()[0];
-    return row?.next_seq ?? 0;
-  }
-
-  #writeNextSeq(key: string, nextSeq: number): void {
-    this.#sql.exec(
-      "INSERT INTO pss_thread_event_meta (thread_key, next_seq) VALUES (?, ?) ON CONFLICT(thread_key) DO UPDATE SET next_seq = excluded.next_seq",
-      key,
-      nextSeq
-    );
-  }
-
-  #payloadLocation(key: string, seq: number) {
-    return { ownerKey: key, payloadKey: String(seq), scope: "thread-event" };
   }
 }

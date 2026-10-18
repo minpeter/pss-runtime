@@ -3,7 +3,10 @@ import {
   isScheduledThreadPrompt,
   type ScheduledThreadPrompt,
 } from "../../../execution/scheduled-work";
-import type { DurableObjectStorage } from "../host/storage-host";
+import type {
+  DurableObjectStorage,
+  DurableObjectTransactionStorage,
+} from "../host/storage-host";
 import {
   requiredSqlStorage,
   withTransaction,
@@ -32,6 +35,9 @@ export interface CelldSchedulerOptions {
 }
 
 export interface CelldScheduler extends HostScheduler {
+  readonly createTransactionScheduler?: (
+    transactionStorage: DurableObjectTransactionStorage
+  ) => HostScheduler;
   readonly storage: CelldDurableObjectStorage;
 }
 
@@ -62,6 +68,50 @@ export function serialize<T>(
   return current;
 }
 
+export async function insertDueWorkInTransaction<T>(
+  transaction: DurableObjectTransactionStorage,
+  prefix: string,
+  kind: typeof RUN_KIND | typeof THREAD_PROMPT_KIND,
+  workId: string,
+  value: T,
+  dueAtMs: number,
+  indexes: { readonly runId?: string; readonly threadKey?: string },
+  currentAlarm: number | null = null
+): Promise<void> {
+  insertScheduledWorkInTransaction(
+    transaction,
+    prefix,
+    kind,
+    workId,
+    { dueAtMs, value } satisfies DuePayload<T>,
+    { ...indexes, dueAtMs }
+  );
+  if (transaction.setAlarm === undefined) {
+    throw new Error("Celld storage transaction setAlarm() is required.");
+  }
+  const sql = requiredSqlStorage(transaction, "Celld scheduled work alarm");
+  const persistedDueAt = ([RUN_KIND, THREAD_PROMPT_KIND] as const)
+    .flatMap((scheduledKind) => {
+      const row = sql
+        .exec<{ readonly due_at: number | null }>(
+          "SELECT due_at FROM pss_scheduled_work WHERE prefix = ? AND kind = ? AND due_at IS NOT NULL ORDER BY due_at, rowid LIMIT 1",
+          prefix,
+          scheduledKind
+        )
+        .toArray()[0];
+      return typeof row?.due_at === "number" ? [row.due_at] : [];
+    })
+    .reduce(
+      (earliest, persistedValue) => Math.min(earliest, persistedValue),
+      Number.POSITIVE_INFINITY
+    );
+  await transaction.setAlarm(
+    currentAlarm === null
+      ? persistedDueAt
+      : Math.min(currentAlarm, persistedDueAt)
+  );
+}
+
 export async function insertDueWorkAndArm<T>(
   storage: CelldDurableObjectStorage,
   prefix: string,
@@ -72,40 +122,18 @@ export async function insertDueWorkAndArm<T>(
   indexes: { readonly runId?: string; readonly threadKey?: string }
 ): Promise<void> {
   const currentAlarm = await storage.getAlarm();
-  await withTransaction(storage, async (transaction) => {
-    insertScheduledWorkInTransaction(
-      transaction,
+  await withTransaction(storage, (tx) =>
+    insertDueWorkInTransaction(
+      tx,
       prefix,
       kind,
       workId,
-      { dueAtMs, value } satisfies DuePayload<T>,
-      { ...indexes, dueAtMs }
-    );
-    if (transaction.setAlarm === undefined) {
-      throw new Error("Celld storage transaction setAlarm() is required.");
-    }
-    const sql = requiredSqlStorage(transaction, "Celld scheduled work alarm");
-    const persistedDueAt = ([RUN_KIND, THREAD_PROMPT_KIND] as const)
-      .flatMap((scheduledKind) => {
-        const row = sql
-          .exec<{ readonly due_at: number | null }>(
-            "SELECT due_at FROM pss_scheduled_work WHERE prefix = ? AND kind = ? AND due_at IS NOT NULL ORDER BY due_at, rowid LIMIT 1",
-            prefix,
-            scheduledKind
-          )
-          .toArray()[0];
-        return typeof row?.due_at === "number" ? [row.due_at] : [];
-      })
-      .reduce(
-        (earliest, persistedValue) => Math.min(earliest, persistedValue),
-        Number.POSITIVE_INFINITY
-      );
-    await transaction.setAlarm(
-      currentAlarm === null
-        ? persistedDueAt
-        : Math.min(currentAlarm, persistedDueAt)
-    );
-  });
+      value,
+      dueAtMs,
+      indexes,
+      currentAlarm
+    )
+  );
 }
 
 export function listDueWork<T>(

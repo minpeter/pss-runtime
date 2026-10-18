@@ -109,7 +109,15 @@ export function createDurableObjectStorageHost({
       "Durable Object storage host external threadStore cannot join its atomic transactions."
     );
   }
+  const createTransactionScheduler =
+    "createTransactionScheduler" in scheduler &&
+    typeof scheduler.createTransactionScheduler === "function"
+      ? (scheduler.createTransactionScheduler as (
+          storage: DurableObjectTransactionStorage
+        ) => HostScheduler)
+      : undefined;
   const store = new ExecutionStoreImplementation({
+    createTransactionScheduler,
     maxPayloadBytes,
     prefix,
     storage,

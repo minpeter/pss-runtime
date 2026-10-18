@@ -52,17 +52,21 @@ export class InMemoryRunStore implements TurnStore {
   }
 
   listByParentRunId(parentRunId: string): Promise<readonly TurnRecord[]> {
-    const records = [...this.#state().turns.values()].filter(
-      (candidate) => candidate.parentRunId === parentRunId
-    );
-    return Promise.resolve(records.map((record) => structuredClone(record)));
+    return this.#filter((candidate) => candidate.parentRunId === parentRunId);
   }
 
   listByThreadKey(threadKey: string): Promise<readonly TurnRecord[]> {
-    const records = [...this.#state().turns.values()].filter(
-      (candidate) => candidate.threadKey === threadKey
+    return this.#filter((candidate) => candidate.threadKey === threadKey);
+  }
+
+  #filter(
+    predicate: (candidate: TurnRecord) => boolean
+  ): Promise<readonly TurnRecord[]> {
+    return Promise.resolve(
+      [...this.#state().turns.values()]
+        .filter(predicate)
+        .map((record) => structuredClone(record))
     );
-    return Promise.resolve(records.map((record) => structuredClone(record)));
   }
 
   transition(

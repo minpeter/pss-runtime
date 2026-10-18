@@ -47,18 +47,7 @@ export function listRunsByParentRunId(
   prefix: string,
   parentRunId: string
 ): Promise<readonly TurnRecord[]> {
-  const sql = requiredSqlStorage(storage, "DurableObjectRunStore");
-  ensureRunSchema(sql);
-  return Promise.resolve(
-    sql
-      .exec<RunRow>(
-        "SELECT record FROM pss_run WHERE prefix = ? AND parent_run_id = ? ORDER BY created_at, rowid",
-        prefix,
-        parentRunId
-      )
-      .toArray()
-      .map(parseRunRecord)
-  );
+  return listRunsByColumn(storage, prefix, "parent_run_id", parentRunId);
 }
 
 export function listRunsByThreadKey(
@@ -66,14 +55,23 @@ export function listRunsByThreadKey(
   prefix: string,
   threadKey: string
 ): Promise<readonly TurnRecord[]> {
+  return listRunsByColumn(storage, prefix, "thread_key", threadKey);
+}
+
+function listRunsByColumn(
+  storage: DurableObjectTransactionStorage,
+  prefix: string,
+  column: "parent_run_id" | "thread_key",
+  value: string
+): Promise<readonly TurnRecord[]> {
   const sql = requiredSqlStorage(storage, "DurableObjectRunStore");
   ensureRunSchema(sql);
   return Promise.resolve(
     sql
       .exec<RunRow>(
-        "SELECT record FROM pss_run WHERE prefix = ? AND thread_key = ? ORDER BY created_at, rowid",
+        `SELECT record FROM pss_run WHERE prefix = ? AND ${column} = ? ORDER BY created_at, rowid`,
         prefix,
-        threadKey
+        value
       )
       .toArray()
       .map(parseRunRecord)
@@ -147,24 +145,17 @@ function ensureRunSchema(sql: SqlStorage): void {
   sql.exec(
     "CREATE INDEX IF NOT EXISTS pss_run_parent ON pss_run (prefix, parent_run_id, created_at)"
   );
+  sql.exec(
+    "CREATE INDEX IF NOT EXISTS pss_run_thread ON pss_run (prefix, thread_key, created_at)"
+  );
 }
 
 function putSqlRun(sql: SqlStorage, prefix: string, record: TurnRecord): void {
-  ensureRunSchema(sql);
-  const nowMs = Date.now();
-  sql.exec(
-    "INSERT INTO pss_run (prefix, run_id, record, dedupe_key, parent_run_id, root_run_id, thread_key, status, checkpoint_version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(prefix, run_id) DO UPDATE SET record = excluded.record, dedupe_key = excluded.dedupe_key, parent_run_id = excluded.parent_run_id, root_run_id = excluded.root_run_id, thread_key = excluded.thread_key, status = excluded.status, checkpoint_version = excluded.checkpoint_version, updated_at = excluded.updated_at",
+  writeSqlRun(
+    sql,
     prefix,
-    record.runId,
-    JSON.stringify(record),
-    record.dedupeKey ?? null,
-    record.parentRunId ?? null,
-    record.rootRunId,
-    record.threadKey,
-    record.status,
-    record.checkpointVersion,
-    nowMs,
-    nowMs
+    record,
+    " ON CONFLICT(prefix, run_id) DO UPDATE SET record = excluded.record, dedupe_key = excluded.dedupe_key, parent_run_id = excluded.parent_run_id, root_run_id = excluded.root_run_id, thread_key = excluded.thread_key, status = excluded.status, checkpoint_version = excluded.checkpoint_version, updated_at = excluded.updated_at"
   );
 }
 
@@ -173,10 +164,19 @@ function insertSqlRun(
   prefix: string,
   record: TurnRecord
 ): void {
+  writeSqlRun(sql, prefix, record, "");
+}
+
+function writeSqlRun(
+  sql: SqlStorage,
+  prefix: string,
+  record: TurnRecord,
+  suffix: string
+): void {
   ensureRunSchema(sql);
   const nowMs = Date.now();
   sql.exec(
-    "INSERT INTO pss_run (prefix, run_id, record, dedupe_key, parent_run_id, root_run_id, thread_key, status, checkpoint_version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    `INSERT INTO pss_run (prefix, run_id, record, dedupe_key, parent_run_id, root_run_id, thread_key, status, checkpoint_version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)${suffix}`,
     prefix,
     record.runId,
     JSON.stringify(record),

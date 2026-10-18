@@ -278,6 +278,7 @@ export async function runCodingAgentExec({
   });
 
   try {
+    await assertSessionDoesNotRequireManualRecovery(agent, sessionKey);
     const turn = await thread.send(resolvedPrompt);
     // If the timer fired while send() was still starting, interrupt() was a
     // no-op; interrupt again now that the turn is active.
@@ -323,4 +324,26 @@ export async function runCodingAgentExec({
     );
   }
   return result;
+}
+
+async function assertSessionDoesNotRequireManualRecovery(
+  agent: Agent,
+  sessionKey: string | undefined
+): Promise<void> {
+  const latestRun =
+    sessionKey === undefined
+      ? undefined
+      : (await agent.host.store.turns.listByThreadKey?.(sessionKey))?.at(-1);
+  const checkpoint = latestRun
+    ? await agent.host.store.checkpoints.latest(latestRun.runId)
+    : null;
+  const pending = checkpoint?.pendingToolCall as
+    | { readonly policy?: string }
+    | undefined;
+  if (
+    checkpoint?.phase === "before-tool" &&
+    pending?.policy === "manual-recovery"
+  ) {
+    await agent.resume(latestRun?.runId ?? "");
+  }
 }

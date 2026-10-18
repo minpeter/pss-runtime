@@ -7,7 +7,7 @@ import {
   applyAgentInstrumentations,
 } from "./instrumentation";
 import {
-  resolveThreadIdentityFromStoreKey,
+  resolveThreadIdentity,
   type ThreadHandle,
   type ThreadIdentity,
 } from "./thread-entry";
@@ -22,7 +22,7 @@ type ThreadHandleLifecycle =
 
 export function createThreadPublicHandle({
   evict,
-  identity: explicitIdentity,
+  identity,
   instrumentations,
   key,
   namespace,
@@ -35,7 +35,6 @@ export function createThreadPublicHandle({
   readonly namespace: string | undefined;
   readonly thread: AgentThread;
 }): ThreadHandle {
-  const identity = explicitIdentity ?? resolveThreadIdentityFromStoreKey(key);
   let lifecycle: ThreadHandleLifecycle = { tag: "active" };
   const instrumentTurn = (
     turn: AgentTurn,
@@ -152,7 +151,7 @@ export function createThreadPublicHandle({
         operation: "follow-up",
         threadKey: key,
       }),
-    identity,
+    identity: identity ?? resolveThreadIdentity(key),
     interrupt: () => thread.interrupt(),
     overlay: (input) => {
       thread.overlay(input);

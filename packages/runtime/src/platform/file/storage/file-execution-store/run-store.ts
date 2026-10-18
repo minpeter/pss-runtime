@@ -92,18 +92,20 @@ export class FileRunStore implements TurnStore {
     );
   }
 
-  async listByParentRunId(parentRunId: string): Promise<readonly TurnRecord[]> {
-    return await this.#lock(async () => {
-      const records = await this.#listUnlocked();
-      return records.filter((record) => record.parentRunId === parentRunId);
-    });
+  listByParentRunId(parentRunId: string): Promise<readonly TurnRecord[]> {
+    return this.#filterUnlocked((record) => record.parentRunId === parentRunId);
   }
 
-  async listByThreadKey(threadKey: string): Promise<readonly TurnRecord[]> {
-    return await this.#lock(async () => {
-      const records = await this.#listUnlocked();
-      return records.filter((record) => record.threadKey === threadKey);
-    });
+  listByThreadKey(threadKey: string): Promise<readonly TurnRecord[]> {
+    return this.#filterUnlocked((record) => record.threadKey === threadKey);
+  }
+
+  async #filterUnlocked(
+    predicate: (record: TurnRecord) => boolean
+  ): Promise<readonly TurnRecord[]> {
+    return await this.#lock(async () =>
+      (await this.#listUnlocked()).filter(predicate)
+    );
   }
 
   async transition(

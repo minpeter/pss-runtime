@@ -48,9 +48,15 @@ beforeEach(() => {
   for (const path of [repository, caller, home]) {
     mkdirSync(path, { recursive: true });
   }
-  const hostCorepackV1 = join(homedir(), ".cache/node/corepack/v1");
+  const hostCorepack =
+    process.env.COREPACK_HOME ??
+    join(
+      process.env.XDG_CACHE_HOME ?? join(homedir(), ".cache"),
+      "node/corepack"
+    );
+  const hostCorepackV1 = join(hostCorepack, "v1");
+  const guestCorepack = join(home, ".cache/node/corepack");
   if (existsSync(hostCorepackV1)) {
-    const guestCorepack = join(home, ".cache/node/corepack");
     mkdirSync(guestCorepack, { recursive: true });
     symlinkSync(hostCorepackV1, join(guestCorepack, "v1"), "dir");
     writeFileSync(
@@ -109,6 +115,7 @@ beforeEach(() => {
     AI_API_KEY: "fixture-shell-key",
     AI_BASE_URL: "https://shell.invalid/v1",
     AI_MODEL: "fixture-shell-model",
+    COREPACK_HOME: guestCorepack,
     HOME: home,
     INIT_CWD: undefined,
     NODE_OPTIONS: `--import=${pathToFileURL(probe).href}`,

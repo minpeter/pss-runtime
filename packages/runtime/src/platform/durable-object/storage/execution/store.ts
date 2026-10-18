@@ -18,6 +18,7 @@ import type { ThreadStore } from "../../../../thread/store/types";
 import type { SqlStorage } from "../../sql/ports/storage-port";
 import {
   type DurableObjectStorage,
+  type DurableObjectTransactionStorage,
   isSqlStorage,
   withSqlStorage,
 } from "../durable-object/durable-object-storage";
@@ -47,16 +48,24 @@ export class DurableObjectExecutionStore implements HostStore {
   readonly #maxPayloadBytes: number;
   readonly #prefix: string;
   readonly #storage: DurableObjectStorage;
+  readonly #createTransactionScheduler?: (
+    storage: DurableObjectTransactionStorage
+  ) => HostScheduler;
 
   constructor({
+    createTransactionScheduler,
     maxPayloadBytes,
     prefix = "pss-runtime",
     storage,
   }: {
+    readonly createTransactionScheduler?: (
+      storage: DurableObjectTransactionStorage
+    ) => HostScheduler;
     readonly maxPayloadBytes?: StoragePayloadBudgetOptions["maxPayloadBytes"];
     readonly prefix?: string;
     readonly storage: DurableObjectStorage;
   }) {
+    this.#createTransactionScheduler = createTransactionScheduler;
     this.#maxPayloadBytes = maxPayloadBytes ?? resolveStoragePayloadMaxBytes();
     this.#prefix = prefix;
     this.#storage = storage;
@@ -94,41 +103,43 @@ export class DurableObjectExecutionStore implements HostStore {
       prefix,
       payloadBudget
     );
-    this.scheduler = {
-      enqueueRun: (runId, options) => {
-        const runAfterMs = options?.runAfterMs;
-        const dueAtMs =
-          runAfterMs === undefined
-            ? undefined
-            : Date.now() + Math.max(0, Math.floor(runAfterMs));
-        insertScheduledWorkInTransaction(
-          this.#storage,
-          this.#prefix,
-          "run",
-          runId,
-          runId,
-          { ...(dueAtMs === undefined ? {} : { dueAtMs }), runId }
-        );
-        return Promise.resolve();
-      },
-      resumeThread: (threadKey, options) => {
-        const prompt: ScheduledThreadPrompt = {
-          idempotencyKey: options.idempotencyKey,
-          notificationId: options.notificationId,
-          runId: options.runId,
-          threadKey,
+    this.scheduler = createTransactionScheduler
+      ? createTransactionScheduler(storage)
+      : {
+          enqueueRun: (runId, options) => {
+            const runAfterMs = options?.runAfterMs;
+            const dueAtMs =
+              runAfterMs === undefined
+                ? undefined
+                : Date.now() + Math.max(0, Math.floor(runAfterMs));
+            insertScheduledWorkInTransaction(
+              this.#storage,
+              this.#prefix,
+              "run",
+              runId,
+              runId,
+              { ...(dueAtMs === undefined ? {} : { dueAtMs }), runId }
+            );
+            return Promise.resolve();
+          },
+          resumeThread: (threadKey, options) => {
+            const prompt: ScheduledThreadPrompt = {
+              idempotencyKey: options.idempotencyKey,
+              notificationId: options.notificationId,
+              runId: options.runId,
+              threadKey,
+            };
+            insertScheduledWorkInTransaction(
+              this.#storage,
+              this.#prefix,
+              "thread-prompt",
+              threadPromptScheduledWorkId(prompt),
+              prompt,
+              { runId: prompt.runId, threadKey }
+            );
+            return Promise.resolve();
+          },
         };
-        insertScheduledWorkInTransaction(
-          this.#storage,
-          this.#prefix,
-          "thread-prompt",
-          threadPromptScheduledWorkId(prompt),
-          prompt,
-          { runId: prompt.runId, threadKey }
-        );
-        return Promise.resolve();
-      },
-    };
   }
 
   get sessions(): ThreadStore {
@@ -150,31 +161,24 @@ export class DurableObjectExecutionStore implements HostStore {
   async transaction<T>(
     fn: (tx: HostStoreTransaction) => Promise<T>
   ): Promise<T> {
+    const runTx = (storage: DurableObjectTransactionStorage, sql: unknown) =>
+      fn(
+        new DurableObjectExecutionStore({
+          createTransactionScheduler: this.#createTransactionScheduler,
+          maxPayloadBytes: this.#maxPayloadBytes,
+          prefix: this.#prefix,
+          storage: withSqlStorage(storage, sql),
+        })
+      );
     if (this.#storage.transaction) {
       return await this.#storage.transaction((storage) =>
-        fn(
-          new DurableObjectExecutionStore({
-            maxPayloadBytes: this.#maxPayloadBytes,
-            prefix: this.#prefix,
-            storage: withSqlStorage(storage, storage.sql ?? this.#storage.sql),
-          })
-        )
+        runTx(storage, storage.sql ?? this.#storage.sql)
       );
     }
-
     const sql = transactionalSqlStorage(this.#storage.sql);
     if (sql) {
-      return await sql.transaction(() =>
-        fn(
-          new DurableObjectExecutionStore({
-            maxPayloadBytes: this.#maxPayloadBytes,
-            prefix: this.#prefix,
-            storage: withSqlStorage(this.#storage, sql),
-          })
-        )
-      );
+      return await sql.transaction(() => runTx(this.#storage, sql));
     }
-
     throw new Error(
       "DurableObjectExecutionStore requires Durable Object storage.transaction or storage.sql.transaction for atomic transactions."
     );

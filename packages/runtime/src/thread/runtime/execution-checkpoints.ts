@@ -80,21 +80,28 @@ export function createThreadToolExecutionContext({
   return {
     attempt: 1,
     afterTool: async (checkpoint) => {
-      const transformed = await interceptToolResult?.(checkpoint);
-      const effectiveOutput = transformed
-        ? transformed.output
-        : checkpoint.output;
       await appendThreadToolExecutionCheckpoint({
         executionHost,
         leaseId,
         phase: "after-tool",
         runId,
         state,
-        toolCall: {
-          ...checkpoint,
-          output: effectiveOutput,
-        },
+        toolCall: checkpoint,
       });
+      const transformed = await interceptToolResult?.(checkpoint);
+      if (transformed && !Object.is(transformed.output, checkpoint.output)) {
+        await appendThreadToolExecutionCheckpoint({
+          executionHost,
+          leaseId,
+          phase: "after-tool",
+          runId,
+          state,
+          toolCall: {
+            ...checkpoint,
+            output: transformed.output,
+          },
+        });
+      }
       return transformed;
     },
     beforeTool: async (checkpoint) => {
