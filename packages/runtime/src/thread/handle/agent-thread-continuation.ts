@@ -30,7 +30,10 @@ import {
   precreateThreadExecutionRun,
   type QueuedThreadExecutionRun,
 } from "../runtime/execution";
-import { registerLiveThreadInput } from "../runtime/live-input-ownership";
+import {
+  registerLiveThreadInput,
+  unregisterLiveThreadInput,
+} from "../runtime/live-input-ownership";
 import { startThreadQueueDrain } from "../runtime/notification";
 import { reserveThreadInputAdmission } from "../runtime/thread-input-admission-coordinator";
 import { enqueueAgentThreadInputAdmission } from "./agent-thread-admission";
@@ -165,19 +168,11 @@ async function admitContinuation(
 function enqueuePreparedTurn(
   context: AgentThreadContext,
   extra: Partial<QueuedInput>,
-  executionRun?: QueuedThreadExecutionRun
+  executionRun?: QueuedThreadExecutionRun,
+  run = new BufferedAgentTurn()
 ): BufferedAgentTurn {
-  const run = new BufferedAgentTurn();
   if (executionRun) {
     bindTurnExecutionRun(run, executionRun.runId, executionRun.leaseId ?? null);
-  }
-  if (extra.durableMessageId) {
-    registerLiveThreadInput(
-      context.execution.executionHost,
-      context.threadKey,
-      extra.durableMessageId,
-      run
-    );
   }
   if (extra.acceptedEvent) {
     context.events.emitProcessedEvent(run, extra.acceptedEvent);
@@ -253,36 +248,45 @@ async function tryEnqueuePendingDurableInputForRun(
     signal.throwIfAborted();
     return;
   }
-  await releaseDurableThreadInputClaim({
-    executionHost: host,
-    record: pending.record,
-  });
-  assertAgentThreadOpen(context);
-  signal.throwIfAborted();
-  if (
-    !executionRun ||
+  const { record } = pending;
+  const resumable =
+    executionRun !== undefined &&
+    record.kind !== "steer" &&
     createThreadExecutionRunId({
       threadKey: context.threadKey,
-      turnId: pending.record.messageId,
-    }) !== executionRun.runId ||
-    pending.record.kind === "steer"
-  ) {
+      turnId: record.messageId,
+    }) === executionRun.runId;
+  // Like send(), publish live ownership before the record becomes claimable
+  // again so local drains wait for this turn instead of claiming its input.
+  const run = new BufferedAgentTurn();
+  if (resumable) {
+    registerLiveThreadInput(host, context.threadKey, record.messageId, run);
+  }
+  try {
+    await releaseDurableThreadInputClaim({ executionHost: host, record });
+    assertAgentThreadOpen(context);
+    signal.throwIfAborted();
+  } catch (error) {
+    unregisterLiveThreadInput(host, context.threadKey, record.messageId, run);
+    throw error;
+  }
+  if (!resumable) {
     throw busyError("Thread has queued durable work.");
   }
   return enqueuePreparedTurn(
     context,
     {
       acceptedEvent: attachInputMeta(
-        pending.record.input,
-        inputMetaForQueuedKind(pending.record.kind)
+        record.input,
+        inputMetaForQueuedKind(record.kind)
       ),
       awaitBoundaries: true,
       durableInput: true,
-      durableInputKind:
-        pending.record.kind === "follow-up" ? "follow-up" : "send",
-      durableMessageId: pending.record.messageId,
+      durableInputKind: record.kind === "follow-up" ? "follow-up" : "send",
+      durableMessageId: record.messageId,
     },
-    executionRun
+    executionRun,
+    run
   );
 }
 
@@ -296,9 +300,6 @@ async function recoverPersistedThreadContinuation(
   const turns = host?.store.turns;
   if (!(host && turns?.listByThreadKey)) {
     return;
-  }
-  if (isThreadDrainOwned(host, context.threadKey)) {
-    throw busyError();
   }
   const ownerNamespace = context.execution.ownerNamespace ?? "";
   const hasExplicitNamespace = context.execution.ownerNamespace !== undefined;
@@ -321,6 +322,11 @@ async function recoverPersistedThreadContinuation(
   }
   if (latestRun.status === "needs-recovery") {
     await throwIfManualToolRecovery(host, latestRun.runId, true, signal);
+  }
+  // Only a recoverable run can collide with this host's active drain; settled
+  // history must not report busy while a finished drain is winding down.
+  if (isThreadDrainOwned(host, context.threadKey)) {
+    throw busyError();
   }
   const claimed = await turns.claim(latestRun.runId, {
     attempt: (latestRun.lease?.attempt ?? 0) + 1,
@@ -478,7 +484,7 @@ export async function releaseClaimedContinuationRun(
   if (!transition.ok) {
     throw new TurnTransitionConflictError(
       record.runId,
-      "notification",
+      "requeue",
       transition.reason
     );
   }

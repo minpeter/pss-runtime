@@ -162,15 +162,19 @@ async function disposeExecResources(
   agent: Agent,
   extensionHost: CodingAgentExtensionHost
 ): Promise<string | undefined> {
-  const results = await Promise.allSettled([
-    agent.dispose(),
-    extensionHost.dispose(),
-  ]);
-  const failures = results.flatMap((r) =>
-    r.status === "rejected"
-      ? [r.reason instanceof Error ? r.reason.message : String(r.reason)]
-      : []
-  );
+  const failures: string[] = [];
+  // Agent teardown drains threads whose instrumentations may still use
+  // extension services, so the extension host must outlive it.
+  for (const dispose of [
+    () => agent.dispose(),
+    () => extensionHost.dispose(),
+  ]) {
+    try {
+      await dispose();
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : String(error));
+    }
+  }
   return failures.length > 0 ? failures.join("; ") : undefined;
 }
 

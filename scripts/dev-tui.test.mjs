@@ -123,6 +123,10 @@ beforeEach(() => {
     PSS_DISABLE_UPDATE_CHECK: "1",
     PSS_THREAD_DIR: join(directory, "threads"),
     PSS_THREAD_KEY: undefined,
+    // The fixture repository borrows the real node_modules through a symlink.
+    // pnpm 11 defaults verifyDepsBeforeRun to "install", which would prune
+    // that shared tree to the fixture manifest before running dev:tui.
+    pnpm_config_verify_deps_before_run: "false",
   };
 });
 

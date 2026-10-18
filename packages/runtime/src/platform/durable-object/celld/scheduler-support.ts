@@ -105,11 +105,14 @@ export async function insertDueWorkInTransaction<T>(
       (earliest, persistedValue) => Math.min(earliest, persistedValue),
       Number.POSITIVE_INFINITY
     );
-  await transaction.setAlarm(
+  const alarm =
     currentAlarm === null
       ? persistedDueAt
-      : Math.min(currentAlarm, persistedDueAt)
-  );
+      : Math.min(currentAlarm, persistedDueAt);
+  // A preserved duplicate row may predate due_at; never arm an infinite alarm.
+  if (Number.isFinite(alarm)) {
+    await transaction.setAlarm(alarm);
+  }
 }
 
 export async function insertDueWorkAndArm<T>(

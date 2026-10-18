@@ -1,3 +1,4 @@
+import type { ModelMessage } from "ai";
 import { AgentHookRuntime } from "../../agent/core/hook-runtime";
 import { runAgentLoop } from "../../agent/loop/run";
 import { stageUserInputAttachments } from "../input/attachments";
@@ -84,17 +85,16 @@ export async function processQueuedInput({
       turnId,
     });
     executionStarted = true;
-    if (
-      !(await activateContinuation(
-        item,
-        state,
-        executionRun,
-        activeAbort.signal
-      ))
-    ) {
+    const committedHistory = await activateContinuation(
+      item,
+      state,
+      executionRun,
+      activeAbort.signal
+    );
+    if (!committedHistory) {
       return "processed";
     }
-    historySnapshot = state.modelSnapshot();
+    historySnapshot = committedHistory;
     resolveQueuedInputRecovery(item, state);
     await emitInitialEvents(item, events, recordEvent);
     const committedPreUser = await commitPreUserRuntimeInputs(
@@ -270,24 +270,30 @@ export async function processQueuedInput({
   }
 }
 
+/**
+ * Applies a continuation over freshly loaded history. Returns the committed
+ * history that failure recovery must roll back to: post-refresh, but without
+ * the uncommitted continuation messages.
+ */
 async function activateContinuation(
   item: ProcessQueuedInputOptions["item"],
   state: ProcessQueuedInputOptions["state"],
   executionRun: ThreadExecutionRun | undefined,
   signal: AbortSignal
-): Promise<boolean> {
+): Promise<ModelMessage[] | undefined> {
   if (item.continuation && !signal.aborted) {
     await state.refresh();
   }
+  const committedHistory = state.modelSnapshot();
   if (
     signal.aborted ||
     (item.continuation && !state.applyContinuationCheckpoint(item.continuation))
   ) {
     await executionRun?.complete("cancelled");
     item.run.emit({ type: "turn-abort" });
-    return false;
+    return;
   }
-  return true;
+  return committedHistory;
 }
 
 function emitStartFailure(

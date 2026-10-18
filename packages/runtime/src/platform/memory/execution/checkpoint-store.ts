@@ -69,7 +69,9 @@ export class InMemoryCheckpointStore
       (candidate) => candidate.version === run.checkpointVersion
     );
     if (!checkpoint) {
-      throw new CheckpointCorruptionError(runId, run.checkpointVersion);
+      return Promise.reject(
+        new CheckpointCorruptionError(runId, run.checkpointVersion)
+      );
     }
     return Promise.resolve(structuredClone(checkpoint));
   }

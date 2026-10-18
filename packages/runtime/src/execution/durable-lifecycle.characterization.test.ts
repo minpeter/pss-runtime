@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Agent, createAgent } from "../agent/core/agent";
 import { ToolExecutionNeedsRecoveryError } from "../llm/tool-execution-checkpoint";
 import { createInMemoryHost } from "../platform/memory";
@@ -11,6 +11,7 @@ import {
   userText,
 } from "../testing/test-fixtures";
 import { AgentThread } from "../thread/handle/agent-thread";
+import { claimOrphanDurableThreadInput } from "../thread/handle/durable-queue-claims";
 import { collect } from "../thread/handle/test-support";
 import { encodeThreadSnapshot } from "../thread/state/snapshot";
 import { DisposedResourceError } from "../thread/state/thread-errors";
@@ -296,6 +297,65 @@ describe("durable lifecycle characterization", () => {
     }
     expect(eventTypes(await collect(pendingTurn))).toContain("turn-end");
     await expect(host.store.turns.get(pendingRunId)).resolves.toMatchObject({
+      status: "completed",
+    });
+  });
+
+  it("keeps resumed durable input owned while its inspection claim is released", async () => {
+    // Given: crashed admission left input and its queued run, and a local
+    // orphan drain tries to claim the input whenever a claim is released.
+    const host = createInMemoryHost();
+    const threadKey = "resume-handoff-thread";
+    const runId = createThreadExecutionRunId({ threadKey, turnId: "msg-race" });
+    await host.store.inputs.admit({
+      input: { text: "handoff prompt", type: "user-input" },
+      kind: "send",
+      messageId: "msg-race",
+      threadKey,
+    });
+    await host.store.turns.create({
+      checkpointVersion: 0,
+      kind: "user-turn",
+      rootRunId: runId,
+      runId,
+      status: "queued",
+      threadKey,
+    });
+    const releaseClaim = host.store.inputs.releaseClaim.bind(host.store.inputs);
+    let competingClaim: unknown = "not attempted";
+    let competed = false;
+    vi.spyOn(host.store.inputs, "releaseClaim").mockImplementation(
+      async (claim) => {
+        const released = await releaseClaim(claim);
+        if (!competed) {
+          competed = true;
+          competingClaim = await claimOrphanDurableThreadInput({
+            executionHost: host,
+            threadKey,
+          });
+        }
+        return released;
+      }
+    );
+    const agent = await createAgent({
+      host,
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("HANDOFF_FINAL")])
+      ),
+    });
+
+    // When: the queued run is resumed.
+    const turn = await agent.resume(runId);
+
+    // Then: the local drain yields to the resumed turn, which completes.
+    expect(competingClaim).toBeUndefined();
+    if (!turn) {
+      throw new Error(
+        "Expected agent.resume to execute pending durable input."
+      );
+    }
+    expect(eventTypes(await collect(turn))).toContain("turn-end");
+    await expect(host.store.turns.get(runId)).resolves.toMatchObject({
       status: "completed",
     });
   });
