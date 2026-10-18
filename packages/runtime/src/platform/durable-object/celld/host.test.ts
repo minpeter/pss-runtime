@@ -1,7 +1,40 @@
 import { describe, expect, it } from "vitest";
 import { describeAgentHostFaultContract } from "../../../contracts/agent-host-fault-contract";
+import { describeExecutionStoreContract } from "../../../contracts/execution-store/contract";
+import {
+  type CelldSqliteTestStorage,
+  createCelldSqliteTestStorage,
+} from "./celld-sqlite-test-storage";
 import { createCelldTestStorage } from "./celld-test-storage";
 import { createCelldHost, listCelldScheduledRuns } from "./host";
+
+const CONTRACT_NOW_MS = 1000;
+const celldStoreStorages = new WeakMap<object, CelldSqliteTestStorage>();
+
+describeExecutionStoreContract({
+  createStore: () => {
+    const storage = createCelldSqliteTestStorage();
+    const { store } = createCelldHost({
+      clock: () => CONTRACT_NOW_MS,
+      state: { storage, waitUntil: () => undefined },
+    });
+    celldStoreStorages.set(store, storage);
+    return store;
+  },
+  name: "Celld",
+  transactionalScheduler: {
+    expectCommittedRunWake: async (store) => {
+      await expect(celldStoreStorages.get(store)?.getAlarm()).resolves.toBe(
+        CONTRACT_NOW_MS
+      );
+    },
+    listScheduledRuns: (store) =>
+      listCelldScheduledRuns(
+        celldStoreStorages.get(store) ?? createCelldSqliteTestStorage(),
+        { nowMs: CONTRACT_NOW_MS }
+      ),
+  },
+});
 
 let hostPrefix = 0;
 

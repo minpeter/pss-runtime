@@ -25,62 +25,50 @@ export function createCelldScheduler({
   storage,
 }: CelldSchedulerOptions): CelldScheduler {
   const createTransactionScheduler = (
-    transactionStorage: DurableObjectTransactionStorage,
-    currentAlarm?: number | null
+    transactionStorage: DurableObjectTransactionStorage
   ): HostScheduler => ({
-    enqueueRun: async (runId, options = {}) => {
-      await insertDueWorkInTransaction(
+    enqueueRun: (runId, options = {}) =>
+      insertDueWorkInTransaction(
         transactionStorage,
         prefix,
         RUN_KIND,
         runId,
         runId,
         clock() + Math.max(0, Math.floor(options.runAfterMs ?? 0)),
-        { runId },
-        currentAlarm ?? (await storage.getAlarm())
-      );
-    },
-    resumeThread: async (threadKey, options) => {
+        { runId }
+      ),
+    resumeThread: (threadKey, options) => {
       const prompt: ScheduledThreadPrompt = {
         idempotencyKey: options.idempotencyKey,
         notificationId: options.notificationId,
         runId: options.runId,
         threadKey,
       };
-      await insertDueWorkInTransaction(
+      return insertDueWorkInTransaction(
         transactionStorage,
         prefix,
         THREAD_PROMPT_KIND,
         threadPromptScheduledWorkId(prompt),
         prompt,
         clock(),
-        { runId: options.runId, threadKey },
-        currentAlarm ?? (await storage.getAlarm())
+        { runId: options.runId, threadKey }
       );
     },
   });
   return {
     createTransactionScheduler,
-    enqueueRun: (runId, options = {}) =>
-      serialize(storage, async () => {
-        const currentAlarm = await storage.getAlarm();
-        await withTransaction(storage, (tx) =>
-          createTransactionScheduler(tx, currentAlarm).enqueueRun(
-            runId,
-            options
-          )
-        );
-      }),
+    enqueueRun: (runId, options) =>
+      serialize(storage, () =>
+        withTransaction(storage, (tx) =>
+          createTransactionScheduler(tx).enqueueRun(runId, options)
+        )
+      ),
     resumeThread: (threadKey, options) =>
-      serialize(storage, async () => {
-        const currentAlarm = await storage.getAlarm();
-        await withTransaction(storage, (tx) =>
-          createTransactionScheduler(tx, currentAlarm).resumeThread(
-            threadKey,
-            options
-          )
-        );
-      }),
+      serialize(storage, () =>
+        withTransaction(storage, (tx) =>
+          createTransactionScheduler(tx).resumeThread(threadKey, options)
+        )
+      ),
     storage,
   };
 }

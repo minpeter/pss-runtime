@@ -14,6 +14,8 @@ export interface CelldSqliteTestStorageOptions {
   readonly getAlarm?: () => Promise<void>;
   readonly setAlarm?: (scheduledTime: Date | number) => Promise<void>;
   readonly sqlFailure?: (query: string) => Error | undefined;
+  /** Called when a transaction must wait behind an open transaction. */
+  readonly transactionQueued?: () => void;
 }
 
 export interface CelldSqliteTestStorage extends CelldDurableObjectStorage {
@@ -71,6 +73,7 @@ export function createCelldSqliteTestStorage(
   const values = new InMemoryDurableObjectStorage();
   let alarm: number | null = null;
   let transactionChain = Promise.resolve();
+  let openTransactions = 0;
 
   const storage: CelldSqliteTestStorage = {
     delete: (key) => values.delete(key),
@@ -97,6 +100,10 @@ export function createCelldSqliteTestStorage(
       transactionChain = new Promise<void>((resolve) => {
         release = resolve;
       });
+      if (openTransactions > 0) {
+        options.transactionQueued?.();
+      }
+      openTransactions += 1;
       await previous;
       const previousAlarm = alarm;
       let nextAlarm = alarm;
@@ -104,7 +111,15 @@ export function createCelldSqliteTestStorage(
         const result = await sql.transaction(() =>
           operation({
             delete: storage.delete,
+            deleteAlarm: async () => {
+              await options.deleteAlarm?.();
+              nextAlarm = null;
+            },
             get: storage.get,
+            getAlarm: async () => {
+              await options.getAlarm?.();
+              return nextAlarm;
+            },
             put: storage.put,
             setAlarm: async (scheduledTime) => {
               await options.setAlarm?.(scheduledTime);
@@ -119,6 +134,7 @@ export function createCelldSqliteTestStorage(
         alarm = previousAlarm;
         throw error;
       } finally {
+        openTransactions -= 1;
         release();
       }
     },

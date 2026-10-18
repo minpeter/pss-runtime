@@ -19,8 +19,17 @@ export interface AgentInstrumentationContext {
   readonly threadKey: string;
 }
 
+/**
+ * Value returned by `wrapTurn`. The runtime reads only `events()` and rebuilds
+ * the iterable public `AgentTurn` with its canonical `runId` around it.
+ */
+export type AgentInstrumentationTurn = Pick<AgentTurn, "events" | "runId">;
+
 export interface AgentInstrumentation {
-  wrapTurn(turn: AgentTurn, context: AgentInstrumentationContext): AgentTurn;
+  wrapTurn(
+    turn: AgentTurn,
+    context: AgentInstrumentationContext
+  ): AgentInstrumentationTurn;
 }
 
 export function normalizeAgentInstrumentations(

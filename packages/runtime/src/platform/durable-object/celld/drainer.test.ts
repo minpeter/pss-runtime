@@ -7,7 +7,11 @@ import {
   type CelldScheduledWorkAgent,
   drainCelldScheduledWork,
 } from "./drainer";
-import { createCelldScheduler, listCelldScheduledRuns } from "./scheduler";
+import {
+  createCelldScheduler,
+  listCelldScheduledRuns,
+  listCelldScheduledThreadPrompts,
+} from "./scheduler";
 
 describe("drainCelldScheduledWork", () => {
   it("consumes run events and acknowledges completed work", async () => {
@@ -98,6 +102,42 @@ describe("drainCelldScheduledWork", () => {
         listCelldScheduledRuns(storage, { nowMs: 0 })
       ).resolves.toEqual([]);
     }
+  });
+
+  it("acknowledges a run parked as needs-recovery instead of polling it", async () => {
+    // Given
+    const storage = createCelldTestStorage();
+    const scheduler = createCelldScheduler({ clock: () => 0, storage });
+    await scheduler.enqueueRun("run-1");
+    await scheduler.resumeThread("thread-1", { runId: "run-1" });
+    const agent = createAgent({
+      record: runRecord("needs-recovery"),
+      run: null,
+    });
+
+    // When
+    const result = await drainCelldScheduledWork({
+      agentForRun: () => agent,
+      nowMs: 0,
+      storage,
+    });
+
+    // Then
+    expect(result.ackedRuns).toEqual(["run-1"]);
+    expect(result.ackedThreadPrompts).toEqual([
+      { runId: "run-1", threadKey: "thread-1" },
+    ]);
+    expect(result.skippedRuns).toEqual([]);
+    expect(result.skippedThreadPrompts).toEqual([]);
+    await expect(
+      listCelldScheduledRuns(storage, { nowMs: Number.MAX_SAFE_INTEGER })
+    ).resolves.toEqual([]);
+    await expect(
+      listCelldScheduledThreadPrompts(storage, {
+        nowMs: Number.MAX_SAFE_INTEGER,
+      })
+    ).resolves.toEqual([]);
+    await expect(storage.getAlarm()).resolves.toBeNull();
   });
 });
 

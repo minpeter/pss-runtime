@@ -99,6 +99,13 @@ export function decrement(value: number | undefined): number | undefined {
   return value === undefined ? undefined : Math.max(0, value - 1);
 }
 
-export function isTerminal(status: TurnStatus): boolean {
-  return status === "cancelled" || status === "completed" || status === "error";
+// needs-recovery is parked for an explicit operator action; polling it again
+// can never make progress.
+export function isSettled(status: TurnStatus): boolean {
+  return (
+    status === "cancelled" ||
+    status === "completed" ||
+    status === "error" ||
+    status === "needs-recovery"
+  );
 }

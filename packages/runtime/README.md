@@ -829,7 +829,9 @@ spans.
 Agent instrumentations run for `send`, `follow-up`, `steer`, and durable `resume` turns.
 Custom `AgentInstrumentation.wrapTurn(turn, context)` implementations receive
 the operation, canonical thread key, optional agent namespace, and the durable
-run ID for resume operations.
+run ID for resume operations. They return an `AgentInstrumentationTurn`
+(`{ events, runId }`); the runtime rebuilds the iterable `AgentTurn` with the
+canonical run ID around it.
 
 ## Delegation
 
@@ -1446,6 +1448,7 @@ timers.
 | Thread + execution stores             | yes               | yes                      | yes                           |
 | Scheduled runs and thread prompts     | list/ack, deduped | list/ack, deduped        | list/ack/claim, deduped       |
 | Delayed runs (`runAfterMs`)           | due-time filtered | due-time filtered        | Agents `schedule()` / fibers  |
+| Transactional `tx.scheduler`          | yes               | yes                      | none; use `host.scheduler` after commit |
 | Product host factory                  | `createInMemoryHost` | `createFileHost`      | `createCloudflareHost`        |
 | Low-level storage host                | —                 | —                        | `createDurableObjectStorageHost` |
 | Drain helper                          | app-driven        | `drainScheduledNodeWork` | Agents fiber resume               |
@@ -1501,7 +1504,9 @@ thread state, and the terminal event in one host transaction. Queued runs cancel
 directly because they have no active thread state to settle. `delete()` and
 `dispose()` stop the current session's in-process work; durable hosts remain
 responsible for app-owned background cancellation, cleanup, and notification
-policy.
+policy. After `agent.dispose()` succeeds, `thread()`, `send()`, `followUp()`,
+`overlay()`, and `resume()` throw `DisposedResourceError`; repeated disposal is
+a no-op.
 
 
 

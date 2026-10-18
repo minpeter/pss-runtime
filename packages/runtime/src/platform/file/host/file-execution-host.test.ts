@@ -243,6 +243,56 @@ describe("createFileHost", () => {
     }
   });
 
+  it("acks scheduled work for a run parked as needs-recovery", async () => {
+    // Given
+    const directory = await tempDir();
+    try {
+      const host = createFileHost({ directory });
+      const agent = new Agent({
+        host,
+        model: createCallbackModel(() =>
+          Promise.resolve([assistantMessage("SHOULD NOT RUN")])
+        ),
+        namespace: "local-owner",
+      });
+      await host.store.turns.create({
+        checkpointVersion: 0,
+        kind: "notification",
+        ownerNamespace: agentNamespace("local-owner"),
+        rootRunId: "run:parked",
+        runId: "run:parked",
+        status: "needs-recovery",
+        threadKey: "thread:parked",
+      });
+      const prompt = {
+        idempotencyKey: "notify:parked",
+        notificationId: "notification:parked",
+        runId: "run:parked",
+        threadKey: "thread:parked",
+      };
+      await appendScheduledNodeRun(directory, "run:parked");
+      await appendScheduledNodeThreadPrompt(directory, prompt);
+
+      // When
+      const drainResult = await drainScheduledNodeWork({
+        agentForRun: () => agent,
+        directory,
+      });
+
+      // Then
+      expect(drainResult.ackedRuns).toEqual(["run:parked"]);
+      expect(drainResult.ackedThreadPrompts).toEqual([prompt]);
+      expect(drainResult.skippedRuns).toEqual([]);
+      expect(drainResult.skippedThreadPrompts).toEqual([]);
+      await expect(listScheduledNodeRuns(directory)).resolves.toEqual([]);
+      await expect(listScheduledNodeThreadPrompts(directory)).resolves.toEqual(
+        []
+      );
+    } finally {
+      await removeTempDir(directory);
+    }
+  });
+
   it("throws deterministic errors for malformed scheduled work files", async () => {
     const directory = await tempDir();
     try {

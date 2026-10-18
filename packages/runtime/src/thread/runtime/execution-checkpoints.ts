@@ -2,6 +2,7 @@ import { appendLeaseFencedCheckpoint } from "../../execution/host/checkpoint-fen
 import { createCheckpointId } from "../../execution/host/checkpoint-ids";
 import type {
   AgentHost,
+  Checkpoint,
   CheckpointPhase,
   LeaseFencedCheckpointWriteResult,
 } from "../../execution/host/types";
@@ -62,6 +63,51 @@ export class ThreadExecutionCheckpointAuthorityError extends Error {
   }
 }
 
+/** A tool call whose after-tool checkpoint was persisted earlier in a run. */
+export interface CompletedToolCall {
+  readonly toolCallId: string;
+  readonly toolName: string;
+}
+
+/** Tool calls a tool checkpoint records as completed before its own call. */
+export function priorCompletedToolCalls(
+  checkpoint: Checkpoint | null
+): CompletedToolCall[] {
+  const state = checkpoint?.runtimeState as
+    | { readonly priorCompletedToolCalls?: unknown }
+    | null
+    | undefined;
+  const prior = state?.priorCompletedToolCalls;
+  if (!Array.isArray(prior)) {
+    return [];
+  }
+  return prior.flatMap((entry: unknown): CompletedToolCall[] => {
+    const call = entry as Partial<Record<keyof CompletedToolCall, unknown>>;
+    return typeof call?.toolCallId === "string" &&
+      typeof call.toolName === "string"
+      ? [{ toolCallId: call.toolCallId, toolName: call.toolName }]
+      : [];
+  });
+}
+
+function completedToolCallsThrough(
+  checkpoint: Checkpoint | null
+): CompletedToolCall[] {
+  const completed = priorCompletedToolCalls(checkpoint);
+  const state = checkpoint?.runtimeState as
+    | Partial<Record<keyof CompletedToolCall, unknown>>
+    | null
+    | undefined;
+  if (
+    checkpoint?.phase === "after-tool" &&
+    typeof state?.toolCallId === "string" &&
+    typeof state.toolName === "string"
+  ) {
+    completed.push({ toolCallId: state.toolCallId, toolName: state.toolName });
+  }
+  return completed;
+}
+
 export function createThreadToolExecutionContext({
   executionHost,
   interceptToolCall,
@@ -77,29 +123,50 @@ export function createThreadToolExecutionContext({
   readonly runId: string;
   readonly state: ThreadState;
 }): RuntimeToolExecutionContext {
-  const append = (
+  // Thread history is committed only at input, steer, and turn end, so every
+  // tool checkpoint records the run's earlier completed tools. Recovery that
+  // can restore only the latest checkpoint uses this to fail closed. A
+  // recovered attempt inherits the list from the run's latest checkpoint.
+  let completed: CompletedToolCall[] | undefined;
+  const append = async (
     phase: Extract<CheckpointPhase, "after-tool" | "before-tool">,
     toolCall: RuntimeToolExecutionCheckpoint & { readonly output?: unknown }
-  ) =>
-    appendThreadToolExecutionCheckpoint({
+  ): Promise<void> => {
+    if (!completed) {
+      const loaded = completedToolCallsThrough(
+        await executionHost.store.checkpoints.latest(runId)
+      );
+      completed ??= loaded;
+    }
+    await appendThreadToolExecutionCheckpoint({
       executionHost,
       leaseId,
       phase,
+      priorCompleted: [...completed],
       runId,
       state,
       toolCall,
     });
+    if (
+      phase === "after-tool" &&
+      !completed.some((call) => call.toolCallId === toolCall.toolCallId)
+    ) {
+      completed.push({
+        toolCallId: toolCall.toolCallId,
+        toolName: toolCall.toolName,
+      });
+    }
+  };
   return {
     attempt: 1,
     afterTool: async (checkpoint) => {
-      await append("after-tool", checkpoint);
+      // Recovered results never pass the result hook again, so persist only
+      // its final output. A crash inside the hook leaves before-tool latest.
       const transformed = await interceptToolResult?.(checkpoint);
-      if (transformed && !Object.is(transformed.output, checkpoint.output)) {
-        await append("after-tool", {
-          ...checkpoint,
-          output: transformed.output,
-        });
-      }
+      await append("after-tool", {
+        ...checkpoint,
+        output: transformed ? transformed.output : checkpoint.output,
+      });
       return transformed;
     },
     beforeTool: async (checkpoint) => {
@@ -124,6 +191,7 @@ async function appendThreadToolExecutionCheckpoint({
   executionHost,
   leaseId,
   phase,
+  priorCompleted,
   runId,
   state,
   toolCall,
@@ -131,6 +199,7 @@ async function appendThreadToolExecutionCheckpoint({
   readonly executionHost: AgentHost;
   readonly leaseId: string | null;
   readonly phase: Extract<CheckpointPhase, "after-tool" | "before-tool">;
+  readonly priorCompleted: readonly CompletedToolCall[];
   readonly runId: string;
   readonly state: ThreadState;
   readonly toolCall: RuntimeToolExecutionCheckpoint & {
@@ -156,6 +225,7 @@ async function appendThreadToolExecutionCheckpoint({
         runId,
         runtimeState: {
           ...(phase === "after-tool" ? cloneToolCallState(toolCall) : {}),
+          priorCompletedToolCalls: priorCompleted,
           toolCallId: toolCall.toolCallId,
           toolName: toolCall.toolName,
         },

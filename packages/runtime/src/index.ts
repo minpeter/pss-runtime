@@ -3,6 +3,7 @@ export {
   type AgentInstrumentation,
   type AgentInstrumentationContext,
   type AgentInstrumentationOperation,
+  type AgentInstrumentationTurn,
   type AgentOptions,
   type CreateAgentOptions,
   createAgent,

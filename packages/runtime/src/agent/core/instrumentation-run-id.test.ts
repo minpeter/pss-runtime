@@ -1,4 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import type {
+  AgentInstrumentation,
+  AgentInstrumentationTurn,
+  AgentTurn,
+} from "../../index";
 import { collect } from "../../thread/handle/test-support";
 import { BufferedAgentTurn } from "../../thread/protocol/turn";
 import { applyAgentInstrumentations } from "./instrumentation";
@@ -101,6 +106,31 @@ describe("instrumented AgentTurn run identity", () => {
     // Then: the canonical facade preserves identity and the event stream.
     await expect(collect(wrapped)).resolves.toEqual([{ type: "turn-start" }]);
     expect(hostileReads).toBe(0);
+    expect(wrapped.runId).toBe("canonical-run");
+  });
+
+  it("accepts a wrapper that returns only events and runId", async () => {
+    // Given: the documented pre-iterable wrapper shape from the public root.
+    const instrumentation = {
+      wrapTurn: (turn) => ({ events: () => turn.events(), runId: turn.runId }),
+    } satisfies AgentInstrumentation;
+    expectTypeOf<
+      AgentInstrumentation["wrapTurn"]
+    >().returns.toEqualTypeOf<AgentInstrumentationTurn>();
+    const turn = new BufferedAgentTurn("canonical-run");
+    turn.emit({ type: "turn-start" });
+    turn.close();
+
+    // When: the runtime applies it.
+    const wrapped = applyAgentInstrumentations(
+      turn,
+      [instrumentation],
+      context
+    );
+
+    // Then: the public turn is still directly iterable.
+    expectTypeOf(wrapped).toEqualTypeOf<AgentTurn>();
+    await expect(collect(wrapped)).resolves.toEqual([{ type: "turn-start" }]);
     expect(wrapped.runId).toBe("canonical-run");
   });
 });

@@ -30,6 +30,8 @@ import {
   precreateThreadExecutionRun,
   type QueuedThreadExecutionRun,
 } from "../runtime/execution";
+import type { CompletedToolCall } from "../runtime/execution-checkpoints";
+import { priorCompletedToolCalls } from "../runtime/execution-checkpoints";
 import {
   registerLiveThreadInput,
   unregisterLiveThreadInput,
@@ -52,9 +54,13 @@ export async function continueAgentThread(
   context: AgentThreadContext,
   options: ThreadContinuationOptions = {}
 ): Promise<AgentTurn | undefined> {
+  // Reject before creating the admission promise: a promise that rejects
+  // before waitForCompactionQueue observes it would be unhandled.
+  assertAgentThreadOpen(context);
   const signal = options.signal
     ? AbortSignal.any([context.lifetime.signal, options.signal])
     : context.lifetime.signal;
+  signal.throwIfAborted();
   return await waitForCompactionQueue(
     runReservedContinuationAdmission(context, signal, () =>
       admitContinuation(context, signal)
@@ -201,19 +207,22 @@ export async function resumeClaimedExecutionRunOnThread(
     if (host && isThreadDrainOwned(host, context.threadKey)) {
       throw busyError();
     }
+    const pendingInputTurn = await tryEnqueuePendingDurableInputForRun(
+      context,
+      executionRun,
+      signal
+    );
+    if (pendingInputTurn) {
+      return pendingInputTurn;
+    }
+    await cancelSupersededExecutionRun(context, executionRun);
     return (
-      (await tryEnqueuePendingDurableInputForRun(
-        context,
-        executionRun,
-        signal
-      )) ??
       (await prepareClaimedContinuation(
         context,
         executionRun,
         checkpoint,
         signal
-      )) ??
-      abortedContinuationTurn(executionRun)
+      )) ?? abortedContinuationTurn(executionRun)
     );
   });
 }
@@ -264,13 +273,22 @@ async function tryEnqueuePendingDurableInputForRun(
   }
   try {
     await releaseDurableThreadInputClaim({ executionHost: host, record });
+    if (resumable && executionRun && host) {
+      // Hand off exactly like send(): the input claim is the only ownership
+      // token, so a later orphan drain can start the unleased run.
+      await releaseClaimedContinuationRun(
+        host.store.turns,
+        { runId: executionRun.runId, status: "leased" },
+        executionRun.leaseId ?? null
+      );
+    }
     assertAgentThreadOpen(context);
     signal.throwIfAborted();
   } catch (error) {
     unregisterLiveThreadInput(host, context.threadKey, record.messageId, run);
     throw error;
   }
-  if (!resumable) {
+  if (!(resumable && executionRun)) {
     throw busyError("Thread has queued durable work.");
   }
   return enqueuePreparedTurn(
@@ -285,9 +303,67 @@ async function tryEnqueuePendingDurableInputForRun(
       durableInputKind: record.kind === "follow-up" ? "follow-up" : "send",
       durableMessageId: record.messageId,
     },
-    executionRun,
+    { kind: executionRun.kind, runId: executionRun.runId },
     run
   );
+}
+
+/** Rejects agent.resume() of a run that newer thread work superseded. */
+export class SupersededExecutionRunError extends Error {
+  readonly runId: string;
+
+  constructor(runId: string) {
+    super(
+      `Thread execution run ${runId} was superseded by newer thread work and was cancelled.`
+    );
+    this.name = "SupersededExecutionRunError";
+    this.runId = runId;
+  }
+}
+
+async function cancelSupersededExecutionRun(
+  context: AgentThreadContext,
+  executionRun: QueuedThreadExecutionRun
+): Promise<void> {
+  const turns = context.execution.executionHost?.store.turns;
+  if (!turns?.listByThreadKey) {
+    return;
+  }
+  const latestRun = latestRecoverableRun(
+    context,
+    await turns.listByThreadKey(context.threadKey)
+  );
+  if (!latestRun || latestRun.runId === executionRun.runId) {
+    return;
+  }
+  const cancelled = await transitionTurn(turns, {
+    expected: { leaseId: executionRun.leaseId ?? null, status: "leased" },
+    runId: executionRun.runId,
+    update: { lease: null, status: "cancelled" },
+  });
+  if (!cancelled.ok) {
+    throw new TurnTransitionConflictError(
+      executionRun.runId,
+      "cancel",
+      cancelled.reason
+    );
+  }
+  throw new SupersededExecutionRunError(executionRun.runId);
+}
+
+function latestRecoverableRun(
+  context: AgentThreadContext,
+  runs: readonly TurnRecord[]
+): TurnRecord | undefined {
+  const ownerNamespace = context.execution.ownerNamespace ?? "";
+  const hasExplicitNamespace = context.execution.ownerNamespace !== undefined;
+  return runs
+    .filter(
+      (run) =>
+        (run.kind === "user-turn" || run.kind === "tool-recovery") &&
+        isRecordClaimableByAgent(run, ownerNamespace, hasExplicitNamespace)
+    )
+    .at(-1);
 }
 
 export const DEFAULT_MAX_TURN_CLAIM_ATTEMPTS = 5;
@@ -301,17 +377,9 @@ async function recoverPersistedThreadContinuation(
   if (!(host && turns?.listByThreadKey)) {
     return;
   }
-  const ownerNamespace = context.execution.ownerNamespace ?? "";
-  const hasExplicitNamespace = context.execution.ownerNamespace !== undefined;
   const runs = await turns.listByThreadKey(context.threadKey);
   signal.throwIfAborted();
-  const latestRun = runs
-    .filter(
-      (run) =>
-        (run.kind === "user-turn" || run.kind === "tool-recovery") &&
-        isRecordClaimableByAgent(run, ownerNamespace, hasExplicitNamespace)
-    )
-    .at(-1);
+  const latestRun = latestRecoverableRun(context, runs);
   if (
     !latestRun ||
     latestRun.status === "completed" ||
@@ -387,11 +455,50 @@ async function prepareClaimedContinuation(
   await context.state.refresh();
   assertAgentThreadOpen(context);
   signal.throwIfAborted();
+  const inMemoryContinuation = context.state.continuationCheckpoint();
+  if (inMemoryContinuation?.recover) {
+    // Mirror input admission: a throwing recovery fences every route, and a
+    // resolvable one is this process's newer view of the run. Never replace
+    // it with the persisted checkpoint.
+    const recovered = inMemoryContinuation.recover();
+    if (context.state.isContinuationCurrent(inMemoryContinuation)) {
+      inMemoryContinuation.history.splice(
+        0,
+        inMemoryContinuation.history.length,
+        ...recovered
+      );
+      return enqueuePreparedTurn(
+        context,
+        { continuation: inMemoryContinuation },
+        executionRun
+      );
+    }
+  }
+  const committedHistory = context.state.modelSnapshot();
+  const turns = context.execution.executionHost?.store.turns;
+  const unrestorable = priorCompletedToolCalls(checkpoint).filter(
+    (call) => !historyHasToolResult(committedHistory, call.toolCallId)
+  );
+  const [firstUnrestorable, ...restUnrestorable] = unrestorable;
+  if (firstUnrestorable) {
+    // Only the latest tool checkpoint can be restored; resuming without an
+    // earlier completed result would let the model repeat its effects.
+    if (turns) {
+      await transitionTurn(turns, {
+        expected: { leaseId: executionRun.leaseId ?? null, status: "leased" },
+        runId: executionRun.runId,
+        update: { lease: null, status: "needs-recovery" },
+      });
+    }
+    throw new UnrestorableToolResultsError(executionRun.runId, [
+      firstUnrestorable,
+      ...restUnrestorable,
+    ]);
+  }
   const history = buildRecoveredContinuationHistory(
-    context.state.modelSnapshot(),
+    committedHistory,
     checkpoint
   );
-  const turns = context.execution.executionHost?.store.turns;
   if (history.length === 0) {
     if (turns) {
       await transitionTurn(turns, {
@@ -411,7 +518,7 @@ async function prepareClaimedContinuation(
     if (turns && executionRun.leaseId) {
       await releaseClaimedContinuationRun(
         turns,
-        { runId: executionRun.runId, status: "leased" } as TurnRecord,
+        { runId: executionRun.runId, status: "leased" },
         executionRun.leaseId
       );
     }
@@ -490,6 +597,54 @@ export async function releaseClaimedContinuationRun(
   }
 }
 
+function historyHasToolResult(
+  history: readonly ModelMessage[],
+  toolCallId: string
+): boolean {
+  return history.some(
+    (message) =>
+      message.role === "tool" &&
+      Array.isArray(message.content) &&
+      message.content.some(
+        (part) =>
+          typeof part === "object" &&
+          part !== null &&
+          "toolCallId" in part &&
+          part.toolCallId === toolCallId
+      )
+  );
+}
+
+/**
+ * Parks a crashed run whose earlier completed tool results never reached
+ * committed history. It is a needs-recovery error so callers never requeue.
+ */
+class UnrestorableToolResultsError extends ToolExecutionNeedsRecoveryError {
+  readonly runId: string;
+  readonly toolCalls: readonly CompletedToolCall[];
+
+  constructor(
+    runId: string,
+    toolCalls: readonly [CompletedToolCall, ...CompletedToolCall[]]
+  ) {
+    const [first] = toolCalls;
+    super({
+      attempt: 1,
+      idempotencyKey: `${runId}:${first.toolCallId}`,
+      policy: "manual-recovery",
+      toolCallId: first.toolCallId,
+      toolName: first.toolName,
+    });
+    this.message = `Thread execution run ${runId} requires manual recovery: completed tool calls ${toolCalls
+      .map((call) => `${call.toolName} (${call.toolCallId})`)
+      .join(
+        ", "
+      )} are missing from committed thread history and cannot be restored.`;
+    this.runId = runId;
+    this.toolCalls = toolCalls;
+  }
+}
+
 function buildRecoveredContinuationHistory(
   baseHistory: readonly ModelMessage[],
   checkpoint: Checkpoint | null
@@ -518,19 +673,7 @@ function buildRecoveredContinuationHistory(
   const toolCallId = candidate.toolCallId;
   const toolName = candidate.toolName;
   const rawOutput = "output" in candidate ? candidate.output : null;
-  const alreadyInHistory = history.some(
-    (message) =>
-      message.role === "tool" &&
-      Array.isArray(message.content) &&
-      message.content.some(
-        (part) =>
-          typeof part === "object" &&
-          part !== null &&
-          "toolCallId" in part &&
-          part.toolCallId === toolCallId
-      )
-  );
-  if (alreadyInHistory) {
+  if (historyHasToolResult(history, toolCallId)) {
     return history;
   }
   history.push(

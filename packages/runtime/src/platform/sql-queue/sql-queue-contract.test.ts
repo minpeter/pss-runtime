@@ -18,9 +18,21 @@ import type {
 import { reconcileSqlQueuedWork } from "./reconciliation";
 import { SqlHostStore } from "./store";
 
+const sqlStorePorts = new WeakMap<object, InMemoryExecutionStore>();
+
 describeExecutionStoreContract({
-  createStore: () => new SqlHostStore(new InMemoryExecutionStore()),
+  createStore: () => {
+    const port = new InMemoryExecutionStore();
+    const store = new SqlHostStore(port);
+    sqlStorePorts.set(store, port);
+    return store;
+  },
   name: "SQL port adapter (in-memory reference)",
+  transactionalScheduler: {
+    listScheduledRuns: (store) =>
+      sqlStorePorts.get(store)?.scheduler.listScheduledRuns() ??
+      Promise.resolve([]),
+  },
 });
 
 class ReferenceQueue implements SqlQueuePort {

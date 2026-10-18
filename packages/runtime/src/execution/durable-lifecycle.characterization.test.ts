@@ -226,6 +226,15 @@ describe("durable lifecycle characterization", () => {
       DisposedResourceError
     );
 
+    // A second Agent over a distinct store object sharing the same data, as
+    // after a restart: process-local ownership registries key by store.
+    const restartedAgent = await createAgent({
+      host: { ...host, store: sharedStoreView(host.store) },
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("RESTARTED_FINAL")])
+      ),
+    });
+
     await host.store.threads.commit(
       "resume-thread",
       {
@@ -261,7 +270,7 @@ describe("durable lifecycle characterization", () => {
       },
       { expectedVersion: 0 }
     );
-    const resumedTurn = await recoveredAgent.resume("crashed-user-turn-2");
+    const resumedTurn = await restartedAgent.resume("crashed-user-turn-2");
     expect(resumedTurn?.runId).toBe("crashed-user-turn-2");
     if (!resumedTurn) {
       throw new Error("Expected agent.resume to recover user-turn.");
@@ -288,7 +297,7 @@ describe("durable lifecycle characterization", () => {
       status: "queued",
       threadKey: "fresh-thread",
     });
-    const pendingTurn = await recoveredAgent.resume(pendingRunId);
+    const pendingTurn = await restartedAgent.resume(pendingRunId);
     expect(pendingTurn?.runId).toBe(pendingRunId);
     if (!pendingTurn) {
       throw new Error(
@@ -411,3 +420,12 @@ describe("durable lifecycle characterization", () => {
     ).resolves.toMatchObject({ status: "needs-recovery" });
   });
 });
+
+function sharedStoreView<T extends object>(store: T): T {
+  return new Proxy(store, {
+    get(target, property) {
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}

@@ -6,7 +6,7 @@ import {
   ackThreadPrompt,
   createDrainResult,
   decrement,
-  isTerminal,
+  isSettled,
   listOptions,
   type MutableDrainResult,
   threadPromptContext,
@@ -205,7 +205,7 @@ async function resumeAndDrain(
   const turn = await agent.resume(context.runId);
   if (turn === null) {
     const record = await agent.host.store.turns.get(context.runId);
-    return record === null || isTerminal(record.status);
+    return record === null || isSettled(record.status);
   }
   for await (const event of turn.events()) {
     events.push(event);

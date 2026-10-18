@@ -27,9 +27,11 @@ describeExecutionStoreContract({
     storeDirectories.set(store, directory);
     return store;
   },
-  listScheduledRuns: (store) =>
-    listScheduledNodeRuns(storeDirectories.get(store) ?? ""),
   name: "FileExecutionStore",
+  transactionalScheduler: {
+    listScheduledRuns: (store) =>
+      listScheduledNodeRuns(storeDirectories.get(store) ?? ""),
+  },
 });
 
 describe("FileExecutionStore", () => {

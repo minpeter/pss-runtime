@@ -68,11 +68,7 @@ export function rearmCelldScheduledWork(
   options: ClaimOptions = {}
 ): Promise<void> {
   return serialize(storage, () =>
-    armNextAlarm(
-      storage,
-      options.prefix ?? DEFAULT_PREFIX,
-      options.nowMs ?? Date.now()
-    )
+    armNextAlarm(storage, options.prefix ?? DEFAULT_PREFIX)
   );
 }
 
@@ -105,7 +101,7 @@ export function retryCelldScheduledRun(
         nowMs + Math.max(0, Math.floor(delayMs))
       );
     }
-    await armNextAlarm(storage, prefix, nowMs);
+    await armNextAlarm(storage, prefix);
   });
 }
 
@@ -137,7 +133,7 @@ export function retryCelldScheduledThreadPrompt(
         nowMs
       );
     }
-    await armNextAlarm(storage, prefix, nowMs);
+    await armNextAlarm(storage, prefix);
   });
 }
 
@@ -160,7 +156,7 @@ export async function ackCelldScheduledRun(
       );
     }
     if (options.rearm !== false) {
-      await armNextAlarm(storage, prefix, options.nowMs ?? Date.now());
+      await armNextAlarm(storage, prefix);
     }
   });
 }
@@ -189,7 +185,7 @@ export async function ackCelldScheduledThreadPrompt(
       );
     }
     if (options.rearm !== false) {
-      await armNextAlarm(storage, prefix, options.nowMs ?? Date.now());
+      await armNextAlarm(storage, prefix);
     }
   });
 }

@@ -126,7 +126,7 @@ export function selectScheduledWorkDue(
 }
 
 export function selectNextScheduledWork(
-  storage: DurableObjectStorage,
+  storage: DurableObjectTransactionStorage,
   prefix: string,
   kind: ScheduledWorkKind
 ): ScheduledWorkRow | undefined {

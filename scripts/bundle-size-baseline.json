@@ -28,7 +28,7 @@
     "packages/runtime/dist/platform/durable-object/celld/host.js": 2591,
     "packages/runtime/dist/platform/durable-object/cloudflare/agents/index.js": 2778,
     "packages/runtime/dist/platform/durable-object/cloudflare/image-codecs-edge.js": 1158,
-    "packages/runtime/dist/platform/durable-object/host/storage-host.js": 5537,
+    "packages/runtime/dist/platform/durable-object/host/storage-host.js": 6071,
     "packages/runtime/dist/platform/file/index.js": 1232,
     "packages/runtime/dist/platform/memory/index.js": 388,
     "packages/runtime/dist/platform/sql-queue/index.js": 354,

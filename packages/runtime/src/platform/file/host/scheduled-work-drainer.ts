@@ -143,9 +143,16 @@ async function shouldAckNullResume(
   if (!record) {
     return true;
   }
-  return isTerminalRunStatus(record.status);
+  return isSettledRunStatus(record.status);
 }
 
-function isTerminalRunStatus(status: TurnStatus): boolean {
-  return status === "cancelled" || status === "completed" || status === "error";
+// needs-recovery is parked for an explicit operator action; polling it again
+// can never make progress.
+function isSettledRunStatus(status: TurnStatus): boolean {
+  return (
+    status === "cancelled" ||
+    status === "completed" ||
+    status === "error" ||
+    status === "needs-recovery"
+  );
 }

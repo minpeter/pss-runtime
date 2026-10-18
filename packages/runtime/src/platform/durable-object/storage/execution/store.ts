@@ -10,10 +10,6 @@ import type {
   ThreadInputInbox,
   TurnStore,
 } from "../../../../execution";
-import {
-  type ScheduledThreadPrompt,
-  threadPromptScheduledWorkId,
-} from "../../../../execution/scheduled-work";
 import type { ThreadStore } from "../../../../thread/store/types";
 import type { SqlStorage } from "../../sql/ports/storage-port";
 import {
@@ -28,7 +24,6 @@ import {
 } from "../payload-guard";
 import { DurableObjectSqliteCheckpointStore } from "../sqlite/checkpoint-store";
 import { DurableObjectSqliteEventStore } from "../sqlite/event-store";
-import { insertScheduledWorkInTransaction } from "../sqlite/scheduled-work-table";
 import { DurableObjectSqliteThreadEventLog } from "../sqlite/thread-event-log";
 import { DurableObjectSqliteThreadStore } from "../sqlite/thread-store";
 import { DurableObjectThreadInputInbox } from "./input-store";
@@ -41,7 +36,8 @@ export class DurableObjectExecutionStore implements HostStore {
   readonly inputs: ThreadInputInbox;
   readonly leaseFencedCheckpoints: LeaseFencedCheckpointStore;
   readonly notifications: NotificationInbox;
-  readonly scheduler: HostScheduler;
+  /** Joins this store's transaction; undefined when the host scheduler cannot. */
+  readonly scheduler?: HostScheduler;
   readonly threadEvents: ThreadEventLog;
   readonly turns: TurnStore;
   readonly threads: ThreadStore;
@@ -103,43 +99,7 @@ export class DurableObjectExecutionStore implements HostStore {
       prefix,
       payloadBudget
     );
-    this.scheduler = createTransactionScheduler
-      ? createTransactionScheduler(storage)
-      : {
-          enqueueRun: (runId, options) => {
-            const runAfterMs = options?.runAfterMs;
-            const dueAtMs =
-              runAfterMs === undefined
-                ? undefined
-                : Date.now() + Math.max(0, Math.floor(runAfterMs));
-            insertScheduledWorkInTransaction(
-              this.#storage,
-              this.#prefix,
-              "run",
-              runId,
-              runId,
-              { ...(dueAtMs === undefined ? {} : { dueAtMs }), runId }
-            );
-            return Promise.resolve();
-          },
-          resumeThread: (threadKey, options) => {
-            const prompt: ScheduledThreadPrompt = {
-              idempotencyKey: options.idempotencyKey,
-              notificationId: options.notificationId,
-              runId: options.runId,
-              threadKey,
-            };
-            insertScheduledWorkInTransaction(
-              this.#storage,
-              this.#prefix,
-              "thread-prompt",
-              threadPromptScheduledWorkId(prompt),
-              prompt,
-              { runId: prompt.runId, threadKey }
-            );
-            return Promise.resolve();
-          },
-        };
+    this.scheduler = createTransactionScheduler?.(storage);
   }
 
   get sessions(): ThreadStore {

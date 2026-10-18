@@ -11,27 +11,41 @@ import { InMemoryDurableObjectStorage } from "../durable-object/durable-object-s
 import { DurableObjectExecutionStore } from "./store";
 import { TransactionalInMemorySqlStorage } from "./store-delete-thread.test-support";
 
-const storeStorages = new WeakMap<object, InMemoryDurableObjectStorage>();
+describeExecutionStoreContract({
+  createStore: () =>
+    new DurableObjectExecutionStore({
+      prefix: "contract-test",
+      storage: new InMemoryDurableObjectStorage({
+        sql: new TransactionalInMemorySqlStorage(),
+      }),
+    }),
+  name: "DurableObjectExecutionStore",
+  transactionalScheduler: "unsupported",
+});
+
+const hostStorages = new WeakMap<object, InMemoryDurableObjectStorage>();
 
 describeExecutionStoreContract({
   createStore: () => {
     const storage = new InMemoryDurableObjectStorage({
       sql: new TransactionalInMemorySqlStorage(),
     });
-    const store = new DurableObjectExecutionStore({
+    const { store } = createDurableObjectStorageHost({
       prefix: "contract-test",
       storage,
     });
-    storeStorages.set(store, storage);
+    hostStorages.set(store, storage);
     return store;
   },
-  listScheduledRuns: (store) => {
-    const storage = storeStorages.get(store);
-    return storage
-      ? listScheduledDurableObjectRuns(storage, { prefix: "contract-test" })
-      : Promise.resolve([]);
+  name: "Durable Object storage host",
+  transactionalScheduler: {
+    listScheduledRuns: (store) => {
+      const storage = hostStorages.get(store);
+      return storage
+        ? listScheduledDurableObjectRuns(storage, { prefix: "contract-test" })
+        : Promise.resolve([]);
+    },
   },
-  name: "DurableObjectExecutionStore",
 });
 
 describe("DurableObjectExecutionStore payload guards", () => {

@@ -1,4 +1,5 @@
-import { readdir } from "node:fs/promises";
+import type { Stats } from "node:fs";
+import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
   applyTurnTransitionUpdate,
@@ -25,6 +26,41 @@ let lastCreatedOrder = 0;
 function nextCreatedOrder(): number {
   lastCreatedOrder = Math.max(Date.now() * 1000, lastCreatedOrder + 1);
   return lastCreatedOrder;
+}
+
+async function readRunFile(file: string): Promise<TurnRecord | null> {
+  const record = await readJsonFile(file, parseRunRecord, "run file");
+  if (!record || runCreatedOrder.has(record)) {
+    return record;
+  }
+  // Files written before `createdOrder` existed approximate it from file
+  // metadata on nextCreatedOrder's microsecond scale. Atomic rename rewrites
+  // reset birth time, so this reflects the legacy run's last write, not its
+  // creation; every later write persists the approximation unchanged.
+  let stats: Stats;
+  try {
+    stats = await stat(file);
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+  const fileTimeMs = stats.birthtimeMs > 0 ? stats.birthtimeMs : stats.mtimeMs;
+  runCreatedOrder.set(record, Math.trunc(fileTimeMs * 1000));
+  return record;
+}
+
+function compareRunCreation(left: TurnRecord, right: TurnRecord): number {
+  const orderDelta =
+    (runCreatedOrder.get(left) ?? 0) - (runCreatedOrder.get(right) ?? 0);
+  if (orderDelta !== 0) {
+    return orderDelta;
+  }
+  if (left.runId === right.runId) {
+    return 0;
+  }
+  return left.runId < right.runId ? -1 : 1;
 }
 
 export class FileRunStore implements TurnStore {
@@ -163,11 +199,7 @@ export class FileRunStore implements TurnStore {
   }
 
   async #getUnlocked(runId: string): Promise<TurnRecord | null> {
-    return await readJsonFile(
-      await this.#fileForRun(runId),
-      parseRunRecord,
-      "run file"
-    );
+    return await readRunFile(await this.#fileForRun(runId));
   }
 
   async #listUnlocked(): Promise<readonly TurnRecord[]> {
@@ -187,19 +219,12 @@ export class FileRunStore implements TurnStore {
       if (!entry.endsWith(".json")) {
         continue;
       }
-      const record = await readJsonFile(
-        join(directory, entry),
-        parseRunRecord,
-        "run file"
-      );
+      const record = await readRunFile(join(directory, entry));
       if (record) {
         records.push(record);
       }
     }
-    return records.sort(
-      (left, right) =>
-        (runCreatedOrder.get(left) ?? 0) - (runCreatedOrder.get(right) ?? 0)
-    );
+    return records.sort(compareRunCreation);
   }
 
   async #writeUnlocked(

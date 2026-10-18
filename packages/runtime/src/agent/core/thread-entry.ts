@@ -44,11 +44,15 @@ export interface ThreadHandle extends AsyncDisposable {
     options?: CompactionSummaryOptions
   ): Promise<ManualThreadCompactionResult>;
   /**
-   * Continue the latest safely stopped unfinished task on this handle or host.
-   * Adds no user message; returns undefined only without a current checkpoint.
+   * Continue the latest unfinished task from its current checkpoint without
+   * adding a user message; returns undefined when no checkpoint exists.
    * Busy/queued work rejects with code THREAD_CONTINUATION_BUSY. An optional
    * signal cancels pending admission; accepted turns always end explicitly.
-   * New user work supersedes checkpoints. Completed tools are retained, never replayed.
+   * New user work supersedes checkpoints. Interrupted or failed runs are
+   * terminal: they continue only in this process, not after a reload. Only
+   * runs a crash left non-terminal are recovered from the host. Completed
+   * tools are kept, never replayed, when recovery can rebuild them; otherwise
+   * the run fails closed as `needs-recovery`.
    */
   continue(options?: ThreadContinuationOptions): Promise<AgentTurn | undefined>;
   delete(): Promise<void>;
@@ -96,4 +100,22 @@ export function threadStoreKey(thread: ThreadKey): string {
   }
 
   return `scope:${namespacePart(thread.scope)}:thread:${namespacePart(id)}`;
+}
+
+const scopedThreadStoreKey = /^scope:([^:]*):thread:([^:]*)$/;
+
+/** Reverses `threadStoreKey` for keys read back from durable records. */
+export function threadIdentityFromStoreKey(key: string): ThreadIdentity {
+  const match = scopedThreadStoreKey.exec(key);
+  if (match !== null) {
+    try {
+      return Object.freeze({
+        id: decodeURIComponent(match[2] ?? ""),
+        scope: decodeURIComponent(match[1] ?? ""),
+      });
+    } catch {
+      // Malformed escapes keep the verbatim store key as the id.
+    }
+  }
+  return Object.freeze({ id: key });
 }

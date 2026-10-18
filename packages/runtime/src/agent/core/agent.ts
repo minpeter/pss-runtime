@@ -16,6 +16,7 @@ import {
   normalizeThreadStateMigrations,
   type ThreadStateMigration,
 } from "../../thread/state/migrations";
+import { DisposedResourceError } from "../../thread/state/thread-errors";
 import type { ThreadStore } from "../../thread/store/types";
 import { stableAgentNamespace } from "../identity/namespace";
 import { type ClaimedTurnRecord, resumeAgentTurn } from "../resume/resume";
@@ -41,6 +42,7 @@ import {
   type ThreadHandle,
   type ThreadIdentity,
   type ThreadKey,
+  threadIdentityFromStoreKey,
   threadStoreKey,
 } from "./thread-entry";
 import { createThreadPublicHandle } from "./thread-handle-factory";
@@ -51,6 +53,7 @@ export type {
   AgentInstrumentation,
   AgentInstrumentationContext,
   AgentInstrumentationOperation,
+  AgentInstrumentationTurn,
 } from "./instrumentation";
 export type {
   AgentOptions,
@@ -82,6 +85,7 @@ export class Agent implements AsyncDisposable {
   readonly #notificationOverlays?: AgentOptions["notificationOverlays"];
   readonly #threadMigrations: readonly ThreadStateMigration[];
   readonly #compaction?: AgentCompaction;
+  #disposed = false;
   readonly host: AgentHost;
   readonly namespace?: string;
   constructor(options: AgentConstructorOptions) {
@@ -143,6 +147,7 @@ export class Agent implements AsyncDisposable {
       readonly maxAttempts?: number;
     } = {}
   ): Promise<AgentTurn | null> {
+    this.#assertNotDisposed();
     return await resumeAgentTurn({
       claim: options.claim,
       hasExplicitNamespace: this.namespace !== undefined,
@@ -158,6 +163,7 @@ export class Agent implements AsyncDisposable {
   }
 
   thread(thread: ThreadKey): ThreadHandle {
+    this.#assertNotDisposed();
     return this.#threadEntry(
       threadStoreKey(thread),
       resolveThreadIdentity(thread)
@@ -165,6 +171,9 @@ export class Agent implements AsyncDisposable {
   }
 
   async dispose(): Promise<void> {
+    if (this.#disposed) {
+      return;
+    }
     let failed = false;
     let failure: unknown;
     for (const entry of [...this.#threads.values()]) {
@@ -180,13 +189,20 @@ export class Agent implements AsyncDisposable {
     if (failed) {
       throw failure;
     }
+    this.#disposed = true;
   }
 
   [Symbol.asyncDispose](): Promise<void> {
     return this.dispose();
   }
 
-  #threadEntry(key: string, identity?: ThreadIdentity): AgentThreadEntry {
+  #assertNotDisposed(): void {
+    if (this.#disposed) {
+      throw new DisposedResourceError("Agent is disposed");
+    }
+  }
+
+  #threadEntry(key: string, identity: ThreadIdentity): AgentThreadEntry {
     const existing = this.#threads.get(key);
     if (existing) {
       return existing;
@@ -220,7 +236,7 @@ export class Agent implements AsyncDisposable {
     const publicHandle = createThreadPublicHandle({
       evict: (evictedKey, evictedHandle) =>
         this.#evictThreadHandle(evictedKey, evictedHandle),
-      ...(identity === undefined ? {} : { identity }),
+      identity,
       instrumentations: this.#instrumentations,
       key,
       namespace: this.namespace,
@@ -247,21 +263,21 @@ export class Agent implements AsyncDisposable {
     notification: NotificationRecord,
     run: ClaimedTurnRecord
   ): Promise<AgentTurn> {
-    const turn = await this.#threadEntry(notification.threadKey).notify(
-      notification.input,
-      {
-        executionRun: {
-          kind: "notification",
-          leaseId: run.lease.leaseId,
-          runId: notification.runId,
-        },
-        observerEvents: notification.observerEvents,
-        overlays: [
-          ...(notification.overlays ?? []),
-          ...(this.#notificationOverlays ?? []),
-        ],
-      }
-    );
+    const turn = await this.#threadEntry(
+      notification.threadKey,
+      threadIdentityFromStoreKey(notification.threadKey)
+    ).notify(notification.input, {
+      executionRun: {
+        kind: "notification",
+        leaseId: run.lease.leaseId,
+        runId: notification.runId,
+      },
+      observerEvents: notification.observerEvents,
+      overlays: [
+        ...(notification.overlays ?? []),
+        ...(this.#notificationOverlays ?? []),
+      ],
+    });
     return this.#instrumentTurn(turn, {
       namespace: this.namespace,
       operation: "resume",
@@ -274,7 +290,10 @@ export class Agent implements AsyncDisposable {
     run: ClaimedTurnRecord,
     checkpoint: Checkpoint | null
   ): Promise<AgentTurn> {
-    const turn = await this.#threadEntry(run.threadKey).resumeExecutionRun(
+    const turn = await this.#threadEntry(
+      run.threadKey,
+      threadIdentityFromStoreKey(run.threadKey)
+    ).resumeExecutionRun(
       {
         kind: run.kind,
         leaseId: run.lease.leaseId,

@@ -14,6 +14,7 @@ import {
   DEFAULT_MAX_TURN_CLAIM_ATTEMPTS,
   isRecordClaimableByAgent,
   releaseClaimedContinuationRun,
+  SupersededExecutionRunError,
   throwIfManualToolRecovery,
   verifyClaimedRunCheckpoint,
 } from "../../thread/handle/agent-thread-continuation";
@@ -180,6 +181,11 @@ async function resumeClaimedExecutionTurn({
     );
     return await resumeExecutionTurn(claimed, checkpoint);
   } catch (error) {
+    if (error instanceof SupersededExecutionRunError) {
+      return null;
+    }
+    // A pending-input handoff may already have released the claim to queued;
+    // the fenced requeue then conflicts harmlessly.
     if (!(error instanceof ToolExecutionNeedsRecoveryError)) {
       await requeueClaimedRun(host.store.turns, claimed).catch(() => undefined);
     }

@@ -43,7 +43,12 @@ export function createCelldTestStorage(
         return await inner.transaction((transaction) =>
           operation({
             delete: (key) => transaction.delete(key),
+            deleteAlarm: async () => {
+              alarmTime = null;
+              await transaction.deleteAlarm?.();
+            },
             get: (key) => transaction.get(key),
+            getAlarm: () => Promise.resolve(alarmTime),
             put: (key, value) => transaction.put(key, value),
             setAlarm: (scheduledTime) =>
               setAlarm(
