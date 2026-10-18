@@ -23,13 +23,13 @@ export interface CreateCodingAgentOptions {
   readonly host?: AgentOptions["host"];
   readonly instructions?: string;
   readonly model?: AgentOptions["model"];
+  readonly threadDirectory?: string;
   /**
    * Replaces the default optional web tools. Workspace tools are always
    * included and win name collisions, so custom tools cannot shadow them.
    * This factory always grants workspace file/shell access; build restricted
    * agents on `createAgent` from @minpeter/pss-runtime instead.
    */
-  readonly threadDirectory?: string;
   readonly tools?: ToolSet;
   readonly webTools?: CreateCodingAgentToolsOptions;
   readonly workspace?: string;

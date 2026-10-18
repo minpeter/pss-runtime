@@ -17,9 +17,15 @@ import type {
 } from "../../../../execution/host/types";
 import { isNodeError } from "../../../../internal/guards";
 import { readJsonFile, writeJsonFile } from "./json";
-import { parseRunRecord } from "./schemas";
+import { parseRunRecord, runCreatedOrder } from "./schemas";
 import type { DataDirectoryResolver } from "./types";
 import { encodeKey } from "./utils";
+
+let lastCreatedOrder = 0;
+function nextCreatedOrder(): number {
+  lastCreatedOrder = Math.max(Date.now() * 1000, lastCreatedOrder + 1);
+  return lastCreatedOrder;
+}
 
 export class FileRunStore implements TurnStore {
   readonly #directory: DataDirectoryResolver;
@@ -45,7 +51,7 @@ export class FileRunStore implements TurnStore {
 
       const { decision, nextRecord } = resolveTurnClaim(runId, record, options);
       if (nextRecord) {
-        await this.#writeUnlocked(nextRecord);
+        await this.#writeUnlocked(nextRecord, runCreatedOrder.get(record));
       }
       return decision;
     });
@@ -71,7 +77,7 @@ export class FileRunStore implements TurnStore {
         }
       }
 
-      await this.#writeUnlocked(record);
+      await this.#writeUnlocked(record, nextCreatedOrder());
       return { ok: true, record };
     });
   }
@@ -115,14 +121,18 @@ export class FileRunStore implements TurnStore {
         return conflict;
       }
       const record = applyTurnTransitionUpdate(current, update);
-      await this.#writeUnlocked(record);
+      await this.#writeUnlocked(record, runCreatedOrder.get(current));
       return { ok: true, record: structuredClone(record) };
     });
   }
 
   async update(record: TurnRecord): Promise<TurnRecord> {
     return await this.#lock(async () => {
-      await this.#writeUnlocked(record);
+      const existing = await this.#getUnlocked(record.runId);
+      await this.#writeUnlocked(
+        record,
+        existing ? runCreatedOrder.get(existing) : undefined
+      );
       return record;
     });
   }
@@ -135,7 +145,10 @@ export class FileRunStore implements TurnStore {
     if (!record) {
       return;
     }
-    await this.#writeUnlocked({ ...record, checkpointVersion });
+    await this.#writeUnlocked(
+      { ...record, checkpointVersion },
+      runCreatedOrder.get(record)
+    );
   }
 
   getUnlocked(runId: string): Promise<TurnRecord | null> {
@@ -181,11 +194,20 @@ export class FileRunStore implements TurnStore {
         records.push(record);
       }
     }
-    return records;
+    return records.sort(
+      (left, right) =>
+        (runCreatedOrder.get(left) ?? 0) - (runCreatedOrder.get(right) ?? 0)
+    );
   }
 
-  async #writeUnlocked(record: TurnRecord): Promise<void> {
-    await writeJsonFile(await this.#fileForRun(record.runId), record);
+  async #writeUnlocked(
+    record: TurnRecord,
+    createdOrder?: number
+  ): Promise<void> {
+    await writeJsonFile(
+      await this.#fileForRun(record.runId),
+      createdOrder === undefined ? record : { ...record, createdOrder }
+    );
   }
 
   async #fileForRun(runId: string): Promise<string> {

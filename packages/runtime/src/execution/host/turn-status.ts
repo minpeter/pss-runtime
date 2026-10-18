@@ -66,7 +66,7 @@ export function resolveTurnClaim(
     };
   }
   const lease: TurnLease = {
-    attempt: options.attempt,
+    attempt: effectiveAttempt,
     leaseId: options.leaseId,
     leaseUntilMs: options.nowMs + options.leaseMs,
   };

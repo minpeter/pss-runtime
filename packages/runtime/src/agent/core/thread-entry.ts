@@ -79,13 +79,6 @@ const ENCODED_SCOPE_THREAD_PATTERN = /^scope:([^:]*):thread:([^:]*)$/;
 
 export function resolveThreadIdentity(thread: ThreadKey): ThreadIdentity {
   if (typeof thread === "string") {
-    const match = ENCODED_SCOPE_THREAD_PATTERN.exec(thread);
-    if (match && match[1] !== undefined && match[2] !== undefined) {
-      return Object.freeze({
-        id: decodeURIComponent(match[2]),
-        scope: decodeURIComponent(match[1]),
-      });
-    }
     return Object.freeze({ id: thread });
   }
 
@@ -93,6 +86,21 @@ export function resolveThreadIdentity(thread: ThreadKey): ThreadIdentity {
   return Object.freeze(
     thread.scope === undefined ? { id } : { id, scope: thread.scope }
   );
+}
+
+export function resolveThreadIdentityFromStoreKey(key: string): ThreadIdentity {
+  const match = ENCODED_SCOPE_THREAD_PATTERN.exec(key);
+  if (match && match[1] !== undefined && match[2] !== undefined) {
+    try {
+      return Object.freeze({
+        id: decodeURIComponent(match[2]),
+        scope: decodeURIComponent(match[1]),
+      });
+    } catch {
+      return Object.freeze({ id: key });
+    }
+  }
+  return Object.freeze({ id: key });
 }
 
 export function threadStoreKey(thread: ThreadKey): string {

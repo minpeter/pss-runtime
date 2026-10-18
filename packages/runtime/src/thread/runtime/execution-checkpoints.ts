@@ -80,15 +80,22 @@ export function createThreadToolExecutionContext({
   return {
     attempt: 1,
     afterTool: async (checkpoint) => {
+      const transformed = await interceptToolResult?.(checkpoint);
+      const effectiveOutput = transformed
+        ? transformed.output
+        : checkpoint.output;
       await appendThreadToolExecutionCheckpoint({
         executionHost,
         leaseId,
         phase: "after-tool",
         runId,
         state,
-        toolCall: checkpoint,
+        toolCall: {
+          ...checkpoint,
+          output: effectiveOutput,
+        },
       });
-      return await interceptToolResult?.(checkpoint);
+      return transformed;
     },
     beforeTool: async (checkpoint) => {
       await appendThreadToolExecutionCheckpoint({
@@ -197,13 +204,15 @@ async function appendThreadToolExecutionCheckpoint({
 function cloneToolCallState(toolCall: {
   readonly input: unknown;
   readonly output?: unknown;
-}): { readonly input?: unknown; readonly output?: unknown } {
-  try {
-    return {
-      input: structuredClone(toolCall.input),
-      output: structuredClone(toolCall.output),
-    };
-  } catch {
-    return {};
-  }
+}): {
+  readonly hasOutput: true;
+  readonly input: unknown;
+  readonly output: unknown;
+} {
+  return {
+    hasOutput: true,
+    input: structuredClone(toolCall.input ?? {}),
+    output:
+      toolCall.output === undefined ? null : structuredClone(toolCall.output),
+  };
 }

@@ -104,10 +104,10 @@ export function describeExecutionStoreContract({
       await expect(store.threads.load("thread-1")).resolves.toBeNull();
     });
 
-    it("lists runs by threadKey and rolls back transactional scheduler writes on failure", async () => {
+    it("lists runs by threadKey in creation order and rolls back transactional scheduler writes on failure", async () => {
       const store = createStore();
       await store.turns.create({
-        ...createQueuedRun("run-thread-a-1"),
+        ...createQueuedRun("run-thread-a-z-first"),
         threadKey: "thread-a",
       });
       await store.turns.create({
@@ -115,14 +115,16 @@ export function describeExecutionStoreContract({
         threadKey: "thread-b",
       });
       await store.turns.create({
-        ...createQueuedRun("run-thread-a-2"),
+        ...createQueuedRun("run-thread-a-a-second"),
         threadKey: "thread-a",
       });
 
-      await expect(store.turns.listByThreadKey?.("thread-a")).resolves.toEqual([
-        expect.objectContaining({ runId: "run-thread-a-1" }),
-        expect.objectContaining({ runId: "run-thread-a-2" }),
-      ]);
+      if (store.turns.listByThreadKey) {
+        await expect(store.turns.listByThreadKey("thread-a")).resolves.toEqual([
+          expect.objectContaining({ runId: "run-thread-a-z-first" }),
+          expect.objectContaining({ runId: "run-thread-a-a-second" }),
+        ]);
+      }
 
       await expect(
         store.transaction(async (tx) => {

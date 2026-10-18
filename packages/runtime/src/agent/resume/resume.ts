@@ -10,12 +10,13 @@ import type {
   TurnStore,
 } from "../../execution/host/types";
 import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution-checkpoint";
-import type { AgentTurn } from "../../thread/protocol/turn";
 import {
   DEFAULT_MAX_TURN_CLAIM_ATTEMPTS,
   isRecordClaimableByAgent,
-  manualRecoveryToolCheckpoint,
-} from "../../thread/runtime/durable-continuation-recovery";
+  throwIfManualToolRecovery,
+  verifyClaimedRunCheckpoint,
+} from "../../thread/handle/agent-thread-continuation";
+import type { AgentTurn } from "../../thread/protocol/turn";
 import { ownsAgentNamespace } from "../identity/namespace";
 import { leaseIdForResumeClaim } from "./retry-authority";
 
@@ -55,14 +56,7 @@ export async function resumeAgentTurn({
   if (!run) {
     return null;
   }
-  if (
-    !isRecordClaimableByAgent(
-      run,
-      ownerNamespace,
-      hasExplicitNamespace,
-      ownsAgentNamespace
-    )
-  ) {
+  if (!isRecordClaimableByAgent(run, ownerNamespace, hasExplicitNamespace)) {
     return null;
   }
   if (run.kind === "notification" && run.dedupeKey) {
@@ -132,30 +126,60 @@ export async function resumeAgentTurn({
     (run.kind === "user-turn" || run.kind === "tool-recovery") &&
     resumeExecutionTurn
   ) {
-    const claimed = await host.store.transaction(
-      async (transaction) =>
-        await claimRun(transaction.turns, run, retryLeaseId, maxAttempts)
-    );
-    if (!claimed) {
-      return null;
-    }
-    const latestCheckpoint = await host.store.checkpoints.latest(claimed.runId);
-    const unrecoverableTool = manualRecoveryToolCheckpoint(latestCheckpoint);
-    if (unrecoverableTool) {
-      await transitionTurn(host.store.turns, {
-        expected: {
-          leaseId: claimed.lease.leaseId,
-          status: claimed.status,
-        },
-        runId: claimed.runId,
-        update: { lease: null, status: "needs-recovery" },
-      });
-      throw new ToolExecutionNeedsRecoveryError(unrecoverableTool);
-    }
-    return await resumeExecutionTurn(claimed, latestCheckpoint);
+    return await resumeClaimedExecutionTurn({
+      host,
+      maxAttempts,
+      resumeExecutionTurn,
+      retryLeaseId,
+      run,
+    });
   }
 
   return null;
+}
+
+async function resumeClaimedExecutionTurn({
+  host,
+  maxAttempts,
+  resumeExecutionTurn,
+  retryLeaseId,
+  run,
+}: {
+  readonly host: AgentHost;
+  readonly maxAttempts: number;
+  readonly resumeExecutionTurn: NonNullable<
+    ResumeAgentTurnInput["resumeExecutionTurn"]
+  >;
+  readonly retryLeaseId: string | undefined;
+  readonly run: TurnRecord;
+}): Promise<AgentTurn | null> {
+  if (run.status === "needs-recovery") {
+    await throwIfManualToolRecovery(host, run.runId);
+    return null;
+  }
+  const claimed = await host.store.transaction(
+    async (transaction) =>
+      await claimRun(transaction.turns, run, retryLeaseId, maxAttempts)
+  );
+  if (!claimed) {
+    if ((await host.store.turns.get(run.runId))?.status === "needs-recovery") {
+      await throwIfManualToolRecovery(host, run.runId);
+    }
+    return null;
+  }
+  try {
+    const checkpoint = await verifyClaimedRunCheckpoint(
+      host,
+      claimed,
+      claimed.lease.leaseId
+    );
+    return await resumeExecutionTurn(claimed, checkpoint);
+  } catch (error) {
+    if (!(error instanceof ToolExecutionNeedsRecoveryError)) {
+      await requeueClaimedRun(host.store.turns, claimed).catch(() => undefined);
+    }
+    throw error;
+  }
 }
 
 interface ClaimedNotification {

@@ -57,7 +57,7 @@ export async function processQueuedInput({
     runtimeInput,
     turnId,
   });
-  const historySnapshot = state.modelSnapshot();
+  let historySnapshot = state.modelSnapshot();
   const meterCheckpoint = model.contextTokenMeter?.checkpoint();
   let executionRun: ThreadExecutionRun | undefined;
   let executionStarted = false;
@@ -94,6 +94,7 @@ export async function processQueuedInput({
     ) {
       return "processed";
     }
+    historySnapshot = state.modelSnapshot();
     resolveQueuedInputRecovery(item, state);
     await emitInitialEvents(item, events, recordEvent);
     const committedPreUser = await commitPreUserRuntimeInputs(

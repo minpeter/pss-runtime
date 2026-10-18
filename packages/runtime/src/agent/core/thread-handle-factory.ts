@@ -7,7 +7,7 @@ import {
   applyAgentInstrumentations,
 } from "./instrumentation";
 import {
-  resolveThreadIdentity,
+  resolveThreadIdentityFromStoreKey,
   type ThreadHandle,
   type ThreadIdentity,
 } from "./thread-entry";
@@ -35,7 +35,7 @@ export function createThreadPublicHandle({
   readonly namespace: string | undefined;
   readonly thread: AgentThread;
 }): ThreadHandle {
-  const identity = explicitIdentity ?? resolveThreadIdentity(key);
+  const identity = explicitIdentity ?? resolveThreadIdentityFromStoreKey(key);
   let lifecycle: ThreadHandleLifecycle = { tag: "active" };
   const instrumentTurn = (
     turn: AgentTurn,

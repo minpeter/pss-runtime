@@ -95,14 +95,19 @@ export class DurableObjectExecutionStore implements HostStore {
       payloadBudget
     );
     this.scheduler = {
-      enqueueRun: (runId) => {
+      enqueueRun: (runId, options) => {
+        const runAfterMs = options?.runAfterMs;
+        const dueAtMs =
+          runAfterMs === undefined
+            ? undefined
+            : Date.now() + Math.max(0, Math.floor(runAfterMs));
         insertScheduledWorkInTransaction(
           this.#storage,
           this.#prefix,
           "run",
           runId,
           runId,
-          { runId }
+          { ...(dueAtMs === undefined ? {} : { dueAtMs }), runId }
         );
         return Promise.resolve();
       },

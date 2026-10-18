@@ -85,7 +85,7 @@ function selectRunRows(
       .filter((row) => row.prefix === prefix && row.thread_key === threadKey)
       .sort((left: RunRow, right: RunRow) => left.created_at - right.created_at)
       .map((row) =>
-        query.includes("SELECT record")
+        query.includes("select record")
           ? projectRun(row)
           : { run_id: row.run_id }
       );

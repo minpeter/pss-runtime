@@ -218,11 +218,55 @@ describe("durable lifecycle characterization", () => {
       replayed.push(record.event.type);
     }
     expect(replayed).toContain("turn-end");
-
     await thread[Symbol.asyncDispose]();
     await expect(thread.send("after-dispose")).rejects.toBeInstanceOf(
       DisposedResourceError
     );
+
+    await host.store.threads.commit(
+      "resume-thread",
+      {
+        state: encodeThreadSnapshot([
+          { content: "resume via agent.resume", role: "user" },
+        ]),
+      },
+      { expectedVersion: null }
+    );
+    await host.store.turns.create({
+      checkpointVersion: 0,
+      dedupeKey: "crashed-user-turn-2",
+      kind: "user-turn",
+      rootRunId: "crashed-user-turn-2",
+      runId: "crashed-user-turn-2",
+      status: "running",
+      threadKey: "resume-thread",
+    });
+    await host.store.checkpoints.append(
+      {
+        checkpointId: "crashed-user-turn-2:1:after-tool",
+        phase: "after-tool",
+        runId: "crashed-user-turn-2",
+        runtimeState: {
+          hasOutput: true,
+          input: { step: 2 },
+          output: null,
+          toolCallId: "call-2",
+          toolName: "void_tool",
+        },
+        threadSnapshot: {},
+        version: 1,
+      },
+      { expectedVersion: 0 }
+    );
+    const resumedTurn = await recoveredAgent.resume("crashed-user-turn-2");
+    expect(resumedTurn?.runId).toBe("crashed-user-turn-2");
+    if (!resumedTurn) {
+      throw new Error("Expected agent.resume to recover user-turn.");
+    }
+    expect(eventTypes(await collect(resumedTurn))).toContain("turn-end");
+    await expect(
+      host.store.turns.get("crashed-user-turn-2")
+    ).resolves.toMatchObject({ status: "completed" });
   });
 
   it("fails closed when resuming a run interrupted mid manual-recovery tool", async () => {
@@ -265,6 +309,9 @@ describe("durable lifecycle characterization", () => {
       ),
     });
 
+    await expect(agent.resume("crashed-before-tool")).rejects.toBeInstanceOf(
+      ToolExecutionNeedsRecoveryError
+    );
     await expect(agent.resume("crashed-before-tool")).rejects.toBeInstanceOf(
       ToolExecutionNeedsRecoveryError
     );
