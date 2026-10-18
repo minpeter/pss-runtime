@@ -21,7 +21,7 @@ permissions:
 jobs:
   validation:
     name: Validate (node ${{ matrix.node }})
-    runs-on: instabox-k3s
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -96,7 +96,7 @@ jobs:
   # demand grows only from two runners to three.
   artifacts:
     name: Coverage, build, and release validation (node 24)
-    runs-on: instabox-k3s
+    runs-on: ubuntu-latest
     timeout-minutes: 45
 
     steps:

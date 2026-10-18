@@ -21,7 +21,7 @@ jobs:
   publish:
     name: Version and publish
     needs: validate
-    runs-on: instabox-k3s
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: write
