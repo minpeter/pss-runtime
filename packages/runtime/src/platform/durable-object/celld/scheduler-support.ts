@@ -67,6 +67,7 @@ export function serialize<T>(
 
 export async function insertDueWorkInTransaction<T>(
   transaction: DurableObjectTransactionStorage,
+  storage: CelldDurableObjectStorage,
   prefix: string,
   kind: typeof RUN_KIND | typeof THREAD_PROMPT_KIND,
   workId: string,
@@ -90,9 +91,8 @@ export async function insertDueWorkInTransaction<T>(
   if (nextDueAtMs === undefined) {
     return;
   }
-  // Without a transactional alarm read, arming the earliest persisted due time
-  // still wakes every persisted row.
-  const currentAlarm = (await transaction.getAlarm?.()) ?? null;
+  // An earlier alarm may belong to work outside this prefix, so it is kept.
+  const currentAlarm = await (transaction.getAlarm?.() ?? storage.getAlarm());
   await transaction.setAlarm(
     Math.min(currentAlarm ?? Number.POSITIVE_INFINITY, nextDueAtMs)
   );
@@ -110,6 +110,7 @@ export async function insertDueWorkAndArm<T>(
   await withTransaction(storage, (tx) =>
     insertDueWorkInTransaction(
       tx,
+      storage,
       prefix,
       kind,
       workId,
@@ -143,24 +144,43 @@ export function listDueWork<T>(
     });
 }
 
-// Re-arm reads rows and alarm inside one storage transaction so it never acts
-// on rows another transaction has since changed; transactions without alarm
-// methods fall back to the Celld storage's own alarm.
+/**
+ * Applies `mutate` to scheduled-work rows and re-arms the alarm for the
+ * earliest persisted due time in one storage transaction, so the alarm never
+ * reflects rows another transaction has since changed. A transaction without
+ * the needed alarm method gets the storage-level alarm write after commit:
+ * written inside, it would be replaced by the transaction's buffered alarm.
+ */
 export async function armNextAlarm(
   storage: CelldDurableObjectStorage,
-  prefix: string
+  prefix: string,
+  mutate?: (transaction: DurableObjectTransactionStorage) => Promise<void>
 ): Promise<void> {
-  await withTransaction(storage, async (transaction) => {
-    const dueAtMs = earliestDueAt(transaction, prefix);
-    if (dueAtMs === undefined) {
-      await (transaction.deleteAlarm?.() ?? storage.deleteAlarm());
-      return;
+  const afterCommit = await withTransaction(
+    storage,
+    async (transaction): Promise<(() => Promise<void>) | undefined> => {
+      await mutate?.(transaction);
+      const dueAtMs = earliestDueAt(transaction, prefix);
+      if (dueAtMs === undefined) {
+        if (transaction.deleteAlarm === undefined) {
+          return () => storage.deleteAlarm();
+        }
+        await transaction.deleteAlarm();
+        return;
+      }
+      if (transaction.setAlarm === undefined) {
+        return async () => {
+          if ((await storage.getAlarm()) !== dueAtMs) {
+            await storage.setAlarm(dueAtMs);
+          }
+        };
+      }
+      if ((await transaction.getAlarm?.()) !== dueAtMs) {
+        await transaction.setAlarm(dueAtMs);
+      }
     }
-    const currentAlarm = await (transaction.getAlarm?.() ?? storage.getAlarm());
-    if (currentAlarm !== dueAtMs) {
-      await (transaction.setAlarm?.(dueAtMs) ?? storage.setAlarm(dueAtMs));
-    }
-  });
+  );
+  await afterCommit?.();
 }
 
 function earliestDueAt(

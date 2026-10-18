@@ -31,7 +31,10 @@ import {
   type QueuedThreadExecutionRun,
 } from "../runtime/execution";
 import type { CompletedToolCall } from "../runtime/execution-checkpoints";
-import { priorCompletedToolCalls } from "../runtime/execution-checkpoints";
+import {
+  priorCompletedToolCalls,
+  recordedThreadVersion,
+} from "../runtime/execution-checkpoints";
 import {
   registerLiveThreadInput,
   unregisterLiveThreadInput,
@@ -289,6 +292,15 @@ async function tryEnqueuePendingDurableInputForRun(
     throw error;
   }
   if (!(resumable && executionRun)) {
+    if (
+      executionRun &&
+      host &&
+      !(await executionRunHasPendingInput(context, executionRun))
+    ) {
+      // The run's own input is settled, so newer pending input supersedes
+      // it. A run still waiting on its own input is queued behind instead.
+      await supersedeExecutionRun(host.store.turns, executionRun);
+    }
     throw busyError("Thread has queued durable work.");
   }
   return enqueuePreparedTurn(
@@ -336,6 +348,47 @@ async function cancelSupersededExecutionRun(
   if (!latestRun || latestRun.runId === executionRun.runId) {
     return;
   }
+  await supersedeExecutionRun(turns, executionRun);
+}
+
+async function executionRunHasPendingInput(
+  context: AgentThreadContext,
+  executionRun: QueuedThreadExecutionRun
+): Promise<boolean> {
+  const prefix = createThreadExecutionRunId({
+    threadKey: context.threadKey,
+    turnId: "",
+  });
+  if (!executionRun.runId.startsWith(prefix)) {
+    return false;
+  }
+  let messageId: string;
+  try {
+    messageId = decodeURIComponent(executionRun.runId.slice(prefix.length));
+  } catch {
+    return false;
+  }
+  if (!messageId) {
+    return false;
+  }
+  const executionHost = context.execution.executionHost;
+  const own = await claimDurableThreadInput({
+    boundary: "turn-idle",
+    executionHost,
+    messageId,
+    threadKey: context.threadKey,
+  });
+  if (own.kind !== "claimed" || !own.record) {
+    return false;
+  }
+  await releaseDurableThreadInputClaim({ executionHost, record: own.record });
+  return true;
+}
+
+async function supersedeExecutionRun(
+  turns: TurnStore,
+  executionRun: QueuedThreadExecutionRun
+): Promise<never> {
   const cancelled = await transitionTurn(turns, {
     expected: { leaseId: executionRun.leaseId ?? null, status: "leased" },
     runId: executionRun.runId,
@@ -475,9 +528,18 @@ async function prepareClaimedContinuation(
     }
   }
   const committedHistory = context.state.modelSnapshot();
+  const committedVersion =
+    context.state.threadCheckpointReference().threadVersion;
   const turns = context.execution.executionHost?.store.turns;
+  // Provider tool call ids can recur across steps and turns, so a result
+  // counts as committed only when the thread was committed after its
+  // checkpoint. Step-end commits include the step's results, but a
+  // background compaction can commit mid-step, so the id must also appear.
   const unrestorable = priorCompletedToolCalls(checkpoint).filter(
-    (call) => !historyHasToolResult(committedHistory, call.toolCallId)
+    (call) =>
+      call.threadVersion === undefined ||
+      call.threadVersion === committedVersion ||
+      !historyHasToolResult(committedHistory, call.toolCallId)
   );
   const [firstUnrestorable, ...restUnrestorable] = unrestorable;
   if (firstUnrestorable) {
@@ -497,6 +559,7 @@ async function prepareClaimedContinuation(
   }
   const history = buildRecoveredContinuationHistory(
     committedHistory,
+    committedVersion,
     checkpoint
   );
   if (history.length === 0) {
@@ -647,6 +710,7 @@ class UnrestorableToolResultsError extends ToolExecutionNeedsRecoveryError {
 
 function buildRecoveredContinuationHistory(
   baseHistory: readonly ModelMessage[],
+  committedVersion: string | null,
   checkpoint: Checkpoint | null
 ): ModelMessage[] {
   const unrecoverableTool = manualRecoveryToolCheckpoint(checkpoint);
@@ -673,7 +737,13 @@ function buildRecoveredContinuationHistory(
   const toolCallId = candidate.toolCallId;
   const toolName = candidate.toolName;
   const rawOutput = "output" in candidate ? candidate.output : null;
-  if (historyHasToolResult(history, toolCallId)) {
+  // Unchanged thread version: nothing committed the result, even if an older
+  // call reused its id. Otherwise the id shows whether the commit included it.
+  const resultVersion = recordedThreadVersion(checkpoint);
+  if (
+    (resultVersion === undefined || resultVersion !== committedVersion) &&
+    historyHasToolResult(history, toolCallId)
+  ) {
     return history;
   }
   history.push(

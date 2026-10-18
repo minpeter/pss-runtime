@@ -33,10 +33,11 @@ async function readRunFile(file: string): Promise<TurnRecord | null> {
   if (!record || runCreatedOrder.has(record)) {
     return record;
   }
-  // Files written before `createdOrder` existed approximate it from file
-  // metadata on nextCreatedOrder's microsecond scale. Atomic rename rewrites
-  // reset birth time, so this reflects the legacy run's last write, not its
-  // creation; every later write persists the approximation unchanged.
+  // Files written before `createdOrder` existed approximate it from their
+  // mtime on nextCreatedOrder's microsecond scale: the legacy run's last write,
+  // not its creation. Birth time is never used because generation copies
+  // reset it while preserving mtime. Every later write persists the
+  // approximation unchanged.
   let stats: Stats;
   try {
     stats = await stat(file);
@@ -46,8 +47,7 @@ async function readRunFile(file: string): Promise<TurnRecord | null> {
     }
     throw error;
   }
-  const fileTimeMs = stats.birthtimeMs > 0 ? stats.birthtimeMs : stats.mtimeMs;
-  runCreatedOrder.set(record, Math.trunc(fileTimeMs * 1000));
+  runCreatedOrder.set(record, Math.trunc(stats.mtimeMs * 1000));
   return record;
 }
 
@@ -169,7 +169,7 @@ export class FileRunStore implements TurnStore {
       const existing = await this.#getUnlocked(record.runId);
       await this.#writeUnlocked(
         record,
-        existing ? runCreatedOrder.get(existing) : undefined
+        existing ? runCreatedOrder.get(existing) : nextCreatedOrder()
       );
       return record;
     });

@@ -24,31 +24,29 @@ export function createCelldTestStorage(): CelldDurableObjectStorage & {
       await inner.setAlarm(scheduledTime);
     },
     sql: inner.sql,
-    transaction: async (operation) => {
-      const previousAlarm = alarmTime;
-      try {
-        return await inner.transaction((transaction) =>
-          operation({
-            delete: (key) => transaction.delete(key),
-            deleteAlarm: async () => {
-              alarmTime = null;
-              await transaction.deleteAlarm?.();
-            },
-            get: (key) => transaction.get(key),
-            getAlarm: () => Promise.resolve(alarmTime),
-            put: (key, value) => transaction.put(key, value),
-            setAlarm: async (scheduledTime) => {
-              alarmTime = toMilliseconds(scheduledTime);
-              await transaction.setAlarm?.(scheduledTime);
-            },
-            sql: transaction.sql ?? inner.sql,
-          } satisfies DurableObjectStorage)
-        );
-      } catch (error) {
-        alarmTime = previousAlarm;
-        throw error;
-      }
-    },
+    // Like Durable Object storage, a transaction's alarm writes are buffered
+    // and become visible only when the transaction commits.
+    transaction: (operation) =>
+      inner.transaction(async (transaction) => {
+        let transactionAlarm = alarmTime;
+        const result = await operation({
+          delete: (key) => transaction.delete(key),
+          deleteAlarm: async () => {
+            transactionAlarm = null;
+            await transaction.deleteAlarm?.();
+          },
+          get: (key) => transaction.get(key),
+          getAlarm: () => Promise.resolve(transactionAlarm),
+          put: (key, value) => transaction.put(key, value),
+          setAlarm: async (scheduledTime) => {
+            transactionAlarm = toMilliseconds(scheduledTime);
+            await transaction.setAlarm?.(scheduledTime);
+          },
+          sql: transaction.sql ?? inner.sql,
+        } satisfies DurableObjectStorage);
+        alarmTime = transactionAlarm;
+        return result;
+      }),
     transactionSync: inner.transactionSync.bind(inner),
   };
   return storage;

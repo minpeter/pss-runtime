@@ -65,6 +65,14 @@ export class ThreadExecutionCheckpointAuthorityError extends Error {
 
 /** A tool call whose after-tool checkpoint was persisted earlier in a run. */
 export interface CompletedToolCall {
+  /** Run checkpoint version of the after-tool checkpoint; unique per run. */
+  readonly checkpointVersion?: number;
+  /**
+   * Committed thread version when the result was checkpointed. A thread
+   * commit after it is required before the result counts as committed;
+   * `undefined` means it was not recorded and the result is unrestorable.
+   */
+  readonly threadVersion?: string | null;
   readonly toolCallId: string;
   readonly toolName: string;
 }
@@ -83,11 +91,43 @@ export function priorCompletedToolCalls(
   }
   return prior.flatMap((entry: unknown): CompletedToolCall[] => {
     const call = entry as Partial<Record<keyof CompletedToolCall, unknown>>;
-    return typeof call?.toolCallId === "string" &&
-      typeof call.toolName === "string"
-      ? [{ toolCallId: call.toolCallId, toolName: call.toolName }]
-      : [];
+    if (
+      !(
+        typeof call?.toolCallId === "string" &&
+        typeof call.toolName === "string"
+      )
+    ) {
+      return [];
+    }
+    return [
+      {
+        ...(typeof call.checkpointVersion === "number"
+          ? { checkpointVersion: call.checkpointVersion }
+          : {}),
+        ...(typeof call.threadVersion === "string" ||
+        call.threadVersion === null
+          ? { threadVersion: call.threadVersion }
+          : {}),
+        toolCallId: call.toolCallId,
+        toolName: call.toolName,
+      },
+    ];
   });
+}
+
+/**
+ * Committed thread version a checkpoint was written against; `undefined`
+ * when the checkpoint did not record one.
+ */
+export function recordedThreadVersion(
+  checkpoint: Checkpoint | null
+): string | null | undefined {
+  const snapshot = checkpoint?.threadSnapshot as
+    | { readonly threadVersion?: unknown }
+    | null
+    | undefined;
+  const version = snapshot?.threadVersion;
+  return typeof version === "string" || version === null ? version : undefined;
 }
 
 function completedToolCallsThrough(
@@ -103,7 +143,13 @@ function completedToolCallsThrough(
     typeof state?.toolCallId === "string" &&
     typeof state.toolName === "string"
   ) {
-    completed.push({ toolCallId: state.toolCallId, toolName: state.toolName });
+    const threadVersion = recordedThreadVersion(checkpoint);
+    completed.push({
+      checkpointVersion: checkpoint.version,
+      ...(threadVersion === undefined ? {} : { threadVersion }),
+      toolCallId: state.toolCallId,
+      toolName: state.toolName,
+    });
   }
   return completed;
 }
@@ -212,6 +258,7 @@ async function appendThreadToolExecutionCheckpoint({
     }
 
     const version = run.checkpointVersion + 1;
+    const threadSnapshot = state.threadCheckpointReference();
     const result = await appendLeaseFencedCheckpoint(
       executionHost.store,
       {
@@ -221,13 +268,11 @@ async function appendThreadToolExecutionCheckpoint({
         runId,
         runtimeState: {
           ...(phase === "after-tool" ? cloneToolCallState(toolCall) : {}),
-          priorCompletedToolCalls: completed.filter(
-            (call) => call.toolCallId !== toolCall.toolCallId
-          ),
+          priorCompletedToolCalls: [...completed],
           toolCallId: toolCall.toolCallId,
           toolName: toolCall.toolName,
         },
-        threadSnapshot: state.threadCheckpointReference(),
+        threadSnapshot,
         version,
       },
       {
@@ -238,9 +283,12 @@ async function appendThreadToolExecutionCheckpoint({
 
     if (result.ok) {
       if (phase === "after-tool") {
-        mergeCompletedToolCalls(completed, [
-          { toolCallId: toolCall.toolCallId, toolName: toolCall.toolName },
-        ]);
+        completed.push({
+          checkpointVersion: version,
+          threadVersion: threadSnapshot.threadVersion,
+          toolCallId: toolCall.toolCallId,
+          toolName: toolCall.toolName,
+        });
       }
       return;
     }
@@ -275,12 +323,20 @@ async function appendThreadToolExecutionCheckpoint({
   );
 }
 
+// Provider tool call ids can recur, so the after-tool checkpoint version
+// identifies a completion.
 function mergeCompletedToolCalls(
   completed: CompletedToolCall[],
   calls: readonly CompletedToolCall[]
 ): void {
   for (const call of calls) {
-    if (!completed.some((known) => known.toolCallId === call.toolCallId)) {
+    if (
+      !completed.some(
+        (known) =>
+          known.checkpointVersion === call.checkpointVersion &&
+          known.toolCallId === call.toolCallId
+      )
+    ) {
       completed.push(call);
     }
   }

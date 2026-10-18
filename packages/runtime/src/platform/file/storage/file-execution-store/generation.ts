@@ -26,7 +26,11 @@ export async function copyDataDirectories(
     const sourceDirectory = join(source, dataDirectory);
     const targetDirectory = join(target, dataDirectory);
     try {
-      await cp(sourceDirectory, targetDirectory, { recursive: true });
+      // Legacy run order falls back to mtime, so copies must preserve it.
+      await cp(sourceDirectory, targetDirectory, {
+        preserveTimestamps: true,
+        recursive: true,
+      });
     } catch (error) {
       if (isNodeError(error) && error.code === "ENOENT") {
         continue;

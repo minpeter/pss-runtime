@@ -30,6 +30,7 @@ export function createCelldScheduler({
     enqueueRun: (runId, options = {}) =>
       insertDueWorkInTransaction(
         transactionStorage,
+        storage,
         prefix,
         RUN_KIND,
         runId,
@@ -46,6 +47,7 @@ export function createCelldScheduler({
       };
       return insertDueWorkInTransaction(
         transactionStorage,
+        storage,
         prefix,
         THREAD_PROMPT_KIND,
         threadPromptScheduledWorkId(prompt),

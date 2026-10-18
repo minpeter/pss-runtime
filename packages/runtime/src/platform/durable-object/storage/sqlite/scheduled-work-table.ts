@@ -142,7 +142,7 @@ export function selectNextScheduledWork(
 }
 
 export function deleteScheduledWork(
-  storage: DurableObjectStorage,
+  storage: DurableObjectTransactionStorage,
   prefix: string,
   kind: ScheduledWorkKind,
   workId: string

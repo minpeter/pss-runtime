@@ -1,5 +1,7 @@
 import type { ScheduledThreadPrompt } from "../../../execution/scheduled-work";
 import { threadPromptScheduledWorkId } from "../../../execution/scheduled-work";
+import type { DurableObjectTransactionStorage } from "../storage/durable-object/durable-object-storage";
+import { withTransaction } from "../storage/durable-object/sql-access";
 import {
   ackScheduledWorkLease,
   claimScheduledWorkLease,
@@ -142,23 +144,7 @@ export async function ackCelldScheduledRun(
   runId: string,
   options: MutationOptions = {}
 ): Promise<void> {
-  await serialize(storage, async () => {
-    const prefix = options.prefix ?? DEFAULT_PREFIX;
-    if (options.claimToken === undefined) {
-      await deleteScheduledWork(storage, prefix, RUN_KIND, runId);
-    } else {
-      await ackScheduledWorkLease(
-        storage,
-        prefix,
-        RUN_KIND,
-        runId,
-        options.claimToken
-      );
-    }
-    if (options.rearm !== false) {
-      await armNextAlarm(storage, prefix);
-    }
-  });
+  await ackScheduledWork(storage, RUN_KIND, runId, options);
 }
 
 export async function ackCelldScheduledThreadPrompt(
@@ -166,26 +152,42 @@ export async function ackCelldScheduledThreadPrompt(
   prompt: ScheduledThreadPrompt,
   options: MutationOptions = {}
 ): Promise<void> {
-  await serialize(storage, async () => {
-    const prefix = options.prefix ?? DEFAULT_PREFIX;
-    if (options.claimToken === undefined) {
-      await deleteScheduledWork(
-        storage,
-        prefix,
-        THREAD_PROMPT_KIND,
-        threadPromptScheduledWorkId(prompt)
-      );
-    } else {
+  await ackScheduledWork(
+    storage,
+    THREAD_PROMPT_KIND,
+    threadPromptScheduledWorkId(prompt),
+    options
+  );
+}
+
+function ackScheduledWork(
+  storage: CelldDurableObjectStorage,
+  kind: typeof RUN_KIND | typeof THREAD_PROMPT_KIND,
+  workId: string,
+  options: MutationOptions
+): Promise<void> {
+  const prefix = options.prefix ?? DEFAULT_PREFIX;
+  return serialize(storage, async () => {
+    if (options.claimToken !== undefined) {
       await ackScheduledWorkLease(
         storage,
         prefix,
-        THREAD_PROMPT_KIND,
-        threadPromptScheduledWorkId(prompt),
+        kind,
+        workId,
         options.claimToken
       );
+      if (options.rearm !== false) {
+        await armNextAlarm(storage, prefix);
+      }
+      return;
     }
-    if (options.rearm !== false) {
-      await armNextAlarm(storage, prefix);
-    }
+    // The delete must run in its own storage transaction: issued directly it
+    // would join, and roll back with, any store transaction open on the
+    // same SQL connection.
+    const deleteRow = (transaction: DurableObjectTransactionStorage) =>
+      deleteScheduledWork(transaction, prefix, kind, workId);
+    await (options.rearm === false
+      ? withTransaction(storage, deleteRow)
+      : armNextAlarm(storage, prefix, deleteRow));
   });
 }

@@ -125,4 +125,46 @@ describe("Celld alarm re-arm racing a store transaction", () => {
     ).resolves.toEqual(["first"]);
     await expect(storage.getAlarm()).resolves.toBe(3);
   });
+
+  it("keeps an unclaimed ack when a concurrent store transaction rolls back", async () => {
+    // Given
+    const queued = createDeferred();
+    const storage = createCelldSqliteTestStorage({
+      transactionQueued: () => queued.resolve(),
+    });
+    const activation: Promise<unknown>[] = [];
+    const host = createCelldHost({
+      clock: () => 0,
+      state: {
+        storage,
+        waitUntil: (promise) => {
+          activation.push(promise);
+        },
+      },
+    });
+    await Promise.all(activation);
+    await host.scheduler.enqueueRun("acked");
+    const storeEntered = createDeferred();
+    const storeGate = createDeferred();
+    const rollback = new Error("store rollback");
+    const storeTransaction = host.store.transaction(async () => {
+      storeEntered.resolve();
+      await storeGate.promise;
+      throw rollback;
+    });
+    await storeEntered.promise;
+
+    // When
+    const ack = ackCelldScheduledRun(storage, "acked");
+    await queued.promise;
+    storeGate.resolve();
+    await expect(storeTransaction).rejects.toBe(rollback);
+    await ack;
+
+    // Then
+    await expect(
+      listCelldScheduledRuns(storage, { nowMs: Number.MAX_SAFE_INTEGER })
+    ).resolves.toEqual([]);
+    await expect(storage.getAlarm()).resolves.toBeNull();
+  });
 });

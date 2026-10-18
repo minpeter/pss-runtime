@@ -249,4 +249,42 @@ describe("thread tool execution checkpoints", () => {
       version: 1,
     });
   });
+
+  it("keeps an earlier completion when a later step reuses its tool call id", async () => {
+    // Given: step 1 completed provider call call_0, and step 2 reuses call_0.
+    const runId = "reused-tool-call-id";
+    const { context, host } = await createRunContext(runId);
+    await host.store.threads.commit(
+      "thread",
+      { state: encodeThreadSnapshot([{ content: "go", role: "user" }]) },
+      { expectedVersion: null }
+    );
+    const reused = toolCall(runId, "call_0", "deploy");
+    await completeTool(context, reused, "deployed");
+
+    // When: step 2's tool starts and the process crashes before its result.
+    await context.beforeTool?.(reused);
+
+    // Then: the step-1 completion is still recorded on the latest checkpoint.
+    await expect(host.store.checkpoints.latest(runId)).resolves.toMatchObject({
+      phase: "before-tool",
+      runtimeState: {
+        priorCompletedToolCalls: [
+          { checkpointVersion: 2, toolCallId: "call_0", toolName: "deploy" },
+        ],
+      },
+    });
+    let modelCalls = 0;
+    const agent = await createAgent({
+      host,
+      model: createCallbackModel(() => {
+        modelCalls += 1;
+        return Promise.resolve([assistantMessage("UNREACHABLE")]);
+      }),
+    });
+    await expect(agent.thread("thread").continue()).rejects.toBeInstanceOf(
+      ToolExecutionNeedsRecoveryError
+    );
+    expect(modelCalls).toBe(0);
+  });
 });
