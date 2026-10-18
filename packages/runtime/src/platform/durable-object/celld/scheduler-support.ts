@@ -90,8 +90,8 @@ export async function insertDueWorkInTransaction<T>(
     throw new Error("Celld storage transaction setAlarm() is required.");
   }
   const sql = requiredSqlStorage(transaction, "Celld scheduled work alarm");
-  const persistedDueAt = ([RUN_KIND, THREAD_PROMPT_KIND] as const)
-    .flatMap((scheduledKind) => {
+  const persistedDueTimes = ([RUN_KIND, THREAD_PROMPT_KIND] as const).flatMap(
+    (scheduledKind) => {
       const row = sql
         .exec<{ readonly due_at: number | null }>(
           "SELECT due_at FROM pss_scheduled_work WHERE prefix = ? AND kind = ? AND due_at IS NOT NULL ORDER BY due_at, rowid LIMIT 1",
@@ -100,19 +100,16 @@ export async function insertDueWorkInTransaction<T>(
         )
         .toArray()[0];
       return typeof row?.due_at === "number" ? [row.due_at] : [];
-    })
-    .reduce(
-      (earliest, persistedValue) => Math.min(earliest, persistedValue),
-      Number.POSITIVE_INFINITY
-    );
-  const alarm =
-    currentAlarm === null
-      ? persistedDueAt
-      : Math.min(currentAlarm, persistedDueAt);
-  // A preserved duplicate row may predate due_at; never arm an infinite alarm.
-  if (Number.isFinite(alarm)) {
-    await transaction.setAlarm(alarm);
+    }
+  );
+  // Only a preserved duplicate that predates due_at leaves nothing to arm;
+  // any persisted due time, valid or not, still reaches setAlarm.
+  if (persistedDueTimes.length === 0 && currentAlarm === null) {
+    return;
   }
+  await transaction.setAlarm(
+    Math.min(currentAlarm ?? Number.POSITIVE_INFINITY, ...persistedDueTimes)
+  );
 }
 
 export async function insertDueWorkAndArm<T>(
