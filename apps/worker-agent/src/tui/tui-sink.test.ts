@@ -250,6 +250,9 @@ function toolCallEvent(input: unknown): AgentEvent {
 function runWithEvents(events: readonly AgentEvent[]): AgentTurn {
   return {
     events: () => eventStream(events),
+    [Symbol.asyncIterator]() {
+      return this.events()[Symbol.asyncIterator]();
+    },
   };
 }
 

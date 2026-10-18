@@ -88,17 +88,19 @@ function createPublicAgentTurn(
       "Agent: options.instrumentations entry wrapTurn() must return an AgentTurn."
     );
   }
-  const publicTurn = Object.freeze({
-    events: () => {
-      const iterable = Reflect.apply(events, turn, []);
-      if (!isAgentEventIterable(iterable)) {
-        throw new TypeError(
-          "Agent: options.instrumentations entry wrapTurn() must return an AgentTurn."
-        );
-      }
-      return iterable;
-    },
+  const getEvents = (): AsyncIterable<AgentEvent> => {
+    const iterable = Reflect.apply(events, turn, []);
+    if (!isAgentEventIterable(iterable)) {
+      throw new TypeError(
+        "Agent: options.instrumentations entry wrapTurn() must return an AgentTurn."
+      );
+    }
+    return iterable;
+  };
+  const publicTurn: AgentTurn = Object.freeze({
+    events: getEvents,
     ...(runId === undefined ? {} : { runId }),
+    [Symbol.asyncIterator]: () => getEvents()[Symbol.asyncIterator](),
   });
   if (ownership) {
     bindTurnExecutionRun(publicTurn, ownership.runId, ownership.leaseId);

@@ -1,4 +1,7 @@
 import type {
+  ClaimTurnOptions,
+  ClaimTurnResult,
+  TurnLease,
   TurnRecord,
   TurnStatus,
   TurnStore,
@@ -31,6 +34,55 @@ export function decideTurnClaim(
     return { ok: false, reason: "leased" };
   }
   return { ok: true };
+}
+
+export function resolveTurnClaim(
+  runId: string,
+  record: TurnRecord,
+  options: ClaimTurnOptions
+): {
+  readonly decision: ClaimTurnResult;
+  readonly nextRecord?: TurnRecord;
+} {
+  const decision = decideTurnClaim(runId, record, options.nowMs);
+  if (!decision.ok) {
+    return { decision };
+  }
+  const effectiveAttempt = Math.max(
+    options.attempt,
+    (record.lease?.attempt ?? 0) + 1
+  );
+  if (
+    options.maxAttempts !== undefined &&
+    options.maxAttempts >= 1 &&
+    effectiveAttempt > options.maxAttempts
+  ) {
+    return {
+      decision: { ok: false, reason: "not-claimable" },
+      nextRecord: applyTurnTransitionUpdate(record, {
+        lease: null,
+        status: "needs-recovery",
+      }),
+    };
+  }
+  const lease: TurnLease = {
+    attempt: options.attempt,
+    leaseId: options.leaseId,
+    leaseUntilMs: options.nowMs + options.leaseMs,
+  };
+  const claimed: TurnRecord = {
+    ...record,
+    lease,
+    status: "leased",
+  };
+  return {
+    decision: {
+      lease,
+      ok: true,
+      record: claimed,
+    },
+    nextRecord: claimed,
+  };
 }
 
 export function applyTurnTransitionUpdate(

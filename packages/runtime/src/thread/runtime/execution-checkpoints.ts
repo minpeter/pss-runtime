@@ -154,6 +154,7 @@ async function appendThreadToolExecutionCheckpoint({
         phase,
         runId,
         runtimeState: {
+          ...(phase === "after-tool" ? cloneToolCallState(toolCall) : {}),
           toolCallId: toolCall.toolCallId,
           toolName: toolCall.toolName,
         },
@@ -191,4 +192,18 @@ async function appendThreadToolExecutionCheckpoint({
     lastConflict?.expected ?? 0,
     lastConflict?.current ?? 0
   );
+}
+
+function cloneToolCallState(toolCall: {
+  readonly input: unknown;
+  readonly output?: unknown;
+}): { readonly input?: unknown; readonly output?: unknown } {
+  try {
+    return {
+      input: structuredClone(toolCall.input),
+      output: structuredClone(toolCall.output),
+    };
+  } catch {
+    return {};
+  }
 }

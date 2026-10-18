@@ -23,6 +23,8 @@ describe("instrumented AgentTurn run identity", () => {
             wrapTurn: (source) => ({
               events: () => source.events(),
               ...(wrappedRunId === undefined ? {} : { runId: wrappedRunId }),
+              [Symbol.asyncIterator]: () =>
+                source.events()[Symbol.asyncIterator](),
             }),
           },
         ],
@@ -82,6 +84,8 @@ describe("instrumented AgentTurn run identity", () => {
               hostileReads += 1;
               throw new Error("hostile runId getter invoked");
             },
+            [Symbol.asyncIterator]: () =>
+              source.events()[Symbol.asyncIterator](),
           }),
         },
         {

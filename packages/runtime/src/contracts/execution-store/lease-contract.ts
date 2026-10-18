@@ -111,6 +111,42 @@ export function describeExecutionLeaseContract(
       }
     );
 
+    it("parks a repeatedly claimed run into needs-recovery when maxAttempts is exceeded", async () => {
+      const store = createStore();
+      await store.turns.create(createQueuedRun("run-crash-loop"));
+
+      const first = await store.turns.claim("run-crash-loop", {
+        attempt: 1,
+        leaseId: "worker-1",
+        leaseMs: 50,
+        maxAttempts: 2,
+        nowMs: 10,
+      });
+      expect(first.ok).toBe(true);
+
+      const second = await store.turns.claim("run-crash-loop", {
+        attempt: 2,
+        leaseId: "worker-2",
+        leaseMs: 50,
+        maxAttempts: 2,
+        nowMs: 100,
+      });
+      expect(second.ok).toBe(true);
+
+      const third = await store.turns.claim("run-crash-loop", {
+        attempt: 3,
+        leaseId: "worker-3",
+        leaseMs: 50,
+        maxAttempts: 2,
+        nowMs: 200,
+      });
+      expect(third).toEqual({ ok: false, reason: "not-claimable" });
+
+      const parked = await store.turns.get("run-crash-loop");
+      expect(parked?.status).toBe("needs-recovery");
+      expect(parked?.lease).toBeUndefined();
+    });
+
     it("preserves current identity and checkpoint fields for a status transition", async () => {
       const store = createStore();
       const original = {

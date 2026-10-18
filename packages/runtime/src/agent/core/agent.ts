@@ -1,4 +1,8 @@
-import type { AgentHost, NotificationRecord } from "../../execution/host/types";
+import type {
+  AgentHost,
+  Checkpoint,
+  NotificationRecord,
+} from "../../execution/host/types";
 import {
   ContextTokenCalibrationRegistry,
   ContextTokenMeter,
@@ -33,7 +37,9 @@ import {
 } from "./options";
 import {
   type AgentThreadEntry,
+  resolveThreadIdentity,
   type ThreadHandle,
+  type ThreadIdentity,
   type ThreadKey,
   threadStoreKey,
 } from "./thread-entry";
@@ -53,13 +59,16 @@ export type {
 export type {
   ThreadAddress,
   ThreadHandle,
+  ThreadId,
+  ThreadIdentity,
   ThreadKey,
   ThreadMetadata,
+  ThreadReplayOptions,
 } from "./thread-entry";
 
 export type AgentConstructorOptions = AgentOptions;
 
-export class Agent {
+export class Agent implements AsyncDisposable {
   readonly #modelOptions: AgentModelOptions;
   readonly #compactionOwner = Object.freeze({});
   readonly #threads = new Map<string, AgentThreadEntry>();
@@ -131,12 +140,17 @@ export class Agent {
     runId: string,
     options: {
       readonly claim?: object;
+      readonly maxAttempts?: number;
     } = {}
   ): Promise<AgentTurn | null> {
     return await resumeAgentTurn({
       claim: options.claim,
+      hasExplicitNamespace: this.namespace !== undefined,
       host: this.#host,
+      maxAttempts: options.maxAttempts,
       ownerNamespace: this.#ownerNamespace,
+      resumeExecutionTurn: (run, checkpoint) =>
+        this.#resumeExecutionTurn(run, checkpoint),
       resumeNotification: (notification, run) =>
         this.#resumeNotification(notification, run),
       runId,
@@ -144,7 +158,10 @@ export class Agent {
   }
 
   thread(thread: ThreadKey): ThreadHandle {
-    return this.#threadEntry(threadStoreKey(thread)).publicHandle;
+    return this.#threadEntry(
+      threadStoreKey(thread),
+      resolveThreadIdentity(thread)
+    ).publicHandle;
   }
 
   async dispose(): Promise<void> {
@@ -165,7 +182,11 @@ export class Agent {
     }
   }
 
-  #threadEntry(key: string): AgentThreadEntry {
+  [Symbol.asyncDispose](): Promise<void> {
+    return this.dispose();
+  }
+
+  #threadEntry(key: string, identity?: ThreadIdentity): AgentThreadEntry {
     const existing = this.#threads.get(key);
     if (existing) {
       return existing;
@@ -191,11 +212,15 @@ export class Agent {
         compaction: this.#compaction,
         executionHost: this.#host,
         hookRuntime: this.#hookRuntime,
+        ...(this.namespace === undefined
+          ? {}
+          : { ownerNamespace: this.#ownerNamespace }),
       }
     );
     const publicHandle = createThreadPublicHandle({
       evict: (evictedKey, evictedHandle) =>
         this.#evictThreadHandle(evictedKey, evictedHandle),
+      ...(identity === undefined ? {} : { identity }),
       instrumentations: this.#instrumentations,
       key,
       namespace: this.namespace,
@@ -204,6 +229,8 @@ export class Agent {
     const entry: AgentThreadEntry = {
       notify: (input, options) => thread.notify(input, options),
       publicHandle,
+      resumeExecutionRun: (executionRun, checkpoint) =>
+        thread.resumeExecutionRun(executionRun, checkpoint),
     };
     this.#threads.set(key, entry);
     return entry;
@@ -240,6 +267,26 @@ export class Agent {
       operation: "resume",
       runId: run.runId,
       threadKey: notification.threadKey,
+    });
+  }
+
+  async #resumeExecutionTurn(
+    run: ClaimedTurnRecord,
+    checkpoint: Checkpoint | null
+  ): Promise<AgentTurn> {
+    const turn = await this.#threadEntry(run.threadKey).resumeExecutionRun(
+      {
+        kind: run.kind,
+        leaseId: run.lease.leaseId,
+        runId: run.runId,
+      },
+      checkpoint
+    );
+    return this.#instrumentTurn(turn, {
+      namespace: this.namespace,
+      operation: "resume",
+      runId: run.runId,
+      threadKey: run.threadKey,
     });
   }
 

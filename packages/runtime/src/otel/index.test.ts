@@ -241,7 +241,7 @@ describe("traceAgentTurn", () => {
     let sourceCalls = 0;
     const tracer = new RecordingTracer();
     const source: AgentTurn = {
-      events: () => {
+      events() {
         sourceCalls += 1;
         return (async function* () {
           await Promise.resolve();
@@ -252,6 +252,9 @@ describe("traceAgentTurn", () => {
             returned = true;
           }
         })();
+      },
+      [Symbol.asyncIterator]() {
+        return this.events()[Symbol.asyncIterator]();
       },
     };
     const traced = traceAgentTurn(source, { tracer });
@@ -283,6 +286,9 @@ describe("traceAgentTurn", () => {
           yield { type: "step-start" } satisfies AgentEvent;
           throw sourceError;
         })(),
+      [Symbol.asyncIterator]() {
+        return this.events()[Symbol.asyncIterator]();
+      },
     };
 
     await expect(
@@ -314,7 +320,7 @@ function singleUseTurn(
 ): AgentTurn {
   let consumed = false;
   return {
-    events: () => {
+    events() {
       if (consumed) {
         throw new Error("AgentTurn.events() can only be consumed once");
       }
@@ -329,6 +335,9 @@ function singleUseTurn(
           onReturn();
         }
       })();
+    },
+    [Symbol.asyncIterator]() {
+      return this.events()[Symbol.asyncIterator]();
     },
   };
 }

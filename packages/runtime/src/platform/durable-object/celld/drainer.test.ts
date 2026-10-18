@@ -129,6 +129,9 @@ function turn(values: readonly AgentEvent[]): AgentTurn {
   return {
     events,
     runId: "run-1",
+    [Symbol.asyncIterator]() {
+      return events()[Symbol.asyncIterator]();
+    },
   };
 }
 

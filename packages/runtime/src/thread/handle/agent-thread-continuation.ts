@@ -1,3 +1,4 @@
+import type { Checkpoint } from "../../execution/host/types";
 import { createRuntimeInputState } from "../input/runtime-input";
 import {
   type AgentTurn,
@@ -7,12 +8,17 @@ import {
 } from "../protocol/turn";
 import { waitForCompactionQueue } from "../runtime/compaction-queue-deadline";
 import {
+  buildRecoveredContinuationHistory,
+  recoverPersistedThreadContinuation,
+} from "../runtime/durable-continuation-recovery";
+import {
   claimDurableThreadInput,
   releaseDurableThreadInputClaim,
 } from "../runtime/durable-input-claims";
 import {
   cancelThreadExecutionRun,
   precreateThreadExecutionRun,
+  type QueuedThreadExecutionRun,
 } from "../runtime/execution";
 import { startThreadQueueDrain } from "../runtime/notification";
 import { reserveThreadInputAdmission } from "../runtime/thread-input-admission-coordinator";
@@ -82,8 +88,8 @@ async function admitContinuation(
       code: "THREAD_CONTINUATION_BUSY",
     });
   }
-  const continuation = context.state.continuationCheckpoint();
-  if (!continuation) {
+  const inMemoryContinuation = context.state.continuationCheckpoint();
+  if (!inMemoryContinuation) {
     const pending = await claimDurableThreadInput({
       boundary: "turn-idle",
       executionHost: host,
@@ -102,27 +108,56 @@ async function admitContinuation(
     }
     assertAgentThreadOpen(context);
     signal.throwIfAborted();
-    return;
+    const recovered = await recoverPersistedThreadContinuation({
+      executionHost: host,
+      signal,
+      state: context.state,
+      threadKey: context.threadKey,
+    });
+    assertAgentThreadOpen(context);
+    signal.throwIfAborted();
+    if (!recovered) {
+      return;
+    }
+    const recoveredRun = new BufferedAgentTurn();
+    bindTurnExecutionRun(
+      recoveredRun,
+      recovered.executionRun.runId,
+      recovered.executionRun.leaseId ?? null
+    );
+    context.inputQueue.push({
+      continuation: recovered.continuation,
+      executionRun: recovered.executionRun,
+      initialEvents: [],
+      preUserRuntimeInputs: [],
+      run: recoveredRun,
+      runtimeInput: createRuntimeInputState([]),
+    });
+    startThreadQueueDrain(recoveredRun, () =>
+      drainAgentThreadInputQueue(context)
+    );
+    return recoveredRun;
   }
   // Keep the serial position until the physical refresh settles. A
   // cancelled caller can stop waiting, but a late load cannot overtake B.
   await context.state.refresh();
   assertAgentThreadOpen(context);
   signal.throwIfAborted();
-  if (!context.state.isContinuationCurrent(continuation)) {
+  if (!context.state.isContinuationCurrent(inMemoryContinuation)) {
     return;
   }
-  if (continuation.recover) {
-    continuation.history.splice(
+  if (inMemoryContinuation.recover) {
+    inMemoryContinuation.history.splice(
       0,
-      continuation.history.length,
-      ...continuation.recover()
+      inMemoryContinuation.history.length,
+      ...inMemoryContinuation.recover()
     );
   }
   signal.throwIfAborted();
   const precreated = await precreateThreadExecutionRun({
     executionHost: host,
     kind: "user-turn",
+    ownerNamespace: context.execution.ownerNamespace,
     threadKey: context.threadKey,
   });
   // Storage creation is not cancellable. Retain admission ownership until
@@ -143,7 +178,7 @@ async function admitContinuation(
     bindTurnExecutionRun(run, precreated.runId);
   }
   context.inputQueue.push({
-    continuation,
+    continuation: inMemoryContinuation,
     ...(precreated
       ? {
           executionRun: {
@@ -152,6 +187,39 @@ async function admitContinuation(
           },
         }
       : {}),
+    initialEvents: [],
+    preUserRuntimeInputs: [],
+    run,
+    runtimeInput: createRuntimeInputState([]),
+  });
+  startThreadQueueDrain(run, () => drainAgentThreadInputQueue(context));
+  return run;
+}
+
+export async function resumeClaimedExecutionRunOnThread(
+  context: AgentThreadContext,
+  executionRun: QueuedThreadExecutionRun,
+  checkpoint: Checkpoint | null
+): Promise<AgentTurn> {
+  assertAgentThreadOpen(context);
+  await ensureAgentThreadStarted(context);
+  assertAgentThreadOpen(context);
+  await context.state.refresh();
+  assertAgentThreadOpen(context);
+  const history = buildRecoveredContinuationHistory(
+    context.state.modelSnapshot(),
+    checkpoint
+  );
+  context.state.setContinuationCheckpoint(history);
+  const continuation = context.state.continuationCheckpoint();
+  if (!continuation) {
+    throw new Error("Thread continuation checkpoint was revoked.");
+  }
+  const run = new BufferedAgentTurn();
+  bindTurnExecutionRun(run, executionRun.runId, executionRun.leaseId ?? null);
+  context.inputQueue.push({
+    continuation,
+    executionRun,
     initialEvents: [],
     preUserRuntimeInputs: [],
     run,

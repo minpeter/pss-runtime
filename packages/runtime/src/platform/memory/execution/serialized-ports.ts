@@ -134,6 +134,8 @@ export function serializeTurnMutations(
     getByDedupeKey: async (dedupeKey) => await raw.getByDedupeKey(dedupeKey),
     listByParentRunId: async (parentRunId) =>
       await raw.listByParentRunId(parentRunId),
+    listByThreadKey: async (threadKey) =>
+      (await raw.listByThreadKey?.(threadKey)) ?? [],
     transition: async (runId, expected, update) =>
       await run(
         async (tx) =>

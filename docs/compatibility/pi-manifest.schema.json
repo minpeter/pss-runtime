@@ -21,7 +21,10 @@
           "const": "Pi"
         },
         "repository": {
-          "const": "https://github.com/badlogic/pi-mono"
+          "enum": [
+            "https://github.com/badlogic/pi-mono",
+            "https://github.com/earendil-works/pi"
+          ]
         },
         "release": {
           "type": "string",

@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -8,7 +9,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -46,6 +47,18 @@ beforeEach(() => {
   const home = join(directory, "home");
   for (const path of [repository, caller, home]) {
     mkdirSync(path, { recursive: true });
+  }
+  const hostCorepackV1 = join(homedir(), ".cache/node/corepack/v1");
+  if (existsSync(hostCorepackV1)) {
+    const guestCorepack = join(home, ".cache/node/corepack");
+    mkdirSync(guestCorepack, { recursive: true });
+    symlinkSync(hostCorepackV1, join(guestCorepack, "v1"), "dir");
+    writeFileSync(
+      join(guestCorepack, "lastKnownGood.json"),
+      JSON.stringify({
+        pnpm: String(packageJson.packageManager).slice("pnpm@".length),
+      })
+    );
   }
   cpSync(
     join(root, "apps/coding-agent/src"),

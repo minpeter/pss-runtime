@@ -35,6 +35,7 @@ export async function admitThreadSendInput({
   input,
   inputQueue,
   kind = "send",
+  ownerNamespace,
   pendingOverlays,
   pendingRuntimeInputs,
   reservation,
@@ -49,6 +50,7 @@ export async function admitThreadSendInput({
   readonly input: AgentInput;
   readonly inputQueue: QueuedInput[];
   readonly kind?: Exclude<ThreadInputKind, "steer">;
+  readonly ownerNamespace?: string;
   readonly pendingOverlays: QueuedRuntimeInput[];
   readonly pendingRuntimeInputs: QueuedRuntimeInput[];
   readonly reservation?: ThreadInputAdmissionOperation;
@@ -62,6 +64,7 @@ export async function admitThreadSendInput({
     executionHost,
     input,
     kind,
+    ownerNamespace,
     pendingOverlays,
     pendingRuntimeInputs,
     reservation,
@@ -92,6 +95,7 @@ export async function createQueuedSendInput({
   executionHost,
   input,
   kind = "send",
+  ownerNamespace,
   pendingOverlays,
   pendingRuntimeInputs,
   reservation,
@@ -104,6 +108,7 @@ export async function createQueuedSendInput({
   readonly executionHost: AgentHost | undefined;
   readonly input: AgentInput;
   readonly kind?: Exclude<ThreadInputKind, "steer">;
+  readonly ownerNamespace?: string;
   readonly pendingOverlays: QueuedRuntimeInput[];
   readonly pendingRuntimeInputs: QueuedRuntimeInput[];
   readonly reservation?: ThreadInputAdmissionOperation;
@@ -147,6 +152,7 @@ export async function createQueuedSendInput({
       input: queuedInput,
       kind,
       messageId,
+      ownerNamespace,
       precreateExecutionRun: true,
       reservation,
       threadKey,

@@ -9,8 +9,11 @@ export {
   type ThreadAddress,
   type ThreadCompactionInput,
   type ThreadHandle,
+  type ThreadId,
+  type ThreadIdentity,
   type ThreadKey,
   type ThreadMetadata,
+  type ThreadReplayOptions,
 } from "./agent/core/agent";
 export { AgentHookError } from "./agent/core/hook-error";
 export {
@@ -221,6 +224,7 @@ export {
   ThreadCompactionValidationError,
   ThreadStateValidationError,
 } from "./thread/state/snapshot";
+export { DisposedResourceError } from "./thread/state/thread-errors";
 export type {
   CommitResult,
   ExpectedThreadVersion,

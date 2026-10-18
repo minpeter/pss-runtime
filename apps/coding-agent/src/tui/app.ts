@@ -247,6 +247,9 @@ async function startTuiSession(
     extensionHost.emitHostEvent(type, payload);
   };
   let agent: Awaited<ReturnType<typeof createCodingAgent>>;
+  const initialFileHost = createFileHost({
+    directory: resolvedThreadConfig.directory,
+  });
   let contextResources: ContextResources;
   try {
     contextResources = await loadContextResources({
@@ -258,7 +261,7 @@ async function startTuiSession(
     agent = await createCodingAgent({
       compaction: tuiCompaction,
       extensionHost,
-      host: createFileHost({ directory: resolvedThreadConfig.directory }),
+      host: initialFileHost,
       instructions: composeCodingAgentInstructions(
         contextResources.instructionFragments
       ),
@@ -280,8 +283,7 @@ async function startTuiSession(
     const sessionManager = createSessionManager({
       cwd,
       directory: resolvedThreadConfig.directory,
-      threads: createFileHost({ directory: resolvedThreadConfig.directory })
-        .store.threads,
+      threads: initialFileHost.store.threads,
     });
     const threadConfig = await selectedThreadConfig(
       resolvedThreadConfig,

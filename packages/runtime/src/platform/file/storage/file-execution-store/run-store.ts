@@ -2,14 +2,13 @@ import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
   applyTurnTransitionUpdate,
-  decideTurnClaim,
   decideTurnTransition,
+  resolveTurnClaim,
 } from "../../../../execution/host/turn-status";
 import type {
   ClaimTurnOptions,
   ClaimTurnResult,
   CreateTurnResult,
-  TurnLease,
   TurnRecord,
   TurnStore,
   TurnTransitionExpected,
@@ -44,19 +43,11 @@ export class FileRunStore implements TurnStore {
         return { ok: false, reason: "not-found" };
       }
 
-      const decision = decideTurnClaim(runId, record, options.nowMs);
-      if (!decision.ok) {
-        return decision;
+      const { decision, nextRecord } = resolveTurnClaim(runId, record, options);
+      if (nextRecord) {
+        await this.#writeUnlocked(nextRecord);
       }
-
-      const lease: TurnLease = {
-        attempt: options.attempt,
-        leaseId: options.leaseId,
-        leaseUntilMs: options.nowMs + options.leaseMs,
-      };
-      const claimed: TurnRecord = { ...record, lease, status: "leased" };
-      await this.#writeUnlocked(claimed);
-      return { lease, ok: true, record: claimed };
+      return decision;
     });
   }
 
@@ -99,6 +90,13 @@ export class FileRunStore implements TurnStore {
     return await this.#lock(async () => {
       const records = await this.#listUnlocked();
       return records.filter((record) => record.parentRunId === parentRunId);
+    });
+  }
+
+  async listByThreadKey(threadKey: string): Promise<readonly TurnRecord[]> {
+    return await this.#lock(async () => {
+      const records = await this.#listUnlocked();
+      return records.filter((record) => record.threadKey === threadKey);
     });
   }
 

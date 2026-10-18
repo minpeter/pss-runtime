@@ -78,6 +78,7 @@ export async function processQueuedInput({
         events.interceptBeforeToolCall(checkpoint),
       interceptToolResult: (checkpoint) =>
         events.interceptAfterToolCall(checkpoint),
+      ownerNamespace: execution.ownerNamespace,
       threadKey,
       state,
       turnId,

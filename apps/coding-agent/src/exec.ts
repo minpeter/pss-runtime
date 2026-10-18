@@ -3,6 +3,7 @@ import { writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import {
+  type Agent,
   type AgentEvent,
   type AgentOptions,
   isStreamAgentEvent,
@@ -64,10 +65,13 @@ export interface RunCodingAgentExecOptions {
   readonly extensions?: readonly CodingAgentExtensionInput[];
   /** Overrides the home directory used for context-resource discovery. */
   readonly home?: string;
+  readonly host?: AgentOptions["host"];
   readonly model: AgentOptions["model"];
   readonly prompt: string;
   readonly resultFile?: string;
+  readonly sessionKey?: string;
   readonly stdout?: TextOutput;
+  readonly threadDirectory?: string;
   readonly timeoutMs?: number;
   readonly webToolsAvailability?: WebToolsAvailability;
   readonly workspace: string;
@@ -154,14 +158,42 @@ async function resolveExecContext({
   };
 }
 
+async function disposeExecResources(
+  agent: Agent,
+  extensionHost: CodingAgentExtensionHost
+): Promise<string | undefined> {
+  const cleanupFailures: unknown[] = [];
+  for (const cleanup of [
+    () => agent.dispose(),
+    () => extensionHost.dispose(),
+  ]) {
+    try {
+      await cleanup();
+    } catch (error) {
+      cleanupFailures.push(error);
+    }
+  }
+  if (cleanupFailures.length === 0) {
+    return;
+  }
+  return cleanupFailures
+    .map((failure) =>
+      failure instanceof Error ? failure.message : String(failure)
+    )
+    .join("; ");
+}
+
 export async function runCodingAgentExec({
   bindProviderObservation,
   extensions = [],
   home = homedir(),
+  host,
   model,
   prompt,
   resultFile,
+  sessionKey,
   stdout = process.stdout,
+  threadDirectory,
   timeoutMs = 20 * 60 * 1000,
   webToolsAvailability = "disabled",
   workspace,
@@ -202,8 +234,10 @@ export async function runCodingAgentExec({
     resolvedPrompt = context.prompt;
     agent = await createCodingAgent({
       extensionHost,
+      ...(host === undefined ? {} : { host }),
       instructions: context.instructions,
       model,
+      ...(threadDirectory === undefined ? {} : { threadDirectory }),
       webTools: { webToolsAvailability },
       workspace: absoluteWorkspace,
     });
@@ -229,7 +263,7 @@ export async function runCodingAgentExec({
     }
     throw error;
   }
-  const thread = agent.thread(`exec:${randomUUID()}`);
+  const thread = agent.thread(sessionKey ?? `exec:${randomUUID()}`);
   let timeoutFired = false;
   const timeout = setTimeout(() => {
     timeoutFired = true;
@@ -264,23 +298,9 @@ export async function runCodingAgentExec({
     state.status = "error";
   } finally {
     clearTimeout(timeout);
-    const cleanupFailures: unknown[] = [];
-    for (const cleanup of [
-      () => agent.dispose(),
-      () => extensionHost.dispose(),
-    ]) {
-      try {
-        await cleanup();
-      } catch (error) {
-        cleanupFailures.push(error);
-      }
-    }
-    if (cleanupFailures.length > 0 && state.error === undefined) {
-      state.error = cleanupFailures
-        .map((failure) =>
-          failure instanceof Error ? failure.message : String(failure)
-        )
-        .join("; ");
+    const cleanupError = await disposeExecResources(agent, extensionHost);
+    if (cleanupError !== undefined && state.error === undefined) {
+      state.error = cleanupError;
       state.status = "error";
     }
   }

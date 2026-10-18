@@ -1,11 +1,16 @@
 import type { AgentThread } from "../../thread/handle/agent-thread";
 import type { AgentTurn } from "../../thread/protocol/turn";
+import { DisposedResourceError } from "../../thread/state/thread-errors";
 import {
   type AgentInstrumentation,
   type AgentInstrumentationContext,
   applyAgentInstrumentations,
 } from "./instrumentation";
-import type { ThreadHandle } from "./thread-entry";
+import {
+  resolveThreadIdentity,
+  type ThreadHandle,
+  type ThreadIdentity,
+} from "./thread-entry";
 
 type ThreadHandleLifecycle =
   | { readonly tag: "active" }
@@ -17,17 +22,20 @@ type ThreadHandleLifecycle =
 
 export function createThreadPublicHandle({
   evict,
+  identity: explicitIdentity,
   instrumentations,
   key,
   namespace,
   thread,
 }: {
   readonly evict: (key: string, handle: ThreadHandle) => void;
+  readonly identity?: ThreadIdentity;
   readonly instrumentations: readonly AgentInstrumentation[];
   readonly key: string;
   readonly namespace: string | undefined;
   readonly thread: AgentThread;
 }): ThreadHandle {
+  const identity = explicitIdentity ?? resolveThreadIdentity(key);
   let lifecycle: ThreadHandleLifecycle = { tag: "active" };
   const instrumentTurn = (
     turn: AgentTurn,
@@ -70,7 +78,9 @@ export function createThreadPublicHandle({
       case "deleted":
         return Promise.resolve();
       case "disposed":
-        return Promise.reject(new Error("Thread handle is disposed"));
+        return Promise.reject(
+          new DisposedResourceError("Thread handle is disposed")
+        );
       default:
         return assertNeverLifecycle(lifecycle);
     }
@@ -142,11 +152,13 @@ export function createThreadPublicHandle({
         operation: "follow-up",
         threadKey: key,
       }),
+    identity,
     interrupt: () => thread.interrupt(),
     overlay: (input) => {
       thread.overlay(input);
       return publicHandle;
     },
+    replay: (options) => thread.replay(options),
     send: async (input) =>
       instrumentTurn(await thread.send(input), {
         namespace,
@@ -159,6 +171,7 @@ export function createThreadPublicHandle({
         operation: "steer",
         threadKey: key,
       }),
+    [Symbol.asyncDispose]: () => disposeThread(),
   };
   return publicHandle;
 }

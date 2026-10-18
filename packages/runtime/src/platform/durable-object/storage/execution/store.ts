@@ -1,6 +1,7 @@
 import type {
   CheckpointStore,
   EventStore,
+  HostScheduler,
   HostStore,
   HostStoreTransaction,
   LeaseFencedCheckpointStore,
@@ -9,6 +10,10 @@ import type {
   ThreadInputInbox,
   TurnStore,
 } from "../../../../execution";
+import {
+  type ScheduledThreadPrompt,
+  threadPromptScheduledWorkId,
+} from "../../../../execution/scheduled-work";
 import type { ThreadStore } from "../../../../thread/store/types";
 import type { SqlStorage } from "../../sql/ports/storage-port";
 import {
@@ -22,6 +27,7 @@ import {
 } from "../payload-guard";
 import { DurableObjectSqliteCheckpointStore } from "../sqlite/checkpoint-store";
 import { DurableObjectSqliteEventStore } from "../sqlite/event-store";
+import { insertScheduledWorkInTransaction } from "../sqlite/scheduled-work-table";
 import { DurableObjectSqliteThreadEventLog } from "../sqlite/thread-event-log";
 import { DurableObjectSqliteThreadStore } from "../sqlite/thread-store";
 import { DurableObjectThreadInputInbox } from "./input-store";
@@ -34,6 +40,7 @@ export class DurableObjectExecutionStore implements HostStore {
   readonly inputs: ThreadInputInbox;
   readonly leaseFencedCheckpoints: LeaseFencedCheckpointStore;
   readonly notifications: NotificationInbox;
+  readonly scheduler: HostScheduler;
   readonly threadEvents: ThreadEventLog;
   readonly turns: TurnStore;
   readonly threads: ThreadStore;
@@ -87,6 +94,36 @@ export class DurableObjectExecutionStore implements HostStore {
       prefix,
       payloadBudget
     );
+    this.scheduler = {
+      enqueueRun: (runId) => {
+        insertScheduledWorkInTransaction(
+          this.#storage,
+          this.#prefix,
+          "run",
+          runId,
+          runId,
+          { runId }
+        );
+        return Promise.resolve();
+      },
+      resumeThread: (threadKey, options) => {
+        const prompt: ScheduledThreadPrompt = {
+          idempotencyKey: options.idempotencyKey,
+          notificationId: options.notificationId,
+          runId: options.runId,
+          threadKey,
+        };
+        insertScheduledWorkInTransaction(
+          this.#storage,
+          this.#prefix,
+          "thread-prompt",
+          threadPromptScheduledWorkId(prompt),
+          prompt,
+          { runId: prompt.runId, threadKey }
+        );
+        return Promise.resolve();
+      },
+    };
   }
 
   get sessions(): ThreadStore {

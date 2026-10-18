@@ -61,6 +61,25 @@ export function listRunsByParentRunId(
   );
 }
 
+export function listRunsByThreadKey(
+  storage: DurableObjectTransactionStorage,
+  prefix: string,
+  threadKey: string
+): Promise<readonly TurnRecord[]> {
+  const sql = requiredSqlStorage(storage, "DurableObjectRunStore");
+  ensureRunSchema(sql);
+  return Promise.resolve(
+    sql
+      .exec<RunRow>(
+        "SELECT record FROM pss_run WHERE prefix = ? AND thread_key = ? ORDER BY created_at, rowid",
+        prefix,
+        threadKey
+      )
+      .toArray()
+      .map(parseRunRecord)
+  );
+}
+
 export function putRun(
   storage: DurableObjectTransactionStorage,
   prefix: string,

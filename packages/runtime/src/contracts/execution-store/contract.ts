@@ -104,6 +104,40 @@ export function describeExecutionStoreContract({
       await expect(store.threads.load("thread-1")).resolves.toBeNull();
     });
 
+    it("lists runs by threadKey and rolls back transactional scheduler writes on failure", async () => {
+      const store = createStore();
+      await store.turns.create({
+        ...createQueuedRun("run-thread-a-1"),
+        threadKey: "thread-a",
+      });
+      await store.turns.create({
+        ...createQueuedRun("run-thread-b-1"),
+        threadKey: "thread-b",
+      });
+      await store.turns.create({
+        ...createQueuedRun("run-thread-a-2"),
+        threadKey: "thread-a",
+      });
+
+      await expect(store.turns.listByThreadKey?.("thread-a")).resolves.toEqual([
+        expect.objectContaining({ runId: "run-thread-a-1" }),
+        expect.objectContaining({ runId: "run-thread-a-2" }),
+      ]);
+
+      await expect(
+        store.transaction(async (tx) => {
+          await tx.turns.create({
+            ...createQueuedRun("run-rolled-back"),
+            threadKey: "thread-a",
+          });
+          await tx.scheduler?.enqueueRun("run-rolled-back");
+          throw new Error("outbox rollback");
+        })
+      ).rejects.toThrow("outbox rollback");
+
+      await expect(store.turns.get("run-rolled-back")).resolves.toBeNull();
+    });
+
     it("deletes aggregate thread execution data when supported", async () => {
       const store = createStore();
       if (!store.deleteThread) {
