@@ -127,35 +127,31 @@ export function createThreadToolExecutionContext({
   // tool checkpoint records the run's earlier completed tools. Recovery that
   // can restore only the latest checkpoint uses this to fail closed. A
   // recovered attempt inherits the list from the run's latest checkpoint.
+  // Appends are serialized so parallel tool calls in one step each record
+  // every sibling whose result was checkpointed before them.
   let completed: CompletedToolCall[] | undefined;
-  const append = async (
+  let appends: Promise<unknown> = Promise.resolve();
+  const append = (
     phase: Extract<CheckpointPhase, "after-tool" | "before-tool">,
     toolCall: RuntimeToolExecutionCheckpoint & { readonly output?: unknown }
   ): Promise<void> => {
-    if (!completed) {
-      const loaded = completedToolCallsThrough(
+    const appended = appends.then(async () => {
+      completed ??= completedToolCallsThrough(
         await executionHost.store.checkpoints.latest(runId)
       );
-      completed ??= loaded;
-    }
-    await appendThreadToolExecutionCheckpoint({
-      executionHost,
-      leaseId,
-      phase,
-      priorCompleted: [...completed],
-      runId,
-      state,
-      toolCall,
-    });
-    if (
-      phase === "after-tool" &&
-      !completed.some((call) => call.toolCallId === toolCall.toolCallId)
-    ) {
-      completed.push({
-        toolCallId: toolCall.toolCallId,
-        toolName: toolCall.toolName,
+      await appendThreadToolExecutionCheckpoint({
+        completed,
+        executionHost,
+        leaseId,
+        phase,
+        runId,
+        state,
+        toolCall,
       });
-    }
+    });
+    // A failed append rejects only its own caller, never later appends.
+    appends = appended.catch(() => undefined);
+    return appended;
   };
   return {
     attempt: 1,
@@ -188,18 +184,18 @@ export function createThreadToolExecutionContext({
 }
 
 async function appendThreadToolExecutionCheckpoint({
+  completed,
   executionHost,
   leaseId,
   phase,
-  priorCompleted,
   runId,
   state,
   toolCall,
 }: {
+  readonly completed: CompletedToolCall[];
   readonly executionHost: AgentHost;
   readonly leaseId: string | null;
   readonly phase: Extract<CheckpointPhase, "after-tool" | "before-tool">;
-  readonly priorCompleted: readonly CompletedToolCall[];
   readonly runId: string;
   readonly state: ThreadState;
   readonly toolCall: RuntimeToolExecutionCheckpoint & {
@@ -225,7 +221,9 @@ async function appendThreadToolExecutionCheckpoint({
         runId,
         runtimeState: {
           ...(phase === "after-tool" ? cloneToolCallState(toolCall) : {}),
-          priorCompletedToolCalls: priorCompleted,
+          priorCompletedToolCalls: completed.filter(
+            (call) => call.toolCallId !== toolCall.toolCallId
+          ),
           toolCallId: toolCall.toolCallId,
           toolName: toolCall.toolName,
         },
@@ -239,6 +237,11 @@ async function appendThreadToolExecutionCheckpoint({
     );
 
     if (result.ok) {
+      if (phase === "after-tool") {
+        mergeCompletedToolCalls(completed, [
+          { toolCallId: toolCall.toolCallId, toolName: toolCall.toolName },
+        ]);
+      }
       return;
     }
 
@@ -252,6 +255,13 @@ async function appendThreadToolExecutionCheckpoint({
           current: result.currentVersion,
           expected: run.checkpointVersion,
         };
+        // Another writer advanced the run; keep its completed tools too.
+        mergeCompletedToolCalls(
+          completed,
+          completedToolCallsThrough(
+            await executionHost.store.checkpoints.latest(runId)
+          )
+        );
         break;
       default:
         assertNever(result);
@@ -263,6 +273,17 @@ async function appendThreadToolExecutionCheckpoint({
     lastConflict?.expected ?? 0,
     lastConflict?.current ?? 0
   );
+}
+
+function mergeCompletedToolCalls(
+  completed: CompletedToolCall[],
+  calls: readonly CompletedToolCall[]
+): void {
+  for (const call of calls) {
+    if (!completed.some((known) => known.toolCallId === call.toolCallId)) {
+      completed.push(call);
+    }
+  }
 }
 
 function cloneToolCallState(toolCall: {

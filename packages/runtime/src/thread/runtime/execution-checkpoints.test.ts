@@ -1,10 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { createAgent } from "../../agent/core/agent";
+import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution-checkpoint";
 import type {
   RuntimeToolExecutionCheckpoint,
   RuntimeToolExecutionContext,
 } from "../../llm/tool-execution-types";
 import { createInMemoryHost } from "../../platform/memory";
 import type { InMemoryHost } from "../../platform/memory/execution/execution-host";
+import {
+  assistantMessage,
+  createCallbackModel,
+} from "../../testing/test-fixtures";
+import { encodeThreadSnapshot } from "../state/snapshot";
 import { ThreadState } from "../state/thread-state";
 import {
   createThreadToolExecutionContext,
@@ -150,6 +157,95 @@ describe("thread tool execution checkpoints", () => {
     // Then: the raw output was never persisted for recovery replay.
     await expect(host.store.checkpoints.latest(runId)).resolves.toMatchObject({
       phase: "before-tool",
+      version: 1,
+    });
+  });
+
+  it("lists a concurrently completed sibling on the latest checkpoint", async () => {
+    // Given: two parallel tool calls of one step have both started.
+    const runId = "parallel-siblings";
+    const { context, host } = await createRunContext(runId);
+    const first = toolCall(runId, "call-deploy", "deploy");
+    const second = toolCall(runId, "call-notify", "notify");
+    await context.beforeTool?.(first);
+    await context.beforeTool?.(second);
+
+    // When: both results are checkpointed concurrently.
+    await Promise.all([
+      context.afterTool?.({ ...first, output: "deployed" }),
+      context.afterTool?.({ ...second, output: "notified" }),
+    ]);
+
+    // Then: the latest checkpoint records the sibling as completed.
+    await expect(host.store.checkpoints.latest(runId)).resolves.toMatchObject({
+      runtimeState: {
+        priorCompletedToolCalls: [
+          { toolCallId: "call-deploy", toolName: "deploy" },
+        ],
+        toolCallId: "call-notify",
+      },
+      version: 4,
+    });
+  });
+
+  it("fails recovery closed after concurrent sibling results", async () => {
+    // Given: a crashed run whose two parallel tool results were checkpointed
+    // concurrently but never committed to thread history.
+    const runId = "parallel-siblings-recovery";
+    const { context, host } = await createRunContext(runId);
+    await host.store.threads.commit(
+      "thread",
+      { state: encodeThreadSnapshot([{ content: "go", role: "user" }]) },
+      { expectedVersion: null }
+    );
+    const first = toolCall(runId, "call-deploy", "deploy");
+    const second = toolCall(runId, "call-notify", "notify");
+    await context.beforeTool?.(first);
+    await context.beforeTool?.(second);
+    await Promise.all([
+      context.afterTool?.({ ...first, output: "deployed" }),
+      context.afterTool?.({ ...second, output: "notified" }),
+    ]);
+    let modelCalls = 0;
+    const agent = await createAgent({
+      host,
+      model: createCallbackModel(() => {
+        modelCalls += 1;
+        return Promise.resolve([assistantMessage("UNREACHABLE")]);
+      }),
+    });
+
+    // When: the thread is continued after the crash.
+    const continued = agent.thread("thread").continue();
+
+    // Then: recovery parks the run instead of replaying one tool.
+    await expect(continued).rejects.toBeInstanceOf(
+      ToolExecutionNeedsRecoveryError
+    );
+    expect(modelCalls).toBe(0);
+    await expect(host.store.turns.get(runId)).resolves.toMatchObject({
+      status: "needs-recovery",
+    });
+  });
+
+  it("keeps checkpointing after an earlier append fails", async () => {
+    // Given: a run whose next checkpoint read fails once.
+    const runId = "append-failure";
+    const { context, host } = await createRunContext(runId);
+    const get = host.store.turns.get.bind(host.store.turns);
+    vi.spyOn(host.store.turns, "get")
+      .mockRejectedValueOnce(new Error("transient read failure"))
+      .mockImplementation(get);
+
+    // When: one append fails and a later one is issued.
+    await expect(
+      context.beforeTool?.(toolCall(runId, "call-a", "a"))
+    ).rejects.toThrow("transient read failure");
+    await context.beforeTool?.(toolCall(runId, "call-b", "b"));
+
+    // Then: the later append is persisted.
+    await expect(host.store.checkpoints.latest(runId)).resolves.toMatchObject({
+      runtimeState: { toolCallId: "call-b" },
       version: 1,
     });
   });

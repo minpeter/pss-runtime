@@ -120,7 +120,17 @@ async function resumeAndDrainScheduledNodeWork({
   ) => void;
 }): Promise<boolean> {
   const agent = await agentForRun(context);
-  const run = await agent.resume(context.runId);
+  // Manual recovery rejects resume after parking the run; once the record is
+  // settled the scheduled work can never make progress, so it is acked.
+  const run = await agent
+    .resume(context.runId)
+    .catch(async (error: unknown) => {
+      const record = await agent.host?.store.turns.get(context.runId);
+      if (record && isSettledRunStatus(record.status)) {
+        return null;
+      }
+      throw error;
+    });
   if (!run) {
     return await shouldAckNullResume(agent, context.runId);
   }

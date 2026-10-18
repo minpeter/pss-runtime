@@ -39,6 +39,9 @@ export interface CelldDurableObjectStorage extends DurableObjectStorage {
   deleteAlarm(): Promise<void>;
   getAlarm(): Promise<number | null>;
   setAlarm(scheduledTime: Date | number): Promise<void>;
+  transaction<T>(
+    fn: (storage: DurableObjectTransactionStorage) => Promise<T>
+  ): Promise<T>;
 }
 
 interface DuePayload<T> {
@@ -62,27 +65,6 @@ export function serialize<T>(
   return current;
 }
 
-type CelldTransactionStorage = DurableObjectTransactionStorage &
-  Required<
-    Pick<
-      DurableObjectTransactionStorage,
-      "deleteAlarm" | "getAlarm" | "setAlarm"
-    >
-  >;
-
-// Alarm reads and writes go through the storage transaction so every
-// scheduled-work writer observes rows and alarm together; a read outside it
-// can act on rows another transaction has since changed.
-function assertCelldTransaction(
-  transaction: DurableObjectTransactionStorage
-): asserts transaction is CelldTransactionStorage {
-  for (const method of ["deleteAlarm", "getAlarm", "setAlarm"] as const) {
-    if (typeof transaction[method] !== "function") {
-      throw new Error(`Celld storage transaction ${method}() is required.`);
-    }
-  }
-}
-
 export async function insertDueWorkInTransaction<T>(
   transaction: DurableObjectTransactionStorage,
   prefix: string,
@@ -92,7 +74,9 @@ export async function insertDueWorkInTransaction<T>(
   dueAtMs: number,
   indexes: { readonly runId?: string; readonly threadKey?: string }
 ): Promise<void> {
-  assertCelldTransaction(transaction);
+  if (transaction.setAlarm === undefined) {
+    throw new Error("Celld storage transaction setAlarm() is required.");
+  }
   insertScheduledWorkInTransaction(
     transaction,
     prefix,
@@ -106,7 +90,9 @@ export async function insertDueWorkInTransaction<T>(
   if (nextDueAtMs === undefined) {
     return;
   }
-  const currentAlarm = await transaction.getAlarm();
+  // Without a transactional alarm read, arming the earliest persisted due time
+  // still wakes every persisted row.
+  const currentAlarm = (await transaction.getAlarm?.()) ?? null;
   await transaction.setAlarm(
     Math.min(currentAlarm ?? Number.POSITIVE_INFINITY, nextDueAtMs)
   );
@@ -157,19 +143,22 @@ export function listDueWork<T>(
     });
 }
 
+// Re-arm reads rows and alarm inside one storage transaction so it never acts
+// on rows another transaction has since changed; transactions without alarm
+// methods fall back to the Celld storage's own alarm.
 export async function armNextAlarm(
   storage: CelldDurableObjectStorage,
   prefix: string
 ): Promise<void> {
   await withTransaction(storage, async (transaction) => {
-    assertCelldTransaction(transaction);
     const dueAtMs = earliestDueAt(transaction, prefix);
     if (dueAtMs === undefined) {
-      await transaction.deleteAlarm();
+      await (transaction.deleteAlarm?.() ?? storage.deleteAlarm());
       return;
     }
-    if ((await transaction.getAlarm()) !== dueAtMs) {
-      await transaction.setAlarm(dueAtMs);
+    const currentAlarm = await (transaction.getAlarm?.() ?? storage.getAlarm());
+    if (currentAlarm !== dueAtMs) {
+      await (transaction.setAlarm?.(dueAtMs) ?? storage.setAlarm(dueAtMs));
     }
   });
 }

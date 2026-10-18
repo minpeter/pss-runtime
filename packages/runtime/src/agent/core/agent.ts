@@ -86,6 +86,7 @@ export class Agent implements AsyncDisposable {
   readonly #threadMigrations: readonly ThreadStateMigration[];
   readonly #compaction?: AgentCompaction;
   #disposed = false;
+  #disposal: Promise<void> | undefined;
   readonly host: AgentHost;
   readonly namespace?: string;
   constructor(options: AgentConstructorOptions) {
@@ -163,17 +164,36 @@ export class Agent implements AsyncDisposable {
   }
 
   thread(thread: ThreadKey): ThreadHandle {
-    this.#assertNotDisposed();
     return this.#threadEntry(
       threadStoreKey(thread),
       resolveThreadIdentity(thread)
     ).publicHandle;
   }
 
-  async dispose(): Promise<void> {
+  dispose(): Promise<void> {
     if (this.#disposed) {
-      return;
+      return Promise.resolve();
     }
+    // Admission closes synchronously so no entry can join after the snapshot;
+    // a failed cleanup reopens it so dispose() can be retried.
+    this.#disposal ??= this.#disposeThreads().then(
+      () => {
+        this.#disposed = true;
+        this.#disposal = undefined;
+      },
+      (error: unknown) => {
+        this.#disposal = undefined;
+        throw error;
+      }
+    );
+    return this.#disposal;
+  }
+
+  [Symbol.asyncDispose](): Promise<void> {
+    return this.dispose();
+  }
+
+  async #disposeThreads(): Promise<void> {
     let failed = false;
     let failure: unknown;
     for (const entry of [...this.#threads.values()]) {
@@ -189,20 +209,16 @@ export class Agent implements AsyncDisposable {
     if (failed) {
       throw failure;
     }
-    this.#disposed = true;
-  }
-
-  [Symbol.asyncDispose](): Promise<void> {
-    return this.dispose();
   }
 
   #assertNotDisposed(): void {
-    if (this.#disposed) {
+    if (this.#disposed || this.#disposal !== undefined) {
       throw new DisposedResourceError("Agent is disposed");
     }
   }
 
   #threadEntry(key: string, identity: ThreadIdentity): AgentThreadEntry {
+    this.#assertNotDisposed();
     const existing = this.#threads.get(key);
     if (existing) {
       return existing;

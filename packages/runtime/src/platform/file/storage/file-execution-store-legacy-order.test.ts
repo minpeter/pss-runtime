@@ -1,4 +1,4 @@
-import { readFile, utimes, writeFile } from "node:fs/promises";
+import { readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { TurnRecord } from "../../../execution/host/types";
@@ -10,10 +10,22 @@ import {
   tempDir,
 } from "./file-execution-store-test-support";
 
-const legacyRunIds = Array.from(
-  { length: 12 },
-  (_, index) => `run-${String(index).padStart(2, "0")}`
-);
+// Creation order deliberately disagrees with lexical runId order, so neither
+// readdir order nor a runId tie-break can produce the expected listing.
+const legacyRunIds = [
+  "run-k",
+  "run-c",
+  "run-x",
+  "run-a",
+  "run-q",
+  "run-f",
+  "run-y",
+  "run-b",
+  "run-m",
+  "run-e",
+  "run-t",
+  "run-h",
+];
 
 function runFile(dataDirectory: string, runId: string): string {
   return join(dataDirectory, "runs", `${base64Url(runId)}.json`);
@@ -28,45 +40,66 @@ async function listThreadRuns(
   return await store.turns.listByThreadKey("thread-1");
 }
 
-async function writeLegacyRuns(
+/**
+ * Writes run files in array order with strictly increasing file time: birth
+ * time where the filesystem records it (recreating a file until the coarse
+ * filesystem clock advances past its predecessor), and an mtime that follows
+ * the same order for filesystems without birth time.
+ */
+async function createRunFilesInOrder(
+  dataDirectory: string,
+  records: readonly (TurnRecord & { readonly createdOrder?: number })[]
+): Promise<void> {
+  let previousBirthtimeMs = 0;
+  for (const [index, record] of records.entries()) {
+    const file = runFile(dataDirectory, record.runId);
+    let birthtimeMs = 0;
+    do {
+      await rm(file, { force: true });
+      await writeFile(file, `${JSON.stringify(record, null, 2)}\n`);
+      ({ birthtimeMs } = await stat(file));
+    } while (birthtimeMs > 0 && birthtimeMs <= previousBirthtimeMs);
+    previousBirthtimeMs = birthtimeMs;
+    const fileTimeSeconds = 1_700_000_000 + index * 60;
+    await utimes(file, fileTimeSeconds, fileTimeSeconds);
+  }
+}
+
+async function dataDirectoryFor(
   store: FileExecutionStore,
   directory: string
 ): Promise<string> {
   await store.turns.create(runRecord("seed", { threadKey: "seed-thread" }));
-  const dataDirectory = await currentDataDirectory(directory);
-  for (const [index, runId] of legacyRunIds.entries()) {
-    // origin/main wrote run files without `createdOrder`.
-    const legacyRecord: TurnRecord = runRecord(runId, { status: "completed" });
-    const file = runFile(dataDirectory, runId);
-    await writeFile(file, `${JSON.stringify(legacyRecord, null, 2)}\n`);
-    const fileTimeSeconds = 1_700_000_000 + index * 60;
-    await utimes(file, fileTimeSeconds, fileTimeSeconds);
-  }
-  return dataDirectory;
+  return await currentDataDirectory(directory);
 }
 
 describe("FileExecutionStore legacy run ordering", () => {
   it("orders runs without createdOrder by file time and keeps that order after rewrites", async () => {
-    // Given run files rewritten in origin/main format, written oldest first
+    // Given run files in origin/main format (no createdOrder) created in an
+    // order that differs from their lexical runId order
     const directory = await tempDir();
     const store = new FileExecutionStore(directory);
-    const dataDirectory = await writeLegacyRuns(store, directory);
+    const dataDirectory = await dataDirectoryFor(store, directory);
+    await createRunFilesInOrder(
+      dataDirectory,
+      legacyRunIds.map((runId) => runRecord(runId, { status: "completed" }))
+    );
 
     // When the thread runs are listed
     const listed = await listThreadRuns(store);
 
-    // Then they come back in creation order, not readdir order
+    // Then they come back in creation order, not readdir or runId order
     expect(listed.map((record) => record.runId)).toEqual(legacyRunIds);
 
     // When the oldest legacy run is rewritten and a modern run is created
     await store.turns.update(
-      runRecord("run-00", { output: "rewritten", status: "completed" })
+      runRecord("run-k", { output: "rewritten", status: "completed" })
     );
     await store.turns.create(runRecord("run-zz-modern"));
 
     // Then the rewrite persists the fallback order instead of moving the run
     const rewritten = JSON.parse(
-      await readFile(runFile(dataDirectory, "run-00"), "utf8")
+      await readFile(runFile(dataDirectory, "run-k"), "utf8")
     ) as { readonly createdOrder?: unknown };
     expect(typeof rewritten.createdOrder).toBe("number");
     const relisted = await listThreadRuns(store);
@@ -74,25 +107,28 @@ describe("FileExecutionStore legacy run ordering", () => {
       ...legacyRunIds,
       "run-zz-modern",
     ]);
-    expect(relisted.at(-1)?.runId).toBe("run-zz-modern");
   });
 
-  it("keeps a persisted createdOrder regardless of file time", async () => {
-    // Given two modern runs whose newer file is backdated
+  it("keeps a persisted createdOrder over file time and runId", async () => {
+    // Given modern run files whose persisted createdOrder contradicts both
+    // their file creation order and their lexical runId order
     const directory = await tempDir();
     const store = new FileExecutionStore(directory);
-    await store.turns.create(runRecord("run-b-first"));
-    await store.turns.create(runRecord("run-a-second"));
-    const dataDirectory = await currentDataDirectory(directory);
-    await utimes(runFile(dataDirectory, "run-a-second"), 1, 1);
+    const dataDirectory = await dataDirectoryFor(store, directory);
+    await createRunFilesInOrder(dataDirectory, [
+      { ...runRecord("run-a-persisted-third"), createdOrder: 3000 },
+      { ...runRecord("run-m-persisted-second"), createdOrder: 2000 },
+      { ...runRecord("run-z-persisted-first"), createdOrder: 1000 },
+    ]);
 
     // When the thread runs are listed
     const listed = await listThreadRuns(store);
 
     // Then persisted creation order wins over file metadata and runId
     expect(listed.map((record) => record.runId)).toEqual([
-      "run-b-first",
-      "run-a-second",
+      "run-z-persisted-first",
+      "run-m-persisted-second",
+      "run-a-persisted-third",
     ]);
   });
 });

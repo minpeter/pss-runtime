@@ -95,14 +95,16 @@ export function createCelldSqliteTestStorage(
     transaction: async <T>(
       operation: (transaction: DurableObjectTransactionStorage) => Promise<T>
     ): Promise<T> => {
+      // The hook runs before this transaction joins the chain, so a throwing
+      // hook rejects only this transaction and never wedges later ones.
+      if (openTransactions > 0) {
+        options.transactionQueued?.();
+      }
       const previous = transactionChain;
       let release: () => void = () => undefined;
       transactionChain = new Promise<void>((resolve) => {
         release = resolve;
       });
-      if (openTransactions > 0) {
-        options.transactionQueued?.();
-      }
       openTransactions += 1;
       await previous;
       const previousAlarm = alarm;

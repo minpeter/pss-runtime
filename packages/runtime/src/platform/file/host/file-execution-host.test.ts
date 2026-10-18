@@ -248,11 +248,13 @@ describe("createFileHost", () => {
     const directory = await tempDir();
     try {
       const host = createFileHost({ directory });
+      let modelCalls = 0;
       const agent = new Agent({
         host,
-        model: createCallbackModel(() =>
-          Promise.resolve([assistantMessage("SHOULD NOT RUN")])
-        ),
+        model: createCallbackModel(() => {
+          modelCalls += 1;
+          return Promise.resolve([assistantMessage("SHOULD NOT RUN")]);
+        }),
         namespace: "local-owner",
       });
       await host.store.turns.create({
@@ -284,6 +286,8 @@ describe("createFileHost", () => {
       expect(drainResult.ackedThreadPrompts).toEqual([prompt]);
       expect(drainResult.skippedRuns).toEqual([]);
       expect(drainResult.skippedThreadPrompts).toEqual([]);
+      expect(drainResult.events).toEqual([]);
+      expect(modelCalls).toBe(0);
       await expect(listScheduledNodeRuns(directory)).resolves.toEqual([]);
       await expect(listScheduledNodeThreadPrompts(directory)).resolves.toEqual(
         []
@@ -292,6 +296,77 @@ describe("createFileHost", () => {
       await removeTempDir(directory);
     }
   });
+
+  it.each(["running", "needs-recovery"] as const)(
+    "acks scheduled work for a %s run whose resume rejects for manual tool recovery",
+    async (status) => {
+      // Given
+      const directory = await tempDir();
+      try {
+        const host = createFileHost({ directory });
+        let modelCalls = 0;
+        const agent = new Agent({
+          host,
+          model: createCallbackModel(() => {
+            modelCalls += 1;
+            return Promise.resolve([assistantMessage("SHOULD NOT RUN")]);
+          }),
+        });
+        await host.store.turns.create({
+          checkpointVersion: 0,
+          kind: "user-turn",
+          rootRunId: "run:manual",
+          runId: "run:manual",
+          status,
+          threadKey: "default",
+        });
+        await host.store.checkpoints.append(
+          {
+            checkpointId: "run:manual:1:before-tool",
+            pendingToolCall: {
+              attempt: 1,
+              idempotencyKey: "run:manual:deploy",
+              policy: "manual-recovery",
+              toolCallId: "call-deploy",
+              toolName: "deploy",
+            },
+            phase: "before-tool",
+            runId: "run:manual",
+            runtimeState: { toolCallId: "call-deploy", toolName: "deploy" },
+            threadSnapshot: {},
+            version: 1,
+          },
+          { expectedVersion: 0 }
+        );
+        const prompt = { runId: "run:manual", threadKey: "default" };
+        await appendScheduledNodeRun(directory, "run:manual");
+        await appendScheduledNodeThreadPrompt(directory, prompt);
+
+        // When
+        const drainResult = await drainScheduledNodeWork({
+          agentForRun: () => agent,
+          directory,
+        });
+
+        // Then
+        expect(drainResult.ackedRuns).toEqual(["run:manual"]);
+        expect(drainResult.ackedThreadPrompts).toEqual([prompt]);
+        expect(drainResult.events).toEqual([]);
+        expect(modelCalls).toBe(0);
+        await expect(host.store.turns.get("run:manual")).resolves.toMatchObject(
+          {
+            status: "needs-recovery",
+          }
+        );
+        await expect(listScheduledNodeRuns(directory)).resolves.toEqual([]);
+        await expect(
+          listScheduledNodeThreadPrompts(directory)
+        ).resolves.toEqual([]);
+      } finally {
+        await removeTempDir(directory);
+      }
+    }
+  );
 
   it("throws deterministic errors for malformed scheduled work files", async () => {
     const directory = await tempDir();

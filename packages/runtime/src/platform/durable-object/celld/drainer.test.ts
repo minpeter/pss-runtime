@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
-import type { TurnRecord, TurnStatus } from "../../../execution/host/types";
+import { Agent } from "../../../agent/core/agent";
+import type {
+  HostStore,
+  TurnRecord,
+  TurnStatus,
+} from "../../../execution/host/types";
+import {
+  assistantMessage,
+  createCallbackModel,
+} from "../../../testing/test-fixtures";
 import type { AgentEvent } from "../../../thread/protocol/events";
 import type { AgentTurn } from "../../../thread/protocol/turn";
+import { createInMemoryHost } from "../../memory/execution/execution-host";
 import { createCelldTestStorage } from "./celld-test-storage";
 import {
   type CelldScheduledWorkAgent,
@@ -139,6 +149,78 @@ describe("drainCelldScheduledWork", () => {
     ).resolves.toEqual([]);
     await expect(storage.getAlarm()).resolves.toBeNull();
   });
+
+  it.each(["running", "needs-recovery"] as const)(
+    "acknowledges a %s run whose resume rejects for manual tool recovery",
+    async (status) => {
+      // Given
+      const storage = createCelldTestStorage();
+      const scheduler = createCelldScheduler({ clock: () => 0, storage });
+      const host = createInMemoryHost();
+      await seedManualRecoveryRun(host.store, "run-1", status);
+      await scheduler.enqueueRun("run-1");
+      await scheduler.resumeThread("default", { runId: "run-1" });
+      let modelCalls = 0;
+      const agent = new Agent({
+        host,
+        model: createCallbackModel(() => {
+          modelCalls += 1;
+          return Promise.resolve([assistantMessage("UNREACHABLE")]);
+        }),
+      });
+
+      // When
+      const result = await drainCelldScheduledWork({
+        agentForRun: () => ({
+          host,
+          resume: (runId) => agent.resume(runId),
+        }),
+        nowMs: 0,
+        storage,
+      });
+
+      // Then
+      expect(result.ackedRuns).toEqual(["run-1"]);
+      expect(result.ackedThreadPrompts).toEqual([
+        { runId: "run-1", threadKey: "default" },
+      ]);
+      expect(result.events).toEqual([]);
+      expect(modelCalls).toBe(0);
+      await expect(host.store.turns.get("run-1")).resolves.toMatchObject({
+        status: "needs-recovery",
+      });
+      await expect(
+        listCelldScheduledRuns(storage, { nowMs: Number.MAX_SAFE_INTEGER })
+      ).resolves.toEqual([]);
+      await expect(storage.getAlarm()).resolves.toBeNull();
+    }
+  );
+
+  it("retries a run whose resume rejects while the run is still recoverable", async () => {
+    // Given
+    const storage = createCelldTestStorage();
+    const scheduler = createCelldScheduler({ clock: () => 0, storage });
+    await scheduler.enqueueRun("run-1");
+    const failure = new Error("transient resume failure");
+    const agent = createAgent({
+      record: runRecord("queued"),
+      resume: () => Promise.reject(failure),
+      run: null,
+    });
+
+    // When
+    const drain = drainCelldScheduledWork({
+      agentForRun: () => agent,
+      nowMs: 0,
+      storage,
+    });
+
+    // Then
+    await expect(drain).rejects.toBe(failure);
+    await expect(
+      listCelldScheduledRuns(storage, { nowMs: 1000 })
+    ).resolves.toEqual(["run-1"]);
+  });
 });
 
 function createAgent({
@@ -184,4 +266,37 @@ function runRecord(status: TurnStatus): TurnRecord {
     status,
     threadKey: "thread-1",
   };
+}
+
+async function seedManualRecoveryRun(
+  store: HostStore,
+  runId: string,
+  status: TurnStatus
+): Promise<void> {
+  await store.turns.create({
+    checkpointVersion: 0,
+    kind: "user-turn",
+    rootRunId: runId,
+    runId,
+    status,
+    threadKey: "default",
+  });
+  await store.checkpoints.append(
+    {
+      checkpointId: `${runId}:1:before-tool`,
+      pendingToolCall: {
+        attempt: 1,
+        idempotencyKey: `${runId}:deploy`,
+        policy: "manual-recovery",
+        toolCallId: "call-deploy",
+        toolName: "deploy",
+      },
+      phase: "before-tool",
+      runId,
+      runtimeState: { toolCallId: "call-deploy", toolName: "deploy" },
+      threadSnapshot: {},
+      version: 1,
+    },
+    { expectedVersion: 0 }
+  );
 }

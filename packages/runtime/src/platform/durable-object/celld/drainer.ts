@@ -202,7 +202,17 @@ async function resumeAndDrain(
   onEvent: CelldScheduledWorkDrainOptions["onEvent"]
 ): Promise<boolean> {
   const agent = await agentForRun(context);
-  const turn = await agent.resume(context.runId);
+  // Manual recovery rejects resume after parking the run; once the record is
+  // settled the scheduled work can never make progress, so it is acked.
+  const turn = await agent
+    .resume(context.runId)
+    .catch(async (error: unknown) => {
+      const record = await agent.host.store.turns.get(context.runId);
+      if (record !== null && isSettled(record.status)) {
+        return null;
+      }
+      throw error;
+    });
   if (turn === null) {
     const record = await agent.host.store.turns.get(context.runId);
     return record === null || isSettled(record.status);
