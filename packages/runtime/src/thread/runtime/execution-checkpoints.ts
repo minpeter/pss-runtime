@@ -77,54 +77,41 @@ export function createThreadToolExecutionContext({
   readonly runId: string;
   readonly state: ThreadState;
 }): RuntimeToolExecutionContext {
+  const append = (
+    phase: Extract<CheckpointPhase, "after-tool" | "before-tool">,
+    toolCall: RuntimeToolExecutionCheckpoint & { readonly output?: unknown }
+  ) =>
+    appendThreadToolExecutionCheckpoint({
+      executionHost,
+      leaseId,
+      phase,
+      runId,
+      state,
+      toolCall,
+    });
   return {
     attempt: 1,
     afterTool: async (checkpoint) => {
-      await appendThreadToolExecutionCheckpoint({
-        executionHost,
-        leaseId,
-        phase: "after-tool",
-        runId,
-        state,
-        toolCall: checkpoint,
-      });
+      await append("after-tool", checkpoint);
       const transformed = await interceptToolResult?.(checkpoint);
       if (transformed && !Object.is(transformed.output, checkpoint.output)) {
-        await appendThreadToolExecutionCheckpoint({
-          executionHost,
-          leaseId,
-          phase: "after-tool",
-          runId,
-          state,
-          toolCall: {
-            ...checkpoint,
-            output: transformed.output,
-          },
+        await append("after-tool", {
+          ...checkpoint,
+          output: transformed.output,
         });
       }
       return transformed;
     },
     beforeTool: async (checkpoint) => {
-      await appendThreadToolExecutionCheckpoint({
-        executionHost,
-        leaseId,
-        phase: "before-tool",
-        runId,
-        state,
-        toolCall: checkpoint,
-      });
+      await append("before-tool", checkpoint);
       const decision = await interceptToolCall?.(checkpoint);
       if (
         decision?.status === "needs-recovery" &&
         checkpoint.policy !== "manual-recovery"
       ) {
-        await appendThreadToolExecutionCheckpoint({
-          executionHost,
-          leaseId,
-          phase: "before-tool",
-          runId,
-          state,
-          toolCall: { ...checkpoint, policy: "manual-recovery" },
+        await append("before-tool", {
+          ...checkpoint,
+          policy: "manual-recovery",
         });
       }
       return decision;

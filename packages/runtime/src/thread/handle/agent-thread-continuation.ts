@@ -2,6 +2,7 @@ import type { JSONValue, ModelMessage } from "ai";
 import { ownsAgentNamespace } from "../../agent/identity/namespace";
 import { createThreadExecutionRunId } from "../../execution/host/thread-execution-run-id";
 import { transitionTurn } from "../../execution/host/turn-status";
+import { TurnTransitionConflictError } from "../../execution/host/turn-transition-conflict";
 import type {
   AgentHost,
   Checkpoint,
@@ -29,6 +30,7 @@ import {
   precreateThreadExecutionRun,
   type QueuedThreadExecutionRun,
 } from "../runtime/execution";
+import { registerLiveThreadInput } from "../runtime/live-input-ownership";
 import { startThreadQueueDrain } from "../runtime/notification";
 import { reserveThreadInputAdmission } from "../runtime/thread-input-admission-coordinator";
 import { enqueueAgentThreadInputAdmission } from "./agent-thread-admission";
@@ -153,21 +155,11 @@ async function admitContinuation(
     assertAgentThreadOpen(context);
     signal.throwIfAborted();
   }
-  return enqueueContinuationTurn(
+  return enqueuePreparedTurn(
     context,
-    inMemoryContinuation,
+    { continuation: inMemoryContinuation },
     precreated ? { kind: precreated.kind, runId: precreated.runId } : undefined
   );
-}
-
-function enqueueContinuationTurn(
-  context: AgentThreadContext,
-  continuation: NonNullable<
-    ReturnType<AgentThreadContext["state"]["continuationCheckpoint"]>
-  >,
-  executionRun?: QueuedThreadExecutionRun
-): BufferedAgentTurn {
-  return enqueuePreparedTurn(context, { continuation }, executionRun);
 }
 
 function enqueuePreparedTurn(
@@ -179,8 +171,20 @@ function enqueuePreparedTurn(
   if (executionRun) {
     bindTurnExecutionRun(run, executionRun.runId, executionRun.leaseId ?? null);
   }
+  if (extra.durableMessageId) {
+    registerLiveThreadInput(
+      context.execution.executionHost,
+      context.threadKey,
+      extra.durableMessageId,
+      run
+    );
+  }
+  if (extra.acceptedEvent) {
+    context.events.emitProcessedEvent(run, extra.acceptedEvent);
+  }
   context.inputQueue.push({
     ...extra,
+    ...(extra.durableMessageId ? { durableOwner: run } : {}),
     ...(executionRun ? { executionRun } : {}),
     initialEvents: [],
     preUserRuntimeInputs: [],
@@ -202,33 +206,35 @@ export async function resumeClaimedExecutionRunOnThread(
     if (host && isThreadDrainOwned(host, context.threadKey)) {
       throw busyError();
     }
-    const pendingTurn = await tryEnqueuePendingDurableInputForRun(
-      context,
-      executionRun,
-      signal
+    return (
+      (await tryEnqueuePendingDurableInputForRun(
+        context,
+        executionRun,
+        signal
+      )) ??
+      (await prepareClaimedContinuation(
+        context,
+        executionRun,
+        checkpoint,
+        signal
+      )) ??
+      abortedContinuationTurn(executionRun)
     );
-    if (pendingTurn) {
-      return pendingTurn;
-    }
-    const turn = await prepareClaimedContinuation(
-      context,
-      executionRun,
-      checkpoint,
-      signal
-    );
-    if (turn) {
-      return turn;
-    }
-    const aborted = new BufferedAgentTurn();
-    bindTurnExecutionRun(
-      aborted,
-      executionRun.runId,
-      executionRun.leaseId ?? null
-    );
-    aborted.emit({ type: "turn-abort" });
-    aborted.close();
-    return aborted;
   });
+}
+
+function abortedContinuationTurn(
+  executionRun: QueuedThreadExecutionRun
+): BufferedAgentTurn {
+  const aborted = new BufferedAgentTurn();
+  bindTurnExecutionRun(
+    aborted,
+    executionRun.runId,
+    executionRun.leaseId ?? null
+  );
+  aborted.emit({ type: "turn-abort" });
+  aborted.close();
+  return aborted;
 }
 
 async function tryEnqueuePendingDurableInputForRun(
@@ -247,22 +253,20 @@ async function tryEnqueuePendingDurableInputForRun(
     signal.throwIfAborted();
     return;
   }
+  await releaseDurableThreadInputClaim({
+    executionHost: host,
+    record: pending.record,
+  });
+  assertAgentThreadOpen(context);
+  signal.throwIfAborted();
   if (
     !executionRun ||
     createThreadExecutionRunId({
       threadKey: context.threadKey,
       turnId: pending.record.messageId,
     }) !== executionRun.runId ||
-    pending.record.kind === "steer" ||
-    signal.aborted ||
-    context.terminal.state.tag !== "open"
+    pending.record.kind === "steer"
   ) {
-    await releaseDurableThreadInputClaim({
-      executionHost: host,
-      record: pending.record,
-    });
-    assertAgentThreadOpen(context);
-    signal.throwIfAborted();
     throw busyError("Thread has queued durable work.");
   }
   return enqueuePreparedTurn(
@@ -273,9 +277,10 @@ async function tryEnqueuePendingDurableInputForRun(
         inputMetaForQueuedKind(pending.record.kind)
       ),
       awaitBoundaries: true,
-      durableInputClaim: pending.record,
+      durableInput: true,
       durableInputKind:
         pending.record.kind === "follow-up" ? "follow-up" : "send",
+      durableMessageId: pending.record.messageId,
     },
     executionRun
   );
@@ -406,7 +411,7 @@ async function prepareClaimedContinuation(
     }
     return;
   }
-  return enqueueContinuationTurn(context, continuation, executionRun);
+  return enqueuePreparedTurn(context, { continuation }, executionRun);
 }
 
 function busyError(message = "Thread has active or queued work."): Error {
@@ -421,18 +426,13 @@ export async function verifyClaimedRunCheckpoint(
   leaseId: string,
   signal?: AbortSignal
 ): Promise<Checkpoint | null> {
-  const latestCheckpoint = await host.store.checkpoints.latest(record.runId);
-  signal?.throwIfAborted();
-  const unrecoverableTool = manualRecoveryToolCheckpoint(latestCheckpoint);
-  if (unrecoverableTool) {
+  return await loadCheckedCheckpoint(host, record.runId, signal, async () => {
     await transitionTurn(host.store.turns, {
       expected: { leaseId, status: record.status },
       runId: record.runId,
       update: { lease: null, status: "needs-recovery" },
     });
-    throw new ToolExecutionNeedsRecoveryError(unrecoverableTool);
-  }
-  return latestCheckpoint;
+  });
 }
 
 export async function throwIfManualToolRecovery(
@@ -441,12 +441,7 @@ export async function throwIfManualToolRecovery(
   throwGeneric = false,
   signal?: AbortSignal
 ): Promise<void> {
-  const latestCheckpoint = await host.store.checkpoints.latest(runId);
-  signal?.throwIfAborted();
-  const unrecoverableTool = manualRecoveryToolCheckpoint(latestCheckpoint);
-  if (unrecoverableTool) {
-    throw new ToolExecutionNeedsRecoveryError(unrecoverableTool);
-  }
+  await loadCheckedCheckpoint(host, runId, signal);
   if (throwGeneric) {
     throw new Error(
       `Thread execution run ${runId} requires manual recovery before continuing.`
@@ -454,16 +449,39 @@ export async function throwIfManualToolRecovery(
   }
 }
 
+async function loadCheckedCheckpoint(
+  host: AgentHost,
+  runId: string,
+  signal?: AbortSignal,
+  onManualRecovery?: () => Promise<void>
+): Promise<Checkpoint | null> {
+  const latest = await host.store.checkpoints.latest(runId);
+  signal?.throwIfAborted();
+  const unrecoverableTool = manualRecoveryToolCheckpoint(latest);
+  if (unrecoverableTool) {
+    await onManualRecovery?.();
+    throw new ToolExecutionNeedsRecoveryError(unrecoverableTool);
+  }
+  return latest;
+}
+
 export async function releaseClaimedContinuationRun(
   turns: TurnStore,
   record: Pick<TurnRecord, "runId" | "status">,
   leaseId: string | null
 ): Promise<void> {
-  await transitionTurn(turns, {
+  const transition = await transitionTurn(turns, {
     expected: { leaseId, status: record.status },
     runId: record.runId,
     update: { lease: null, status: "queued" },
   });
+  if (!transition.ok) {
+    throw new TurnTransitionConflictError(
+      record.runId,
+      "notification",
+      transition.reason
+    );
+  }
 }
 
 function buildRecoveredContinuationHistory(

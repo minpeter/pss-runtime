@@ -162,25 +162,16 @@ async function disposeExecResources(
   agent: Agent,
   extensionHost: CodingAgentExtensionHost
 ): Promise<string | undefined> {
-  const cleanupFailures: unknown[] = [];
-  for (const cleanup of [
-    () => agent.dispose(),
-    () => extensionHost.dispose(),
-  ]) {
-    try {
-      await cleanup();
-    } catch (error) {
-      cleanupFailures.push(error);
-    }
-  }
-  if (cleanupFailures.length === 0) {
-    return;
-  }
-  return cleanupFailures
-    .map((failure) =>
-      failure instanceof Error ? failure.message : String(failure)
-    )
-    .join("; ");
+  const results = await Promise.allSettled([
+    agent.dispose(),
+    extensionHost.dispose(),
+  ]);
+  const failures = results.flatMap((r) =>
+    r.status === "rejected"
+      ? [r.reason instanceof Error ? r.reason.message : String(r.reason)]
+      : []
+  );
+  return failures.length > 0 ? failures.join("; ") : undefined;
 }
 
 export async function runCodingAgentExec({
@@ -234,10 +225,10 @@ export async function runCodingAgentExec({
     resolvedPrompt = context.prompt;
     agent = await createCodingAgent({
       extensionHost,
-      ...(host === undefined ? {} : { host }),
+      host,
       instructions: context.instructions,
       model,
-      ...(threadDirectory === undefined ? {} : { threadDirectory }),
+      threadDirectory,
       webTools: { webToolsAvailability },
       workspace: absoluteWorkspace,
     });
@@ -330,20 +321,26 @@ async function assertSessionDoesNotRequireManualRecovery(
   agent: Agent,
   sessionKey: string | undefined
 ): Promise<void> {
-  const latestRun =
-    sessionKey === undefined
-      ? undefined
-      : (await agent.host.store.turns.listByThreadKey?.(sessionKey))?.at(-1);
-  const checkpoint = latestRun
-    ? await agent.host.store.checkpoints.latest(latestRun.runId)
-    : null;
-  const pending = checkpoint?.pendingToolCall as
-    | { readonly policy?: string }
-    | undefined;
+  const run =
+    sessionKey &&
+    (await agent.host.store.turns.listByThreadKey?.(sessionKey))
+      ?.filter((r) => r.kind !== "notification")
+      .at(-1);
   if (
-    checkpoint?.phase === "before-tool" &&
-    pending?.policy === "manual-recovery"
+    !run ||
+    run.status === "completed" ||
+    run.status === "cancelled" ||
+    run.status === "error"
   ) {
-    await agent.resume(latestRun?.runId ?? "");
+    return;
+  }
+  const cp = await agent.host.store.checkpoints.latest(run.runId);
+  const pending = cp?.pendingToolCall as { policy?: string } | undefined;
+  if (
+    run.status === "needs-recovery" ||
+    (cp?.phase === "before-tool" && pending?.policy === "manual-recovery")
+  ) {
+    await agent.resume(run.runId);
+    throw new Error(`Run ${run.runId} requires manual recovery.`);
   }
 }
