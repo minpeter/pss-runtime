@@ -98,19 +98,10 @@ describe("dispatchAgentNotification", () => {
   it("reschedules an active run on an idempotent retry", async () => {
     // Given: a dispatched notification whose scheduled prompt was consumed
     const host = createInMemoryHost();
-    const input = {
+    const { first, input, prompt } = await dispatchConsumed(
       host,
-      idempotencyKey: "reminder:retry",
-      input: { text: "Reminder fired", type: "user-input" } as const,
-      namespace: "agent-a",
-      threadKey: "room:1:user:2",
-    };
-    const first = await dispatchAgentNotification(input);
-    const [prompt] = await host.scheduler.listScheduledThreadPrompts();
-    if (!prompt) {
-      throw new Error("expected scheduled thread prompt");
-    }
-    await host.scheduler.ackScheduledThreadPrompt(prompt);
+      "reminder:retry"
+    );
 
     // When: the caller retries with the same idempotency key
     const retry = await dispatchAgentNotification(input);
@@ -127,19 +118,10 @@ describe("dispatchAgentNotification", () => {
     async (status) => {
       // Given: a consumed notification prompt whose run reached a terminal status
       const host = createInMemoryHost();
-      const input = {
+      const { first, input } = await dispatchConsumed(
         host,
-        idempotencyKey: `reminder:terminal:${status}`,
-        input: { text: "Reminder fired", type: "user-input" } as const,
-        namespace: "agent-a",
-        threadKey: "room:1:user:2",
-      };
-      const first = await dispatchAgentNotification(input);
-      const [prompt] = await host.scheduler.listScheduledThreadPrompts();
-      if (!prompt) {
-        throw new Error("expected scheduled thread prompt");
-      }
-      await host.scheduler.ackScheduledThreadPrompt(prompt);
+        `reminder:terminal:${status}`
+      );
       const run = await host.store.turns.get(first.runId);
       if (!run) {
         throw new Error("expected notification run");
@@ -261,4 +243,25 @@ function hostWithNotificationLookup(
         }),
     },
   };
+}
+
+/** Dispatches a notification and acks its scheduled prompt, as a drainer would. */
+async function dispatchConsumed(
+  host: ReturnType<typeof createInMemoryHost>,
+  idempotencyKey: string
+) {
+  const input = {
+    host,
+    idempotencyKey,
+    input: { text: "Reminder fired", type: "user-input" } as const,
+    namespace: "agent-a",
+    threadKey: "room:1:user:2",
+  };
+  const first = await dispatchAgentNotification(input);
+  const [prompt] = await host.scheduler.listScheduledThreadPrompts();
+  if (!prompt) {
+    throw new Error("expected scheduled thread prompt");
+  }
+  await host.scheduler.ackScheduledThreadPrompt(prompt);
+  return { first, input, prompt };
 }
