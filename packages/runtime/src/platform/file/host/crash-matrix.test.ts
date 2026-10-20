@@ -1,0 +1,371 @@
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { ModelMessage } from "ai";
+import { describe, expect, it } from "vitest";
+import { createAgent } from "../../../agent/core/agent";
+import {
+  assistantMessage,
+  createCallbackModel,
+  eventTypes,
+} from "../../../testing/test-fixtures";
+import { collect } from "../../../thread/handle/test-support";
+import type { AgentTurn } from "../../../thread/protocol/turn";
+import { INTERRUPTED_TOOL_CALL_TEXT } from "../../../thread/runtime/recovered-tool-round";
+import { decodeStoredThreadSnapshot } from "../../../thread/state/snapshot";
+import {
+  ACT_CALL,
+  ACT_OUTPUT,
+  CRASH_CHILD_ENV,
+  type CrashChildConfig,
+  type CrashScenario,
+  FIRST_CALL,
+  FIRST_OUTPUT,
+  KILL_POINT_LINE,
+  MATRIX_THREAD,
+  matrixTools,
+  PARTIAL_ANSWER,
+  readEffects,
+} from "./crash-matrix.test-support";
+import { createFileHost } from "./file-host";
+
+/** What committed history tells the model a call returned. */
+type Outcome = "absent" | "interrupted" | "output";
+
+interface MatrixRow extends CrashScenario {
+  /** Attempts of `act` that applied its effect, in order. */
+  readonly actAttempts: readonly number[];
+  readonly actOutcome: Outcome;
+  /** Whether recovery waited for a decision before the turn went on. */
+  readonly parked: boolean;
+}
+
+// Each row kills a real process at one point of a turn whose step calls
+// `act`, then continues the thread from another process.
+const MATRIX: readonly MatrixRow[] = [
+  // The streamed answer was never saved, so the model is asked again.
+  {
+    actAttempts: [],
+    actOutcome: "absent",
+    kill: "model-stream",
+    name: "model mid-stream",
+    parked: false,
+    policy: "interrupt",
+  },
+  // A step of only pure calls is asked again; nothing reruns on its own.
+  {
+    actAttempts: [],
+    actOutcome: "absent",
+    kill: "tool-start",
+    name: "pure call before its effect",
+    parked: false,
+    policy: "pure",
+  },
+  {
+    actAttempts: [1],
+    actOutcome: "absent",
+    kill: "tool-effect",
+    name: "pure call after its effect",
+    parked: false,
+    policy: "pure",
+  },
+  // An idempotent call runs again under its key, as the next attempt.
+  {
+    actAttempts: [2],
+    actOutcome: "output",
+    kill: "tool-start",
+    name: "idempotent call before its effect",
+    parked: false,
+    policy: "idempotent",
+  },
+  {
+    actAttempts: [1, 2],
+    actOutcome: "output",
+    kill: "tool-effect",
+    name: "idempotent call after its effect",
+    parked: false,
+    policy: "idempotent",
+  },
+  // Other calls never run again: the model hears they were interrupted.
+  {
+    actAttempts: [],
+    actOutcome: "interrupted",
+    kill: "tool-start",
+    name: "interrupt call before its effect",
+    parked: false,
+    policy: "interrupt",
+  },
+  {
+    actAttempts: [1],
+    actOutcome: "interrupted",
+    kill: "tool-effect",
+    name: "interrupt call after its effect",
+    parked: false,
+    policy: "interrupt",
+  },
+  {
+    actAttempts: [],
+    actOutcome: "interrupted",
+    kill: "tool-start",
+    name: "manual-recovery call before its effect",
+    parked: true,
+    policy: "manual-recovery",
+  },
+  {
+    actAttempts: [1],
+    actOutcome: "interrupted",
+    kill: "tool-effect",
+    name: "manual-recovery call after its effect",
+    parked: true,
+    policy: "manual-recovery",
+  },
+  // A saved result is kept, whether or not its step committed.
+  {
+    actAttempts: [1],
+    actOutcome: "output",
+    kill: "after-result",
+    name: "result saved, step not committed",
+    parked: false,
+    policy: "interrupt",
+  },
+  {
+    actAttempts: [1],
+    actOutcome: "output",
+    kill: "after-commit",
+    name: "tool round committed",
+    parked: false,
+    policy: "interrupt",
+  },
+  {
+    actAttempts: [1],
+    actOutcome: "interrupted",
+    kill: "tool-effect",
+    name: "finished sibling, interrupted call",
+    parked: false,
+    policy: "interrupt",
+    sibling: true,
+  },
+];
+
+const TSX_LOADER = import.meta.resolve("tsx");
+const CHILD_ENTRY = `import { runCrashChild } from ${JSON.stringify(
+  new URL("./crash-matrix.test-support.ts", import.meta.url).href
+)};
+await runCrashChild();`;
+
+// Rows run one at a time: each starts a child process that loads the
+// runtime source, and a burst of them would starve other test files.
+describe("SIGKILL crash matrix on a file host", () => {
+  it.for(MATRIX)(
+    "recovers a turn killed at: $name",
+    { timeout: 60_000 },
+    async ({ actAttempts, actOutcome, parked, ...scenario }, { signal }) => {
+      const root = await mkdtemp(join(tmpdir(), "pss-crash-matrix-"));
+      const config: CrashChildConfig = {
+        directory: join(root, "threads"),
+        effectsFile: join(root, "effects.jsonl"),
+        scenario,
+      };
+      try {
+        // Given: the process running the turn is SIGKILLed at the point.
+        const crashedPid = await killAtKillPoint(config, signal);
+
+        // When: another process continues the thread.
+        const recovered = await continueThread(config);
+
+        // Then: the same run finishes, and only the scenario's calls ran.
+        expect(recovered.parked).toBe(parked);
+        expect(recovered.events).toContain("turn-end");
+        expect(recovered.events).not.toContain("turn-error");
+        expect(recovered.runs.map((run) => run.status)).toEqual(["completed"]);
+        const runId = recovered.runs[0]?.runId;
+        const effects = readEffects(config.effectsFile);
+        const acts = effects.filter((effect) => effect.tool === "act");
+        expect(acts.map((effect) => effect.attempt)).toEqual(actAttempts);
+        for (const effect of effects) {
+          // The killed process ran first attempts; recovery ran the rest,
+          // under the call's own idempotency key.
+          expect(effect.pid).toBe(
+            effect.attempt === 1 ? crashedPid : process.pid
+          );
+          expect(effect.idempotencyKey).toBe(
+            `${runId}:${effect.tool === "act" ? ACT_CALL : FIRST_CALL}`
+          );
+        }
+        expect(
+          effects.filter((effect) => effect.tool === "first")
+        ).toHaveLength(scenario.sibling ? 1 : 0);
+
+        // Then: committed history pairs every call with one result.
+        const history = recovered.history;
+        expect(outcome(history, ACT_CALL)).toBe(actOutcome);
+        if (scenario.sibling) {
+          expect(outcome(history, FIRST_CALL)).toBe("output");
+        }
+        const shape = historyShape(history);
+        expect(shape.users).toBe(1);
+        expect([...shape.results].sort()).toEqual([...shape.calls].sort());
+        expect(new Set(shape.calls).size).toBe(shape.calls.length);
+        expect(shape.final).toContain("DONE");
+        expect(JSON.stringify(history)).not.toContain(PARTIAL_ANSWER);
+      } finally {
+        await rm(root, { force: true, recursive: true });
+      }
+    }
+  );
+});
+
+/** Runs the scenario in a child process and SIGKILLs it at its kill point. */
+async function killAtKillPoint(
+  config: CrashChildConfig,
+  signal: AbortSignal
+): Promise<number> {
+  const child = spawn(
+    process.execPath,
+    ["--import", TSX_LOADER, "--input-type=module", "--eval", CHILD_ENTRY],
+    {
+      env: { ...process.env, [CRASH_CHILD_ENV]: JSON.stringify(config) },
+      // A timed-out row must not leave its child running.
+      killSignal: "SIGKILL",
+      signal,
+      stdio: ["ignore", "pipe", "pipe"],
+    }
+  );
+  const exited = once(child, "exit") as Promise<
+    [number | null, NodeJS.Signals | null]
+  >;
+  let stderr = "";
+  child.stderr.setEncoding("utf8").on("data", (chunk: string) => {
+    stderr += chunk;
+  });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      let stdout = "";
+      child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
+        stdout += chunk;
+        if (stdout.includes(KILL_POINT_LINE)) {
+          resolve();
+        }
+      });
+      exited.then(([code, signal]) => {
+        reject(
+          new Error(
+            `The crash child exited (${signal ?? code}) before its kill point:\n${stderr}`
+          )
+        );
+      }, reject);
+    });
+  } finally {
+    child.kill("SIGKILL");
+  }
+  const [, exitSignal] = await exited;
+  if (exitSignal !== "SIGKILL" || child.pid === undefined) {
+    throw new Error(
+      `Expected the crash child to die by SIGKILL, got ${exitSignal}.`
+    );
+  }
+  return child.pid;
+}
+
+/**
+ * Continues the thread on a new host, as a restarted `pss` would. A run
+ * waiting for a decision gets one: report every unfinished call as
+ * interrupted.
+ */
+async function continueThread({
+  directory,
+  effectsFile,
+  scenario,
+}: CrashChildConfig) {
+  const host = createFileHost({ directory });
+  const agent = await createAgent({
+    host,
+    model: createCallbackModel(() =>
+      Promise.resolve([assistantMessage("DONE")])
+    ),
+    tools: matrixTools(scenario, effectsFile),
+  });
+  const runs = async () =>
+    (await host.store.turns.listByThreadKey?.(MATRIX_THREAD)) ?? [];
+  try {
+    let parked = false;
+    const turn: AgentTurn | null | undefined = await agent
+      .thread(MATRIX_THREAD)
+      .continue()
+      .catch(async (error: unknown) => {
+        const [run] = await runs();
+        if (run?.status !== "needs-recovery") {
+          throw error;
+        }
+        parked = true;
+        await agent.resolveRecovery(run.runId, {
+          otherwise: { action: "interrupt" },
+        });
+        return await agent.resume(run.runId);
+      });
+    if (!turn) {
+      throw new Error("Expected the killed turn to continue.");
+    }
+    const events = eventTypes(await collect(turn));
+    return {
+      events,
+      history: decodeStoredThreadSnapshot(
+        await host.store.threads.load(MATRIX_THREAD)
+      ),
+      parked,
+      runs: await runs(),
+    };
+  } finally {
+    await agent.dispose();
+  }
+}
+
+function outcome(history: readonly ModelMessage[], toolCallId: string): string {
+  const results = history.flatMap((message) =>
+    message.role === "tool"
+      ? message.content.filter(
+          (part) =>
+            part.type === "tool-result" && part.toolCallId === toolCallId
+        )
+      : []
+  );
+  const text = JSON.stringify(results);
+  if (results.length === 0) {
+    return "absent";
+  }
+  if (results.length === 1 && text.includes(INTERRUPTED_TOOL_CALL_TEXT)) {
+    return "interrupted";
+  }
+  if (
+    results.length === 1 &&
+    (text.includes(ACT_OUTPUT) || text.includes(FIRST_OUTPUT))
+  ) {
+    return "output";
+  }
+  return text;
+}
+
+function historyShape(history: readonly ModelMessage[]) {
+  const calls = history.flatMap((message) =>
+    message.role === "assistant" && typeof message.content !== "string"
+      ? message.content.flatMap((part) =>
+          part.type === "tool-call" ? [part.toolCallId] : []
+        )
+      : []
+  );
+  const results = history.flatMap((message) =>
+    message.role === "tool"
+      ? message.content.flatMap((part) =>
+          part.type === "tool-result" ? [part.toolCallId] : []
+        )
+      : []
+  );
+  return {
+    calls,
+    final: JSON.stringify(history.at(-1) ?? null),
+    results,
+    users: history.filter((message) => message.role === "user").length,
+  };
+}
