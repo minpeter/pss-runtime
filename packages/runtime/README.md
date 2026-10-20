@@ -1552,9 +1552,11 @@ and renews it every 100 seconds (inside a store transaction when the store has
 no atomic `TurnStore.transition`); a lease lasts 300 seconds. Another process
 may claim the run only after the lease lapses, or earlier when its host proves
 the owner gone through `AgentHost.ownerLiveness`. File hosts record the owning
-process's host name, pid, and (on Linux) start time, and treat an owner on the
-same host as gone once no process has its pid or a later process does; like
-the file lock, this assumes one PID namespace per host name. Durable Object
+process's host name, pid, and (on Linux) start time, boot id, and PID
+namespace, and treat an owner as gone only when it shares this host name and
+every boot id and PID namespace this process knows, and no process has its pid
+or a later process does; an owner from another container that shares the host
+name, or one missing those facts, frees only on expiry. Durable Object
 hosts, including Celld and Cloudflare Agents hosts, treat a lease taken by
 another isolate as gone, because an object runs one activation at a time.
 Memory hosts and hosts without `ownerLiveness` wait for the lease to lapse. A

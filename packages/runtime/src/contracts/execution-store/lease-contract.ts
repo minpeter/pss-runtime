@@ -114,7 +114,14 @@ export function describeExecutionLeaseContract(
     it("keeps the lease owner through claims and lease renewals", async () => {
       const store = createStore();
       await store.turns.create(createQueuedRun("run-owner"));
-      const owner = { hostname: "host-a", id: "process-a", pid: 41 };
+      const owner = {
+        bootId: "boot-a",
+        hostname: "host-a",
+        id: "process-a",
+        pid: 41,
+        pidNamespace: "pid:[4026531836]",
+        processStart: "1234",
+      };
       const claimed = await store.turns.claim("run-owner", {
         ...claimOptions("owner-a", 10),
         owner,

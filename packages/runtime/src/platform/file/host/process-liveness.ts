@@ -1,21 +1,31 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readlinkSync } from "node:fs";
 import { hostname } from "node:os";
-import type { LeaseOwnerLiveness } from "../../../execution";
+import type { LeaseOwnerLiveness, TurnLeaseOwner } from "../../../execution";
 import { isProcessPossiblyAlive } from "../storage/file-lock";
 
 /**
- * Leases record this process's host name, pid, and (on Linux) start time.
- * Another owner on the same host is gone once no process has its pid, or
- * once a process that started at a different time holds that pid. Like the
- * file lock, this assumes one PID namespace per host name; owners on other
- * hosts are never proven gone.
+ * Leases record this process's host name, pid, and (on Linux) start time,
+ * boot id, and PID namespace. Another owner is gone once it ran on this host
+ * name, in this boot and PID namespace whenever this process knows them, and
+ * no process has its pid or one that started at a different time holds it.
+ * Owners on other hosts, and owners that lack an identity fact this process
+ * has, are never proven gone: containers sharing a host name may see each
+ * other's pids in different PID namespaces.
  */
 export function createProcessOwnerLiveness(): LeaseOwnerLiveness {
   const host = hostname();
   const started = processStartTime(process.pid);
+  const bootId = readProc(() =>
+    readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim()
+  );
+  const pidNamespace = readProc(() => readlinkSync("/proc/self/ns/pid"));
+  const sharesPidSpace = (owner: TurnLeaseOwner): boolean =>
+    owner.hostname === host &&
+    (bootId === undefined || owner.bootId === bootId) &&
+    (pidNamespace === undefined || owner.pidNamespace === pidNamespace);
   return {
     isGone: (owner) => {
-      if (owner.hostname !== host || owner.pid === undefined) {
+      if (!sharesPidSpace(owner) || owner.pid === undefined) {
         return false;
       }
       if (!isProcessPossiblyAlive(owner.pid)) {
@@ -28,11 +38,22 @@ export function createProcessOwnerLiveness(): LeaseOwnerLiveness {
       return current !== undefined && current !== owner.processStart;
     },
     self: {
+      ...(bootId === undefined ? {} : { bootId }),
       hostname: host,
       pid: process.pid,
+      ...(pidNamespace === undefined ? {} : { pidNamespace }),
       ...(started === undefined ? {} : { processStart: started }),
     },
   };
+}
+
+/** A non-empty `/proc` fact, or undefined where `/proc` lacks it. */
+function readProc(read: () => string): string | undefined {
+  try {
+    return read() || undefined;
+  } catch {
+    return;
+  }
 }
 
 /** The process's start time in clock ticks since boot, where `/proc` has it. */
