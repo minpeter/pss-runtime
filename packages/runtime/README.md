@@ -1513,16 +1513,23 @@ crash in between neither loses nor repeats it.
 unfinished call of a `needs-recovery` run and requeues the run:
 `{ action: "rerun" }` runs the call again under its idempotency key,
 `{ action: "interrupt" }` reports it as interrupted, and
-`{ action: "result", output }` gives the model `output`. Decide per call with
-`toolCalls` (keyed by tool call id; a decision there also overrides a call's
-policy) or use `otherwise` for every remaining `manual-recovery` call. A run
-parked by repeated crashes needs no decision and is simply requeued. Resume the
-run with `agent.resume(runId)` or `thread.continue()`. A decided rerun that
-crashes again parks again, because the decision is spent once the call starts.
-`RecoveryResolutionError` rejects the call without recording anything; its
-`reason` is `not-found`, `not-parked`, `undecided`, `unknown-tool-call`,
-`unsupported` (a checkpoint format that cannot record decisions), or
-`conflict`.
+`{ action: "result", output }` gives the model `output`, stored as JSON
+(`undefined` becomes `null`; a value JSON cannot represent throws a
+`TypeError` before anything is written). Decide per call with `toolCalls`
+(keyed by tool call id; a decision there also overrides a call's policy) or
+use `otherwise` for every remaining `manual-recovery` call. A run parked by
+repeated crashes needs no decision and is simply requeued; a run parked
+because completed results are missing from committed history parks again
+when resumed. Resume the run with `agent.resume(runId)` or `thread.continue()`.
+A decided rerun that crashes again parks again, because the decision is spent
+once the call starts. `RecoveryResolutionError` rejects the call without
+recording anything; its `reason` is `not-found`, `not-parked`, `undecided`,
+`unknown-tool-call`, `unsupported` (an unreadable journal, or a checkpoint
+format that cannot record decisions), or `conflict`.
+
+If the recovered turn is cancelled while it settles these calls, the calls
+already settled keep their outcomes and the rest are reported as interrupted;
+the cancelled turn commits that round.
 
 ```ts
 await agent.resolveRecovery(runId, { otherwise: { action: "interrupt" } });

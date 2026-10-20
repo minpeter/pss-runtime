@@ -71,7 +71,8 @@ export class RecoveryResolutionError extends Error {
  * Records decisions for a `needs-recovery` run's unfinished tool calls and
  * requeues it; `agent.resume(runId)` or `thread.continue()` then settles each
  * call before the model runs. A run parked without such calls (repeated
- * crashes) is requeued as is.
+ * crashes) is requeued as is. Requeueing cannot restore completed results
+ * that are missing from committed history; such a run parks again on resume.
  */
 export async function resolveAgentRecovery({
   hasExplicitNamespace,
@@ -86,6 +87,16 @@ export async function resolveAgentRecovery({
   readonly resolution: RecoveryResolution;
   readonly runId: string;
 }): Promise<void> {
+  // Decisions are stored as JSON, so validate and copy them before writing.
+  const decisions = new Map(
+    Object.entries(resolution.toolCalls ?? {}).map(([id, decision]) => [
+      id,
+      storedDecision(decision),
+    ])
+  );
+  const otherwise = resolution.otherwise
+    ? storedDecision(resolution.otherwise)
+    : undefined;
   await host.store.transaction(async (transaction) => {
     const run = await transaction.turns.get(runId);
     if (
@@ -101,7 +112,7 @@ export async function resolveAgentRecovery({
       throw new RecoveryResolutionError(runId, "not-parked");
     }
     const latest = await transaction.checkpoints.latest(runId);
-    const decided = decideToolCalls(runId, latest, resolution);
+    const decided = decideToolCalls(runId, latest, decisions, otherwise);
     let checkpointVersion = run.checkpointVersion;
     if (decided) {
       checkpointVersion += 1;
@@ -122,15 +133,14 @@ export async function resolveAgentRecovery({
 function decideToolCalls(
   runId: string,
   latest: Checkpoint | null,
-  { otherwise, toolCalls = {} }: RecoveryResolution
+  decisions: ReadonlyMap<string, ToolRecoveryDecision>,
+  fallback: ToolRecoveryDecision | undefined
 ): Checkpoint | undefined {
-  const decisions = new Map(
-    Object.entries(toolCalls).map(([toolCallId, decision]) => [
-      toolCallId,
-      decisionCopy(decision),
-    ])
-  );
-  const fallback = otherwise ? decisionCopy(otherwise) : undefined;
+  const journal = toolStepJournal(latest);
+  if (journal && journal.unreadable > 0) {
+    // Recovery fails closed on an unreadable journal; no decision helps.
+    throw new RecoveryResolutionError(runId, "unsupported");
+  }
   const pending = pendingToolCalls(latest);
   const unknown = [...decisions.keys()].filter(
     (toolCallId) => !pending.some((call) => call.toolCallId === toolCallId)
@@ -156,8 +166,8 @@ function decideToolCalls(
   if (!(latest && pending.some((call) => decisionFor(call)))) {
     return;
   }
-  const journal = toolStepJournal(latest);
-  if (!journal || journal.unreadable > 0) {
+  if (!journal) {
+    // Older checkpoint formats cannot carry decisions.
     throw new RecoveryResolutionError(runId, "unsupported");
   }
   return {
@@ -194,14 +204,28 @@ async function recordDecisions(
   }
 }
 
-function decisionCopy(decision: ToolRecoveryDecision): ToolRecoveryDecision {
+/** A copy of `decision` as stored: a result's output becomes plain JSON. */
+function storedDecision(decision: ToolRecoveryDecision): ToolRecoveryDecision {
   switch (decision.action) {
     case "interrupt":
     case "rerun":
       return { action: decision.action };
     case "result":
-      return { action: "result", output: structuredClone(decision.output) };
+      return { action: "result", output: jsonCopy(decision.output) };
     default:
       return assertNever(decision, "Unknown tool recovery decision.");
   }
+}
+
+function jsonCopy(value: unknown): unknown {
+  let text: string | undefined;
+  try {
+    text = JSON.stringify(value ?? null);
+  } catch (cause) {
+    throw new TypeError("A recovery result output must be JSON.", { cause });
+  }
+  if (text === undefined) {
+    throw new TypeError("A recovery result output must be JSON.");
+  }
+  return JSON.parse(text);
 }

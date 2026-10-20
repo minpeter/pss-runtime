@@ -1,8 +1,8 @@
 import type { ModelMessage } from "ai";
 import { createAgent } from "../../agent/core/agent";
+import type { AgentHost } from "../../execution/host/types";
 import type { ModelStepOutput } from "../../llm/model-step-types";
 import type { RuntimeToolRetryPolicy } from "../../llm/tool-execution-types";
-import type { InMemoryHost } from "../../platform/memory/execution/execution-host";
 import { checkpointedTool } from "../../testing/execution-checkpoint-test-support";
 import {
   assistantMessage,
@@ -64,7 +64,7 @@ export function effectTool(
 }
 
 /** Options the runtime passed to one call of a tool. */
-export interface RecordedToolCall {
+interface RecordedToolCall {
   readonly attempt?: number;
   readonly idempotencyKey?: string;
   readonly toolCallId?: string;
@@ -108,10 +108,10 @@ export function hangingTool(
  * Once `dies()` holds, its store transactions never settle, as when the
  * process dies before they commit.
  */
-export function restartedHost(
-  host: InMemoryHost,
+export function restartedHost<Host extends AgentHost>(
+  host: Host,
   dies: () => boolean = () => false
-): InMemoryHost {
+): Host {
   return {
     ...host,
     store: new Proxy(host.store, {
@@ -121,7 +121,7 @@ export function restartedHost(
           return value;
         }
         if (property === "transaction") {
-          return (...args: Parameters<InMemoryHost["store"]["transaction"]>) =>
+          return (...args: Parameters<AgentHost["store"]["transaction"]>) =>
             dies() ? new Promise(() => undefined) : value.apply(target, args);
         }
         return value.bind(target);
@@ -130,7 +130,7 @@ export function restartedHost(
   };
 }
 
-export async function committedHistory(host: InMemoryHost): Promise<string> {
+export async function committedHistory(host: AgentHost): Promise<string> {
   return JSON.stringify(
     decodeStoredThreadSnapshot(await host.store.threads.load(THREAD))
   );
@@ -141,7 +141,7 @@ export async function committedHistory(host: InMemoryHost): Promise<string> {
  * run's latest checkpoint journals `results` finished results.
  */
 export async function crashDuringTurn(
-  host: InMemoryHost,
+  host: AgentHost,
   tools: Tools,
   crashed: Promise<void>,
   steps: Parameters<typeof scriptedModel>[0],
@@ -159,7 +159,7 @@ export async function crashDuringTurn(
 
 /** Continues the thread in a restarted process that answers "DONE". */
 export async function continueAfterRestart(
-  host: InMemoryHost,
+  host: AgentHost,
   tools: Tools
 ): Promise<{ readonly events: string[]; readonly history: string }> {
   const model = scriptedModel([
@@ -187,7 +187,7 @@ export async function drainContinuation(
 }
 
 /** The thread's latest run. */
-export async function latestRun(host: InMemoryHost) {
+export async function latestRun(host: AgentHost) {
   const runs = (await host.store.turns.listByThreadKey?.(THREAD)) ?? [];
   const run = runs.at(-1);
   if (!run) {
@@ -197,16 +197,13 @@ export async function latestRun(host: InMemoryHost) {
 }
 
 /** Waits until the run's latest checkpoint journals `count` results. */
-export async function waitForResults(
-  host: InMemoryHost,
-  count: number
-): Promise<void> {
+async function waitForResults(host: AgentHost, count: number): Promise<void> {
   await waitForJournal(host, (results) => results.length >= count);
 }
 
 /** Waits until the run's latest checkpoint journals the call's result. */
 export async function waitForResult(
-  host: InMemoryHost,
+  host: AgentHost,
   toolCallId: string
 ): Promise<void> {
   await waitForJournal(host, (results) =>
@@ -215,7 +212,7 @@ export async function waitForResult(
 }
 
 async function waitForJournal(
-  host: InMemoryHost,
+  host: AgentHost,
   done: (results: readonly { readonly toolCallId?: string }[]) => boolean
 ): Promise<void> {
   for (let attempt = 0; attempt < 200; attempt += 1) {
@@ -233,7 +230,7 @@ async function waitForJournal(
 }
 
 /** Lets the run's current lease lapse, as if its holder died long ago. */
-export async function expireLease(host: InMemoryHost): Promise<void> {
+export async function expireLease(host: AgentHost): Promise<void> {
   const run = await latestRun(host);
   if (!run.lease) {
     throw new Error("Expected a leased run.");

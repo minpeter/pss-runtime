@@ -9,10 +9,11 @@ import { rerunToolCall } from "../../llm/tool-execution-wrapper";
 import type { AgentEvent } from "../protocol/events";
 import { modelMessageToAgentEvents } from "../protocol/mapping";
 import type { ThreadState } from "../state/thread-state";
+import { waitForCompactionQueue } from "./compaction-queue-deadline";
 import type { ThreadExecutionRun } from "./execution";
 import type { RecoveredToolOutcome } from "./execution-checkpoints";
 
-/** Error text the model receives for a call that a crash interrupted. */
+/** Error text the model receives for a call that a crash or cancellation cut short. */
 export const INTERRUPTED_TOOL_CALL_TEXT =
   "The tool call was interrupted before it finished and may have partly run. Check its effects before calling it again.";
 
@@ -62,7 +63,8 @@ export function recoveredToolRoundMessages(
  * idempotency keys, reports `interrupt` calls as interrupted, and applies
  * decisions recorded by `agent.resolveRecovery()`. Each outcome is journaled
  * before the round joins history and commits, so a crash in between neither
- * loses nor repeats it.
+ * loses nor repeats it. A cancelled turn still adds the round: calls it cut
+ * short are reported as interrupted, and the turn's terminal commit keeps it.
  */
 export async function settleRecoveredToolCalls({
   calls,
@@ -88,22 +90,14 @@ export async function settleRecoveredToolCalls({
   toolExecution.resumeToolCalls(calls);
   const settled: RecoveredToolRoundCall[] = [];
   for (const call of calls) {
-    if (signal.aborted) {
-      return "aborted";
-    }
-    try {
-      settled.push({
-        input: call.input,
-        outcome: await settleCall(call),
-        toolCallId: call.toolCallId,
-        toolName: call.toolName,
-      });
-    } catch (error) {
-      if (signal.aborted) {
-        return "aborted";
-      }
-      throw error;
-    }
+    settled.push({
+      input: call.input,
+      outcome: signal.aborted
+        ? { errorText: INTERRUPTED_TOOL_CALL_TEXT }
+        : await settleCall(call),
+      toolCallId: call.toolCallId,
+      toolName: call.toolName,
+    });
   }
 
   const round = recoveredToolRoundMessages(settled);
@@ -115,12 +109,30 @@ export async function settleRecoveredToolCalls({
       await emit(event);
     }
   }
+  if (signal.aborted) {
+    return "aborted";
+  }
   const finishToolRoundCommit = toolExecution.beginToolRoundCommit();
   await commitRound();
   finishToolRoundCommit?.();
   return "settled";
 
   async function settleCall(
+    call: JournaledToolIntent
+  ): Promise<RecoveredToolOutcome> {
+    try {
+      // A tool that ignores cancellation must not hold the turn open.
+      return await waitForCompactionQueue(settleUncancelledCall(call), signal);
+    } catch (error) {
+      // A cancelled rerun may have partly run.
+      if (signal.aborted) {
+        return { errorText: INTERRUPTED_TOOL_CALL_TEXT };
+      }
+      throw error;
+    }
+  }
+
+  async function settleUncancelledCall(
     call: JournaledToolIntent
   ): Promise<RecoveredToolOutcome> {
     const decision = recoveryDecision(call);

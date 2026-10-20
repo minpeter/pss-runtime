@@ -1,14 +1,20 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createAgent } from "../../agent/core/agent";
 import type { RecoveryResolution } from "../../agent/resume/resolve-recovery";
 import { RecoveryResolutionError } from "../../agent/resume/resolve-recovery";
+import type { AgentHost } from "../../execution/host/types";
 import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution-checkpoint";
+import { createFileHost } from "../../platform/file";
 import { createInMemoryHost } from "../../platform/memory";
 import { createCheckpointSpyHost } from "../../testing/execution-checkpoint-test-support";
 import { eventTypes } from "../../testing/test-fixtures";
 import { INTERRUPTED_TOOL_CALL_TEXT } from "../runtime/recovered-tool-round";
 import {
   callTools,
+  committedHistory,
   continueAfterRestart,
   crashDuringTurn,
   drainContinuation,
@@ -28,16 +34,7 @@ describe("durable tool recovery policies", () => {
   it("reruns an unfinished idempotent call under its idempotency key", async () => {
     // Given: a step's idempotent call never finished; its sibling did.
     const host = createInMemoryHost();
-    const deploy = effectTool("DEPLOYED");
-    const sync = hangingTool("idempotent", { output: "SYNCED" });
-    const tools = { deploy: deploy.tool, sync: sync.tool };
-    await crashDuringTurn(
-      host,
-      tools,
-      sync.called(),
-      [callTools(["call_deploy", "deploy"], ["call_sync", "sync"])],
-      1
-    );
+    const { deploy, sync, tools } = await crashedDeployAndSync(host);
 
     // When: a restarted process continues the thread.
     const recovered = await continueAfterRestart(host, tools);
@@ -98,16 +95,7 @@ describe("durable tool recovery policies", () => {
     // Given: a recovering process reran an unfinished call, journaled the
     // result, and died before committing the round.
     const host = createInMemoryHost();
-    const deploy = effectTool("DEPLOYED");
-    const sync = hangingTool("idempotent", { output: "SYNCED" });
-    const tools = { deploy: deploy.tool, sync: sync.tool };
-    await crashDuringTurn(
-      host,
-      tools,
-      sync.called(),
-      [callTools(["call_deploy", "deploy"], ["call_sync", "sync"])],
-      1
-    );
+    const { deploy, sync, tools } = await crashedDeployAndSync(host);
     const dying = await createAgent({
       host: restartedHost(host, () => sync.calls.length > 1),
       model: scriptedModel([]).model,
@@ -163,6 +151,39 @@ describe("durable tool recovery policies", () => {
     expect(shell.calls).toHaveLength(1);
     expect(sync.calls).toHaveLength(3);
   });
+
+  it("keeps settled results and reports the rest interrupted when the recovered turn is cancelled", async () => {
+    // Given: a crashed step left two calls unfinished; the recovering
+    // process reran the first and is stuck rerunning the second.
+    const host = createInMemoryHost();
+    const sync = hangingTool("idempotent", { output: "SYNCED" });
+    const upload = hangingTool("idempotent", { hangs: 2 });
+    const tools = { sync: sync.tool, upload: upload.tool };
+    await crashDuringTurn(
+      host,
+      tools,
+      Promise.all([sync.called(), upload.called()]).then(() => undefined),
+      [callTools(["call_sync", "sync"], ["call_upload", "upload"])]
+    );
+    const recovering = await createAgent({
+      host: restartedHost(host),
+      model: scriptedModel([]).model,
+      tools,
+    });
+    const thread = recovering.thread(THREAD);
+    const events = collect((await thread.continue()) ?? emptyTurn());
+    await upload.called(2);
+
+    // When: the user interrupts the recovered turn.
+    thread.interrupt();
+
+    // Then: the cancelled turn committed the finished rerun's result and
+    // reports the cut-short call as interrupted.
+    expect(eventTypes(await events)).toContain("turn-abort");
+    const history = await committedHistory(host);
+    expect(history.split("SYNCED")).toHaveLength(2);
+    expect(history).toContain(INTERRUPTED_TOOL_CALL_TEXT);
+  });
 });
 
 describe("agent.resolveRecovery", () => {
@@ -203,6 +224,32 @@ describe("agent.resolveRecovery", () => {
     // Then: the model receives that result, and the tool never runs again.
     expect(recovered.history.split("CONFIRMED_BY_OPERATOR")).toHaveLength(2);
     expect(parked.transfer.calls).toHaveLength(1);
+  });
+
+  it("stores a supplied result without output as null on a file host", async () => {
+    // Given: a file-hosted run parked on an unfinished manual-recovery call.
+    const directory = await mkdtemp(join(tmpdir(), "pss-resolve-recovery-"));
+    try {
+      const parked = await parkedTransfer({
+        host: createFileHost({ directory }),
+      });
+
+      // When: the operator supplies a result without output and resumes.
+      await parked.agent.resolveRecovery(parked.runId, {
+        toolCalls: { call_transfer: { action: "result", output: undefined } },
+      });
+      const recovered = await drainContinuation(
+        parked.agent,
+        parked.model.histories
+      );
+
+      // Then: the model receives a null result, and the tool never reruns.
+      expect(recovered.events).toContain("turn-end");
+      expect(recovered.history).toContain('"value":null');
+      expect(parked.transfer.calls).toHaveLength(1);
+    } finally {
+      await rm(directory, { force: true, maxRetries: 10, recursive: true });
+    }
   });
 
   it("reruns a parked call under its idempotency key on resume", async () => {
@@ -298,8 +345,10 @@ describe("agent.resolveRecovery", () => {
 });
 
 /** A run parked on its unfinished manual-recovery `transfer` call. */
-async function parkedTransfer({ hangs = 1 } = {}) {
-  const host = createInMemoryHost();
+async function parkedTransfer({
+  hangs = 1,
+  host = createInMemoryHost() as AgentHost,
+} = {}) {
   const transfer = hangingTool("manual-recovery", {
     hangs,
     output: "TRANSFERRED",
@@ -319,4 +368,19 @@ async function parkedTransfer({ hangs = 1 } = {}) {
   );
   const { runId } = await latestRun(host);
   return { agent, host, model, runId, tools, transfer };
+}
+
+/** A crashed step whose `deploy` call finished and `sync` call never did. */
+async function crashedDeployAndSync(host: AgentHost) {
+  const deploy = effectTool("DEPLOYED");
+  const sync = hangingTool("idempotent", { output: "SYNCED" });
+  const tools = { deploy: deploy.tool, sync: sync.tool };
+  await crashDuringTurn(
+    host,
+    tools,
+    sync.called(),
+    [callTools(["call_deploy", "deploy"], ["call_sync", "sync"])],
+    1
+  );
+  return { deploy, sync, tools };
 }
