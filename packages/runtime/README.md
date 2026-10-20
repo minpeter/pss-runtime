@@ -1521,6 +1521,10 @@ use `otherwise` for every remaining `manual-recovery` call. A run parked by
 repeated crashes needs no decision and is simply requeued; a run parked
 because completed results are missing from committed history parks again
 when resumed. Resume the run with `agent.resume(runId)` or `thread.continue()`.
+A run that parks while its process keeps running (a `beforeToolExecution` hook
+returned `needs-recovery`, or the process lost track of a tool's outcome)
+keeps its input and every committed tool round; a run a hook parked can be
+resumed by that same process once it is decided.
 A decided rerun that crashes again parks again, because the decision is spent
 once the call starts. `RecoveryResolutionError` rejects the call without
 recording anything; its `reason` is `not-found`, `not-parked`, `undecided`,
