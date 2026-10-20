@@ -50,7 +50,9 @@ describe("examples workspace packages", () => {
         rootPackageJson.devDependencies["@ai-sdk/openai-compatible"]
       );
       expect(packageJson.dependencies["@t3-oss/env-core"]).toBe("^0.13.11");
-      expect(packageJson.dependencies.dotenv).toBe("^17.4.2");
+      expect(packageJson.dependencies.dotenv).toBe(
+        rootPackageJson.devDependencies.dotenv
+      );
       expect(packageJson.dependencies.zod).toBe(
         rootPackageJson.devDependencies.zod
       );
