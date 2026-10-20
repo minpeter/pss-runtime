@@ -48,8 +48,21 @@ export type {
 export interface AgentHost {
   readonly attachmentStore?: HostAttachmentStore;
   readonly diagnostics: RuntimeDiagnosticsSink;
+  /** Frees the leases of dead processes before the leases expire. */
+  readonly ownerLiveness?: LeaseOwnerLiveness;
   readonly scheduler: HostScheduler;
   readonly store: HostStore;
+}
+
+/** How a host tells that another process holding a lease is gone. */
+export interface LeaseOwnerLiveness {
+  /**
+   * Whether `owner`, a process other than this one, provably holds no lease
+   * any more. Return `false` when unsure; its leases then free on expiry.
+   */
+  isGone(owner: TurnLeaseOwner): boolean;
+  /** Facts about this process recorded with every lease it takes. */
+  readonly self?: Omit<TurnLeaseOwner, "id">;
 }
 
 export interface HostScheduler {
@@ -72,19 +85,34 @@ export type TurnStatus =
   | "running"
   | "suspended";
 
+/** The process that took a lease, so other processes can tell it died. */
+export interface TurnLeaseOwner {
+  /** Host name of the owning process, when its host records one. */
+  readonly hostname?: string;
+  /** Random per process; every lease a process takes carries the same id. */
+  readonly id: string;
+  /** Operating-system process id, when its host records one. */
+  readonly pid?: number;
+  /** Start time of the process; tells it apart from a later one with its pid. */
+  readonly processStart?: string;
+}
+
 /**
  * Captured authority for a turn attempt.
  *
  * `leaseUntilMs` is the deadline after which another worker may atomically
  * replace this claim. Time passing alone does not revoke `leaseId`; the owner
  * remains authoritative until a successful replacement claim persists a new
- * lease ID or a terminal transition settles the run.
+ * lease ID or a terminal transition settles the run. A running turn renews
+ * its lease, and a lease whose owner is provably gone may be replaced early.
  */
 export interface TurnLease {
   readonly attempt: number;
   readonly leaseId: string;
   /** Reclaim deadline, not a hard write-expiry timestamp. */
   readonly leaseUntilMs: number;
+  /** The process holding the lease; absent on leases of older versions. */
+  readonly owner?: TurnLeaseOwner;
 }
 
 export interface TurnRecord {
@@ -122,11 +150,18 @@ export type CreateTurnResult =
     };
 
 export interface ClaimTurnOptions {
+  /**
+   * Id of the current lease when the claimer proved its owner gone; that
+   * lease is then claimable before `leaseUntilMs`. Any other lease is not.
+   */
+  readonly abandonedLeaseId?: string;
   readonly attempt: number;
   readonly leaseId: string;
   readonly leaseMs: number;
   readonly maxAttempts?: number;
   readonly nowMs: number;
+  /** Recorded on the new lease. */
+  readonly owner?: TurnLeaseOwner;
 }
 
 /**

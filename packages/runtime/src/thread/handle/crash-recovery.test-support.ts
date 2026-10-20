@@ -138,7 +138,8 @@ export async function committedHistory(host: AgentHost): Promise<string> {
 
 /**
  * Runs a turn in a process that dies once `crashed` settles, after the
- * run's latest checkpoint journals `results` finished results.
+ * run's latest checkpoint journals `results` finished results. The dead
+ * process's lease then lapses, so another process may claim the run.
  */
 export async function crashDuringTurn(
   host: AgentHost,
@@ -155,6 +156,7 @@ export async function crashDuringTurn(
   collect(await agent.thread(THREAD).send("go")).catch(() => undefined);
   await crashed;
   await waitForResults(host, results);
+  await expireLease(host);
 }
 
 /** Continues the thread in a restarted process that answers "DONE". */

@@ -91,6 +91,54 @@ export function describeExecutionLeaseContract(
       ).resolves.toEqual({ ok: false, reason: "not-claimable" });
     });
 
+    it("replaces a live lease only when the claim names it abandoned", async () => {
+      const store = createStore();
+      await store.turns.create(createQueuedRun("run-abandoned"));
+      const claimed = await claim(store, "run-abandoned", "owner-a", 10);
+      await store.turns.update({ ...claimed, status: "running" });
+
+      await expect(
+        store.turns.claim("run-abandoned", {
+          ...claimOptions("owner-b", 20),
+          abandonedLeaseId: "another-lease",
+        })
+      ).resolves.toEqual({ ok: false, reason: "leased" });
+      await expect(
+        store.turns.claim("run-abandoned", {
+          ...claimOptions("owner-b", 20),
+          abandonedLeaseId: "owner-a",
+        })
+      ).resolves.toMatchObject({ lease: { leaseId: "owner-b" }, ok: true });
+    });
+
+    it("keeps the lease owner through claims and lease renewals", async () => {
+      const store = createStore();
+      await store.turns.create(createQueuedRun("run-owner"));
+      const owner = { hostname: "host-a", id: "process-a", pid: 41 };
+      const claimed = await store.turns.claim("run-owner", {
+        ...claimOptions("owner-a", 10),
+        owner,
+      });
+      if (!claimed.ok) {
+        throw new Error("Expected owner A to claim run-owner.");
+      }
+
+      const renewed = await transitionTurn(store.turns, {
+        expected: { leaseId: "owner-a", status: "leased" },
+        runId: "run-owner",
+        update: {
+          lease: { ...claimed.lease, leaseUntilMs: 5000 },
+          status: "running",
+        },
+      });
+
+      expect(renewed.ok).toBe(true);
+      await expect(store.turns.get("run-owner")).resolves.toMatchObject({
+        lease: { leaseId: "owner-a", leaseUntilMs: 5000, owner },
+        status: "running",
+      });
+    });
+
     it.each([
       "cancelled",
       "completed",

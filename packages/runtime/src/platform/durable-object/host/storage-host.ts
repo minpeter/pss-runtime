@@ -32,6 +32,7 @@ import {
 import { DurableObjectSqliteCheckpointStore as CheckpointStoreImplementation } from "../storage/sqlite/checkpoint-store";
 import { DurableObjectSqliteEventStore as EventStoreImplementation } from "../storage/sqlite/event-store";
 import { DurableObjectSqliteThreadStore as ThreadStoreImplementation } from "../storage/sqlite/thread-store";
+import { durableObjectOwnerLiveness } from "./activation-liveness";
 import type { DurableObjectScheduledThreadPrompt as ScheduledThreadPrompt } from "./scheduled-work-codec";
 import {
   ackScheduledRun,
@@ -136,6 +137,7 @@ export function createDurableObjectStorageHost({
       storage,
     }),
     diagnostics: noopRuntimeDiagnostics,
+    ownerLiveness: durableObjectOwnerLiveness,
     scheduler,
     store,
   };

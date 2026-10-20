@@ -1,4 +1,5 @@
 import { AgentHookRuntime } from "../../agent/core/hook-runtime";
+import { TURN_LEASE_MS } from "../../execution/host/lease-owner";
 import type { AgentHost } from "../../execution/host/types";
 import { createInMemoryHost } from "../../platform/memory";
 import { ThreadState } from "../state/thread-state";
@@ -29,11 +30,12 @@ export async function createReplacedExecution(
   if (!execution) {
     throw new Error("Expected a durable execution.");
   }
+  execution.release();
   const replacement = await host.store.turns.claim(execution.runId, {
     attempt: 2,
     leaseId: "replacement-owner",
     leaseMs: 100,
-    nowMs: 0,
+    nowMs: Date.now() + TURN_LEASE_MS + 1,
   });
   if (!replacement.ok) {
     throw new Error("Expected replacement owner to claim the run.");

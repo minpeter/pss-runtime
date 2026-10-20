@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Agent } from "../../agent/core/agent";
+import { TURN_LEASE_MS } from "../../execution/host/lease-owner";
 import { createInMemoryHost } from "../../platform/memory";
 import {
   assistantMessage,
@@ -35,18 +36,23 @@ describe("terminal ownership durable commit", () => {
     const stateBeforeOwnershipLoss = await host.store.threads.load(threadKey);
     const eventsBeforeOwnershipLoss = await readEventTypes(host, threadKey);
 
-    // When: another worker acquires the run before terminal settlement.
+    // When: another worker acquires the run once its lease lapses, before
+    // terminal settlement.
     const claim = await host.store.turns.claim(runId, {
       attempt: 2,
       leaseId: "replacement-owner",
-      leaseMs: 300_000,
-      nowMs: Date.now(),
+      leaseMs: TURN_LEASE_MS,
+      nowMs: Date.now() + TURN_LEASE_MS + 1,
     });
     expect(claim.ok).toBe(true);
     allowModelCompletion.resolve();
-    await draining;
 
-    // Then: the stale worker must not durably commit its result or events.
+    // Then: the stale worker reports the takeover and does not durably
+    // commit its result or events.
+    expect((await draining).at(-1)).toMatchObject({
+      error: { code: "THREAD_OWNERSHIP_LOST" },
+      type: "turn-error",
+    });
     await expect(host.store.threads.load(threadKey)).resolves.toEqual(
       stateBeforeOwnershipLoss
     );

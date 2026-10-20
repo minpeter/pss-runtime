@@ -30,7 +30,9 @@ export async function createScenarioAgent(state, options = {}) {
         };
       }
     : undefined;
-  const host = createCelldHost({ maxPayloadBytes: 512, state });
+  // Small enough that 8 KiB history payloads are chunked, and large enough
+  // for run records, which carry the running turn's lease.
+  const host = createCelldHost({ maxPayloadBytes: 1024, state });
   const recordSideEffectTool = {
     execute: async (/** @type {unknown} */ input) =>
       await recordSideEffect(state, operationId(input)),

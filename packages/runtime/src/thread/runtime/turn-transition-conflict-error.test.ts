@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { TURN_LEASE_MS } from "../../execution/host/lease-owner";
 import { createInMemoryHost } from "../../platform/memory";
 import { ThreadState } from "../state/thread-state";
 import { startThreadExecutionRun } from "./execution";
@@ -39,7 +40,7 @@ describe("turn transition conflict errors", () => {
       attempt: 2,
       leaseId: "owner-b",
       leaseMs: 100,
-      nowMs: 200,
+      nowMs: Date.now() + TURN_LEASE_MS + 1,
     });
     if (!secondClaim.ok) {
       throw new Error("Expected owner B to reclaim the run.");

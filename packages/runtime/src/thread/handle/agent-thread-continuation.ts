@@ -1,5 +1,10 @@
 import type { JSONValue, ModelMessage } from "ai";
 import { ownsAgentNamespace } from "../../agent/identity/namespace";
+import {
+  abandonedLeaseId,
+  processLeaseOwner,
+  TURN_LEASE_MS,
+} from "../../execution/host/lease-owner";
 import { createThreadExecutionRunId } from "../../execution/host/thread-execution-run-id";
 import {
   awaitsRecoveryDecision,
@@ -457,11 +462,13 @@ async function recoverPersistedThreadContinuation(
     throw busyError();
   }
   const claimed = await turns.claim(latestRun.runId, {
+    abandonedLeaseId: abandonedLeaseId(latestRun, host.ownerLiveness),
     attempt: (latestRun.lease?.attempt ?? 0) + 1,
     leaseId: crypto.randomUUID(),
-    leaseMs: 300_000,
+    leaseMs: TURN_LEASE_MS,
     maxAttempts: DEFAULT_MAX_TURN_CLAIM_ATTEMPTS,
     nowMs: Date.now(),
+    owner: processLeaseOwner(host.ownerLiveness),
   });
   if (!claimed.ok) {
     signal.throwIfAborted();

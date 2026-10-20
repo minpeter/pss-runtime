@@ -20,7 +20,8 @@ const CLAIMABLE_TURN_STATUSES = new Set<TurnStatus>([
 export function decideTurnClaim(
   runId: string,
   record: TurnRecord,
-  nowMs: number
+  nowMs: number,
+  abandonedLeaseId?: string
 ):
   | { ok: true }
   | { ok: false; reason: "leased" | "not-claimable" | "not-found" } {
@@ -30,7 +31,11 @@ export function decideTurnClaim(
   if (!CLAIMABLE_TURN_STATUSES.has(record.status)) {
     return { ok: false, reason: "not-claimable" };
   }
-  if (record.lease && record.lease.leaseUntilMs > nowMs) {
+  if (
+    record.lease &&
+    record.lease.leaseUntilMs > nowMs &&
+    record.lease.leaseId !== abandonedLeaseId
+  ) {
     return { ok: false, reason: "leased" };
   }
   return { ok: true };
@@ -44,7 +49,12 @@ export function resolveTurnClaim(
   readonly decision: ClaimTurnResult;
   readonly nextRecord?: TurnRecord;
 } {
-  const decision = decideTurnClaim(runId, record, options.nowMs);
+  const decision = decideTurnClaim(
+    runId,
+    record,
+    options.nowMs,
+    options.abandonedLeaseId
+  );
   if (!decision.ok) {
     return { decision };
   }
@@ -69,6 +79,7 @@ export function resolveTurnClaim(
     attempt: effectiveAttempt,
     leaseId: options.leaseId,
     leaseUntilMs: options.nowMs + options.leaseMs,
+    ...(options.owner ? { owner: { ...options.owner } } : {}),
   };
   const claimed: TurnRecord = {
     ...record,

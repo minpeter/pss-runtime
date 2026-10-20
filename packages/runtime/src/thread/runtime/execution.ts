@@ -1,10 +1,15 @@
 import type { AgentHookRuntime } from "../../agent/core/hook-runtime";
+import {
+  processLeaseOwner,
+  TURN_LEASE_MS,
+} from "../../execution/host/lease-owner";
 import { createThreadExecutionRunId } from "../../execution/host/thread-execution-run-id";
 import { transitionTurn } from "../../execution/host/turn-status";
 import { TurnTransitionConflictError } from "../../execution/host/turn-transition-conflict";
 import type {
   AgentHost,
   TurnKind,
+  TurnLease,
   TurnRecord,
   TurnStatus,
   TurnStore,
@@ -26,6 +31,7 @@ import {
   settleThreadExecutionRun,
   type TerminalRunStorageCommit,
 } from "./terminal-run-settlement";
+import { startTurnLeaseHeartbeat } from "./turn-ownership";
 
 export interface ThreadExecutionOptions {
   readonly compaction?: AgentCompaction;
@@ -51,6 +57,10 @@ export type ThreadExecutionCancellation =
 export interface ThreadExecutionRun {
   commitOwned<Result>(persist: OwnedRunStorageCommit<Result>): Promise<Result>;
   complete(status: ThreadExecutionTerminalStatus): Promise<void>;
+  /** Aborted with a `TurnOwnershipLostError` when another owner took over. */
+  readonly ownershipLost: AbortSignal;
+  /** Stops renewing the run's lease; settling the run also stops it. */
+  release(): void;
   readonly runId: string;
   settle(
     status: ThreadExecutionTerminalStatus,
@@ -127,27 +137,40 @@ export async function startThreadExecutionRun({
 
   const runId =
     executionRun?.runId ?? createThreadExecutionRunId({ threadKey, turnId });
-  const created = await executionHost.store.turns.create(
-    createThreadExecutionRunRecord({
+  // The turn owns its run through a lease from the start, so no other
+  // process can take a live turn over; the heartbeat keeps it current.
+  const owner = processLeaseOwner(executionHost.ownerLiveness);
+  const startLease = (claimed: TurnLease | undefined): TurnLease => ({
+    attempt: claimed?.attempt ?? 1,
+    leaseId: claimed?.leaseId ?? crypto.randomUUID(),
+    leaseUntilMs: Date.now() + TURN_LEASE_MS,
+    owner,
+  });
+  const created = await executionHost.store.turns.create({
+    ...createThreadExecutionRunRecord({
       kind: executionRun?.kind ?? "user-turn",
       ownerNamespace,
       runId,
       status: "running",
       threadKey,
-    })
-  );
+    }),
+    lease: startLease(undefined),
+  });
   let running = created.record;
   if (isTerminalTurnStatus(created.record.status)) {
     throw new TurnTransitionConflictError(runId, "start", "status-conflict");
   }
   if (!created.ok) {
+    const expectedLeaseId = executionRun?.leaseId ?? null;
     const transition = await transitionTurn(executionHost.store.turns, {
-      expected: {
-        leaseId: executionRun?.leaseId ?? null,
-        status: created.record.status,
-      },
+      expected: { leaseId: expectedLeaseId, status: created.record.status },
       runId,
-      update: { status: "running" },
+      update: {
+        lease: startLease(
+          expectedLeaseId === null ? undefined : created.record.lease
+        ),
+        status: "running",
+      },
     });
     if (!transition.ok) {
       throw new TurnTransitionConflictError(runId, "start", transition.reason);
@@ -156,6 +179,25 @@ export async function startThreadExecutionRun({
   }
 
   const leaseId = running.lease?.leaseId ?? null;
+  const heartbeat = running.lease
+    ? startTurnLeaseHeartbeat({
+        lease: running.lease,
+        runId,
+        store: executionHost.store,
+      })
+    : undefined;
+  // Renewal stops before settlement writes; the lease counts as this
+  // process's until settlement finishes, so no claim here races it.
+  const settling = async <Result>(
+    write: () => Promise<Result>
+  ): Promise<Result> => {
+    heartbeat?.stopRenewal();
+    try {
+      return await write();
+    } finally {
+      heartbeat?.release();
+    }
+  };
   return {
     commitOwned: async (persist) =>
       await commitOwnedThreadExecutionRunStorage({
@@ -164,22 +206,28 @@ export async function startThreadExecutionRun({
         persist,
         runId,
       }),
-    complete: async (status) =>
-      await completeThreadExecutionRun({
-        executionHost,
-        leaseId,
-        runId,
-        status,
-      }),
+    complete: (status) =>
+      settling(() =>
+        completeThreadExecutionRun({
+          executionHost,
+          leaseId,
+          runId,
+          status,
+        })
+      ),
+    ownershipLost: heartbeat?.lost ?? new AbortController().signal,
+    release: () => heartbeat?.release(),
     runId,
-    settle: async (status, persist) =>
-      await settleThreadExecutionRun({
-        executionHost,
-        leaseId,
-        persist,
-        runId,
-        status,
-      }),
+    settle: (status, persist) =>
+      settling(() =>
+        settleThreadExecutionRun({
+          executionHost,
+          leaseId,
+          persist,
+          runId,
+          status,
+        })
+      ),
     toolExecution: createThreadToolExecutionContext({
       executionHost,
       interceptToolCall,

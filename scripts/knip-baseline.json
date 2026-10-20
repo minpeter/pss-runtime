@@ -151,7 +151,6 @@
     "exports:packages/runtime/src/thread/input/runtime-input-emit.ts#runtimeInputEventFromQueued",
     "exports:packages/runtime/src/thread/runtime/auto-compaction-range.ts#MIN_SOURCE_WRAPPER_MULTIPLE",
     "exports:packages/runtime/src/thread/runtime/durable-input-cancellation.ts#DurableThreadInputCancellationError",
-    "exports:packages/runtime/src/thread/runtime/execution-checkpoints.ts#ThreadExecutionCheckpointAuthorityError",
     "exports:packages/runtime/src/thread/runtime/execution-checkpoints.ts#ThreadExecutionCheckpointError",
     "exports:packages/runtime/src/thread/runtime/execution.ts#createThreadExecutionRunRecord",
     "exports:packages/runtime/src/thread/runtime/thread-event-log.ts#ThreadEventTransactionUnsupportedError",

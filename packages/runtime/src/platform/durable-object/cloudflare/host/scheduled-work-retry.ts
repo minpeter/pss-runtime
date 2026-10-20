@@ -4,6 +4,12 @@ import {
   type TurnStore,
   transitionTurn,
 } from "../../../../execution";
+import {
+  abandonedLeaseId,
+  processLeaseOwner,
+  TURN_LEASE_MS,
+} from "../../../../execution/host/lease-owner";
+import { durableObjectOwnerLiveness } from "../../host/activation-liveness";
 import { createDurableObjectStorageHost as createCloudflareStorageHost } from "../../host/storage-host";
 import {
   type DurableObjectStorage as CloudflareDurableObjectStorage,
@@ -97,42 +103,33 @@ async function captureRetryOwnership({
   readonly turns: TurnStore;
 }): Promise<TurnRecord | null> {
   const run = await turns.get(runId);
-  if (isOwnedRetryableRun(run, leaseId, allowNonNotification)) {
+  if (!isRetryableRun(run, allowNonNotification)) {
+    return null;
+  }
+  if ((run.lease?.leaseId ?? null) === leaseId) {
     return run;
   }
-  if (!isUnleasedRetryableRun(run, allowNonNotification)) {
+  // An interrupted activation leaves its lease behind; adopt that one too.
+  const abandoned = abandonedLeaseId(run, durableObjectOwnerLiveness);
+  if (run.lease !== undefined && abandoned === undefined) {
     return null;
   }
   const claim = await turns.claim(runId, {
+    abandonedLeaseId: abandoned,
     attempt: 1,
     leaseId,
-    leaseMs: 300_000,
+    leaseMs: TURN_LEASE_MS,
     nowMs: Date.now(),
+    owner: processLeaseOwner(durableObjectOwnerLiveness),
   });
   return claim.ok ? claim.record : null;
 }
 
-function isOwnedRetryableRun(
-  run: TurnRecord | null,
-  leaseId: string,
-  allowNonNotification: boolean
-): run is TurnRecord {
-  if (
-    !(run && isRetryableRunStatus(run.status)) ||
-    (run.lease?.leaseId ?? null) !== leaseId
-  ) {
-    return false;
-  }
-  return run.kind === "notification"
-    ? run.dedupeKey !== undefined
-    : allowNonNotification;
-}
-
-function isUnleasedRetryableRun(
+function isRetryableRun(
   run: TurnRecord | null,
   allowNonNotification: boolean
 ): run is TurnRecord {
-  if (!(run && isRetryableRunStatus(run.status)) || run.lease !== undefined) {
+  if (!(run && isRetryableRunStatus(run.status))) {
     return false;
   }
   return run.kind === "notification"
