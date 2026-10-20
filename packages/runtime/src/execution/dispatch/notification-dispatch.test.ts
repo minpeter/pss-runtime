@@ -96,48 +96,46 @@ describe("dispatchAgentNotification", () => {
   });
 
   it("reschedules an active run on an idempotent retry", async () => {
-    const { host, resumeCallCount } = hostWithResumeCounter(
-      createInMemoryHost()
-    );
-    const input = {
+    // Given: a dispatched notification whose scheduled prompt was consumed
+    const host = createInMemoryHost();
+    const { first, input, prompt } = await dispatchConsumed(
       host,
-      idempotencyKey: "reminder:retry",
-      input: { text: "Reminder fired", type: "user-input" } as const,
-      namespace: "agent-a",
-      threadKey: "room:1:user:2",
-    };
+      "reminder:retry"
+    );
 
-    const first = await dispatchAgentNotification(input);
+    // When: the caller retries with the same idempotency key
     const retry = await dispatchAgentNotification(input);
 
+    // Then: the still-queued run is scheduled again
     expect(retry).toEqual({ ...first, deduplicated: true });
-    expect(resumeCallCount()).toBe(2);
+    await expect(host.scheduler.listScheduledThreadPrompts()).resolves.toEqual([
+      prompt,
+    ]);
   });
 
   it.each(["cancelled", "completed", "error", "needs-recovery"] as const)(
     "returns a deduplicated result without rescheduling a %s run",
     async (status) => {
-      const { host, resumeCallCount } = hostWithResumeCounter(
-        createInMemoryHost()
-      );
-      const input = {
+      // Given: a consumed notification prompt whose run reached a terminal status
+      const host = createInMemoryHost();
+      const { first, input } = await dispatchConsumed(
         host,
-        idempotencyKey: `reminder:terminal:${status}`,
-        input: { text: "Reminder fired", type: "user-input" } as const,
-        namespace: "agent-a",
-        threadKey: "room:1:user:2",
-      };
-      const first = await dispatchAgentNotification(input);
+        `reminder:terminal:${status}`
+      );
       const run = await host.store.turns.get(first.runId);
       if (!run) {
         throw new Error("expected notification run");
       }
       await host.store.turns.update({ ...run, status });
 
+      // When: the caller retries with the same idempotency key
       const retry = await dispatchAgentNotification(input);
 
+      // Then: nothing is scheduled for the settled run
       expect(retry).toEqual({ ...first, deduplicated: true });
-      expect(resumeCallCount()).toBe(1);
+      await expect(
+        host.scheduler.listScheduledThreadPrompts()
+      ).resolves.toEqual([]);
     }
   );
 
@@ -216,27 +214,6 @@ describe("dispatchAgentNotification", () => {
   );
 });
 
-function hostWithResumeCounter(baseHost: AgentHost): {
-  readonly host: AgentHost;
-  readonly resumeCallCount: () => number;
-} {
-  let resumeCalls = 0;
-  return {
-    host: {
-      ...baseHost,
-      scheduler: {
-        enqueueRun: (runId, options) =>
-          baseHost.scheduler.enqueueRun(runId, options),
-        resumeThread: async (threadKey, options) => {
-          resumeCalls += 1;
-          await baseHost.scheduler.resumeThread(threadKey, options);
-        },
-      },
-    },
-    resumeCallCount: () => resumeCalls,
-  };
-}
-
 function hostWithNotificationLookup(
   host: AgentHost,
   lookup: (idempotencyKey: string) => NotificationRecord | null
@@ -266,4 +243,25 @@ function hostWithNotificationLookup(
         }),
     },
   };
+}
+
+/** Dispatches a notification and acks its scheduled prompt, as a drainer would. */
+async function dispatchConsumed(
+  host: ReturnType<typeof createInMemoryHost>,
+  idempotencyKey: string
+) {
+  const input = {
+    host,
+    idempotencyKey,
+    input: { text: "Reminder fired", type: "user-input" } as const,
+    namespace: "agent-a",
+    threadKey: "room:1:user:2",
+  };
+  const first = await dispatchAgentNotification(input);
+  const [prompt] = await host.scheduler.listScheduledThreadPrompts();
+  if (!prompt) {
+    throw new Error("expected scheduled thread prompt");
+  }
+  await host.scheduler.ackScheduledThreadPrompt(prompt);
+  return { first, input, prompt };
 }
