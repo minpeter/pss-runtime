@@ -16,10 +16,12 @@ import type {
 import type { ThreadStore } from "../../../thread/store/types";
 import { deleteFileExecutionThread } from "./file-execution-store/delete-thread";
 import {
-  copyDataDirectories,
   currentDataDirectory,
   GENERATIONS_DIRECTORY,
+  linkDataDirectories,
   migrateLegacyScheduledWork,
+  pruneGenerations,
+  readCurrentGenerationId,
   writeCurrentGeneration,
 } from "./file-execution-store/generation";
 import {
@@ -94,6 +96,13 @@ export class FileExecutionStore implements HostStore {
     });
   }
 
+  /**
+   * Runs `operation` against a hard-linked copy of the current generation and
+   * publishes it by durably switching `.current-generation`. Every reader and
+   * writer resolves that pointer under `.execution.lock`, which this holds
+   * throughout, so superseded and abandoned generations are unreachable once
+   * the switch lands and are removed before the lock is released.
+   */
   async #commitGeneration<T>(
     operation: (directory: string) => Promise<T>
   ): Promise<T> {
@@ -110,20 +119,27 @@ export class FileExecutionStore implements HostStore {
         );
         await mkdir(transactionDirectory, { recursive: true });
 
-        let committed = false;
+        let result: T;
         try {
           const currentDirectory = await currentDataDirectory(this.#directory);
           await migrateLegacyScheduledWork(this.#directory, currentDirectory);
-          await copyDataDirectories(currentDirectory, transactionDirectory);
-          const result = await operation(transactionDirectory);
+          await linkDataDirectories(currentDirectory, transactionDirectory);
+          result = await operation(transactionDirectory);
           await writeCurrentGeneration(this.#directory, generationId);
-          committed = true;
-          return result;
-        } finally {
-          if (!committed) {
+        } catch (error) {
+          // A failure after the pointer rename leaves this generation current.
+          if (
+            (await readCurrentGenerationId(this.#directory)) !== generationId
+          ) {
             await rm(transactionDirectory, { force: true, recursive: true });
           }
+          throw error;
         }
+        // The commit is durable; a failed sweep is retried by the next commit.
+        await pruneGenerations(this.#directory, generationId).catch(
+          () => undefined
+        );
+        return result;
       }
     );
   }

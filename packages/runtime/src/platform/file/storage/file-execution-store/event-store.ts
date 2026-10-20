@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   createEventCursor,
@@ -21,6 +21,7 @@ import {
   parseEventLogLine,
   parseThreadEventLogLine,
 } from "./event-log-schemas";
+import { appendJsonLine } from "./json";
 import type { DataDirectoryResolver } from "./types";
 import { encodeKey } from "./utils";
 
@@ -127,7 +128,7 @@ async function appendJsonlEntry(
   await mkdir(dirname(file), { recursive: true });
   const lines = await readJsonlLines(file);
   const offset = lines.length + 1;
-  await appendFile(file, `${JSON.stringify(createPayload(offset))}\n`, "utf8");
+  await appendJsonLine(file, createPayload(offset));
   return offset;
 }
 
