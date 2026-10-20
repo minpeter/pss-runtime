@@ -8,6 +8,7 @@ import {
   drainCelldScheduledWork,
   listCelldScheduledBackstops,
 } from "../../platform/durable-object/celld/host";
+import { createInMemoryHost } from "../../platform/memory";
 import {
   assistantMessage,
   createCallbackModel,
@@ -193,6 +194,36 @@ describe("turn backstops", () => {
         nowMs: Date.now() + 4 * TURN_BACKSTOP_DELAY_MS,
       })
     ).resolves.toEqual([]);
+  });
+
+  it("frees a run whose backstop could not be scheduled after it started", async () => {
+    // Given: a host whose scheduler schedules backstops only after commit,
+    // and fails to.
+    const base = createInMemoryHost();
+    const host: AgentHost = {
+      ...base,
+      scheduler: {
+        enqueueRun: (runId, options) =>
+          base.scheduler.enqueueRun(runId, options),
+        resumeThread: (threadKey, options) =>
+          base.scheduler.resumeThread(threadKey, options),
+        scheduleBackstop: () =>
+          Promise.reject(new Error("scheduler unavailable")),
+      },
+    };
+    const agent = await answeringAgent(host);
+
+    // When: a turn starts.
+    const events = eventTypes(
+      await collect(await agent.thread(THREAD).send("go"))
+    );
+
+    // Then: the turn fails, and its run is left queued without a lease rather
+    // than running under one nobody renews.
+    expect(events).toContain("turn-error");
+    const run = await latestRun(host);
+    expect(run.status).toBe("queued");
+    expect(run.lease).toBeUndefined();
   });
 });
 
