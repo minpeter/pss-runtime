@@ -1,4 +1,9 @@
 // biome-ignore-all lint/performance/noBarrelFile: Public package subpath entrypoint required by package exports.
+export type {
+  RecoveryResolution,
+  RecoveryResolutionErrorReason,
+} from "../agent/resume/resolve-recovery";
+export { RecoveryResolutionError } from "../agent/resume/resolve-recovery";
 export { ToolExecutionNeedsRecoveryError } from "../llm/tool-execution-checkpoint";
 export type {
   RuntimeToolExecutionCheckpoint,
@@ -20,7 +25,10 @@ export {
 export { threadStoreFromHost } from "./host/host";
 export type { ResumeThreadOptions } from "./host/scheduler-options";
 export { ThreadInputDuplicateConflictError } from "./host/thread-input-conflict";
-export type { PendingToolCall } from "./host/tool-step-journal";
+export type {
+  PendingToolCall,
+  ToolRecoveryDecision,
+} from "./host/tool-step-journal";
 export { transitionTurn } from "./host/turn-status";
 export type {
   AdmitReceipt,

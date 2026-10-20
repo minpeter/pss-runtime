@@ -1153,7 +1153,8 @@ if (turn.runId) {
 Recorded runs report `runId`, `status`, `threadKey`, `checkpointVersion`,
 `latestCheckpoint`, `pendingToolCalls`, and `state`. `pendingToolCalls` lists
 every tool call whose intent was recorded without an outcome, with its retry
-policy. `state` is `"checkpointed"` or
+policy and any decision recorded by `agent.resolveRecovery()` (`resolution`).
+`state` is `"checkpointed"` or
 `"no-checkpoint"`; absent IDs return `"unknown-run"`, and a thread-only store
 returns `"unsupported"`. Lifecycle status distinguishes queued (`queued`),
 active (`running`), claimed/resumed (`leased`), completed (`completed`), failed
@@ -1494,15 +1495,52 @@ step's journal: each call whose intent was recorded without an outcome, and
 each finished result not yet committed, including failed calls as their error
 result. A crashed run resumes from committed history plus that journal, so a
 finished tool never runs again; the in-flight model step is requested again.
-A recorded call without an outcome parks the run as `needs-recovery` when its
-policy is `manual-recovery` (the default); `idempotent` and `pure` calls are
-left for the model to request again.
+A tool's `retryPolicy` decides what recovery does with a call whose outcome the
+crash left unknown:
+
+| `retryPolicy` | After a crash |
+|---|---|
+| `pure` | Runs again. Its intent gets no checkpoint of its own; it is recorded with the step's next checkpoint, so a step of only pure calls is simply requested again. |
+| `idempotent` | Runs again with the same `idempotencyKey` and the next `attempt`. |
+| `interrupt` | The model receives an error result saying the call was interrupted and may have partly run. |
+| `manual-recovery` (default) | The run parks as `needs-recovery` until `agent.resolveRecovery()` records a decision. |
+
+Recovery settles these calls before the recovered turn's first model request.
+Each outcome is checkpointed before the round joins committed history, so a
+crash in between neither loses nor repeats it.
+
+`agent.resolveRecovery(runId, resolution)` records a decision for each
+unfinished call of a `needs-recovery` run and requeues the run:
+`{ action: "rerun" }` runs the call again under its idempotency key,
+`{ action: "interrupt" }` reports it as interrupted, and
+`{ action: "result", output }` gives the model `output`, stored as JSON
+(`undefined` becomes `null`; a value JSON cannot represent throws a
+`TypeError` before anything is written). Decide per call with `toolCalls`
+(keyed by tool call id; a decision there also overrides a call's policy) or
+use `otherwise` for every remaining `manual-recovery` call. A run parked by
+repeated crashes needs no decision and is simply requeued; a run parked
+because completed results are missing from committed history parks again
+when resumed. Resume the run with `agent.resume(runId)` or `thread.continue()`.
+A decided rerun that crashes again parks again, because the decision is spent
+once the call starts. `RecoveryResolutionError` rejects the call without
+recording anything; its `reason` is `not-found`, `not-parked`, `undecided`,
+`unknown-tool-call`, `unsupported` (an unreadable journal, or a checkpoint
+format that cannot record decisions), or `conflict`.
+
+If the recovered turn is cancelled while it settles these calls, the calls
+already settled keep their outcomes and the rest are reported as interrupted;
+the cancelled turn commits that round.
+
+```ts
+await agent.resolveRecovery(runId, { otherwise: { action: "interrupt" } });
+const turn = await agent.resume(runId);
+```
 
 When `createAgent()` receives an `AgentHost`, high-level model turns create a
 `user-turn` run record and thread tool execution context into managed model
-calls. Tools are checkpointed before and after execution and receive stable
-`attempt`, `idempotencyKey`, `retryPolicy`, `signal`, and public `toolCallId`
-values. The `@minpeter/pss-runtime/execution`
+calls. Tools are checkpointed before execution (except `pure` calls) and after
+it, and receive stable `attempt`, `idempotencyKey`, `retryPolicy`, `signal`,
+and public `toolCallId` values. The `@minpeter/pss-runtime/execution`
 entrypoint also exposes the same low-level tool execution checkpoint types.
 
 These checkpoints are rollback boundaries, not a complete host adapter by

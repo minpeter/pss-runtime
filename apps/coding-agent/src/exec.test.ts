@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isStreamAgentEvent } from "@minpeter/pss-runtime";
+import { createFileHost } from "@minpeter/pss-runtime/platform/file";
 import { APICallError } from "ai";
 import { convertArrayToReadableStream, MockLanguageModelV4 } from "ai/test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -337,5 +338,82 @@ describe("runCodingAgentExec", () => {
     expect(second.status).toBe("completed");
     expect(JSON.stringify(seenPrompts[1])).toContain("first prompt");
     expect(JSON.stringify(seenPrompts[1])).toContain("second prompt");
+  });
+
+  it("refuses new work while the session's run has recorded recovery decisions", async () => {
+    // Given: the session's latest run was requeued with a decision for its
+    // unfinished manual-recovery call.
+    const threadDirectory = join(workspace, ".pss-threads");
+    const sessionKey = "exec:decided-session";
+    const runId = "decided-run";
+    const host = createFileHost({ directory: threadDirectory });
+    await host.store.turns.create({
+      checkpointVersion: 0,
+      kind: "user-turn",
+      rootRunId: runId,
+      runId,
+      status: "queued",
+      threadKey: sessionKey,
+    });
+    const transfer = {
+      attempt: 1,
+      idempotencyKey: `${runId}:call_transfer`,
+      policy: "manual-recovery",
+      toolCallId: "call_transfer",
+      toolName: "transfer",
+    } as const;
+    await host.store.checkpoints.append(
+      {
+        checkpointId: "decided-checkpoint",
+        pendingToolCall: transfer,
+        phase: "before-tool",
+        runId,
+        runtimeState: {
+          inflight: [
+            {
+              ...transfer,
+              input: {},
+              resolution: { action: "interrupt" },
+              seq: 1,
+            },
+          ],
+          journalVersion: 2,
+          results: [],
+          toolCallId: transfer.toolCallId,
+          toolName: transfer.toolName,
+        },
+        threadSnapshot: { history: [] },
+        version: 1,
+      },
+      { expectedVersion: 0 }
+    );
+    const seenPrompts: unknown[] = [];
+
+    // When: exec sends a new prompt to that session.
+    const result = await runCodingAgentExec({
+      model: new MockLanguageModelV4({
+        doStream: (options) => {
+          seenPrompts.push(options.prompt);
+          return Promise.resolve({
+            stream: convertArrayToReadableStream(streamChunks),
+          });
+        },
+      }),
+      prompt: "new work",
+      sessionKey,
+      stdout: createCapturedOutput().output,
+      threadDirectory,
+      workspace,
+    });
+
+    // Then: it refuses before the model runs and leaves the run queued.
+    expect(result).toMatchObject({
+      error: expect.stringContaining("has recorded recovery decisions"),
+      status: "error",
+    });
+    expect(seenPrompts).toEqual([]);
+    await expect(host.store.turns.get(runId)).resolves.toMatchObject({
+      status: "queued",
+    });
   });
 });

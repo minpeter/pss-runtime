@@ -31,3 +31,8 @@ export function persistedToolExecutionCheckpoint(
     toolName: checkpoint.toolName,
   };
 }
+
+/** The error text the model receives for a failed tool call. */
+export function toolErrorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}

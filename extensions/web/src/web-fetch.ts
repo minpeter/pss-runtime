@@ -31,12 +31,19 @@ export type WebFetchTool = Tool<
   WebFetchInput,
   readonly FetchResult[],
   Record<string, unknown>
->;
+> & {
+  /** Fetching only reads, so a crashed durable run fetches again. */
+  readonly retryPolicy: "pure";
+};
 
 export function createWebFetchTool(
   client: Pick<CodingAgentOpenSearchClient, "fetch">
 ): WebFetchTool {
-  return tool<WebFetchInput, readonly FetchResult[], Record<string, unknown>>({
+  const definition = tool<
+    WebFetchInput,
+    readonly FetchResult[],
+    Record<string, unknown>
+  >({
     description:
       "Read one or more webpages as clean markdown with source metadata. Use after web_search when a result needs full-page content, or call directly with known URLs.",
     execute: async (input, options) => {
@@ -62,6 +69,7 @@ export function createWebFetchTool(
       type: "array",
     }),
   });
+  return { ...definition, retryPolicy: "pure" };
 }
 
 function getFetchOptions(

@@ -692,6 +692,14 @@ but AI provider API keys are withheld from the child environment. Untrusted
 workloads belong in a container (see `experimental/nextjs-bench`, which runs the agent
 in Docker).
 
+When a turn interrupted by a crash is continued (an empty Enter in the TUI),
+it resumes from its last finished tool call, and a call the crash left
+unfinished is settled before the model runs again: `read_file`, `glob_files`,
+`grep_files`, `web_search`, and `web_fetch` run again, while `edit_file`,
+`write_file`, `delete_file`, and `shell_execute` are reported to the model as
+interrupted (they may have partly run), so it can check their effects instead
+of repeating them.
+
 Pass `tools` to `startTui` (or `createCodingAgent`) from a custom entrypoint to
 replace the optional web tools; the workspace tools are always included.
 

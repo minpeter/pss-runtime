@@ -12,11 +12,19 @@ import type { Checkpoint } from "./checkpoint-types";
  */
 export const TOOL_STEP_JOURNAL_VERSION = 2;
 
+/** A decision recorded by `agent.resolveRecovery()` for an unfinished call. */
+export type ToolRecoveryDecision =
+  | { readonly action: "interrupt" }
+  | { readonly action: "rerun" }
+  | { readonly action: "result"; readonly output: unknown };
+
 /** A tool call whose intent was recorded and whose outcome is unknown. */
 export interface JournaledToolIntent
   extends RuntimeToolExecutionCheckpointMetadata {
   /** Input the model generated for the call. */
   readonly input: unknown;
+  /** Recorded decision; it overrides the call's retry policy. */
+  readonly resolution?: ToolRecoveryDecision;
   /** Order in which the step recorded the call. */
   readonly seq: number;
 }
@@ -49,13 +57,23 @@ export interface ToolStepJournal {
 }
 
 /** A recorded tool call without an outcome, in any checkpoint format. */
-export type PendingToolCall = RuntimeToolExecutionCheckpointMetadata;
+export interface PendingToolCall
+  extends RuntimeToolExecutionCheckpointMetadata {
+  /** Decision recorded by `agent.resolveRecovery()`, if any. */
+  readonly resolution?: ToolRecoveryDecision;
+}
 
 const RETRY_POLICIES: Record<RuntimeToolRetryPolicy, true> = {
   idempotent: true,
+  interrupt: true,
   "manual-recovery": true,
   pure: true,
 };
+
+/** Whether recovery must wait for a recorded decision on this call. */
+export function awaitsRecoveryDecision(call: PendingToolCall): boolean {
+  return call.policy === "manual-recovery" && call.resolution === undefined;
+}
 
 /** The step journal of a tool checkpoint; `undefined` for other formats. */
 export function toolStepJournal(
@@ -101,7 +119,10 @@ export function pendingToolCalls(
 ): readonly PendingToolCall[] {
   const journal = toolStepJournal(checkpoint);
   if (journal) {
-    return journal.inflight.map(toolCallMetadata);
+    return journal.inflight.map((intent) => ({
+      ...toolCallMetadata(intent),
+      ...(intent.resolution ? { resolution: intent.resolution } : {}),
+    }));
   }
   if (checkpoint?.phase !== "before-tool") {
     return [];
@@ -119,7 +140,31 @@ function parseIntent(entry: unknown): JournaledToolIntent | undefined {
   if (typeof value.seq !== "number" || !("input" in value)) {
     return;
   }
-  return { ...metadata, input: value.input, seq: value.seq };
+  const intent = { ...metadata, input: value.input, seq: value.seq };
+  if (value.resolution === undefined) {
+    return intent;
+  }
+  // A decision that cannot be read must not fall back to the policy.
+  const resolution = parseDecision(value.resolution);
+  return resolution ? { ...intent, resolution } : undefined;
+}
+
+function parseDecision(value: unknown): ToolRecoveryDecision | undefined {
+  if (typeof value !== "object" || value === null) {
+    return;
+  }
+  const decision = value as Record<string, unknown>;
+  switch (decision.action) {
+    case "interrupt":
+    case "rerun":
+      return { action: decision.action };
+    case "result":
+      return "output" in decision
+        ? { action: "result", output: decision.output }
+        : undefined;
+    default:
+      return;
+  }
 }
 
 function parseResult(entry: unknown): JournaledToolResult | undefined {

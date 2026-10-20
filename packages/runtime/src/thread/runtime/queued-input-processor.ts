@@ -10,6 +10,7 @@ import {
   commitPreUserRuntimeInputs,
   emitCommittedRuntimeInputs,
 } from "../input/runtime-input-emit";
+import type { AgentEvent } from "../protocol/events";
 import { scheduleThreadCompaction } from "./auto-compaction-runner";
 import { drainRuntimeInput } from "./drain";
 import { commitAndAckDurableThreadInput } from "./durable-input-acknowledgement";
@@ -17,6 +18,7 @@ import { releasePendingDurableThreadInputClaim } from "./durable-input-claims";
 import { startThreadExecutionRun, type ThreadExecutionRun } from "./execution";
 import { runAgentLoopWithOverflowCompaction } from "./loop-overflow";
 import { recoverQueuedInputFailure } from "./queued-input-error-recovery";
+import { settleRecoveredToolCalls } from "./recovered-tool-round";
 import {
   commitThreadStateAndEvents,
   createDurableThreadEventRecorder,
@@ -159,6 +161,37 @@ export async function processQueuedInput({
     });
     recordEvent({ type: "turn-start" });
     await emitCommittedRuntimeInputs(events, run, committedPreUser);
+    const emit = (event: AgentEvent) =>
+      emitTurnEvent({
+        attachmentStore: model.attachmentStore,
+        durableEvents,
+        event,
+        events,
+        executionHost: execution.executionHost,
+        executionRun,
+        awaitBoundaries,
+        recordEvent,
+        run,
+        runtimeInput,
+        state,
+        threadKey,
+      });
+    const recovery = await settleRecoveredToolCalls({
+      calls: item.recoveredToolCalls,
+      commitRound: () =>
+        commitThreadStateAndEvents({
+          buffer: durableEvents,
+          executionHost: execution.executionHost,
+          executionRun,
+          state,
+          threadKey,
+        }),
+      emit,
+      executionRun,
+      signal: activeAbort.signal,
+      state,
+      tools: model.tools,
+    });
     await drainRuntimeInput({
       attachmentStore: model.attachmentStore,
       durableEvents,
@@ -174,44 +207,33 @@ export async function processQueuedInput({
     });
 
     const agentLoopRuntimeState = { runtimeStepIndex: 0 };
-    const result = await runAgentLoopWithOverflowCompaction({
-      compact: (input, guard) => events.compact(state, input, guard),
-      execution,
-      latestContextTransform,
-      model,
-      runLoop: () =>
-        runAgentLoop({
-          emit: async (event) =>
-            emitTurnEvent({
-              attachmentStore: model.attachmentStore,
-              durableEvents,
-              event,
-              events,
-              executionHost: execution.executionHost,
-              executionRun,
-              awaitBoundaries,
-              recordEvent,
-              run,
-              runtimeInput,
-              state,
-              threadKey,
-            }),
-          history: state.history,
-          model,
-          runtimeState: agentLoopRuntimeState,
-          captureObserverEvents: (callback) =>
-            events.captureObserverEvents(run, callback),
-          signal: activeAbort.signal,
-          threadKey,
-          toolExecution: executionRun?.toolExecution,
-          transformModelContext,
-          transformModelStep,
-        }),
-      state,
-      signal: activeAbort.signal,
-      threadKey,
-      transformModelContext,
-    });
+    const result =
+      recovery === "aborted"
+        ? recovery
+        : await runAgentLoopWithOverflowCompaction({
+            compact: (input, guard) => events.compact(state, input, guard),
+            execution,
+            latestContextTransform,
+            model,
+            runLoop: () =>
+              runAgentLoop({
+                emit,
+                history: state.history,
+                model,
+                runtimeState: agentLoopRuntimeState,
+                captureObserverEvents: (callback) =>
+                  events.captureObserverEvents(run, callback),
+                signal: activeAbort.signal,
+                threadKey,
+                toolExecution: executionRun?.toolExecution,
+                transformModelContext,
+                transformModelStep,
+              }),
+            state,
+            signal: activeAbort.signal,
+            threadKey,
+            transformModelContext,
+          });
 
     state.clearTransientInputs();
     await closeTurnWithDurableTerminalEvent({

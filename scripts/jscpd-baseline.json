@@ -14,7 +14,7 @@
     "duplicates:apps/coding-agent/scripts/preview-retry-wait-tui.ts:51-65=apps/coding-agent/scripts/preview-retry-wait.ts:96-109",
     "duplicates:apps/coding-agent/scripts/preview-retry-wait-tui.ts:66-91=apps/coding-agent/scripts/preview-retry-wait.ts:109-134",
     "duplicates:apps/coding-agent/src/cli-startup.test.ts:30-40=apps/coding-agent/src/tui/app-startup-output.test.ts:16-24",
-    "duplicates:apps/coding-agent/src/coding-agent-events.test-support.ts:3-22=apps/coding-agent/src/exec.test.ts:13-32",
+    "duplicates:apps/coding-agent/src/coding-agent-events.test-support.ts:3-22=apps/coding-agent/src/exec.test.ts:14-33",
     "duplicates:apps/coding-agent/src/coding-agent-events.test.ts:157-172=apps/coding-agent/src/coding-agent-events.test.ts:192-207",
     "duplicates:apps/coding-agent/src/context/prompt-templates.test.ts:16-27=apps/coding-agent/src/context/skills.test.ts:12-23",
     "duplicates:apps/coding-agent/src/edit-file-flow.test.ts:16-37=apps/coding-agent/src/tui/renderers/tool-renderers.test.ts:7-26",

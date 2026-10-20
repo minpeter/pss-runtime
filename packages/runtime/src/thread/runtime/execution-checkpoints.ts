@@ -12,7 +12,10 @@ import type {
   LeaseFencedCheckpointWriteResult,
 } from "../../execution/host/types";
 import { assertNever } from "../../internal/guards";
-import { persistedToolExecutionCheckpoint } from "../../llm/tool-execution-checkpoint";
+import {
+  persistedToolExecutionCheckpoint,
+  toolErrorText,
+} from "../../llm/tool-execution-checkpoint";
 import type {
   RuntimeToolExecutionCheckpoint,
   RuntimeToolExecutionContext,
@@ -173,6 +176,11 @@ function completedToolCallsThrough(
   ];
 }
 
+/** The outcome recovery gives a call the crashed step left unfinished. */
+export type RecoveredToolOutcome =
+  | { readonly errorText: string }
+  | { readonly output: unknown };
+
 /** Run tool context that journals the current step's tool round. */
 export interface ThreadToolExecutionContext
   extends RuntimeToolExecutionContext {
@@ -182,6 +190,17 @@ export interface ThreadToolExecutionContext
    * once the commit holds the round, which drops it from the journal.
    */
   beginToolRoundCommit(): (() => void) | undefined;
+  /**
+   * Carries a crashed step's unfinished calls into this attempt's journal,
+   * so every checkpoint records them until each one is settled. Call it
+   * before any tool of this attempt runs.
+   */
+  resumeToolCalls(calls: readonly JournaledToolIntent[]): void;
+  /** Journals a carried call's outcome; result hooks never see it. */
+  settleToolCall(
+    call: JournaledToolIntent,
+    outcome: RecoveredToolOutcome
+  ): Promise<void>;
 }
 
 interface StepJournalState {
@@ -245,6 +264,13 @@ export function createThreadToolExecutionContext({
     appends = appended.catch(() => undefined);
     return appended;
   };
+  // Journal changes that write nothing still queue behind pending appends,
+  // which replace the journal with what they wrote.
+  const stage = (change: () => void): Promise<void> => {
+    const staged = appends.then(change);
+    appends = staged.catch(() => undefined);
+    return staged;
+  };
   return {
     attempt: 1,
     afterTool: async (checkpoint) => {
@@ -269,7 +295,21 @@ export function createThreadToolExecutionContext({
       );
     },
     beforeTool: async (checkpoint) => {
-      await append("before-tool", checkpoint, { kind: "intent" });
+      if (checkpoint.policy === "pure") {
+        // A pure call has no effect to protect: its intent rides along with
+        // the step's next checkpoint instead of writing one of its own.
+        await stage(() =>
+          applyStepJournal(
+            journal,
+            nextStepJournal(journal, { kind: "intent" }, checkpoint, {
+              priorResultCount: 0,
+              version: 0,
+            })
+          )
+        );
+      } else {
+        await append("before-tool", checkpoint, { kind: "intent" });
+      }
       const decision = await interceptToolCall?.(checkpoint);
       if (
         decision?.status === "needs-recovery" &&
@@ -305,7 +345,23 @@ export function createThreadToolExecutionContext({
         }
       };
     },
+    resumeToolCalls: (calls) => {
+      stage(() => {
+        journal.inflight.push(...structuredClone([...calls]));
+        journal.seq = Math.max(journal.seq, ...calls.map((call) => call.seq));
+      }).catch(() => undefined);
+    },
     runId,
+    settleToolCall: async (call, outcome) => {
+      const { resolution: _resolution, seq: _seq, ...toolCall } = call;
+      await append(
+        "after-tool",
+        { ...toolCall, output: "output" in outcome ? outcome.output : null },
+        "errorText" in outcome
+          ? { errorText: outcome.errorText, kind: "result" }
+          : { kind: "result" }
+      );
+    },
   };
 }
 
@@ -380,9 +436,7 @@ async function appendThreadToolExecutionCheckpoint({
     );
 
     if (result.ok) {
-      journal.inflight.splice(0, journal.inflight.length, ...next.inflight);
-      journal.results.splice(0, journal.results.length, ...next.results);
-      journal.seq = next.seq;
+      applyStepJournal(journal, next);
       if (priorResultCount !== undefined) {
         completed.push({
           checkpointVersion: version,
@@ -490,8 +544,13 @@ function nextStepJournal(
   };
 }
 
-function toolErrorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+function applyStepJournal(
+  journal: StepJournalState,
+  next: ReturnType<typeof nextStepJournal>
+): void {
+  journal.inflight.splice(0, journal.inflight.length, ...next.inflight);
+  journal.results.splice(0, journal.results.length, ...next.results);
+  journal.seq = next.seq;
 }
 
 // Provider tool call ids can recur, so the after-tool checkpoint version

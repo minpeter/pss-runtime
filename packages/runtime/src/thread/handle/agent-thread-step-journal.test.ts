@@ -1,99 +1,27 @@
-import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { createAgent } from "../../agent/core/agent";
 import { deferred } from "../../internal/deferred";
 import type { ModelStepOutput } from "../../llm/model-step-types";
 import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution-checkpoint";
 import { createInMemoryHost } from "../../platform/memory";
-import type { InMemoryHost } from "../../platform/memory/execution/execution-host";
 import { checkpointedTool } from "../../testing/execution-checkpoint-test-support";
+import { assistantMessage, eventTypes } from "../../testing/test-fixtures";
 import {
-  assistantMessage,
-  createCallbackModel,
-  eventTypes,
-  toolCallPart,
-} from "../../testing/test-fixtures";
-import { decodeStoredThreadSnapshot } from "../state/snapshot";
+  callTools,
+  committedHistory,
+  continueAfterRestart,
+  crashDuringTurn,
+  effectTool,
+  emptyTurn,
+  expireLease,
+  hangingTool,
+  latestRun,
+  never,
+  restartedHost,
+  scriptedModel,
+  THREAD,
+} from "./crash-recovery.test-support";
 import { collect } from "./test-support";
-
-const THREAD = "step-journal";
-
-/** A model that answers each request with the next scripted step. */
-function scriptedModel(
-  steps: readonly ((
-    history: readonly ModelMessage[]
-  ) => Promise<ModelStepOutput>)[]
-): {
-  readonly histories: string[];
-  readonly model: ReturnType<typeof createCallbackModel>;
-} {
-  const histories: string[] = [];
-  let index = 0;
-  return {
-    histories,
-    model: createCallbackModel(({ history }) => {
-      histories.push(JSON.stringify(history));
-      const step = steps[index];
-      index += 1;
-      return step ? step(history) : Promise.resolve([assistantMessage("DONE")]);
-    }),
-  };
-}
-
-const callTools =
-  (...calls: readonly [string, string][]) =>
-  () =>
-    Promise.resolve([
-      assistantMessage(calls.map(([id, name]) => toolCallPart(id, name))),
-    ]);
-
-const never = () => new Promise<ModelStepOutput>(() => undefined);
-
-/** A tool that counts its effects and returns a fixed output. */
-function effectTool(
-  output: string,
-  policy: "idempotent" | "manual-recovery" | "pure" = "idempotent"
-) {
-  const effects = { count: 0 };
-  return {
-    effects,
-    tool: checkpointedTool(policy, () => {
-      effects.count += 1;
-      return output;
-    }),
-  };
-}
-
-/** A tool whose call starts and never finishes, as when its process dies. */
-function hangingTool(policy: "idempotent" | "manual-recovery" | "pure") {
-  const started = deferred<void>();
-  return {
-    started: started.promise,
-    tool: checkpointedTool(policy, () => {
-      started.resolve();
-      return new Promise(() => undefined);
-    }),
-  };
-}
-
-/** Another process on the same store: distinct drain and live-input owners. */
-function restartedHost(host: InMemoryHost): InMemoryHost {
-  return {
-    ...host,
-    store: new Proxy(host.store, {
-      get(target, property) {
-        const value = Reflect.get(target, property, target);
-        return typeof value === "function" ? value.bind(target) : value;
-      },
-    }),
-  };
-}
-
-async function committedHistory(host: InMemoryHost): Promise<string> {
-  return JSON.stringify(
-    decodeStoredThreadSnapshot(await host.store.threads.load(THREAD))
-  );
-}
 
 describe("durable step journal", () => {
   it("commits each finished tool round before the next model request", async () => {
@@ -154,7 +82,7 @@ describe("durable step journal", () => {
     const host = createInMemoryHost();
     const deploy = effectTool("DEPLOYED");
     const notify = effectTool("NOTIFIED");
-    const probe = hangingTool("pure");
+    const probe = hangingTool("pure", { output: "PROBED" });
     const tools = {
       deploy: deploy.tool,
       notify: notify.tool,
@@ -163,7 +91,7 @@ describe("durable step journal", () => {
     await crashDuringTurn(
       host,
       tools,
-      probe.started,
+      probe.called(),
       [
         callTools(
           ["call_deploy", "deploy"],
@@ -177,13 +105,15 @@ describe("durable step journal", () => {
     // When: a restarted process continues the thread.
     const recovered = await continueAfterRestart(host, tools);
 
-    // Then: both results reach the model once, and neither tool reruns.
+    // Then: both results reach the model once and neither tool reruns; only
+    // the unfinished pure call runs again.
     expect(recovered.events).toContain("turn-end");
     expect(recovered.history.split("DEPLOYED")).toHaveLength(2);
     expect(recovered.history.split("NOTIFIED")).toHaveLength(2);
-    expect(recovered.history).not.toContain("call_probe");
+    expect(recovered.history.split("PROBED")).toHaveLength(2);
     expect(deploy.effects.count).toBe(1);
     expect(notify.effects.count).toBe(1);
+    expect(probe.calls).toHaveLength(2);
   });
 
   it("keeps restored results across a second crash", async () => {
@@ -192,7 +122,7 @@ describe("durable step journal", () => {
     const host = createInMemoryHost();
     const deploy = effectTool("DEPLOYED");
     const probe = hangingTool("pure");
-    const recheck = hangingTool("pure");
+    const recheck = hangingTool("idempotent");
     const tools = {
       deploy: deploy.tool,
       probe: probe.tool,
@@ -201,7 +131,7 @@ describe("durable step journal", () => {
     await crashDuringTurn(
       host,
       tools,
-      probe.started,
+      probe.called(),
       [callTools(["call_deploy", "deploy"], ["call_probe", "probe"])],
       1
     );
@@ -212,7 +142,7 @@ describe("durable step journal", () => {
     });
     const recovered = await recovering.thread(THREAD).continue();
     collect(recovered ?? emptyTurn()).catch(() => undefined);
-    await recheck.started;
+    await recheck.called();
     await expireLease(host);
 
     // When: a third process continues the thread.
@@ -237,7 +167,7 @@ describe("durable step journal", () => {
     await crashDuringTurn(
       host,
       tools,
-      probe.started,
+      probe.called(),
       [callTools(["call_flaky", "flaky"], ["call_probe", "probe"])],
       1
     );
@@ -260,7 +190,7 @@ describe("durable step journal", () => {
     await crashDuringTurn(
       host,
       tools,
-      transfer.started,
+      transfer.called(),
       [callTools(["call_transfer", "transfer"], ["call_deploy", "deploy"])],
       1
     );
@@ -280,85 +210,6 @@ describe("durable step journal", () => {
     );
     await expect(continued).rejects.toThrow("transfer");
     expect(second.histories).toEqual([]);
-    const [run] = (await host.store.turns.listByThreadKey?.(THREAD)) ?? [];
-    expect(run).toMatchObject({ status: "needs-recovery" });
+    expect(await latestRun(host)).toMatchObject({ status: "needs-recovery" });
   });
 });
-
-type Tools = NonNullable<Parameters<typeof createAgent>[0]["tools"]>;
-
-/**
- * Runs a turn in a process that dies once `crashed` settles, after the
- * run's latest checkpoint journals `results` finished results.
- */
-async function crashDuringTurn(
-  host: InMemoryHost,
-  tools: Tools,
-  crashed: Promise<void>,
-  steps: Parameters<typeof scriptedModel>[0],
-  results = 0
-): Promise<void> {
-  const agent = await createAgent({
-    host,
-    model: scriptedModel(steps).model,
-    tools,
-  });
-  collect(await agent.thread(THREAD).send("go")).catch(() => undefined);
-  await crashed;
-  await waitForResults(host, results);
-}
-
-/** Continues the thread in a restarted process that answers "DONE". */
-async function continueAfterRestart(
-  host: InMemoryHost,
-  tools: Tools
-): Promise<{ readonly events: string[]; readonly history: string }> {
-  const model = scriptedModel([
-    () => Promise.resolve([assistantMessage("DONE")]),
-  ]);
-  const agent = await createAgent({
-    host: restartedHost(host),
-    model: model.model,
-    tools,
-  });
-  const turn = await agent.thread(THREAD).continue();
-  if (!turn) {
-    throw new Error("Expected the crashed run to continue.");
-  }
-  const events = eventTypes(await collect(turn));
-  return { events, history: model.histories[0] ?? "" };
-}
-
-/** Waits until the run's latest checkpoint journals `count` results. */
-async function waitForResults(
-  host: InMemoryHost,
-  count: number
-): Promise<void> {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
-    const [run] = (await host.store.turns.listByThreadKey?.(THREAD)) ?? [];
-    const latest = run ? await host.store.checkpoints.latest(run.runId) : null;
-    const results = (latest?.runtimeState as { results?: unknown[] } | null)
-      ?.results;
-    if ((results?.length ?? 0) >= count) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-  throw new Error(`Expected ${count} journaled tool results.`);
-}
-
-/** Lets the run's current lease lapse, as if its holder died long ago. */
-async function expireLease(host: InMemoryHost): Promise<void> {
-  const [run] = (await host.store.turns.listByThreadKey?.(THREAD)) ?? [];
-  if (!run?.lease) {
-    throw new Error("Expected a leased run.");
-  }
-  await host.store.turns.update({
-    ...run,
-    lease: { ...run.lease, leaseUntilMs: 0 },
-  });
-}
-
-function emptyTurn(): Parameters<typeof collect>[0] {
-  throw new Error("Expected the crashed run to continue.");
-}
