@@ -9,7 +9,13 @@ import type { AgentHost, LeaseOwnerLiveness } from "../../execution/host/types";
 import { deferred } from "../../internal/deferred";
 import type { ModelStepOutput } from "../../llm/model-step-types";
 import { createInMemoryHost } from "../../platform/memory";
-import { createCallbackModel } from "../../testing/test-fixtures";
+import { checkpointedTool } from "../../testing/execution-checkpoint-test-support";
+import {
+  assistantMessage,
+  createCallbackModel,
+  eventTypes,
+  toolCallPart,
+} from "../../testing/test-fixtures";
 import { encodeThreadSnapshot } from "../state/snapshot";
 import {
   drainContinuation,
@@ -98,13 +104,7 @@ describe("durable turn leases", () => {
 
     // When: another process claims the run after its lease lapsed, and the
     // turn's next renewal finds out.
-    const { runId } = await latestRun(host);
-    await host.store.turns.claim(runId, {
-      attempt: 2,
-      leaseId: "new-owner",
-      leaseMs: TURN_LEASE_MS,
-      nowMs: Date.now() + TURN_LEASE_MS + 1,
-    });
+    await takeOverRun(host);
     await vi.advanceTimersByTimeAsync(TURN_LEASE_RENEW_MS);
 
     // Then: the turn reports the takeover without writing its outcome.
@@ -118,7 +118,75 @@ describe("durable turn leases", () => {
       status: "leased",
     });
   });
+
+  it.each([
+    ["its model request fails", "fail"],
+    ["its tool's checkpoint is refused", "tool"],
+  ] as const)(
+    "reports a takeover found when %s before its renewal",
+    async (_case, kind) => {
+      // Given: a turn waiting on its model, whose run another process claims
+      // after the lease lapsed, before the turn's next renewal.
+      const host = createInMemoryHost();
+      const started = deferred<void>();
+      const answer = deferred<void>();
+      const effects = { count: 0 };
+      let requests = 0;
+      const agent = await createAgent({
+        host,
+        model: createCallbackModel(async () => {
+          requests += 1;
+          if (requests > 1) {
+            return [assistantMessage("DONE")];
+          }
+          started.resolve();
+          await answer.promise;
+          if (kind === "fail") {
+            throw new Error("upstream failed");
+          }
+          return [assistantMessage([toolCallPart("call-act", "act")])];
+        }),
+        tools: {
+          act: checkpointedTool("idempotent", () => {
+            effects.count += 1;
+            return "ACTED";
+          }),
+        },
+      });
+      const thread = agent.thread(THREAD);
+      const events = collect(await thread.send("go"));
+      await started.promise;
+      const committed = await host.store.threads.load(THREAD);
+      await takeOverRun(host);
+
+      // When: the model answers.
+      answer.resolve();
+
+      // Then: the turn reports the takeover, writes nothing and runs no tool,
+      // and the handle still takes new work.
+      expect((await events).at(-1)).toMatchObject({
+        error: { code: "THREAD_OWNERSHIP_LOST" },
+        type: "turn-error",
+      });
+      await expect(host.store.threads.load(THREAD)).resolves.toEqual(committed);
+      expect(effects.count).toBe(0);
+      expect(eventTypes(await collect(await thread.send("again")))).toContain(
+        "turn-end"
+      );
+    }
+  );
 });
+
+/** Another process claims the thread's run after its lease lapsed. */
+async function takeOverRun(host: AgentHost): Promise<void> {
+  const { runId } = await latestRun(host);
+  await host.store.turns.claim(runId, {
+    attempt: 2,
+    leaseId: "new-owner",
+    leaseMs: TURN_LEASE_MS,
+    nowMs: Date.now() + TURN_LEASE_MS + 1,
+  });
+}
 
 /** A model that waits until its request is cancelled. */
 function modelThatWaits() {
