@@ -94,11 +94,13 @@ export async function emitTurnErrorAfterRecovery({
   const safeHistory = state.modelSnapshot();
   const continuation =
     partial === undefined ? undefined : [...state.modelSnapshot(), ...partial];
-  const { safeHookRetry, retainedHistory } = hookFailureHistory(
-    error,
-    safeHistory,
-    historySnapshot
-  );
+  // A parked run resumes from committed history plus its step journal, so it
+  // keeps its input and every committed tool round; the failed step itself
+  // was never appended to history.
+  const { safeHookRetry, retainedHistory } =
+    executionStatusForError(error) === "needs-recovery"
+      ? { retainedHistory: safeHistory, safeHookRetry: false }
+      : hookFailureHistory(error, safeHistory, historySnapshot);
   state.rollback(retainedHistory);
   const normalizedError = normalizeTurnError(error);
   const recoveryRequired = isErrorInstance(error, QueuedInputRecoveryError);
@@ -143,12 +145,49 @@ export async function emitTurnErrorAfterRecovery({
     throw persistenceError;
   }
 
+  setFailedTurnContinuation({
+    continuation,
+    error,
+    historySnapshot,
+    retainedHistory,
+    safeHistory,
+    safeHookRetry,
+    state,
+  });
+  run.emit(event);
+  closeRuntimeInput(runtimeInput, "turn-error");
+}
+
+/** What a later continue() of this handle resumes after the failed turn. */
+function setFailedTurnContinuation({
+  continuation,
+  error,
+  historySnapshot,
+  retainedHistory,
+  safeHistory,
+  safeHookRetry,
+  state,
+}: {
+  readonly continuation: ModelMessage[] | undefined;
+  readonly error: unknown;
+  readonly historySnapshot: ModelMessage[];
+  readonly retainedHistory: ModelMessage[];
+  readonly safeHistory: ModelMessage[];
+  readonly safeHookRetry: boolean;
+  readonly state: ThreadState;
+}): void {
   if (isErrorInstance(error, QueuedInputRecoveryError)) {
     state.setContinuationCheckpoint(
       error.checkpoint.history,
       error.checkpoint.recover
     );
-  } else if (safeHookRetry) {
+  } else if (
+    safeHookRetry ||
+    isErrorInstance(error, ToolExecutionNeedsRecoveryError)
+  ) {
+    // A safe hook retry starts over. A parked run's journal drives its
+    // recovery: once agent.resolveRecovery() requeues it, resume() or
+    // continue() picks it up.
     state.clearContinuationCheckpoint();
   } else if (continuation) {
     state.setContinuationCheckpoint(continuation);
@@ -168,8 +207,6 @@ export async function emitTurnErrorAfterRecovery({
       }
     );
   }
-  run.emit(event);
-  closeRuntimeInput(runtimeInput, "turn-error");
 }
 
 function hookFailureHistory(

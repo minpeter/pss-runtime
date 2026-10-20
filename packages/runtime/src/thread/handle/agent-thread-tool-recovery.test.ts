@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createAgent } from "../../agent/core/agent";
+import type { AgentHooks } from "../../agent/core/hooks";
 import type { RecoveryResolution } from "../../agent/resume/resolve-recovery";
 import { RecoveryResolutionError } from "../../agent/resume/resolve-recovery";
 import type { AgentHost } from "../../execution/host/types";
@@ -10,7 +11,7 @@ import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution-checkp
 import { createFileHost } from "../../platform/file";
 import { createInMemoryHost } from "../../platform/memory";
 import { createCheckpointSpyHost } from "../../testing/execution-checkpoint-test-support";
-import { eventTypes } from "../../testing/test-fixtures";
+import { assistantMessage, eventTypes } from "../../testing/test-fixtures";
 import { INTERRUPTED_TOOL_CALL_TEXT } from "../runtime/recovered-tool-round";
 import {
   callTools,
@@ -342,6 +343,82 @@ describe("agent.resolveRecovery", () => {
       expect(await latestRun(parked.host)).toEqual(before);
     }
   );
+
+  it("keeps the turn's input and finished rounds when a hook parks a call", async () => {
+    // Given: a hook parked step 2's call after step 1's tool ran.
+    const host = createInMemoryHost();
+    const lookup = effectTool("LOOKUP_RESULT");
+    const deploy = effectTool("DEPLOYED");
+    const tools = { deploy: deploy.tool, lookup: lookup.tool };
+    const parking = await createAgent({
+      hooks: parkDeploy,
+      host,
+      model: scriptedModel([
+        callTools(["call_lookup", "lookup"]),
+        callTools(["call_deploy", "deploy"]),
+      ]).model,
+      tools,
+    });
+    await collect(await parking.thread(THREAD).send("go"));
+    const { runId } = await latestRun(host);
+    const committed = await committedHistory(host);
+
+    // When: a restarted process records a result and resumes the run.
+    const model = scriptedModel([
+      () => Promise.resolve([assistantMessage("DONE")]),
+    ]);
+    const agent = await createAgent({
+      host: restartedHost(host),
+      model: model.model,
+      tools,
+    });
+    await agent.resolveRecovery(runId, {
+      toolCalls: {
+        call_deploy: { action: "result", output: "DEPLOYED_BY_HAND" },
+      },
+    });
+    const resumed = await agent.resume(runId);
+    const events = eventTypes(await collect(resumed ?? emptyTurn()));
+
+    // Then: the park kept the input and step 1's round, and the run finishes
+    // with both results without running either tool again.
+    expect(committed).toContain('"content":"go"');
+    expect(committed).toContain("LOOKUP_RESULT");
+    expect(events).toContain("turn-end");
+    expect(model.histories[0]).toContain("LOOKUP_RESULT");
+    expect(model.histories[0]).toContain("DEPLOYED_BY_HAND");
+    expect(lookup.effects.count).toBe(1);
+    expect(deploy.effects.count).toBe(0);
+    expect(await latestRun(host)).toMatchObject({ status: "completed" });
+  });
+
+  it("resumes a hook-parked run in the same process once it is decided", async () => {
+    // Given: a hook parked the turn's only call in this process.
+    const host = createInMemoryHost();
+    const deploy = effectTool("DEPLOYED");
+    const agent = await createAgent({
+      hooks: parkDeploy,
+      host,
+      model: scriptedModel([
+        callTools(["call_deploy", "deploy"]),
+        () => Promise.resolve([assistantMessage("DONE")]),
+      ]).model,
+      tools: { deploy: deploy.tool },
+    });
+    await collect(await agent.thread(THREAD).send("go"));
+    const { runId } = await latestRun(host);
+
+    // When: the same process records a decision and resumes the run.
+    await agent.resolveRecovery(runId, { otherwise: { action: "interrupt" } });
+    const resumed = await agent.resume(runId);
+
+    // Then: the run finishes; the parked call never ran.
+    expect(eventTypes(await collect(resumed ?? emptyTurn()))).toContain(
+      "turn-end"
+    );
+    expect(await latestRun(host)).toMatchObject({ status: "completed" });
+    expect(deploy.effects.count).toBe(0);
+  });
 });
 
 /** A run parked on its unfinished manual-recovery `transfer` call. */
@@ -369,6 +446,12 @@ async function parkedTransfer({
   const { runId } = await latestRun(host);
   return { agent, host, model, runId, tools, transfer };
 }
+
+/** Hooks that park every `deploy` call before it runs. */
+const parkDeploy: AgentHooks = {
+  beforeToolExecution: (event) =>
+    event.toolName === "deploy" ? { status: "needs-recovery" } : undefined,
+};
 
 /** A crashed step whose `deploy` call finished and `sync` call never did. */
 async function crashedDeployAndSync(host: AgentHost) {
