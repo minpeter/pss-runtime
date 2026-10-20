@@ -12,10 +12,12 @@ import { ackCelldScheduledThreadPrompt } from "./scheduler-claims";
 import type { CelldDurableObjectStorage } from "./scheduler-support";
 
 export interface MutableDrainResult {
+  ackedBackstops: string[];
   ackedRuns: string[];
   ackedThreadPrompts: ScheduledThreadPrompt[];
   events: AgentEvent[];
   remaining: number | undefined;
+  skippedBackstops: string[];
   skippedRuns: string[];
   skippedThreadPrompts: ScheduledThreadPrompt[];
 }
@@ -24,10 +26,12 @@ export function createDrainResult(
   limit: number | undefined
 ): MutableDrainResult {
   return {
+    ackedBackstops: [],
     ackedRuns: [],
     ackedThreadPrompts: [],
     events: [],
     remaining: normalizedListLimit(limit),
+    skippedBackstops: [],
     skippedRuns: [],
     skippedThreadPrompts: [],
   };

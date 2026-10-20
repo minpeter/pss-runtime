@@ -16,6 +16,11 @@ export type {
   DispatchedAgentNotification,
 } from "./dispatch/notification-dispatch";
 export { dispatchAgentNotification } from "./dispatch/notification-dispatch";
+export type {
+  TurnBackstopAgent,
+  TurnBackstopResult,
+} from "./dispatch/turn-backstop";
+export { runTurnBackstop } from "./dispatch/turn-backstop";
 export { CheckpointCorruptionError } from "./host/checkpoint-corruption";
 export { UnsupportedCheckpointFencingError } from "./host/checkpoint-fencing";
 export {

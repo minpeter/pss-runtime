@@ -10,21 +10,26 @@ import {
 } from "./drainer";
 import {
   createCelldScheduler as createScheduler,
+  listCelldScheduledBackstops as listScheduledBackstops,
   listCelldScheduledRuns as listScheduledRuns,
   listCelldScheduledThreadPrompts as listScheduledThreadPrompts,
 } from "./scheduler";
 import {
+  ackCelldScheduledBackstop as ackScheduledBackstop,
   ackCelldScheduledRun as ackScheduledRun,
   ackCelldScheduledThreadPrompt as ackScheduledThreadPrompt,
+  claimCelldScheduledBackstop as claimScheduledBackstop,
   claimCelldScheduledRun as claimScheduledRun,
   claimCelldScheduledThreadPrompt as claimScheduledThreadPrompt,
   rearmCelldScheduledWork as rearmScheduledWork,
+  retryCelldScheduledBackstop as retryScheduledBackstop,
   retryCelldScheduledRun as retryScheduledRun,
   retryCelldScheduledThreadPrompt as retryScheduledThreadPrompt,
 } from "./scheduler-claims";
 import type {
   CelldDurableObjectStorage as CelldDurableObjectStorageType,
   CelldScheduler,
+  CelldScheduledBackstop as ScheduledBackstop,
   CelldScheduledWorkListOptions as ScheduledWorkListOptions,
   CelldSchedulerOptions as SchedulerOptions,
 } from "./scheduler-support";
@@ -61,6 +66,11 @@ export const claimCelldScheduledThreadPrompt = claimScheduledThreadPrompt;
 export const rearmCelldScheduledWork = rearmScheduledWork;
 export const retryCelldScheduledRun = retryScheduledRun;
 export const retryCelldScheduledThreadPrompt = retryScheduledThreadPrompt;
+export type CelldScheduledBackstop = ScheduledBackstop;
+export const listCelldScheduledBackstops = listScheduledBackstops;
+export const claimCelldScheduledBackstop = claimScheduledBackstop;
+export const retryCelldScheduledBackstop = retryScheduledBackstop;
+export const ackCelldScheduledBackstop = ackScheduledBackstop;
 export type CelldScheduledWorkListOptions = ScheduledWorkListOptions;
 export type CelldSchedulerOptions = SchedulerOptions;
 export type CelldDurableObjectStorage = CelldDurableObjectStorageType;

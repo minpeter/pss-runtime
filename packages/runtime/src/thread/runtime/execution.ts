@@ -1,4 +1,5 @@
 import type { AgentHookRuntime } from "../../agent/core/hook-runtime";
+import { TURN_BACKSTOP_DELAY_MS } from "../../execution/dispatch/turn-backstop";
 import {
   processLeaseOwner,
   TURN_LEASE_MS,
@@ -137,46 +138,20 @@ export async function startThreadExecutionRun({
 
   const runId =
     executionRun?.runId ?? createThreadExecutionRunId({ threadKey, turnId });
-  // The turn owns its run through a lease from the start, so no other
-  // process can take a live turn over; the heartbeat keeps it current.
-  const owner = processLeaseOwner(executionHost.ownerLiveness);
-  const startLease = (claimed: TurnLease | undefined): TurnLease => ({
-    attempt: claimed?.attempt ?? 1,
-    leaseId: claimed?.leaseId ?? crypto.randomUUID(),
-    leaseUntilMs: Date.now() + TURN_LEASE_MS,
-    owner,
-  });
-  const created = await executionHost.store.turns.create({
-    ...createThreadExecutionRunRecord({
-      kind: executionRun?.kind ?? "user-turn",
+  const start = (turns: TurnStore) =>
+    markRunRunning({
+      executionHost,
+      executionRun,
       ownerNamespace,
       runId,
-      status: "running",
       threadKey,
-    }),
-    lease: startLease(undefined),
-  });
-  let running = created.record;
-  if (isTerminalTurnStatus(created.record.status)) {
-    throw new TurnTransitionConflictError(runId, "start", "status-conflict");
-  }
-  if (!created.ok) {
-    const expectedLeaseId = executionRun?.leaseId ?? null;
-    const transition = await transitionTurn(executionHost.store.turns, {
-      expected: { leaseId: expectedLeaseId, status: created.record.status },
-      runId,
-      update: {
-        lease: startLease(
-          expectedLeaseId === null ? undefined : created.record.lease
-        ),
-        status: "running",
-      },
+      turns,
     });
-    if (!transition.ok) {
-      throw new TurnTransitionConflictError(runId, "start", transition.reason);
-    }
-    running = transition.record;
-  }
+  const running = await startWithBackstop(
+    executionHost,
+    { runId, threadKey },
+    start
+  );
 
   const leaseId = running.lease?.leaseId ?? null;
   const heartbeat = running.lease
@@ -237,6 +212,92 @@ export async function startThreadExecutionRun({
       state,
     }),
   };
+}
+
+/**
+ * Makes the run `running` under a fresh lease, or the lease its claim took,
+ * so no other process can take a live turn over; the heartbeat keeps the
+ * lease current.
+ */
+async function markRunRunning({
+  executionHost,
+  executionRun,
+  ownerNamespace,
+  runId,
+  threadKey,
+  turns,
+}: {
+  readonly executionHost: AgentHost;
+  readonly executionRun?: QueuedThreadExecutionRun;
+  readonly ownerNamespace?: string;
+  readonly runId: string;
+  readonly threadKey: string;
+  readonly turns: TurnStore;
+}): Promise<TurnRecord> {
+  const owner = processLeaseOwner(executionHost.ownerLiveness);
+  const startLease = (claimed: TurnLease | undefined): TurnLease => ({
+    attempt: claimed?.attempt ?? 1,
+    leaseId: claimed?.leaseId ?? crypto.randomUUID(),
+    leaseUntilMs: Date.now() + TURN_LEASE_MS,
+    owner,
+  });
+  const created = await turns.create({
+    ...createThreadExecutionRunRecord({
+      kind: executionRun?.kind ?? "user-turn",
+      ownerNamespace,
+      runId,
+      status: "running",
+      threadKey,
+    }),
+    lease: startLease(undefined),
+  });
+  if (isTerminalTurnStatus(created.record.status)) {
+    throw new TurnTransitionConflictError(runId, "start", "status-conflict");
+  }
+  if (created.ok) {
+    return created.record;
+  }
+  const expectedLeaseId = executionRun?.leaseId ?? null;
+  const transition = await transitionTurn(turns, {
+    expected: { leaseId: expectedLeaseId, status: created.record.status },
+    runId,
+    update: {
+      lease: startLease(
+        expectedLeaseId === null ? undefined : created.record.lease
+      ),
+      status: "running",
+    },
+  });
+  if (!transition.ok) {
+    throw new TurnTransitionConflictError(runId, "start", transition.reason);
+  }
+  return transition.record;
+}
+
+/**
+ * Starts the run and, on hosts that schedule backstops, schedules its first
+ * one in the same transaction, so a crash right after the start still gets
+ * the run checked. A host whose transactions cannot schedule does it next.
+ */
+async function startWithBackstop(
+  executionHost: AgentHost,
+  { runId, threadKey }: { readonly runId: string; readonly threadKey: string },
+  start: (turns: TurnStore) => Promise<TurnRecord>
+): Promise<TurnRecord> {
+  if (!executionHost.scheduler.scheduleBackstop) {
+    return await start(executionHost.store.turns);
+  }
+  const backstop = { runAfterMs: TURN_BACKSTOP_DELAY_MS, threadKey };
+  const started = await executionHost.store.transaction(async (tx) => {
+    const record = await start(tx.turns);
+    const scheduled = tx.scheduler?.scheduleBackstop;
+    await scheduled?.call(tx.scheduler, runId, backstop);
+    return { record, scheduled: scheduled !== undefined };
+  });
+  if (!started.scheduled) {
+    await executionHost.scheduler.scheduleBackstop(runId, backstop);
+  }
+  return started.record;
 }
 
 export function cancellationForExecutionRun(

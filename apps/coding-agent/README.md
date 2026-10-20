@@ -700,6 +700,16 @@ unfinished is settled before the model runs again: `read_file`, `glob_files`,
 interrupted (they may have partly run), so it can check their effects instead
 of repeating them.
 
+When the TUI opens an existing session (`--session`, `PSS_THREAD_KEY`, or
+`/resume`) whose last turn never finished, it says so after any replayed
+history and never resumes the turn on its own. When the turn's process is
+gone, it shows "■ interrupted - press Enter to continue". While another `pss`
+process still holds the turn, it says the turn is running there (with that
+process's pid). When the turn stopped inside a tool that only a recovery
+decision could settle (such as an extension tool with
+`retryPolicy: "manual-recovery"`), it says the tool may have partly run and to
+check its effects, then enter new instructions.
+
 Pass `tools` to `startTui` (or `createCodingAgent`) from a custom entrypoint to
 replace the optional web tools; the workspace tools are always included.
 

@@ -1,7 +1,11 @@
-import type { TurnRecord } from "../../../execution/host/types";
+import type {
+  LeaseOwnerLiveness,
+  TurnRecord,
+} from "../../../execution/host/types";
 import type { ScheduledThreadPrompt } from "../../../execution/scheduled-work";
 import type { AgentEvent } from "../../../thread/protocol/events";
 import type { AgentTurn } from "../../../thread/protocol/turn";
+import { drainCelldBackstops } from "./backstop-drainer";
 import {
   ackThreadPrompt,
   createDrainResult,
@@ -28,6 +32,7 @@ import type { CelldDurableObjectStorage } from "./scheduler-support";
 
 export interface CelldScheduledWorkAgent {
   readonly host: {
+    readonly ownerLiveness?: LeaseOwnerLiveness;
     readonly store: {
       readonly turns: {
         get(runId: string): Promise<TurnRecord | null>;
@@ -38,6 +43,11 @@ export interface CelldScheduledWorkAgent {
 }
 
 export type CelldScheduledWorkRunContext =
+  | {
+      readonly kind: "backstop";
+      readonly runId: string;
+      readonly threadKey: string;
+    }
   | { readonly kind: "run"; readonly runId: string }
   | {
       readonly idempotencyKey?: string;
@@ -62,9 +72,13 @@ export interface CelldScheduledWorkDrainOptions {
 }
 
 export interface CelldScheduledWorkDrainResult {
+  /** Backstops whose run was settled or resumed. */
+  readonly ackedBackstops: readonly string[];
   readonly ackedRuns: readonly string[];
   readonly ackedThreadPrompts: readonly ScheduledThreadPrompt[];
   readonly events: readonly AgentEvent[];
+  /** Backstops moved past a live owner's lease. */
+  readonly skippedBackstops: readonly string[];
   readonly skippedRuns: readonly string[];
   readonly skippedThreadPrompts: readonly ScheduledThreadPrompt[];
 }
@@ -77,6 +91,9 @@ export async function drainCelldScheduledWork(
     await drainRuns(options, result);
     if (result.remaining !== 0) {
       await drainThreadPrompts(options, result);
+    }
+    if (result.remaining !== 0) {
+      await drainCelldBackstops(options, result);
     }
   } catch (error) {
     try {

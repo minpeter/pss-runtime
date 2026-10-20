@@ -147,18 +147,17 @@ function earliestScheduledAt(
   sql: SqlStorage,
   prefix: string
 ): number | undefined {
-  const times = (["celld-run", "celld-thread-prompt"] as const).flatMap(
-    (kind) => {
-      const row = sql
-        .exec<ScheduledWorkRow>(
-          "SELECT due_at FROM pss_scheduled_work WHERE prefix = ? AND kind = ? AND due_at IS NOT NULL ORDER BY due_at, rowid LIMIT 1",
-          prefix,
-          kind
-        )
-        .toArray()[0];
-      return typeof row?.due_at === "number" ? [row.due_at] : [];
-    }
-  );
+  const kinds = ["celld-backstop", "celld-run", "celld-thread-prompt"] as const;
+  const times = kinds.flatMap((kind) => {
+    const row = sql
+      .exec<ScheduledWorkRow>(
+        "SELECT due_at FROM pss_scheduled_work WHERE prefix = ? AND kind = ? AND due_at IS NOT NULL ORDER BY due_at, rowid LIMIT 1",
+        prefix,
+        kind
+      )
+      .toArray()[0];
+    return typeof row?.due_at === "number" ? [row.due_at] : [];
+  });
   return times.length === 0 ? undefined : Math.min(...times);
 }
 
