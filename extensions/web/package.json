@@ -36,11 +36,11 @@
   },
   "dependencies": {
     "@minpeter/opensearch": "0.1.3",
-    "ai": "7.0.99",
-    "zod": "^4.6.2"
+    "ai": "7.0.143",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "tsdown": "^0.23.0",
+    "tsdown": "^0.23.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   },

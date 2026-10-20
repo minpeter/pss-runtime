@@ -1,4 +1,5 @@
 import type { JSONValue, ModelMessage } from "ai";
+import { deferred } from "../internal/deferred";
 import { StoppedToolRecoveryError } from "./stopped-model-step";
 
 interface Entry {
@@ -14,6 +15,7 @@ interface Entry {
 /** Request-local execution ledger, including hostless tools and SDK-detached work. */
 export class ToolStepProgress {
   readonly #entries: Entry[] = [];
+  readonly #running = new Set<Promise<void>>();
   #authorityFailed = false;
   #recoveryError: unknown;
 
@@ -42,6 +44,12 @@ export class ToolStepProgress {
   begin(input: unknown, toolCallId: string, toolName: string) {
     const entry: Entry = { input, toolCallId, toolName, settled: false };
     this.#entries.push(entry);
+    const execution = deferred();
+    this.#running.add(execution.promise);
+    const finish = () => {
+      this.#running.delete(execution.promise);
+      execution.resolve();
+    };
     return {
       complete: (output: unknown) => {
         entry.outcome =
@@ -52,6 +60,7 @@ export class ToolStepProgress {
                 value: output === undefined ? null : (output as JSONValue),
               };
         entry.settled = true;
+        finish();
       },
       failed: (error: unknown, recoverable: boolean) => {
         if (recoverable) {
@@ -61,8 +70,17 @@ export class ToolStepProgress {
           };
           entry.settled = true;
         }
+        finish();
       },
     };
+  }
+
+  /** Resolves once every begun execution has completed or failed. */
+  idle(): Promise<void> {
+    if (this.#running.size === 0) {
+      return Promise.resolve();
+    }
+    return Promise.all(this.#running).then(() => this.idle());
   }
 
   get hasUnresolved(): boolean {

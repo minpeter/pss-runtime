@@ -58,6 +58,13 @@ export interface ModelStepStreamFinalResult {
   readonly usage: GenerateTextResult["usage"];
 }
 
+/** Settled `streamText` fields; independent of its single-consumer overload. */
+type StreamTextFinalFields = {
+  readonly [Key in keyof ModelStepStreamFinalResult]: PromiseLike<
+    ModelStepStreamFinalResult[Key]
+  >;
+};
+
 export interface ModelStepStreamHandle {
   finalize(): Promise<ModelStepStreamFinalResult>;
   partialMessages?(): Promise<ModelMessage[]>;
@@ -367,7 +374,7 @@ function serializeToolInput(input: unknown): string {
 }
 
 async function finalizeStreamTextResult(
-  result: ReturnType<typeof streamText>
+  result: StreamTextFinalFields
 ): Promise<ModelStepStreamFinalResult> {
   const [responseMessages, usage, finalStep, finishReason, response] =
     await Promise.all([
@@ -381,7 +388,7 @@ async function finalizeStreamTextResult(
 }
 
 async function finalizeStreamingModelStep(
-  result: ReturnType<typeof streamText>,
+  result: StreamTextFinalFields,
   getStreamFailure: () => { readonly error: unknown } | undefined,
   settleUnfinishedAttempt: () => void
 ): Promise<ModelStepStreamFinalResult> {
