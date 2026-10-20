@@ -331,8 +331,6 @@
     "duplicates:packages/runtime/src/platform/durable-object/storage/execution/input-record-parser.ts:61-95=packages/runtime/src/platform/file/storage/file-execution-store/thread-input-schema.ts:69-103",
     "duplicates:packages/runtime/src/platform/durable-object/storage/execution/input-record-parser.ts:95-113=packages/runtime/src/platform/file/storage/file-execution-store/thread-input-schema.ts:103-121",
     "duplicates:packages/runtime/src/platform/durable-object/storage/execution/store-contract.test.ts:243-273=packages/runtime/src/platform/durable-object/storage/execution/store-delete-thread.test-support.ts:171-201",
-    "duplicates:packages/runtime/src/platform/durable-object/storage/sqlite/payload-chunk-write.ts:51-100=packages/runtime/src/platform/durable-object/storage/sqlite/thread-store-sql/messages/chunks.ts:50-99",
-    "duplicates:packages/runtime/src/platform/durable-object/storage/sqlite/payload-chunk-write.ts:99-122=packages/runtime/src/platform/durable-object/storage/sqlite/thread-store-sql/messages/chunks.ts:172-195",
     "duplicates:packages/runtime/src/platform/durable-object/storage/sqlite/thread-store-lifecycle.test.ts:113-122=packages/runtime/src/platform/file/storage/file-thread-store.test.ts:110-119",
     "duplicates:packages/runtime/src/platform/file/storage/file-execution-store.test.ts:213-230=packages/runtime/src/platform/file/storage/file-execution-store.test.ts:257-273",
     "duplicates:packages/runtime/src/platform/file/storage/file-execution-store.test.ts:240-253=packages/runtime/src/platform/file/storage/file-execution-store.test.ts:287-300",

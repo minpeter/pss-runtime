@@ -140,7 +140,6 @@
     "exports:packages/runtime/src/platform/durable-object/storage/payload-guard.ts#jsonByteLength",
     "exports:packages/runtime/src/platform/durable-object/storage/sqlite/scheduled-work-claims.ts#SCHEDULED_WORK_LEASE_MS",
     "exports:packages/runtime/src/platform/durable-object/storage/sqlite/scheduled-work-table-schema.ts#hasScheduledWorkColumn",
-    "exports:packages/runtime/src/platform/durable-object/storage/sqlite/thread-store-sql/messages/chunks.ts#chunkSerializedPayload",
     "exports:packages/runtime/src/platform/durable-object/storage/sqlite/thread-store-sql/messages/chunks.ts#threadMessageChunkMarkerPrefix",
     "exports:packages/runtime/src/platform/durable-object/storage/sqlite/thread-store-sql/messages/history.ts#insertThreadMessages",
     "exports:packages/runtime/src/platform/file/storage/file-execution-store/checkpoint-store.ts#FileCheckpointCorruptionError",
