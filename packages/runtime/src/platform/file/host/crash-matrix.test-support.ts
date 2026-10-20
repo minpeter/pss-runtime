@@ -1,4 +1,5 @@
 import { appendFileSync, readFileSync } from "node:fs";
+import type { Tool } from "ai";
 import { createAgent } from "../../../agent/core/agent";
 import type { Checkpoint } from "../../../execution/host/checkpoint-types";
 import { toolStepJournal } from "../../../execution/host/tool-step-journal";
@@ -30,11 +31,21 @@ export type KillPoint =
   /** After the step committed its tool round, during the next request. */
   | "after-commit";
 
+/** Where in a recovery the recovering process is killed. */
+export type RecoveryKillPoint =
+  /** At the recovery's first model request. */
+  | "model-request"
+  /** In a rerun of the tool, after its effect, before its result is saved. */
+  | "tool-effect";
+
+/** A retry policy, or `default` for a tool that declares none. */
+export type ActPolicy = RuntimeToolRetryPolicy | "default";
+
 export interface CrashScenario {
   readonly kill: KillPoint;
   readonly name: string;
   /** Retry policy of `act`, the call the kill point targets. */
-  readonly policy: RuntimeToolRetryPolicy;
+  readonly policy: ActPolicy;
   /** Whether the step also calls `first`, which finishes before the crash. */
   readonly sibling?: boolean;
 }
@@ -42,6 +53,11 @@ export interface CrashScenario {
 export interface CrashChildConfig {
   readonly directory: string;
   readonly effectsFile: string;
+  /**
+   * Set when the child continues the crashed thread instead of starting the
+   * turn; it is killed at this point of the recovery.
+   */
+  readonly recoveryKill?: RecoveryKillPoint;
   readonly scenario: CrashScenario;
 }
 
@@ -58,6 +74,8 @@ export const ACT_CALL = "call-act";
 export const FIRST_CALL = "call-first";
 export const ACT_OUTPUT = "ACT_OUTPUT";
 export const FIRST_OUTPUT = "FIRST_OUTPUT";
+/** Output an operator records for `act` through `agent.resolveRecovery()`. */
+export const OPERATOR_OUTPUT = "OPERATOR_OUTPUT";
 export const PARTIAL_ANSWER = "PARTIAL_ANSWER";
 /** Carries the child's {@link CrashChildConfig} as JSON. */
 export const CRASH_CHILD_ENV = "PSS_CRASH_MATRIX_CHILD";
@@ -77,8 +95,8 @@ export function matrixTools(
     readonly afterEffect?: () => Promise<void>;
     readonly beforeEffect?: () => Promise<void>;
   } = {}
-): Record<string, ReturnType<typeof checkpointedTool>> {
-  const act = checkpointedTool(scenario.policy, async (_input, options) => {
+): Record<string, Tool> {
+  const act = actTool(scenario.policy, async (_input, options) => {
     await hooks.beforeEffect?.();
     recordEffect(effectsFile, "act", options);
     await hooks.afterEffect?.();
@@ -92,6 +110,20 @@ export function matrixTools(
     return FIRST_OUTPUT;
   });
   return { act, first };
+}
+
+function actTool(
+  policy: ActPolicy,
+  execute: Parameters<typeof checkpointedTool>[1]
+): Tool {
+  if (policy !== "default") {
+    return checkpointedTool(policy, execute);
+  }
+  const { retryPolicy: _declared, ...undeclared } = checkpointedTool(
+    "manual-recovery",
+    execute
+  );
+  return undeclared;
 }
 
 export function readEffects(effectsFile: string): ToolEffect[] {
@@ -112,12 +144,16 @@ export function readEffects(effectsFile: string): ToolEffect[] {
  * point, then waits there for the parent's SIGKILL.
  */
 export async function runCrashChild(): Promise<void> {
-  const { directory, effectsFile, scenario } = JSON.parse(
+  const config = JSON.parse(
     process.env[CRASH_CHILD_ENV] ?? ""
   ) as CrashChildConfig;
   // The parent's SIGKILL ends this process; if the parent died first, it
   // ends itself instead of running on.
   setTimeout(() => process.exit(2), CHILD_LIFETIME_MS);
+  if (config.recoveryKill) {
+    return await runRecoveryChild(config, config.recoveryKill);
+  }
+  const { directory, effectsFile, scenario } = config;
   const firstJournaled = deferred<void>();
   const host = afterCheckpoint(createFileHost({ directory }), (checkpoint) => {
     if (checkpoint.phase !== "after-tool") {
@@ -163,6 +199,41 @@ export async function runCrashChild(): Promise<void> {
     }
   }
   throw new Error(`${scenario.name}: the turn ended before its kill point.`);
+}
+
+/**
+ * Continues the crashed thread on a file host in this process until the
+ * recovery's kill point, then waits there for the parent's SIGKILL.
+ */
+async function runRecoveryChild(
+  { directory, effectsFile, scenario }: CrashChildConfig,
+  kill: RecoveryKillPoint
+): Promise<void> {
+  const agent = await createAgent({
+    host: createFileHost({ directory }),
+    model: createCallbackModel(() =>
+      kill === "model-request"
+        ? killPoint()
+        : Promise.reject(new Error(`${scenario.name}: missed its kill point.`))
+    ),
+    tools: matrixTools(scenario, effectsFile, {
+      afterEffect: async () => {
+        if (kill === "tool-effect") {
+          await killPoint();
+        }
+      },
+    }),
+  });
+  const turn = await agent.thread(MATRIX_THREAD).continue();
+  if (!turn) {
+    throw new Error(`${scenario.name}: there was no turn to recover.`);
+  }
+  for await (const _event of turn.events()) {
+    // The recovery runs until its kill point.
+  }
+  throw new Error(
+    `${scenario.name}: the recovery ended before its kill point.`
+  );
 }
 
 function killPoint(): Promise<never> {
