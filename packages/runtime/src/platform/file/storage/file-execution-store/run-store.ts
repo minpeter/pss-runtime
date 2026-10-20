@@ -2,15 +2,15 @@ import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
   applyTurnTransitionUpdate,
-  decideTurnClaim,
   decideTurnTransition,
+  resolveTurnClaim,
 } from "../../../../execution/host/turn-status";
 import type {
   ClaimTurnOptions,
   ClaimTurnResult,
   CreateTurnResult,
-  TurnLease,
   TurnRecord,
+  TurnStatus,
   TurnStore,
   TurnTransitionExpected,
   TurnTransitionResult,
@@ -18,9 +18,67 @@ import type {
 } from "../../../../execution/host/types";
 import { isNodeError } from "../../../../internal/guards";
 import { readJsonFile, writeJsonFile } from "./json";
-import { parseRunRecord } from "./schemas";
+import { parseRunRecord, runCreatedOrder } from "./schemas";
 import type { DataDirectoryResolver } from "./types";
 import { encodeKey } from "./utils";
+
+let lastCreatedOrder = 0;
+function nextCreatedOrder(): number {
+  lastCreatedOrder = Math.max(Date.now() * 1000, lastCreatedOrder + 1);
+  return lastCreatedOrder;
+}
+
+/**
+ * `createdOrder` reserved for runs written before creation order was
+ * persisted. Their real order is unrecoverable (copies rewrote file times), so
+ * the first read assigns this marker and every rewrite persists it: a legacy
+ * run never moves after runs with a real (positive) creation order, whatever
+ * its later status.
+ */
+const LEGACY_CREATED_ORDER = 0;
+
+const SETTLED_STATUS: Record<TurnStatus, boolean> = {
+  cancelled: true,
+  completed: true,
+  error: true,
+  leased: false,
+  "needs-recovery": true,
+  queued: false,
+  running: false,
+  suspended: false,
+};
+
+async function readRunFile(file: string): Promise<TurnRecord | null> {
+  const record = await readJsonFile(file, parseRunRecord, "run file");
+  if (record && !runCreatedOrder.has(record)) {
+    runCreatedOrder.set(record, LEGACY_CREATED_ORDER);
+  }
+  return record;
+}
+
+function compareRunCreation(left: TurnRecord, right: TurnRecord): number {
+  const leftOrder = runCreatedOrder.get(left) ?? LEGACY_CREATED_ORDER;
+  const rightOrder = runCreatedOrder.get(right) ?? LEGACY_CREATED_ORDER;
+  if (leftOrder !== rightOrder) {
+    return leftOrder - rightOrder;
+  }
+  // Among legacy runs, settled ones sort after unsettled ones and are read as
+  // the latest work, so recovery never resumes a stale crashed legacy run when
+  // a later one finished. Placement follows the current status on purpose: a
+  // recovered legacy run that settles becomes the latest legacy run.
+  if (leftOrder === LEGACY_CREATED_ORDER) {
+    const settledDelta =
+      Number(SETTLED_STATUS[left.status]) -
+      Number(SETTLED_STATUS[right.status]);
+    if (settledDelta !== 0) {
+      return settledDelta;
+    }
+  }
+  if (left.runId === right.runId) {
+    return 0;
+  }
+  return left.runId < right.runId ? -1 : 1;
+}
 
 export class FileRunStore implements TurnStore {
   readonly #directory: DataDirectoryResolver;
@@ -44,19 +102,11 @@ export class FileRunStore implements TurnStore {
         return { ok: false, reason: "not-found" };
       }
 
-      const decision = decideTurnClaim(runId, record, options.nowMs);
-      if (!decision.ok) {
-        return decision;
+      const { decision, nextRecord } = resolveTurnClaim(runId, record, options);
+      if (nextRecord) {
+        await this.#writeUnlocked(nextRecord, runCreatedOrder.get(record));
       }
-
-      const lease: TurnLease = {
-        attempt: options.attempt,
-        leaseId: options.leaseId,
-        leaseUntilMs: options.nowMs + options.leaseMs,
-      };
-      const claimed: TurnRecord = { ...record, lease, status: "leased" };
-      await this.#writeUnlocked(claimed);
-      return { lease, ok: true, record: claimed };
+      return decision;
     });
   }
 
@@ -80,7 +130,7 @@ export class FileRunStore implements TurnStore {
         }
       }
 
-      await this.#writeUnlocked(record);
+      await this.#writeUnlocked(record, nextCreatedOrder());
       return { ok: true, record };
     });
   }
@@ -95,11 +145,20 @@ export class FileRunStore implements TurnStore {
     );
   }
 
-  async listByParentRunId(parentRunId: string): Promise<readonly TurnRecord[]> {
-    return await this.#lock(async () => {
-      const records = await this.#listUnlocked();
-      return records.filter((record) => record.parentRunId === parentRunId);
-    });
+  listByParentRunId(parentRunId: string): Promise<readonly TurnRecord[]> {
+    return this.#filterUnlocked((record) => record.parentRunId === parentRunId);
+  }
+
+  listByThreadKey(threadKey: string): Promise<readonly TurnRecord[]> {
+    return this.#filterUnlocked((record) => record.threadKey === threadKey);
+  }
+
+  async #filterUnlocked(
+    predicate: (record: TurnRecord) => boolean
+  ): Promise<readonly TurnRecord[]> {
+    return await this.#lock(async () =>
+      (await this.#listUnlocked()).filter(predicate)
+    );
   }
 
   async transition(
@@ -117,14 +176,18 @@ export class FileRunStore implements TurnStore {
         return conflict;
       }
       const record = applyTurnTransitionUpdate(current, update);
-      await this.#writeUnlocked(record);
+      await this.#writeUnlocked(record, runCreatedOrder.get(current));
       return { ok: true, record: structuredClone(record) };
     });
   }
 
   async update(record: TurnRecord): Promise<TurnRecord> {
     return await this.#lock(async () => {
-      await this.#writeUnlocked(record);
+      const existing = await this.#getUnlocked(record.runId);
+      await this.#writeUnlocked(
+        record,
+        existing ? runCreatedOrder.get(existing) : nextCreatedOrder()
+      );
       return record;
     });
   }
@@ -137,7 +200,10 @@ export class FileRunStore implements TurnStore {
     if (!record) {
       return;
     }
-    await this.#writeUnlocked({ ...record, checkpointVersion });
+    await this.#writeUnlocked(
+      { ...record, checkpointVersion },
+      runCreatedOrder.get(record)
+    );
   }
 
   getUnlocked(runId: string): Promise<TurnRecord | null> {
@@ -150,11 +216,7 @@ export class FileRunStore implements TurnStore {
   }
 
   async #getUnlocked(runId: string): Promise<TurnRecord | null> {
-    return await readJsonFile(
-      await this.#fileForRun(runId),
-      parseRunRecord,
-      "run file"
-    );
+    return await readRunFile(await this.#fileForRun(runId));
   }
 
   async #listUnlocked(): Promise<readonly TurnRecord[]> {
@@ -174,20 +236,22 @@ export class FileRunStore implements TurnStore {
       if (!entry.endsWith(".json")) {
         continue;
       }
-      const record = await readJsonFile(
-        join(directory, entry),
-        parseRunRecord,
-        "run file"
-      );
+      const record = await readRunFile(join(directory, entry));
       if (record) {
         records.push(record);
       }
     }
-    return records;
+    return records.sort(compareRunCreation);
   }
 
-  async #writeUnlocked(record: TurnRecord): Promise<void> {
-    await writeJsonFile(await this.#fileForRun(record.runId), record);
+  async #writeUnlocked(
+    record: TurnRecord,
+    createdOrder?: number
+  ): Promise<void> {
+    await writeJsonFile(
+      await this.#fileForRun(record.runId),
+      createdOrder === undefined ? record : { ...record, createdOrder }
+    );
   }
 
   async #fileForRun(runId: string): Promise<string> {

@@ -125,6 +125,7 @@ export interface ClaimTurnOptions {
   readonly attempt: number;
   readonly leaseId: string;
   readonly leaseMs: number;
+  readonly maxAttempts?: number;
   readonly nowMs: number;
 }
 
@@ -202,6 +203,7 @@ export interface TurnStore {
   get(runId: string): Promise<TurnRecord | null>;
   getByDedupeKey(dedupeKey: string): Promise<TurnRecord | null>;
   listByParentRunId(parentRunId: string): Promise<readonly TurnRecord[]>;
+  listByThreadKey?(threadKey: string): Promise<readonly TurnRecord[]>;
   transition?(
     runId: string,
     expected: TurnTransitionExpected,
@@ -259,6 +261,7 @@ export interface HostStorePorts {
 
 export interface HostStoreTransaction extends HostStorePorts {
   deleteThread?(threadKey: string): Promise<void>;
+  readonly scheduler?: HostScheduler;
 }
 
 export interface HostStore extends HostStorePorts {

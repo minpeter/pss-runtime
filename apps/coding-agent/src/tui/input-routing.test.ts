@@ -6,6 +6,9 @@ const createRun = (): AgentTurn => ({
   async *events() {
     // No events are needed to test routing.
   },
+  [Symbol.asyncIterator]() {
+    return this.events()[Symbol.asyncIterator]();
+  },
 });
 
 const hooks = {

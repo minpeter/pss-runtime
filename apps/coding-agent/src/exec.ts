@@ -3,6 +3,7 @@ import { writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import {
+  type Agent,
   type AgentEvent,
   type AgentOptions,
   isStreamAgentEvent,
@@ -64,10 +65,13 @@ export interface RunCodingAgentExecOptions {
   readonly extensions?: readonly CodingAgentExtensionInput[];
   /** Overrides the home directory used for context-resource discovery. */
   readonly home?: string;
+  readonly host?: AgentOptions["host"];
   readonly model: AgentOptions["model"];
   readonly prompt: string;
   readonly resultFile?: string;
+  readonly sessionKey?: string;
   readonly stdout?: TextOutput;
+  readonly threadDirectory?: string;
   readonly timeoutMs?: number;
   readonly webToolsAvailability?: WebToolsAvailability;
   readonly workspace: string;
@@ -154,14 +158,37 @@ async function resolveExecContext({
   };
 }
 
+async function disposeExecResources(
+  agent: Agent,
+  extensionHost: CodingAgentExtensionHost
+): Promise<string | undefined> {
+  const failures: string[] = [];
+  // Agent teardown drains threads whose instrumentations may still use
+  // extension services, so the extension host must outlive it.
+  for (const dispose of [
+    () => agent.dispose(),
+    () => extensionHost.dispose(),
+  ]) {
+    try {
+      await dispose();
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  return failures.length > 0 ? failures.join("; ") : undefined;
+}
+
 export async function runCodingAgentExec({
   bindProviderObservation,
   extensions = [],
   home = homedir(),
+  host,
   model,
   prompt,
   resultFile,
+  sessionKey,
   stdout = process.stdout,
+  threadDirectory,
   timeoutMs = 20 * 60 * 1000,
   webToolsAvailability = "disabled",
   workspace,
@@ -202,8 +229,10 @@ export async function runCodingAgentExec({
     resolvedPrompt = context.prompt;
     agent = await createCodingAgent({
       extensionHost,
+      host,
       instructions: context.instructions,
       model,
+      threadDirectory,
       webTools: { webToolsAvailability },
       workspace: absoluteWorkspace,
     });
@@ -229,7 +258,7 @@ export async function runCodingAgentExec({
     }
     throw error;
   }
-  const thread = agent.thread(`exec:${randomUUID()}`);
+  const thread = agent.thread(sessionKey ?? `exec:${randomUUID()}`);
   let timeoutFired = false;
   const timeout = setTimeout(() => {
     timeoutFired = true;
@@ -244,6 +273,7 @@ export async function runCodingAgentExec({
   });
 
   try {
+    await assertSessionDoesNotRequireManualRecovery(agent, sessionKey);
     const turn = await thread.send(resolvedPrompt);
     // If the timer fired while send() was still starting, interrupt() was a
     // no-op; interrupt again now that the turn is active.
@@ -264,23 +294,9 @@ export async function runCodingAgentExec({
     state.status = "error";
   } finally {
     clearTimeout(timeout);
-    const cleanupFailures: unknown[] = [];
-    for (const cleanup of [
-      () => agent.dispose(),
-      () => extensionHost.dispose(),
-    ]) {
-      try {
-        await cleanup();
-      } catch (error) {
-        cleanupFailures.push(error);
-      }
-    }
-    if (cleanupFailures.length > 0 && state.error === undefined) {
-      state.error = cleanupFailures
-        .map((failure) =>
-          failure instanceof Error ? failure.message : String(failure)
-        )
-        .join("; ");
+    const cleanupError = await disposeExecResources(agent, extensionHost);
+    if (cleanupError !== undefined && state.error === undefined) {
+      state.error = cleanupError;
       state.status = "error";
     }
   }
@@ -303,4 +319,32 @@ export async function runCodingAgentExec({
     );
   }
   return result;
+}
+
+async function assertSessionDoesNotRequireManualRecovery(
+  agent: Agent,
+  sessionKey: string | undefined
+): Promise<void> {
+  const run =
+    sessionKey &&
+    (await agent.host.store.turns.listByThreadKey?.(sessionKey))
+      ?.filter((r) => r.kind !== "notification")
+      .at(-1);
+  if (
+    !run ||
+    run.status === "completed" ||
+    run.status === "cancelled" ||
+    run.status === "error"
+  ) {
+    return;
+  }
+  const cp = await agent.host.store.checkpoints.latest(run.runId);
+  const pending = cp?.pendingToolCall as { policy?: string } | undefined;
+  if (
+    run.status === "needs-recovery" ||
+    (cp?.phase === "before-tool" && pending?.policy === "manual-recovery")
+  ) {
+    await agent.resume(run.runId);
+    throw new Error(`Run ${run.runId} requires manual recovery.`);
+  }
 }

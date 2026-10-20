@@ -1,13 +1,29 @@
 import { describe, expect, it } from "vitest";
-import type { TurnRecord, TurnStatus } from "../../../execution/host/types";
+import { Agent } from "../../../agent/core/agent";
+import { createThreadExecutionRunId } from "../../../execution/host/thread-execution-run-id";
+import type {
+  HostStore,
+  TurnRecord,
+  TurnStatus,
+} from "../../../execution/host/types";
+import {
+  assistantMessage,
+  createCallbackModel,
+} from "../../../testing/test-fixtures";
+import { collect } from "../../../thread/handle/test-support";
 import type { AgentEvent } from "../../../thread/protocol/events";
 import type { AgentTurn } from "../../../thread/protocol/turn";
+import { createInMemoryHost } from "../../memory/execution/execution-host";
 import { createCelldTestStorage } from "./celld-test-storage";
 import {
   type CelldScheduledWorkAgent,
   drainCelldScheduledWork,
 } from "./drainer";
-import { createCelldScheduler, listCelldScheduledRuns } from "./scheduler";
+import {
+  createCelldScheduler,
+  listCelldScheduledRuns,
+  listCelldScheduledThreadPrompts,
+} from "./scheduler";
 
 describe("drainCelldScheduledWork", () => {
   it("consumes run events and acknowledges completed work", async () => {
@@ -99,6 +115,188 @@ describe("drainCelldScheduledWork", () => {
       ).resolves.toEqual([]);
     }
   });
+
+  it("acknowledges a run parked as needs-recovery instead of polling it", async () => {
+    // Given
+    const storage = createCelldTestStorage();
+    const scheduler = createCelldScheduler({ clock: () => 0, storage });
+    await scheduler.enqueueRun("run-1");
+    await scheduler.resumeThread("thread-1", { runId: "run-1" });
+    const agent = createAgent({
+      record: runRecord("needs-recovery"),
+      run: null,
+    });
+
+    // When
+    const result = await drainCelldScheduledWork({
+      agentForRun: () => agent,
+      nowMs: 0,
+      storage,
+    });
+
+    // Then
+    expect(result.ackedRuns).toEqual(["run-1"]);
+    expect(result.ackedThreadPrompts).toEqual([
+      { runId: "run-1", threadKey: "thread-1" },
+    ]);
+    expect(result.skippedRuns).toEqual([]);
+    expect(result.skippedThreadPrompts).toEqual([]);
+    await expect(
+      listCelldScheduledRuns(storage, { nowMs: Number.MAX_SAFE_INTEGER })
+    ).resolves.toEqual([]);
+    await expect(
+      listCelldScheduledThreadPrompts(storage, {
+        nowMs: Number.MAX_SAFE_INTEGER,
+      })
+    ).resolves.toEqual([]);
+    await expect(storage.getAlarm()).resolves.toBeNull();
+  });
+
+  it.each(["running", "needs-recovery"] as const)(
+    "acknowledges a %s run whose resume rejects for manual tool recovery",
+    async (status) => {
+      // Given
+      const storage = createCelldTestStorage();
+      const scheduler = createCelldScheduler({ clock: () => 0, storage });
+      const host = createInMemoryHost();
+      await seedManualRecoveryRun(host.store, "run-1", status);
+      await scheduler.enqueueRun("run-1");
+      await scheduler.resumeThread("default", { runId: "run-1" });
+      let modelCalls = 0;
+      const agent = new Agent({
+        host,
+        model: createCallbackModel(() => {
+          modelCalls += 1;
+          return Promise.resolve([assistantMessage("UNREACHABLE")]);
+        }),
+      });
+
+      // When
+      const result = await drainCelldScheduledWork({
+        agentForRun: () => ({
+          host,
+          resume: (runId) => agent.resume(runId),
+        }),
+        nowMs: 0,
+        storage,
+      });
+
+      // Then
+      expect(result.ackedRuns).toEqual(["run-1"]);
+      expect(result.ackedThreadPrompts).toEqual([
+        { runId: "run-1", threadKey: "default" },
+      ]);
+      expect(result.events).toEqual([]);
+      expect(modelCalls).toBe(0);
+      await expect(host.store.turns.get("run-1")).resolves.toMatchObject({
+        status: "needs-recovery",
+      });
+      await expect(
+        listCelldScheduledRuns(storage, { nowMs: Number.MAX_SAFE_INTEGER })
+      ).resolves.toEqual([]);
+      await expect(storage.getAlarm()).resolves.toBeNull();
+    }
+  );
+
+  it("retries a run whose resume rejects while the run is still recoverable", async () => {
+    // Given
+    const storage = createCelldTestStorage();
+    const scheduler = createCelldScheduler({ clock: () => 0, storage });
+    await scheduler.enqueueRun("run-1");
+    const failure = new Error("transient resume failure");
+    const agent = createAgent({
+      record: runRecord("queued"),
+      resume: () => Promise.reject(failure),
+      run: null,
+    });
+
+    // When
+    const drain = drainCelldScheduledWork({
+      agentForRun: () => agent,
+      nowMs: 0,
+      storage,
+    });
+
+    // Then
+    await expect(drain).rejects.toBe(failure);
+    await expect(
+      listCelldScheduledRuns(storage, { nowMs: 1000 })
+    ).resolves.toEqual(["run-1"]);
+  });
+
+  it("retries a run queued behind older pending input without aborting the pass", async () => {
+    // Given two admitted sends whose precreated runs never started, with the
+    // newer run listed first
+    const storage = createCelldTestStorage();
+    const scheduler = createCelldScheduler({ clock: () => 0, storage });
+    const host = createInMemoryHost();
+    const threadKey = "thread-pending";
+    const olderRunId = createThreadExecutionRunId({
+      threadKey,
+      turnId: "msg-old",
+    });
+    const newerRunId = createThreadExecutionRunId({
+      threadKey,
+      turnId: "msg-new",
+    });
+    for (const [messageId, runId] of [
+      ["msg-old", olderRunId],
+      ["msg-new", newerRunId],
+    ] as const) {
+      await host.store.inputs.admit({
+        input: { text: `${messageId} prompt`, type: "user-input" },
+        kind: "send",
+        messageId,
+        threadKey,
+      });
+      await host.store.turns.create({
+        checkpointVersion: 0,
+        kind: "user-turn",
+        rootRunId: runId,
+        runId,
+        status: "queued",
+        threadKey,
+      });
+    }
+    await scheduler.enqueueRun(newerRunId);
+    await scheduler.enqueueRun(olderRunId);
+    const agent = new Agent({
+      host,
+      model: createCallbackModel(() =>
+        Promise.resolve([assistantMessage("REPLY")])
+      ),
+    });
+    const drainAt = (nowMs: number) =>
+      drainCelldScheduledWork({
+        agentForRun: () => ({
+          host,
+          resume: (runId) => agent.resume(runId),
+        }),
+        nowMs,
+        storage,
+      });
+
+    // When
+    const first = await drainAt(0);
+    // The older turn's live drain goes on to process msg-new; a later send
+    // queues behind it, so its end means msg-new's run has settled.
+    await collect(await agent.thread(threadKey).send("barrier"));
+    const second = await drainAt(1000);
+
+    // Then
+    expect(first.skippedRuns).toEqual([newerRunId]);
+    expect(first.ackedRuns).toEqual([olderRunId]);
+    expect(second.ackedRuns).toEqual([newerRunId]);
+    await expect(host.store.turns.get(olderRunId)).resolves.toMatchObject({
+      status: "completed",
+    });
+    await expect(host.store.turns.get(newerRunId)).resolves.toMatchObject({
+      status: "completed",
+    });
+    await expect(
+      listCelldScheduledRuns(storage, { nowMs: Number.MAX_SAFE_INTEGER })
+    ).resolves.toEqual([]);
+  });
 });
 
 function createAgent({
@@ -129,6 +327,9 @@ function turn(values: readonly AgentEvent[]): AgentTurn {
   return {
     events,
     runId: "run-1",
+    [Symbol.asyncIterator]() {
+      return events()[Symbol.asyncIterator]();
+    },
   };
 }
 
@@ -141,4 +342,37 @@ function runRecord(status: TurnStatus): TurnRecord {
     status,
     threadKey: "thread-1",
   };
+}
+
+async function seedManualRecoveryRun(
+  store: HostStore,
+  runId: string,
+  status: TurnStatus
+): Promise<void> {
+  await store.turns.create({
+    checkpointVersion: 0,
+    kind: "user-turn",
+    rootRunId: runId,
+    runId,
+    status,
+    threadKey: "default",
+  });
+  await store.checkpoints.append(
+    {
+      checkpointId: `${runId}:1:before-tool`,
+      pendingToolCall: {
+        attempt: 1,
+        idempotencyKey: `${runId}:deploy`,
+        policy: "manual-recovery",
+        toolCallId: "call-deploy",
+        toolName: "deploy",
+      },
+      phase: "before-tool",
+      runId,
+      runtimeState: { toolCallId: "call-deploy", toolName: "deploy" },
+      threadSnapshot: {},
+      version: 1,
+    },
+    { expectedVersion: 0 }
+  );
 }

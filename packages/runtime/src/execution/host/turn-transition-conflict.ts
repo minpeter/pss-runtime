@@ -5,6 +5,7 @@ export type TurnTransitionOperation =
   | "complete"
   | "durable-input"
   | "notification"
+  | "requeue"
   | "start";
 
 type TurnTransitionConflictReason = Extract<

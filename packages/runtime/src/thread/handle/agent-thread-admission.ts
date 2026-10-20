@@ -50,6 +50,7 @@ export async function queueAgentThreadInput(
         input,
         inputQueue: context.inputQueue,
         kind,
+        ownerNamespace: context.execution.ownerNamespace,
         pendingOverlays: context.pendingOverlays,
         pendingRuntimeInputs: context.pendingRuntimeInputs,
         reservation: async (operation) => operation(),

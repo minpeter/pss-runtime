@@ -10,8 +10,8 @@ import type {
 } from "../../../../execution";
 import {
   applyTurnTransitionUpdate,
-  decideTurnClaim,
   decideTurnTransition,
+  resolveTurnClaim,
 } from "../../../../execution/host/turn-status";
 import type { DurableObjectStorage } from "../durable-object/durable-object-storage";
 import { withTransaction } from "../durable-object/sql-access";
@@ -24,6 +24,7 @@ import {
   getRunByDedupeKey,
   insertRun,
   listRunsByParentRunId,
+  listRunsByThreadKey,
   putRun,
 } from "./run-records";
 
@@ -51,21 +52,20 @@ export class DurableObjectRunStore implements TurnStore {
       if (!run) {
         return { ok: false, reason: "not-found" };
       }
-      const decision = decideTurnClaim(runId, run, options.nowMs);
+      const { decision, nextRecord } = resolveTurnClaim(runId, run, options);
+      if (nextRecord) {
+        await putRun(storage, this.#prefix, nextRecord, {
+          maxPayloadBytes: this.#maxPayloadBytes,
+        });
+      }
       if (!decision.ok) {
         return decision;
       }
-
-      const lease = {
-        attempt: options.attempt,
-        leaseId: options.leaseId,
-        leaseUntilMs: options.nowMs + options.leaseMs,
+      return {
+        lease: decision.lease,
+        ok: true,
+        record: structuredClone(decision.record),
       };
-      const claimed: TurnRecord = { ...run, lease, status: "leased" };
-      await putRun(storage, this.#prefix, claimed, {
-        maxPayloadBytes: this.#maxPayloadBytes,
-      });
-      return { lease, ok: true, record: structuredClone(claimed) };
     });
   }
 
@@ -105,6 +105,10 @@ export class DurableObjectRunStore implements TurnStore {
       this.#prefix,
       parentRunId
     );
+  }
+
+  async listByThreadKey(threadKey: string): Promise<readonly TurnRecord[]> {
+    return await listRunsByThreadKey(this.#storage, this.#prefix, threadKey);
   }
 
   async transition(

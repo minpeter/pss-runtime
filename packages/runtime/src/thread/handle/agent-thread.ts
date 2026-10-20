@@ -1,5 +1,6 @@
 import { AgentHookError } from "../../agent/core/hook-error";
 import type {
+  Checkpoint,
   StoredThreadEvent,
   ThreadEventReadOptions,
 } from "../../execution/host/types";
@@ -11,7 +12,10 @@ import type {
   CompactionSummaryOptions,
   ManualThreadCompactionResult,
 } from "../runtime/auto-compaction-types";
-import type { ThreadExecutionOptions } from "../runtime/execution";
+import type {
+  QueuedThreadExecutionRun,
+  ThreadExecutionOptions,
+} from "../runtime/execution";
 import type { NotifyOptions } from "../runtime/notification";
 import { queueThreadNotification } from "../runtime/notification";
 import { readThreadEvents } from "../runtime/thread-event-replay";
@@ -28,7 +32,10 @@ import {
   type AgentThreadContext,
   createAgentThreadContext,
 } from "./agent-thread-context";
-import { continueAgentThread } from "./agent-thread-continuation";
+import {
+  continueAgentThread,
+  resumeClaimedExecutionRunOnThread,
+} from "./agent-thread-continuation";
 import { drainAgentThreadInputQueue } from "./agent-thread-drain";
 import { killAgentThread } from "./agent-thread-kill";
 import {
@@ -84,6 +91,17 @@ export class AgentThread {
     options?: ThreadContinuationOptions
   ): Promise<AgentTurn | undefined> {
     return await continueAgentThread(this.#context, options);
+  }
+
+  async resumeExecutionRun(
+    executionRun: QueuedThreadExecutionRun,
+    checkpoint: Checkpoint | null
+  ): Promise<AgentTurn> {
+    return await resumeClaimedExecutionRunOnThread(
+      this.#context,
+      executionRun,
+      checkpoint
+    );
   }
 
   /** Queue a durable user turn that starts only after the active turn ends. */
@@ -154,11 +172,16 @@ export class AgentThread {
   }
 
   events(options?: ThreadEventReadOptions): AsyncIterable<StoredThreadEvent> {
+    assertAgentThreadOpen(this.#context);
     return readThreadEvents(
       this.#context.execution,
       this.#context.threadKey,
       options
     );
+  }
+
+  replay(options?: ThreadEventReadOptions): AsyncIterable<StoredThreadEvent> {
+    return this.events(options);
   }
 
   interrupt(): void {
@@ -223,6 +246,10 @@ export class AgentThread {
       await kill;
       await this.#shutdown();
     }
+  }
+
+  [Symbol.asyncDispose](): Promise<void> {
+    return this.dispose();
   }
 
   kill(): Promise<void> {

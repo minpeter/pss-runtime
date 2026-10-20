@@ -14,6 +14,8 @@ export interface CelldSqliteTestStorageOptions {
   readonly getAlarm?: () => Promise<void>;
   readonly setAlarm?: (scheduledTime: Date | number) => Promise<void>;
   readonly sqlFailure?: (query: string) => Error | undefined;
+  /** Called when a transaction must wait behind an open transaction. */
+  readonly transactionQueued?: () => void;
 }
 
 export interface CelldSqliteTestStorage extends CelldDurableObjectStorage {
@@ -71,6 +73,7 @@ export function createCelldSqliteTestStorage(
   const values = new InMemoryDurableObjectStorage();
   let alarm: number | null = null;
   let transactionChain = Promise.resolve();
+  let openTransactions = 0;
 
   const storage: CelldSqliteTestStorage = {
     delete: (key) => values.delete(key),
@@ -92,33 +95,48 @@ export function createCelldSqliteTestStorage(
     transaction: async <T>(
       operation: (transaction: DurableObjectTransactionStorage) => Promise<T>
     ): Promise<T> => {
+      // The hook runs before this transaction joins the chain, so a throwing
+      // hook rejects only this transaction and never wedges later ones.
+      if (openTransactions > 0) {
+        options.transactionQueued?.();
+      }
       const previous = transactionChain;
       let release: () => void = () => undefined;
       transactionChain = new Promise<void>((resolve) => {
         release = resolve;
       });
+      openTransactions += 1;
       await previous;
-      const previousAlarm = alarm;
-      let nextAlarm = alarm;
+      // Like Durable Object storage, only alarm writes made by this
+      // transaction are committed, and only when it succeeds.
+      let written: { readonly alarm: number | null } | undefined;
       try {
         const result = await sql.transaction(() =>
           operation({
             delete: storage.delete,
+            deleteAlarm: async () => {
+              await options.deleteAlarm?.();
+              written = { alarm: null };
+            },
             get: storage.get,
+            getAlarm: async () => {
+              await options.getAlarm?.();
+              return written === undefined ? alarm : written.alarm;
+            },
             put: storage.put,
             setAlarm: async (scheduledTime) => {
               await options.setAlarm?.(scheduledTime);
-              nextAlarm = alarmValue(scheduledTime);
+              written = { alarm: alarmValue(scheduledTime) };
             },
             sql,
           })
         );
-        alarm = nextAlarm;
+        if (written !== undefined) {
+          alarm = written.alarm;
+        }
         return result;
-      } catch (error) {
-        alarm = previousAlarm;
-        throw error;
       } finally {
+        openTransactions -= 1;
         release();
       }
     },

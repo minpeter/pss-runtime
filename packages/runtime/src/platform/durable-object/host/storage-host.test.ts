@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { describeAgentHostFaultContract } from "../../../contracts/agent-host-fault-contract";
+import {
+  createFakeCloudflareAgent,
+  runWithText,
+} from "../cloudflare/agents/test-support";
+import { createCloudflareHost } from "../cloudflare/host/create-cloudflare-host";
 import { InMemorySqlStorage } from "../sql/node-test/node-sqlite-storage";
 import type { DurableObjectTransactionStorage } from "../storage/durable-object/durable-object-storage";
 import {
@@ -217,6 +222,79 @@ describe("Durable Object storage host", () => {
     );
 
     expect(readScheduledWorkRows(storage)).toEqual([]);
+  });
+
+  it("joins tx.scheduler writes to the store transaction for the default queue scheduler", async () => {
+    // Given
+    const storage = new InMemoryDurableObjectStorage();
+    const host = createDurableObjectStorageHost({ storage });
+
+    // When
+    await expect(
+      host.store.transaction(async (tx) => {
+        await tx.scheduler?.enqueueRun("rolled-back-run");
+        throw new Error("rollback");
+      })
+    ).rejects.toThrow("rollback");
+    await host.store.transaction(async (tx) => {
+      expect(tx.scheduler).toBeDefined();
+      await tx.scheduler?.enqueueRun("committed-run", { runAfterMs: 60_000 });
+      await tx.scheduler?.resumeThread("committed-thread", {
+        idempotencyKey: "committed-idempotency",
+        runId: "committed-run",
+      });
+    });
+
+    // Then
+    await expect(listScheduledDurableObjectRuns(storage)).resolves.toEqual([
+      "committed-run",
+    ]);
+    await expect(
+      listScheduledDurableObjectThreadPrompts(storage)
+    ).resolves.toEqual([
+      {
+        idempotencyKey: "committed-idempotency",
+        runId: "committed-run",
+        threadKey: "committed-thread",
+      },
+    ]);
+  });
+
+  it("leaves tx.scheduler undefined when the provided scheduler cannot join store transactions", async () => {
+    // Given
+    const host = createDurableObjectStorageHost({
+      scheduler: {
+        enqueueRun: () => Promise.resolve(),
+        resumeThread: () => Promise.resolve(),
+      },
+      storage: new InMemoryDurableObjectStorage(),
+    });
+
+    // When
+    const transactionScheduler = await host.store.transaction((tx) =>
+      Promise.resolve(tx.scheduler)
+    );
+
+    // Then
+    expect(transactionScheduler).toBeUndefined();
+  });
+
+  it("leaves tx.scheduler undefined for the Cloudflare Agents fiber host", async () => {
+    // Given
+    const cloudflareAgent = createFakeCloudflareAgent();
+    const host = createCloudflareHost({
+      cloudflareAgent,
+      durableObjectContext: cloudflareAgent.durableObjectContext,
+      resume: (payload) => Promise.resolve(runWithText(payload.runId)),
+    });
+
+    // When
+    const transactionScheduler = await host.store.transaction((tx) =>
+      Promise.resolve(tx.scheduler)
+    );
+
+    // Then
+    expect(transactionScheduler).toBeUndefined();
   });
 });
 

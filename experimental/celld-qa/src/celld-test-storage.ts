@@ -24,26 +24,32 @@ export function createCelldTestStorage(): CelldDurableObjectStorage & {
       await inner.setAlarm(scheduledTime);
     },
     sql: inner.sql,
-    transaction: async (operation) => {
-      const previousAlarm = alarmTime;
-      try {
-        return await inner.transaction((transaction) =>
-          operation({
-            delete: (key) => transaction.delete(key),
-            get: (key) => transaction.get(key),
-            put: (key, value) => transaction.put(key, value),
-            setAlarm: async (scheduledTime) => {
-              alarmTime = toMilliseconds(scheduledTime);
-              await transaction.setAlarm?.(scheduledTime);
-            },
-            sql: transaction.sql ?? inner.sql,
-          } satisfies DurableObjectStorage)
-        );
-      } catch (error) {
-        alarmTime = previousAlarm;
-        throw error;
-      }
-    },
+    // Like Durable Object storage, only alarm writes made by a transaction are
+    // committed, and only when it succeeds.
+    transaction: (operation) =>
+      inner.transaction(async (transaction) => {
+        let written: { readonly alarm: number | null } | undefined;
+        const result = await operation({
+          delete: (key) => transaction.delete(key),
+          deleteAlarm: async () => {
+            written = { alarm: null };
+            await transaction.deleteAlarm?.();
+          },
+          get: (key) => transaction.get(key),
+          getAlarm: () =>
+            Promise.resolve(written === undefined ? alarmTime : written.alarm),
+          put: (key, value) => transaction.put(key, value),
+          setAlarm: async (scheduledTime) => {
+            written = { alarm: toMilliseconds(scheduledTime) };
+            await transaction.setAlarm?.(scheduledTime);
+          },
+          sql: transaction.sql ?? inner.sql,
+        } satisfies DurableObjectStorage);
+        if (written !== undefined) {
+          alarmTime = written.alarm;
+        }
+        return result;
+      }),
     transactionSync: inner.transactionSync.bind(inner),
   };
   return storage;

@@ -11,6 +11,7 @@ import {
   type DurableObjectTransactionStorage as DurableObjectTransactionStorageType,
   InMemoryDurableObjectStorage as InMemoryDurableObjectStorageImplementation,
 } from "../storage/durable-object/durable-object-storage";
+import { withTransaction } from "../storage/durable-object/sql-access";
 import { DurableObjectExecutionStore as ExecutionStoreImplementation } from "../storage/execution/store";
 import {
   type StorageCompactionMode as CompactionMode,
@@ -35,8 +36,8 @@ import type { DurableObjectScheduledThreadPrompt as ScheduledThreadPrompt } from
 import {
   ackScheduledRun,
   ackScheduledThreadPrompt,
-  appendScheduledRun,
-  appendScheduledThreadPrompt,
+  insertScheduledRun,
+  insertScheduledThreadPrompt,
   listScheduledRuns,
   listScheduledThreadPrompts,
 } from "./scheduled-work-queue";
@@ -92,6 +93,18 @@ export interface DurableObjectStorageHostOptions {
 }
 
 /**
+ * HostScheduler that can also write its scheduled work inside a Durable Object
+ * storage transaction. The storage host exposes that transaction-bound
+ * scheduler as `tx.scheduler`; schedulers without it leave `tx.scheduler`
+ * undefined, so callers schedule through `host.scheduler` after commit.
+ */
+export interface DurableObjectTransactionalScheduler extends HostScheduler {
+  readonly createTransactionScheduler: (
+    storage: DurableObjectTransactionStorage
+  ) => HostScheduler;
+}
+
+/**
  * Low-level DO storage host (store + attachments + optional scheduler).
  *
  * Defaults to a queue-only scheduler (no DO alarm wake). Product agent
@@ -110,6 +123,9 @@ export function createDurableObjectStorageHost({
     );
   }
   const store = new ExecutionStoreImplementation({
+    createTransactionScheduler: isTransactionalScheduler(scheduler)
+      ? scheduler.createTransactionScheduler
+      : undefined,
     maxPayloadBytes,
     prefix,
     storage,
@@ -125,6 +141,15 @@ export function createDurableObjectStorageHost({
   };
 }
 
+function isTransactionalScheduler(
+  scheduler: HostScheduler
+): scheduler is DurableObjectTransactionalScheduler {
+  return (
+    "createTransactionScheduler" in scheduler &&
+    typeof scheduler.createTransactionScheduler === "function"
+  );
+}
+
 /**
  * Queue-only HostScheduler backed by DO storage scheduled-work rows.
  * Does not arm Durable Object alarms — wake/resume is Agents SDK owned.
@@ -135,19 +160,34 @@ export function createDurableObjectScheduledWorkScheduler({
 }: {
   readonly prefix?: string;
   readonly storage: DurableObjectStorage;
-}): HostScheduler {
-  return {
-    enqueueRun: async (runId) => {
-      await appendScheduledRun(storage, prefix, runId);
+}): DurableObjectTransactionalScheduler {
+  const createTransactionScheduler = (
+    transactionStorage: DurableObjectTransactionStorage
+  ): HostScheduler => ({
+    enqueueRun: (runId) => {
+      insertScheduledRun(transactionStorage, prefix, runId);
+      return Promise.resolve();
     },
-    resumeThread: async (threadKey, options) => {
-      await appendScheduledThreadPrompt(storage, prefix, {
+    resumeThread: (threadKey, options) => {
+      insertScheduledThreadPrompt(transactionStorage, prefix, {
         idempotencyKey: options?.idempotencyKey,
         notificationId: options?.notificationId,
         runId: options?.runId,
         threadKey,
       });
+      return Promise.resolve();
     },
+  });
+  return {
+    createTransactionScheduler,
+    enqueueRun: (runId) =>
+      withTransaction(storage, (tx) =>
+        createTransactionScheduler(tx).enqueueRun(runId)
+      ),
+    resumeThread: (threadKey, options) =>
+      withTransaction(storage, (tx) =>
+        createTransactionScheduler(tx).resumeThread(threadKey, options)
+      ),
   };
 }
 

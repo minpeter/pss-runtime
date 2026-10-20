@@ -35,4 +35,13 @@ describe("Celld SDK structural shape", () => {
     expect(scheduler).toBeDefined();
     expect(host).toBeDefined();
   });
+
+  it("requires storage.transaction() for Celld storage", () => {
+    const { transaction: _transaction, ...withoutTransaction } =
+      durableObjectStorage;
+    // @ts-expect-error Celld scheduling and re-arm run inside storage transactions.
+    const invalid: CelldDurableObjectStorage = withoutTransaction;
+
+    expect(invalid).not.toHaveProperty("transaction");
+  });
 });

@@ -23,6 +23,9 @@ export function collectAssistantOutput(events: RunEvents): string {
 export function replayRun(events: RunEvents): AgentTurn {
   return {
     events: () => eventStream(events),
+    [Symbol.asyncIterator]() {
+      return this.events()[Symbol.asyncIterator]();
+    },
   };
 }
 

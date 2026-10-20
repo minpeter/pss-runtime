@@ -2,12 +2,23 @@ import { transitionTurn } from "../../execution/host/turn-status";
 import { TurnTransitionConflictError } from "../../execution/host/turn-transition-conflict";
 import type {
   AgentHost,
+  Checkpoint,
   NotificationInbox,
   NotificationRecord,
   TurnLease,
   TurnRecord,
   TurnStore,
 } from "../../execution/host/types";
+import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution-checkpoint";
+import {
+  DEFAULT_MAX_TURN_CLAIM_ATTEMPTS,
+  isRecordClaimableByAgent,
+  releaseClaimedContinuationRun,
+  SupersededExecutionRunError,
+  throwIfManualToolRecovery,
+  verifyClaimedRunCheckpoint,
+} from "../../thread/handle/agent-thread-continuation";
+import { isThreadDrainOwned } from "../../thread/handle/thread-drain-coordinator";
 import type { AgentTurn } from "../../thread/protocol/turn";
 import { ownsAgentNamespace } from "../identity/namespace";
 import { leaseIdForResumeClaim } from "./retry-authority";
@@ -18,8 +29,14 @@ export type ClaimedTurnRecord = TurnRecord & {
 
 interface ResumeAgentTurnInput {
   readonly claim?: object;
+  readonly hasExplicitNamespace?: boolean;
   readonly host: AgentHost;
+  readonly maxAttempts?: number;
   readonly ownerNamespace: string;
+  resumeExecutionTurn?(
+    run: ClaimedTurnRecord,
+    checkpoint: Checkpoint | null
+  ): Promise<AgentTurn>;
   resumeNotification(
     notification: NotificationRecord,
     run: ClaimedTurnRecord
@@ -29,8 +46,11 @@ interface ResumeAgentTurnInput {
 
 export async function resumeAgentTurn({
   claim,
+  hasExplicitNamespace = false,
   host,
+  maxAttempts = DEFAULT_MAX_TURN_CLAIM_ATTEMPTS,
   ownerNamespace,
+  resumeExecutionTurn,
   resumeNotification,
   runId,
 }: ResumeAgentTurnInput): Promise<AgentTurn | null> {
@@ -39,14 +59,18 @@ export async function resumeAgentTurn({
   if (!run) {
     return null;
   }
-  if (!canAccessRun(run, ownerNamespace)) {
+  if (!isRecordClaimableByAgent(run, ownerNamespace, hasExplicitNamespace)) {
     return null;
   }
-
   if (run.kind === "notification" && run.dedupeKey) {
     const idempotencyKey = run.dedupeKey;
     const claimedTuple = await host.store.transaction(async (transaction) => {
-      const claimed = await claimRun(transaction.turns, run, retryLeaseId);
+      const claimed = await claimRun(
+        transaction.turns,
+        run,
+        retryLeaseId,
+        maxAttempts
+      );
       if (!claimed) {
         return null;
       }
@@ -101,8 +125,72 @@ export async function resumeAgentTurn({
       throw error;
     }
   }
+  if (
+    (run.kind === "user-turn" || run.kind === "tool-recovery") &&
+    resumeExecutionTurn
+  ) {
+    return await resumeClaimedExecutionTurn({
+      host,
+      maxAttempts,
+      resumeExecutionTurn,
+      retryLeaseId,
+      run,
+    });
+  }
 
   return null;
+}
+
+async function resumeClaimedExecutionTurn({
+  host,
+  maxAttempts,
+  resumeExecutionTurn,
+  retryLeaseId,
+  run,
+}: {
+  readonly host: AgentHost;
+  readonly maxAttempts: number;
+  readonly resumeExecutionTurn: NonNullable<
+    ResumeAgentTurnInput["resumeExecutionTurn"]
+  >;
+  readonly retryLeaseId: string | undefined;
+  readonly run: TurnRecord;
+}): Promise<AgentTurn | null> {
+  if (run.status === "needs-recovery") {
+    await throwIfManualToolRecovery(host, run.runId);
+    return null;
+  }
+  if (isThreadDrainOwned(host, run.threadKey)) {
+    return null;
+  }
+  const claimed = await host.store.transaction(
+    async (transaction) =>
+      await claimRun(transaction.turns, run, retryLeaseId, maxAttempts)
+  );
+  if (!claimed) {
+    if ((await host.store.turns.get(run.runId))?.status === "needs-recovery") {
+      await throwIfManualToolRecovery(host, run.runId);
+    }
+    return null;
+  }
+  try {
+    const checkpoint = await verifyClaimedRunCheckpoint(
+      host,
+      claimed,
+      claimed.lease.leaseId
+    );
+    return await resumeExecutionTurn(claimed, checkpoint);
+  } catch (error) {
+    if (error instanceof SupersededExecutionRunError) {
+      return null;
+    }
+    // A pending-input handoff may already have released the claim to queued;
+    // the fenced requeue then conflicts harmlessly.
+    if (!(error instanceof ToolExecutionNeedsRecoveryError)) {
+      await requeueClaimedRun(host.store.turns, claimed).catch(() => undefined);
+    }
+    throw error;
+  }
 }
 
 interface ClaimedNotification {
@@ -124,31 +212,8 @@ async function claimNotificationForRun(
   return null;
 }
 
-async function requeueClaimedRun(
-  turns: TurnStore,
-  run: TurnRecord
-): Promise<void> {
-  const transition = await transitionTurn(turns, {
-    expected: {
-      leaseId: run.lease?.leaseId ?? null,
-      status: run.status,
-    },
-    runId: run.runId,
-    update: { lease: null, status: "queued" },
-  });
-  if (!transition.ok) {
-    throw new TurnTransitionConflictError(
-      run.runId,
-      "notification",
-      transition.reason
-    );
-  }
-}
-
-function canAccessRun(run: TurnRecord, ownerNamespace: string): boolean {
-  // Owner-less runs are denied: ownsAgentNamespace(undefined, …) is false,
-  // and there is no parent-threadKey fallback.
-  return ownsAgentNamespace(run.ownerNamespace, ownerNamespace);
+function requeueClaimedRun(turns: TurnStore, run: TurnRecord): Promise<void> {
+  return releaseClaimedContinuationRun(turns, run, run.lease?.leaseId ?? null);
 }
 
 export async function completeNotificationRun(
@@ -184,12 +249,14 @@ export async function completeNotificationRun(
 async function claimRun(
   turns: TurnStore,
   run: TurnRecord,
-  retryLeaseId: string | undefined
+  retryLeaseId: string | undefined,
+  maxAttempts: number
 ): Promise<ClaimedTurnRecord | null> {
   const result = await turns.claim(run.runId, {
     attempt: (run.lease?.attempt ?? 0) + 1,
     leaseId: retryLeaseId ?? crypto.randomUUID(),
     leaseMs: 300_000,
+    maxAttempts,
     nowMs: Date.now(),
   });
   return result.ok ? { ...result.record, lease: result.lease } : null;

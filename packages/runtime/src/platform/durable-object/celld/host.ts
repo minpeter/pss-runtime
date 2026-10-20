@@ -78,10 +78,7 @@ export function createCelldHost({
     storage: state.storage,
   });
   state.waitUntil(
-    rearmScheduledWork(state.storage, {
-      ...(clock === undefined ? {} : { nowMs: clock() }),
-      ...(prefix === undefined ? {} : { prefix }),
-    })
+    rearmScheduledWork(state.storage, prefix === undefined ? {} : { prefix })
   );
   return {
     ...createDurableObjectStorageHost({

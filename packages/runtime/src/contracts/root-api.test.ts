@@ -36,10 +36,14 @@ import type {
   ThreadCompactionInput,
   ThreadContextMessage,
   ThreadHandle,
+  ThreadId,
+  ThreadIdentity,
+  ThreadReplayOptions,
 } from "../index";
 import {
   AgentHookError,
   createAgent,
+  DisposedResourceError,
   decodeStoredThreadState,
   encodeThreadSnapshot,
   isStreamAgentEvent,
@@ -227,6 +231,17 @@ describe("runtime public exports", () => {
     expectTypeOf<ReturnType<ThreadHandle["events"]>>().toEqualTypeOf<
       AsyncIterable<StoredThreadEvent>
     >();
+    expectTypeOf<Parameters<ThreadHandle["replay"]>[0]>().toEqualTypeOf<
+      ThreadReplayOptions | undefined
+    >();
+    expectTypeOf<ReturnType<ThreadHandle["replay"]>>().toEqualTypeOf<
+      AsyncIterable<StoredThreadEvent>
+    >();
+    expectTypeOf<ThreadHandle["identity"]>().toEqualTypeOf<ThreadIdentity>();
+    expectTypeOf<ThreadIdentity["id"]>().toEqualTypeOf<ThreadId>();
+    expect(new DisposedResourceError("disposed").name).toBe(
+      "DisposedResourceError"
+    );
     expect(new ThreadEventReplayUnsupportedError("thread-1").name).toBe(
       "ThreadEventReplayUnsupportedError"
     );

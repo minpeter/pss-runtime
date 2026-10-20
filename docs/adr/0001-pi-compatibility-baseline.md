@@ -17,15 +17,19 @@ ordinary compatibility work.
 We record compatibility in a versioned JSON manifest validated by
 [`pi-manifest.schema.json`](../compatibility/pi-manifest.schema.json). The first
 baseline is Pi v0.83.0 at commit
-`845d6ff1f6643aba440341cce877ce1c43ebbc39`.
+`845d6ff1f6643aba440341cce877ce1c43ebbc39`, followed by Pi v1.3.0 at commit
+`71023aec1546d6d677a65669c5665c0927ce0dd0`.
 
 Each comparison surface is `native`, `adapter`, or `planned`, except for exactly
 two deliberate architectural differences:
 
 1. **AI SDK:** PSS accepts AI SDK language-model contracts instead of adopting
-   Pi's provider and model execution stack.
-2. **Durable execution:** PSS owns durable thread state, replay, suspension, and
-   recovery semantics instead of matching Pi's process-local session loop.
+   Pi's provider and model execution stack (`@earendil-works/pi-ai`).
+2. **Durable execution:** PSS owns durable thread state, lease-fenced
+   transitions, replay, suspension, and cross-process recovery through
+   runtime-neutral `AgentHost` ports instead of matching Pi's process-local
+   session loop (`v0.83.0`) or adopting Pi Durable's Chord document engine
+   (`@earendil-works/pi-durable` in `v1.3.0`).
 
 `adapter` describes compatibility of intent through a boundary; it does not
 claim source, wire, extension, or storage-format identity. `planned` records a

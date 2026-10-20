@@ -105,6 +105,22 @@ export class ModelMessageHistory {
     this.#triggerChange();
   }
 
+  /** Tool-result parts for `toolCallId` in model history, without cloning. */
+  toolResultCount(toolCallId: string): number {
+    let count = 0;
+    for (const message of this.#modelHistory) {
+      if (message.role !== "tool") {
+        continue;
+      }
+      for (const part of message.content) {
+        if (part.type === "tool-result" && part.toolCallId === toolCallId) {
+          count += 1;
+        }
+      }
+    }
+    return count;
+  }
+
   clearTransientInputs(): void {
     this.#transientMessages.length = 0;
   }

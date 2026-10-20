@@ -1,7 +1,40 @@
 import { describe, expect, it } from "vitest";
 import { describeAgentHostFaultContract } from "../../../contracts/agent-host-fault-contract";
+import { describeExecutionStoreContract } from "../../../contracts/execution-store/contract";
+import {
+  type CelldSqliteTestStorage,
+  createCelldSqliteTestStorage,
+} from "./celld-sqlite-test-storage";
 import { createCelldTestStorage } from "./celld-test-storage";
-import { createCelldHost } from "./host";
+import { createCelldHost, listCelldScheduledRuns } from "./host";
+
+const CONTRACT_NOW_MS = 1000;
+const celldStoreStorages = new WeakMap<object, CelldSqliteTestStorage>();
+
+describeExecutionStoreContract({
+  createStore: () => {
+    const storage = createCelldSqliteTestStorage();
+    const { store } = createCelldHost({
+      clock: () => CONTRACT_NOW_MS,
+      state: { storage, waitUntil: () => undefined },
+    });
+    celldStoreStorages.set(store, storage);
+    return store;
+  },
+  name: "Celld",
+  transactionalScheduler: {
+    expectCommittedRunWake: async (store) => {
+      await expect(celldStoreStorages.get(store)?.getAlarm()).resolves.toBe(
+        CONTRACT_NOW_MS
+      );
+    },
+    listScheduledRuns: (store) =>
+      listCelldScheduledRuns(
+        celldStoreStorages.get(store) ?? createCelldSqliteTestStorage(),
+        { nowMs: CONTRACT_NOW_MS }
+      ),
+  },
+});
 
 let hostPrefix = 0;
 
@@ -28,6 +61,12 @@ describe("createCelldHost", () => {
     await host.scheduler.enqueueRun("celld-run");
 
     await expect(state.storage.getAlarm()).resolves.toBeDefined();
+    await host.store.transaction(async (tx) => {
+      await tx.scheduler?.enqueueRun("celld-tx-run", { runAfterMs: 10 });
+    });
+    await expect(
+      listCelldScheduledRuns(state.storage, { nowMs: Date.now() + 20 })
+    ).resolves.toContain("celld-tx-run");
   });
 
   it("requires no Cloudflare Agents SDK object or fiber", () => {

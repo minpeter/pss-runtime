@@ -31,6 +31,7 @@ export interface ThreadExecutionOptions {
   readonly compaction?: AgentCompaction;
   readonly executionHost?: AgentHost;
   readonly hookRuntime?: AgentHookRuntime;
+  readonly ownerNamespace?: string;
 }
 
 export interface QueuedThreadExecutionRun {
@@ -66,12 +67,14 @@ export type ThreadExecutionTerminalStatus = Extract<
 export async function precreateThreadExecutionRun({
   executionHost,
   kind,
+  ownerNamespace,
   runId: requestedRunId,
   threadKey,
   turnStore,
 }: {
   readonly executionHost?: AgentHost;
   readonly kind: TurnKind;
+  readonly ownerNamespace?: string;
   readonly runId?: string;
   readonly threadKey: string;
   readonly turnStore?: TurnStore;
@@ -90,6 +93,7 @@ export async function precreateThreadExecutionRun({
   const created = await turns.create(
     createThreadExecutionRunRecord({
       kind,
+      ownerNamespace,
       runId,
       status: "queued",
       threadKey,
@@ -103,6 +107,7 @@ export async function startThreadExecutionRun({
   executionHost,
   interceptToolCall,
   interceptToolResult,
+  ownerNamespace,
   threadKey,
   state,
   turnId,
@@ -111,6 +116,7 @@ export async function startThreadExecutionRun({
   readonly executionHost?: AgentHost;
   readonly interceptToolCall?: ThreadToolCallInterceptor;
   readonly interceptToolResult?: ThreadToolResultInterceptor;
+  readonly ownerNamespace?: string;
   readonly threadKey: string;
   readonly state: ThreadState;
   readonly turnId: string;
@@ -124,6 +130,7 @@ export async function startThreadExecutionRun({
   const created = await executionHost.store.turns.create(
     createThreadExecutionRunRecord({
       kind: executionRun?.kind ?? "user-turn",
+      ownerNamespace,
       runId,
       status: "running",
       threadKey,
@@ -241,11 +248,13 @@ export async function cancelThreadExecutionRun({
 
 export function createThreadExecutionRunRecord({
   kind,
+  ownerNamespace,
   runId,
   status,
   threadKey,
 }: {
   readonly kind: TurnKind;
+  readonly ownerNamespace?: string;
   readonly runId: string;
   readonly status: Extract<TurnStatus, "queued" | "running">;
   readonly threadKey: string;
@@ -254,6 +263,7 @@ export function createThreadExecutionRunRecord({
     checkpointVersion: 0,
     dedupeKey: runId,
     kind,
+    ...(ownerNamespace === undefined ? {} : { ownerNamespace }),
     rootRunId: runId,
     runId,
     threadKey,
