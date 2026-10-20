@@ -141,6 +141,9 @@ it.each([false, true])(
             Promise.resolve({ done: true as const, value: undefined }),
         };
       },
+      [Symbol.asyncIterator]() {
+        return this.events()[Symbol.asyncIterator]();
+      },
     };
     const send = vi.fn(async () => run);
     const steer = vi.fn(async () => run);

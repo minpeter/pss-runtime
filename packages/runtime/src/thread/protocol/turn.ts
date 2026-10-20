@@ -5,7 +5,7 @@ export interface ThreadContinuationOptions {
   readonly signal?: AbortSignal;
 }
 
-export interface AgentTurn {
+export interface AgentTurn extends AsyncIterable<AgentEvent> {
   events(): AsyncIterable<AgentEvent>;
   readonly runId?: string | undefined;
 }
@@ -160,6 +160,10 @@ export class BufferedAgentTurn implements AgentTurn {
       [Symbol.asyncIterator]: () => iterator,
     };
     return iterator;
+  }
+
+  [Symbol.asyncIterator](): AsyncIterator<AgentEvent> {
+    return this.events()[Symbol.asyncIterator]();
   }
 
   #cancel(): void {

@@ -83,7 +83,12 @@ function selectRunRows(
     const threadKey = stringBinding(bindings[1]);
     return state.turns
       .filter((row) => row.prefix === prefix && row.thread_key === threadKey)
-      .map((row) => ({ run_id: row.run_id }));
+      .sort((left: RunRow, right: RunRow) => left.created_at - right.created_at)
+      .map((row) =>
+        query.includes("select record")
+          ? projectRun(row)
+          : { run_id: row.run_id }
+      );
   }
   if (query.includes("run_id = ?")) {
     const runId = stringBinding(bindings[1]);

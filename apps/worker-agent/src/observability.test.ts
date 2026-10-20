@@ -87,6 +87,9 @@ describe("createTurnObservabilityInstrumentation", () => {
           yield* sourceEvents;
         },
         runId: "run-1",
+        [Symbol.asyncIterator]() {
+          return this.events()[Symbol.asyncIterator]();
+        },
       },
       {
         operation: "send",
@@ -124,6 +127,9 @@ describe("createTurnObservabilityInstrumentation", () => {
           };
         },
         runId: "durable-42",
+        [Symbol.asyncIterator]() {
+          return this.events()[Symbol.asyncIterator]();
+        },
       },
       { operation: "send", threadKey: "t", runId: "durable-42" }
     );

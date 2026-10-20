@@ -135,6 +135,26 @@ describe("Celld due-aware alarm HostScheduler", () => {
     expect(await storage.getAlarm()).toBe(1000);
   });
 
+  it("does not arm an alarm for a preserved duplicate without a due time", async () => {
+    const storage = createAlarmCapableStorage();
+    storage.sql.exec(
+      "INSERT INTO pss_scheduled_work (prefix, kind, work_id, payload, thread_key, run_id, due_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      "pss-runtime",
+      "celld-run",
+      "legacy",
+      JSON.stringify({ dueAtMs: 0, value: { runId: "legacy" } }),
+      null,
+      "legacy",
+      null,
+      0
+    );
+    const scheduler = createCelldScheduler({ clock: () => 0, storage });
+
+    await scheduler.enqueueRun("legacy");
+
+    expect(await storage.getAlarm()).toBeNull();
+  });
+
   it("rearms the next due item after ack", async () => {
     const storage = createAlarmCapableStorage();
     const scheduler = createCelldScheduler({ clock: () => 0, storage });

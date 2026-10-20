@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { describe, expect, it } from "vitest";
 import { describeExecutionStoreContract } from "../../../contracts/execution-store/contract";
+import { listScheduledNodeRuns } from "../host/scheduled-work-store";
 import { FileExecutionStore } from "./file-execution-store";
 import {
   base64Url,
@@ -17,9 +18,20 @@ import {
   tempDir,
 } from "./file-execution-store-test-support";
 
+const storeDirectories = new WeakMap<object, string>();
+
 describeExecutionStoreContract({
-  createStore: () => new FileExecutionStore(contractTempDir()),
+  createStore: () => {
+    const directory = contractTempDir();
+    const store = new FileExecutionStore(directory);
+    storeDirectories.set(store, directory);
+    return store;
+  },
   name: "FileExecutionStore",
+  transactionalScheduler: {
+    listScheduledRuns: (store) =>
+      listScheduledNodeRuns(storeDirectories.get(store) ?? ""),
+  },
 });
 
 describe("FileExecutionStore", () => {

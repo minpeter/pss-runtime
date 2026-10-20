@@ -117,6 +117,9 @@ export function createTurnObservabilityInstrumentation(
           return observeEvents(turn.events(), options.label, record);
         },
         runId: turn.runId,
+        [Symbol.asyncIterator]() {
+          return this.events()[Symbol.asyncIterator]();
+        },
       };
     },
   };

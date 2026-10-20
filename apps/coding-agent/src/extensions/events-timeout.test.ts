@@ -31,6 +31,9 @@ describe("extension event timeouts", () => {
           yield { type: "turn-start" } satisfies AgentEvent;
         },
         runId: "run-1",
+        [Symbol.asyncIterator]() {
+          return this.events()[Symbol.asyncIterator]();
+        },
       },
       { operation: "send", threadKey: "t1", runId: "run-1" }
     );
@@ -62,6 +65,9 @@ describe("extension event timeouts", () => {
           yield { type: "turn-end" } satisfies AgentEvent;
         },
         runId: "durable-run",
+        [Symbol.asyncIterator]() {
+          return this.events()[Symbol.asyncIterator]();
+        },
       },
       { operation: "send", threadKey: "t1" }
     );

@@ -34,18 +34,20 @@ export function traceAgentTurn(
   options: TraceAgentTurnOptions = {}
 ): AgentTurn {
   let consumed = false;
+  const getEvents = () => {
+    if (consumed) {
+      throw new Error("AgentTurn.events() can only be consumed once");
+    }
+    consumed = true;
+    return new TracedAgentEventIterator(
+      turn.events()[Symbol.asyncIterator](),
+      createTraceState(options)
+    );
+  };
   return Object.freeze({
-    events: () => {
-      if (consumed) {
-        throw new Error("AgentTurn.events() can only be consumed once");
-      }
-      consumed = true;
-      return new TracedAgentEventIterator(
-        turn.events()[Symbol.asyncIterator](),
-        createTraceState(options)
-      );
-    },
+    events: getEvents,
     ...(turn.runId === undefined ? {} : { runId: turn.runId }),
+    [Symbol.asyncIterator]: () => getEvents(),
   });
 }
 

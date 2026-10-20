@@ -60,6 +60,9 @@ function wrapExtensionEvents(
         timeoutMs
       ),
     runId: turn.runId,
+    [Symbol.asyncIterator]() {
+      return this.events()[Symbol.asyncIterator]();
+    },
   };
 }
 

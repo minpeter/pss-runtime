@@ -9,7 +9,8 @@ import {
   validateCompatibilityManifests,
 } from "./validate-pi-compatibility-manifest.mjs";
 
-const UPSTREAM_COMMIT = "845d6ff1f6643aba440341cce877ce1c43ebbc39";
+const UPSTREAM_COMMIT_V0_83_0 = "845d6ff1f6643aba440341cce877ce1c43ebbc39";
+const UPSTREAM_COMMIT_V1_3_0 = "71023aec1546d6d677a65669c5665c0927ce0dd0";
 const INTENTIONAL_DIFFERENCES = [
   "intentional-difference:ai-sdk",
   "intentional-difference:durable-execution",
@@ -20,17 +21,23 @@ function clone(value) {
 }
 
 describe("Pi compatibility manifest", () => {
-  it("validates every checked-in versioned manifest and pins v0.83.0", () => {
-    const files = readCompatibilityFiles();
+  it("validates every checked-in versioned manifest and pins v0.83.0 and v1.3.0", () => {
+    const manifests = validateCompatibilityManifests();
+    const latest = readCompatibilityFiles();
+    const initial = readCompatibilityFiles(manifests[0]);
 
-    expect(validateCompatibilityManifests()).toHaveLength(1);
-    expect(files.manifest.baseline).toMatchObject({
+    expect(manifests).toHaveLength(2);
+    expect(initial.manifest.baseline).toMatchObject({
       release: "v0.83.0",
-      commit: UPSTREAM_COMMIT,
+      commit: UPSTREAM_COMMIT_V0_83_0,
     });
-    expect(files.manifest.classifications).toBeUndefined();
-    expect(files.schema.properties.classifications).toBeUndefined();
-    expect(files.schema.$defs.surface.properties.classification.enum).toEqual([
+    expect(latest.manifest.baseline).toMatchObject({
+      release: "v1.3.0",
+      commit: UPSTREAM_COMMIT_V1_3_0,
+    });
+    expect(latest.manifest.classifications).toBeUndefined();
+    expect(latest.schema.properties.classifications).toBeUndefined();
+    expect(latest.schema.$defs.surface.properties.classification.enum).toEqual([
       "native",
       "adapter",
       "planned",
@@ -169,7 +176,7 @@ describe("Pi compatibility manifest", () => {
         JSON.stringify(files.schema)
       );
       writeFileSync(
-        join(directory, "pi-v0.83.0.json"),
+        join(directory, "pi-v1.3.0.json"),
         JSON.stringify(files.manifest)
       );
 
@@ -186,7 +193,7 @@ describe("Pi compatibility manifest", () => {
         JSON.stringify(files.manifest)
       );
       expect(() => validateCompatibilityManifests(directory)).toThrow(
-        "pi-v9.9.9.json does not match baseline release v0.83.0"
+        "pi-v9.9.9.json does not match baseline release v1.3.0"
       );
     } finally {
       rmSync(directory, { force: true, recursive: true });

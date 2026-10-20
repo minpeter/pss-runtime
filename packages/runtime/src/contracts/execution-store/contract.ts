@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { EventCursor, HostStore } from "../../execution";
+import type {
+  EventCursor,
+  HostScheduler,
+  HostStore,
+  HostStoreTransaction,
+} from "../../execution";
 import {
   appendCheckpoint,
   collectEvents,
@@ -10,14 +15,34 @@ import {
 import { describeThreadEventLogContract } from "./thread-event-contract";
 import { describeThreadInputInboxContract } from "./thread-input-contract";
 
+/**
+ * How a store's `tx.scheduler` behaves. Stores that schedule transactionally
+ * must list committed work and drop rolled-back work; stores that cannot must
+ * leave `tx.scheduler` undefined so callers schedule after commit.
+ */
+type ExecutionStoreTransactionalSchedulerContract =
+  | "unsupported"
+  | {
+      /** Asserts the committed run will be woken, e.g. by an armed alarm. */
+      readonly expectCommittedRunWake?: (
+        store: HostStore,
+        runId: string
+      ) => Promise<void>;
+      readonly listScheduledRuns: (
+        store: HostStore
+      ) => Promise<readonly string[]>;
+    };
+
 export interface ExecutionStoreContractOptions {
   readonly createStore: () => HostStore;
   readonly name: string;
+  readonly transactionalScheduler: ExecutionStoreTransactionalSchedulerContract;
 }
 
 export function describeExecutionStoreContract({
   createStore,
   name,
+  transactionalScheduler,
 }: ExecutionStoreContractOptions): void {
   describe(`${name} HostStore contract`, () => {
     it("transactions commit run checkpoint event and notification atomically", async () => {
@@ -103,6 +128,68 @@ export function describeExecutionStoreContract({
 
       await expect(store.threads.load("thread-1")).resolves.toBeNull();
     });
+
+    it("lists runs by threadKey in creation order", async () => {
+      const store = createStore();
+      await store.turns.create({
+        ...createQueuedRun("run-thread-a-z-first"),
+        threadKey: "thread-a",
+      });
+      await store.turns.create({
+        ...createQueuedRun("run-thread-b-1"),
+        threadKey: "thread-b",
+      });
+      await store.turns.create({
+        ...createQueuedRun("run-thread-a-a-second"),
+        threadKey: "thread-a",
+      });
+
+      if (store.turns.listByThreadKey) {
+        await expect(store.turns.listByThreadKey("thread-a")).resolves.toEqual([
+          expect.objectContaining({ runId: "run-thread-a-z-first" }),
+          expect.objectContaining({ runId: "run-thread-a-a-second" }),
+        ]);
+      }
+    });
+
+    if (transactionalScheduler === "unsupported") {
+      it("leaves tx.scheduler undefined without transactional scheduling", async () => {
+        const store = createStore();
+
+        const scheduler = await store.transaction((tx) =>
+          Promise.resolve(tx.scheduler)
+        );
+
+        expect(scheduler).toBeUndefined();
+      });
+    } else {
+      it("commits and rolls back tx.scheduler writes with the transaction", async () => {
+        const store = createStore();
+
+        await expect(
+          store.transaction(async (tx) => {
+            await tx.turns.create(createQueuedRun("run-rolled-back"));
+            await requiredTransactionScheduler(tx).enqueueRun(
+              "run-rolled-back"
+            );
+            throw new Error("outbox rollback");
+          })
+        ).rejects.toThrow("outbox rollback");
+        await store.transaction(async (tx) => {
+          await tx.turns.create(createQueuedRun("run-committed"));
+          await requiredTransactionScheduler(tx).enqueueRun("run-committed");
+        });
+
+        await expect(store.turns.get("run-rolled-back")).resolves.toBeNull();
+        const scheduled = await transactionalScheduler.listScheduledRuns(store);
+        expect(scheduled).not.toContain("run-rolled-back");
+        expect(scheduled).toContain("run-committed");
+        await transactionalScheduler.expectCommittedRunWake?.(
+          store,
+          "run-committed"
+        );
+      });
+    }
 
     it("deletes aggregate thread execution data when supported", async () => {
       const store = createStore();
@@ -365,4 +452,11 @@ export function describeExecutionStoreContract({
       });
     });
   });
+}
+
+function requiredTransactionScheduler(tx: HostStoreTransaction): HostScheduler {
+  if (tx.scheduler === undefined) {
+    throw new Error("Expected a store with transactional scheduling.");
+  }
+  return tx.scheduler;
 }

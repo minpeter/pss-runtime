@@ -302,4 +302,40 @@ describe("runCodingAgentExec", () => {
       expect(serialized).not.toContain(secret);
     }
   });
+
+  it("persists and resumes a durable thread across exec runs when threadDirectory and sessionKey are set", async () => {
+    const threadDirectory = join(workspace, ".pss-threads");
+    const seenPrompts: unknown[] = [];
+    const createModel = () =>
+      new MockLanguageModelV4({
+        doStream: (options) => {
+          seenPrompts.push(options.prompt);
+          return Promise.resolve({
+            stream: convertArrayToReadableStream(streamChunks),
+          });
+        },
+      });
+
+    const first = await runCodingAgentExec({
+      model: createModel(),
+      prompt: "first prompt",
+      sessionKey: "exec:durable-session",
+      stdout: createCapturedOutput().output,
+      threadDirectory,
+      workspace,
+    });
+    const second = await runCodingAgentExec({
+      model: createModel(),
+      prompt: "second prompt",
+      sessionKey: "exec:durable-session",
+      stdout: createCapturedOutput().output,
+      threadDirectory,
+      workspace,
+    });
+
+    expect(first.status).toBe("completed");
+    expect(second.status).toBe("completed");
+    expect(JSON.stringify(seenPrompts[1])).toContain("first prompt");
+    expect(JSON.stringify(seenPrompts[1])).toContain("second prompt");
+  });
 });
