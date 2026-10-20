@@ -13,9 +13,11 @@ import type { ProcessQueuedInputOptions } from "./turn-processor-options";
 
 /**
  * Ends a started turn that failed. A turn whose run another owner took over
- * writes nothing; any other failure goes through turn-error recovery. Later
- * queued input still runs: its runs are separate, and thread commits stay
- * version-checked against the other owner's.
+ * writes nothing, including one whose failure (a model error, a refused tool
+ * checkpoint) came before its renewal noticed the takeover; any other
+ * failure goes through turn-error recovery. Later queued input still runs:
+ * its runs are separate, and thread commits stay version-checked against the
+ * other owner's.
  */
 export async function settleFailedTurn(
   options: Parameters<typeof recoverQueuedInputFailure>[0] & {
@@ -25,11 +27,12 @@ export async function settleFailedTurn(
   readonly outcome: QueuedInputOutcome;
   readonly pendingDurableInputClaim: ProcessQueuedInputOptions["item"]["durableInputClaim"];
 }> {
-  const loss = turnOwnershipLoss(
-    options.error,
-    options.signal,
-    options.executionRun?.runId
-  );
+  const loss =
+    turnOwnershipLoss(
+      options.error,
+      options.signal,
+      options.executionRun?.runId
+    ) ?? (await options.executionRun?.lostOwnership());
   if (loss) {
     await abandonLostTurn({
       item: options.item,

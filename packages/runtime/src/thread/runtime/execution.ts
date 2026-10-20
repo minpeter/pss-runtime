@@ -32,7 +32,10 @@ import {
   settleThreadExecutionRun,
   type TerminalRunStorageCommit,
 } from "./terminal-run-settlement";
-import { startTurnLeaseHeartbeat } from "./turn-ownership";
+import {
+  startTurnLeaseHeartbeat,
+  TurnOwnershipLostError,
+} from "./turn-ownership";
 
 export interface ThreadExecutionOptions {
   readonly compaction?: AgentCompaction;
@@ -58,6 +61,11 @@ export type ThreadExecutionCancellation =
 export interface ThreadExecutionRun {
   commitOwned<Result>(persist: OwnedRunStorageCommit<Result>): Promise<Result>;
   complete(status: ThreadExecutionTerminalStatus): Promise<void>;
+  /**
+   * Re-reads the run and reports whether another owner took it over, for a
+   * turn that failed before its renewal or a fenced write noticed.
+   */
+  lostOwnership(): Promise<TurnOwnershipLostError | undefined>;
   /** Aborted with a `TurnOwnershipLostError` when another owner took over. */
   readonly ownershipLost: AbortSignal;
   /** Stops renewing the run's lease; settling the run also stops it. */
@@ -190,6 +198,7 @@ export async function startThreadExecutionRun({
           status,
         })
       ),
+    lostOwnership: () => lostRunOwnership(executionHost, runId, leaseId),
     ownershipLost: heartbeat?.lost ?? new AbortController().signal,
     release: () => heartbeat?.release(),
     runId,
@@ -212,6 +221,33 @@ export async function startThreadExecutionRun({
       state,
     }),
   };
+}
+
+/**
+ * The takeover of `runId` that a failed turn missed: the run is gone, holds
+ * another lease, or no longer runs. A read that fails reports nothing, so the
+ * turn settles as it otherwise would.
+ */
+async function lostRunOwnership(
+  executionHost: AgentHost,
+  runId: string,
+  leaseId: string | null
+): Promise<TurnOwnershipLostError | undefined> {
+  let run: TurnRecord | null;
+  try {
+    run = await executionHost.store.turns.get(runId);
+  } catch {
+    return;
+  }
+  if (!run) {
+    return new TurnOwnershipLostError(runId, "not-found");
+  }
+  if ((run.lease?.leaseId ?? null) !== leaseId) {
+    return new TurnOwnershipLostError(runId, "lease-conflict");
+  }
+  if (run.status !== "running") {
+    return new TurnOwnershipLostError(runId, "status-conflict");
+  }
 }
 
 /**

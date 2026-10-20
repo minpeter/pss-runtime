@@ -1562,7 +1562,8 @@ run left `running` by a turn of this process that ended without settling it is
 reclaimable by this process at once. Until a claim succeeds,
 `thread.continue()` rejects with `THREAD_CONTINUATION_BUSY` and
 `agent.resume(runId)` returns `null`. A turn whose run another owner took over
-or settled (a renewal or a fenced write fails) stops at once, writes nothing,
+or settled (a renewal or a fenced write fails, or the turn fails for another
+reason and finds its run taken) stops at once, writes nothing,
 reloads the committed thread, and emits `turn-error` with error code
 `THREAD_OWNERSHIP_LOST`. A fresh run's lease is its first attempt, so the
 default five claim attempts allow four recoveries before the run parks as
