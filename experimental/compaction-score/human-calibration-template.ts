@@ -19,11 +19,11 @@ For every prefilled CSV row:
 
 Do not use an LLM, automated grader, search tool, or the sealed key file. Preserve every prefilled identity and protocol field. Save the completed CSV separately from the packet directory.
 
-## 한국어 안내
+## Korean Language Instructions
 
-이 평가는 반드시 실제 사람이 직접 수행해야 합니다. \`packets.blinded.jsonl\`에서 해당 \`packet_id\`와 \`qid\`를 찾고, CSV 행의 \`viewed_arm\`에 지정된 후보 하나만 읽으세요. 같은 질문의 A와 B를 서로 비교하지 마세요.
+This evaluation must be performed by a real person. \`packets.blinded.jsonl\`Applicable in the \`packet_id\`Wa \`qid\`Find and, CSV Rows \`viewed_arm\`Please read only one candidate assigned to. For the same question AWa BDo not compare with each other.
 
-본인이 판단한 정답을 \`human_answer\`에 적고, 후보와의 관계를 \`candidate_match\`에 \`exact\`, \`equiv\`, \`wrong\`, \`unknown\` 중 하나로 기록하세요. \`confidence\`는 1-5, \`seconds_spent\`는 실제 소요 시간을 양의 초 단위로 입력합니다. 사람을 식별할 수 있는 안정적인 \`annotator_id\`는 \`human:<id>\` 형식을 사용하고, 역할·세션·UTC 시각·난이도·메모도 채우세요.
+The correct answer you judged \`human_answer\`Write down your relationship with the candidate in the \`candidate_match\`on \`exact\`, \`equiv\`, \`wrong\`, \`unknown\` Make a note of it as one of. \`confidence\` is  1-5, \`seconds_spent\`enters the actual time spent in quantities of seconds. Reliable, human-identifiable \`annotator_id\` is  \`human:<id>\` using formats, roles and sessions·UTC Fill in time, difficulty, and notes.
 
-LLM, 자동 채점기, 검색 도구, sealed key 파일을 사용하면 안 됩니다. 미리 채워진 ID, digest, arm, protocol 값은 수정하지 말고, 완성한 CSV는 packet 디렉터리 밖에 저장하세요.
+LLM, Auto-scoring, search tools, sealed key File should not be used. Prefilled ID, digest, arm, protocol Do not modify the value, CSV is  packet Save it outside the directory.
 `;

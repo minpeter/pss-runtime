@@ -8,8 +8,8 @@ const runtime = await createExampleRuntime();
 output.write(
   [
     "sync-subagent CLI",
-    "종료: /quit",
-    "kb/ 지식베이스 질문을 입력하세요. reader가 관련 문서를 읽고 답합니다.",
+    "Shutdown: /quit",
+    "kb/ Please enter a knowledgebase question. readerReads and answers relevant documents.",
     "",
   ].join("\n")
 );

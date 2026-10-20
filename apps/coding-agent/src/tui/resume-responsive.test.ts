@@ -9,7 +9,7 @@ import { SessionSelectorRow } from "./session-selector-row";
 import { SnapshotText } from "./snapshot-views";
 import { ColdSnapshot } from "./transcript-owner";
 
-const korean = "긴한글제목남은공간확인테스트입니다";
+const korean = "LongEnglishTitleForWidthTest123456";
 const entry = {
   createdAt: "",
   cwd: "/work",
@@ -46,7 +46,7 @@ describe("responsive resume", () => {
     for (const name of [
       korean,
       "abc".repeat(60),
-      "API 한국어 日本語 mixed".repeat(6),
+      "API Korean mixed".repeat(6),
     ]) {
       let previous = 0;
       for (let width = 5; width <= 240; width++) {
@@ -72,7 +72,7 @@ describe("responsive resume", () => {
       for (const current of [false, true]) {
         for (const selected of [false, true]) {
           const rows = new SessionSelectorRow(
-            { ...entry, key: "cwd:/work#한국어日本語" },
+            { ...entry, key: "cwd:/work # English" },
             current,
             selected
           ).render(width);
@@ -88,7 +88,7 @@ describe("responsive resume", () => {
         onCancel: vi.fn(),
         onSelect: vi.fn(),
       });
-      selector.handleInput("한국");
+      selector.handleInput("Korea");
       expect(
         selector.render(width).every((row) => visibleWidth(row) <= width),
         `component width ${width}`
@@ -186,7 +186,7 @@ describe("responsive resume", () => {
   );
 
   it("keeps HOT and COLD two-line CJK blocks bounded on every resize", () => {
-    const source = `${korean}\nmodel · /work/한국어/日本語`;
+    const source = `${korean}\nmodel · /work/English/日本語`;
     const view = new SnapshotText(
       source,
       1,

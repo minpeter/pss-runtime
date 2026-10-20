@@ -72,7 +72,7 @@ describe("human-calibration CLI artifacts", () => {
         expect(packet).not.toContain('"rng_seed"');
         expect(packet).not.toContain('"arm_order"');
         expect(keys).toContain('"answer":"R-17"');
-        expect(instructions).toContain("## 한국어 안내");
+        expect(instructions).toContain("## Korean Language Instructions");
         expect(instructions).toContain("human:<id>");
         expect(instructions.toLowerCase()).not.toContain("pss");
         expect(instructions.toLowerCase()).not.toContain("pi runtime");

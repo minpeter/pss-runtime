@@ -23,7 +23,7 @@ describe("storage metrics", () => {
       threadKey,
       {
         state: {
-          history: [{ content: "한".repeat(480), role: "user" }],
+          history: [{ content: "history 😀 ".repeat(480), role: "user" }],
           schemaVersion: 1,
         },
       },
@@ -38,7 +38,7 @@ describe("storage metrics", () => {
       threadKey,
     });
     await host.store.events.append(runId, {
-      text: "가".repeat(480),
+      text: "output 😀 ".repeat(480),
       type: "assistant-output",
     });
     await host.store.checkpoints.append(
@@ -46,7 +46,7 @@ describe("storage metrics", () => {
         checkpointId: `${runId}:checkpoint-1`,
         phase: "after-model",
         runId,
-        runtimeState: { output: "나".repeat(480) },
+        runtimeState: { output: "state 😀 ".repeat(480) },
         threadSnapshot: { threadKey, version: "1" },
         version: 1,
       },
@@ -54,14 +54,14 @@ describe("storage metrics", () => {
     );
     await host.store.notifications.enqueue({
       idempotencyKey: `${runId}:notification`,
-      input: { text: "다".repeat(480), type: "user-input" },
+      input: { text: "notification 😀 ".repeat(480), type: "user-input" },
       notificationId: `${runId}:notification`,
       runId,
       status: "pending",
       threadKey,
     });
     await host.store.inputs.admit({
-      input: { text: "라".repeat(480), type: "user-input" },
+      input: { text: "input 😀 ".repeat(480), type: "user-input" },
       kind: "steer",
       messageId: `${runId}:input`,
       placement: "step-start",

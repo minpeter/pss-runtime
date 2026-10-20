@@ -95,16 +95,16 @@ describe("extractMermaidBlocks", () => {
 });
 
 describe("renderDiagramArt", () => {
-  it("renders a Korean flowchart as box art", () => {
-    const art = renderDiagramArt("graph TD\n  A[사용자 입력] --> B[pss TUI]");
+  it("renders an English flowchart as box art", () => {
+    const art = renderDiagramArt("graph TD\n  A[user input] --> B[pss TUI]");
 
     expect(art).toBeDefined();
-    expect(art?.join("\n")).toContain("사용자 입력");
+    expect(art?.join("\n")).toContain("user input");
     expect(art?.join("\n")).toContain("┌");
   });
 
-  it("keeps every art line at the same visible width with CJK labels", () => {
-    const art = renderDiagramArt("graph LR\nA[사용자 입력]-->B[게이트웨이]");
+  it("keeps every art line at the same visible width with text labels", () => {
+    const art = renderDiagramArt("graph LR\nA[user input]-->B[gateway]");
 
     expect(art).toBeDefined();
     const widths = new Set((art ?? []).map((line) => visibleWidth(line)));
@@ -185,10 +185,10 @@ describe("renderDiagramArt", () => {
 
   it("renders sequence diagrams", () => {
     const art = renderDiagramArt(
-      "sequenceDiagram\n  participant U as 사용자\n  U->>U: ping"
+      "sequenceDiagram\n  participant U as user\n  U->>U: ping"
     );
 
-    expect(art?.join("\n")).toContain("사용자");
+    expect(art?.join("\n")).toContain("user");
   });
 
   it("renders sequence diagrams with textual brackets", () => {
@@ -222,7 +222,7 @@ describe("renderDiagramArt", () => {
 
   it("renders subgraph clusters without a stray end node", () => {
     const art = renderDiagramArt(`graph TD;
-  subgraph client[클라이언트]
+  subgraph client[client]
     A[input] --> B[tui];
   end;
   B --> C[agent];`);

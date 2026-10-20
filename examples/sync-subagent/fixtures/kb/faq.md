@@ -1,13 +1,13 @@
 # FAQ
 
-## Pro 플랜 환불은 어떻게 신청하나요?
+## Pro How do I apply for a plan refund??
 
-설정 > 결제 > 환불 요청에서 신청한다. 승인까지 영업일 기준 2~3일 걸린다.
+Go to Settings > Payments > Request a Refund. Approval takes 2-3 business days.
 
-## Free에서 Pro로 바꾸면 데이터가 사라지나요?
+## Freefrom ProWill the data disappear if I replace it with?
 
-아니다. 기존 세션과 플러그인 설정은 그대로 유지된다.
+No, existing sessions and plugin settings will remain the same.
 
-## 백그라운드 서브에이전트는 어떤 플랜에서 쓸 수 있나요?
+## What plans can I use Background Sub-Agent on??
 
-Pro 플랜 이상에서 사용할 수 있다.
+Pro Can be used in Plans and Above.

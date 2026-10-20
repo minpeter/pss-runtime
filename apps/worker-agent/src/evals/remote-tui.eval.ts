@@ -25,7 +25,7 @@ defineEval(
   },
   (it) => {
     it("delivers one turn through the remote TUI endpoint", async (t) => {
-      await t.run("eval smoke: 답장은 한 문장으로 remote eval ok 라고 말해줘.");
+      await t.run("eval smoke: Please say remote eval ok in one sentence.");
 
       t.completed();
       t.didNotFail();

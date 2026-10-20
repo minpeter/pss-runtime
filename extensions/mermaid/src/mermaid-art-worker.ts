@@ -13,7 +13,7 @@ const HEADER_SEMICOLON_PATTERN =
 const TRAILING_SEMICOLON_PATTERN = /;[ \t]*$/gm;
 const FLOWCHART_HEADER_PATTERN = /^\s*(?:graph|flowchart)\b/;
 const ARROW_TOKEN = "(-->>|->>|-->|->|==>|-.->)";
-const ARROW_PREFIX = "([\\w\\]\\)}\"'가-힯])";
+const ARROW_PREFIX = "([\\p{L}\\w\\]\\)}\"'])";
 const ARROW_BEFORE_NODE_PATTERN = new RegExp(
   `${ARROW_PREFIX}${ARROW_TOKEN}(?=[^\\s|])`,
   "gu"

@@ -18,7 +18,7 @@ describe("payload chunk rows", () => {
       sql,
       location,
       "notification-record",
-      { text: "큰 payload ".repeat(80) },
+      { text: "large payload ".repeat(80) },
       220
     );
     expect(chunkCount(sql)).toBeGreaterThan(0);

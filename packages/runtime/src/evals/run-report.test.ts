@@ -21,7 +21,7 @@ const tools = {
   get_weather: tool({
     execute: (input) => ({
       city: readCity(input),
-      condition: "맑음",
+      condition: "clear",
       tempC: 21,
     }),
     inputSchema: jsonSchema({
@@ -38,10 +38,10 @@ describe("eval run reports", () => {
     clearEvals();
     defineEval("multi-run-report", { thread: twoTurnWeatherThread }, (it) => {
       it("keeps two run traces", async (t) => {
-        await t.run("서울 날씨?");
-        await t.run("부산 날씨?");
+        await t.run("Seoul weather?");
+        await t.run("Busan weather?");
         t.calledTool("get_weather", { times: 2 });
-        t.messageIncludes("부산");
+        t.messageIncludes("Busan");
       });
     });
 
@@ -57,8 +57,8 @@ describe("eval run reports", () => {
             expect.objectContaining({ type: "assistant-output" }),
             expect.objectContaining({ type: "tool-call" }),
           ]),
-          input: "서울 날씨?",
-          output: expect.stringContaining("서울"),
+          input: "Seoul weather?",
+          output: expect.stringContaining("Seoul"),
           toolCalls: [
             expect.objectContaining({
               toolCallId: "call_weather_first",
@@ -71,8 +71,8 @@ describe("eval run reports", () => {
             expect.objectContaining({ type: "assistant-output" }),
             expect.objectContaining({ type: "tool-call" }),
           ]),
-          input: "부산 날씨?",
-          output: expect.stringContaining("부산"),
+          input: "Busan weather?",
+          output: expect.stringContaining("Busan"),
           toolCalls: [
             expect.objectContaining({
               toolCallId: "call_weather_second",
@@ -498,20 +498,20 @@ function duplicateUsageThread(): EvalThreadLike {
 
 function twoTurnWeatherThread() {
   return new Agent({
-    instructions: "You are a helpful assistant. Answer in Korean.",
+    instructions: "You are a helpful assistant. Answer in English.",
     model: createMockLanguageModelV4([
       mockLanguageModelV4ToolCall({
-        input: { city: "서울" },
+        input: { city: "Seoul" },
         toolCallId: "call_weather_first",
         toolName: "get_weather",
       }),
-      mockLanguageModelV4Text("서울은 맑음입니다."),
+      mockLanguageModelV4Text("It is clear in Seoul."),
       mockLanguageModelV4ToolCall({
-        input: { city: "부산" },
+        input: { city: "Busan" },
         toolCallId: "call_weather_second",
         toolName: "get_weather",
       }),
-      mockLanguageModelV4Text("부산도 맑음입니다."),
+      mockLanguageModelV4Text("It is also clear in Busan."),
     ]),
     tools,
   }).thread("eval");
@@ -523,5 +523,5 @@ function readCity(input: unknown): string {
     "city" in input &&
     typeof input.city === "string"
     ? input.city
-    : "서울";
+    : "Seoul";
 }

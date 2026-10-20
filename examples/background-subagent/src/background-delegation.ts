@@ -63,8 +63,8 @@ export async function launchDurableBackgroundDelegation(
 export function backgroundLaunchOutput(job: BackgroundJobLaunch) {
   return {
     message: [
-      `백그라운드 작업 ${job.id}을(를) 시작했다.`,
-      `작업 ${job.id}을(를) 확인하기 전에 <system-reminder>를 기다려라.`,
+      `Background job ${job.id} launched.`,
+      `Wait for a <system-reminder> before checking job ${job.id}.`,
     ].join(" "),
     run_in_background: true,
     status: job.status,

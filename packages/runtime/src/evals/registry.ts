@@ -20,7 +20,7 @@ const registry: EvalDefinition[] = [];
  *     (await createAgent({ model, instructions, tools })).thread("eval"),
  * }, (it) => {
  *   it("calls get_weather", async (t) => {
- *     await t.run("서울 날씨 어때?");
+ *     await t.run("How is the weather in Seoul?");
  *     t.calledTool("get_weather");
  *     t.notCalledTool("send_email");
  *   });

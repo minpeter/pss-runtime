@@ -4,7 +4,7 @@ import { drain } from "./drain";
 import { thread } from "./setup";
 
 output.write(
-  ["basic CLI", "종료: /quit", "메시지를 입력하세요.", ""].join("\n")
+  ["basic CLI", "Shutdown: /quit", "Please enter a message.", ""].join("\n")
 );
 
 const rl = createInterface({ input, output });

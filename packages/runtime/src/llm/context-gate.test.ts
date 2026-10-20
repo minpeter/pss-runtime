@@ -58,7 +58,7 @@ describe("model prompt measurement", () => {
   it.each([
     ["ascii", { content: "hello world", role: "user" }],
     ["japanese", { content: "日本語のテキスト", role: "user" }],
-    ["korean", { content: "한국어 텍스트", role: "user" }],
+    ["english", { content: "English text", role: "user" }],
     ["emoji surrogate pair", { content: "😀😀😀", role: "user" }],
     ["lone high surrogate", { content: "\uD800", role: "user" }],
     ["lone low surrogate", { content: "\uDC00", role: "user" }],

@@ -70,7 +70,7 @@ for row, model in enumerate(MODELS):
         FIRST_SHOT[model],
         width,
         color=first_color,
-        label="1턴 성공률",
+        label="First-turn success rate",
         zorder=3,
     )
     final_bars = ax_pass.bar(
@@ -78,7 +78,7 @@ for row, model in enumerate(MODELS):
         THREE_TURN[model],
         width,
         color=final_color,
-        label="3턴 최종 성공률",
+        label="Final three-turn success rate",
         zorder=3,
     )
     for bars, values, counts in (
@@ -99,8 +99,8 @@ for row, model in enumerate(MODELS):
     ax_pass.set_xticks(positions)
     ax_pass.set_xticklabels(FORMATS, fontsize=10.5)
     ax_pass.set_ylim(0, 112)
-    ax_pass.set_ylabel("통과율 (%)", fontsize=11)
-    ax_pass.set_title(f"minimax {model} — 1턴 vs 3턴", fontsize=12.5, pad=10)
+    ax_pass.set_ylabel("Pass rate (%)", fontsize=11)
+    ax_pass.set_title(f"minimax {model} — 1Turn vs 3Turn", fontsize=12.5, pad=10)
     ax_pass.yaxis.grid(True, color="#d8dde3", lw=0.8, zorder=0)
     ax_pass.set_axisbelow(True)
     for spine in ("top", "right"):
@@ -133,9 +133,9 @@ for row, model in enumerate(MODELS):
     ax_recovery.set_yticklabels(FORMATS, fontsize=10.5)
     ax_recovery.invert_yaxis()
     ax_recovery.set_xlim(0, 108)
-    ax_recovery.set_xlabel("복구율 (%)", fontsize=11)
+    ax_recovery.set_xlabel("Recovery rate (%)", fontsize=11)
     ax_recovery.set_title(
-        f"minimax {model} — 1턴 실패 후 3턴 내 복구",
+        f"minimax {model} — recovery within three turns after first-turn failure",
         fontsize=12.5,
         pad=10,
     )
@@ -147,15 +147,14 @@ for row, model in enumerate(MODELS):
         ax_recovery.spines[spine].set_color("#b8c0c8")
 
 fig.suptitle(
-    "4개 edit format의 1턴 성공률과 3턴 복구성 — read_file + 누적 상태, runs=10",
+    "First-turn success and three-turn recovery for four edit formats — read_file + cumulative state, runs=10",
     fontsize=15,
     y=0.985,
 )
 fig.text(
     0.5,
     0.012,
-    "복구율 = 1턴 실패 중 2~3턴 내 최종 성공. 괄호는 scored 성공/전체 또는 "
-    "복구 성공/1턴 실패 수. request 실패는 scored에서 제외. temperature 0, thinking off.",
+    "Recovery rate = final success within turns 2–3 among first-turn failures. Parentheses show scored successes/total or recovered/first-turn failures. Request failures are excluded from scoring. temperature 0, thinking off.",
     ha="center",
     fontsize=9.5,
     color="#555",

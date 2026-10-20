@@ -42,7 +42,7 @@ first_bars = ax_pass.bar(
     FIRST_SHOT,
     width,
     color="#8aa6c1",
-    label="1턴 성공률",
+    label="First-turn success rate",
     zorder=3,
 )
 final_bars = ax_pass.bar(
@@ -50,7 +50,7 @@ final_bars = ax_pass.bar(
     THREE_TURN,
     width,
     color="#C0392B",
-    label="3턴 최종 성공률",
+    label="Final three-turn success rate",
     zorder=3,
 )
 for bars, values, counts in (
@@ -72,8 +72,8 @@ for bars, values, counts in (
 ax_pass.set_xticks(positions)
 ax_pass.set_xticklabels(FORMATS, fontsize=11)
 ax_pass.set_ylim(0, 112)
-ax_pass.set_ylabel("통과율 (%)", fontsize=12)
-ax_pass.set_title("1턴 성공률과 3턴 최종 성공률", fontsize=13, pad=12)
+ax_pass.set_ylabel("Pass rate (%)", fontsize=12)
+ax_pass.set_title("First-turn and final three-turn success rates", fontsize=13, pad=12)
 ax_pass.yaxis.grid(True, color="#d8dde3", lw=0.8, zorder=0)
 ax_pass.set_axisbelow(True)
 for spine in ("top", "right"):
@@ -102,8 +102,8 @@ ax_recovery.set_yticks(positions)
 ax_recovery.set_yticklabels(FORMATS, fontsize=11)
 ax_recovery.invert_yaxis()
 ax_recovery.set_xlim(0, 108)
-ax_recovery.set_xlabel("복구율 (%)", fontsize=12)
-ax_recovery.set_title("1턴 실패 후 3턴 내 복구율", fontsize=13, pad=12)
+ax_recovery.set_xlabel("Recovery rate (%)", fontsize=12)
+ax_recovery.set_title("Recovery within three turns after first-turn failure", fontsize=13, pad=12)
 ax_recovery.xaxis.grid(True, color="#d8dde3", lw=0.8, zorder=0)
 ax_recovery.set_axisbelow(True)
 for spine in ("top", "right"):
@@ -112,16 +112,14 @@ for spine in ("left", "bottom"):
     ax_recovery.spines[spine].set_color("#b8c0c8")
 
 fig.suptitle(
-    "minimax m3 × 4 edit formats — read_file + 누적 상태, runs=10",
+    "minimax m3 × 4 edit formats — read_file + cumulative state, runs=10",
     fontsize=15,
     y=0.98,
 )
 fig.text(
     0.5,
     0.015,
-    "각 포맷의 scored 모집단은 request 실패를 제외한 값입니다. "
-    "복구율 = 1턴 실패 중 2~3턴 내 최종 성공. "
-    "최대 3 recovery turns, temperature 0, thinking off.",
+    "Each format's scored population excludes request failures. Recovery rate is final success within turns 2–3 among first-turn failures. Maximum 3 recovery turns, temperature 0, thinking off.",
     ha="center",
     fontsize=9.5,
     color="#555",
