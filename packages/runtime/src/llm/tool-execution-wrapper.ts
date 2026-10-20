@@ -4,7 +4,6 @@ import { ToolExecutionNeedsRecoveryError } from "./tool-execution-checkpoint";
 import type {
   RuntimeToolExecutionCheckpoint,
   RuntimeToolExecutionContext,
-  RuntimeToolExecutionDecision,
   RuntimeToolExecutionResult,
   RuntimeToolRetryPolicy,
 } from "./tool-execution-types";
@@ -106,13 +105,9 @@ function wrapToolExecute(
         toolExecution,
         toolName,
       });
-      let decision: RuntimeToolExecutionDecision;
-      try {
-        decision = await toolExecution.beforeTool?.(checkpoint);
-      } catch (error) {
-        progress?.markAuthorityFailure();
-        throw error;
-      }
+      const decision = await withAuthority(progress, () =>
+        toolExecution.beforeTool?.(checkpoint)
+      );
       if (decision?.status === "needs-recovery") {
         throw new ToolExecutionNeedsRecoveryError(checkpoint);
       }
@@ -128,29 +123,47 @@ function wrapToolExecute(
 
       progress?.updateInput(toolCallId, executeInput);
 
-      const output = await execute(executeInput, {
-        ...options,
-        attempt: checkpoint.attempt,
-        idempotencyKey: checkpoint.idempotencyKey,
-        retryPolicy: checkpoint.policy,
-        ...(options.abortSignal === undefined
-          ? {}
-          : { signal: options.abortSignal }),
-        toolCallId,
-      });
-      let transformed: RuntimeToolExecutionResult | undefined;
+      let output: unknown;
       try {
-        transformed = await toolExecution.afterTool?.({
-          ...executionCheckpoint,
-          output,
+        output = await execute(executeInput, {
+          ...options,
+          attempt: checkpoint.attempt,
+          idempotencyKey: checkpoint.idempotencyKey,
+          retryPolicy: checkpoint.policy,
+          ...(options.abortSignal === undefined
+            ? {}
+            : { signal: options.abortSignal }),
+          toolCallId,
         });
       } catch (error) {
-        progress?.markAuthorityFailure();
+        // An aborted call may have partly run: leave its outcome unknown.
+        if (!options.abortSignal?.aborted) {
+          await withAuthority(progress, () =>
+            toolExecution.afterToolError?.(checkpoint, error)
+          );
+        }
         throw error;
       }
+      const transformed: RuntimeToolExecutionResult | undefined =
+        await withAuthority(progress, () =>
+          toolExecution.afterTool?.({ ...executionCheckpoint, output })
+        );
       return transformed ? transformed.output : output;
     },
   };
+}
+
+/** Runs a durable execution hook; its failure revokes recovery authority. */
+async function withAuthority<Result>(
+  progress: ToolStepProgress | undefined,
+  hook: () => Promise<Result> | Result
+): Promise<Result> {
+  try {
+    return await hook();
+  } catch (error) {
+    progress?.markAuthorityFailure();
+    throw error;
+  }
 }
 
 function isExecutableToolDefinition(value: unknown): value is {

@@ -9,13 +9,13 @@ import type {
   TurnStatus,
   TurnStore,
 } from "../../execution/host/types";
-import type { RuntimeToolExecutionContext } from "../../llm/tool-execution-types";
 import type { ThreadState } from "../state/thread-state";
 import type { CommitResult } from "../store/types";
 import type { AgentCompaction } from "./auto-compaction-types";
 import {
   createThreadToolExecutionContext,
   type ThreadToolCallInterceptor,
+  type ThreadToolExecutionContext,
   type ThreadToolResultInterceptor,
 } from "./execution-checkpoints";
 import {
@@ -56,7 +56,7 @@ export interface ThreadExecutionRun {
     status: ThreadExecutionTerminalStatus,
     persist: TerminalRunStorageCommit
   ): Promise<CommitResult>;
-  readonly toolExecution: RuntimeToolExecutionContext;
+  readonly toolExecution: ThreadToolExecutionContext;
 }
 
 export type ThreadExecutionTerminalStatus = Extract<

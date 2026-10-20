@@ -42,6 +42,7 @@ describe("inspectDurableTurn", () => {
       await expect(inspectDurableTurn(host.store, runId)).resolves.toEqual({
         checkpointVersion: 0,
         latestCheckpoint: null,
+        pendingToolCalls: [],
         runId,
         state: "no-checkpoint",
         status,
@@ -60,12 +61,47 @@ describe("inspectDurableTurn", () => {
     await expect(inspectDurableTurn(host, runId)).resolves.toEqual({
       checkpointVersion: 1,
       latestCheckpoint: checkpoint,
+      pendingToolCalls: [],
       runId,
       state: "checkpointed",
       status: "running",
       threadKey: "inspect-thread",
     });
     expect(transaction).toHaveBeenCalledOnce();
+  });
+
+  it("reports an unfinished sibling recorded beside a finished call", async () => {
+    // Given: the latest checkpoint finished one call while its step journal
+    // still records a manual-recovery sibling without an outcome.
+    const host = createInMemoryHost();
+    await host.store.turns.create(turnRecord("running"));
+    const transfer = {
+      attempt: 1,
+      idempotencyKey: `${runId}:call-transfer`,
+      policy: "manual-recovery" as const,
+      toolCallId: "call-transfer",
+      toolName: "transfer",
+    };
+    await host.store.checkpoints.append(
+      {
+        ...inspectionCheckpoint(),
+        phase: "after-tool",
+        runtimeState: {
+          inflight: [{ ...transfer, input: {}, seq: 1 }],
+          journalVersion: 2,
+          results: [],
+          toolCallId: "call-lookup",
+          toolName: "lookup",
+        },
+      },
+      { expectedVersion: 0 }
+    );
+
+    // When: the run is inspected.
+    const report = await inspectDurableTurn(host, runId);
+
+    // Then: the sibling is reported with its policy.
+    expect(report).toMatchObject({ pendingToolCalls: [transfer] });
   });
 
   it("uses transaction ports instead of reading the outer store", async () => {

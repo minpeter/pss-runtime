@@ -1,5 +1,10 @@
 import { appendLeaseFencedCheckpoint } from "../../execution/host/checkpoint-fencing";
 import { createCheckpointId } from "../../execution/host/checkpoint-ids";
+import {
+  type JournaledToolIntent,
+  type JournaledToolResult,
+  TOOL_STEP_JOURNAL_VERSION,
+} from "../../execution/host/tool-step-journal";
 import type {
   AgentHost,
   Checkpoint,
@@ -168,6 +173,27 @@ function completedToolCallsThrough(
   ];
 }
 
+/** Run tool context that journals the current step's tool round. */
+export interface ThreadToolExecutionContext
+  extends RuntimeToolExecutionContext {
+  /**
+   * Starts committing the step's tool round to thread history. Returns
+   * `undefined` when the step journaled nothing; otherwise call the result
+   * once the commit holds the round, which drops it from the journal.
+   */
+  beginToolRoundCommit(): (() => void) | undefined;
+}
+
+interface StepJournalState {
+  readonly inflight: JournaledToolIntent[];
+  readonly results: JournaledToolResult[];
+  seq: number;
+}
+
+type StepJournalEntry =
+  | { readonly kind: "intent" }
+  | { readonly errorText?: string; readonly kind: "result" };
+
 export function createThreadToolExecutionContext({
   executionHost,
   interceptToolCall,
@@ -182,18 +208,22 @@ export function createThreadToolExecutionContext({
   readonly leaseId: string | null;
   readonly runId: string;
   readonly state: ThreadState;
-}): RuntimeToolExecutionContext {
-  // Thread history is committed only at input, steer, and turn end, so every
-  // tool checkpoint records the run's earlier completed tools. Recovery that
-  // can restore only the latest checkpoint uses this to fail closed. A
-  // recovered attempt inherits the list from the run's latest checkpoint.
+}): ThreadToolExecutionContext {
+  // Thread history commits each tool round at step end. Until then every tool
+  // checkpoint carries the step's journal (recorded intents without outcomes
+  // and finished results), so a crash anywhere in the step can be resumed.
+  // Each checkpoint also records the run's completed tools, which recovery
+  // uses to fail closed when a result is neither committed nor journaled. A
+  // recovered attempt inherits that list from the run's latest checkpoint.
   // Appends are serialized so parallel tool calls in one step each record
-  // every sibling whose result was checkpointed before them.
+  // every sibling journaled before them.
   let completed: CompletedToolCall[] | undefined;
+  const journal: StepJournalState = { inflight: [], results: [], seq: 0 };
   let appends: Promise<unknown> = Promise.resolve();
   const append = (
     phase: Extract<CheckpointPhase, "after-tool" | "before-tool">,
-    toolCall: RuntimeToolExecutionCheckpoint & { readonly output?: unknown }
+    toolCall: RuntimeToolExecutionCheckpoint & { readonly output?: unknown },
+    entry: StepJournalEntry
   ): Promise<void> => {
     const appended = appends.then(async () => {
       completed ??= completedToolCallsThrough(
@@ -201,7 +231,9 @@ export function createThreadToolExecutionContext({
       );
       await appendThreadToolExecutionCheckpoint({
         completed,
+        entry,
         executionHost,
+        journal,
         leaseId,
         phase,
         runId,
@@ -217,27 +249,61 @@ export function createThreadToolExecutionContext({
     attempt: 1,
     afterTool: async (checkpoint) => {
       // Recovered results never pass the result hook again, so persist only
-      // its final output. A crash inside the hook leaves before-tool latest.
+      // its final output. A crash inside the hook leaves the intent pending.
       const transformed = await interceptToolResult?.(checkpoint);
-      await append("after-tool", {
-        ...checkpoint,
-        output: transformed ? transformed.output : checkpoint.output,
-      });
+      await append(
+        "after-tool",
+        {
+          ...checkpoint,
+          output: transformed ? transformed.output : checkpoint.output,
+        },
+        { kind: "result" }
+      );
       return transformed;
     },
+    afterToolError: async (checkpoint, error) => {
+      await append(
+        "after-tool",
+        { ...checkpoint, output: null },
+        { errorText: toolErrorText(error), kind: "result" }
+      );
+    },
     beforeTool: async (checkpoint) => {
-      await append("before-tool", checkpoint);
+      await append("before-tool", checkpoint, { kind: "intent" });
       const decision = await interceptToolCall?.(checkpoint);
       if (
         decision?.status === "needs-recovery" &&
         checkpoint.policy !== "manual-recovery"
       ) {
-        await append("before-tool", {
-          ...checkpoint,
-          policy: "manual-recovery",
-        });
+        await append(
+          "before-tool",
+          { ...checkpoint, policy: "manual-recovery" },
+          { kind: "intent" }
+        );
+      }
+      if (decision?.status === "blocked") {
+        // The model receives the blocked output as this call's result.
+        await append(
+          "after-tool",
+          { ...checkpoint, output: decision.output },
+          { kind: "result" }
+        );
       }
       return decision;
+    },
+    beginToolRoundCommit: () => {
+      if (journal.inflight.length === 0 && journal.results.length === 0) {
+        return;
+      }
+      const committing = [...journal.results];
+      return () => {
+        for (const result of committing) {
+          const index = journal.results.indexOf(result);
+          if (index >= 0) {
+            journal.results.splice(index, 1);
+          }
+        }
+      };
     },
     runId,
   };
@@ -245,7 +311,9 @@ export function createThreadToolExecutionContext({
 
 async function appendThreadToolExecutionCheckpoint({
   completed,
+  entry,
   executionHost,
+  journal,
   leaseId,
   phase,
   runId,
@@ -253,7 +321,9 @@ async function appendThreadToolExecutionCheckpoint({
   toolCall,
 }: {
   readonly completed: CompletedToolCall[];
+  readonly entry: StepJournalEntry;
   readonly executionHost: AgentHost;
+  readonly journal: StepJournalState;
   readonly leaseId: string | null;
   readonly phase: Extract<CheckpointPhase, "after-tool" | "before-tool">;
   readonly runId: string;
@@ -278,6 +348,10 @@ async function appendThreadToolExecutionCheckpoint({
     }
 
     const version = run.checkpointVersion + 1;
+    const next = nextStepJournal(journal, entry, toolCall, {
+      priorResultCount: priorResultCount ?? 0,
+      version,
+    });
     const result = await appendLeaseFencedCheckpoint(
       executionHost.store,
       {
@@ -285,10 +359,14 @@ async function appendThreadToolExecutionCheckpoint({
         pendingToolCall: persistedToolExecutionCheckpoint(toolCall),
         phase,
         runId,
+        // The journal carries this call's input and output; recovery reads
+        // results only from it, so the legacy copies are not repeated.
         runtimeState: {
-          ...(phase === "after-tool" ? cloneToolCallState(toolCall) : {}),
+          inflight: next.inflight,
+          journalVersion: TOOL_STEP_JOURNAL_VERSION,
           priorCompletedToolCalls: [...completed],
           ...(priorResultCount === undefined ? {} : { priorResultCount }),
+          results: next.results,
           toolCallId: toolCall.toolCallId,
           toolName: toolCall.toolName,
         },
@@ -302,6 +380,9 @@ async function appendThreadToolExecutionCheckpoint({
     );
 
     if (result.ok) {
+      journal.inflight.splice(0, journal.inflight.length, ...next.inflight);
+      journal.results.splice(0, journal.results.length, ...next.results);
+      journal.seq = next.seq;
       if (priorResultCount !== undefined) {
         completed.push({
           checkpointVersion: version,
@@ -343,6 +424,76 @@ async function appendThreadToolExecutionCheckpoint({
   );
 }
 
+/**
+ * The journal a checkpoint would record: an intent replaces the same call's
+ * earlier intent (a policy upgrade keeps its order); a result settles the
+ * call's intent.
+ */
+function nextStepJournal(
+  journal: StepJournalState,
+  entry: StepJournalEntry,
+  toolCall: RuntimeToolExecutionCheckpoint & { readonly output?: unknown },
+  { priorResultCount, version }: { priorResultCount: number; version: number }
+): {
+  readonly inflight: JournaledToolIntent[];
+  readonly results: JournaledToolResult[];
+  readonly seq: number;
+} {
+  const intentIndex = journal.inflight.findIndex(
+    (intent) => intent.toolCallId === toolCall.toolCallId
+  );
+  const intent = intentIndex >= 0 ? journal.inflight[intentIndex] : undefined;
+  const seq = intent ? journal.seq : journal.seq + 1;
+  const callSeq = intent?.seq ?? seq;
+  const inflight = journal.inflight.filter((_, index) => index !== intentIndex);
+  if (entry.kind === "intent") {
+    const recorded: JournaledToolIntent = {
+      attempt: toolCall.attempt,
+      idempotencyKey: toolCall.idempotencyKey,
+      input: intent ? intent.input : structuredClone(toolCall.input ?? {}),
+      policy: toolCall.policy,
+      seq: callSeq,
+      toolCallId: toolCall.toolCallId,
+      toolName: toolCall.toolName,
+    };
+    inflight.splice(
+      intentIndex >= 0 ? intentIndex : inflight.length,
+      0,
+      recorded
+    );
+    return { inflight, results: [...journal.results], seq };
+  }
+  const outcome =
+    entry.errorText === undefined
+      ? {
+          output:
+            toolCall.output === undefined
+              ? null
+              : structuredClone(toolCall.output),
+        }
+      : { errorText: entry.errorText };
+  return {
+    inflight,
+    results: [
+      ...journal.results,
+      {
+        checkpointVersion: version,
+        input: intent ? intent.input : structuredClone(toolCall.input ?? {}),
+        priorResultCount,
+        seq: callSeq,
+        toolCallId: toolCall.toolCallId,
+        toolName: toolCall.toolName,
+        ...outcome,
+      },
+    ],
+    seq,
+  };
+}
+
+function toolErrorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 // Provider tool call ids can recur, so the after-tool checkpoint version
 // identifies a completion.
 function mergeCompletedToolCalls(
@@ -360,20 +511,4 @@ function mergeCompletedToolCalls(
       completed.push(call);
     }
   }
-}
-
-function cloneToolCallState(toolCall: {
-  readonly input: unknown;
-  readonly output?: unknown;
-}): {
-  readonly hasOutput: true;
-  readonly input: unknown;
-  readonly output: unknown;
-} {
-  return {
-    hasOutput: true,
-    input: structuredClone(toolCall.input ?? {}),
-    output:
-      toolCall.output === undefined ? null : structuredClone(toolCall.output),
-  };
 }

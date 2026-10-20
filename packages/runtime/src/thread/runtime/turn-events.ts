@@ -11,6 +11,7 @@ import { drainRuntimeInput } from "./drain";
 import type { ThreadExecutionRun } from "./execution";
 import type { ThreadEventDispatcher } from "./thread-event-dispatcher";
 import {
+  commitThreadStateAndEvents,
   type DurableThreadEventBuffer,
   flushDurableThreadEvents,
 } from "./thread-event-log";
@@ -74,6 +75,22 @@ export async function emitTurnEvent({
     });
   });
   recordEvent?.(event);
+  if (event.type === "step-end" && executionHost && executionRun) {
+    // A finished tool round is durable before the next model request, so a
+    // crash resumes after it instead of repeating its effects.
+    const finishToolRoundCommit =
+      executionRun.toolExecution.beginToolRoundCommit();
+    if (finishToolRoundCommit) {
+      await commitThreadStateAndEvents({
+        buffer: durableEvents,
+        executionHost,
+        executionRun,
+        state,
+        threadKey,
+      });
+      finishToolRoundCommit();
+    }
+  }
   const runtimeInputAdded = await drainRuntimeInput({
     attachmentStore,
     durableEvents,
