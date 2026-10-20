@@ -1584,9 +1584,14 @@ schedule no checks; there a crashed turn waits for `thread.continue()` or
 that run scheduled work through `onFiberRecovered()`.
 
 These checkpoints are rollback boundaries, not a complete host adapter by
-themselves. Edge hosts still need durable scheduling, leases, resume workers,
-and notification resume handling; externally visible side-effect tools still need
-idempotent execution or a manual recovery flow.
+themselves. A host still needs durable scheduling, a worker that resumes due
+work (`drainScheduledNodeWork`, `drainCelldScheduledWork`, or Cloudflare Agents
+fibers), and notification resume handling. A tool with externally visible
+side effects still needs a matching `retryPolicy`: `idempotent` when its effect
+honors `idempotencyKey`, otherwise `interrupt` or the default
+`manual-recovery`. Design notes and the crash matrix that checks these
+guarantees are in
+[RFC 0006](https://github.com/minpeter/pss-runtime/blob/main/docs/rfc/0006-durable-recovery-v4.md).
 
 Active work is aborted locally first, then its processor settles cancellation,
 thread state, and the terminal event in one host transaction. Queued runs cancel
