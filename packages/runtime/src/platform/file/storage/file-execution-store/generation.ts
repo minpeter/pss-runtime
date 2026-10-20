@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Dirent } from "node:fs";
+import { type Dirent, readFileSync } from "node:fs";
 import {
   copyFile,
   cp,
@@ -89,6 +89,22 @@ export async function readCurrentGenerationId(
   } catch (error) {
     if (isNodeError(error) && error.code === "ENOENT") {
       return null;
+    }
+    throw error;
+  }
+}
+
+/** The generation named by the pointer, or the initial one, read synchronously. */
+export function currentGenerationIdSync(directory: string): string {
+  try {
+    const generationId = readFileSync(
+      join(directory, CURRENT_GENERATION_FILE),
+      "utf8"
+    ).trim();
+    return generationId.length > 0 ? generationId : INITIAL_GENERATION_ID;
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return INITIAL_GENERATION_ID;
     }
     throw error;
   }
