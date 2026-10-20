@@ -286,6 +286,11 @@ export async function generateModelStepResult({
     if (error instanceof StoppedModelStep) {
       throw error;
     }
+    if (signal?.aborted) {
+      // Cancellation ends the SDK stream without awaiting tool executions; a
+      // step must not conclude while its own effects are still in flight.
+      await toolProgress.idle();
+    }
     if (toolProgress.hasUnresolved) {
       if (toolProgress.recoveryError !== undefined) {
         throw toolProgress.recoveryError;
