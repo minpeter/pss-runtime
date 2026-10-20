@@ -105,6 +105,8 @@ async function seedRun(
   status: TurnStatus,
   owner?: Pick<TurnLeaseOwner, "pid">
 ): Promise<void> {
+  // Another process on this machine: same host name, boot, and PID namespace.
+  const self = host.ownerLiveness?.self;
   await host.store.turns.create({
     checkpointVersion: 0,
     kind: "user-turn",
@@ -115,7 +117,15 @@ async function seedRun(
             attempt: 1,
             leaseId: "lease-1",
             leaseUntilMs: NOW_MS + 30_000,
-            owner: { hostname: hostname(), id: "other-process", ...owner },
+            owner: {
+              ...(self?.bootId === undefined ? {} : { bootId: self.bootId }),
+              hostname: hostname(),
+              id: "other-process",
+              ...(self?.pidNamespace === undefined
+                ? {}
+                : { pidNamespace: self.pidNamespace }),
+              ...owner,
+            },
           },
         }),
     rootRunId: "run-1",

@@ -102,12 +102,23 @@ export type TurnStatus =
 
 /** The process that took a lease, so other processes can tell it died. */
 export interface TurnLeaseOwner {
+  /**
+   * Boot id of the owner's machine (Linux `/proc/sys/kernel/random/boot_id`),
+   * when its host records one; pids from another boot never match.
+   */
+  readonly bootId?: string;
   /** Host name of the owning process, when its host records one. */
   readonly hostname?: string;
   /** Random per process; every lease a process takes carries the same id. */
   readonly id: string;
   /** Operating-system process id, when its host records one. */
   readonly pid?: number;
+  /**
+   * PID namespace of the owning process (Linux `/proc/self/ns/pid`, such as
+   * `pid:[4026531836]`), when its host records one; its pid means nothing in
+   * another namespace.
+   */
+  readonly pidNamespace?: string;
   /** Start time of the process; tells it apart from a later one with its pid. */
   readonly processStart?: string;
 }
