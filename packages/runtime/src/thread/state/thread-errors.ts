@@ -6,6 +6,10 @@ export function errorMessage(error: unknown): string {
   return String(error);
 }
 
-export function threadKilledError(): Error {
-  return new Error("Thread killed");
+export class DisposedResourceError extends Error {
+  override readonly name = "DisposedResourceError";
+}
+
+export function threadKilledError(): DisposedResourceError {
+  return new DisposedResourceError("Thread killed");
 }

@@ -86,7 +86,7 @@ describe("pre-mount startup status", () => {
           before.match(SPINNER_PATTERN)?.[0]
         );
         expect(
-          after.replace(ANSI_PATTERN, "").replace("\r", "").length
+          after.replace(ANSI_PATTERN, "").replaceAll("\r", "").length
         ).toBeLessThanOrEqual(columns);
         stop();
         const writes = write.mock.calls.length;

@@ -71,10 +71,16 @@ export class DurableObjectSqliteEventStore implements EventStore {
       // Synchronous read-modify-write critical section (no await): concurrent
       // appends to the same run serialize on the JS event loop inside the
       // single-threaded Durable Object, so no `seq` collision can occur.
-      const seq = this.#readNextSeq(key);
+      const seq =
+        this.#sql
+          .exec<EventMetaRow>(
+            "SELECT next_seq FROM pss_event_meta WHERE run_key = ?",
+            key
+          )
+          .toArray()[0]?.next_seq ?? 0;
       const serializedEvent = writeJsonPayloadToSqlRows(
         this.#sql,
-        this.#payloadLocation(key, seq),
+        { ownerKey: key, payloadKey: String(seq), scope: "event" },
         "event",
         event,
         this.#maxPayloadBytes
@@ -85,7 +91,11 @@ export class DurableObjectSqliteEventStore implements EventStore {
         seq,
         serializedEvent
       );
-      this.#writeNextSeq(key, seq + 1);
+      this.#sql.exec(
+        "INSERT INTO pss_event_meta (run_key, next_seq) VALUES (?, ?) ON CONFLICT(run_key) DO UPDATE SET next_seq = excluded.next_seq",
+        key,
+        seq + 1
+      );
       resolve(createEventCursor(seq + 1));
     });
   }
@@ -143,27 +153,5 @@ export class DurableObjectSqliteEventStore implements EventStore {
     );
     ensurePayloadChunkSchema(this.#sql);
     this.#schemaReady = true;
-  }
-
-  #readNextSeq(key: string): number {
-    const row = this.#sql
-      .exec<EventMetaRow>(
-        "SELECT next_seq FROM pss_event_meta WHERE run_key = ?",
-        key
-      )
-      .toArray()[0];
-    return row?.next_seq ?? 0;
-  }
-
-  #writeNextSeq(key: string, nextSeq: number): void {
-    this.#sql.exec(
-      "INSERT INTO pss_event_meta (run_key, next_seq) VALUES (?, ?) ON CONFLICT(run_key) DO UPDATE SET next_seq = excluded.next_seq",
-      key,
-      nextSeq
-    );
-  }
-
-  #payloadLocation(key: string, seq: number) {
-    return { ownerKey: key, payloadKey: String(seq), scope: "event" };
   }
 }

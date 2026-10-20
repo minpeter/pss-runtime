@@ -2,6 +2,14 @@ const DEFAULT_ENDPOINT = "http://127.0.0.1:14566";
 const DEFAULT_BUCKET = "pss-celld-qa";
 const CLEANUP_CONCURRENCY = 16;
 const LOCAL_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
+const XML_ENTITY = /&(?:amp|lt|gt|quot|apos);/g;
+const XML_ENTITIES: Record<string, string> = {
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&apos;": "'",
+};
 
 interface CleanupOptions {
   readonly endpoint?: string;
@@ -151,12 +159,7 @@ function decodeTag(xml: string, tag: string): string | undefined {
 }
 
 function decodeXml(value: string): string {
-  return value
-    .replaceAll("&amp;", "&")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&quot;", '"')
-    .replaceAll("&apos;", "'");
+  return value.replace(XML_ENTITY, (entity) => XML_ENTITIES[entity] ?? entity);
 }
 
 function encodeKey(key: string): string {

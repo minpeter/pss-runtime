@@ -1,12 +1,16 @@
 import { jsonSchema, type Tool, tool } from "ai";
+import { convertArrayToReadableStream } from "ai/test";
 import { describe, expect, it, vi } from "vitest";
 import { readModelOutput } from "../agent/loop/step-output";
+import { deferred } from "../internal/deferred";
 import {
   createMockLanguageModelV4,
+  createStreamingMockLanguageModelV4,
   mockLanguageModelV4Text,
 } from "../testing/mock-language-model-v4-test-utils";
 import { failedRequestMessages } from "./failed-request";
 import { generateModelStepResult } from "./model-step";
+import { takeStoppedModelStep } from "./stopped-model-step";
 import { normalizeToolCallIds } from "./tool-execution-wrapper";
 import { ToolStepProgress } from "./tool-step-progress";
 
@@ -82,6 +86,57 @@ describe("cancellation classification", () => {
       })
     ).resolves.toBe("aborted");
     expect(model).not.toHaveBeenCalled();
+  });
+  it("keeps a cancelled step open until its in-flight tool effect settles", async () => {
+    const controller = new AbortController();
+    const started = deferred();
+    const result = deferred<string>();
+    const step = generateModelStepResult({
+      history: [{ role: "user", content: "INPUT" }],
+      signal: controller.signal,
+      model: createStreamingMockLanguageModelV4(() =>
+        Promise.resolve({
+          stream: convertArrayToReadableStream([
+            {
+              type: "tool-call",
+              toolCallId: "late",
+              toolName: "effect",
+              input: "{}",
+            },
+            {
+              type: "finish",
+              finishReason: { raw: "tool-calls", unified: "tool-calls" },
+              usage: mockLanguageModelV4Text("").usage,
+            },
+          ]),
+        })
+      ),
+      tools: {
+        effect: tool({
+          inputSchema: jsonSchema({ type: "object" }),
+          execute: () => {
+            started.resolve();
+            return result.promise;
+          },
+        }),
+      },
+    }).catch((cause: unknown) => cause);
+    await started.promise;
+    controller.abort();
+    // Settle the effect only after cancellation has fully propagated.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    result.resolve("LATE_RESULT");
+    const error = await step;
+    expect(error).toMatchObject({ name: "AbortError" });
+    expect(takeStoppedModelStep(error)?.messages).toContainEqual({
+      role: "tool",
+      content: [
+        expect.objectContaining({
+          type: "tool-result",
+          output: { type: "text", value: "LATE_RESULT" },
+        }),
+      ],
+    });
   });
 });
 

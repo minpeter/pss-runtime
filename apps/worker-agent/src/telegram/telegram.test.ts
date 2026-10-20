@@ -75,6 +75,14 @@ class TestSpan {
     return false;
   }
 
+  spanContext(): TracingSpanContext {
+    return {
+      spanId: "0000000000000000",
+      traceFlags: 0,
+      traceId: "00000000000000000000000000000000",
+    };
+  }
+
   end() {
     return;
   }
@@ -91,6 +99,14 @@ class TestSpan {
 
   recordException(_exception: unknown) {
     return;
+  }
+
+  updateName(_name: string) {
+    return this;
+  }
+
+  setStatus(_status: TracingSpanStatus) {
+    return this;
   }
 }
 

@@ -172,7 +172,7 @@ function stream() {
     { event: AgentEvent; consumed: ReturnType<typeof gate<void>> } | undefined
   >();
   const returned = vi.fn();
-  const run = {
+  const run: AgentTurn = {
     runId: "local-run",
     events: () =>
       (async function* () {
@@ -193,7 +193,10 @@ function stream() {
           returned();
         }
       })(),
-  } as AgentTurn;
+    [Symbol.asyncIterator]() {
+      return this.events()[Symbol.asyncIterator]();
+    },
+  };
   return {
     run,
     returned,
@@ -446,6 +449,9 @@ describe.sequential("actual TUI transcript ownership", () => {
             text: "COMPLETED_ANSWER",
           });
         },
+        [Symbol.asyncIterator]() {
+          return this.events()[Symbol.asyncIterator]();
+        },
       });
       const resume = vi.fn(async () => undefined);
       const ready = idle();
@@ -549,6 +555,9 @@ describe.sequential("actual TUI transcript ownership", () => {
           message: "fixture provider failure",
         });
       },
+      [Symbol.asyncIterator]() {
+        return this.events()[Symbol.asyncIterator]();
+      },
     });
     const ready = idle();
     const run = createAgentTUI({
@@ -639,6 +648,9 @@ describe.sequential("actual TUI transcript ownership", () => {
             message: "fixture provider failure",
           });
         },
+        [Symbol.asyncIterator]() {
+          return this.events()[Symbol.asyncIterator]();
+        },
       });
       const continued = (): AgentTurn => ({
         async *events() {
@@ -654,6 +666,9 @@ describe.sequential("actual TUI transcript ownership", () => {
                   text: "CONTINUED_ANSWER",
                 }
           );
+        },
+        [Symbol.asyncIterator]() {
+          return this.events()[Symbol.asyncIterator]();
         },
       });
       const ready = idle();
@@ -719,6 +734,9 @@ describe.sequential("actual TUI transcript ownership", () => {
             type: "turn-error" as const,
             message: "fixture provider failure",
           });
+        },
+        [Symbol.asyncIterator]() {
+          return this.events()[Symbol.asyncIterator]();
         },
       });
       const ready = idle();

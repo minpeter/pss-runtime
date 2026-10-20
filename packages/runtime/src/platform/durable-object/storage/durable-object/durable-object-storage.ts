@@ -3,7 +3,9 @@ import type { SqlStorage } from "../../sql/ports/storage-port";
 
 export interface DurableObjectTransactionStorage {
   delete(key: string): Promise<unknown>;
+  deleteAlarm?(): Promise<void>;
   get<T>(key: string): Promise<T | undefined>;
+  getAlarm?(): Promise<number | null>;
   put<T>(key: string, value: T): Promise<void>;
   setAlarm?(scheduledTime: Date | number): Promise<void>;
   readonly sql?: unknown;
@@ -31,6 +33,12 @@ export function withSqlStorage(
   };
   if (storage.setAlarm) {
     withSql.setAlarm = (time) => storage.setAlarm?.(time) ?? Promise.resolve();
+  }
+  if (storage.getAlarm) {
+    withSql.getAlarm = () => storage.getAlarm?.() ?? Promise.resolve(null);
+  }
+  if (storage.deleteAlarm) {
+    withSql.deleteAlarm = () => storage.deleteAlarm?.() ?? Promise.resolve();
   }
   return withSql;
 }
@@ -81,10 +89,16 @@ export class InMemoryDurableObjectStorage implements DurableObjectStorage {
     await previousTransaction;
 
     const transactionValues = cloneMap(this.#values);
-    let transactionAlarmTime = this.#alarmTime;
+    // Only alarm writes made by this transaction are committed, so an alarm
+    // set outside it while it was open survives.
+    let writtenAlarm: { readonly time: Date | number | undefined } | undefined;
     const transactionStorage = new TransactionalDurableObjectStorage({
-      setAlarm: (scheduledTime) => {
-        transactionAlarmTime = scheduledTime;
+      alarm: {
+        get: () =>
+          writtenAlarm === undefined ? this.#alarmTime : writtenAlarm.time,
+        set: (scheduledTime) => {
+          writtenAlarm = { time: scheduledTime };
+        },
       },
       sql: this.sql,
       values: transactionValues,
@@ -95,7 +109,9 @@ export class InMemoryDurableObjectStorage implements DurableObjectStorage {
         fn(transactionStorage)
       );
       this.#values = transactionValues;
-      this.#alarmTime = transactionAlarmTime;
+      if (writtenAlarm !== undefined) {
+        this.#alarmTime = writtenAlarm.time;
+      }
       return result;
     } finally {
       releaseTransaction();
@@ -132,26 +148,31 @@ export class InMemoryDurableObjectStorage implements DurableObjectStorage {
 class TransactionalDurableObjectStorage
   implements DurableObjectTransactionStorage
 {
-  readonly #setAlarm: (scheduledTime: Date | number) => void;
+  readonly #alarm: TransactionAlarmCell;
   readonly sql: SqlStorage;
   readonly #values: Map<string, unknown>;
 
   constructor({
-    setAlarm,
+    alarm,
     sql,
     values,
   }: {
-    readonly setAlarm: (scheduledTime: Date | number) => void;
+    readonly alarm: TransactionAlarmCell;
     readonly sql: SqlStorage;
     readonly values: Map<string, unknown>;
   }) {
-    this.#setAlarm = setAlarm;
+    this.#alarm = alarm;
     this.sql = sql;
     this.#values = values;
   }
 
   delete(key: string): Promise<boolean> {
     return Promise.resolve(this.#values.delete(key));
+  }
+
+  deleteAlarm(): Promise<void> {
+    this.#alarm.set(undefined);
+    return Promise.resolve();
   }
 
   get<T>(key: string): Promise<T | undefined> {
@@ -161,15 +182,24 @@ class TransactionalDurableObjectStorage
     );
   }
 
+  getAlarm(): Promise<number | null> {
+    return Promise.resolve(this.#alarm.get()?.valueOf() ?? null);
+  }
+
   put<T>(key: string, value: T): Promise<void> {
     this.#values.set(key, structuredClone(value));
     return Promise.resolve();
   }
 
   setAlarm(scheduledTime: Date | number): Promise<void> {
-    this.#setAlarm(scheduledTime);
+    this.#alarm.set(scheduledTime);
     return Promise.resolve();
   }
+}
+
+interface TransactionAlarmCell {
+  get(): Date | number | undefined;
+  set(scheduledTime: Date | number | undefined): void;
 }
 
 function cloneMap(values: Map<string, unknown>): Map<string, unknown> {

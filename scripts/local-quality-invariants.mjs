@@ -246,13 +246,14 @@ export function ciWiringProblems(workflowSource) {
     return [`ci workflow parse error: ${error.message}`];
   }
   const problems = [];
-  const nodes = (doc?.jobs?.checks?.strategy?.matrix?.node ?? []).map(String);
+  const validation = doc?.jobs?.validation;
+  const nodes = (validation?.strategy?.matrix?.node ?? []).map(String);
   for (const version of ["24", "26"]) {
     if (!nodes.includes(version)) {
       problems.push(`ci matrix does not include Node ${version}`);
     }
   }
-  const steps = doc?.jobs?.checks?.steps ?? [];
+  const steps = validation?.steps ?? [];
   const testStep = steps.find(
     (step) => typeof step?.run === "string" && TEST_STEP_RUN.test(step.run)
   );

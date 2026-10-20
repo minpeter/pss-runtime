@@ -32,10 +32,12 @@ function readJson(path) {
 }
 
 describe("toolchain: Node 24/26 matrix (VAL-SEC-044)", () => {
-  it("ci.yml runs the checks job on Node 24 and Node 26 under network isolation", () => {
+  it("ci.yml runs the validation job on Node 24 and Node 26 under network isolation", () => {
     expect(ciWiringProblems(readRepoFile(CI_WORKFLOW_PATH))).toEqual([]);
     const doc = parseYaml(readRepoFile(CI_WORKFLOW_PATH));
-    const nodes = (doc?.jobs?.checks?.strategy?.matrix?.node ?? []).map(String);
+    const nodes = (doc?.jobs?.validation?.strategy?.matrix?.node ?? []).map(
+      String
+    );
     expect(nodes).toContain("24");
     expect(nodes).toContain("26");
   });

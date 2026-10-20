@@ -4,11 +4,21 @@ import {
   createDeferred,
   createQueuedRun,
 } from "../../../contracts/execution-store/fixtures";
-import { createInMemoryHost } from "./execution-host";
+import { createInMemoryHost, type InMemoryHost } from "./execution-host";
+
+const hostSchedulers = new WeakMap<object, InMemoryHost["scheduler"]>();
 
 describeExecutionStoreContract({
-  createStore: () => createInMemoryHost().store,
+  createStore: () => {
+    const host = createInMemoryHost();
+    hostSchedulers.set(host.store, host.scheduler);
+    return host.store;
+  },
   name: "InMemoryExecutionStore",
+  transactionalScheduler: {
+    listScheduledRuns: (store) =>
+      hostSchedulers.get(store)?.listScheduledRuns() ?? Promise.resolve([]),
+  },
 });
 
 describe("InMemoryExecutionStore transaction isolation", () => {

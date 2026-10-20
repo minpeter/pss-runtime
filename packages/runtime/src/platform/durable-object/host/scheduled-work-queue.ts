@@ -3,11 +3,14 @@ import {
   normalizedListLimit,
   threadPromptScheduledWorkId,
 } from "../../../execution/scheduled-work";
-import type { DurableObjectStorage } from "../storage/durable-object/durable-object-storage";
+import type {
+  DurableObjectStorage,
+  DurableObjectTransactionStorage,
+} from "../storage/durable-object/durable-object-storage";
 import {
   claimScheduledWork,
   deleteScheduledWork,
-  insertScheduledWork,
+  insertScheduledWorkInTransaction,
   selectScheduledWork,
 } from "../storage/sqlite/scheduled-work-table";
 import {
@@ -24,13 +27,13 @@ export interface ScheduledWorkListOptions {
   readonly prefix?: string;
 }
 
-export async function appendScheduledRun(
-  storage: DurableObjectStorage,
+export function insertScheduledRun(
+  transaction: DurableObjectTransactionStorage,
   prefix: string,
   runId: string
-): Promise<void> {
-  await insertScheduledWork(
-    storage,
+): void {
+  insertScheduledWorkInTransaction(
+    transaction,
     prefix,
     "run",
     runScheduledWorkId(runId),
@@ -39,13 +42,13 @@ export async function appendScheduledRun(
   );
 }
 
-export async function appendScheduledThreadPrompt(
-  storage: DurableObjectStorage,
+export function insertScheduledThreadPrompt(
+  transaction: DurableObjectTransactionStorage,
   prefix: string,
   prompt: DurableObjectScheduledThreadPrompt
-): Promise<void> {
-  await insertScheduledWork(
-    storage,
+): void {
+  insertScheduledWorkInTransaction(
+    transaction,
     prefix,
     "thread-prompt",
     threadPromptScheduledWorkId(prompt),

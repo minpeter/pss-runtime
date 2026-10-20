@@ -36,6 +36,10 @@ export class StoredAgentTurn implements AgentTurn {
       this.#eventStore.read(this.#runId, this.#cursor)
     );
   }
+
+  [Symbol.asyncIterator](): AsyncIterator<AgentEvent> {
+    return this.events()[Symbol.asyncIterator]();
+  }
 }
 
 class StoredAgentEventIterator implements AsyncIterableIterator<AgentEvent> {

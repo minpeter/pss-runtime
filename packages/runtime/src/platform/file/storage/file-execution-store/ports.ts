@@ -4,6 +4,7 @@ import type {
   LeaseFencedCheckpointStore,
   ThreadEventLog,
 } from "../../../../execution/host/types";
+import { createDataDirectoryFileScheduler } from "../../host/scheduled-work-store";
 import { FileCheckpointStore } from "./checkpoint-store";
 import { FileEventStore, FileThreadEventLog } from "./event-store";
 import { FileThreadInputInbox } from "./input-inbox";
@@ -36,6 +37,7 @@ export function createFileExecutionStorePorts(
     leaseFencedCheckpoints: checkpoints,
     notifications: new FileNotificationInbox(directory, lock),
     checkpoints,
+    scheduler: createDataDirectoryFileScheduler(directory, lock),
     threadEvents: new FileThreadEventLog(directory, lock),
     threads,
     turns: runs,

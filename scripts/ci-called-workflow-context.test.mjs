@@ -23,8 +23,8 @@ it.each([
   ],
   [
     "job permission override",
-    "  checks:\n",
-    "  checks:\n    permissions:\n      contents: write\n",
+    "  validation:\n",
+    "  validation:\n    permissions:\n      contents: write\n",
     "unapproved fields: permissions",
   ],
 ])("rejects called CI %s", (_label, from, to, error) => {
@@ -45,12 +45,12 @@ it.each([
 });
 
 it.each([
-  ["empty", "jobs:\n  checks:", "jobs: {}\nignored:\n  checks:"],
-  ["renamed", "  checks:\n", "  renamed:\n"],
+  ["empty", "jobs:\n  validation:", "jobs: {}\nignored:\n  validation:"],
+  ["renamed", "  validation:\n", "  renamed:\n"],
   [
     "extra",
-    "jobs:\n  checks:\n",
-    "jobs:\n  extra:\n    uses: ./.github/workflows/ci.yml\n  checks:\n",
+    "jobs:\n  validation:\n",
+    "jobs:\n  extra:\n    uses: ./.github/workflows/ci.yml\n  validation:\n",
   ],
 ])("rejects a %s called CI job set", (_label, from, to) => {
   const ci = replaceWorkflowSource(ciWorkflow(), from, to);

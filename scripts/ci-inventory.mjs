@@ -3,12 +3,10 @@
 // workflow files: no network, no ports, no writes.
 //
 // Three halves:
-//   fastGateStepOrderProblems  the ci.yml job `checks` keeps the twelve
-//                              documented fast-gate steps (mirrored by
-//                              docs/runbooks/ci-failure-triage.md) exactly
-//                              once each and in their pinned relative order;
-//                              additive analysis steps may sit between them
-//                              but never reorder or replace them.
+//   fastGateStepOrderProblems  the ci.yml validation and artifacts jobs keep
+//                              the twelve documented fast-gate steps (mirrored
+//                              by docs/runbooks/ci-failure-triage.md) exactly
+//                              once each and in their pinned relative order.
 //   workflowClassProblems      every workflow file is classified
 //                              deterministic (pull_request/push), scheduled,
 //                              or manual, and the scheduled/manual analysis
@@ -24,8 +22,8 @@ export const CI_INVENTORY_WORKFLOW = ".github/workflows/ci.yml";
 const KNOWN_BOUNDED_REUSABLE_WORKFLOWS = new Set([CI_INVENTORY_WORKFLOW]);
 const LOCAL_PREFIX = /^\.\//;
 
-// The twelve documented fast-gate steps of the ci.yml job `checks`, pinned
-// in relative order (VAL-CROSS-004).
+// The twelve documented fast-gate steps across ci.yml's validation and
+// artifacts jobs, pinned in relative order (VAL-CROSS-004).
 export const FAST_GATE_STEPS = [
   "Install dependencies",
   "Audit dependencies",
@@ -92,7 +90,17 @@ export const WORKFLOW_CLASSES = [
 function ciChecksSteps(workflows, problems) {
   for (const { path, doc } of parseWorkflowDocs(workflows, problems)) {
     if (path === CI_INVENTORY_WORKFLOW) {
-      return doc?.jobs?.checks?.steps ?? [];
+      const seen = new Set();
+      return Object.values(doc?.jobs ?? {})
+        .flatMap((job) => job?.steps ?? [])
+        .filter((step) => {
+          const name = String(step?.name ?? "");
+          if (name !== "Install dependencies" || !seen.has(name)) {
+            seen.add(name);
+            return true;
+          }
+          return false;
+        });
     }
   }
   problems.push(`${CI_INVENTORY_WORKFLOW} is missing from the workflow set`);
@@ -112,18 +120,16 @@ export function fastGateStepOrderProblems(workflows) {
     );
     if (indices.length === 0) {
       problems.push(
-        `ci.yml job "checks" no longer has the documented fast-gate step "${step}"`
+        `ci.yml no longer has the documented fast-gate step "${step}"`
       );
       continue;
     }
     if (indices.length > 1) {
-      problems.push(
-        `ci.yml job "checks" repeats the documented fast-gate step "${step}"`
-      );
+      problems.push(`ci.yml repeats the documented fast-gate step "${step}"`);
     }
     if (indices[0] < previous) {
       problems.push(
-        `ci.yml job "checks" runs "${step}" before "${previousStep}"; the documented relative order is pinned`
+        `ci.yml runs "${step}" before "${previousStep}"; the documented relative order is pinned`
       );
     }
     previous = Math.max(previous, indices[0]);
@@ -230,7 +236,7 @@ export function driftAlongsideProblems(workflows) {
   for (const { label, pattern } of gates) {
     if (!runs.some((run) => pattern.test(run))) {
       problems.push(
-        `ci.yml job "checks" no longer runs the ${label}; the drift result must accompany the package-boundary and release gates, never substitute for them`
+        `ci.yml no longer runs the ${label}; the drift result must accompany the package-boundary and release gates, never substitute for them`
       );
     }
   }

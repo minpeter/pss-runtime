@@ -1,6 +1,7 @@
 import type {
   CheckpointStore,
   EventStore,
+  HostScheduler,
   HostStore,
   HostStoreTransaction,
   LeaseFencedCheckpointStore,
@@ -13,6 +14,7 @@ import type { ThreadStore } from "../../../../thread/store/types";
 import type { SqlStorage } from "../../sql/ports/storage-port";
 import {
   type DurableObjectStorage,
+  type DurableObjectTransactionStorage,
   isSqlStorage,
   withSqlStorage,
 } from "../durable-object/durable-object-storage";
@@ -34,22 +36,32 @@ export class DurableObjectExecutionStore implements HostStore {
   readonly inputs: ThreadInputInbox;
   readonly leaseFencedCheckpoints: LeaseFencedCheckpointStore;
   readonly notifications: NotificationInbox;
+  /** Joins this store's transaction; undefined when the host scheduler cannot. */
+  readonly scheduler?: HostScheduler;
   readonly threadEvents: ThreadEventLog;
   readonly turns: TurnStore;
   readonly threads: ThreadStore;
   readonly #maxPayloadBytes: number;
   readonly #prefix: string;
   readonly #storage: DurableObjectStorage;
+  readonly #createTransactionScheduler?: (
+    storage: DurableObjectTransactionStorage
+  ) => HostScheduler;
 
   constructor({
+    createTransactionScheduler,
     maxPayloadBytes,
     prefix = "pss-runtime",
     storage,
   }: {
+    readonly createTransactionScheduler?: (
+      storage: DurableObjectTransactionStorage
+    ) => HostScheduler;
     readonly maxPayloadBytes?: StoragePayloadBudgetOptions["maxPayloadBytes"];
     readonly prefix?: string;
     readonly storage: DurableObjectStorage;
   }) {
+    this.#createTransactionScheduler = createTransactionScheduler;
     this.#maxPayloadBytes = maxPayloadBytes ?? resolveStoragePayloadMaxBytes();
     this.#prefix = prefix;
     this.#storage = storage;
@@ -87,6 +99,7 @@ export class DurableObjectExecutionStore implements HostStore {
       prefix,
       payloadBudget
     );
+    this.scheduler = createTransactionScheduler?.(storage);
   }
 
   get sessions(): ThreadStore {
@@ -108,31 +121,24 @@ export class DurableObjectExecutionStore implements HostStore {
   async transaction<T>(
     fn: (tx: HostStoreTransaction) => Promise<T>
   ): Promise<T> {
+    const runTx = (storage: DurableObjectTransactionStorage, sql: unknown) =>
+      fn(
+        new DurableObjectExecutionStore({
+          createTransactionScheduler: this.#createTransactionScheduler,
+          maxPayloadBytes: this.#maxPayloadBytes,
+          prefix: this.#prefix,
+          storage: withSqlStorage(storage, sql),
+        })
+      );
     if (this.#storage.transaction) {
       return await this.#storage.transaction((storage) =>
-        fn(
-          new DurableObjectExecutionStore({
-            maxPayloadBytes: this.#maxPayloadBytes,
-            prefix: this.#prefix,
-            storage: withSqlStorage(storage, storage.sql ?? this.#storage.sql),
-          })
-        )
+        runTx(storage, storage.sql ?? this.#storage.sql)
       );
     }
-
     const sql = transactionalSqlStorage(this.#storage.sql);
     if (sql) {
-      return await sql.transaction(() =>
-        fn(
-          new DurableObjectExecutionStore({
-            maxPayloadBytes: this.#maxPayloadBytes,
-            prefix: this.#prefix,
-            storage: withSqlStorage(this.#storage, sql),
-          })
-        )
-      );
+      return await sql.transaction(() => runTx(this.#storage, sql));
     }
-
     throw new Error(
       "DurableObjectExecutionStore requires Durable Object storage.transaction or storage.sql.transaction for atomic transactions."
     );

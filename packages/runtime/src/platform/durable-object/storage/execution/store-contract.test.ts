@@ -3,6 +3,7 @@ import { describeExecutionStoreContract } from "../../../../contracts/execution-
 import type { NotificationRecord, TurnRecord } from "../../../../execution";
 import {
   createDurableObjectStorageHost,
+  listScheduledDurableObjectRuns,
   InMemoryDurableObjectStorage as PublicInMemoryDurableObjectStorage,
 } from "../../host/storage-host";
 import { InMemorySqlStorage } from "../../sql/node-test/node-sqlite-storage";
@@ -19,6 +20,32 @@ describeExecutionStoreContract({
       }),
     }),
   name: "DurableObjectExecutionStore",
+  transactionalScheduler: "unsupported",
+});
+
+const hostStorages = new WeakMap<object, InMemoryDurableObjectStorage>();
+
+describeExecutionStoreContract({
+  createStore: () => {
+    const storage = new InMemoryDurableObjectStorage({
+      sql: new TransactionalInMemorySqlStorage(),
+    });
+    const { store } = createDurableObjectStorageHost({
+      prefix: "contract-test",
+      storage,
+    });
+    hostStorages.set(store, storage);
+    return store;
+  },
+  name: "Durable Object storage host",
+  transactionalScheduler: {
+    listScheduledRuns: (store) => {
+      const storage = hostStorages.get(store);
+      return storage
+        ? listScheduledDurableObjectRuns(storage, { prefix: "contract-test" })
+        : Promise.resolve([]);
+    },
+  },
 });
 
 describe("DurableObjectExecutionStore payload guards", () => {

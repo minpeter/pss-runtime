@@ -24,7 +24,7 @@ export function parseRunRecord(value: unknown, file: string): TurnRecord {
     throw invalidFile(file, "expected run record fields");
   }
 
-  return {
+  const record: TurnRecord = {
     checkpointVersion: value.checkpointVersion,
     ...(typeof value.dedupeKey === "string"
       ? { dedupeKey: value.dedupeKey }
@@ -46,7 +46,13 @@ export function parseRunRecord(value: unknown, file: string): TurnRecord {
     status: value.status,
     threadKey: value.threadKey,
   };
+  if (typeof value.createdOrder === "number") {
+    runCreatedOrder.set(record, value.createdOrder);
+  }
+  return record;
 }
+
+export const runCreatedOrder = new WeakMap<TurnRecord, number>();
 
 export function parseRunCheckpoint(value: unknown, file: string): Checkpoint {
   if (!isRecord(value)) {

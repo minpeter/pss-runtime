@@ -143,12 +143,12 @@ describe("worker coverage scope and thresholds (VAL-SEC-021)", () => {
 describe("worker coverage isolation (VAL-SEC-023)", () => {
   it("runs the Worker coverage gate once in CI, without ignoring failures", () => {
     const workflow = parse(readRepoFile(".github/workflows/ci.yml"));
-    const steps = workflow.jobs.checks.steps.filter(
+    const steps = workflow.jobs.artifacts.steps.filter(
       (step) =>
         step.run === "pnpm --filter @minpeter/pss-worker-agent test:coverage"
     );
     expect(steps).toHaveLength(1);
-    expect(steps[0].if).toBe("matrix.node == '24'");
+    expect(steps[0].if).toBeUndefined();
     expect(steps[0]["continue-on-error"]).not.toBe(true);
   });
   it("declares a test:coverage script that enables coverage", () => {

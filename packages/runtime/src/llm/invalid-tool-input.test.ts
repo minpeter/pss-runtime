@@ -168,7 +168,8 @@ it("does not relabel a genuine branded input callback failure as rejection", asy
     cause: new Error("CALLBACK_EFFECT"),
   });
   const execute = vi.fn(() => "unexpected");
-  const onInputAvailable = vi.fn(() => {
+  // The SDK skips onInputAvailable for invalid calls; deltas still reach callbacks.
+  const onInputDelta = vi.fn(() => {
     throw error;
   });
   await expect(
@@ -183,9 +184,9 @@ it("does not relabel a genuine branded input callback failure as rejection", asy
           ]),
         })
       ),
-      tools: { effect: tool({ inputSchema, execute, onInputAvailable }) },
+      tools: { effect: tool({ inputSchema, execute, onInputDelta }) },
     })
   ).rejects.toBe(error);
-  expect(onInputAvailable).toHaveBeenCalledOnce();
+  expect(onInputDelta).toHaveBeenCalledOnce();
   expect(execute).not.toHaveBeenCalled();
 });

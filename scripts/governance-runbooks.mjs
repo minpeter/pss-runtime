@@ -208,11 +208,13 @@ export function unresolvedJobSteps(text, root = ".") {
   return bad;
 }
 
-// Root scripts (and pnpm subcommands) invoked by steps of the `ci.yml` `checks`
-// job (VAL-GOV-032).
+// Root scripts (and pnpm subcommands) invoked by ci.yml validation jobs
+// (VAL-GOV-032).
 export function ciGateScripts(root = ".") {
   const doc = parse(readFileSync(join(root, WORKFLOWS_DIR, "ci.yml"), "utf8"));
-  const steps = doc?.jobs?.checks?.steps ?? [];
+  const steps = Object.values(doc?.jobs ?? {}).flatMap(
+    (job) => job?.steps ?? []
+  );
   const scripts = new Set();
   for (const step of steps) {
     for (const match of String(step?.run ?? "").matchAll(PNPM_TOKEN)) {

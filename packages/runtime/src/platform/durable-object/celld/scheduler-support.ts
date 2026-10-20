@@ -1,13 +1,13 @@
-import type { HostScheduler } from "../../../execution";
 import {
   isScheduledThreadPrompt,
   type ScheduledThreadPrompt,
 } from "../../../execution/scheduled-work";
-import type { DurableObjectStorage } from "../host/storage-host";
-import {
-  requiredSqlStorage,
-  withTransaction,
-} from "../storage/durable-object/sql-access";
+import type {
+  DurableObjectStorage,
+  DurableObjectTransactionalScheduler,
+  DurableObjectTransactionStorage,
+} from "../host/storage-host";
+import { withTransaction } from "../storage/durable-object/sql-access";
 import {
   insertScheduledWorkInTransaction,
   selectNextScheduledWork,
@@ -31,7 +31,7 @@ export interface CelldSchedulerOptions {
   readonly storage: CelldDurableObjectStorage;
 }
 
-export interface CelldScheduler extends HostScheduler {
+export interface CelldScheduler extends DurableObjectTransactionalScheduler {
   readonly storage: CelldDurableObjectStorage;
 }
 
@@ -39,6 +39,9 @@ export interface CelldDurableObjectStorage extends DurableObjectStorage {
   deleteAlarm(): Promise<void>;
   getAlarm(): Promise<number | null>;
   setAlarm(scheduledTime: Date | number): Promise<void>;
+  transaction<T>(
+    fn: (storage: DurableObjectTransactionStorage) => Promise<T>
+  ): Promise<T>;
 }
 
 interface DuePayload<T> {
@@ -62,6 +65,39 @@ export function serialize<T>(
   return current;
 }
 
+export async function insertDueWorkInTransaction<T>(
+  transaction: DurableObjectTransactionStorage,
+  storage: CelldDurableObjectStorage,
+  prefix: string,
+  kind: typeof RUN_KIND | typeof THREAD_PROMPT_KIND,
+  workId: string,
+  value: T,
+  dueAtMs: number,
+  indexes: { readonly runId?: string; readonly threadKey?: string }
+): Promise<void> {
+  if (transaction.setAlarm === undefined) {
+    throw new Error("Celld storage transaction setAlarm() is required.");
+  }
+  insertScheduledWorkInTransaction(
+    transaction,
+    prefix,
+    kind,
+    workId,
+    { dueAtMs, value } satisfies DuePayload<T>,
+    { ...indexes, dueAtMs }
+  );
+  const nextDueAtMs = earliestDueAt(transaction, prefix);
+  // Only a preserved duplicate that predates due_at leaves nothing to arm.
+  if (nextDueAtMs === undefined) {
+    return;
+  }
+  // An earlier alarm may belong to work outside this prefix, so it is kept.
+  const currentAlarm = await (transaction.getAlarm?.() ?? storage.getAlarm());
+  await transaction.setAlarm(
+    Math.min(currentAlarm ?? Number.POSITIVE_INFINITY, nextDueAtMs)
+  );
+}
+
 export async function insertDueWorkAndArm<T>(
   storage: CelldDurableObjectStorage,
   prefix: string,
@@ -71,41 +107,18 @@ export async function insertDueWorkAndArm<T>(
   dueAtMs: number,
   indexes: { readonly runId?: string; readonly threadKey?: string }
 ): Promise<void> {
-  const currentAlarm = await storage.getAlarm();
-  await withTransaction(storage, async (transaction) => {
-    insertScheduledWorkInTransaction(
-      transaction,
+  await withTransaction(storage, (tx) =>
+    insertDueWorkInTransaction(
+      tx,
+      storage,
       prefix,
       kind,
       workId,
-      { dueAtMs, value } satisfies DuePayload<T>,
-      { ...indexes, dueAtMs }
-    );
-    if (transaction.setAlarm === undefined) {
-      throw new Error("Celld storage transaction setAlarm() is required.");
-    }
-    const sql = requiredSqlStorage(transaction, "Celld scheduled work alarm");
-    const persistedDueAt = ([RUN_KIND, THREAD_PROMPT_KIND] as const)
-      .flatMap((scheduledKind) => {
-        const row = sql
-          .exec<{ readonly due_at: number | null }>(
-            "SELECT due_at FROM pss_scheduled_work WHERE prefix = ? AND kind = ? AND due_at IS NOT NULL ORDER BY due_at, rowid LIMIT 1",
-            prefix,
-            scheduledKind
-          )
-          .toArray()[0];
-        return typeof row?.due_at === "number" ? [row.due_at] : [];
-      })
-      .reduce(
-        (earliest, persistedValue) => Math.min(earliest, persistedValue),
-        Number.POSITIVE_INFINITY
-      );
-    await transaction.setAlarm(
-      currentAlarm === null
-        ? persistedDueAt
-        : Math.min(currentAlarm, persistedDueAt)
-    );
-  });
+      value,
+      dueAtMs,
+      indexes
+    )
+  );
 }
 
 export function listDueWork<T>(
@@ -131,27 +144,51 @@ export function listDueWork<T>(
     });
 }
 
+/**
+ * Applies `mutate` to scheduled-work rows and re-arms the alarm for the
+ * earliest persisted due time in one storage transaction, so the alarm never
+ * reflects rows another transaction has since changed. A transaction without
+ * setAlarm gets the storage-level write after commit: written inside, it would
+ * be replaced by the transaction's buffered alarm. A transaction without
+ * deleteAlarm leaves the alarm in place: deleting after commit could erase an
+ * alarm a concurrent transaction just armed, while a stale alarm only costs
+ * one empty drain, which re-arms.
+ */
 export async function armNextAlarm(
   storage: CelldDurableObjectStorage,
   prefix: string,
-  _nowMs = Date.now()
+  mutate?: (transaction: DurableObjectTransactionStorage) => Promise<void>
 ): Promise<void> {
-  const dueAtMs = earliestDueAt(storage, prefix);
-  if (dueAtMs === undefined) {
-    await storage.deleteAlarm();
-    return;
-  }
-  if ((await storage.getAlarm()) !== dueAtMs) {
-    await storage.setAlarm(dueAtMs);
-  }
+  const afterCommit = await withTransaction(
+    storage,
+    async (transaction): Promise<(() => Promise<void>) | undefined> => {
+      await mutate?.(transaction);
+      const dueAtMs = earliestDueAt(transaction, prefix);
+      if (dueAtMs === undefined) {
+        await transaction.deleteAlarm?.();
+        return;
+      }
+      if (transaction.setAlarm === undefined) {
+        return async () => {
+          if ((await storage.getAlarm()) !== dueAtMs) {
+            await storage.setAlarm(dueAtMs);
+          }
+        };
+      }
+      if ((await transaction.getAlarm?.()) !== dueAtMs) {
+        await transaction.setAlarm(dueAtMs);
+      }
+    }
+  );
+  await afterCommit?.();
 }
 
 function earliestDueAt(
-  storage: CelldDurableObjectStorage,
+  transaction: DurableObjectTransactionStorage,
   prefix: string
 ): number | undefined {
   const values = ([RUN_KIND, THREAD_PROMPT_KIND] as const).flatMap((kind) => {
-    const row = selectNextScheduledWork(storage, prefix, kind);
+    const row = selectNextScheduledWork(transaction, prefix, kind);
     return typeof row?.due_at === "number" ? [row.due_at] : [];
   });
   return values.length === 0 ? undefined : Math.min(...values);

@@ -134,12 +134,9 @@ describe("local quality: fast-gate scope (VAL-LOCAL-024)", () => {
       "| Single invariant | vitest run one | ≤ 30 s |";
     expect(gateBoundProblems(section(goodRows))).toEqual([]);
     expect(
-      gateBoundProblems(
-        section(goodRows.replace("≤ 60 s", "≤ 90 s")).replace(
-          "Pre-commit",
-          "Pre-commit"
-        )
-      ).join("\n")
+      gateBoundProblems(section(goodRows.replace("≤ 60 s", "≤ 90 s"))).join(
+        "\n"
+      )
     ).toContain("60s ceiling");
     expect(
       gateBoundProblems(
@@ -171,7 +168,7 @@ describe("local quality: CI wiring (VAL-LOCAL-023)", () => {
   it("rejects a matrix without Node 24/26 and a test step without isolation", () => {
     const workflow = `
 jobs:
-  checks:
+  validation:
     strategy:
       matrix:
         node: ["24"]
@@ -183,7 +180,7 @@ jobs:
     expect(problems).toContain("PSS_TASK_VALIDATOR_NETWORK_ISOLATED");
     const noTestStep = `
 jobs:
-  checks:
+  validation:
     strategy:
       matrix:
         node: ["24", "26"]

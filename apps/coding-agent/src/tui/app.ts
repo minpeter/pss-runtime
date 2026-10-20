@@ -7,6 +7,7 @@ import {
   type AgentOptions,
   type ContextUsageSnapshot,
   commitThreadStateMigrations,
+  DisposedResourceError,
   threadStoreKey,
 } from "@minpeter/pss-runtime";
 import { createFileHost } from "@minpeter/pss-runtime/platform/file";
@@ -247,6 +248,9 @@ async function startTuiSession(
     extensionHost.emitHostEvent(type, payload);
   };
   let agent: Awaited<ReturnType<typeof createCodingAgent>>;
+  const initialFileHost = createFileHost({
+    directory: resolvedThreadConfig.directory,
+  });
   let contextResources: ContextResources;
   try {
     contextResources = await loadContextResources({
@@ -258,7 +262,7 @@ async function startTuiSession(
     agent = await createCodingAgent({
       compaction: tuiCompaction,
       extensionHost,
-      host: createFileHost({ directory: resolvedThreadConfig.directory }),
+      host: initialFileHost,
       instructions: composeCodingAgentInstructions(
         contextResources.instructionFragments
       ),
@@ -280,8 +284,7 @@ async function startTuiSession(
     const sessionManager = createSessionManager({
       cwd,
       directory: resolvedThreadConfig.directory,
-      threads: createFileHost({ directory: resolvedThreadConfig.directory })
-        .store.threads,
+      threads: initialFileHost.store.threads,
     });
     const threadConfig = await selectedThreadConfig(
       resolvedThreadConfig,
@@ -609,22 +612,30 @@ async function startTuiSession(
           await reloadExtensionRuntime();
         } catch (error) {
           // A failed reload may have touched the durable thread. Rebind only
-          // after disposal succeeds so the replacement re-reads the store.
+          // after disposal settles so the replacement re-reads the store.
           const stale = thread;
           stale.interrupt();
+          let disposeError: unknown;
           try {
             await stale.dispose();
-          } catch (disposeError) {
-            const authoritative = agent.thread(currentSession.key);
-            if (authoritative !== stale) {
-              thread = authoritative;
+          } catch (caught) {
+            disposeError = caught ?? new Error("Thread disposal failed");
+          }
+          try {
+            thread = agent.thread(currentSession.key);
+          } catch (rebindError) {
+            // An unrecoverable reload leaves `agent` disposed; its error
+            // (which says to restart pss) stays the authoritative failure.
+            if (!(rebindError instanceof DisposedResourceError)) {
+              disposeError ??= rebindError;
             }
+          }
+          if (disposeError !== undefined) {
             throw new AggregateError(
               [error, disposeError],
               "Extension reload and thread refresh failed"
             );
           }
-          thread = agent.thread(currentSession.key);
           throw error;
         }
       },
