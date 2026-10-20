@@ -118,9 +118,10 @@ that crashes again parks again. The coding agent declares its tools:
     starts, inside the start transaction when `tx.scheduler` provides it.
   - Settlement cancels the check in its own transaction.
 - `runTurnBackstop(agent, runId)` decides a due check:
-  - `done` when the run settled, parked, or was requeued;
-  - `retry` 10 s past a live owner's lease, or when the thread is busy;
-  - `resumed` when the owner is gone.
+  - `done` when the run settled or parked;
+  - `retry` 10 s past a live owner's lease, 10 s later when the thread is
+    busy, or a full delay later when the agent could not resume the run;
+  - `resumed` when the owner is gone or the run went back to `queued`.
 - Celld implements backstops as `celld-backstop` scheduled-work rows behind
   the object's alarm, drained by `drainCelldScheduledWork`.
 - The TUI never resumes on its own. When it opens an existing session, it

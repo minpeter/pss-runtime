@@ -23,6 +23,7 @@ import {
   THREAD,
 } from "../../thread/handle/crash-recovery.test-support";
 import { collect } from "../../thread/handle/test-support";
+import type { AgentHost } from "../host/types";
 import {
   TURN_BACKSTOP_DELAY_MS,
   TURN_BACKSTOP_MARGIN_MS,
@@ -64,17 +65,8 @@ describe("turn backstops", () => {
   it("resumes a crashed run once its backstop comes due", async () => {
     // Given: a turn whose process died while its model was answering.
     const { host, storage } = celldHost();
-    const crashed = modelThatWaits();
-    const agent = await createAgent({ host, model: crashed.model });
-    collect(await agent.thread(THREAD).send("go")).catch(() => undefined);
-    await crashed.started.promise;
-    await expireLease(host);
-    const restarted = await createAgent({
-      host: restartedHost(host),
-      model: createCallbackModel(() =>
-        Promise.resolve([assistantMessage("DONE")])
-      ),
-    });
+    await crashWhileModelAnswers(host);
+    const restarted = await answeringAgent(restartedHost(host));
 
     // When: the alarm drains the due backstop.
     const drained = await drainCelldScheduledWork({
@@ -165,7 +157,63 @@ describe("turn backstops", () => {
       })
     ).resolves.toEqual([]);
   });
+
+  it("resumes a run that a failed resume left queued", async () => {
+    // Given: a crashed run whose first resume fails after claiming it, which
+    // puts the run back in the queue.
+    const { host, storage } = celldHost();
+    await crashWhileModelAnswers(host);
+    const restarted = await answeringAgent(
+      failingCheckpointReadOnce(restartedHost(host))
+    );
+    const dueAtMs = Date.now() + TURN_BACKSTOP_DELAY_MS + 1000;
+    await expect(
+      drainCelldScheduledWork({
+        agentForRun: () => restarted,
+        nowMs: dueAtMs,
+        storage,
+      })
+    ).rejects.toThrow("transient store failure");
+    const { runId } = await latestRun(host);
+    expect(await latestRun(host)).toMatchObject({ status: "queued" });
+
+    // When: the alarm drains the retried backstop.
+    const drained = await drainCelldScheduledWork({
+      agentForRun: () => restarted,
+      nowMs: dueAtMs + 5000,
+      storage,
+    });
+
+    // Then: the queued run is resumed and finished, leaving no check.
+    expect(drained.ackedBackstops).toEqual([runId]);
+    expect(eventTypes([...drained.events])).toContain("turn-end");
+    expect(await latestRun(host)).toMatchObject({ status: "completed" });
+    await expect(
+      listCelldScheduledBackstops(storage, {
+        nowMs: Date.now() + 4 * TURN_BACKSTOP_DELAY_MS,
+      })
+    ).resolves.toEqual([]);
+  });
 });
+
+/** Runs a turn on `host` whose process dies while its model answers. */
+async function crashWhileModelAnswers(host: AgentHost): Promise<void> {
+  const crashed = modelThatWaits();
+  const agent = await createAgent({ host, model: crashed.model });
+  collect(await agent.thread(THREAD).send("go")).catch(() => undefined);
+  await crashed.started.promise;
+  await expireLease(host);
+}
+
+/** An agent on `host` whose model answers "DONE". */
+function answeringAgent(host: AgentHost) {
+  return createAgent({
+    host,
+    model: createCallbackModel(() =>
+      Promise.resolve([assistantMessage("DONE")])
+    ),
+  });
+}
 
 function celldHost() {
   const storage = createCelldSqliteTestStorage();
@@ -186,5 +234,32 @@ function modelThatWaits() {
     }),
     release,
     started,
+  };
+}
+
+/** `host` whose first checkpoint read fails, as a transient store error. */
+function failingCheckpointReadOnce<Host extends AgentHost>(host: Host): Host {
+  let failed = false;
+  const checkpoints = host.store.checkpoints;
+  return {
+    ...host,
+    store: new Proxy(host.store, {
+      get(target, property) {
+        if (property === "checkpoints") {
+          return {
+            ...checkpoints,
+            latest: (runId: string) => {
+              if (failed) {
+                return checkpoints.latest(runId);
+              }
+              failed = true;
+              return Promise.reject(new Error("transient store failure"));
+            },
+          };
+        }
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    }),
   };
 }

@@ -1571,10 +1571,12 @@ turn starts, the optional `HostScheduler.scheduleBackstop` schedules a check
 transaction when `tx.scheduler` provides it; settlement cancels the check in
 its own transaction. The host's drainer passes a due check to
 `runTurnBackstop(agent, runId)` from `@minpeter/pss-runtime/execution`, which
-returns what to do with it: `done` when the run settled, parked as
-`needs-recovery`, or went back to `queued`; `retry` with `runAfterMs` while the
-owner is alive (10 seconds past its lease) or the thread is busy; `resumed`
-with the resumed turn when the owner is gone, whose start schedules the run's
+returns what to do with it: `done` when the run settled or parked as
+`needs-recovery`; `retry` with `runAfterMs` while the owner is alive (10
+seconds past its lease), while the thread is busy (10 seconds), or when the
+agent could not resume the run (after another 310 seconds); `resumed` with the
+resumed turn when the owner is gone or the run went back to `queued` (for
+example after a resume failed), whose start schedules the run's
 next check. Celld hosts implement it: checks are scheduled-work rows behind the
 object's alarm, and `drainCelldScheduledWork` runs due checks after runs and
 thread prompts, reporting them in `ackedBackstops` and `skippedBackstops`.
