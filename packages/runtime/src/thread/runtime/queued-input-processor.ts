@@ -17,7 +17,7 @@ import { commitAndAckDurableThreadInput } from "./durable-input-acknowledgement"
 import { releasePendingDurableThreadInputClaim } from "./durable-input-claims";
 import { startThreadExecutionRun, type ThreadExecutionRun } from "./execution";
 import { runAgentLoopWithOverflowCompaction } from "./loop-overflow";
-import { recoverQueuedInputFailure } from "./queued-input-error-recovery";
+import { settleFailedTurn } from "./queued-input-error-recovery";
 import { settleRecoveredToolCalls } from "./recovered-tool-round";
 import {
   commitThreadStateAndEvents,
@@ -27,6 +27,10 @@ import { QueuedInputRecoveryError } from "./turn-error";
 import { normalizeTurnError } from "./turn-error-metadata";
 import { emitTurnEvent } from "./turn-events";
 import { createTurnModelTransforms } from "./turn-model-transforms";
+import {
+  forwardTurnOwnershipLoss,
+  throwIfTurnOwnershipLost,
+} from "./turn-ownership";
 import type { ProcessQueuedInputOptions } from "./turn-processor-options";
 import { closeTurnWithDurableTerminalEvent } from "./turn-terminal";
 
@@ -87,6 +91,7 @@ export async function processQueuedInput({
       turnId,
     });
     executionStarted = true;
+    forwardTurnOwnershipLoss(executionRun?.ownershipLost, activeAbort);
     const committedHistory = await activateContinuation(
       item,
       state,
@@ -235,6 +240,8 @@ export async function processQueuedInput({
             transformModelContext,
           });
 
+    // A turn another owner took over must not write its terminal state.
+    throwIfTurnOwnershipLost(activeAbort.signal);
     state.clearTransientInputs();
     await closeTurnWithDurableTerminalEvent({
       buffer: durableEvents,
@@ -269,10 +276,7 @@ export async function processQueuedInput({
       emitStartFailure(item, error);
       return "start-failed";
     }
-    const blocked =
-      pendingDurableInputClaim !== undefined ||
-      error instanceof QueuedInputRecoveryError;
-    pendingDurableInputClaim = await recoverQueuedInputFailure({
+    const failure = await settleFailedTurn({
       durableEvents,
       error,
       execution,
@@ -283,11 +287,14 @@ export async function processQueuedInput({
       model,
       pendingDurableInputClaim,
       recordEvent,
+      signal: activeAbort.signal,
       state,
       threadKey,
     });
-    return blocked ? "blocked" : "processed";
+    pendingDurableInputClaim = failure.pendingDurableInputClaim;
+    return failure.outcome;
   } finally {
+    executionRun?.release();
     await releasePendingDurableThreadInputClaim({
       executionHost: execution.executionHost,
       onReleased: () => {

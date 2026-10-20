@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { TURN_LEASE_MS } from "../../execution/host/lease-owner";
 import { transitionTurn } from "../../execution/host/turn-status";
 import type {
   AgentHost,
@@ -60,7 +61,7 @@ describe("thread execution lease fencing", () => {
     if (!execution) {
       throw new Error("Expected a running execution.");
     }
-    const second = await claim(host, runId, "owner-b", 200);
+    const second = await claim(host, runId, "owner-b", afterStartLease());
 
     await expect(execution.complete("completed")).rejects.toThrow(
       LEASE_ERROR_PATTERN
@@ -69,8 +70,8 @@ describe("thread execution lease fencing", () => {
     expect(first.lease?.leaseId).toBe("owner-a");
   });
 
-  it("fences an execution that started before another owner claimed it", async () => {
-    // Given: an unleased queued run starts without ownership.
+  it("holds a lease from start and is fenced once another owner replaces it", async () => {
+    // Given: a queued run starts, taking its own lease.
     const host = createInMemoryHost();
     const runId = "initially-unleased";
     await createRun(host, runId);
@@ -84,11 +85,25 @@ describe("thread execution lease fencing", () => {
     if (!execution) {
       throw new Error("Expected a running execution.");
     }
+    execution.release();
 
-    // When: owner B becomes the first lease holder after execution starts.
-    const claimedByOwnerB = await claim(host, runId, "owner-b", 10);
+    // When: owner B claims while the lease is live, and again once it lapses.
+    const whileLive = await host.store.turns.claim(runId, {
+      attempt: 1,
+      leaseId: "owner-b",
+      leaseMs: 100,
+      nowMs: Date.now(),
+    });
+    const claimedByOwnerB = await claim(
+      host,
+      runId,
+      "owner-b",
+      afterStartLease()
+    );
 
-    // Then: the earlier unleased execution cannot settle owner B's run.
+    // Then: only the lapsed lease is replaced, and the earlier execution
+    // cannot settle owner B's run.
+    expect(whileLive).toEqual({ ok: false, reason: "leased" });
     await expect(execution.complete("completed")).rejects.toThrow(
       LEASE_ERROR_PATTERN
     );
@@ -123,7 +138,7 @@ describe("thread execution lease fencing", () => {
           return async (requestedRunId: string) => {
             if (injectOwnerB) {
               injectOwnerB = false;
-              await claim(base, requestedRunId, "owner-b", 200);
+              await claim(base, requestedRunId, "owner-b", afterStartLease());
             }
             return await target.get(requestedRunId);
           };
@@ -205,6 +220,11 @@ describe("thread execution lease fencing", () => {
 });
 
 type Host = ReturnType<typeof createInMemoryHost>;
+
+/** A time past the lease a run takes when it starts now. */
+function afterStartLease(): number {
+  return Date.now() + TURN_LEASE_MS + 1;
+}
 
 function createState(host: AgentHost): ThreadState {
   return new ThreadState({ key: "thread", store: host.store.threads });

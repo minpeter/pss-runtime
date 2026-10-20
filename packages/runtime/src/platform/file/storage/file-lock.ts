@@ -156,7 +156,8 @@ async function readOwner(lockFile: string): Promise<LockOwner | null> {
   }
 }
 
-function isProcessPossiblyAlive(pid: number): boolean {
+/** `false` only when no process with `pid` exists in this PID namespace. */
+export function isProcessPossiblyAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;

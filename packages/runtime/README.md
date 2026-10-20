@@ -1543,6 +1543,27 @@ it, and receive stable `attempt`, `idempotencyKey`, `retryPolicy`, `signal`,
 and public `toolCallId` values. The `@minpeter/pss-runtime/execution`
 entrypoint also exposes the same low-level tool execution checkpoint types.
 
+A running turn owns its run through a lease. It takes the lease when it starts
+and renews it every 100 seconds (inside a store transaction when the store has
+no atomic `TurnStore.transition`); a lease lasts 300 seconds. Another process
+may claim the run only after the lease lapses, or earlier when its host proves
+the owner gone through `AgentHost.ownerLiveness`. File hosts record the owning
+process's host name, pid, and (on Linux) start time, and treat an owner on the
+same host as gone once no process has its pid or a later process does; like
+the file lock, this assumes one PID namespace per host name. Durable Object
+hosts, including Celld and Cloudflare Agents hosts, treat a lease taken by
+another isolate as gone, because an object runs one activation at a time.
+Memory hosts and hosts without `ownerLiveness` wait for the lease to lapse. A
+run left `running` by a turn of this process that ended without settling it is
+reclaimable by this process at once. Until a claim succeeds,
+`thread.continue()` rejects with `THREAD_CONTINUATION_BUSY` and
+`agent.resume(runId)` returns `null`. A turn whose run another owner took over
+or settled (a renewal or a fenced write fails) stops at once, writes nothing,
+reloads the committed thread, and emits `turn-error` with error code
+`THREAD_OWNERSHIP_LOST`. A fresh run's lease is its first attempt, so the
+default five claim attempts allow four recoveries before the run parks as
+`needs-recovery`.
+
 These checkpoints are rollback boundaries, not a complete host adapter by
 themselves. Edge hosts still need durable scheduling, leases, resume workers,
 and notification resume handling; externally visible side-effect tools still need

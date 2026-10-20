@@ -2,6 +2,7 @@ import { noopRuntimeDiagnostics } from "../../../diagnostics";
 import type { AgentHost, HostScheduler } from "../../../execution";
 import { FileAttachmentStore } from "../storage/file-attachment-store";
 import { FileExecutionStore } from "../storage/file-execution-store";
+import { createProcessOwnerLiveness } from "./process-liveness";
 import {
   appendScheduledNodeRun,
   appendScheduledNodeThreadPrompt,
@@ -15,6 +16,7 @@ export function createFileHost({ directory }: FileHostOptions): AgentHost {
   return {
     attachmentStore: new FileAttachmentStore(directory),
     diagnostics: noopRuntimeDiagnostics,
+    ownerLiveness: createProcessOwnerLiveness(),
     scheduler: createFileScheduler({ directory }),
     store: new FileExecutionStore(directory),
   };

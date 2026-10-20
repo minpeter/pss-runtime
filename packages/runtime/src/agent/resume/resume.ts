@@ -1,8 +1,14 @@
+import {
+  abandonedLeaseId,
+  processLeaseOwner,
+  TURN_LEASE_MS,
+} from "../../execution/host/lease-owner";
 import { transitionTurn } from "../../execution/host/turn-status";
 import { TurnTransitionConflictError } from "../../execution/host/turn-transition-conflict";
 import type {
   AgentHost,
   Checkpoint,
+  LeaseOwnerLiveness,
   NotificationInbox,
   NotificationRecord,
   TurnLease,
@@ -69,7 +75,8 @@ export async function resumeAgentTurn({
         transaction.turns,
         run,
         retryLeaseId,
-        maxAttempts
+        maxAttempts,
+        host.ownerLiveness
       );
       if (!claimed) {
         return null;
@@ -165,7 +172,13 @@ async function resumeClaimedExecutionTurn({
   }
   const claimed = await host.store.transaction(
     async (transaction) =>
-      await claimRun(transaction.turns, run, retryLeaseId, maxAttempts)
+      await claimRun(
+        transaction.turns,
+        run,
+        retryLeaseId,
+        maxAttempts,
+        host.ownerLiveness
+      )
   );
   if (!claimed) {
     if ((await host.store.turns.get(run.runId))?.status === "needs-recovery") {
@@ -250,14 +263,17 @@ async function claimRun(
   turns: TurnStore,
   run: TurnRecord,
   retryLeaseId: string | undefined,
-  maxAttempts: number
+  maxAttempts: number,
+  liveness: LeaseOwnerLiveness | undefined
 ): Promise<ClaimedTurnRecord | null> {
   const result = await turns.claim(run.runId, {
+    abandonedLeaseId: abandonedLeaseId(run, liveness),
     attempt: (run.lease?.attempt ?? 0) + 1,
     leaseId: retryLeaseId ?? crypto.randomUUID(),
-    leaseMs: 300_000,
+    leaseMs: TURN_LEASE_MS,
     maxAttempts,
     nowMs: Date.now(),
+    owner: processLeaseOwner(liveness),
   });
   return result.ok ? { ...result.record, lease: result.lease } : null;
 }

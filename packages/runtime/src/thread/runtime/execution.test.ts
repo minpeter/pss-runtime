@@ -33,12 +33,16 @@ describe("thread execution run lifecycle helpers", () => {
       turnId: "unused",
     });
     expect(started?.runId).toBe(runId);
-    await expect(host.store.turns.get(runId)).resolves.toMatchObject({
-      status: "running",
-    });
+    started?.release();
+    const running = await host.store.turns.get(runId);
+    expect(running).toMatchObject({ lease: { attempt: 1 }, status: "running" });
 
     await cancelThreadExecutionRun({
-      cancellation: { kind: "owned", leaseId: null, runId },
+      cancellation: {
+        kind: "owned",
+        leaseId: running?.lease?.leaseId ?? null,
+        runId,
+      },
       executionHost: host,
     });
     await expect(host.store.turns.get(runId)).resolves.toMatchObject({

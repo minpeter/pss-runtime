@@ -84,4 +84,36 @@ describe("Cloudflare Agents retry ownership", () => {
       await expectRetryScheduled({ cloudflareAgent, host, runId });
     }
   );
+
+  it("adopts a run that an earlier activation left leased", async () => {
+    // Given: a run still leased by the activation that ran it before this
+    // Durable Object restarted.
+    const cloudflareAgent = createFakeCloudflareAgent();
+    const host = createRetryHost(cloudflareAgent, () => Promise.resolve(null));
+    const runId = "background:bg_earlier_activation";
+    await seedRetryableNotification(host, runId, {
+      leaseUntilMs: Date.now() + 60_000,
+    });
+    const run = await host.store.turns.get(runId);
+    if (!run?.lease) {
+      throw new Error("Expected a leased run.");
+    }
+    await host.store.turns.update({
+      ...run,
+      lease: { ...run.lease, owner: { id: "earlier-activation" } },
+    });
+    const retry = createCloudflareAgentsFiberRetryScheduler({
+      cloudflareAgent,
+      storage: cloudflareAgent.durableObjectContext.storage,
+    });
+    const payload = cloudflareAgentsRunPayload({ prefix: "tenant-a", runId });
+    const authority = await prepareRetryAuthority(host, payload);
+
+    // When: this activation retries the run.
+    const retried = retry(payload, "error", authority);
+
+    // Then: it takes over the abandoned lease and schedules the retry.
+    await expect(retried).resolves.toBe(true);
+    await expectRetryScheduled({ cloudflareAgent, host, runId });
+  });
 });
