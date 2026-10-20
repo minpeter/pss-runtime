@@ -8,9 +8,13 @@ import {
   releaseScheduledWorkLease,
 } from "../storage/sqlite/scheduled-work-claims";
 import { deleteScheduledWork } from "../storage/sqlite/scheduled-work-table";
-import type { CelldDurableObjectStorage } from "./scheduler-support";
+import type {
+  CelldDurableObjectStorage,
+  CelldScheduledWorkKind,
+} from "./scheduler-support";
 import {
   armNextAlarm,
+  BACKSTOP_KIND,
   DEFAULT_PREFIX,
   insertDueWorkAndArm,
   RUN_KIND,
@@ -160,9 +164,56 @@ export async function ackCelldScheduledThreadPrompt(
   );
 }
 
+export function claimCelldScheduledBackstop(
+  storage: CelldDurableObjectStorage,
+  runId: string,
+  options: ClaimOptions = {}
+): Promise<string | undefined> {
+  return serialize(storage, () =>
+    claimScheduledWorkLease(
+      storage,
+      options.prefix ?? DEFAULT_PREFIX,
+      BACKSTOP_KIND,
+      runId,
+      options.nowMs,
+      options.leaseMs
+    )
+  );
+}
+
+/** Moves a claimed backstop `delayMs` later; a replaced claim is left alone. */
+export function retryCelldScheduledBackstop(
+  storage: CelldDurableObjectStorage,
+  runId: string,
+  delayMs: number,
+  options: MutationOptions & { readonly claimToken: string }
+): Promise<void> {
+  const prefix = options.prefix ?? DEFAULT_PREFIX;
+  const nowMs = options.nowMs ?? Date.now();
+  return serialize(storage, async () => {
+    await releaseScheduledWorkLease(
+      storage,
+      prefix,
+      BACKSTOP_KIND,
+      runId,
+      options.claimToken,
+      nowMs + Math.max(0, Math.floor(delayMs))
+    );
+    await armNextAlarm(storage, prefix);
+  });
+}
+
+export async function ackCelldScheduledBackstop(
+  storage: CelldDurableObjectStorage,
+  runId: string,
+  options: MutationOptions = {}
+): Promise<void> {
+  await ackScheduledWork(storage, BACKSTOP_KIND, runId, options);
+}
+
 function ackScheduledWork(
   storage: CelldDurableObjectStorage,
-  kind: typeof RUN_KIND | typeof THREAD_PROMPT_KIND,
+  kind: CelldScheduledWorkKind,
   workId: string,
   options: MutationOptions
 ): Promise<void> {

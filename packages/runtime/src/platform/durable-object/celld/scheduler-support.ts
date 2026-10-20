@@ -15,9 +15,21 @@ import {
 } from "../storage/sqlite/scheduled-work-table";
 
 export const DEFAULT_PREFIX = "pss-runtime";
+export const BACKSTOP_KIND = "celld-backstop";
 export const RUN_KIND = "celld-run";
 export const THREAD_PROMPT_KIND = "celld-thread-prompt";
 export const storageOperations = new WeakMap<object, Promise<void>>();
+
+export type CelldScheduledWorkKind =
+  | typeof BACKSTOP_KIND
+  | typeof RUN_KIND
+  | typeof THREAD_PROMPT_KIND;
+
+/** A due backstop check of a started run. */
+export interface CelldScheduledBackstop {
+  readonly runId: string;
+  readonly threadKey: string;
+}
 
 export interface CelldScheduledWorkListOptions {
   readonly limit?: number;
@@ -69,7 +81,7 @@ export async function insertDueWorkInTransaction<T>(
   transaction: DurableObjectTransactionStorage,
   storage: CelldDurableObjectStorage,
   prefix: string,
-  kind: typeof RUN_KIND | typeof THREAD_PROMPT_KIND,
+  kind: CelldScheduledWorkKind,
   workId: string,
   value: T,
   dueAtMs: number,
@@ -101,7 +113,7 @@ export async function insertDueWorkInTransaction<T>(
 export async function insertDueWorkAndArm<T>(
   storage: CelldDurableObjectStorage,
   prefix: string,
-  kind: typeof RUN_KIND | typeof THREAD_PROMPT_KIND,
+  kind: CelldScheduledWorkKind,
   workId: string,
   value: T,
   dueAtMs: number,
@@ -123,7 +135,7 @@ export async function insertDueWorkAndArm<T>(
 
 export function listDueWork<T>(
   storage: CelldDurableObjectStorage,
-  kind: typeof RUN_KIND | typeof THREAD_PROMPT_KIND,
+  kind: CelldScheduledWorkKind,
   options: CelldScheduledWorkListOptions,
   parseValue: (value: unknown) => T | undefined
 ): T[] {
@@ -187,7 +199,8 @@ function earliestDueAt(
   transaction: DurableObjectTransactionStorage,
   prefix: string
 ): number | undefined {
-  const values = ([RUN_KIND, THREAD_PROMPT_KIND] as const).flatMap((kind) => {
+  const kinds = [BACKSTOP_KIND, RUN_KIND, THREAD_PROMPT_KIND] as const;
+  const values = kinds.flatMap((kind) => {
     const row = selectNextScheduledWork(transaction, prefix, kind);
     return typeof row?.due_at === "number" ? [row.due_at] : [];
   });
@@ -228,4 +241,19 @@ export function parseThreadPrompt(
   value: unknown
 ): ScheduledThreadPrompt | undefined {
   return isScheduledThreadPrompt(value) ? value : undefined;
+}
+
+export function parseBackstop(
+  value: unknown
+): CelldScheduledBackstop | undefined {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "runId" in value &&
+    typeof value.runId === "string" &&
+    "threadKey" in value &&
+    typeof value.threadKey === "string"
+  ) {
+    return { runId: value.runId, threadKey: value.threadKey };
+  }
 }

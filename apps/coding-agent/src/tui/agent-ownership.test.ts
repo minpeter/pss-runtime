@@ -2410,6 +2410,83 @@ describe.sequential("actual TUI transcript ownership", () => {
     }
   );
 
+  it.each(["startup", "direct", "picker"] as const)(
+    "shows the session's interrupted turn once, below replayed history, after %s",
+    async (method) => {
+      // Given: a session whose last turn was interrupted.
+      const target = {
+        key: "cwd:/workspace#cafebabe",
+        name: "INTERRUPTED_SESSION",
+        cwd: "/workspace",
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-01T00:00:00Z",
+      };
+      let current =
+        method === "startup" ? target : { ...target, key: "old", name: "OLD" };
+      const switchSession = vi.fn(() => {
+        current = target;
+        return Promise.resolve();
+      });
+      const app = await fixture({
+        currentSession: () => current,
+        replayHistoryOnStartup: method === "startup",
+        commands: [
+          {
+            name: "resume",
+            description: "fixture",
+            execute: async () => {
+              if (method === "picker") {
+                return { success: true, action: { type: "select-session" } };
+              }
+              await switchSession();
+              return {
+                success: true,
+                action: { type: "session", clear: true, reason: "resume" },
+              };
+            },
+          },
+        ],
+        sessionSelector: {
+          currentSessionKey: () => current.key,
+          listSessions: async () => [target],
+          switchSession,
+          loadCurrentHistory: async () =>
+            current === target
+              ? [{ role: "user", content: "UNANSWERED_USER_SENTINEL" }]
+              : [],
+        },
+        unfinishedTurn: async () =>
+          current === target ? { kind: "interrupted" } : undefined,
+      });
+      try {
+        // When: the session is opened.
+        if (method === "direct") {
+          await app.command("/resume");
+        } else if (method === "picker") {
+          await onRender(
+            () =>
+              (surface().children.at(-1) as Container).children[0] instanceof
+              SessionSelectorComponent,
+            () => send("/resume\r")
+          );
+          const selected = idle();
+          send("\r");
+          await selected;
+        }
+
+        // Then: the notice follows the replayed turn and survives the reset.
+        const text = plain();
+        const notice = "■ interrupted - press Enter to continue";
+        expect(text.split(notice)).toHaveLength(2);
+        expect(text.indexOf(notice)).toBeGreaterThan(
+          text.indexOf("UNANSWERED_USER_SENTINEL")
+        );
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
   it.each([
     { name: "named", sessionName: "Release notes" },
     { name: "unnamed", sessionName: undefined },

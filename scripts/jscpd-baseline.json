@@ -46,7 +46,7 @@
     "duplicates:apps/coding-agent/src/tui/agent-busy.test.ts:17-61=apps/coding-agent/src/tui/repeated-notice.test.ts:8-52",
     "duplicates:apps/coding-agent/src/tui/agent-busy.test.ts:19-28=apps/coding-agent/src/tui/tool-input-token-usage.test.ts:18-27",
     "duplicates:apps/coding-agent/src/tui/agent-busy.test.ts:29-44=apps/coding-agent/src/tui/agent-ownership.test.ts:41-56",
-    "duplicates:apps/coding-agent/src/tui/agent-ownership.test.ts:1177-1193=apps/coding-agent/src/tui/agent-ownership.test.ts:3253-3269",
+    "duplicates:apps/coding-agent/src/tui/agent-ownership.test.ts:1177-1193=apps/coding-agent/src/tui/agent-ownership.test.ts:3330-3346",
     "duplicates:apps/coding-agent/src/tui/agent-ownership.test.ts:1701-1717=apps/coding-agent/src/tui/agent-ownership.test.ts:1755-1771",
     "duplicates:apps/coding-agent/src/tui/agent-ownership.test.ts:41-56=apps/coding-agent/src/tui/tool-input-token-usage.test.ts:28-43",
     "duplicates:apps/coding-agent/src/tui/agent-ownership.test.ts:552-567=apps/coding-agent/src/tui/agent-ownership.test.ts:732-747",

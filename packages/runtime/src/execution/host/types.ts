@@ -66,11 +66,26 @@ export interface LeaseOwnerLiveness {
 }
 
 export interface HostScheduler {
+  /**
+   * Drops `runId`'s pending backstop, if any. Settlement calls it so a
+   * finished turn leaves no check behind.
+   */
+  cancelBackstop?(runId: string): Promise<void>;
   enqueueRun(
     runId: string,
     options?: { readonly runAfterMs?: number }
   ): Promise<void>;
   resumeThread(threadKey: string, options: ResumeThreadOptions): Promise<void>;
+  /**
+   * Schedules a check of a started run `runAfterMs` from now, replacing the
+   * run's earlier check. When it comes due, the host's drainer passes it to
+   * `runTurnBackstop()`, which resumes the run if its owner died. Hosts
+   * without a drainer that wakes on its own omit it.
+   */
+  scheduleBackstop?(
+    runId: string,
+    options: { readonly runAfterMs: number; readonly threadKey: string }
+  ): Promise<void>;
 }
 
 export type TurnKind = "notification" | "tool-recovery" | "user-turn";

@@ -16,6 +16,7 @@ import { ensureScheduledWorkSchema } from "./scheduled-work-table-schema";
 export type ScheduledWorkKind =
   | "agents-run"
   | "agents-thread-prompt"
+  | "celld-backstop"
   | "celld-run"
   | "celld-thread-prompt"
   | SharedScheduledWorkKind;

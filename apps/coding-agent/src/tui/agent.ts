@@ -100,6 +100,7 @@ import {
   type TranscriptLease,
   TranscriptOwner,
 } from "./transcript-owner";
+import { type UnfinishedTurn, unfinishedTurnMessage } from "./unfinished-turn";
 
 const ANSI_RESET = "\x1b[0m";
 const ANSI_BLACK = "\x1b[30m";
@@ -822,6 +823,11 @@ export interface AgentTUIConfig {
   };
   thread: TuiThread;
   toolRenderers?: ToolRendererMap;
+  /**
+   * The current session's unfinished turn, shown at startup and after each
+   * session switch with how to go on from it. The TUI never resumes it.
+   */
+  unfinishedTurn?: () => Promise<UnfinishedTurn | undefined>;
 }
 
 export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
@@ -1306,15 +1312,38 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     addChatComponent(
       chatContainer,
       new Text(
-        style(
-          STATUS_ERROR,
-          "■ interrupted - press Enter to continue, or enter new instructions."
-        ),
+        style(STATUS_ERROR, unfinishedTurnMessage({ kind: "interrupted" })),
         1,
         0
       )
     );
     tui.requestRender();
+  };
+
+  /** Tells how to go on from the session's unfinished turn. */
+  const showUnfinishedTurn = async (): Promise<void> => {
+    let turn: UnfinishedTurn | undefined;
+    try {
+      turn = await config.unfinishedTurn?.();
+    } catch (error) {
+      showSystemMessage(
+        `Could not check this session's last turn: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return;
+    }
+    if (turn?.kind === "interrupted") {
+      addInterruptedMessage();
+    } else if (turn?.kind === "needs-decision") {
+      addChatComponent(
+        chatContainer,
+        new Text(style(STATUS_ERROR, unfinishedTurnMessage(turn)), 1, 0)
+      );
+      tui.requestRender();
+    } else if (turn?.kind === "running-elsewhere") {
+      showSystemMessage(unfinishedTurnMessage(turn));
+    }
   };
 
   const addAbnormalFinishReasonMessage = (finishReason: string): void => {
@@ -1930,6 +1959,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
         );
       });
       refreshCurrentStatus("resume");
+      await showUnfinishedTurn();
     } catch (error) {
       showSystemMessage(
         `Session switch failed (current session: ${selectorConfig.currentSessionKey()}; previous transcript retained): ${
@@ -2033,7 +2063,9 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
       }
     }
     refreshCurrentStatus(action.reason);
-    if (commandResult.message && action.reason !== "resume") {
+    if (action.reason === "resume") {
+      await showUnfinishedTurn();
+    } else if (commandResult.message) {
       showSystemMessage(commandResult.message);
     }
     tui.requestRender();
@@ -2327,6 +2359,7 @@ export async function createAgentTUI(config: AgentTUIConfig): Promise<void> {
     if (config.replayHistoryOnStartup === true) {
       await renderSessionHistory(undefined, "initial-replay");
     }
+    await showUnfinishedTurn();
     initializing = false;
     refreshCurrentStatus();
 

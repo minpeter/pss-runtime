@@ -1564,6 +1564,25 @@ reloads the committed thread, and emits `turn-error` with error code
 default five claim attempts allow four recoveries before the run parks as
 `needs-recovery`.
 
+A host whose scheduler wakes on its own can also check each started run later,
+so a crashed turn resumes without anyone calling `thread.continue()`. When a
+turn starts, the optional `HostScheduler.scheduleBackstop` schedules a check
+310 seconds out (the lease plus a 10-second margin), inside the start's store
+transaction when `tx.scheduler` provides it; settlement cancels the check in
+its own transaction. The host's drainer passes a due check to
+`runTurnBackstop(agent, runId)` from `@minpeter/pss-runtime/execution`, which
+returns what to do with it: `done` when the run settled, parked as
+`needs-recovery`, or went back to `queued`; `retry` with `runAfterMs` while the
+owner is alive (10 seconds past its lease) or the thread is busy; `resumed`
+with the resumed turn when the owner is gone, whose start schedules the run's
+next check. Celld hosts implement it: checks are scheduled-work rows behind the
+object's alarm, and `drainCelldScheduledWork` runs due checks after runs and
+thread prompts, reporting them in `ackedBackstops` and `skippedBackstops`.
+Memory, file, default Durable Object storage, and Cloudflare Agents hosts
+schedule no checks; there a crashed turn waits for `thread.continue()` or
+`agent.resume(runId)`, and Cloudflare Agents hosts still recover the fibers
+that run scheduled work through `onFiberRecovered()`.
+
 These checkpoints are rollback boundaries, not a complete host adapter by
 themselves. Edge hosts still need durable scheduling, leases, resume workers,
 and notification resume handling; externally visible side-effect tools still need

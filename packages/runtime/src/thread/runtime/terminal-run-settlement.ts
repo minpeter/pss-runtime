@@ -121,6 +121,9 @@ export async function settleThreadExecutionRun({
         transition.reason
       );
     }
+    // A settled run needs no check; hosts that cannot cancel inside the
+    // transaction find it settled when the backstop comes due.
+    await tx.scheduler?.cancelBackstop?.(runId);
     return result;
   });
 }

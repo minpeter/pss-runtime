@@ -70,6 +70,7 @@ import { createSessionCommands } from "./session-commands";
 import { shouldReplayOnStartup } from "./session-startup-replay";
 import { type StartupStatusOutput, showStartupStatus } from "./startup-status";
 import { formatSessionResumeHint } from "./terminal-exit";
+import { findUnfinishedTurn } from "./unfinished-turn";
 import { contextUsageFooter } from "./usage-footer";
 
 export interface StartTuiOptions {
@@ -297,6 +298,9 @@ async function startTuiSession(
       options.sessionName
     );
     let currentSession = startupSession.entry;
+    // Finding a session's runs reads every stored run, and a session this
+    // startup created has none, so only an existing session is checked.
+    let sessionHasRuns = threadConfig.keyFromEnv;
     onSessionReady(() => currentSession.key);
     const sessionIndexNotice = startupSession.notice;
     let thread = agent.thread(currentSession.key);
@@ -506,6 +510,7 @@ async function startTuiSession(
       await previous.dispose().catch(() => undefined);
       thread = agent.thread(entry.key);
       currentSession = entry;
+      sessionHasRuns = reason === "resume";
       resetUsageTotals();
       header.subtitle = buildSubtitle();
       emitSessionEvent("host:session-switch", {
@@ -645,6 +650,10 @@ async function startTuiSession(
         extensionHost.toolRenderers,
         (toolName) => extensionHost.getToolRendererOwner(toolName)
       ),
+      unfinishedTurn: async () =>
+        sessionHasRuns
+          ? await findUnfinishedTurn(agent.host, currentSession.key)
+          : undefined,
     };
 
     const activateReplacementHost = async (
