@@ -1,13 +1,16 @@
-import type { ToolSet } from "ai";
+import type { ModelMessage, ToolSet } from "ai";
 import { publicToolCallId } from "./tool-call-ids";
-import { ToolExecutionNeedsRecoveryError } from "./tool-execution-checkpoint";
+import {
+  ToolExecutionNeedsRecoveryError,
+  toolErrorText,
+} from "./tool-execution-checkpoint";
 import type {
   RuntimeToolExecutionCheckpoint,
   RuntimeToolExecutionContext,
   RuntimeToolExecutionResult,
   RuntimeToolRetryPolicy,
 } from "./tool-execution-types";
-import type { ToolStepProgress } from "./tool-step-progress";
+import { ToolStepProgress } from "./tool-step-progress";
 
 export function normalizeToolCallIds(
   tools: ToolSet | undefined,
@@ -153,6 +156,64 @@ function wrapToolExecute(
   };
 }
 
+/**
+ * Runs a recovered call again through the durable wrapper, so it is
+ * journaled like any call. Returns `undefined` when the tool cannot run, its
+ * output, or the error text the model receives. Cancellation, a durable
+ * hook failure, and a manual-recovery decision still throw.
+ */
+export async function rerunToolCall({
+  attempt,
+  input,
+  messages,
+  signal,
+  toolCallId,
+  toolDefinition,
+  toolExecution,
+  toolName,
+}: {
+  readonly attempt: number;
+  readonly input: unknown;
+  readonly messages: readonly ModelMessage[];
+  readonly signal: AbortSignal;
+  readonly toolCallId: string;
+  readonly toolDefinition: unknown;
+  readonly toolExecution: RuntimeToolExecutionContext;
+  readonly toolName: string;
+}): Promise<
+  { readonly errorText: string } | { readonly output: unknown } | undefined
+> {
+  const progress = new ToolStepProgress();
+  const wrapped = wrapToolExecute(
+    toolName,
+    toolDefinition,
+    new Map(),
+    { ...toolExecution, attempt },
+    progress
+  );
+  if (!isExecutableToolDefinition(wrapped)) {
+    return;
+  }
+  try {
+    return {
+      output: await wrapped.execute(input, {
+        abortSignal: signal,
+        messages,
+        toolCallId,
+      }),
+    };
+  } catch (error) {
+    if (
+      signal.aborted ||
+      progress.authorityFailed ||
+      error instanceof ToolExecutionNeedsRecoveryError
+    ) {
+      throw error;
+    }
+    return { errorText: toolErrorText(error) };
+  }
+}
+
 /** Runs a durable execution hook; its failure revokes recovery authority. */
 async function withAuthority<Result>(
   progress: ToolStepProgress | undefined,
@@ -182,6 +243,7 @@ function isExecutableToolDefinition(value: unknown): value is {
 
 interface ToolExecutionOptionsLike {
   readonly abortSignal?: AbortSignal;
+  readonly messages?: readonly ModelMessage[];
   readonly toolCallId: string;
 }
 
@@ -230,6 +292,9 @@ function toolRetryPolicy(toolDefinition: unknown): RuntimeToolRetryPolicy {
 
 function isToolRetryPolicy(value: unknown): value is RuntimeToolRetryPolicy {
   return (
-    value === "idempotent" || value === "manual-recovery" || value === "pure"
+    value === "idempotent" ||
+    value === "interrupt" ||
+    value === "manual-recovery" ||
+    value === "pure"
   );
 }

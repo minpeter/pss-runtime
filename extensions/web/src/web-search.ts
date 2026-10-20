@@ -34,40 +34,46 @@ export type WebSearchTool = Tool<
   WebSearchInput,
   readonly SearchResult[],
   Record<string, unknown>
->;
+> & {
+  /** Searching only reads, so a crashed durable run searches again. */
+  readonly retryPolicy: "pure";
+};
 
 export function createWebSearchTool(
   client: Pick<CodingAgentOpenSearchClient, "search">
 ): WebSearchTool {
-  return tool<WebSearchInput, readonly SearchResult[], Record<string, unknown>>(
-    {
-      description:
-        "Search the web for current facts, documentation, news, people, companies, and other external information. Follow promising URLs with web_fetch when full page content is needed.",
-      execute: async (input, options) => {
-        abortIfRequested(options.abortSignal, "web_search");
-        const maxResults = input.numResults ?? DEFAULT_SEARCH_RESULT_COUNT;
-        if (options.abortSignal === undefined) {
-          return await client.search(input.query, maxResults);
-        }
-        return await client.search(input.query, maxResults, {
-          signal: options.abortSignal,
-        });
-      },
-      inputSchema,
-      outputSchema: jsonSchema<readonly SearchResult[]>({
-        items: {
-          additionalProperties: false,
-          properties: {
-            engine: { type: "string" },
-            snippet: { type: "string" },
-            title: { type: "string" },
-            url: { type: "string" },
-          },
-          required: ["engine", "snippet", "title", "url"],
-          type: "object",
+  const definition = tool<
+    WebSearchInput,
+    readonly SearchResult[],
+    Record<string, unknown>
+  >({
+    description:
+      "Search the web for current facts, documentation, news, people, companies, and other external information. Follow promising URLs with web_fetch when full page content is needed.",
+    execute: async (input, options) => {
+      abortIfRequested(options.abortSignal, "web_search");
+      const maxResults = input.numResults ?? DEFAULT_SEARCH_RESULT_COUNT;
+      if (options.abortSignal === undefined) {
+        return await client.search(input.query, maxResults);
+      }
+      return await client.search(input.query, maxResults, {
+        signal: options.abortSignal,
+      });
+    },
+    inputSchema,
+    outputSchema: jsonSchema<readonly SearchResult[]>({
+      items: {
+        additionalProperties: false,
+        properties: {
+          engine: { type: "string" },
+          snippet: { type: "string" },
+          title: { type: "string" },
+          url: { type: "string" },
         },
-        type: "array",
-      }),
-    }
-  );
+        required: ["engine", "snippet", "title", "url"],
+        type: "object",
+      },
+      type: "array",
+    }),
+  });
+  return { ...definition, retryPolicy: "pure" };
 }

@@ -1,3 +1,4 @@
+import type { JournaledToolIntent } from "../../execution/host/tool-step-journal";
 import type { ClaimedThreadInput } from "../../execution/host/types";
 import type { AgentEvent, RuntimeInput } from "../protocol/events";
 import type { BufferedAgentTurn } from "../protocol/turn";
@@ -46,6 +47,8 @@ export interface QueuedInput {
   readonly initialEvents: AgentEvent[];
   readonly input?: UserInput;
   readonly preUserRuntimeInputs: QueuedRuntimeInput[];
+  /** Unfinished calls of a crashed step, settled before the model runs. */
+  readonly recoveredToolCalls?: readonly JournaledToolIntent[];
   readonly run: BufferedAgentTurn;
   readonly runtimeInput: RuntimeInputState;
 }

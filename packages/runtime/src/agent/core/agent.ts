@@ -19,6 +19,10 @@ import {
 import { DisposedResourceError } from "../../thread/state/thread-errors";
 import type { ThreadStore } from "../../thread/store/types";
 import { stableAgentNamespace } from "../identity/namespace";
+import {
+  type RecoveryResolution,
+  resolveAgentRecovery,
+} from "../resume/resolve-recovery";
 import { type ClaimedTurnRecord, resumeAgentTurn } from "../resume/resume";
 import { createAgentModelOptions } from "./agent-model-options";
 import { AgentHookRuntime } from "./hook-runtime";
@@ -161,6 +165,31 @@ export class Agent implements AsyncDisposable {
         this.#resumeExecutionTurn(run, checkpoint),
       resumeNotification: (notification, run) =>
         this.#resumeNotification(notification, run),
+      runId,
+    });
+  }
+
+  /**
+   * Records decisions for a `needs-recovery` run's tool calls whose outcome
+   * is unknown, then requeues the run. Resume it with `resume(runId)` or the
+   * thread's `continue()`: before the model runs, each call is run again
+   * (`rerun`, same idempotency key), reported to the model as interrupted
+   * (`interrupt`), or given the supplied output (`result`). Every unfinished
+   * `manual-recovery` call needs a decision (`toolCalls` by id, or
+   * `otherwise`). A run parked by repeated crashes needs none and is simply
+   * requeued. Rejects with `RecoveryResolutionError` and records nothing when
+   * the run is unknown, not parked, or left undecided.
+   */
+  async resolveRecovery(
+    runId: string,
+    resolution: RecoveryResolution = {}
+  ): Promise<void> {
+    this.#assertNotDisposed();
+    await resolveAgentRecovery({
+      hasExplicitNamespace: this.namespace !== undefined,
+      host: this.#host,
+      ownerNamespace: this.#ownerNamespace,
+      resolution,
       runId,
     });
   }

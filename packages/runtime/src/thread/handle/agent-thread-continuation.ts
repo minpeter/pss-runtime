@@ -2,6 +2,7 @@ import type { JSONValue, ModelMessage } from "ai";
 import { ownsAgentNamespace } from "../../agent/identity/namespace";
 import { createThreadExecutionRunId } from "../../execution/host/thread-execution-run-id";
 import {
+  awaitsRecoveryDecision,
   type JournaledToolResult,
   pendingToolCalls,
   type ToolStepJournal,
@@ -45,6 +46,7 @@ import {
   unregisterLiveThreadInput,
 } from "../runtime/live-input-ownership";
 import { startThreadQueueDrain } from "../runtime/notification";
+import { recoveredToolRoundMessages } from "../runtime/recovered-tool-round";
 import { reserveThreadInputAdmission } from "../runtime/thread-input-admission-coordinator";
 import { enqueueAgentThreadInputAdmission } from "./agent-thread-admission";
 import type { AgentThreadContext } from "./agent-thread-context";
@@ -591,7 +593,19 @@ async function prepareClaimedContinuation(
     }
     return;
   }
-  return enqueuePreparedTurn(context, { continuation }, executionRun);
+  // The processor settles the crashed step's unfinished calls (reruns,
+  // interruptions, and recorded decisions) before its first model request.
+  const recoveredToolCalls = [...(journal?.inflight ?? [])].sort(
+    (left, right) => left.seq - right.seq
+  );
+  return enqueuePreparedTurn(
+    context,
+    {
+      continuation,
+      ...(recoveredToolCalls.length > 0 ? { recoveredToolCalls } : {}),
+    },
+    executionRun
+  );
 }
 
 /**
@@ -810,13 +824,11 @@ function buildRecoveredContinuationHistory(
   return history;
 }
 
-/** The first recorded call without an outcome whose policy forbids replay. */
+/** The first recorded call without an outcome that awaits a decision. */
 function manualRecoveryToolCheckpoint(
   checkpoint: Checkpoint | null
 ): RuntimeToolExecutionCheckpointMetadata | undefined {
-  return pendingToolCalls(checkpoint).find(
-    (call) => call.policy === "manual-recovery"
-  );
+  return pendingToolCalls(checkpoint).find(awaitsRecoveryDecision);
 }
 
 /**
@@ -869,44 +881,20 @@ function recoveredToolRoundHistory(
   if (unrecoverableTool) {
     throw new ToolExecutionNeedsRecoveryError(unrecoverableTool);
   }
-  const history = structuredClone([...baseHistory]);
-  if (results.length === 0) {
-    return history;
-  }
-  history.push(
-    {
-      content: results.map((result) => ({
-        input: result.input ?? {},
-        toolCallId: result.toolCallId,
-        toolName: result.toolName,
-        type: "tool-call" as const,
-      })),
-      role: "assistant",
-    },
-    {
-      content: results.map((result) => ({
-        output:
+  return [
+    ...structuredClone([...baseHistory]),
+    ...recoveredToolRoundMessages(
+      results.map((result) => ({
+        input: result.input,
+        outcome:
           result.errorText === undefined
-            ? toolResultOutput(result.output)
-            : { type: "error-text" as const, value: result.errorText },
+            ? { output: result.output }
+            : { errorText: result.errorText },
         toolCallId: result.toolCallId,
         toolName: result.toolName,
-        type: "tool-result" as const,
-      })),
-      role: "tool",
-    }
-  );
-  return history;
-}
-
-function toolResultOutput(
-  output: unknown
-):
-  | { readonly type: "json"; readonly value: JSONValue }
-  | { readonly type: "text"; readonly value: string } {
-  return typeof output === "string"
-    ? { type: "text", value: output }
-    : { type: "json", value: (output ?? null) as JSONValue };
+      }))
+    ),
+  ];
 }
 
 export function isRecordClaimableByAgent(

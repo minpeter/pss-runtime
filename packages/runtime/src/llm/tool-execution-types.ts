@@ -1,4 +1,14 @@
-export type RuntimeToolRetryPolicy = "idempotent" | "manual-recovery" | "pure";
+/**
+ * What crash recovery does with a call whose outcome is unknown: `pure` and
+ * `idempotent` calls run again under the same idempotency key, `interrupt`
+ * calls report an interrupted error result to the model, and
+ * `manual-recovery` calls park the run until `agent.resolveRecovery()`.
+ */
+export type RuntimeToolRetryPolicy =
+  | "idempotent"
+  | "interrupt"
+  | "manual-recovery"
+  | "pure";
 
 export interface RuntimeToolExecutionCheckpointMetadata {
   readonly attempt: number;

@@ -5,6 +5,7 @@ import type {
   Checkpoint,
   TurnRecord,
 } from "../execution/host/types";
+import type { RuntimeToolRetryPolicy } from "../llm/tool-execution-types";
 import { createInMemoryHost } from "../platform/memory";
 
 export interface GenerateTextToolOptions {
@@ -21,9 +22,9 @@ export const createQueuedUserTurnRun = (runId = "run-1"): TurnRecord => ({
 });
 
 export function checkpointedTool(
-  retryPolicy: "idempotent" | "manual-recovery" | "pure",
+  retryPolicy: RuntimeToolRetryPolicy,
   execute: (input: unknown, options: unknown) => unknown
-): Tool & { readonly retryPolicy: "idempotent" | "manual-recovery" | "pure" } {
+): Tool & { readonly retryPolicy: RuntimeToolRetryPolicy } {
   return {
     ...tool({
       execute,

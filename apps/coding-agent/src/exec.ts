@@ -340,12 +340,13 @@ async function assertSessionDoesNotRequireManualRecovery(
     return;
   }
   // The step journal lists every unfinished call, including a sibling of
-  // the latest checkpoint's call.
+  // the latest checkpoint's call. A recorded decision lets the run resume.
   const inspection = await inspectDurableTurn(agent.host, run.runId);
   const pendingManual =
     "pendingToolCalls" in inspection &&
     inspection.pendingToolCalls.some(
-      (call) => call.policy === "manual-recovery"
+      (call) =>
+        call.policy === "manual-recovery" && call.resolution === undefined
     );
   if (run.status === "needs-recovery" || pendingManual) {
     await agent.resume(run.runId);
