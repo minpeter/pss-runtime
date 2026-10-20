@@ -47,6 +47,7 @@ const expectedStreamUsage = {
   inputTokens: 11,
   outputTokenDetails: { reasoningTokens: 5, textTokens: 8 },
   outputTokens: 13,
+  raw: streamUsageFixture.raw,
   totalTokens: 24,
 };
 const streamTimestampFixture = new Date("2026-07-23T00:00:00.000Z");
@@ -79,6 +80,7 @@ const expectedGenerateUsage = {
   inputTokens: 21,
   outputTokenDetails: { reasoningTokens: 3, textTokens: 7 },
   outputTokens: 10,
+  raw: generateUsageFixture.raw,
   totalTokens: 31,
 };
 const generateTimestampFixture = new Date("2026-07-23T01:00:00.000Z");
@@ -232,7 +234,7 @@ describe("createModelStepStream", () => {
         modelId: "response-model",
         timestamp: streamTimestampFixture,
       },
-      usage: { ...expectedStreamUsage, raw: streamUsageFixture.raw },
+      usage: expectedStreamUsage,
     });
     expect(finalized.finishReason).toBe("stop");
     expect(finalized.response).toEqual({
@@ -423,7 +425,7 @@ describe("createModelStepStream", () => {
         modelId: "response-model",
         timestamp: generateTimestampFixture,
       },
-      usage: { ...expectedGenerateUsage, raw: generateUsageFixture.raw },
+      usage: expectedGenerateUsage,
     });
     expect(finalized.finishReason).toBe("tool-calls");
     expect(finalized.response).toEqual({
