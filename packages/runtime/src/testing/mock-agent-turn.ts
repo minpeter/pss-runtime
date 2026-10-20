@@ -11,13 +11,18 @@ export function createMockAgentTurn(
 ): AgentTurn {
   let eventsStarted = false;
 
+  const getEvents = (): AsyncIterable<AgentEvent> => {
+    if (eventsStarted) {
+      throw new Error("AgentTurn.events() can only be consumed once");
+    }
+    eventsStarted = true;
+    return isAsyncIterable(events) ? events : agentEventStream(events);
+  };
+
   return {
-    events(): AsyncIterable<AgentEvent> {
-      if (eventsStarted) {
-        throw new Error("AgentTurn.events() can only be consumed once");
-      }
-      eventsStarted = true;
-      return isAsyncIterable(events) ? events : agentEventStream(events);
+    events: getEvents,
+    [Symbol.asyncIterator](): AsyncIterator<AgentEvent> {
+      return getEvents()[Symbol.asyncIterator]();
     },
   };
 }

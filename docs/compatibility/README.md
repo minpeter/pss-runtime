@@ -1,8 +1,10 @@
 # Pi compatibility baseline
 
-[`pi-v0.83.0.json`](./pi-v0.83.0.json) is the machine-readable comparison
-between PSS and Pi v0.83.0. The release tag is pinned to upstream commit
-[`845d6ff1f6643aba440341cce877ce1c43ebbc39`](https://github.com/badlogic/pi-mono/commit/845d6ff1f6643aba440341cce877ce1c43ebbc39),
+[`pi-v1.3.0.json`](./pi-v1.3.0.json) is the current machine-readable comparison
+between PSS and Pi v1.3.0 (pinned to upstream commit
+[`71023aec1546d6d677a65669c5665c0927ce0dd0`](https://github.com/earendil-works/pi/commit/71023aec1546d6d677a65669c5665c0927ce0dd0)),
+alongside the historical [`pi-v0.83.0.json`](./pi-v0.83.0.json) baseline (pinned
+to [`845d6ff1f6643aba440341cce877ce1c43ebbc39`](https://github.com/badlogic/pi-mono/commit/845d6ff1f6643aba440341cce877ce1c43ebbc39)),
 so a moved tag or a later Pi release cannot silently change the baseline.
 Evidence under `upstream` is relative to that commit; evidence under `local` is
 relative to this repository.

@@ -1,5 +1,6 @@
 import { readdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
+import type { HostScheduler } from "../../../execution/host/types";
 import {
   normalizedListLimit,
   threadPromptScheduledWorkId,
@@ -9,6 +10,7 @@ import {
   migrateLegacyScheduledWork,
 } from "../storage/file-execution-store/generation";
 import { withFileLock } from "../storage/file-execution-store/lock";
+import type { DataDirectoryResolver } from "../storage/file-execution-store/types";
 import {
   fileForScheduledWork,
   parseStoredScheduledRunWork,
@@ -48,6 +50,41 @@ export async function appendScheduledNodeThreadPrompt(
       prompt
     );
   });
+}
+
+export function createDataDirectoryFileScheduler(
+  directory: DataDirectoryResolver,
+  lock: <T>(fn: () => Promise<T>) => Promise<T>
+): HostScheduler {
+  return {
+    enqueueRun: async (runId, options) => {
+      await lock(async () => {
+        await insertScheduledWork(
+          await directory(),
+          "run",
+          runId,
+          runId,
+          options
+        );
+      });
+    },
+    resumeThread: async (threadKey, options) => {
+      const prompt: NodeScheduledThreadPrompt = {
+        idempotencyKey: options.idempotencyKey,
+        notificationId: options.notificationId,
+        runId: options.runId,
+        threadKey,
+      };
+      await lock(async () => {
+        await insertScheduledWork(
+          await directory(),
+          "thread-prompt",
+          threadPromptScheduledWorkId(prompt),
+          prompt
+        );
+      });
+    },
+  };
 }
 
 export async function listScheduledNodeRuns(

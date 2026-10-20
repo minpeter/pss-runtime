@@ -11,7 +11,10 @@ function turn(events: readonly AgentEvent[]): AgentTurn {
         yield event;
       }
     },
-  } as AgentTurn;
+    [Symbol.asyncIterator]() {
+      return this.events()[Symbol.asyncIterator]();
+    },
+  };
 }
 
 describe("coding-agent RPC session", () => {
@@ -99,13 +102,16 @@ describe("coding-agent RPC session", () => {
     expect(steer).not.toHaveBeenCalled();
 
     let finishEvents: (() => void) | undefined;
-    const activeTurn = {
+    const activeTurn: AgentTurn = {
       async *events() {
         await new Promise<void>((resolve) => {
           finishEvents = resolve;
         });
       },
-    } as AgentTurn;
+      [Symbol.asyncIterator]() {
+        return this.events()[Symbol.asyncIterator]();
+      },
+    };
     resolveTurn?.(activeTurn);
     await Promise.resolve();
     await Promise.resolve();

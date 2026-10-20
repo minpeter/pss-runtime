@@ -1,7 +1,7 @@
 import {
   applyTurnTransitionUpdate,
-  decideTurnClaim,
   decideTurnTransition,
+  resolveTurnClaim,
 } from "../../../execution/host/turn-status";
 import type {
   ClaimTurnOptions,
@@ -52,10 +52,21 @@ export class InMemoryRunStore implements TurnStore {
   }
 
   listByParentRunId(parentRunId: string): Promise<readonly TurnRecord[]> {
-    const records = [...this.#state().turns.values()].filter(
-      (candidate) => candidate.parentRunId === parentRunId
+    return this.#filter((candidate) => candidate.parentRunId === parentRunId);
+  }
+
+  listByThreadKey(threadKey: string): Promise<readonly TurnRecord[]> {
+    return this.#filter((candidate) => candidate.threadKey === threadKey);
+  }
+
+  #filter(
+    predicate: (candidate: TurnRecord) => boolean
+  ): Promise<readonly TurnRecord[]> {
+    return Promise.resolve(
+      [...this.#state().turns.values()]
+        .filter(predicate)
+        .map((record) => structuredClone(record))
     );
-    return Promise.resolve(records.map((record) => structuredClone(record)));
   }
 
   transition(
@@ -89,26 +100,17 @@ export class InMemoryRunStore implements TurnStore {
       return Promise.resolve({ ok: false, reason: "not-found" });
     }
 
-    const decision = decideTurnClaim(runId, record, options.nowMs);
+    const { decision, nextRecord } = resolveTurnClaim(runId, record, options);
+    if (nextRecord) {
+      this.#state().turns.set(runId, structuredClone(nextRecord));
+    }
     if (!decision.ok) {
       return Promise.resolve(decision);
     }
-
-    const lease = {
-      attempt: options.attempt,
-      leaseId: options.leaseId,
-      leaseUntilMs: options.nowMs + options.leaseMs,
-    };
-    const claimed: TurnRecord = {
-      ...record,
-      lease,
-      status: "leased",
-    };
-    this.#state().turns.set(runId, claimed);
     return Promise.resolve({
-      lease,
+      lease: decision.lease,
       ok: true,
-      record: structuredClone(claimed),
+      record: structuredClone(decision.record),
     });
   }
 }

@@ -165,6 +165,9 @@ function createReaderAgent(): Agent {
 function runWithText(text: string): AgentTurn {
   return {
     events: () => eventStream([{ text, type: "assistant-output" }]),
+    [Symbol.asyncIterator]() {
+      return this.events()[Symbol.asyncIterator]();
+    },
   };
 }
 

@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -8,7 +9,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -46,6 +47,24 @@ beforeEach(() => {
   const home = join(directory, "home");
   for (const path of [repository, caller, home]) {
     mkdirSync(path, { recursive: true });
+  }
+  const hostCorepack =
+    process.env.COREPACK_HOME ??
+    join(
+      process.env.XDG_CACHE_HOME ?? join(homedir(), ".cache"),
+      "node/corepack"
+    );
+  const hostCorepackV1 = join(hostCorepack, "v1");
+  const guestCorepack = join(home, ".cache/node/corepack");
+  if (existsSync(hostCorepackV1)) {
+    mkdirSync(guestCorepack, { recursive: true });
+    symlinkSync(hostCorepackV1, join(guestCorepack, "v1"), "dir");
+    writeFileSync(
+      join(guestCorepack, "lastKnownGood.json"),
+      JSON.stringify({
+        pnpm: String(packageJson.packageManager).slice("pnpm@".length),
+      })
+    );
   }
   cpSync(
     join(root, "apps/coding-agent/src"),
@@ -96,6 +115,7 @@ beforeEach(() => {
     AI_API_KEY: "fixture-shell-key",
     AI_BASE_URL: "https://shell.invalid/v1",
     AI_MODEL: "fixture-shell-model",
+    COREPACK_HOME: guestCorepack,
     HOME: home,
     INIT_CWD: undefined,
     NODE_OPTIONS: `--import=${pathToFileURL(probe).href}`,
@@ -103,6 +123,10 @@ beforeEach(() => {
     PSS_DISABLE_UPDATE_CHECK: "1",
     PSS_THREAD_DIR: join(directory, "threads"),
     PSS_THREAD_KEY: undefined,
+    // The fixture repository borrows the real node_modules through a symlink.
+    // pnpm 11 defaults verifyDepsBeforeRun to "install", which would prune
+    // that shared tree to the fixture manifest before running dev:tui.
+    pnpm_config_verify_deps_before_run: "false",
   };
 });
 

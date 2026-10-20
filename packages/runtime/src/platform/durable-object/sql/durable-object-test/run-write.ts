@@ -26,11 +26,18 @@ function upsertRun(
   bindings: readonly unknown[]
 ): void {
   const row = createRunRow(bindings);
-  state.turns = state.turns.filter(
+  // Mirrors `ON CONFLICT DO UPDATE`: the row keeps its created_at and rowid
+  // position, which thread listings order by.
+  const index = state.turns.findIndex(
     (existing) =>
-      !(existing.prefix === row.prefix && existing.run_id === row.run_id)
+      existing.prefix === row.prefix && existing.run_id === row.run_id
   );
-  state.turns.push(row);
+  const existing = state.turns[index];
+  if (existing === undefined) {
+    state.turns.push(row);
+    return;
+  }
+  state.turns[index] = { ...row, created_at: existing.created_at };
 }
 
 function deleteRun(

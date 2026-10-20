@@ -120,7 +120,25 @@ async function resumeAndDrainScheduledNodeWork({
   ) => void;
 }): Promise<boolean> {
   const agent = await agentForRun(context);
-  const run = await agent.resume(context.runId);
+  // Manual recovery rejects resume after parking the run, and a run queued
+  // behind older pending input rejects busy after requeueing itself. Both fall
+  // through to the record check: settled work is acked, queued work skipped.
+  const run = await agent
+    .resume(context.runId)
+    .catch(async (error: unknown) => {
+      if (
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "THREAD_CONTINUATION_BUSY"
+      ) {
+        return null;
+      }
+      const record = await agent.host?.store.turns.get(context.runId);
+      if (record && isSettledRunStatus(record.status)) {
+        return null;
+      }
+      throw error;
+    });
   if (!run) {
     return await shouldAckNullResume(agent, context.runId);
   }
@@ -143,9 +161,16 @@ async function shouldAckNullResume(
   if (!record) {
     return true;
   }
-  return isTerminalRunStatus(record.status);
+  return isSettledRunStatus(record.status);
 }
 
-function isTerminalRunStatus(status: TurnStatus): boolean {
-  return status === "cancelled" || status === "completed" || status === "error";
+// needs-recovery is parked for an explicit operator action; polling it again
+// can never make progress.
+function isSettledRunStatus(status: TurnStatus): boolean {
+  return (
+    status === "cancelled" ||
+    status === "completed" ||
+    status === "error" ||
+    status === "needs-recovery"
+  );
 }

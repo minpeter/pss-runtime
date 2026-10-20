@@ -4,6 +4,7 @@ import {
   createAgent,
   speculativeCompaction,
 } from "@minpeter/pss-runtime";
+import { createFileHost } from "@minpeter/pss-runtime/platform/file";
 import type { ToolSet } from "ai";
 import { composeAgentHooks } from "./extensions/compose-hooks";
 import type { CodingAgentExtensionHost } from "./extensions/host";
@@ -22,6 +23,7 @@ export interface CreateCodingAgentOptions {
   readonly host?: AgentOptions["host"];
   readonly instructions?: string;
   readonly model?: AgentOptions["model"];
+  readonly threadDirectory?: string;
   /**
    * Replaces the default optional web tools. Workspace tools are always
    * included and win name collisions, so custom tools cannot shadow them.
@@ -40,6 +42,7 @@ export function createCodingAgent({
   hooks,
   instructions = CODING_AGENT_INSTRUCTIONS,
   model = createCodingLanguageModel(),
+  threadDirectory,
   tools,
   webTools,
   workspace = process.cwd(),
@@ -71,9 +74,15 @@ export function createCodingAgent({
     ...(extensionHost?.hookRegistrations ?? []),
   ];
 
+  const resolvedHost =
+    host ??
+    (threadDirectory === undefined
+      ? undefined
+      : createFileHost({ directory: threadDirectory }));
+
   return createAgent({
     compaction,
-    ...(host === undefined ? {} : { host }),
+    ...(resolvedHost === undefined ? {} : { host: resolvedHost }),
     hooks:
       hookRegistrations.length === 0
         ? undefined

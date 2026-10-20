@@ -184,6 +184,9 @@ describe.sequential("TUI cancellation terminal ownership", () => {
           subscribed.resolve();
           return source;
         },
+        [Symbol.asyncIterator]() {
+          return this.events()[Symbol.asyncIterator]();
+        },
       };
       const api = {
         send: vi.fn(async () => run),

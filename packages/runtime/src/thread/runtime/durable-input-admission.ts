@@ -27,6 +27,7 @@ export async function admitDurableThreadInput({
   input,
   kind,
   messageId = crypto.randomUUID(),
+  ownerNamespace,
   placement,
   precreateExecutionRun = false,
   reservation,
@@ -36,6 +37,7 @@ export async function admitDurableThreadInput({
   readonly input: UserInput;
   readonly kind: ThreadInputKind;
   readonly messageId?: string;
+  readonly ownerNamespace?: string;
   readonly placement?: ThreadInputPlacement;
   readonly precreateExecutionRun?: boolean;
   readonly reservation?: ThreadInputAdmissionOperation;
@@ -61,6 +63,7 @@ export async function admitDurableThreadInput({
           }
           const executionRun = await precreateThreadExecutionRun({
             kind: "user-turn",
+            ownerNamespace,
             runId: createThreadExecutionRunId({ threadKey, turnId: messageId }),
             threadKey,
             turnStore: transaction.turns,

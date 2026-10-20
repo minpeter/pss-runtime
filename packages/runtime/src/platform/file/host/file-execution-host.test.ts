@@ -14,6 +14,7 @@ import { Agent } from "../../../agent/core/agent";
 import { agentNamespace } from "../../../agent/identity/namespace";
 import { describeAgentHostFaultContract } from "../../../contracts/agent-host-fault-contract";
 import { dispatchAgentNotification } from "../../../execution/dispatch/notification-dispatch";
+import { createThreadExecutionRunId } from "../../../execution/host/thread-execution-run-id";
 import {
   assistantMessage,
   createCallbackModel,
@@ -238,6 +239,210 @@ describe("createFileHost", () => {
       await expect(listScheduledNodeThreadPrompts(directory)).resolves.toEqual([
         prompt,
       ]);
+    } finally {
+      await removeTempDir(directory);
+    }
+  });
+
+  it("acks scheduled work for a run parked as needs-recovery", async () => {
+    // Given
+    const directory = await tempDir();
+    try {
+      const host = createFileHost({ directory });
+      let modelCalls = 0;
+      const agent = new Agent({
+        host,
+        model: createCallbackModel(() => {
+          modelCalls += 1;
+          return Promise.resolve([assistantMessage("SHOULD NOT RUN")]);
+        }),
+        namespace: "local-owner",
+      });
+      await host.store.turns.create({
+        checkpointVersion: 0,
+        kind: "notification",
+        ownerNamespace: agentNamespace("local-owner"),
+        rootRunId: "run:parked",
+        runId: "run:parked",
+        status: "needs-recovery",
+        threadKey: "thread:parked",
+      });
+      const prompt = {
+        idempotencyKey: "notify:parked",
+        notificationId: "notification:parked",
+        runId: "run:parked",
+        threadKey: "thread:parked",
+      };
+      await appendScheduledNodeRun(directory, "run:parked");
+      await appendScheduledNodeThreadPrompt(directory, prompt);
+
+      // When
+      const drainResult = await drainScheduledNodeWork({
+        agentForRun: () => agent,
+        directory,
+      });
+
+      // Then
+      expect(drainResult.ackedRuns).toEqual(["run:parked"]);
+      expect(drainResult.ackedThreadPrompts).toEqual([prompt]);
+      expect(drainResult.skippedRuns).toEqual([]);
+      expect(drainResult.skippedThreadPrompts).toEqual([]);
+      expect(drainResult.events).toEqual([]);
+      expect(modelCalls).toBe(0);
+      await expect(listScheduledNodeRuns(directory)).resolves.toEqual([]);
+      await expect(listScheduledNodeThreadPrompts(directory)).resolves.toEqual(
+        []
+      );
+    } finally {
+      await removeTempDir(directory);
+    }
+  });
+
+  it.each(["running", "needs-recovery"] as const)(
+    "acks scheduled work for a %s run whose resume rejects for manual tool recovery",
+    async (status) => {
+      // Given
+      const directory = await tempDir();
+      try {
+        const host = createFileHost({ directory });
+        let modelCalls = 0;
+        const agent = new Agent({
+          host,
+          model: createCallbackModel(() => {
+            modelCalls += 1;
+            return Promise.resolve([assistantMessage("SHOULD NOT RUN")]);
+          }),
+        });
+        await host.store.turns.create({
+          checkpointVersion: 0,
+          kind: "user-turn",
+          rootRunId: "run:manual",
+          runId: "run:manual",
+          status,
+          threadKey: "default",
+        });
+        await host.store.checkpoints.append(
+          {
+            checkpointId: "run:manual:1:before-tool",
+            pendingToolCall: {
+              attempt: 1,
+              idempotencyKey: "run:manual:deploy",
+              policy: "manual-recovery",
+              toolCallId: "call-deploy",
+              toolName: "deploy",
+            },
+            phase: "before-tool",
+            runId: "run:manual",
+            runtimeState: { toolCallId: "call-deploy", toolName: "deploy" },
+            threadSnapshot: {},
+            version: 1,
+          },
+          { expectedVersion: 0 }
+        );
+        const prompt = { runId: "run:manual", threadKey: "default" };
+        await appendScheduledNodeRun(directory, "run:manual");
+        await appendScheduledNodeThreadPrompt(directory, prompt);
+
+        // When
+        const drainResult = await drainScheduledNodeWork({
+          agentForRun: () => agent,
+          directory,
+        });
+
+        // Then
+        expect(drainResult.ackedRuns).toEqual(["run:manual"]);
+        expect(drainResult.ackedThreadPrompts).toEqual([prompt]);
+        expect(drainResult.events).toEqual([]);
+        expect(modelCalls).toBe(0);
+        await expect(host.store.turns.get("run:manual")).resolves.toMatchObject(
+          {
+            status: "needs-recovery",
+          }
+        );
+        await expect(listScheduledNodeRuns(directory)).resolves.toEqual([]);
+        await expect(
+          listScheduledNodeThreadPrompts(directory)
+        ).resolves.toEqual([]);
+      } finally {
+        await removeTempDir(directory);
+      }
+    }
+  );
+
+  it("skips a run queued behind older pending input and finishes it on a later pass", async () => {
+    // Given two admitted sends whose precreated runs never started, with the
+    // newer run listed first
+    const directory = await tempDir();
+    try {
+      const host = createFileHost({ directory });
+      const threadKey = "thread:pending";
+      const olderRunId = createThreadExecutionRunId({
+        threadKey,
+        turnId: "msg-old",
+      });
+      const newerRunId = createThreadExecutionRunId({
+        threadKey,
+        turnId: "msg-new",
+      });
+      for (const [messageId, runId] of [
+        ["msg-old", olderRunId],
+        ["msg-new", newerRunId],
+      ] as const) {
+        await host.store.inputs.admit({
+          input: { text: `${messageId} prompt`, type: "user-input" },
+          kind: "send",
+          messageId,
+          threadKey,
+        });
+        await host.store.turns.create({
+          checkpointVersion: 0,
+          kind: "user-turn",
+          rootRunId: runId,
+          runId,
+          status: "queued",
+          threadKey,
+        });
+      }
+      await appendScheduledNodeRun(directory, newerRunId);
+      await appendScheduledNodeRun(directory, olderRunId, {
+        runAfterMs: 60_000,
+      });
+      const agent = new Agent({
+        host,
+        model: createCallbackModel(() =>
+          Promise.resolve([assistantMessage("REPLY")])
+        ),
+      });
+      const nowMs = Date.now() + 120_000;
+
+      // When
+      const first = await drainScheduledNodeWork({
+        agentForRun: () => agent,
+        directory,
+        nowMs,
+      });
+      // The older turn's live drain goes on to process msg-new; a later send
+      // queues behind it, so its end means msg-new's run has settled.
+      await collect(await agent.thread(threadKey).send("barrier"));
+      const second = await drainScheduledNodeWork({
+        agentForRun: () => agent,
+        directory,
+        nowMs,
+      });
+
+      // Then
+      expect(first.skippedRuns).toEqual([newerRunId]);
+      expect(first.ackedRuns).toEqual([olderRunId]);
+      expect(second.ackedRuns).toEqual([newerRunId]);
+      await expect(host.store.turns.get(olderRunId)).resolves.toMatchObject({
+        status: "completed",
+      });
+      await expect(host.store.turns.get(newerRunId)).resolves.toMatchObject({
+        status: "completed",
+      });
+      await expect(
+        listScheduledNodeRuns(directory, { nowMs })
+      ).resolves.toEqual([]);
     } finally {
       await removeTempDir(directory);
     }

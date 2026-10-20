@@ -32,6 +32,9 @@ function turn(events: readonly AgentEvent[]): AgentTurn {
       yield* events;
     },
     runId: "run-1",
+    [Symbol.asyncIterator]() {
+      return this.events()[Symbol.asyncIterator]();
+    },
   };
 }
 

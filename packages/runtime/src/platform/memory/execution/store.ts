@@ -135,6 +135,7 @@ class InMemoryTransactionStore implements HostStoreTransaction {
   readonly inputs: ThreadInputInbox;
   readonly leaseFencedCheckpoints: LeaseFencedCheckpointStore;
   readonly notifications: NotificationInbox;
+  readonly scheduler: InMemoryExecutionScheduler;
   readonly threadEvents: ThreadEventLog;
   readonly turns: InMemoryRunStore;
   readonly threads: ThreadStore;
@@ -148,6 +149,11 @@ class InMemoryTransactionStore implements HostStoreTransaction {
     this.events = new InMemoryEventStore(() => this.#state);
     this.inputs = new InMemoryThreadInputInbox(() => this.#state);
     this.notifications = new InMemoryNotificationInbox(() => this.#state);
+    this.scheduler = createBoundInMemoryExecutionScheduler({
+      mutate: (operation) =>
+        Promise.resolve(operation(this.#state.scheduledWork)),
+      read: () => this.#state.scheduledWork,
+    });
     this.threadEvents = new InMemoryThreadEventLog(() => this.#state);
     this.turns = new InMemoryRunStore(() => this.#state);
     this.threads = new InMemoryExecutionThreadStore(() => this.#state);

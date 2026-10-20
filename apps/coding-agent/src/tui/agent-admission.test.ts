@@ -103,6 +103,9 @@ const emptyRun = (): AgentTurn => ({
   async *events() {
     yield* [];
   },
+  [Symbol.asyncIterator]() {
+    return this.events()[Symbol.asyncIterator]();
+  },
 });
 const stream = () => {
   const entered = gate();
@@ -115,6 +118,9 @@ const stream = () => {
         entered.resolve();
         await end.promise;
         yield* [];
+      },
+      [Symbol.asyncIterator]() {
+        return this.events()[Symbol.asyncIterator]();
       },
     } satisfies AgentTurn,
   };
@@ -557,7 +563,10 @@ describe.sequential("TUI admission ownership", () => {
           () => undefined
         );
         if (outcome === "success") {
-          admission.resolve({ events });
+          admission.resolve({
+            events,
+            [Symbol.asyncIterator]: () => events()[Symbol.asyncIterator](),
+          });
         }
         if (outcome === "undefined") {
           admission.resolve(undefined);

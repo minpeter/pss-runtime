@@ -6,7 +6,7 @@ import {
   ackThreadPrompt,
   createDrainResult,
   decrement,
-  isTerminal,
+  isSettled,
   listOptions,
   type MutableDrainResult,
   threadPromptContext,
@@ -202,10 +202,28 @@ async function resumeAndDrain(
   onEvent: CelldScheduledWorkDrainOptions["onEvent"]
 ): Promise<boolean> {
   const agent = await agentForRun(context);
-  const turn = await agent.resume(context.runId);
+  // Manual recovery rejects resume after parking the run, and a run queued
+  // behind older pending input rejects busy after requeueing itself. Both fall
+  // through to the record check: settled work is acked, queued work retried.
+  const turn = await agent
+    .resume(context.runId)
+    .catch(async (error: unknown) => {
+      if (
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "THREAD_CONTINUATION_BUSY"
+      ) {
+        return null;
+      }
+      const record = await agent.host.store.turns.get(context.runId);
+      if (record !== null && isSettled(record.status)) {
+        return null;
+      }
+      throw error;
+    });
   if (turn === null) {
     const record = await agent.host.store.turns.get(context.runId);
-    return record === null || isTerminal(record.status);
+    return record === null || isSettled(record.status);
   }
   for await (const event of turn.events()) {
     events.push(event);
