@@ -17,6 +17,11 @@ const CLAIMABLE_TURN_STATUSES = new Set<TurnStatus>([
   "suspended",
 ]);
 
+/** Statuses of a run that has not settled and can still be claimed. */
+export function isClaimableTurnStatus(status: TurnStatus): boolean {
+  return CLAIMABLE_TURN_STATUSES.has(status);
+}
+
 export function decideTurnClaim(
   runId: string,
   record: TurnRecord,
@@ -28,7 +33,7 @@ export function decideTurnClaim(
   if (record.runId !== runId) {
     return { ok: false, reason: "not-found" };
   }
-  if (!CLAIMABLE_TURN_STATUSES.has(record.status)) {
+  if (!isClaimableTurnStatus(record.status)) {
     return { ok: false, reason: "not-claimable" };
   }
   if (

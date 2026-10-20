@@ -1,7 +1,8 @@
 import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution-checkpoint";
 import type { AgentTurn } from "../../thread/protocol/turn";
 import { abandonedLeaseId, TURN_LEASE_MS } from "../host/lease-owner";
-import type { LeaseOwnerLiveness, TurnStatus, TurnStore } from "../host/types";
+import { isClaimableTurnStatus } from "../host/turn-status";
+import type { LeaseOwnerLiveness, TurnRecord, TurnStore } from "../host/types";
 
 /** How long after a lease deadline a backstop checks the run. */
 export const TURN_BACKSTOP_MARGIN_MS = 10_000;
@@ -29,10 +30,11 @@ export type TurnBackstopResult =
   | { readonly action: "retry"; readonly runAfterMs: number };
 
 /**
- * Checks a run whose backstop came due. A run that settled, parked for a
- * decision, or was requeued is done. A live owner keeps its run until the
- * lease lapses; otherwise the run is resumed. A thread busy with other work
- * is retried later.
+ * Checks a run whose backstop came due. A run that settled or parked for a
+ * decision is done. A live owner keeps its run until the lease lapses; any
+ * other unsettled run, including one requeued after a failed resume, is
+ * resumed. A thread busy with other work is retried shortly, and a run this
+ * agent cannot resume is checked again after a full backstop delay.
  */
 export async function runTurnBackstop(
   agent: TurnBackstopAgent,
@@ -40,19 +42,12 @@ export async function runTurnBackstop(
   { nowMs = Date.now() }: { readonly nowMs?: number } = {}
 ): Promise<TurnBackstopResult> {
   const run = await agent.host.store.turns.get(runId);
-  if (!(run && isOwnedStatus(run.status))) {
+  if (!(run && isClaimableTurnStatus(run.status))) {
     return { action: "done" };
   }
-  const lease = run.lease;
-  if (
-    lease &&
-    lease.leaseUntilMs > nowMs &&
-    abandonedLeaseId(run, agent.host.ownerLiveness) === undefined
-  ) {
-    return {
-      action: "retry",
-      runAfterMs: lease.leaseUntilMs - nowMs + TURN_BACKSTOP_MARGIN_MS,
-    };
+  const held = liveOwnerRetry(run, agent, nowMs);
+  if (held) {
+    return held;
   }
   let turn: AgentTurn | null;
   try {
@@ -70,14 +65,34 @@ export async function runTurnBackstop(
     return { action: "resumed", turn };
   }
   const after = await agent.host.store.turns.get(runId);
-  return after && isOwnedStatus(after.status)
-    ? { action: "retry", runAfterMs: TURN_BACKSTOP_MARGIN_MS }
-    : { action: "done" };
+  if (!(after && isClaimableTurnStatus(after.status))) {
+    return { action: "done" };
+  }
+  return (
+    liveOwnerRetry(after, agent, nowMs) ?? {
+      action: "retry",
+      runAfterMs: TURN_BACKSTOP_DELAY_MS,
+    }
+  );
 }
 
-/** Statuses of a run that some process started and may still own. */
-function isOwnedStatus(status: TurnStatus): boolean {
-  return status === "leased" || status === "running" || status === "suspended";
+/** A retry just past `run`'s lease while a live owner holds it. */
+function liveOwnerRetry(
+  run: TurnRecord,
+  agent: TurnBackstopAgent,
+  nowMs: number
+): TurnBackstopResult | undefined {
+  const lease = run.lease;
+  if (
+    lease &&
+    lease.leaseUntilMs > nowMs &&
+    abandonedLeaseId(run, agent.host.ownerLiveness) === undefined
+  ) {
+    return {
+      action: "retry",
+      runAfterMs: lease.leaseUntilMs - nowMs + TURN_BACKSTOP_MARGIN_MS,
+    };
+  }
 }
 
 function isBusy(error: unknown): boolean {

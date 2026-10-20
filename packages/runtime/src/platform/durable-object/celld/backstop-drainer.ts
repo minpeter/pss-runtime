@@ -70,6 +70,13 @@ export async function drainCelldBackstops(
           result.events.push(event);
           await onEvent?.(context, event);
         }
+        // The resumed start normally replaced the claimed row, so this ack
+        // matches nothing; it drops the row of a turn that never started.
+        await ackCelldScheduledBackstop(storage, runId, {
+          ...workOptions(options),
+          claimToken,
+          rearm: false,
+        });
         result.ackedBackstops.push(runId);
       }
     } catch (error) {
