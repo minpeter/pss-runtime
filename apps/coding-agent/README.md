@@ -708,7 +708,10 @@ process still holds the turn, it says the turn is running there (with that
 process's pid). When the turn stopped inside a tool that only a recovery
 decision could settle (such as an extension tool with
 `retryPolicy: "manual-recovery"`), it says the tool may have partly run and to
-check its effects, then enter new instructions.
+check its effects, then enter new instructions. When the run stopped for
+another reason (it crashed too many times, or a finished tool's result cannot
+be restored), it says the turn cannot resume; pressing Enter would only report
+that the run needs manual recovery, so enter new instructions instead.
 
 Pass `tools` to `startTui` (or `createCodingAgent`) from a custom entrypoint to
 replace the optional web tools; the workspace tools are always included.

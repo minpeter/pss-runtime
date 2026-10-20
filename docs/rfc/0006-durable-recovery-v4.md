@@ -3,7 +3,7 @@
 - **Status:** Implemented
 - **Date:** 2026-10-21
 - **Scope:** `@minpeter/pss-runtime`, `@minpeter/pss-coding-agent`
-- **Pull requests:** #468, #470, #471, #472, #473
+- **Pull requests:** #468, #470, #471, #472, #473; follow-ups #475–#481
 
 ## Summary
 
@@ -101,12 +101,16 @@ that crashes again parks again. The coding agent declares its tools:
 - `TurnLease.owner` records the process that took the lease.
   `AgentHost.ownerLiveness.isGone(owner)` lets a claim name the lease as
   abandoned before it lapses (`ClaimTurnOptions.abandonedLeaseId`):
-  - file hosts: same host name, and the pid is gone or now belongs to a
-    process with another start time;
+  - file hosts: same host name, boot id, and PID namespace, and the pid is
+    gone or now belongs to a process with another start time (#478);
   - Durable Object hosts (Celld, Cloudflare): a lease from another isolate;
   - memory hosts and hosts without `ownerLiveness`: expiry only.
-- A turn whose renewal or fenced write fails stops, writes nothing, reloads
-  the committed thread, and emits `turn-error` with `THREAD_OWNERSHIP_LOST`.
+
+  On every host, a `running` run whose turn in this process ended without
+  settling it is reclaimable by this process at once.
+- A turn whose renewal or fenced write fails, or that fails for another
+  reason and finds its run taken (#480), stops, writes nothing, reloads the
+  committed thread, and emits `turn-error` with `THREAD_OWNERSHIP_LOST`.
 - A fresh run's lease is attempt 1, so five claim attempts allow four
   recoveries before `needs-recovery`.
 
@@ -116,6 +120,8 @@ that crashes again parks again. The coding agent declares its tools:
   threadKey })` and `cancelBackstop(runId)`.
   - A turn schedules a check `TURN_BACKSTOP_DELAY_MS` (310 s) out when it
     starts, inside the start transaction when `tx.scheduler` provides it.
+    Otherwise it schedules the check once it holds the lease; if that fails,
+    the run goes back to `queued` and the turn fails to start.
   - Settlement cancels the check in its own transaction.
 - `runTurnBackstop(agent, runId)` decides a due check:
   - `done` when the run settled or parked;
@@ -126,7 +132,8 @@ that crashes again parks again. The coding agent declares its tools:
   the object's alarm, drained by `drainCelldScheduledWork`.
 - The TUI never resumes on its own. When it opens an existing session, it
   says whether the last turn is interrupted (Enter continues), still running
-  in another `pss` process, or waiting on a call that may have partly run.
+  in another `pss` process, waiting on a call that may have partly run, or
+  parked for another reason and unable to resume.
 
 #### Crash matrix (#473)
 
@@ -140,6 +147,10 @@ cases. Another process then continues the thread. The cases kill it:
 - next to a finished sibling.
 
 The matrix runs in the runtime suite, so CI runs it on every pull request.
+#479 grew it to 19 rows: a tool with no declared policy, operator decisions,
+a live owner that must not be taken over, and a second crash during recovery.
+Every row also asserts the state saved at the kill and what the recovery's
+first model request receives.
 
 ### Reject
 
@@ -148,7 +159,8 @@ The matrix runs in the runtime suite, so CI runs it on every pull request.
 - a TLA+ model: a separate project's worth of work;
 - resuming automatically in the TUI: the user may have stopped on purpose;
 - automatic resume on hosts without a self-waking scheduler: the file host
-  has no worker of its own, and the TUI covers it.
+  has no worker of its own; the TUI tells the user about the unfinished turn
+  and continues it on Enter instead.
 
 ## Invariants
 
@@ -169,17 +181,39 @@ All changes are additive:
 - tool checkpoints carry `journalVersion: 2` journals; checkpoints without
   one take the previous recovery path;
 - decisions are stored as `resolution` on journaled intents;
-- leases carry `owner`; a lease without one frees only on expiry;
+- leases carry `owner`; a lease without one frees only on expiry. File hosts
+  also record `bootId` and `pidNamespace` (#478); an owner without them frees
+  only on expiry on Linux;
 - Celld stores backstops under a new scheduled-work kind; older runtimes
-  neither arm alarms for nor drain it, and thread deletion sweeps it.
+  neither arm alarms for nor drain it, and thread deletion sweeps it;
+- file hosts keep one generation directory instead of every one (#481);
+  record formats are unchanged.
 
 Thread snapshots keep their encoding.
 
 ## Rollback
 
-Each wave is independently revertible. A run that crashed under a journal
-checkpoint needs this runtime to recover as described here. Committed thread
-history and settled runs read the same on either side.
+The waves build on each other: #470 settles calls from #468's journal, and
+#472's backstops rely on #471's leases, so revert newest first. A run that
+crashed under a journal checkpoint needs this runtime to recover as described
+here. Committed thread history and settled runs read the same on either side.
+
+## Follow-ups
+
+A review of the series found and fixed:
+
+- #475: a backstop treated a run that a failed resume left `queued` as done;
+  it now resumes it;
+- #476: a turn that parked in-process rolled the thread back to before the
+  turn, erasing its input and committed rounds;
+- #477: notification dispatch scheduled its wake after commit instead of in
+  the transaction;
+- #478: file hosts could take over a live turn of a container sharing the host
+  name;
+- #480: a turn whose run was taken over reported a storage failure and
+  wedged its handle when it failed before its renewal noticed;
+- #481: file host transactions copied the whole store into generation
+  directories that were never removed, and nothing was flushed to disk.
 
 ## Verification
 
@@ -203,3 +237,14 @@ history and settled runs read the same on either side.
 - `CheckpointPhase` still declares `before-notification`,
   `after-notification`, `before-child-run`, and `child-linked`, which no
   runtime path writes. They stay for wire compatibility.
+- SQL queue hosts and custom hosts without `ownerLiveness` free another
+  process's crashed turn only when its 300 s lease lapses.
+- Compaction commits are version-checked but not lease-fenced. Until a turn
+  notices a takeover (up to 100 s), a compaction from its process can still
+  commit, and the new owner's next thread commit can then fail with
+  `ThreadCommitConflictError`.
+- A `pure` call's rerun is not recorded, so after another crash it can run
+  again with the same `attempt` number.
+- File host transactions still link and stat every stored file, so their cost
+  grows with the store's file count; writes outside transactions are not
+  flushed to disk.

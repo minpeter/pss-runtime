@@ -970,7 +970,8 @@ must not overwrite a thread that changed after inspection.
 - `transformModelContext` before each model call
 - `transformModelStep` after generation and before atomic step append
 - `beforeCompaction` before manual, background, or overflow compaction
-- `beforeToolExecution` after the durable checkpoint and before tool `execute`
+- `beforeToolExecution` after the durable checkpoint (none for `pure` calls)
+  and before tool `execute`
 - `transformToolResult` after tool execution and before the result returns to
   the model
 
@@ -982,8 +983,9 @@ Tool hooks use durable execution decisions with `status: "continue"`,
 
 ### Tool-call interception
 
-Use `beforeToolExecution` after the runtime writes the
-`before-tool` checkpoint and before the tool's `execute` function runs:
+Use `beforeToolExecution` after the runtime writes the `before-tool`
+checkpoint (a `pure` call writes none) and before the tool's `execute`
+function runs:
 
 ```ts
 import type { AgentHooks } from "@minpeter/pss-runtime";
@@ -1451,16 +1453,18 @@ Platform-neutral scheduled-work semantics (work-id derivation, thread-prompt
 validation, list limits) live in runtime core; adapters only bind storage and
 timers.
 
-| Capability                            | memory            | file                     | cloudflare                    |
-| ------------------------------------- | ----------------- | ------------------------ | ----------------------------- |
-| Thread + execution stores             | yes               | yes                      | yes                           |
-| Scheduled runs and thread prompts     | list/ack, deduped | list/ack, deduped        | list/ack/claim, deduped       |
-| Delayed runs (`runAfterMs`)           | due-time filtered | due-time filtered        | Agents `schedule()` / fibers  |
-| Transactional `tx.scheduler`          | yes               | yes                      | none; use `host.scheduler` after commit |
-| Product host factory                  | `createInMemoryHost` | `createFileHost`      | `createCloudflareHost`        |
-| Low-level storage host                | —                 | —                        | `createDurableObjectStorageHost` |
-| Drain helper                          | app-driven        | `drainScheduledNodeWork` | Agents fiber resume               |
-| Scheduled fiber retry backoff         | —                 | —                        | Cloudflare Agents SDK adapter |
+| Capability                            | memory            | file                     | cloudflare                    | celld                         |
+| ------------------------------------- | ----------------- | ------------------------ | ----------------------------- | ----------------------------- |
+| Thread + execution stores             | yes               | yes                      | yes                           | yes                           |
+| Scheduled runs and thread prompts     | list/ack, deduped | list/ack, deduped        | list/ack/claim, deduped       | list/ack/claim, deduped       |
+| Delayed runs (`runAfterMs`)           | due-time filtered | due-time filtered        | Agents `schedule()` / fibers  | due-time filtered, DO alarm   |
+| Transactional `tx.scheduler`          | yes               | yes                      | none; use `host.scheduler` after commit | yes                 |
+| Product host factory                  | `createInMemoryHost` | `createFileHost`      | `createCloudflareHost`        | `createCelldHost`             |
+| Low-level storage host                | —                 | —                        | `createDurableObjectStorageHost` | —                          |
+| Drain helper                          | app-driven        | `drainScheduledNodeWork` | Agents fiber resume               | `drainCelldScheduledWork` |
+| Scheduled fiber retry backoff         | —                 | —                        | Cloudflare Agents SDK adapter | —                             |
+| Dead lease owner (`ownerLiveness`)    | lease expiry only | same host, boot, and PID namespace | earlier activation  | earlier activation            |
+| Turn backstops (`scheduleBackstop`)   | —                 | —                        | —                             | alarm-driven                  |
 
 The same core API supports room/user/thread routing through stable thread keys.
 
@@ -1500,7 +1504,7 @@ crash left unknown:
 
 | `retryPolicy` | After a crash |
 |---|---|
-| `pure` | Runs again. Its intent gets no checkpoint of its own; it is recorded with the step's next checkpoint, so a step of only pure calls is simply requested again. |
+| `pure` | Runs again when a later checkpoint of its step recorded it; its intent gets no checkpoint of its own, so a step of only pure calls is simply requested again. A rerun is not recorded either, so a pure call can repeat an `attempt` number. |
 | `idempotent` | Runs again with the same `idempotencyKey` and the next `attempt`. |
 | `interrupt` | The model receives an error result saying the call was interrupted and may have partly run. |
 | `manual-recovery` (default) | The run parks as `needs-recovery` until `agent.resolveRecovery()` records a decision. |
@@ -1575,8 +1579,11 @@ A host whose scheduler wakes on its own can also check each started run later,
 so a crashed turn resumes without anyone calling `thread.continue()`. When a
 turn starts, the optional `HostScheduler.scheduleBackstop` schedules a check
 310 seconds out (the lease plus a 10-second margin), inside the start's store
-transaction when `tx.scheduler` provides it; settlement cancels the check in
-its own transaction. The host's drainer passes a due check to
+transaction when `tx.scheduler` provides it and otherwise once the turn holds
+its lease; a turn whose check cannot be scheduled puts its run back to
+`queued` and fails to start. Settlement cancels the check in its own
+transaction when `tx.scheduler` can; otherwise the check finds the run
+settled. The host's drainer passes a due check to
 `runTurnBackstop(agent, runId)` from `@minpeter/pss-runtime/execution`, which
 returns what to do with it: `done` when the run settled or parked as
 `needs-recovery`; `retry` with `runAfterMs` while the owner is alive (10
@@ -1587,8 +1594,8 @@ example after a resume failed), whose start schedules the run's
 next check. Celld hosts implement it: checks are scheduled-work rows behind the
 object's alarm, and `drainCelldScheduledWork` runs due checks after runs and
 thread prompts, reporting them in `ackedBackstops` and `skippedBackstops`.
-Memory, file, default Durable Object storage, and Cloudflare Agents hosts
-schedule no checks; there a crashed turn waits for `thread.continue()` or
+Memory, file, SQL queue, default Durable Object storage, and Cloudflare Agents
+hosts schedule no checks; there a crashed turn waits for `thread.continue()` or
 `agent.resume(runId)`, and Cloudflare Agents hosts still recover the fibers
 that run scheduled work through `onFiberRecovered()`.
 
@@ -1690,8 +1697,8 @@ retry is safe and expected.
 Committing durable scheduling state and calling `HostScheduler.enqueueRun` or
 `HostScheduler.resumeThread` are not one atomic operation. A process can crash after the store transaction commits but before queue
 insertion. When the SQL port's transaction exposes `tx.scheduler`, notification
-dispatch and turn backstops schedule through it inside the store transaction
-instead, so it must write the same queue work. Otherwise deployments must either implement a transactional
+dispatch schedules its wake through it inside the store transaction instead, so
+it must write the same queue work. Otherwise deployments must either implement a transactional
 outbox in their SQL port or run `reconcileSqlQueuedWork` periodically. Its
 `SqlQueuedWorkSource` must return the exact original `SqlQueueWork`, including
 kind, due time, payload, and stable ID. This is naturally an outbox query; a
@@ -1707,6 +1714,17 @@ adapter using `InMemoryExecutionStore` and a leased-map reference queue, plus
 consumer/reconciliation behavior tests. These prove adapter delegation and
 queue semantics, **not PostgreSQL SQL correctness**. Production database
 implementations and integration tests remain application-owned.
+
+### Crashed turns on SQL hosts
+
+`createSqlQueueHost` has no `ownerLiveness`, so a crashed turn's run is freed
+only when its 300-second lease lapses; until then `thread.continue()` rejects
+with `THREAD_CONTINUATION_BUSY` and `agent.resume(runId)` returns `null`. Its
+scheduler has no `scheduleBackstop`, so nothing checks started runs on its own:
+have a worker call `agent.resume(runId)` for runs your turns table still shows
+`running` past `lease.leaseUntilMs`. A port whose `TurnStore` has no atomic
+`transition` renews each running turn's lease inside a store transaction every
+100 seconds.
 
 ## JSONL protocol client
 

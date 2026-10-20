@@ -155,7 +155,7 @@ export async function startThreadExecutionRun({
       threadKey,
       turns,
     });
-  const running = await startWithBackstop(
+  const { record: running, scheduleAfterStart } = await startWithBackstop(
     executionHost,
     { runId, threadKey },
     start
@@ -169,6 +169,24 @@ export async function startThreadExecutionRun({
         store: executionHost.store,
       })
     : undefined;
+  if (scheduleAfterStart) {
+    try {
+      await scheduleAfterStart();
+    } catch (error) {
+      // The turn never starts: free its run, unleased, for another attempt.
+      heartbeat?.release();
+      try {
+        await transitionTurn(executionHost.store.turns, {
+          expected: { leaseId, status: "running" },
+          runId,
+          update: { lease: null, status: "queued" },
+        });
+      } catch {
+        throw error;
+      }
+      throw error;
+    }
+  }
   // Renewal stops before settlement writes; the lease counts as this
   // process's until settlement finishes, so no claim here races it.
   const settling = async <Result>(
@@ -313,15 +331,20 @@ async function markRunRunning({
 /**
  * Starts the run and, on hosts that schedule backstops, schedules its first
  * one in the same transaction, so a crash right after the start still gets
- * the run checked. A host whose transactions cannot schedule does it next.
+ * the run checked. A host whose transactions cannot schedule gets
+ * `scheduleAfterStart`, to call once the turn holds its lease.
  */
 async function startWithBackstop(
   executionHost: AgentHost,
   { runId, threadKey }: { readonly runId: string; readonly threadKey: string },
   start: (turns: TurnStore) => Promise<TurnRecord>
-): Promise<TurnRecord> {
-  if (!executionHost.scheduler.scheduleBackstop) {
-    return await start(executionHost.store.turns);
+): Promise<{
+  readonly record: TurnRecord;
+  readonly scheduleAfterStart?: () => Promise<void>;
+}> {
+  const { scheduler } = executionHost;
+  if (!scheduler.scheduleBackstop) {
+    return { record: await start(executionHost.store.turns) };
   }
   const backstop = { runAfterMs: TURN_BACKSTOP_DELAY_MS, threadKey };
   const started = await executionHost.store.transaction(async (tx) => {
@@ -330,10 +353,14 @@ async function startWithBackstop(
     await scheduled?.call(tx.scheduler, runId, backstop);
     return { record, scheduled: scheduled !== undefined };
   });
-  if (!started.scheduled) {
-    await executionHost.scheduler.scheduleBackstop(runId, backstop);
-  }
-  return started.record;
+  const scheduleBackstop = scheduler.scheduleBackstop;
+  return started.scheduled
+    ? { record: started.record }
+    : {
+        record: started.record,
+        scheduleAfterStart: () =>
+          scheduleBackstop.call(scheduler, runId, backstop),
+      };
 }
 
 export function cancellationForExecutionRun(
