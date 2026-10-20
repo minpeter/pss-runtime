@@ -3,7 +3,8 @@ import { generateText, type LanguageModel, type ModelMessage } from "ai";
 const GENERATED_TITLE_MAX_LENGTH = 40;
 const FALLBACK_TITLE_MAX_LENGTH = 50;
 const FIRST_LINE_BREAK = /\r?\n/;
-const TITLE_PREFIX = /^\s*title\s*:\s*/i;
+// Titles follow the user's language; also strip the Korean "title" label (escaped).
+const TITLE_PREFIX = /^\s*(?:title|\uC81C\uBAA9)\s*:\s*/i;
 const TITLE_WRAPPER = /^(?:["'`]|\*\*)+|(?:["'`]|\*\*)+$/g;
 const WHITESPACE_RUN = /\s+/g;
 

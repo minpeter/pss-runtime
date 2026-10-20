@@ -125,6 +125,9 @@ describe("sanitizeGeneratedTitle", () => {
         'Title: **"Automatic session title"**\nDescription'
       )
     ).toBe("Automatic session title");
+    expect(
+      sanitizeGeneratedTitle('\uC81C\uBAA9: **"\uC138\uC158"**\nDescription')
+    ).toBe("\uC138\uC158");
     expect(sanitizeGeneratedTitle("x".repeat(50))).toBe(`${"x".repeat(39)}…`);
     expect(sanitizeGeneratedTitle(" \n ")).toBeUndefined();
   });
