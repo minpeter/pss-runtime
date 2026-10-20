@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -6,6 +6,7 @@ import { encodeThreadSnapshot } from "../../../thread/state/snapshot";
 import { createFileHost } from "../host/file-host";
 import {
   fileThreadStorageHint,
+  fileThreadStoragePath,
   inspectFileThread,
 } from "./file-thread-inspection";
 
@@ -85,6 +86,34 @@ describe("inspectFileThread", () => {
         threadKey,
         version: null,
       });
+    } finally {
+      await rm(directory, { force: true, recursive: true });
+    }
+  });
+
+  it("points the sync storage path at the thread file after a transaction moved it", async () => {
+    // Given: a thread committed inside a store transaction, which moves the
+    // store to a new generation and prunes the old one.
+    const directory = await tempDir();
+    const threadKey = "moved:thread";
+    try {
+      const host = createFileHost({ directory });
+      await host.store.transaction(async (tx) => {
+        await tx.threads.commit(
+          threadKey,
+          { state: encodeThreadSnapshot([{ content: "hi", role: "user" }]) },
+          { expectedVersion: null }
+        );
+      });
+
+      // When: a caller asks for the thread's file synchronously.
+      const storageFile = fileThreadStoragePath({ directory, key: threadKey });
+
+      // Then: it is the live file, the same one inspection reports.
+      expect(storageFile).toBe(
+        await fileThreadStorageHint({ directory, key: threadKey })
+      );
+      await expect(stat(storageFile)).resolves.toBeDefined();
     } finally {
       await rm(directory, { force: true, recursive: true });
     }

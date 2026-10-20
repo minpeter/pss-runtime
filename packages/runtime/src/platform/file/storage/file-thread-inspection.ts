@@ -3,6 +3,7 @@ import { decodeStoredThreadState } from "../../../thread/state/snapshot";
 import { createFileHost } from "../host/file-host";
 import {
   currentDataDirectory,
+  currentGenerationIdSync,
   INITIAL_GENERATION_ID,
 } from "./file-execution-store/generation";
 
@@ -69,7 +70,7 @@ export async function fileThreadStorageHint(
   );
 }
 
-/** Sync path assuming the default main generation layout. */
+/** Sync path under the current generation's threads directory. */
 export function fileThreadStoragePath({
   directory,
   key,
@@ -77,7 +78,7 @@ export function fileThreadStoragePath({
   return join(
     directory,
     "generations",
-    INITIAL_GENERATION_ID,
+    currentGenerationIdSync(directory),
     "threads",
     `${Buffer.from(key).toString("base64url")}.json`
   );
