@@ -7,14 +7,14 @@ const CHECKOUT_ACTION =
 const PNPM_ACTION =
   "pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413";
 const NODE_ACTION =
-  "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020";
+  "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1";
 const UPLOAD_ACTION =
-  "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
+  "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9";
 const SANDBOX_ACTION = "./.github/actions/ci-sandbox-prerequisite";
 const CANONICAL_STEPS_SHA256 = {
-  artifacts: "9bad434c4310c74ffd665649923830360e979b6eb65732555daada70e7b92a1d",
+  artifacts: "006aaf426c6da79146cd7b9c7e77ab5d4ca33139ce3f4e473403ec8010e1b172",
   validation:
-    "0ee57e2f1fde21b5812171a639e7014c5a1680421ee68b427798b6fc79d4d6c6",
+    "1e57f73afa3d7d324d33af442f0de2955fbef1865198548dba83c83e470ae611",
 };
 const CALLED_JOB_IDS = ["validation", "artifacts"];
 const CALLED_JOB_KEYS = new Set([
