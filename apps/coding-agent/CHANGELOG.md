@@ -1,3 +1,25 @@
+## @minpeter/pss-coding-agent@0.0.14-next.23 (next)
+
+### Localize repository text in English
+
+Translate Korean user-facing strings, examples, fixtures, and documentation to English. Preserve multilingual Mermaid label handling through Unicode letter matching.
+
+### Durable Execution Recovery, Public API vNext, and Pi v1.3.0 Baseline
+
+Add cross-process turn recovery (`agent.resume` and `thread.continue` over persisted `HostStore` runs and checkpoints left non-terminal by a crash), crash-loop `maxAttempts` parking, transactional `HostStoreTransaction.scheduler` outbox support, and the RFC 0004 public surface (`AgentTurn` async iteration, `thread.replay()`, `thread.identity`, `DisposedResourceError`, and `AsyncDisposable`). Custom `AgentInstrumentation.wrapTurn` implementations may keep returning `{ events, runId }` (`AgentInstrumentationTurn`); the runtime still returns an iterable `AgentTurn`. After a successful `agent.dispose()`, `thread()`, `send()`, `followUp()`, `overlay()`, and `resume()` throw `DisposedResourceError`. Wire `threadDirectory` and `sessionKey` into `createCodingAgent` and `runCodingAgentExec`, deduplicate the TUI `FileHost` instance, and record the Pi v1.3.0 (`@earendil-works/pi-durable`) compatibility baseline.
+
+`tx.scheduler` is defined only when the host scheduler can join store transactions (memory, file, the default Durable Object storage host, and Celld); `createCloudflareHost` leaves it undefined, so schedule through `host.scheduler` after commit. `CelldDurableObjectStorage` now declares the `transaction()` it already required; its transactions must provide `setAlarm()`, and Celld uses the transaction's `getAlarm()`/`deleteAlarm()` when present. Scheduled-work drainers acknowledge runs parked as `needs-recovery` instead of retrying them, and a crashed run whose earlier completed tool results cannot be restored is parked as `needs-recovery` rather than resumed.
+
+`agent.resume(runId)` returns `null` after cancelling a crashed run that newer thread work superseded, discarding its uncommitted tool results, and rejects with `THREAD_CONTINUATION_BUSY` while the run still waits behind older pending input; the file and Celld drainers skip busy runs and retry them on a later pass.
+
+### Update dotenv to 18
+
+Bump `dotenv` from 17.4.2 to 18.0.8. `pss` still loads `.env` quietly with explicit options; dotenv 18 additionally honors `DOTENV_*` environment defaults (for example `DOTENV_PATH`) for options `pss` does not pass explicitly.
+
+### Update AI SDK and minor/patch dependencies
+
+Bump the npm minor/patch dependency group, including `ai` 7.0.143 and the `@ai-sdk/*` providers. AI SDK cancellation no longer waits for in-flight tool executions, so an interrupted model step now waits for its own tool effects to settle before concluding: a tool result that lands after interruption is kept for continuation instead of forcing manual recovery.
+
 ## @minpeter/pss-coding-agent@0.0.14-next.22 (next)
 
 ### Harden extension packages
