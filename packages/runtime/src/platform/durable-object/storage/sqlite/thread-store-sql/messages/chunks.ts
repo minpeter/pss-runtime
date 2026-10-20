@@ -4,6 +4,7 @@ import {
   serializedJsonByteLength,
   stringifyJsonPayloadWithinBudget,
 } from "../../../payload-guard";
+import { chunkSerializedPayload } from "../../utf8-chunks";
 import type {
   RawThreadMessageRow,
   ThreadMessageChunkMarker,
@@ -11,8 +12,6 @@ import type {
 } from "../keys/types";
 
 export const threadMessageChunkMarkerPrefix = "\u001epss-thread-chunk:";
-
-const textEncoder = new TextEncoder();
 
 export function stringifyThreadMessagePayload(
   sql: SqlStorage,
@@ -45,57 +44,6 @@ export function stringifyThreadMessagePayload(
     );
   }
   return marker;
-}
-
-export function chunkSerializedPayload(
-  serialized: string,
-  maxPayloadBytes: number
-): string[] {
-  const chunkMaxBytes = Math.max(1, maxPayloadBytes);
-  const totalBytes = textEncoder.encode(serialized).byteLength;
-  if (totalBytes <= chunkMaxBytes) {
-    return [serialized];
-  }
-  if (totalBytes === serialized.length) {
-    const chunks: string[] = [];
-    for (let index = 0; index < serialized.length; index += chunkMaxBytes) {
-      chunks.push(serialized.slice(index, index + chunkMaxBytes));
-    }
-    return chunks;
-  }
-
-  const chunks: string[] = [];
-  let currentStart = 0;
-  while (currentStart < serialized.length) {
-    const firstEnd = nextCodePointEnd(serialized, currentStart);
-    let low = firstEnd;
-    let high = Math.max(
-      firstEnd,
-      Math.min(serialized.length, currentStart + chunkMaxBytes)
-    );
-    let best = firstEnd;
-    while (low <= high) {
-      const mid = avoidTrailingHighSurrogate(
-        serialized,
-        Math.floor((low + high) / 2)
-      );
-      if (mid <= currentStart) {
-        break;
-      }
-      const byteLength = textEncoder.encode(
-        serialized.slice(currentStart, mid)
-      ).byteLength;
-      if (byteLength <= chunkMaxBytes) {
-        best = mid;
-        low = mid + 1;
-      } else {
-        high = mid - 1;
-      }
-    }
-    chunks.push(serialized.slice(currentStart, best));
-    currentStart = best;
-  }
-  return chunks;
 }
 
 export function readThreadMessageChunks(
@@ -170,28 +118,6 @@ export function parseThreadMessageChunkMarker(
   }
   const count = Number(message.slice(threadMessageChunkMarkerPrefix.length));
   return Number.isInteger(count) && count > 0 ? { n: count } : null;
-}
-
-function avoidTrailingHighSurrogate(value: string, index: number): number {
-  if (index <= 0 || index >= value.length) {
-    return index;
-  }
-  const previous = value.charCodeAt(index - 1);
-  return previous >= 0xd8_00 && previous <= 0xdb_ff ? index - 1 : index;
-}
-
-function nextCodePointEnd(value: string, index: number): number {
-  if (index >= value.length) {
-    return index;
-  }
-  const first = value.charCodeAt(index);
-  const second = value.charCodeAt(index + 1);
-  return first >= 0xd8_00 &&
-    first <= 0xdb_ff &&
-    second >= 0xdc_00 &&
-    second <= 0xdf_ff
-    ? index + 2
-    : index + 1;
 }
 
 function createThreadChunkMarker(
