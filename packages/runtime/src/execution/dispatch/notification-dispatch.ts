@@ -101,17 +101,32 @@ export async function dispatchAgentNotification(
       status: "pending",
     } satisfies NotificationRecord;
 
+    let scheduledInTransaction: boolean;
     try {
-      await input.host.store.transaction(async (tx) => {
-        const runCreate = await tx.turns.create(runRecord);
-        if (!runCreate.ok) {
-          throw new DuplicateNotificationError();
+      scheduledInTransaction = await input.host.store.transaction(
+        async (tx) => {
+          const runCreate = await tx.turns.create(runRecord);
+          if (!runCreate.ok) {
+            throw new DuplicateNotificationError();
+          }
+          const writeResult =
+            await tx.notifications.enqueue(notificationRecord);
+          if (!writeResult.ok) {
+            throw new DuplicateNotificationError();
+          }
+          if (tx.scheduler === undefined) {
+            return false;
+          }
+          // The wake commits or rolls back with the queued run, so a crash
+          // after commit cannot strand a notification nothing resumes.
+          await tx.scheduler.resumeThread(input.threadKey, {
+            idempotencyKey: storageIdempotencyKey,
+            notificationId,
+            runId,
+          });
+          return true;
         }
-        const writeResult = await tx.notifications.enqueue(notificationRecord);
-        if (!writeResult.ok) {
-          throw new DuplicateNotificationError();
-        }
-      });
+      );
     } catch (error) {
       if (error instanceof DuplicateNotificationError) {
         const deduplicated = await queuedNotificationRun({
@@ -135,7 +150,7 @@ export async function dispatchAgentNotification(
       idempotencyKey: input.idempotencyKey,
       notificationId,
       runId,
-      shouldSchedule: true,
+      shouldSchedule: !scheduledInTransaction,
       threadKey: input.threadKey,
       storageIdempotencyKey,
     } satisfies SchedulableAgentNotification;

@@ -1686,7 +1686,9 @@ retry is safe and expected.
 
 Committing durable scheduling state and calling `HostScheduler.enqueueRun` or
 `HostScheduler.resumeThread` are not one atomic operation. A process can crash after the store transaction commits but before queue
-insertion. Deployments must either implement a transactional
+insertion. When the SQL port's transaction exposes `tx.scheduler`, notification
+dispatch and turn backstops schedule through it inside the store transaction
+instead, so it must write the same queue work. Otherwise deployments must either implement a transactional
 outbox in their SQL port or run `reconcileSqlQueuedWork` periodically. Its
 `SqlQueuedWorkSource` must return the exact original `SqlQueueWork`, including
 kind, due time, payload, and stable ID. This is naturally an outbox query; a
