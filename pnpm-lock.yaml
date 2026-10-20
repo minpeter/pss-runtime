@@ -69,8 +69,8 @@ importers:
         specifier: 8.20.0
         version: 8.20.0
       dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
+        specifier: ^18.0.8
+        version: 18.0.8
       eslint:
         specifier: 10.13.0
         version: 10.13.0(jiti@2.7.0)
@@ -177,8 +177,8 @@ importers:
         specifier: 1.1.3
         version: 1.1.3
       dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
+        specifier: ^18.0.8
+        version: 18.0.8
       fast-png:
         specifier: 8.0.0
         version: 8.0.0
@@ -239,7 +239,7 @@ importers:
         version: 4.42.0(ai@7.0.143(zod@4.6.7))(zod@4.6.7)
       evlog:
         specifier: ^2.32.0
-        version: 2.33.1(ai@7.0.143(zod@4.6.7))(express@5.3.0)(hono@4.13.13)(react@19.3.1)(vite@8.1.0(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 2.32.0(ai@7.0.143(zod@4.6.7))(express@5.3.0)(hono@4.13.13)(react@19.3.1)(vite@8.1.0(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -281,8 +281,8 @@ importers:
         specifier: 7.0.143
         version: 7.0.143(zod@4.6.7)
       dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
+        specifier: ^18.0.8
+        version: 18.0.8
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -309,8 +309,8 @@ importers:
         specifier: ^0.13.11
         version: 0.13.11(typescript@7.0.2)(zod@4.6.7)
       dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
+        specifier: ^18.0.8
+        version: 18.0.8
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -337,8 +337,8 @@ importers:
         specifier: 7.0.143
         version: 7.0.143(zod@4.6.7)
       dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
+        specifier: ^18.0.8
+        version: 18.0.8
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -362,8 +362,8 @@ importers:
         specifier: ^0.13.11
         version: 0.13.11(typescript@7.0.2)(zod@4.6.7)
       dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
+        specifier: ^18.0.8
+        version: 18.0.8
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -387,8 +387,8 @@ importers:
         specifier: ^0.13.11
         version: 0.13.11(typescript@7.0.2)(zod@4.6.7)
       dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
+        specifier: ^18.0.8
+        version: 18.0.8
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -415,8 +415,8 @@ importers:
         specifier: 7.0.143
         version: 7.0.143(zod@4.6.7)
       dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
+        specifier: ^18.0.8
+        version: 18.0.8
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -477,8 +477,8 @@ importers:
         specifier: 2.2.1
         version: 2.2.1(patch_hash=05cef63751494e5378395a2a0cfa449c7c818e1011d2079a65c49ca44e491fbc)
       dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
+        specifier: ^18.0.8
+        version: 18.0.8
 
   experimental/pss-edit-format-bench:
     dependencies:
@@ -498,8 +498,8 @@ importers:
         specifier: 7.0.143
         version: 7.0.143(zod@4.6.7)
       dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
+        specifier: ^18.0.8
+        version: 18.0.8
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -3246,9 +3246,10 @@ packages:
     resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
     engines: {node: '>=12'}
 
-  dotenv@17.4.2:
-    resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
+  dotenv@18.0.8:
+    resolution: {integrity: sha512-2KDeoFoK/zRtcnbunCDlLG5VWVMcyqeQc6iK65o231nfNAcuGrKoqUQfJFUtBI+QlShk5HKIHxwebBtUl3rEfA==}
     engines: {node: '>=12'}
+    hasBin: true
 
   dts-resolver@3.0.0:
     resolution: {integrity: sha512-1T1f+z+4tl9XD+m+0HBgWoL/nm0bOIffyWaUuUSBlFg/86IWvfx+wjNaO/ybU0AJzG9/Mi5hBUgGV6zCmWEN7Q==}
@@ -3443,8 +3444,8 @@ packages:
     resolution: {integrity: sha512-CRT1WTyuQoD771GW56XEZFQ/ZoSfWid1alKGDYMmkt2yl8UXrVR4pspqWNEcqKvVIzg6PAltWjxcSSPrboA4iA==}
     engines: {node: '>=18.0.0'}
 
-  evlog@2.33.1:
-    resolution: {integrity: sha512-raahjdFBFXWBYRD/SMuBs/pBAcarTlV/YzuIk/iWH/Snieo5mqh1a9epfo7DOKXq1OWpHqH4xXhVxWv1JIIg+w==}
+  evlog@2.32.0:
+    resolution: {integrity: sha512-jfQZ/GCRgoPDlvPz5kGnRy4CePFWi3qmy1w1BEboBZBj6S34ZGeBWPbUwk9HFFncFoVtnVTnqXutCtxhOK2QrQ==}
     engines: {node: '>=18.0.0'}
     hasBin: true
     peerDependencies:
@@ -3454,7 +3455,6 @@ packages:
       '@orpc/server': '>=1.15.4'
       '@tanstack/start-client-core': ^1.170.34
       ai: '>=6.0.168 <8.0.0'
-      effect: ^4.0.0
       elysia: '>=1.4.30'
       eve: '>=0.30.0'
       express: '>=5.2.1'
@@ -3480,8 +3480,6 @@ packages:
       '@tanstack/start-client-core':
         optional: true
       ai:
-        optional: true
-      effect:
         optional: true
       elysia:
         optional: true
@@ -7821,7 +7819,7 @@ snapshots:
 
   dotenv@16.6.1: {}
 
-  dotenv@17.4.2: {}
+  dotenv@18.0.8: {}
 
   dts-resolver@3.0.0(oxc-resolver@11.24.2):
     optionalDependencies:
@@ -8091,7 +8089,7 @@ snapshots:
     dependencies:
       eventsource-parser: 3.1.1
 
-  evlog@2.33.1(ai@7.0.143(zod@4.6.7))(express@5.3.0)(hono@4.13.13)(react@19.3.1)(vite@8.1.0(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
+  evlog@2.32.0(ai@7.0.143(zod@4.6.7))(express@5.3.0)(hono@4.13.13)(react@19.3.1)(vite@8.1.0(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
     optionalDependencies:
       ai: 7.0.143(zod@4.6.7)
       express: 5.3.0
