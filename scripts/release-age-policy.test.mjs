@@ -32,7 +32,7 @@ overrides:
   read-yaml-file: 2.1.0
   typescript: ^7.0.2
   rolldown-plugin-dts: 0.27.2
-  vite: 8.1.0
+  vite: 8.1.6
 auditConfig:
   ignoreGhsas:
     - GHSA-vfj7-8cjw-p6xm
