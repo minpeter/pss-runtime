@@ -1,3 +1,58 @@
+## @minpeter/pss-runtime@0.3.0-next.21 (next)
+
+### Durable tool rounds survive crashes
+
+A durable thread now commits each finished tool round at step end, and every tool checkpoint journals the current step: calls recorded without an outcome and finished results not yet committed, including failed calls as their error result. A crashed run resumes from committed history plus that journal, so finished tools (including parallel siblings) never rerun and no longer park the run as `needs-recovery`; a `manual-recovery` sibling left without an outcome still parks it. `inspectDurableTurn` reports `pendingToolCalls`, which `pss exec` uses to refuse sessions that need manual recovery.
+
+### A post-commit backstop waits for the turn's lease
+
+On a host whose scheduler has `scheduleBackstop` but whose store transactions cannot schedule one, a turn now holds its lease before scheduling the run's first check. When that check cannot be scheduled, the run goes back to `queued` without a lease and the turn fails to start, instead of staying `running` with no turn renewing it and no check scheduled.
+
+### Backstops resume runs a failed resume left queued
+
+A backstop no longer gives up on a run that went back to `queued`: when a resume fails after claiming the run (for example a transient store error), the next check resumes it instead of dropping the check, so Celld still recovers the crashed turn. A run the agent cannot resume is checked again after a full backstop delay instead of every 10 seconds, and a claimed check whose resumed turn never started is cleared once that turn ends.
+
+### Crashed turns resume on their own on Celld
+
+A host scheduler can now check each started run later through the optional `HostScheduler.scheduleBackstop` and `cancelBackstop`. A turn schedules its check 310 seconds out when it starts (inside the start's store transaction when `tx.scheduler` provides it), and settlement cancels it. `runTurnBackstop(agent, runId)` from `@minpeter/pss-runtime/execution` decides what a due check does: nothing for a settled, parked, or requeued run; check again past a live owner's lease or a busy thread; otherwise resume the run. Celld hosts implement it behind the object's alarm: `drainCelldScheduledWork` runs due checks after runs and thread prompts and reports them in `ackedBackstops` and `skippedBackstops`, so a turn whose isolate died resumes without a `thread.continue()` call. Other hosts schedule no checks.
+
+### The TUI explains an unfinished last turn
+
+Opening a session whose last turn never finished now says what happened after the replayed history: press Enter to continue when the turn's process is gone, that it is still running in another `pss` process, or that a tool may have partly run and new instructions are needed. The TUI never resumes the turn on its own.
+
+### Crash recovery follows each tool's retry policy
+
+A tool call that a crash left unfinished is now settled before the recovered turn's first model request: `idempotent` calls run again under the same idempotency key, the new `interrupt` policy reports the call to the model as interrupted, and `manual-recovery` calls park the run until `agent.resolveRecovery(runId, …)` records a decision (`rerun`, `interrupt`, or a supplied `result`). Pure calls no longer write an intent checkpoint of their own: one that a later checkpoint of its step recorded runs again, and a step of only pure calls is requested from the model again. Cancelling the recovered turn keeps the outcomes already settled and reports the rest as interrupted. The coding agent now declares policies for its built-in tools: reads and web tools are pure; edits, writes, deletes, and shell commands are reported as interrupted. `runCodingAgentExec` refuses new work while the session's run has recorded recovery decisions.
+
+### Live turns keep their runs
+
+Every running turn now holds a lease on its run from the moment it starts and renews it while it runs, so another process can no longer take over a live turn. A crashed owner's run is reclaimed as soon as its host proves the owner gone (`AgentHost.ownerLiveness`): file hosts check the owning process on the same machine, so a restarted `pss` session continues at once, and Durable Object hosts treat earlier activations as gone; otherwise the lease lapses after 300 seconds. A turn that finds its run taken over stops immediately, writes nothing, and reports `turn-error` with code `THREAD_OWNERSHIP_LOST`. Run records now carry the lease and its owner, so Durable Object hosts configured with a very small `maxPayloadBytes` need room for them.
+
+### File hosts stop growing per transaction and survive power loss
+
+File host transactions now stage by hard-linking the committed files instead of copying the whole store, and remove superseded and crashed generation directories after each commit, so a store keeps one generation and its disk use tracks its data rather than its transaction count.
+
+A committed transaction is flushed to disk before and after `.current-generation` switches, so a power loss leaves the store at the last committed transaction instead of pointing at unwritten files.
+
+### Keep live leases from containers that share a host name
+
+File hosts on Linux now record the boot id and PID namespace of a lease owner
+and prove an owner gone only when both match this process, so containers or
+pods sharing a data directory and host name no longer take over each other's
+live turns.
+
+### Notifications schedule with their queued run
+
+`dispatchAgentNotification` now schedules the thread wake inside the same store transaction that queues the notification when the host's transaction exposes `tx.scheduler` (memory, file, Durable Object storage, and Celld hosts), so a crash right after commit no longer leaves a queued notification nothing resumes. Hosts without `tx.scheduler`, such as `createCloudflareHost`, still schedule after commit.
+
+### Report takeovers that a failure finds first
+
+A turn whose run another process took over now reports `turn-error` with code `THREAD_OWNERSHIP_LOST` and writes nothing, even when it fails before its lease renewal notices the takeover (a model request error, or a tool checkpoint the store refuses). It used to report "History rollback persistence failed" and leave the thread handle refusing new work until restart.
+
+### Parked turns keep their history
+
+A turn that parks as `needs-recovery` while its process keeps running (a `beforeToolExecution` hook returned `needs-recovery`, or the process lost track of a tool's outcome) no longer rolls the thread back to before the turn. It keeps the user's input and every tool round already committed, so `agent.resolveRecovery()` followed by `agent.resume()` finishes the turn instead of cancelling it or parking it again. A run a hook parked can also be resumed by the same process, without a restart.
+
 ## @minpeter/pss-runtime@0.3.0-next.20 (next)
 
 ### Durable Execution Recovery, Public API vNext, and Pi v1.3.0 Baseline

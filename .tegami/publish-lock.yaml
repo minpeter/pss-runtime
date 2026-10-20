@@ -1,25 +1,43 @@
 core:changelogs:
-  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Localize repository text in English\n\nTranslate Korean user-facing strings, examples, fixtures, and documentation to English. Preserve multilingual Mermaid label handling through Unicode letter matching.\n"
-    filename: 2026-09-16-english-localization.md
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Durable tool rounds survive crashes\n\nA durable thread now commits each finished tool round at step end, and every tool checkpoint journals the current step: calls recorded without an outcome and finished results not yet committed, including failed calls as their error result. A crashed run resumes from committed history plus that journal, so finished tools (including parallel siblings) never rerun and no longer park the run as `needs-recovery`; a `manual-recovery` sibling left without an outcome still parks it. `inspectDurableTurn` reports `pendingToolCalls`, which `pss exec` uses to refuse sessions that need manual recovery.\n"
+    filename: 2026-10-20-durable-step-journal.md
     v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Durable Execution Recovery, Public API vNext, and Pi v1.3.0 Baseline\n\nAdd cross-process turn recovery (`agent.resume` and `thread.continue` over persisted `HostStore` runs and checkpoints left non-terminal by a crash), crash-loop `maxAttempts` parking, transactional `HostStoreTransaction.scheduler` outbox support, and the RFC 0004 public surface (`AgentTurn` async iteration, `thread.replay()`, `thread.identity`, `DisposedResourceError`, and `AsyncDisposable`). Custom `AgentInstrumentation.wrapTurn` implementations may keep returning `{ events, runId }` (`AgentInstrumentationTurn`); the runtime still returns an iterable `AgentTurn`. After a successful `agent.dispose()`, `thread()`, `send()`, `followUp()`, `overlay()`, and `resume()` throw `DisposedResourceError`. Wire `threadDirectory` and `sessionKey` into `createCodingAgent` and `runCodingAgentExec`, deduplicate the TUI `FileHost` instance, and record the Pi v1.3.0 (`@earendil-works/pi-durable`) compatibility baseline.\n\n`tx.scheduler` is defined only when the host scheduler can join store transactions (memory, file, the default Durable Object storage host, and Celld); `createCloudflareHost` leaves it undefined, so schedule through `host.scheduler` after commit. `CelldDurableObjectStorage` now declares the `transaction()` it already required; its transactions must provide `setAlarm()`, and Celld uses the transaction's `getAlarm()`/`deleteAlarm()` when present. Scheduled-work drainers acknowledge runs parked as `needs-recovery` instead of retrying them, and a crashed run whose earlier completed tool results cannot be restored is parked as `needs-recovery` rather than resumed.\n\n`agent.resume(runId)` returns `null` after cancelling a crashed run that newer thread work superseded, discarding its uncommitted tool results, and rejects with `THREAD_CONTINUATION_BUSY` while the run still waits behind older pending input; the file and Celld drainers skip busy runs and retry them on a later pass.\n"
-    filename: 2026-10-18-durable-vnext-recovery.md
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Crashed turns resume on their own on Celld\n\nA host scheduler can now check each started run later through the optional `HostScheduler.scheduleBackstop` and `cancelBackstop`. A turn schedules its check 310 seconds out when it starts (inside the start's store transaction when `tx.scheduler` provides it), and settlement cancels it. `runTurnBackstop(agent, runId)` from `@minpeter/pss-runtime/execution` decides what a due check does: nothing for a settled, parked, or requeued run; check again past a live owner's lease or a busy thread; otherwise resume the run. Celld hosts implement it behind the object's alarm: `drainCelldScheduledWork` runs due checks after runs and thread prompts and reports them in `ackedBackstops` and `skippedBackstops`, so a turn whose isolate died resumes without a `thread.continue()` call. Other hosts schedule no checks.\n\n## The TUI explains an unfinished last turn\n\nOpening a session whose last turn never finished now says what happened after the replayed history: press Enter to continue when the turn's process is gone, that it is still running in another `pss` process, or that a tool may have partly run and new instructions are needed. The TUI never resumes the turn on its own.\n"
+    filename: 2026-10-21-durable-auto-recovery.md
     v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Update dotenv to 18\n\nBump `dotenv` from 17.4.2 to 18.0.8. `pss` still loads `.env` quietly with explicit options; dotenv 18 additionally honors `DOTENV_*` environment defaults (for example `DOTENV_PATH`) for options `pss` does not pass explicitly.\n"
-    filename: 2026-10-20-dotenv-18.md
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Crash recovery follows each tool's retry policy\n\nA tool call that a crash left unfinished is now settled before the recovered turn's first model request: `idempotent` calls run again under the same idempotency key, the new `interrupt` policy reports the call to the model as interrupted, and `manual-recovery` calls park the run until `agent.resolveRecovery(runId, …)` records a decision (`rerun`, `interrupt`, or a supplied `result`). Pure calls no longer write an intent checkpoint of their own: one that a later checkpoint of its step recorded runs again, and a step of only pure calls is requested from the model again. Cancelling the recovered turn keeps the outcomes already settled and reports the rest as interrupted. The coding agent now declares policies for its built-in tools: reads and web tools are pure; edits, writes, deletes, and shell commands are reported as interrupted. `runCodingAgentExec` refuses new work while the session's run has recorded recovery decisions.\n"
+    filename: 2026-10-21-durable-tool-policies.md
     v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Update AI SDK and minor/patch dependencies\n\nBump the npm minor/patch dependency group, including `ai` 7.0.143 and the `@ai-sdk/*` providers. AI SDK cancellation no longer waits for in-flight tool executions, so an interrupted model step now waits for its own tool effects to settle before concluding: a tool result that lands after interruption is kept for continuation instead of forcing manual recovery.\n"
-    filename: 2026-10-20-npm-minor-patch-deps.md
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n  npm:@minpeter/pss-coding-agent:\n    type: patch\n---\n\n## Live turns keep their runs\n\nEvery running turn now holds a lease on its run from the moment it starts and renews it while it runs, so another process can no longer take over a live turn. A crashed owner's run is reclaimed as soon as its host proves the owner gone (`AgentHost.ownerLiveness`): file hosts check the owning process on the same machine, so a restarted `pss` session continues at once, and Durable Object hosts treat earlier activations as gone; otherwise the lease lapses after 300 seconds. A turn that finds its run taken over stops immediately, writes nothing, and reports `turn-error` with code `THREAD_OWNERSHIP_LOST`. Run records now carry the lease and its owner, so Durable Object hosts configured with a very small `maxPayloadBytes` need room for them.\n"
+    filename: 2026-10-21-durable-turn-leases.md
     v: 0.0.0
-  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n---\n\n## Fix Durable Object payload chunking hang on emoji\n\nChunking an oversized Durable Object payload or thread message no longer loops forever when a surrogate pair (for example an emoji) straddles a chunk boundary probe; the two duplicated chunkers now share one implementation.\n"
-    filename: 2026-10-20-payload-chunk-surrogate-loop.md
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n---\n\n## A post-commit backstop waits for the turn's lease\n\nOn a host whose scheduler has `scheduleBackstop` but whose store transactions cannot schedule one, a turn now holds its lease before scheduling the run's first check. When that check cannot be scheduled, the run goes back to `queued` without a lease and the turn fails to start, instead of staying `running` with no turn renewing it and no check scheduled.\n"
+    filename: 2026-10-21-backstop-after-lease.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n---\n\n## Backstops resume runs a failed resume left queued\n\nA backstop no longer gives up on a run that went back to `queued`: when a resume fails after claiming the run (for example a transient store error), the next check resumes it instead of dropping the check, so Celld still recovers the crashed turn. A run the agent cannot resume is checked again after a full backstop delay instead of every 10 seconds, and a claimed check whose resumed turn never started is cleared once that turn ends.\n"
+    filename: 2026-10-21-backstop-queued-runs.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n---\n\n## File hosts stop growing per transaction and survive power loss\n\nFile host transactions now stage by hard-linking the committed files instead of copying the whole store, and remove superseded and crashed generation directories after each commit, so a store keeps one generation and its disk use tracks its data rather than its transaction count.\n\nA committed transaction is flushed to disk before and after `.current-generation` switches, so a power loss leaves the store at the last committed transaction instead of pointing at unwritten files.\n"
+    filename: 2026-10-21-file-store-generations.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n---\n\n## Keep live leases from containers that share a host name\n\nFile hosts on Linux now record the boot id and PID namespace of a lease owner\nand prove an owner gone only when both match this process, so containers or\npods sharing a data directory and host name no longer take over each other's\nlive turns.\n"
+    filename: 2026-10-21-lease-owner-pid-namespace.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n---\n\n## Notifications schedule with their queued run\n\n`dispatchAgentNotification` now schedules the thread wake inside the same store transaction that queues the notification when the host's transaction exposes `tx.scheduler` (memory, file, Durable Object storage, and Celld hosts), so a crash right after commit no longer leaves a queued notification nothing resumes. Hosts without `tx.scheduler`, such as `createCloudflareHost`, still schedule after commit.\n"
+    filename: 2026-10-21-notification-dispatch-outbox.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n---\n\n## Report takeovers that a failure finds first\n\nA turn whose run another process took over now reports `turn-error` with code `THREAD_OWNERSHIP_LOST` and writes nothing, even when it fails before its lease renewal notices the takeover (a model request error, or a tool checkpoint the store refuses). It used to report \"History rollback persistence failed\" and leave the thread handle refusing new work until restart.\n"
+    filename: 2026-10-21-ownership-loss-on-failure.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:@minpeter/pss-runtime:\n    type: patch\n---\n\n## Parked turns keep their history\n\nA turn that parks as `needs-recovery` while its process keeps running (a `beforeToolExecution` hook returned `needs-recovery`, or the process lost track of a tool's outcome) no longer rolls the thread back to before the turn. It keeps the user's input and every tool round already committed, so `agent.resolveRecovery()` followed by `agent.resume()` finishes the turn instead of cancelling it or parking it again. A run a hook parked can also be resumed by the same process, without a restart.\n"
+    filename: 2026-10-21-park-keeps-history.md
     v: 0.0.0
 core:packages:
   - changelogIds:
-      - 2026-09-16-english-localization.md
-      - 2026-10-18-durable-vnext-recovery.md
-      - 2026-10-20-dotenv-18.md
-      - 2026-10-20-npm-minor-patch-deps.md
+      - 2026-10-20-durable-step-journal.md
+      - 2026-10-21-durable-auto-recovery.md
+      - 2026-10-21-durable-tool-policies.md
+      - 2026-10-21-durable-turn-leases.md
     id: npm:@minpeter/pss-coding-agent
     updated: true
   - id: npm:@minpeter/pss-extension-latex
@@ -29,9 +47,17 @@ core:packages:
   - id: npm:@minpeter/pss-extension-web
     updated: false
   - changelogIds:
-      - 2026-10-18-durable-vnext-recovery.md
-      - 2026-10-20-npm-minor-patch-deps.md
-      - 2026-10-20-payload-chunk-surrogate-loop.md
+      - 2026-10-20-durable-step-journal.md
+      - 2026-10-21-backstop-after-lease.md
+      - 2026-10-21-backstop-queued-runs.md
+      - 2026-10-21-durable-auto-recovery.md
+      - 2026-10-21-durable-tool-policies.md
+      - 2026-10-21-durable-turn-leases.md
+      - 2026-10-21-file-store-generations.md
+      - 2026-10-21-lease-owner-pid-namespace.md
+      - 2026-10-21-notification-dispatch-outbox.md
+      - 2026-10-21-ownership-loss-on-failure.md
+      - 2026-10-21-park-keeps-history.md
     id: npm:@minpeter/pss-runtime
     updated: true
 npm:packages:
