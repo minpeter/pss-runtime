@@ -1151,7 +1151,9 @@ if (turn.runId) {
 ```
 
 Recorded runs report `runId`, `status`, `threadKey`, `checkpointVersion`,
-`latestCheckpoint`, and `state`. `state` is `"checkpointed"` or
+`latestCheckpoint`, `pendingToolCalls`, and `state`. `pendingToolCalls` lists
+every tool call whose intent was recorded without an outcome, with its retry
+policy. `state` is `"checkpointed"` or
 `"no-checkpoint"`; absent IDs return `"unknown-run"`, and a thread-only store
 returns `"unsupported"`. Lifecycle status distinguishes queued (`queued`),
 active (`running`), claimed/resumed (`leased`), completed (`completed`), failed
@@ -1485,19 +1487,23 @@ work is woken by the Agents SDK schedule/fiber path through
 
 ## Checkpoints and Cancellation
 
-Resume is safe only at committed boundaries. Durable hosts can checkpoint before
-and after model steps, around notifications, before child run creation, when a
-child link is committed, and when a run suspends. If a process is killed inside a
-provider call or unsafe tool execution, resume rolls back to the last committed
-checkpoint and may re-enter the operation.
+Resume is safe only at committed boundaries. A durable thread commits each
+finished tool round (the assistant tool calls and their results) at step end,
+before the next model request. Within a step, every tool checkpoint carries the
+step's journal: each call whose intent was recorded without an outcome, and
+each finished result not yet committed, including failed calls as their error
+result. A crashed run resumes from committed history plus that journal, so a
+finished tool never runs again; the in-flight model step is requested again.
+A recorded call without an outcome parks the run as `needs-recovery` when its
+policy is `manual-recovery` (the default); `idempotent` and `pure` calls are
+left for the model to request again.
 
 When `createAgent()` receives an `AgentHost`, high-level model turns create a
 `user-turn` run record and thread tool execution context into managed model
 calls. Tools are checkpointed before and after execution and receive stable
 `attempt`, `idempotencyKey`, `retryPolicy`, `signal`, and public `toolCallId`
 values. The `@minpeter/pss-runtime/execution`
-entrypoint also exposes the same low-level tool execution checkpoint types for
-custom resume runners built directly on AI SDK `LanguageModel` objects.
+entrypoint also exposes the same low-level tool execution checkpoint types.
 
 These checkpoints are rollback boundaries, not a complete host adapter by
 themselves. Edge hosts still need durable scheduling, leases, resume workers,

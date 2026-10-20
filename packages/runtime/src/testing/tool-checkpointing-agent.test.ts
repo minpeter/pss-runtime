@@ -190,70 +190,85 @@ describe("tool checkpointing through Agent", () => {
   });
 
   it("keeps tool checkpoints bounded when the thread history is long", async () => {
-    const Agent = await loadAgent();
-    const { checkpoints, host } = createCheckpointSpyCloudflareHost(900);
-    const signal = new AbortController().signal;
+    // Checkpoint size must not depend on how much history the thread holds.
+    const shortHistory = await toolTurnCheckpointBytes(0);
+    const longHistory = await toolTurnCheckpointBytes(10);
 
-    for (let index = 0; index < 10; index += 1) {
-      generateTextMock.mockImplementationOnce(async () => ({
-        responseMessages: [assistantMessage(`ACK ${index}`)],
-      }));
-    }
-    generateTextMock
-      .mockImplementationOnce(async (options: GenerateTextToolOptions) => {
-        const toolCall = toolCallPart(
-          "call_sdk-tool-call-1",
-          "checkpointed_tool"
-        );
-        await executableTool(
-          options.tools ?? {},
-          "checkpointed_tool"
-        ).execute?.({}, toolOptions("call_sdk-tool-call-1", signal));
-
-        return {
-          responseMessages: [
-            assistantMessage([toolCall]),
-            toolResultFor(toolCall),
-          ],
-        };
-      })
-      .mockImplementationOnce(async () => ({
-        responseMessages: [assistantMessage("DONE")],
-      }));
-
-    const agent = new Agent({
-      host,
-      model: fakeModel,
-      tools: {
-        checkpointed_tool: checkpointedTool("idempotent", () => ({
-          ok: true,
-        })),
-      },
-    });
-
-    for (let index = 0; index < 10; index += 1) {
-      await collectRun(
-        await agent.send(`history turn ${index}: ${"x".repeat(80)}`)
-      );
-    }
-
-    const events = await collectRun(await agent.send("use the tool"));
-
-    expect(events.map((event) => event.type)).not.toContain("turn-error");
-    expect(checkpoints.map((checkpoint) => checkpoint.phase)).toEqual([
+    expect(longHistory.map(({ phase }) => phase)).toEqual([
       "before-tool",
       "after-tool",
     ]);
-    for (const checkpoint of checkpoints) {
-      const checkpointBytes = textEncoder.encode(
-        JSON.stringify(checkpoint)
-      ).byteLength;
-      expect(checkpointBytes).toBeLessThan(900);
-      expect(checkpoint.threadSnapshot).toMatchObject({
-        kind: "thread-reference",
-        threadKey: "default",
-      });
-      expect(checkpoint.threadSnapshot).not.toHaveProperty("history");
+    for (const [index, checkpoint] of longHistory.entries()) {
+      // Only version and count digits may differ between the two runs.
+      expect(
+        Math.abs(checkpoint.bytes - (shortHistory[index]?.bytes ?? 0))
+      ).toBeLessThan(16);
     }
   });
 });
+
+async function toolTurnCheckpointBytes(
+  historyTurns: number
+): Promise<{ readonly bytes: number; readonly phase: string }[]> {
+  const Agent = await loadAgent();
+  const { checkpoints, host } = createCheckpointSpyCloudflareHost(900);
+  const signal = new AbortController().signal;
+
+  for (let index = 0; index < historyTurns; index += 1) {
+    generateTextMock.mockImplementationOnce(async () => ({
+      responseMessages: [assistantMessage(`ACK ${index}`)],
+    }));
+  }
+  generateTextMock
+    .mockImplementationOnce(async (options: GenerateTextToolOptions) => {
+      const toolCall = toolCallPart(
+        "call_sdk-tool-call-1",
+        "checkpointed_tool"
+      );
+      await executableTool(options.tools ?? {}, "checkpointed_tool").execute?.(
+        {},
+        toolOptions("call_sdk-tool-call-1", signal)
+      );
+
+      return {
+        responseMessages: [
+          assistantMessage([toolCall]),
+          toolResultFor(toolCall),
+        ],
+      };
+    })
+    .mockImplementationOnce(async () => ({
+      responseMessages: [assistantMessage("DONE")],
+    }));
+
+  const agent = new Agent({
+    host,
+    model: fakeModel,
+    tools: {
+      checkpointed_tool: checkpointedTool("idempotent", () => ({
+        ok: true,
+      })),
+    },
+  });
+
+  for (let index = 0; index < historyTurns; index += 1) {
+    await collectRun(
+      await agent.send(`history turn ${index}: ${"x".repeat(80)}`)
+    );
+  }
+
+  const events = await collectRun(await agent.send("use the tool"));
+
+  expect(events.map((event) => event.type)).not.toContain("turn-error");
+  return checkpoints.map((checkpoint) => {
+    expect(checkpoint.threadSnapshot).toMatchObject({
+      kind: "thread-reference",
+      threadKey: "default",
+    });
+    expect(checkpoint.threadSnapshot).not.toHaveProperty("history");
+    return {
+      bytes: textEncoder.encode(JSON.stringify(checkpoint)).byteLength,
+      phase: checkpoint.phase,
+    };
+  });
+}

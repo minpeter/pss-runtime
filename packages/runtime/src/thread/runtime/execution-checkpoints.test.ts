@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAgent } from "../../agent/core/agent";
-import { ToolExecutionNeedsRecoveryError } from "../../llm/tool-execution-checkpoint";
 import type {
   RuntimeToolExecutionCheckpoint,
   RuntimeToolExecutionContext,
@@ -134,11 +133,11 @@ describe("thread tool execution checkpoints", () => {
       "RAW_SECRET"
     );
 
-    // Then: one after-tool checkpoint carries only the transformed output.
+    // Then: one after-tool checkpoint journals only the transformed output.
     const latest = await host.store.checkpoints.latest(runId);
     expect(latest).toMatchObject({
       phase: "after-tool",
-      runtimeState: { output: "REDACTED" },
+      runtimeState: { results: [{ output: "REDACTED" }] },
       version: 2,
     });
     expect(JSON.stringify(latest)).not.toContain("RAW_SECRET");
@@ -192,7 +191,7 @@ describe("thread tool execution checkpoints", () => {
     });
   });
 
-  it("fails recovery closed after concurrent sibling results", async () => {
+  it("restores concurrent sibling results after a crash", async () => {
     // Given: a crashed run whose two parallel tool results were checkpointed
     // concurrently but never committed to thread history.
     const runId = "parallel-siblings-recovery";
@@ -210,25 +209,15 @@ describe("thread tool execution checkpoints", () => {
       context.afterTool?.({ ...first, output: "deployed" }),
       context.afterTool?.({ ...second, output: "notified" }),
     ]);
-    let modelCalls = 0;
-    const agent = await createAgent({
-      host,
-      model: createCallbackModel(() => {
-        modelCalls += 1;
-        return Promise.resolve([assistantMessage("UNREACHABLE")]);
-      }),
-    });
 
     // When: the thread is continued after the crash.
-    const continued = agent.thread("thread").continue();
+    const history = await continueRecordingHistory(host);
 
-    // Then: recovery parks the run instead of replaying one tool.
-    await expect(continued).rejects.toBeInstanceOf(
-      ToolExecutionNeedsRecoveryError
-    );
-    expect(modelCalls).toBe(0);
+    // Then: both results reach the model exactly once and the run completes.
+    expect(history.split("deployed")).toHaveLength(2);
+    expect(history.split("notified")).toHaveLength(2);
     await expect(host.store.turns.get(runId)).resolves.toMatchObject({
-      status: "needs-recovery",
+      status: "completed",
     });
   });
 
@@ -278,18 +267,9 @@ describe("thread tool execution checkpoints", () => {
         ],
       },
     });
-    let modelCalls = 0;
-    const agent = await createAgent({
-      host,
-      model: createCallbackModel(() => {
-        modelCalls += 1;
-        return Promise.resolve([assistantMessage("UNREACHABLE")]);
-      }),
-    });
-    await expect(agent.thread("thread").continue()).rejects.toBeInstanceOf(
-      ToolExecutionNeedsRecoveryError
-    );
-    expect(modelCalls).toBe(0);
+    // And: recovery restores the journaled step-1 result once.
+    const history = await continueRecordingHistory(host);
+    expect(history.split("deployed")).toHaveLength(2);
   });
 
   it("records same-id results already in history on each after-tool checkpoint", async () => {
@@ -321,29 +301,14 @@ describe("thread tool execution checkpoints", () => {
     await completeTool(context, reused, "STEP2_RESULT");
 
     // When: the process crashes and the thread is continued.
-    const histories: string[] = [];
-    const agent = await createAgent({
-      host,
-      model: createCallbackModel(({ history }) => {
-        histories.push(JSON.stringify(history));
-        return Promise.resolve([assistantMessage("RECOVERED")]);
-      }),
-    });
-    const turn = await agent.thread("thread").continue();
-    if (!turn) {
-      throw new Error("Expected the crashed run to continue.");
-    }
-    for await (const _event of turn.events()) {
-      // Drain the recovered turn.
-    }
+    const history = await continueRecordingHistory(host);
 
     // Then: each result reaches the model exactly once.
-    const [history = ""] = histories;
     expect(history.split("STEP1_RESULT")).toHaveLength(2);
     expect(history.split("STEP2_RESULT")).toHaveLength(2);
   });
 
-  it("fails closed when a background compaction committed before a reused-id result reached history", async () => {
+  it("restores a reused-id result whose step a background compaction committed around", async () => {
     // Given: a previous turn committed call_0; this turn's call_0 completed,
     // and a background compaction committed before step end appended it.
     const runId = "mid-step-compaction-uncommitted";
@@ -357,23 +322,11 @@ describe("thread tool execution checkpoints", () => {
     await context.beforeTool?.(toolCall(runId, "call_1", "verify"));
 
     // When: the process crashes and the thread is continued.
-    let modelCalls = 0;
-    const agent = await createAgent({
-      host,
-      model: createCallbackModel(() => {
-        modelCalls += 1;
-        return Promise.resolve([assistantMessage("UNREACHABLE")]);
-      }),
-    });
+    const history = await continueRecordingHistory(host);
 
-    // Then: recovery parks the run instead of replaying deploy.
-    await expect(agent.thread("thread").continue()).rejects.toBeInstanceOf(
-      ToolExecutionNeedsRecoveryError
-    );
-    expect(modelCalls).toBe(0);
-    await expect(host.store.turns.get(runId)).resolves.toMatchObject({
-      status: "needs-recovery",
-    });
+    // Then: the journaled result reaches the model once, beside the old one.
+    expect(history.split("DEPLOYED")).toHaveLength(2);
+    expect(history.split("OLD_RESULT")).toHaveLength(2);
   });
 });
 
@@ -415,4 +368,24 @@ function appendToolStep(
     ],
     role: "tool",
   });
+}
+
+/** Continues the crashed thread; returns the history the model received. */
+async function continueRecordingHistory(host: InMemoryHost): Promise<string> {
+  const histories: string[] = [];
+  const agent = await createAgent({
+    host,
+    model: createCallbackModel(({ history }) => {
+      histories.push(JSON.stringify(history));
+      return Promise.resolve([assistantMessage("RECOVERED")]);
+    }),
+  });
+  const turn = await agent.thread("thread").continue();
+  if (!turn) {
+    throw new Error("Expected the crashed run to continue.");
+  }
+  for await (const _event of turn.events()) {
+    // Drain the recovered turn.
+  }
+  return histories[0] ?? "";
 }

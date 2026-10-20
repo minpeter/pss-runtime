@@ -8,6 +8,7 @@ import {
   type AgentOptions,
   isStreamAgentEvent,
 } from "@minpeter/pss-runtime";
+import { inspectDurableTurn } from "@minpeter/pss-runtime/execution";
 import { createCodingAgent } from "./coding-agent";
 import { loadContextResources } from "./context";
 import { expandPromptForExec } from "./context/prompt-templates";
@@ -338,12 +339,15 @@ async function assertSessionDoesNotRequireManualRecovery(
   ) {
     return;
   }
-  const cp = await agent.host.store.checkpoints.latest(run.runId);
-  const pending = cp?.pendingToolCall as { policy?: string } | undefined;
-  if (
-    run.status === "needs-recovery" ||
-    (cp?.phase === "before-tool" && pending?.policy === "manual-recovery")
-  ) {
+  // The step journal lists every unfinished call, including a sibling of
+  // the latest checkpoint's call.
+  const inspection = await inspectDurableTurn(agent.host, run.runId);
+  const pendingManual =
+    "pendingToolCalls" in inspection &&
+    inspection.pendingToolCalls.some(
+      (call) => call.policy === "manual-recovery"
+    );
+  if (run.status === "needs-recovery" || pendingManual) {
     await agent.resume(run.runId);
     throw new Error(`Run ${run.runId} requires manual recovery.`);
   }

@@ -1,6 +1,12 @@
 import type { JSONValue, ModelMessage } from "ai";
 import { ownsAgentNamespace } from "../../agent/identity/namespace";
 import { createThreadExecutionRunId } from "../../execution/host/thread-execution-run-id";
+import {
+  type JournaledToolResult,
+  pendingToolCalls,
+  type ToolStepJournal,
+  toolStepJournal,
+} from "../../execution/host/tool-step-journal";
 import { transitionTurn } from "../../execution/host/turn-status";
 import { TurnTransitionConflictError } from "../../execution/host/turn-transition-conflict";
 import type {
@@ -528,12 +534,14 @@ async function prepareClaimedContinuation(
   }
   const committedHistory = context.state.modelSnapshot();
   const turns = context.execution.executionHost?.store.turns;
-  const { latestResultCommitted, unrestorable } =
-    evaluateToolCheckpointEvidence(checkpoint, context.state.history);
-  const [firstUnrestorable, ...restUnrestorable] = unrestorable;
+  const journal = toolStepJournal(checkpoint);
+  const evidence = journal
+    ? evaluateToolStepJournal(checkpoint, journal, context.state.history)
+    : evaluateToolCheckpointEvidence(checkpoint, context.state.history);
+  const [firstUnrestorable, ...restUnrestorable] = evidence.unrestorable;
   if (firstUnrestorable) {
-    // Only the latest tool checkpoint can be restored; resuming without an
-    // earlier completed result would let the model repeat its effects.
+    // A completed result that is neither committed nor journaled cannot be
+    // restored; resuming without it would let the model repeat its effects.
     if (turns) {
       await transitionTurn(turns, {
         expected: { leaseId: executionRun.leaseId ?? null, status: "leased" },
@@ -546,11 +554,18 @@ async function prepareClaimedContinuation(
       ...restUnrestorable,
     ]);
   }
-  const history = buildRecoveredContinuationHistory(
-    committedHistory,
-    checkpoint,
-    latestResultCommitted
-  );
+  const history =
+    "restorable" in evidence
+      ? recoveredToolRoundHistory(
+          committedHistory,
+          checkpoint,
+          evidence.restorable
+        )
+      : buildRecoveredContinuationHistory(
+          committedHistory,
+          checkpoint,
+          evidence.latestResultCommitted
+        );
   if (history.length === 0) {
     if (turns) {
       await transitionTurn(turns, {
@@ -795,30 +810,103 @@ function buildRecoveredContinuationHistory(
   return history;
 }
 
+/** The first recorded call without an outcome whose policy forbids replay. */
 function manualRecoveryToolCheckpoint(
   checkpoint: Checkpoint | null
 ): RuntimeToolExecutionCheckpointMetadata | undefined {
-  const candidate =
-    checkpoint?.phase === "before-tool"
-      ? (checkpoint.pendingToolCall as Record<string, unknown> | undefined)
-      : undefined;
-  if (
-    candidate &&
-    typeof candidate === "object" &&
-    typeof candidate.attempt === "number" &&
-    typeof candidate.idempotencyKey === "string" &&
-    candidate.policy === "manual-recovery" &&
-    typeof candidate.toolCallId === "string" &&
-    typeof candidate.toolName === "string"
-  ) {
-    return {
-      attempt: candidate.attempt,
-      idempotencyKey: candidate.idempotencyKey,
-      policy: "manual-recovery",
-      toolCallId: candidate.toolCallId,
-      toolName: candidate.toolName,
-    };
+  return pendingToolCalls(checkpoint).find(
+    (call) => call.policy === "manual-recovery"
+  );
+}
+
+/**
+ * Thread history commits each tool round at step end, so the journal holds
+ * only the crashed step: results not yet committed are restored; a completed
+ * call that is neither committed nor journaled cannot be, and fails closed.
+ */
+function evaluateToolStepJournal(
+  checkpoint: Checkpoint | null,
+  journal: ToolStepJournal,
+  committed: { toolResultCount(toolCallId: string): number }
+): {
+  readonly restorable: readonly JournaledToolResult[];
+  readonly unrestorable: CompletedToolCall[];
+} {
+  const evidence = toolCheckpointEvidence(checkpoint);
+  const isUncommitted = (call: {
+    readonly priorResultCount?: number;
+    readonly toolCallId: string;
+  }) =>
+    call.priorResultCount === undefined ||
+    committed.toolResultCount(call.toolCallId) <= call.priorResultCount;
+  const unrestorable = (evidence?.priorCompleted ?? []).filter(
+    (call) =>
+      isUncommitted(call) &&
+      !journal.results.some(
+        (result) =>
+          result.toolCallId === call.toolCallId &&
+          result.checkpointVersion === call.checkpointVersion
+      )
+  );
+  if (journal.unreadable > 0 && evidence) {
+    unrestorable.push(evidence.toolCall);
   }
+  return {
+    restorable: journal.results
+      .filter(isUncommitted)
+      .sort((left, right) => left.seq - right.seq),
+    unrestorable,
+  };
+}
+
+/** Committed history plus the crashed step's finished tool round. */
+function recoveredToolRoundHistory(
+  baseHistory: readonly ModelMessage[],
+  checkpoint: Checkpoint | null,
+  results: readonly JournaledToolResult[]
+): ModelMessage[] {
+  const unrecoverableTool = manualRecoveryToolCheckpoint(checkpoint);
+  if (unrecoverableTool) {
+    throw new ToolExecutionNeedsRecoveryError(unrecoverableTool);
+  }
+  const history = structuredClone([...baseHistory]);
+  if (results.length === 0) {
+    return history;
+  }
+  history.push(
+    {
+      content: results.map((result) => ({
+        input: result.input ?? {},
+        toolCallId: result.toolCallId,
+        toolName: result.toolName,
+        type: "tool-call" as const,
+      })),
+      role: "assistant",
+    },
+    {
+      content: results.map((result) => ({
+        output:
+          result.errorText === undefined
+            ? toolResultOutput(result.output)
+            : { type: "error-text" as const, value: result.errorText },
+        toolCallId: result.toolCallId,
+        toolName: result.toolName,
+        type: "tool-result" as const,
+      })),
+      role: "tool",
+    }
+  );
+  return history;
+}
+
+function toolResultOutput(
+  output: unknown
+):
+  | { readonly type: "json"; readonly value: JSONValue }
+  | { readonly type: "text"; readonly value: string } {
+  return typeof output === "string"
+    ? { type: "text", value: output }
+    : { type: "json", value: (output ?? null) as JSONValue };
 }
 
 export function isRecordClaimableByAgent(

@@ -1,4 +1,8 @@
 import type { ThreadStore } from "../../thread/store/types";
+import {
+  type PendingToolCall,
+  pendingToolCalls,
+} from "../host/tool-step-journal";
 import type {
   AgentHost,
   Checkpoint,
@@ -11,6 +15,8 @@ export type DurableTurnInspectionSource = AgentHost | HostStore | ThreadStore;
 interface RecordedDurableTurnInspection {
   readonly checkpointVersion: number;
   readonly latestCheckpoint: Checkpoint | null;
+  /** Tool calls whose intent was recorded without an outcome. */
+  readonly pendingToolCalls: readonly PendingToolCall[];
   readonly runId: string;
   readonly state: "checkpointed" | "no-checkpoint";
   readonly status: TurnStatus;
@@ -48,6 +54,7 @@ export async function inspectDurableTurn(
     return {
       checkpointVersion: turn.checkpointVersion,
       latestCheckpoint,
+      pendingToolCalls: pendingToolCalls(latestCheckpoint),
       runId,
       state: latestCheckpoint ? "checkpointed" : "no-checkpoint",
       status: turn.status,

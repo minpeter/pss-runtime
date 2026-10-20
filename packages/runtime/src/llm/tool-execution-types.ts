@@ -33,6 +33,11 @@ export interface RuntimeToolExecutionContext {
     | Promise<RuntimeToolExecutionResult | undefined>
     | RuntimeToolExecutionResult
     | undefined;
+  /** Records a non-abort execution failure as the call's outcome. */
+  readonly afterToolError?: (
+    checkpoint: RuntimeToolExecutionCheckpoint,
+    error: unknown
+  ) => Promise<void> | void;
   readonly attempt: number;
   readonly beforeTool?: (
     checkpoint: RuntimeToolExecutionCheckpoint

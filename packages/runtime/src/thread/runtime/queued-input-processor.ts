@@ -89,7 +89,15 @@ export async function processQueuedInput({
       item,
       state,
       executionRun,
-      activeAbort.signal
+      activeAbort.signal,
+      () =>
+        commitThreadStateAndEvents({
+          buffer: durableEvents,
+          executionHost: execution.executionHost,
+          executionRun,
+          state,
+          threadKey,
+        })
     );
     if (!committedHistory) {
       return "processed";
@@ -273,13 +281,16 @@ export async function processQueuedInput({
 /**
  * Applies a continuation over freshly loaded history. Returns the committed
  * history that failure recovery must roll back to: post-refresh, but without
- * the uncommitted continuation messages.
+ * the continuation messages. A durable run commits those messages (recovered
+ * tool results and completed steps) before its first model request, so a
+ * second crash still finds them.
  */
 async function activateContinuation(
   item: ProcessQueuedInputOptions["item"],
   state: ProcessQueuedInputOptions["state"],
   executionRun: ThreadExecutionRun | undefined,
-  signal: AbortSignal
+  signal: AbortSignal,
+  commitContinuation: () => Promise<void>
 ): Promise<ModelMessage[] | undefined> {
   if (item.continuation && !signal.aborted) {
     await state.refresh();
@@ -292,6 +303,13 @@ async function activateContinuation(
     await executionRun?.complete("cancelled");
     item.run.emit({ type: "turn-abort" });
     return;
+  }
+  if (
+    item.continuation &&
+    executionRun &&
+    state.modelSnapshot().length !== committedHistory.length
+  ) {
+    await commitContinuation();
   }
   return committedHistory;
 }
