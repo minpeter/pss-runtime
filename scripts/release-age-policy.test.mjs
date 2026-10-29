@@ -27,7 +27,8 @@ overrides:
   # Security-only, parent-scoped resolutions where direct updates cannot reach the vulnerable edge.
   # Keep these exact so unrelated consumers retain their declared dependency ranges.
   '@vercel/agent-eval@2.2.1>@ai-sdk/anthropic': 2.0.102
-  '@ai-sdk/provider-utils@3.0.37>undici': 6.28.1
+  '@ai-sdk/provider-utils@3.0.37>undici': 6.29.1
+  'miniflare@5.20261012.1-beta>undici': 7.30.1
   'dockerode@4.0.12>uuid': 11.1.1
   read-yaml-file: 2.1.0
   typescript: ^7.0.2
@@ -36,6 +37,7 @@ overrides:
 auditConfig:
   ignoreGhsas:
     - GHSA-vfj7-8cjw-p6xm
+    - GHSA-mrhx-c7xc-m3w5
 allowBuilds:
   core-js-pure: true
   cpu-features: false
