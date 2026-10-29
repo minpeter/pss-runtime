@@ -37,6 +37,8 @@ export class ThreadCommitConflictError extends Error {
 
 type HistoryUserInput = Parameters<ModelMessageHistory["appendUserInput"]>[0];
 
+type ThreadCommit = (input: PreparedThreadCommit) => Promise<CommitResult>;
+
 export class ThreadState {
   /** Opaque identity for runtime-owned per-thread caches. */
   readonly compactionIdentity: Readonly<object>;
@@ -44,6 +46,7 @@ export class ThreadState {
   readonly #persistence: ThreadStatePersistence;
   #history = new ModelMessageHistory();
   readonly #writes = new ThreadWriteQueue();
+  #route: ThreadCommit | undefined;
   #continuationRevoked = false;
   #continuation?: {
     readonly history: ModelMessage[];
@@ -230,7 +233,7 @@ export class ThreadState {
       });
       try {
         await this.#commitSnapshotWith(
-          (commit) => this.#persistence.commit(commit),
+          (commit) => this.#commitThroughRoute(commit),
           options
         );
       } catch (error) {
@@ -242,11 +245,27 @@ export class ThreadState {
   }
 
   async commit(): Promise<void> {
-    await this.commitWith((commit) => this.#persistence.commit(commit));
+    await this.commitWith((commit) => this.#commitThroughRoute(commit));
+  }
+
+  /**
+   * Sends commits that name no route of their own (`commit()`, `compact()`)
+   * through `route` instead of straight to the store, until the returned
+   * function is called. A turn that holds a durable run routes them through
+   * the run's lease check, so once another process takes the run over, a
+   * compaction still running in this one cannot write the thread.
+   */
+  routeCommits(route: ThreadCommit): () => void {
+    this.#route = route;
+    return () => {
+      if (this.#route === route) {
+        this.#route = undefined;
+      }
+    };
   }
 
   async commitWith(
-    commit: (input: PreparedThreadCommit) => Promise<CommitResult>,
+    commit: ThreadCommit,
     options: ThreadCommitBoundaryOptions = {}
   ): Promise<void> {
     if (this.#machine.in("deleting", "deleted")) {
@@ -307,8 +326,12 @@ export class ThreadState {
     return await del.promise;
   }
 
+  #commitThroughRoute(commit: PreparedThreadCommit): Promise<CommitResult> {
+    return this.#route ? this.#route(commit) : this.#persistence.commit(commit);
+  }
+
   async #commitSnapshotWith(
-    commit: (input: PreparedThreadCommit) => Promise<CommitResult>,
+    commit: ThreadCommit,
     options: ThreadCommitBoundaryOptions
   ): Promise<void> {
     const snapshot = this.#history.modelSnapshot();

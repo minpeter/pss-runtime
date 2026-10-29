@@ -17,6 +17,7 @@ import {
   toolCallPart,
 } from "../../testing/test-fixtures";
 import { encodeThreadSnapshot } from "../state/snapshot";
+import { tokenCompactionPolicy } from "./automatic-compaction.test-support";
 import {
   drainContinuation,
   latestRun,
@@ -175,6 +176,48 @@ describe("durable turn leases", () => {
       );
     }
   );
+
+  it("commits no overflow compaction once another process took its run over", async () => {
+    // Given: a turn with earlier history waiting on its model, whose run
+    // another process claims after the lease lapsed, before the turn's next
+    // renewal.
+    const host = createInMemoryHost();
+    const started = deferred<void>();
+    const overflow = deferred<void>();
+    let requests = 0;
+    const agent = await createAgent({
+      compaction: tokenCompactionPolicy({ retain: 20, trigger: 50 }),
+      host,
+      model: createCallbackModel(async () => {
+        requests += 1;
+        if (requests === 3) {
+          started.resolve();
+          await overflow.promise;
+          throw new Error("context_length_exceeded: too many tokens");
+        }
+        return [assistantMessage(`answer ${requests}`)];
+      }),
+    });
+    const thread = agent.thread(THREAD);
+    await collect(await thread.send("old"));
+    await collect(await thread.send("tail"));
+    const events = collect(await thread.send("next"));
+    await started.promise;
+    const committed = await host.store.threads.load(THREAD);
+    await takeOverRun(host);
+
+    // When: the model reports a context overflow, so the turn summarizes its
+    // older history and commits the compaction.
+    overflow.resolve();
+
+    // Then: the compaction writes nothing, and the turn reports the takeover.
+    expect((await events).at(-1)).toMatchObject({
+      error: { code: "THREAD_OWNERSHIP_LOST" },
+      type: "turn-error",
+    });
+    expect(requests).toBeGreaterThan(3);
+    await expect(host.store.threads.load(THREAD)).resolves.toEqual(committed);
+  });
 });
 
 /** Another process claims the thread's run after its lease lapsed. */

@@ -3,7 +3,7 @@
 - **Status:** Implemented
 - **Date:** 2026-10-21
 - **Scope:** `@minpeter/pss-runtime`, `@minpeter/pss-coding-agent`
-- **Pull requests:** #468, #470, #471, #472, #473; follow-ups #475–#481
+- **Pull requests:** #468, #470, #471, #472, #473; follow-ups #475–#482, #488
 
 ## Summary
 
@@ -213,7 +213,14 @@ A review of the series found and fixed:
 - #480: a turn whose run was taken over reported a storage failure and
   wedged its handle when it failed before its renewal noticed;
 - #481: file host transactions copied the whole store into generation
-  directories that were never removed, and nothing was flushed to disk.
+  directories that were never removed, and nothing was flushed to disk;
+- #482: on a host that schedules backstops only after commit, a turn
+  scheduled its run's check before holding the lease, and a run whose check
+  failed to schedule stayed `running` with nothing renewing it;
+- #488: a compaction (overflow or background) in a turn whose run another
+  process took over still committed the thread. Thread commits a turn makes
+  without a route of their own now go through the run's lease check until
+  settlement starts.
 
 ## Verification
 
@@ -239,10 +246,6 @@ A review of the series found and fixed:
   runtime path writes. They stay for wire compatibility.
 - SQL queue hosts and custom hosts without `ownerLiveness` free another
   process's crashed turn only when its 300 s lease lapses.
-- Compaction commits are version-checked but not lease-fenced. Until a turn
-  notices a takeover (up to 100 s), a compaction from its process can still
-  commit, and the new owner's next thread commit can then fail with
-  `ThreadCommitConflictError`.
 - A `pure` call's rerun is not recorded, so after another crash it can run
   again with the same `attempt` number.
 - File host transactions still link and stat every stored file, so their cost

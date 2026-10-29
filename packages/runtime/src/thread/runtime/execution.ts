@@ -187,11 +187,27 @@ export async function startThreadExecutionRun({
       throw error;
     }
   }
+  // Commits that name no route, such as a compaction's, are fenced by the
+  // run's lease like the turn's own writes until settlement starts. The
+  // terminal commit settles from inside the thread's write queue, so a
+  // compaction queued behind it commits as an ordinary thread write.
+  const unrouteCommits = state.routeCommits((commit) =>
+    commitOwnedThreadExecutionRunStorage({
+      executionHost,
+      leaseId,
+      persist: (tx) =>
+        tx.threads.commit(commit.key, commit.next, {
+          expectedVersion: commit.expectedVersion,
+        }),
+      runId,
+    })
+  );
   // Renewal stops before settlement writes; the lease counts as this
   // process's until settlement finishes, so no claim here races it.
   const settling = async <Result>(
     write: () => Promise<Result>
   ): Promise<Result> => {
+    unrouteCommits();
     heartbeat?.stopRenewal();
     try {
       return await write();
@@ -218,7 +234,10 @@ export async function startThreadExecutionRun({
       ),
     lostOwnership: () => lostRunOwnership(executionHost, runId, leaseId),
     ownershipLost: heartbeat?.lost ?? new AbortController().signal,
-    release: () => heartbeat?.release(),
+    release: () => {
+      unrouteCommits();
+      heartbeat?.release();
+    },
     runId,
     settle: (status, persist) =>
       settling(() =>
