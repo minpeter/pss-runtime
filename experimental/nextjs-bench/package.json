@@ -19,6 +19,6 @@
   "dependencies": {
     "@minpeter/pss-bench-shared": "workspace:*",
     "@vercel/agent-eval": "2.2.1",
-    "dotenv": "^18.0.8"
+    "dotenv": "^18.0.9"
   }
 }

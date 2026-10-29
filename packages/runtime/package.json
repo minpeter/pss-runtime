@@ -118,19 +118,19 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.production.json --noEmit && tsc -p tsconfig.exact-optional.json --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/gateway": "4.0.116",
+    "@ai-sdk/gateway": "4.0.126",
     "@jsquash/avif": "^2.1.1",
     "@jsquash/webp": "^1.5.0",
-    "@opentelemetry/api": "^1.9.1",
-    "ai": "7.0.143",
+    "@opentelemetry/api": "^1.10.0",
+    "ai": "7.0.153",
     "fast-png": "^8.0.0",
     "heic-decode": "^2.1.0",
     "jpeg-js": "^0.4.4",
     "libheif-js": "^1.23.5"
   },
   "devDependencies": {
-    "agents": "0.28.1",
-    "tsdown": "^0.23.1",
+    "agents": "0.30.1",
+    "tsdown": "^0.23.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^4.1.12"
