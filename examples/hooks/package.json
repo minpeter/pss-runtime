@@ -7,10 +7,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "3.0.71",
+    "@ai-sdk/openai-compatible": "3.0.78",
     "@minpeter/pss-runtime": "workspace:*",
     "@t3-oss/env-core": "^0.13.11",
-    "dotenv": "^18.0.8",
+    "dotenv": "^18.0.9",
     "zod": "^4.6.7"
   },
   "devDependencies": {
