@@ -1,7 +1,8 @@
 ---
 packages:
   npm:@minpeter/pss-runtime:
-    type: patch
+    replay:
+      - exit-prerelease(npm:@minpeter/pss-runtime)
 ---
 
 ## Keep live leases from containers that share a host name

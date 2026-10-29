@@ -1,7 +1,8 @@
 ---
 packages:
   npm:@minpeter/pss-runtime:
-    type: patch
+    replay:
+      - exit-prerelease(npm:@minpeter/pss-runtime)
 ---
 
 ## Parked turns keep their history
