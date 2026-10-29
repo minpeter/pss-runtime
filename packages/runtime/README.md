@@ -1567,7 +1567,9 @@ Memory hosts and hosts without `ownerLiveness` wait for the lease to lapse. A
 run left `running` by a turn of this process that ended without settling it is
 reclaimable by this process at once. Until a claim succeeds,
 `thread.continue()` rejects with `THREAD_CONTINUATION_BUSY` and
-`agent.resume(runId)` returns `null`. A turn whose run another owner took over
+`agent.resume(runId)` returns `null`. Every thread commit a turn makes while it
+holds its run, a compaction's included, checks the run's lease in the same
+store transaction. A turn whose run another owner took over
 or settled (a renewal or a fenced write fails, or the turn fails for another
 reason and finds its run taken) stops at once, writes nothing,
 reloads the committed thread, and emits `turn-error` with error code

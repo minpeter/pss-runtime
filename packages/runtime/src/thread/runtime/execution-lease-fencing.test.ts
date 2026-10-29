@@ -13,6 +13,7 @@ import { ThreadState } from "../state/thread-state";
 import { startThreadExecutionRun } from "./execution";
 import { createThreadToolExecutionContext } from "./execution-checkpoints";
 import { queueThreadNotification } from "./notification";
+import { commitTerminalThreadStateAndEvents } from "./thread-event-log";
 
 const LEASE_ERROR_PATTERN = /lease/i;
 
@@ -216,6 +217,57 @@ describe("thread execution lease fencing", () => {
       leaseId: "owner-a",
       runId: "notification-owner",
     });
+  });
+
+  it("commits a compaction queued behind the turn's terminal commit", async () => {
+    // Given: a running turn with history to compact.
+    const host = createInMemoryHost();
+    const runId = "settling-turn";
+    await createRun(host, runId);
+    const state = createState(host);
+    await state.ensureLoaded();
+    state.history.appendModelMessage({ content: "older", role: "user" });
+    state.history.appendModelMessage({ content: "answer", role: "assistant" });
+    state.history.appendModelMessage({ content: "latest", role: "user" });
+    const execution = await startThreadExecutionRun({
+      executionHost: host,
+      executionRun: { kind: "user-turn", runId },
+      state,
+      threadKey: "thread",
+      turnId: "unused",
+    });
+    if (!execution) {
+      throw new Error("Expected a running execution.");
+    }
+
+    // When: the turn settles, and a compaction queues behind its terminal
+    // commit.
+    const settled = commitTerminalThreadStateAndEvents({
+      buffer: [],
+      executionHost: host,
+      executionRun: execution,
+      state,
+      status: "completed",
+      threadKey: "thread",
+    });
+    const compacted = state.compact({
+      endSeqExclusive: 2,
+      startSeq: 0,
+      summary: "older summarized",
+    });
+
+    // Then: the run settles, and the compaction commits as an ordinary thread
+    // write instead of being refused as a write of the settled run.
+    await settled;
+    await expect(compacted).resolves.toBe(true);
+    await expect(host.store.turns.get(runId)).resolves.toMatchObject({
+      status: "completed",
+    });
+    const reloaded = createState(host);
+    await reloaded.ensureLoaded();
+    expect(reloaded.compactionSnapshot()).toMatchObject([
+      { summary: { content: "older summarized" } },
+    ]);
   });
 });
 
